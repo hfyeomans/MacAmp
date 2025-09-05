@@ -71,19 +71,46 @@ struct WinampPlaylistWindow: View {
     private func buildPlaylistChrome() -> some View {
         // CORRECTED: Proper PLEDIT chrome structure from webamp
         Group {
-            // Top section (CORRECTED tiling)
+            // Top section constructed per Webamp CSS layout
+            // Left corner (25px)
             SimpleSpriteImage("PLAYLIST_TOP_LEFT_CORNER", width: 25, height: 20)
                 .at(x: 0, y: 0)
-            
-            // Title bar fill (100px sections)
+
+            // Compute left/right flex fill widths so that:
+            // 25 (left corner) + leftFill + 12 (spacer) + 100 (title) + 13 (spacer) + rightFill + 25 (right corner) = 275
+            let available: CGFloat = WinampSizes.playlistBase.width - 25 - 12 - 100 - 13 - 25 // = 100
+            let leftFill: CGFloat = floor(available / 2) // 50
+            let rightFill: CGFloat = available - leftFill // 50
+
+            // Left fill: repeat PLAYLIST_TOP_TILE every 25px
+            if leftFill > 0 {
+                let tiles = Int(ceil(leftFill / 25))
+                ForEach(0..<tiles, id: \.self) { i in
+                    SimpleSpriteImage("PLAYLIST_TOP_TILE", width: 25, height: 20)
+                        .at(x: 25 + CGFloat(i) * 25, y: 0)
+                }
+            }
+
+            // Left spacer (12px) — visually part of fill; no dedicated sprite
+            // Title bar (100px)
+            let titleX = 25 + leftFill + 12
             SimpleSpriteImage("PLAYLIST_TITLE_BAR", width: 100, height: 20)
-                .at(x: 25, y: 0)
-            
-            SimpleSpriteImage("PLAYLIST_TITLE_BAR", width: 100, height: 20)
-                .at(x: 125, y: 0)
-            
+                .at(x: titleX, y: 0)
+
+            // Right spacer (13px) — visually part of fill; no dedicated sprite
+
+            // Right fill: repeat PLAYLIST_TOP_TILE
+            if rightFill > 0 {
+                let tiles = Int(ceil(rightFill / 25))
+                ForEach(0..<tiles, id: \.self) { i in
+                    SimpleSpriteImage("PLAYLIST_TOP_TILE", width: 25, height: 20)
+                        .at(x: titleX + 100 + 13 + CGFloat(i) * 25, y: 0)
+                }
+            }
+
+            // Right corner (25px)
             SimpleSpriteImage("PLAYLIST_TOP_RIGHT_CORNER", width: 25, height: 20)
-                .at(x: 250, y: 0)
+                .at(x: WinampSizes.playlistBase.width - 25, y: 0)
             
             // Left border tiles (CORRECTED count and positioning)
             let sideHeight = WinampSizes.playlistBase.height - PLCoords.topHeight - PLCoords.bottomHeight
@@ -94,7 +121,7 @@ struct WinampPlaylistWindow: View {
                     .at(x: 0, y: PLCoords.topHeight + CGFloat(index) * 29)
             }
             
-            // Right border tiles (CORRECTED)  
+            // Right border tiles (CORRECT)  
             ForEach(0..<tileCount, id: \.self) { index in
                 SimpleSpriteImage("PLAYLIST_RIGHT_TILE", width: 20, height: 29)
                     .at(x: WinampSizes.playlistBase.width - 20, y: PLCoords.topHeight + CGFloat(index) * 29)
