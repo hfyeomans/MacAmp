@@ -11,40 +11,59 @@ struct DockingContainerView: View {
     @State private var draggingID: String? = nil
     @State private var dragOffsetX: CGFloat = 0
     @State private var insertionIndex: Int? = nil
+    private let snapDistance: CGFloat = 15
+    private let windowSizeKey = "DockWindowSizeV1"
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            HStack(alignment: .top, spacing: interPaneSpacing) {
-                ForEach(visiblePanes()) { pane in
-                    DraggablePane(
-                        id: pane.id,
-                        draggingID: $draggingID,
-                        dragOffsetX: $dragOffsetX,
-                        onDragChanged: { point in
-                            updateInsertionIndex(with: point.x)
-                        },
-                        onDragEnded: {
-                            commitReorderIfNeeded()
+        GeometryReader { geo in
+            ZStack(alignment: .topLeading) {
+                HStack(alignment: .top, spacing: interPaneSpacing) {
+                    ForEach(visiblePanes()) { pane in
+                        DraggablePane(
+                            id: pane.id,
+                            draggingID: $draggingID,
+                            dragOffsetX: $dragOffsetX,
+                            onDragChanged: { point in
+                                updateInsertionIndex(with: point.x)
+                            },
+                            onDragEnded: {
+                                commitReorderIfNeeded()
+                            }
+                        ) {
+                            contentView(for: pane.type)
+                                .frame(
+                                    width: widthForPane(pane, containerWidth: geo.size.width),
+                                    height: heightForPane(pane)
+                                )
+                                .overlay(targetOverlay(for: pane))
                         }
-                    ) {
-                        contentView(for: pane.type)
+                        .background(PaneFrameReader(id: pane.id))
                     }
-                    .background(PaneFrameReader(id: pane.id))
+                }
+                .coordinateSpace(name: "dock")
+                .onPreferenceChange(PaneFramesKey.self) { itemFrames = $0 }
+
+                // Snap guide overlay
+                if let guide = guideX() {
+                    Rectangle()
+                        .fill(Color.white.opacity(0.6))
+                        .frame(width: 1, height: maxPaneHeight())
+                        .offset(x: guide, y: 0)
                 }
             }
-            .coordinateSpace(name: "dock")
-            .onPreferenceChange(PaneFramesKey.self) { itemFrames = $0 }
-
-            // Snap guide overlay
-            if let guide = guideX() {
-                Rectangle()
-                    .fill(Color.white.opacity(0.6))
-                    .frame(width: 1, height: maxPaneHeight())
-                    .offset(x: guide, y: 0)
+            .onAppear {
+                loadDefaultSkinIfNeeded()
+                restoreWindowSizeIfAvailable()
+            }
+            .onChange(of: geo.size) { _ in
+                saveWindowSize(size: geo.size)
             }
         }
         .background(Color.black)
-        .onAppear(perform: loadDefaultSkinIfNeeded)
+        .background(WindowAccessor { window in
+            // Ensure we can read the window reference for sizing
+            _ = window
+        })
     }
 
     private func loadDefaultSkinIfNeeded() {
@@ -97,23 +116,25 @@ extension DockingContainerView {
     private func updateInsertionIndex(with dragX: CGFloat) {
         let panes = visiblePanes()
         guard !panes.isEmpty else { insertionIndex = nil; return }
-        // Build ordered minX positions
-        let xs: [CGFloat] = panes.compactMap { itemFrames[$0.id]?.minX }.sorted()
-        guard xs.count == panes.count else { insertionIndex = nil; return }
-        // Compute cut points between panes
-        var cuts: [CGFloat] = []
-        for i in 0..<xs.count {
-            if i == 0 {
-                cuts.append(xs[i])
-            } else {
-                let mid = (xs[i-1] + xs[i]) / 2.0
-                cuts.append(mid)
+        // Build ordered boundaries: first minX, mids, last maxX
+        guard let firstX = itemFrames[panes.first!.id]?.minX,
+              let lastMax = itemFrames[panes.last!.id]?.maxX else { insertionIndex = nil; return }
+        var boundaries: [CGFloat] = [firstX]
+        for i in 1..<panes.count {
+            if let left = itemFrames[panes[i-1].id]?.minX, let right = itemFrames[panes[i].id]?.minX {
+                boundaries.append((left + right) / 2.0)
             }
         }
-        // Determine index: first cut with dragX < cut => that index, else at end
-        var idx = xs.count
-        for (i, cut) in cuts.enumerated() {
-            if dragX < cut { idx = i; break }
+        boundaries.append(lastMax)
+        // Snap only if within snapDistance of any boundary
+        let nearest = boundaries.min(by: { abs($0 - dragX) < abs($1 - dragX) })
+        guard let nearestBoundary = nearest, abs(nearestBoundary - dragX) <= snapDistance else {
+            insertionIndex = nil; return
+        }
+        // Compute index by counting boundaries strictly greater than dragX
+        var idx = panes.count
+        for (i, b) in boundaries.enumerated() where i < panes.count {
+            if dragX < b { idx = i; break }
         }
         insertionIndex = idx
     }
@@ -208,4 +229,76 @@ private struct DraggablePane<Content: View>: View {
     }
 
     private var active: Bool { draggingID == id }
+}
+
+// MARK: - Width/Height and overlays
+
+extension DockingContainerView {
+    private func naturalSize(for type: DockPaneType) -> CGSize {
+        switch type {
+        case .main: return WinampSizes.main
+        case .playlist: return CGSize(width: WinampSizes.playlistBase.width, height: WinampSizes.playlistBase.height)
+        case .equalizer: return WinampSizes.equalizer
+        }
+    }
+
+    private func shadeHeight(for type: DockPaneType) -> CGFloat { 14 }
+
+    private func heightForPane(_ pane: DockPaneState) -> CGFloat {
+        pane.isShaded ? shadeHeight(for: pane.type) : naturalSize(for: pane.type).height
+    }
+
+    private func widthForPane(_ pane: DockPaneState, containerWidth: CGFloat) -> CGFloat {
+        // Sum natural widths of visible panes
+        let panes = visiblePanes()
+        let naturalSum = panes.reduce(CGFloat(0)) { $0 + naturalSize(for: $1.type).width }
+        let extra = max(0, containerWidth - naturalSum)
+        // Prefer giving extra to playlist; else the last visible pane
+        if let playlist = panes.first(where: { $0.type == .playlist }) {
+            if playlist.id == pane.id { return naturalSize(for: pane.type).width + extra }
+        } else if pane.id == panes.last?.id {
+            return naturalSize(for: pane.type).width + extra
+        }
+        return naturalSize(for: pane.type).width
+    }
+
+    @ViewBuilder
+    private func targetOverlay(for pane: DockPaneState) -> some View {
+        if let insertionIndex, let targetID = targetPaneID(for: insertionIndex), targetID == pane.id {
+            Rectangle().stroke(Color.white.opacity(0.4), lineWidth: 1)
+        } else {
+            EmptyView()
+        }
+    }
+
+    private func targetPaneID(for index: Int) -> String? {
+        let panes = visiblePanes()
+        guard !panes.isEmpty else { return nil }
+        if index <= 0 { return panes.first?.id }
+        if index >= panes.count { return panes.last?.id }
+        return panes[index].id
+    }
+}
+
+// MARK: - Window size persistence
+
+extension DockingContainerView {
+    private func saveWindowSize(size: CGSize) {
+        let dict: [String: CGFloat] = ["w": size.width, "h": size.height]
+        UserDefaults.standard.set(dict, forKey: windowSizeKey)
+    }
+
+    private func restoreWindowSizeIfAvailable() {
+        guard let dict = UserDefaults.standard.dictionary(forKey: windowSizeKey) as? [String: CGFloat],
+              let w = dict["w"], let h = dict["h"] else { return }
+        // Use WindowAccessor to set content size
+        WindowAccessor { window in
+            var frame = window.frame
+            let contentRect = NSWindow.contentRect(forFrameRect: frame, styleMask: window.styleMask)
+            let newContentRect = NSRect(x: contentRect.origin.x, y: contentRect.origin.y, width: w, height: h)
+            let newFrame = NSWindow.frameRect(forContentRect: newContentRect, styleMask: window.styleMask)
+            window.setFrame(newFrame, display: true)
+        }
+        .body // no-op; force init
+    }
 }

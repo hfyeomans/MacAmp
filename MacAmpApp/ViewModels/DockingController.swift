@@ -98,4 +98,10 @@ final class DockingController: ObservableObject {
         // If vIndex points after last visible, place at end
         return panes.count
     }
+
+    // MARK: - Shade
+    func toggleShade(_ type: DockPaneType) {
+        guard let idx = panes.firstIndex(where: { $0.type == type }) else { return }
+        panes[idx].isShaded.toggle()
+    }
 }
