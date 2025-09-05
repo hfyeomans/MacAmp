@@ -59,6 +59,9 @@ struct WinampPlaylistWindow: View {
             
             // Bottom control buttons
             buildControlButtons()
+
+            // Bottom inlays (mini time, action glyphs, mini visualizer)
+            buildBottomInlays()
             
             // Scrollbar (simplified for now)
             buildScrollbar()
@@ -294,6 +297,39 @@ struct WinampPlaylistWindow: View {
             .buttonStyle(.plain)
             .at(PLCoords.listButton)
         }
+    }
+
+    @ViewBuilder
+    private func buildBottomInlays() -> some View {
+        // Positions from Webamp CSS
+        let bottomTop = WinampSizes.playlistBase.height - PLCoords.bottomHeight
+
+        // Running-time display: top: 10px; left: 7px; height: 10px
+        Rectangle()
+            .fill(Color.black)
+            .frame(width: 96, height: 10)
+            .at(x: 7, y: bottomTop + 10)
+
+        // Action buttons row: top: 22px; left: 3px; 5 small 10x10 boxes
+        HStack(spacing: 2) {
+            ForEach(0..<5, id: \.self) { _ in
+                Rectangle().fill(Color.black).frame(width: 10, height: 10)
+                    .overlay(Rectangle().stroke(Color.gray.opacity(0.6), lineWidth: 1))
+            }
+        }
+        .at(x: 3, y: bottomTop + 22)
+
+        // Mini time at: top: 23px; left: 66px
+        Rectangle()
+            .fill(Color.black)
+            .frame(width: 38, height: 10)
+            .at(x: 66, y: bottomTop + 23)
+
+        // Mini visualizer: width 75px; height full bottom; right: 150px
+        Rectangle()
+            .fill(Color.black)
+            .frame(width: 75, height: PLCoords.bottomHeight)
+            .at(x: WinampSizes.playlistBase.width - 150 - 75, y: bottomTop)
     }
     
     @ViewBuilder
