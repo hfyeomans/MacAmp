@@ -61,7 +61,8 @@ struct WinampPlaylistWindow: View {
             buildControlButtons()
 
             // Bottom inlays (mini time, action glyphs, mini visualizer)
-            buildBottomInlays()
+            // Temporarily disabled to avoid visual artifacts until sprite hookup is complete
+            // buildBottomInlays()
             
             // Scrollbar (simplified for now)
             buildScrollbar()

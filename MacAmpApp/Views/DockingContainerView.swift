@@ -12,6 +12,8 @@ struct DockingContainerView: View {
     @State private var draggingID: String? = nil
     @State private var dragOffsetX: CGFloat = 0
     @State private var insertionIndex: Int? = nil
+    @State private var hoveredSeparatorIndex: Int? = nil
+    @State private var resizingSeparatorIndex: Int? = nil
     private let snapDistance: CGFloat = 15
     private let windowFrameKey = "DockWindowFrameV1"
     @State private var hostWindow: NSWindow?
@@ -45,13 +47,21 @@ struct DockingContainerView: View {
 
                         // Resizer handle between panes
                         if idx < panes.count - 1 {
-                            ResizerBar()
-                                .frame(width: 5, height: heightForPane(pane))
+                            let active = (hoveredSeparatorIndex == idx) || (resizingSeparatorIndex == idx)
+                            ResizerBar(active: active)
+                                .frame(width: active ? 3 : 1, height: heightForPane(pane))
                                 .contentShape(Rectangle())
+                                .onHover { hovering in
+                                    hoveredSeparatorIndex = hovering ? idx : nil
+                                }
                                 .gesture(
                                     DragGesture(minimumDistance: 0, coordinateSpace: .named("dock"))
                                         .onChanged { value in
+                                            resizingSeparatorIndex = idx
                                             resizeBetween(left: panes[idx], right: panes[idx+1], delta: value.translation.width, containerWidth: geo.size.width)
+                                        }
+                                        .onEnded { _ in
+                                            resizingSeparatorIndex = nil
                                         }
                                 )
                         }
@@ -351,15 +361,18 @@ extension DockingContainerView {
 // MARK: - Resizer bar visual
 
 private struct ResizerBar: View {
+    var active: Bool
     @State private var pulse: Bool = false
     var body: some View {
         Rectangle()
-            .fill(Color.gray.opacity(0.4))
-            .overlay(Rectangle().stroke(Color.white.opacity(0.6), lineWidth: 0.5))
-            .shadow(color: Color.white.opacity(pulse ? 0.6 : 0.2), radius: pulse ? 3 : 1)
+            .fill(active ? Color.white.opacity(0.5) : Color.clear)
+            .overlay(Rectangle().stroke(Color.white.opacity(active ? 0.7 : 0.2), lineWidth: active ? 1 : 0.5))
+            .shadow(color: Color.white.opacity(active ? (pulse ? 0.5 : 0.2) : 0.0), radius: active ? (pulse ? 3 : 1) : 0)
             .onAppear {
-                withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
-                    pulse.toggle()
+                if active {
+                    withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
+                        pulse.toggle()
+                    }
                 }
             }
     }
