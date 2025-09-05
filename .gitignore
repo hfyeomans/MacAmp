@@ -31,3 +31,7 @@ dist/
 
 ######## Nested repositories ########
 webamp_clone/
+
+######## IDE/Editor config ########
+.claude/
+.vscode/
