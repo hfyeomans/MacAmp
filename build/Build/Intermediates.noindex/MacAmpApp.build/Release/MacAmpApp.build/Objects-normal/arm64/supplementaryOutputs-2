@@ -1,0 +1,12 @@
+{
+  "/Users/hank/dev/src/MacAmp/MacAmpApp/AppCommands.swift" : {
+    "abi-baseline-json" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/MacAmpApp.abi.json",
+    "const-values" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/MacAmpApp-primary.swiftconstvalues",
+    "dependencies" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/MacAmpApp-primary.d",
+    "diagnostics" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/MacAmpApp-primary.dia",
+    "objc-header" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/MacAmpApp-Swift.h",
+    "swiftdoc" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/MacAmpApp.swiftdoc",
+    "swiftmodule" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/MacAmpApp.swiftmodule",
+    "swiftsourceinfo" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/MacAmpApp.swiftsourceinfo"
+  }
+}

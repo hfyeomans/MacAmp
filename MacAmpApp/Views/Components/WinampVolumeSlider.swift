@@ -12,6 +12,7 @@ struct WinampVolumeSlider: View {
     private let sliderWidth: CGFloat = 68
     private let sliderHeight: CGFloat = 13
     private let trackFillHeight: CGFloat = 7   // thinner visual track inside the recess
+    private let trackInset: CGFloat = 1        // 1px inset inside the recessed border
     private let thumbWidth: CGFloat = 14
     private let thumbHeight: CGFloat = 11
     
@@ -28,6 +29,8 @@ struct WinampVolumeSlider: View {
                 )
 
             // Orange volume bar (thinner to match Winamp look)
+            // Orange fill centered vertically, confined inside the recess
+            // Note: Thumb runs over the fill; we do not subtract thumb width
             Rectangle()
                 .fill(LinearGradient(
                     colors: [
@@ -37,8 +40,11 @@ struct WinampVolumeSlider: View {
                     startPoint: .leading,
                     endPoint: .trailing
                 ))
-                .frame(width: max(0, sliderWidth * CGFloat(volume) - thumbWidth/2), height: trackFillHeight)
-                .offset(y: (sliderHeight - trackFillHeight) / 2)
+                .frame(
+                    width: max(0, (sliderWidth - trackInset * 2) * CGFloat(volume)),
+                    height: trackFillHeight
+                )
+                .offset(x: trackInset, y: (sliderHeight - trackFillHeight) / 2)
 
             // Sprite thumb (from skin)
             let thumbSprite = isDragging ? "MAIN_VOLUME_THUMB_SELECTED" : "MAIN_VOLUME_THUMB"
@@ -88,6 +94,8 @@ struct WinampBalanceSlider: View {
     private let sliderWidth: CGFloat = 38
     private let sliderHeight: CGFloat = 13
     private let trackFillHeight: CGFloat = 7   // thinner visual track
+    private let trackInset: CGFloat = 1        // 1px inset inside the recessed border
+    private let minCenterFill: CGFloat = 2     // ensure visible fill at center
     private let thumbWidth: CGFloat = 14
     private let thumbHeight: CGFloat = 11
     
@@ -103,29 +111,24 @@ struct WinampBalanceSlider: View {
                         .stroke(Color.gray.opacity(0.8), lineWidth: 1)
                 )
 
-            // Orange balance bar from center (thinner)
-            if balance != 0.0 {
-                let fillWidth = CGFloat(abs(balance)) * (sliderWidth / 2)
-                let fillX = balance > 0 ? sliderWidth / 2 : (sliderWidth / 2) - fillWidth
+            // Green balance fill from center, visible even at center
+            let centerX = sliderWidth / 2
+            let halfTrack = (sliderWidth - trackInset * 2) / 2
+            let dynWidth = CGFloat(abs(balance)) * halfTrack
+            let fillWidth = max(minCenterFill, dynWidth)
+            let fillX = balance >= 0 ? centerX : (centerX - fillWidth)
 
-                Rectangle()
-                    .fill(LinearGradient(
-                        colors: [
-                            Color(red: 1.0, green: 0.6, blue: 0.0),
-                            Color(red: 1.0, green: 0.8, blue: 0.0)
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    ))
-                    .frame(width: fillWidth, height: trackFillHeight)
-                    .offset(x: fillX, y: (sliderHeight - trackFillHeight) / 2)
-            }
-
-            // Subtle center indicator
             Rectangle()
-                .fill(Color.gray.opacity(0.25))
-                .frame(width: 1, height: trackFillHeight)
-                .offset(x: sliderWidth / 2, y: (sliderHeight - trackFillHeight) / 2)
+                .fill(LinearGradient(
+                    colors: [
+                        Color(red: 0.15, green: 0.8, blue: 0.25),
+                        Color(red: 0.05, green: 0.6, blue: 0.15)
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                ))
+                .frame(width: fillWidth, height: trackFillHeight)
+                .offset(x: fillX, y: (sliderHeight - trackFillHeight) / 2)
 
             // Sprite thumb (from skin)
             let thumbSprite = isDragging ? "MAIN_BALANCE_THUMB_ACTIVE" : "MAIN_BALANCE_THUMB"

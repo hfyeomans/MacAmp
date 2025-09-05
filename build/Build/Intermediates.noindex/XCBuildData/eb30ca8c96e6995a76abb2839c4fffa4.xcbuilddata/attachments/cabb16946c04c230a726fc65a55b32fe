@@ -1,0 +1,176 @@
+{
+  "" : {
+    "const-values" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/MacAmpApp-primary.swiftconstvalues",
+    "dependencies" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/MacAmpApp-primary.d",
+    "diagnostics" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/MacAmpApp-primary.dia",
+    "emit-module-dependencies" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/MacAmpApp-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/MacAmpApp-primary-emit-module.dia",
+    "pch" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/MacAmpApp-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/MacAmpApp-primary.swiftdeps"
+  },
+  "/Users/hank/dev/src/MacAmp/MacAmpApp/AppCommands.swift" : {
+    "index-unit-output-path" : "/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/AppCommands.o",
+    "llvm-bc" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/AppCommands.bc",
+    "object" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/AppCommands.o"
+  },
+  "/Users/hank/dev/src/MacAmp/MacAmpApp/Audio/AudioPlayer.swift" : {
+    "index-unit-output-path" : "/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/AudioPlayer.o",
+    "llvm-bc" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/AudioPlayer.bc",
+    "object" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/AudioPlayer.o"
+  },
+  "/Users/hank/dev/src/MacAmp/MacAmpApp/MacAmpApp.swift" : {
+    "index-unit-output-path" : "/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/MacAmpApp.o",
+    "llvm-bc" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/MacAmpApp.bc",
+    "object" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/MacAmpApp.o"
+  },
+  "/Users/hank/dev/src/MacAmp/MacAmpApp/Models/EQF.swift" : {
+    "index-unit-output-path" : "/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/EQF.o",
+    "llvm-bc" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/EQF.bc",
+    "object" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/EQF.o"
+  },
+  "/Users/hank/dev/src/MacAmp/MacAmpApp/Models/ImageSlicing.swift" : {
+    "index-unit-output-path" : "/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/ImageSlicing.o",
+    "llvm-bc" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/ImageSlicing.bc",
+    "object" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/ImageSlicing.o"
+  },
+  "/Users/hank/dev/src/MacAmp/MacAmpApp/Models/PLEditParser.swift" : {
+    "index-unit-output-path" : "/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/PLEditParser.o",
+    "llvm-bc" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/PLEditParser.bc",
+    "object" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/PLEditParser.o"
+  },
+  "/Users/hank/dev/src/MacAmp/MacAmpApp/Models/Skin.swift" : {
+    "index-unit-output-path" : "/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/Skin.o",
+    "llvm-bc" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/Skin.bc",
+    "object" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/Skin.o"
+  },
+  "/Users/hank/dev/src/MacAmp/MacAmpApp/Models/SkinSprites.swift" : {
+    "index-unit-output-path" : "/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/SkinSprites.o",
+    "llvm-bc" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/SkinSprites.bc",
+    "object" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/SkinSprites.o"
+  },
+  "/Users/hank/dev/src/MacAmp/MacAmpApp/Models/SnapUtils.swift" : {
+    "index-unit-output-path" : "/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/SnapUtils.o",
+    "llvm-bc" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/SnapUtils.bc",
+    "object" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/SnapUtils.o"
+  },
+  "/Users/hank/dev/src/MacAmp/MacAmpApp/Models/SpritePositions.swift" : {
+    "index-unit-output-path" : "/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/SpritePositions.o",
+    "llvm-bc" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/SpritePositions.bc",
+    "object" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/SpritePositions.o"
+  },
+  "/Users/hank/dev/src/MacAmp/MacAmpApp/Models/VisColorParser.swift" : {
+    "index-unit-output-path" : "/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/VisColorParser.o",
+    "llvm-bc" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/VisColorParser.bc",
+    "object" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/VisColorParser.o"
+  },
+  "/Users/hank/dev/src/MacAmp/MacAmpApp/Models/WindowSpec.swift" : {
+    "index-unit-output-path" : "/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/WindowSpec.o",
+    "llvm-bc" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/WindowSpec.bc",
+    "object" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/WindowSpec.o"
+  },
+  "/Users/hank/dev/src/MacAmp/MacAmpApp/Utilities/WindowAccessor.swift" : {
+    "index-unit-output-path" : "/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/WindowAccessor.o",
+    "llvm-bc" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/WindowAccessor.bc",
+    "object" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/WindowAccessor.o"
+  },
+  "/Users/hank/dev/src/MacAmp/MacAmpApp/Utilities/WindowSnapManager.swift" : {
+    "index-unit-output-path" : "/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/WindowSnapManager.o",
+    "llvm-bc" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/WindowSnapManager.bc",
+    "object" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/WindowSnapManager.o"
+  },
+  "/Users/hank/dev/src/MacAmp/MacAmpApp/ViewModels/SkinManager.swift" : {
+    "index-unit-output-path" : "/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/SkinManager.o",
+    "llvm-bc" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/SkinManager.bc",
+    "object" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/SkinManager.o"
+  },
+  "/Users/hank/dev/src/MacAmp/MacAmpApp/Views/BalanceSliderView.swift" : {
+    "index-unit-output-path" : "/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/BalanceSliderView.o",
+    "llvm-bc" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/BalanceSliderView.bc",
+    "object" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/BalanceSliderView.o"
+  },
+  "/Users/hank/dev/src/MacAmp/MacAmpApp/Views/Components/SimpleSpriteImage.swift" : {
+    "index-unit-output-path" : "/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/SimpleSpriteImage.o",
+    "llvm-bc" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/SimpleSpriteImage.bc",
+    "object" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/SimpleSpriteImage.o"
+  },
+  "/Users/hank/dev/src/MacAmp/MacAmpApp/Views/Components/WinampVolumeSlider.swift" : {
+    "index-unit-output-path" : "/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/WinampVolumeSlider.o",
+    "llvm-bc" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/WinampVolumeSlider.bc",
+    "object" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/WinampVolumeSlider.o"
+  },
+  "/Users/hank/dev/src/MacAmp/MacAmpApp/Views/EQSliderView.swift" : {
+    "index-unit-output-path" : "/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/EQSliderView.o",
+    "llvm-bc" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/EQSliderView.bc",
+    "object" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/EQSliderView.o"
+  },
+  "/Users/hank/dev/src/MacAmp/MacAmpApp/Views/EqGraphView.swift" : {
+    "index-unit-output-path" : "/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/EqGraphView.o",
+    "llvm-bc" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/EqGraphView.bc",
+    "object" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/EqGraphView.o"
+  },
+  "/Users/hank/dev/src/MacAmp/MacAmpApp/Views/EqualizerWindowView.swift" : {
+    "index-unit-output-path" : "/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/EqualizerWindowView.o",
+    "llvm-bc" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/EqualizerWindowView.bc",
+    "object" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/EqualizerWindowView.o"
+  },
+  "/Users/hank/dev/src/MacAmp/MacAmpApp/Views/MainWindowView.swift" : {
+    "index-unit-output-path" : "/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/MainWindowView.o",
+    "llvm-bc" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/MainWindowView.bc",
+    "object" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/MainWindowView.o"
+  },
+  "/Users/hank/dev/src/MacAmp/MacAmpApp/Views/PlaylistWindowView.swift" : {
+    "index-unit-output-path" : "/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/PlaylistWindowView.o",
+    "llvm-bc" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/PlaylistWindowView.bc",
+    "object" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/PlaylistWindowView.o"
+  },
+  "/Users/hank/dev/src/MacAmp/MacAmpApp/Views/PresetsButton.swift" : {
+    "index-unit-output-path" : "/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/PresetsButton.o",
+    "llvm-bc" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/PresetsButton.bc",
+    "object" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/PresetsButton.o"
+  },
+  "/Users/hank/dev/src/MacAmp/MacAmpApp/Views/SimpleTestMainWindow.swift" : {
+    "index-unit-output-path" : "/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/SimpleTestMainWindow.o",
+    "llvm-bc" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/SimpleTestMainWindow.bc",
+    "object" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/SimpleTestMainWindow.o"
+  },
+  "/Users/hank/dev/src/MacAmp/MacAmpApp/Views/SkinnedBanner.swift" : {
+    "index-unit-output-path" : "/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/SkinnedBanner.o",
+    "llvm-bc" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/SkinnedBanner.bc",
+    "object" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/SkinnedBanner.o"
+  },
+  "/Users/hank/dev/src/MacAmp/MacAmpApp/Views/SkinnedText.swift" : {
+    "index-unit-output-path" : "/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/SkinnedText.o",
+    "llvm-bc" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/SkinnedText.bc",
+    "object" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/SkinnedText.o"
+  },
+  "/Users/hank/dev/src/MacAmp/MacAmpApp/Views/VisualizerOptions.swift" : {
+    "index-unit-output-path" : "/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/VisualizerOptions.o",
+    "llvm-bc" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/VisualizerOptions.bc",
+    "object" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/VisualizerOptions.o"
+  },
+  "/Users/hank/dev/src/MacAmp/MacAmpApp/Views/VisualizerView.swift" : {
+    "index-unit-output-path" : "/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/VisualizerView.o",
+    "llvm-bc" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/VisualizerView.bc",
+    "object" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/VisualizerView.o"
+  },
+  "/Users/hank/dev/src/MacAmp/MacAmpApp/Views/VolumeSliderView.swift" : {
+    "index-unit-output-path" : "/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/VolumeSliderView.o",
+    "llvm-bc" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/VolumeSliderView.bc",
+    "object" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/VolumeSliderView.o"
+  },
+  "/Users/hank/dev/src/MacAmp/MacAmpApp/Views/WinampEqualizerWindow.swift" : {
+    "index-unit-output-path" : "/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/WinampEqualizerWindow.o",
+    "llvm-bc" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/WinampEqualizerWindow.bc",
+    "object" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/WinampEqualizerWindow.o"
+  },
+  "/Users/hank/dev/src/MacAmp/MacAmpApp/Views/WinampMainWindow.swift" : {
+    "index-unit-output-path" : "/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/WinampMainWindow.o",
+    "llvm-bc" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/WinampMainWindow.bc",
+    "object" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/WinampMainWindow.o"
+  },
+  "/Users/hank/dev/src/MacAmp/MacAmpApp/Views/WinampPlaylistWindow.swift" : {
+    "index-unit-output-path" : "/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/WinampPlaylistWindow.o",
+    "llvm-bc" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/WinampPlaylistWindow.bc",
+    "object" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/MacAmpApp.build/Release/MacAmpApp.build/Objects-normal/arm64/WinampPlaylistWindow.o"
+  }
+}

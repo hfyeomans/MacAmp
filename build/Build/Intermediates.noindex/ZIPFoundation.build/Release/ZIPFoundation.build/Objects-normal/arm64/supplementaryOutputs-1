@@ -1,0 +1,12 @@
+{
+  "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/ZIPFoundation.build/Release/ZIPFoundation.build/DerivedSources/resource_bundle_accessor.swift" : {
+    "abi-baseline-json" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/ZIPFoundation.build/Release/ZIPFoundation.build/Objects-normal/arm64/ZIPFoundation.abi.json",
+    "const-values" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/ZIPFoundation.build/Release/ZIPFoundation.build/Objects-normal/arm64/ZIPFoundation-primary.swiftconstvalues",
+    "dependencies" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/ZIPFoundation.build/Release/ZIPFoundation.build/Objects-normal/arm64/ZIPFoundation-primary.d",
+    "diagnostics" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/ZIPFoundation.build/Release/ZIPFoundation.build/Objects-normal/arm64/ZIPFoundation-primary.dia",
+    "objc-header" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/ZIPFoundation.build/Release/ZIPFoundation.build/Objects-normal/arm64/ZIPFoundation-Swift.h",
+    "swiftdoc" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/ZIPFoundation.build/Release/ZIPFoundation.build/Objects-normal/arm64/ZIPFoundation.swiftdoc",
+    "swiftmodule" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/ZIPFoundation.build/Release/ZIPFoundation.build/Objects-normal/arm64/ZIPFoundation.swiftmodule",
+    "swiftsourceinfo" : "/Users/hank/dev/src/MacAmp/build/Build/Intermediates.noindex/ZIPFoundation.build/Release/ZIPFoundation.build/Objects-normal/arm64/ZIPFoundation.swiftsourceinfo"
+  }
+}
