@@ -13,6 +13,7 @@ struct WinampVolumeSlider: View {
     private let sliderHeight: CGFloat = 13
     private let trackFillHeight: CGFloat = 7   // thinner visual track inside the recess
     private let trackInset: CGFloat = 1        // 1px inset inside the recessed border
+    private let trackYBias: CGFloat = 1        // nudge to visually center inside channel
     private let thumbWidth: CGFloat = 14
     private let thumbHeight: CGFloat = 11
     
@@ -44,7 +45,7 @@ struct WinampVolumeSlider: View {
                     width: max(0, (sliderWidth - trackInset * 2) * CGFloat(volume)),
                     height: trackFillHeight
                 )
-                .offset(x: trackInset, y: (sliderHeight - trackFillHeight) / 2)
+                .offset(x: trackInset, y: (sliderHeight - trackFillHeight) / 2 + trackYBias)
 
             // Sprite thumb (from skin)
             let thumbSprite = isDragging ? "MAIN_VOLUME_THUMB_SELECTED" : "MAIN_VOLUME_THUMB"
@@ -95,6 +96,7 @@ struct WinampBalanceSlider: View {
     private let sliderHeight: CGFloat = 13
     private let trackFillHeight: CGFloat = 7   // thinner visual track
     private let trackInset: CGFloat = 1        // 1px inset inside the recessed border
+    private let trackYBias: CGFloat = 1        // nudge to visually center inside channel
     private let minCenterFill: CGFloat = 2     // ensure visible fill at center
     private let thumbWidth: CGFloat = 14
     private let thumbHeight: CGFloat = 11
@@ -128,7 +130,7 @@ struct WinampBalanceSlider: View {
                     endPoint: .trailing
                 ))
                 .frame(width: fillWidth, height: trackFillHeight)
-                .offset(x: fillX, y: (sliderHeight - trackFillHeight) / 2)
+                .offset(x: fillX, y: (sliderHeight - trackFillHeight) / 2 + trackYBias)
 
             // Sprite thumb (from skin)
             let thumbSprite = isDragging ? "MAIN_BALANCE_THUMB_ACTIVE" : "MAIN_BALANCE_THUMB"
