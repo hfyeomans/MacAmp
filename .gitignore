@@ -17,6 +17,8 @@ xcuserdata/
 .build/
 .swiftpm/
 DerivedData/
+build/
+dist/
 
 ######## Media (large) ########
 *.mov

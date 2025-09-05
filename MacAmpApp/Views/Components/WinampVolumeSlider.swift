@@ -7,10 +7,13 @@ struct WinampVolumeSlider: View {
     
     @State private var isDragging = false
     
-    // Winamp volume slider specs - CORRECTED
-    // The VOLUME.BMP is a vertical sprite sheet, we need just the horizontal slider portion
+    // Winamp volume slider specs
+    // Matches Winamp sprite sizes; track visually thinned for accuracy
     private let sliderWidth: CGFloat = 68
-    private let sliderHeight: CGFloat = 13  // Just the horizontal slider part, not the full 420px sheet
+    private let sliderHeight: CGFloat = 13
+    private let trackFillHeight: CGFloat = 7   // thinner visual track inside the recess
+    private let trackInset: CGFloat = 1        // 1px inset inside the recessed border
+    private let trackYBias: CGFloat = 1        // nudge to visually center inside channel
     private let thumbWidth: CGFloat = 14
     private let thumbHeight: CGFloat = 11
     
@@ -25,8 +28,10 @@ struct WinampVolumeSlider: View {
                     Rectangle()
                         .stroke(Color.gray.opacity(0.8), lineWidth: 1)
                 )
-            
-            // Orange volume bar (matches position slider style from good.png)
+
+            // Orange volume bar (thinner to match Winamp look)
+            // Orange fill centered vertically, confined inside the recess
+            // Note: Thumb runs over the fill; we do not subtract thumb width
             Rectangle()
                 .fill(LinearGradient(
                     colors: [
@@ -36,9 +41,17 @@ struct WinampVolumeSlider: View {
                     startPoint: .leading,
                     endPoint: .trailing
                 ))
-                .frame(width: sliderWidth * CGFloat(volume), height: sliderHeight - 2)
-                .padding(1)
-            
+                .frame(
+                    width: max(0, (sliderWidth - trackInset * 2) * CGFloat(volume)),
+                    height: trackFillHeight
+                )
+                .offset(x: trackInset, y: (sliderHeight - trackFillHeight) / 2 + trackYBias)
+
+            // Sprite thumb (from skin)
+            let thumbSprite = isDragging ? "MAIN_VOLUME_THUMB_SELECTED" : "MAIN_VOLUME_THUMB"
+            SimpleSpriteImage(thumbSprite, width: thumbWidth, height: thumbHeight)
+                .at(x: thumbPosition, y: (sliderHeight - thumbHeight) / 2)
+
             // Invisible interaction area
             GeometryReader { geo in
                 Color.clear
@@ -81,6 +94,10 @@ struct WinampBalanceSlider: View {
     // Winamp balance slider specs
     private let sliderWidth: CGFloat = 38
     private let sliderHeight: CGFloat = 13
+    private let trackFillHeight: CGFloat = 7   // thinner visual track
+    private let trackInset: CGFloat = 1        // 1px inset inside the recessed border
+    private let trackYBias: CGFloat = 1        // nudge to visually center inside channel
+    private let minCenterFill: CGFloat = 2     // ensure visible fill at center
     private let thumbWidth: CGFloat = 14
     private let thumbHeight: CGFloat = 11
     
@@ -95,33 +112,31 @@ struct WinampBalanceSlider: View {
                     Rectangle()
                         .stroke(Color.gray.opacity(0.8), lineWidth: 1)
                 )
-            
-            // Orange balance bar from center (matches Winamp colors)
-            if balance != 0.0 {
-                let fillWidth = CGFloat(abs(balance)) * (sliderWidth / 2)
-                let fillX = balance > 0 ? sliderWidth / 2 : (sliderWidth / 2) - fillWidth
-                
-                Rectangle()
-                    .fill(LinearGradient(
-                        colors: [
-                            Color(red: 1.0, green: 0.6, blue: 0.0), // Same Winamp orange as volume
-                            Color(red: 1.0, green: 0.8, blue: 0.0)  // Same Winamp yellow as volume
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    ))
-                    .frame(width: fillWidth, height: sliderHeight - 2)
-                    .offset(x: fillX, y: 0)
-                    .padding(1)
-            }
-            
-            // Subtle center indicator (not prominent)
+
+            // Green balance fill from center, visible even at center
+            let centerX = sliderWidth / 2
+            let halfTrack = (sliderWidth - trackInset * 2) / 2
+            let dynWidth = CGFloat(abs(balance)) * halfTrack
+            let fillWidth = max(minCenterFill, dynWidth)
+            let fillX = balance >= 0 ? centerX : (centerX - fillWidth)
+
             Rectangle()
-                .fill(Color.gray.opacity(0.3))
-                .frame(width: 1, height: sliderHeight - 4)
-                .offset(x: sliderWidth / 2, y: 0)
-                .padding(2)
-            
+                .fill(LinearGradient(
+                    colors: [
+                        Color(red: 0.15, green: 0.8, blue: 0.25),
+                        Color(red: 0.05, green: 0.6, blue: 0.15)
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                ))
+                .frame(width: fillWidth, height: trackFillHeight)
+                .offset(x: fillX, y: (sliderHeight - trackFillHeight) / 2 + trackYBias)
+
+            // Sprite thumb (from skin)
+            let thumbSprite = isDragging ? "MAIN_BALANCE_THUMB_ACTIVE" : "MAIN_BALANCE_THUMB"
+            SimpleSpriteImage(thumbSprite, width: thumbWidth, height: thumbHeight)
+                .at(x: thumbPosition, y: (sliderHeight - thumbHeight) / 2)
+
             // Invisible interaction area
             GeometryReader { geo in
                 Color.clear
