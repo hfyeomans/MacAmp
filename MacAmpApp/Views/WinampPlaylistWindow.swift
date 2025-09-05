@@ -8,26 +8,27 @@ struct WinampPlaylistWindow: View {
     
     @State private var selectedTrackIndex: Int? = nil
     
-    // Winamp playlist coordinate constants (CORRECTED from webamp reference)
+    // Winamp playlist coordinate constants (from Webamp CSS)
     private struct PLCoords {
         // Window sections (webamp layout)
-        static let topHeight: CGFloat = 20      // Title bar
-        static let bottomHeight: CGFloat = 38   // Control buttons
-        static let leftBorderWidth: CGFloat = 12 // Left chrome
-        static let rightScrollWidth: CGFloat = 20 // Right scrollbar area
-        
+        static let topHeight: CGFloat = 20        // .playlist-top min/max-height: 20px
+        static let bottomHeight: CGFloat = 38     // .playlist-bottom height: 38px
+        static let leftBorderWidth: CGFloat = 12  // .playlist-middle-left width: 12px
+        static let rightScrollWidth: CGFloat = 20 // .playlist-middle-right width: 20px
+
         // Track area (calculated from window sections)
         static let trackAreaX: CGFloat = leftBorderWidth
-        static let trackAreaY: CGFloat = topHeight + 3 // 3px padding
+        static let trackAreaY: CGFloat = topHeight + 3 // .playlist-middle-center padding: 3px 0
         static let trackAreaWidth: CGFloat = WinampSizes.playlistBase.width - leftBorderWidth - rightScrollWidth
-        
+        // Height is computed as (total - top - bottom) minus 3px top + 3px bottom padding
+
         // Titlebar buttons (same as other windows)
         static let minimizeButton = CGPoint(x: 244, y: 3)
         static let shadeButton = CGPoint(x: 254, y: 3)
         static let closeButton = CGPoint(x: 264, y: 3)
         
         // Bottom control buttons (CORRECTED from webamp)
-        static let bottomY: CGFloat = WinampSizes.playlistBase.height - bottomHeight + 12 // 12px from bottom
+        static let bottomY: CGFloat = WinampSizes.playlistBase.height - bottomHeight + 12 // bottom:12px
         
         // Left side buttons
         static let addButton = CGPoint(x: 14, y: bottomY)
@@ -39,9 +40,10 @@ struct WinampPlaylistWindow: View {
         static let listButton = CGPoint(x: WinampSizes.playlistBase.width - 22 - 22, y: bottomY)
         
         // Track specifications (EXACT webamp specs)
-        static let trackHeight: CGFloat = 13  // EXACT webamp track height  
-        static let fontSize: CGFloat = 9      // EXACT webamp font size
-        static let letterSpacing: CGFloat = 0.5 // CRITICAL: 0.5px letter spacing for authentic Winamp text
+        static let trackHeight: CGFloat = 13     // .track-cell height/line-height: 13px
+        static let fontSize: CGFloat = 9         // font-size: 9px
+        static let letterSpacing: CGFloat = 0.5  // letter-spacing: 0.5px
+        static let durationRightPadding: CGFloat = 3 // playlist-track-durations > div { padding-right: 3px }
     }
     
     var body: some View {
@@ -111,6 +113,7 @@ struct WinampPlaylistWindow: View {
     @ViewBuilder
     private func buildPlaylistContent() -> some View {
         // Track list area with EXACT webamp styling
+        // Center area height minus 3px top + 3px bottom padding (matches Webamp CSS)
         let contentHeight = WinampSizes.playlistBase.height - PLCoords.topHeight - PLCoords.bottomHeight - 6
         
         // Black background for track area (like Winamp)
@@ -188,6 +191,7 @@ struct WinampPlaylistWindow: View {
                 .font(.system(size: PLCoords.fontSize, design: .monospaced))
                 .foregroundColor(trackTextColor(track: track))
                 .frame(width: 30, alignment: .trailing)
+                .padding(.trailing, PLCoords.durationRightPadding)
         }
         .padding(.horizontal, 1) // Minimal padding like webamp
         .frame(height: PLCoords.trackHeight) // EXACT 13px height
@@ -267,32 +271,18 @@ struct WinampPlaylistWindow: View {
     
     @ViewBuilder
     private func buildScrollbar() -> some View {
-        // Scrollbar area (EXACT webamp dimensions and positioning)
-        let scrollAreaX = WinampSizes.playlistBase.width - PLCoords.rightScrollWidth
-        let scrollAreaY = PLCoords.topHeight
-        let scrollAreaHeight = WinampSizes.playlistBase.height - PLCoords.topHeight - PLCoords.bottomHeight
+        // Scrollbar area (EXACT Webamp dimensions and positioning)
+        let scrollAreaX = WinampSizes.playlistBase.width - PLCoords.rightScrollWidth // 20px gutter
+        let scrollAreaY = PLCoords.topHeight                                        // starts below top (20px)
+        let scrollAreaHeight = WinampSizes.playlistBase.height - PLCoords.topHeight - PLCoords.bottomHeight // total - 58
         
         // Scrollbar background (integrated with right chrome)
         // This area is handled by the PLAYLIST_RIGHT_TILE sprites
         
-        // Scroll handle (EXACT webamp spec: 8px wide × 18px tall)
+        // Scroll handle (Webamp: margin-left 5, width 8, height 18; slider height = total - 58)
+        // For now, render at the top of the gutter (no scroll position state yet)
         SimpleSpriteImage("PLAYLIST_SCROLL_HANDLE", width: 8, height: 18)
-            .at(x: scrollAreaX + 5, y: scrollAreaY + 10) // 5px margin from right edge
-        
-        // Scroll buttons at bottom of scrollbar
-        Group {
-            // Up button
-            Rectangle()
-                .fill(Color.gray.opacity(0.8))
-                .frame(width: 8, height: 5)
-                .at(x: scrollAreaX + 7, y: scrollAreaHeight + scrollAreaY - 18 + 2)
-            
-            // Down button  
-            Rectangle()
-                .fill(Color.gray.opacity(0.8))
-                .frame(width: 8, height: 5)
-                .at(x: scrollAreaX + 7, y: scrollAreaHeight + scrollAreaY - 18 + 8)
-        }
+            .at(x: scrollAreaX + 5, y: scrollAreaY)
     }
     
     // MARK: - Helper Functions
