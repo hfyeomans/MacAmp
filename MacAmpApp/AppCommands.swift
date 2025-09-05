@@ -1,15 +1,16 @@
 import SwiftUI
 
 struct AppCommands: Commands {
-    @Environment(\.openWindow) private var openWindow
+    let dockingController: DockingController
 
     var body: some Commands {
-        CommandMenu("Windows") {
-            Button("Show Playlist") { openWindow(id: "playlistWindow") }
-                .keyboardShortcut("p", modifiers: [.command, .shift])
-            Button("Show Equalizer") { openWindow(id: "equalizerWindow") }
-                .keyboardShortcut("e", modifiers: [.command, .shift])
+        CommandMenu("View") {
+            Button(dockingController.showMain ? "Hide Main" : "Show Main") { dockingController.toggleMain() }
+                .keyboardShortcut("1", modifiers: [.command, .shift])
+            Button(dockingController.showPlaylist ? "Hide Playlist" : "Show Playlist") { dockingController.togglePlaylist() }
+                .keyboardShortcut("2", modifiers: [.command, .shift])
+            Button(dockingController.showEqualizer ? "Hide Equalizer" : "Show Equalizer") { dockingController.toggleEqualizer() }
+                .keyboardShortcut("3", modifiers: [.command, .shift])
         }
     }
 }
-

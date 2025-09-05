@@ -42,6 +42,8 @@
 		D077337C4C05A6658475376F /* VisualizerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 499433D5A14F2C47C9EB0931 /* VisualizerView.swift */; };
 		D1C8711941E449B2B86568DF /* SimpleTestMainWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61CCD7FBB76B81039F2887D7 /* SimpleTestMainWindow.swift */; };
 		FEF2451745AD29CA232322BF /* MainWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC46D7551B28A7B9FF034839 /* MainWindowView.swift */; };
+        E0F4D9A2B2C34B0E8F65C1A2 /* DockingController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0F4D998B2C34B0E8F65C1A2 /* DockingController.swift */; };
+        E0F4D9A1B2C34B0E8F65C1A2 /* DockingContainerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0F4D99AB2C34B0E8F65C1A2 /* DockingContainerView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -81,6 +83,8 @@
 		E5AF78956321BB7B21810429 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		F8A2F2CBA9954B0B144DA072 /* WindowAccessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowAccessor.swift; sourceTree = "<group>"; };
 		FDF85EA8990A038079FC0CC3 /* EQF.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EQF.swift; sourceTree = "<group>"; };
+        E0F4D998B2C34B0E8F65C1A2 /* DockingController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DockingController.swift; sourceTree = "<group>"; };
+        E0F4D99AB2C34B0E8F65C1A2 /* DockingContainerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DockingContainerView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -155,6 +159,7 @@
 		D4D715C613A4E03DDE1E814A /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				E0F4D99AB2C34B0E8F65C1A2 /* DockingContainerView.swift */,
 				9D670AF21099D18D7C29C12D /* BalanceSliderView.swift */,
 				032A0DEAD316CCA0CDA2645D /* EqGraphView.swift */,
 				77BEA1F1121A4B4633AD1083 /* EQSliderView.swift */,
@@ -205,6 +210,7 @@
 			isa = PBXGroup;
 			children = (
 				97F3E1419E231E886A674A64 /* SkinManager.swift */,
+				E0F4D998B2C34B0E8F65C1A2 /* DockingController.swift */,
 			);
 			path = ViewModels;
 			sourceTree = "<group>";
@@ -309,6 +315,8 @@
 				34EEE95E7D965A0D94D12C30 /* WinampMainWindow.swift in Sources */,
 				ADDBF8E53028E97A7A005307 /* WinampPlaylistWindow.swift in Sources */,
 				592F5C98FC8B29F71341CBD8 /* WinampVolumeSlider.swift in Sources */,
+				E0F4D9A2B2C34B0E8F65C1A2 /* DockingController.swift in Sources */,
+				E0F4D9A1B2C34B0E8F65C1A2 /* DockingContainerView.swift in Sources */,
 				878F770AF1608311F0C9BA09 /* WindowAccessor.swift in Sources */,
 				7C97F7855F700CA55821BFD1 /* WindowSnapManager.swift in Sources */,
 				47C40C273D4B4CD3804B3224 /* WindowSpec.swift in Sources */,
