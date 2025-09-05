@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 /// Hosts Main, Playlist, and Equalizer panes in a single macOS window.
 struct DockingContainerView: View {
@@ -12,13 +13,16 @@ struct DockingContainerView: View {
     @State private var dragOffsetX: CGFloat = 0
     @State private var insertionIndex: Int? = nil
     private let snapDistance: CGFloat = 15
-    private let windowSizeKey = "DockWindowSizeV1"
+    private let windowFrameKey = "DockWindowFrameV1"
+    @State private var hostWindow: NSWindow?
+    @State private var observersInstalled: Bool = false
 
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .topLeading) {
                 HStack(alignment: .top, spacing: interPaneSpacing) {
-                    ForEach(visiblePanes()) { pane in
+                    let panes = visiblePanes()
+                    ForEach(Array(panes.enumerated()), id: \.element.id) { (idx, pane) in
                         DraggablePane(
                             id: pane.id,
                             draggingID: $draggingID,
@@ -38,6 +42,19 @@ struct DockingContainerView: View {
                                 .overlay(targetOverlay(for: pane))
                         }
                         .background(PaneFrameReader(id: pane.id))
+
+                        // Resizer handle between panes
+                        if idx < panes.count - 1 {
+                            ResizerBar()
+                                .frame(width: 5, height: heightForPane(pane))
+                                .contentShape(Rectangle())
+                                .gesture(
+                                    DragGesture(minimumDistance: 0, coordinateSpace: .named("dock"))
+                                        .onChanged { value in
+                                            resizeBetween(left: panes[idx], right: panes[idx+1], delta: value.translation.width, containerWidth: geo.size.width)
+                                        }
+                                )
+                        }
                     }
                 }
                 .coordinateSpace(name: "dock")
@@ -53,16 +70,24 @@ struct DockingContainerView: View {
             }
             .onAppear {
                 loadDefaultSkinIfNeeded()
-                restoreWindowSizeIfAvailable()
+                restoreWindowFrameIfAvailable()
             }
             .onChange(of: geo.size) { _ in
-                saveWindowSize(size: geo.size)
+                saveWindowFrame()
             }
         }
         .background(Color.black)
         .background(WindowAccessor { window in
-            // Ensure we can read the window reference for sizing
-            _ = window
+            self.hostWindow = window
+            if !observersInstalled {
+                NotificationCenter.default.addObserver(forName: NSWindow.didMoveNotification, object: window, queue: .main) { _ in
+                    saveWindowFrame()
+                }
+                NotificationCenter.default.addObserver(forName: NSWindow.didEndLiveResizeNotification, object: window, queue: .main) { _ in
+                    saveWindowFrame()
+                }
+                observersInstalled = true
+            }
         })
     }
 
@@ -283,22 +308,59 @@ extension DockingContainerView {
 // MARK: - Window size persistence
 
 extension DockingContainerView {
-    private func saveWindowSize(size: CGSize) {
-        let dict: [String: CGFloat] = ["w": size.width, "h": size.height]
-        UserDefaults.standard.set(dict, forKey: windowSizeKey)
+    private func saveWindowFrame() {
+        guard let win = hostWindow else { return }
+        let frame = win.frame
+        let dict: [String: CGFloat] = ["x": frame.origin.x, "y": frame.origin.y, "w": frame.size.width, "h": frame.size.height]
+        UserDefaults.standard.set(dict, forKey: windowFrameKey)
     }
 
-    private func restoreWindowSizeIfAvailable() {
-        guard let dict = UserDefaults.standard.dictionary(forKey: windowSizeKey) as? [String: CGFloat],
-              let w = dict["w"], let h = dict["h"] else { return }
-        // Use WindowAccessor to set content size
-        WindowAccessor { window in
-            var frame = window.frame
-            let contentRect = NSWindow.contentRect(forFrameRect: frame, styleMask: window.styleMask)
-            let newContentRect = NSRect(x: contentRect.origin.x, y: contentRect.origin.y, width: w, height: h)
-            let newFrame = NSWindow.frameRect(forContentRect: newContentRect, styleMask: window.styleMask)
-            window.setFrame(newFrame, display: true)
+    private func restoreWindowFrameIfAvailable() {
+        guard let dict = UserDefaults.standard.dictionary(forKey: windowFrameKey) as? [String: CGFloat],
+              let x = dict["x"], let y = dict["y"], let w = dict["w"], let h = dict["h"],
+              let win = hostWindow else { return }
+        let newFrame = NSRect(x: x, y: y, width: w, height: h)
+        win.setFrame(newFrame, display: true)
+    }
+}
+
+// MARK: - Resizing support
+
+extension DockingContainerView {
+    private func resizeBetween(left: DockPaneState, right: DockPaneState, delta: CGFloat, containerWidth: CGFloat) {
+        let leftCurrent = widthForPane(left, containerWidth: containerWidth)
+        let rightCurrent = widthForPane(right, containerWidth: containerWidth)
+        let minLeft = naturalSize(for: left.type).width
+        let minRight = naturalSize(for: right.type).width
+        var newLeft = max(minLeft, leftCurrent + delta)
+        var newRight = max(minRight, rightCurrent - delta)
+        // If pushing beyond min on one side, clamp and adjust counterpart
+        if newLeft == minLeft { newRight = leftCurrent + rightCurrent - newLeft }
+        if newRight == minRight { newLeft = leftCurrent + rightCurrent - newRight }
+        dockingSetWidth(left.type, newLeft)
+        dockingSetWidth(right.type, newRight)
+    }
+
+    private func dockingSetWidth(_ type: DockPaneType, _ width: CGFloat) {
+        if let idx = docking.panes.firstIndex(where: { $0.type == type }) {
+            docking.panes[idx].idealWidth = width
         }
-        .body // no-op; force init
+    }
+}
+
+// MARK: - Resizer bar visual
+
+private struct ResizerBar: View {
+    @State private var pulse: Bool = false
+    var body: some View {
+        Rectangle()
+            .fill(Color.gray.opacity(0.4))
+            .overlay(Rectangle().stroke(Color.white.opacity(0.6), lineWidth: 0.5))
+            .shadow(color: Color.white.opacity(pulse ? 0.6 : 0.2), radius: pulse ? 3 : 1)
+            .onAppear {
+                withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
+                    pulse.toggle()
+                }
+            }
     }
 }
