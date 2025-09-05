@@ -44,6 +44,7 @@
 		FEF2451745AD29CA232322BF /* MainWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC46D7551B28A7B9FF034839 /* MainWindowView.swift */; };
         E0F4D9A2B2C34B0E8F65C1A2 /* DockingController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0F4D998B2C34B0E8F65C1A2 /* DockingController.swift */; };
         E0F4D9A1B2C34B0E8F65C1A2 /* DockingContainerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0F4D99AB2C34B0E8F65C1A2 /* DockingContainerView.swift */; };
+        E2FD0001F00D000000000001 /* UnifiedDockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2FD0000F00D000000000001 /* UnifiedDockView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -83,8 +84,9 @@
 		E5AF78956321BB7B21810429 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		F8A2F2CBA9954B0B144DA072 /* WindowAccessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowAccessor.swift; sourceTree = "<group>"; };
 		FDF85EA8990A038079FC0CC3 /* EQF.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EQF.swift; sourceTree = "<group>"; };
-        E0F4D998B2C34B0E8F65C1A2 /* DockingController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DockingController.swift; sourceTree = "<group>"; };
+		E0F4D998B2C34B0E8F65C1A2 /* DockingController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DockingController.swift; sourceTree = "<group>"; };
         E0F4D99AB2C34B0E8F65C1A2 /* DockingContainerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DockingContainerView.swift; sourceTree = "<group>"; };
+        E2FD0000F00D000000000001 /* UnifiedDockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnifiedDockView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -159,6 +161,7 @@
 		D4D715C613A4E03DDE1E814A /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				E2FD0000F00D000000000001 /* UnifiedDockView.swift */,
 				E0F4D99AB2C34B0E8F65C1A2 /* DockingContainerView.swift */,
 				9D670AF21099D18D7C29C12D /* BalanceSliderView.swift */,
 				032A0DEAD316CCA0CDA2645D /* EqGraphView.swift */,
@@ -315,6 +318,7 @@
 				34EEE95E7D965A0D94D12C30 /* WinampMainWindow.swift in Sources */,
 				ADDBF8E53028E97A7A005307 /* WinampPlaylistWindow.swift in Sources */,
 				592F5C98FC8B29F71341CBD8 /* WinampVolumeSlider.swift in Sources */,
+				E2FD0001F00D000000000001 /* UnifiedDockView.swift in Sources */,
 				E0F4D9A2B2C34B0E8F65C1A2 /* DockingController.swift in Sources */,
 				E0F4D9A1B2C34B0E8F65C1A2 /* DockingContainerView.swift in Sources */,
 				878F770AF1608311F0C9BA09 /* WindowAccessor.swift in Sources */,

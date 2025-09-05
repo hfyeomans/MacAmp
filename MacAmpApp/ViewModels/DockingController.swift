@@ -15,6 +15,7 @@ struct DockPaneState: Identifiable, Codable, Equatable {
     var visible: Bool
     var isShaded: Bool
     var idealWidth: CGFloat?
+    var row: Int // 0 = top, 1 = bottom
     var id: String { type.rawValue }
 }
 
@@ -36,9 +37,9 @@ final class DockingController: ObservableObject {
         } else {
             // Default order matches classic Winamp: Main | Playlist | Equalizer (only Main visible initially)
             self.panes = [
-                DockPaneState(type: .main, visible: true, isShaded: false, idealWidth: nil),
-                DockPaneState(type: .playlist, visible: false, isShaded: false, idealWidth: nil),
-                DockPaneState(type: .equalizer, visible: false, isShaded: false, idealWidth: nil)
+                DockPaneState(type: .main, visible: true, isShaded: false, idealWidth: nil, row: 0),
+                DockPaneState(type: .playlist, visible: false, isShaded: false, idealWidth: nil, row: 1),
+                DockPaneState(type: .equalizer, visible: false, isShaded: false, idealWidth: nil, row: 1)
             ]
         }
 
@@ -87,15 +88,14 @@ final class DockingController: ObservableObject {
         panes = new
     }
 
-    private func overallIndex(forVisibleIndex vIndex: Int) -> Int {
+    private func overallIndex(forVisibleIndex vIndex: Int, withinRow row: Int? = nil) -> Int {
         var count = 0
         for (i, p) in panes.enumerated() {
-            if p.visible {
+            if p.visible && (row == nil || p.row == row) {
                 if count == vIndex { return i }
                 count += 1
             }
         }
-        // If vIndex points after last visible, place at end
         return panes.count
     }
 
@@ -103,5 +103,18 @@ final class DockingController: ObservableObject {
     func toggleShade(_ type: DockPaneType) {
         guard let idx = panes.firstIndex(where: { $0.type == type }) else { return }
         panes[idx].isShaded.toggle()
+    }
+
+    // MARK: - Move across rows
+    func move(type: DockPaneType, toRow: Int, toVisibleIndex: Int) {
+        guard let fromIndex = panes.firstIndex(where: { $0.type == type }) else { return }
+        var item = panes.remove(at: fromIndex)
+        item.row = toRow
+        // Find start of target row in overall order
+        let indicesInRow = panes.enumerated().filter { $0.element.row == toRow }
+        let rowStart = indicesInRow.map { $0.offset }.min() ?? panes.count
+        // Compute insertion overall index as rowStart + toVisibleIndex (clamped)
+        let insertAt = min(panes.count, max(rowStart, rowStart + toVisibleIndex))
+        panes.insert(item, at: insertAt)
     }
 }

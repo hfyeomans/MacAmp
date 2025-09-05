@@ -8,7 +8,7 @@ struct MacAmpApp: App {
 
     var body: some Scene {
         WindowGroup {
-            DockingContainerView()
+            UnifiedDockView()
                 .environmentObject(skinManager)
                 .environmentObject(audioPlayer)
                 .environmentObject(dockingController)
