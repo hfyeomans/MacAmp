@@ -1,0 +1,27 @@
+name: MacAmpApp
+options:
+  minimumXcodeGenVersion: 2.38.0
+  deploymentTarget:
+    macOS: '13.0'
+packages:
+  ZIPFoundation:
+    url: https://github.com/weichsel/ZIPFoundation.git
+    from: 0.9.0
+targets:
+  MacAmpApp:
+    type: application
+    platform: macOS
+    deploymentTarget: '13.0'
+    sources:
+      - path: MacAmpApp
+    resources:
+      - path: MacAmpApp/Assets
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.hfyeomans.MacAmpApp
+      INFOPLIST_FILE: MacAmpApp/Info.plist
+      SWIFT_VERSION: 6.0
+      configs:
+        Release:
+          CONFIGURATION_BUILD_DIR: $(PROJECT_DIR)/dist
+    dependencies:
+      - package: ZIPFoundation

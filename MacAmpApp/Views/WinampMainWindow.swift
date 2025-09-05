@@ -1,0 +1,363 @@
+import SwiftUI
+import AppKit
+
+/// Pixel-perfect recreation of Winamp's main window using absolute positioning
+struct WinampMainWindow: View {
+    @EnvironmentObject var skinManager: SkinManager
+    @EnvironmentObject var audioPlayer: AudioPlayer
+    @Environment(\.openWindow) var openWindow
+    
+    @State private var isShadeMode: Bool = false
+    @State private var showRemainingTime: Bool = false
+    @State private var isScrubbing: Bool = false
+    @State private var wasPlayingPreScrub: Bool = false
+    
+    // Winamp coordinate constants (from original Winamp and webamp)
+    private struct Coords {
+        // Transport buttons (all at y: 88)
+        static let prevButton = CGPoint(x: 16, y: 88)
+        static let playButton = CGPoint(x: 39, y: 88)
+        static let pauseButton = CGPoint(x: 62, y: 88)
+        static let stopButton = CGPoint(x: 85, y: 88)
+        static let nextButton = CGPoint(x: 108, y: 88)
+        static let ejectButton = CGPoint(x: 136, y: 89) // Slightly different
+        
+        // Time display
+        static let timeDisplay = CGPoint(x: 39, y: 26)
+        
+        // Play/Pause indicator
+        static let playPauseIndicator = CGPoint(x: 24, y: 28)
+        
+        // Volume and Balance
+        static let volumeSlider = CGPoint(x: 107, y: 57)
+        static let balanceSlider = CGPoint(x: 177, y: 57)
+        
+        // Position slider
+        static let positionSlider = CGPoint(x: 16, y: 72)
+        
+        // EQ/Playlist buttons
+        static let eqButton = CGPoint(x: 219, y: 58)
+        static let playlistButton = CGPoint(x: 242, y: 58)
+        
+        // Titlebar buttons (at top)
+        static let minimizeButton = CGPoint(x: 244, y: 3)
+        static let shadeButton = CGPoint(x: 254, y: 3)
+        static let closeButton = CGPoint(x: 264, y: 3)
+    }
+    
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            // Background
+            SimpleSpriteImage("MAIN_WINDOW_BACKGROUND", 
+                            width: WinampSizes.main.width, 
+                            height: WinampSizes.main.height)
+            
+            if !isShadeMode {
+                // Full window mode
+                buildFullWindow()
+            } else {
+                // Shade mode (collapsed to titlebar only)
+                buildShadeMode()
+            }
+        }
+        .frame(width: WinampSizes.main.width, 
+               height: isShadeMode ? WinampSizes.mainShade.height : WinampSizes.main.height)
+        .background(Color.black) // Fallback
+    }
+    
+    @ViewBuilder
+    private func buildFullWindow() -> some View {
+        Group {
+            // Titlebar buttons
+            buildTitlebarButtons()
+            
+            // Play/Pause indicator
+            buildPlayPauseIndicator()
+            
+            // Time display
+            buildTimeDisplay()
+            
+            // Transport buttons
+            buildTransportButtons()
+            
+            // Position slider
+            buildPositionSlider()
+            
+            // Volume slider
+            buildVolumeSlider()
+            
+            // Balance slider  
+            buildBalanceSlider()
+            
+            // EQ/Playlist buttons
+            buildWindowToggleButtons()
+            
+            // Additional Winamp elements (simplified)
+            buildMonoStereoIndicator()
+        }
+    }
+    
+    @ViewBuilder
+    private func buildShadeMode() -> some View {
+        // In shade mode, only show essential controls in compact form
+        buildTitlebarButtons()
+    }
+    
+    @ViewBuilder
+    private func buildTitlebarButtons() -> some View {
+        Group {
+            // Minimize button
+            Button(action: {
+                NSApp.keyWindow?.miniaturize(nil)
+            }) {
+                SimpleSpriteImage("MAIN_MINIMIZE_BUTTON", width: 9, height: 9)
+            }
+            .buttonStyle(.plain)
+            .at(Coords.minimizeButton)
+            
+            // Shade button
+            Button(action: {
+                isShadeMode.toggle()
+            }) {
+                SimpleSpriteImage("MAIN_SHADE_BUTTON", width: 9, height: 9)
+            }
+            .buttonStyle(.plain)
+            .at(Coords.shadeButton)
+            
+            // Close button
+            Button(action: {
+                NSApplication.shared.terminate(nil)
+            }) {
+                SimpleSpriteImage("MAIN_CLOSE_BUTTON", width: 9, height: 9)
+            }
+            .buttonStyle(.plain)
+            .at(Coords.closeButton)
+        }
+    }
+    
+    @ViewBuilder
+    private func buildPlayPauseIndicator() -> some View {
+        let spriteKey = audioPlayer.isPlaying ? "MAIN_PLAYING_INDICATOR" : 
+                       "MAIN_STOPPED_INDICATOR"
+        
+        SimpleSpriteImage(spriteKey, width: 9, height: 9)
+            .at(Coords.playPauseIndicator)
+    }
+    
+    @ViewBuilder
+    private func buildTimeDisplay() -> some View {
+        HStack(spacing: 0) {
+            // Show minus sign for remaining time
+            if showRemainingTime {
+                SimpleSpriteImage("MINUS_SIGN", width: 5, height: 1)
+                    .padding(.top, 6) // Align with digit baseline
+            }
+            
+            // Time digits (MM:SS format)
+            let timeToShow = showRemainingTime ? 
+                max(0.0, audioPlayer.currentDuration - audioPlayer.currentTime) :
+                audioPlayer.currentTime
+            
+            let digits = timeDigits(from: timeToShow)
+            
+            ForEach(0..<digits.count, id: \.self) { index in
+                SimpleSpriteImage("DIGIT_\(digits[index])", width: 9, height: 13)
+                
+                // Add colon after minutes (background has colon, but we position digits around it)
+                if index == 1 {
+                    Spacer().frame(width: 3) // Space for colon in background
+                }
+            }
+        }
+        .at(Coords.timeDisplay)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            showRemainingTime.toggle()
+        }
+    }
+    
+    @ViewBuilder
+    private func buildTransportButtons() -> some View {
+        Group {
+            // Previous
+            Button(action: { audioPlayer.previousTrack() }) {
+                SimpleSpriteImage("MAIN_PREVIOUS_BUTTON", width: 23, height: 18)
+            }
+            .buttonStyle(.plain)
+            .at(Coords.prevButton)
+            
+            // Play
+            Button(action: { audioPlayer.play() }) {
+                SimpleSpriteImage("MAIN_PLAY_BUTTON", width: 23, height: 18)
+            }
+            .buttonStyle(.plain)
+            .at(Coords.playButton)
+            
+            // Pause
+            Button(action: { audioPlayer.pause() }) {
+                SimpleSpriteImage("MAIN_PAUSE_BUTTON", width: 23, height: 18)
+            }
+            .buttonStyle(.plain)
+            .at(Coords.pauseButton)
+            
+            // Stop
+            Button(action: { audioPlayer.stop() }) {
+                SimpleSpriteImage("MAIN_STOP_BUTTON", width: 23, height: 18)
+            }
+            .buttonStyle(.plain)
+            .at(Coords.stopButton)
+            
+            // Next
+            Button(action: { audioPlayer.nextTrack() }) {
+                SimpleSpriteImage("MAIN_NEXT_BUTTON", width: 23, height: 18)
+            }
+            .buttonStyle(.plain)
+            .at(Coords.nextButton)
+            
+            // Eject (handles file loading like original Winamp)
+            Button(action: { 
+                openFileDialog() // File loading integrated into eject button
+            }) {
+                SimpleSpriteImage("MAIN_EJECT_BUTTON", width: 22, height: 16)
+            }
+            .buttonStyle(.plain)
+            .at(Coords.ejectButton)
+        }
+    }
+    
+    @ViewBuilder
+    private func buildPositionSlider() -> some View {
+        // Position slider background
+        SimpleSpriteImage("MAIN_POSITION_SLIDER_BACKGROUND", width: 248, height: 10)
+            .at(Coords.positionSlider)
+            .overlay(
+                // Interactive scrubbing area
+                GeometryReader { geo in
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .gesture(
+                            DragGesture(minimumDistance: 0)
+                                .onChanged { value in
+                                    handlePositionScrub(value, in: geo)
+                                }
+                                .onEnded { value in
+                                    handlePositionScrubEnd(value, in: geo)
+                                }
+                        )
+                }
+                .frame(width: 248, height: 10)
+                .at(Coords.positionSlider)
+            )
+        
+        // Position slider thumb (moves based on playback progress)
+        SimpleSpriteImage("MAIN_POSITION_SLIDER_THUMB", width: 29, height: 10)
+            .at(CGPoint(x: Coords.positionSlider.x + (248 - 29) * audioPlayer.playbackProgress,
+                       y: Coords.positionSlider.y))
+    }
+    
+    @ViewBuilder
+    private func buildVolumeSlider() -> some View {
+        WinampVolumeSlider(volume: $audioPlayer.volume)
+            .at(Coords.volumeSlider)
+    }
+    
+    @ViewBuilder
+    private func buildBalanceSlider() -> some View {
+        WinampBalanceSlider(balance: $audioPlayer.balance)
+            .at(Coords.balanceSlider)
+    }
+    
+    @ViewBuilder
+    private func buildWindowToggleButtons() -> some View {
+        Group {
+            // EQ button
+            Button(action: {
+                openWindow(id: "equalizerWindow")
+            }) {
+                SimpleSpriteImage("MAIN_EQ_BUTTON", width: 23, height: 12)
+            }
+            .buttonStyle(.plain)
+            .at(Coords.eqButton)
+            
+            // Playlist button
+            Button(action: {
+                openWindow(id: "playlistWindow")
+            }) {
+                SimpleSpriteImage("MAIN_PLAYLIST_BUTTON", width: 23, height: 12)
+            }
+            .buttonStyle(.plain)
+            .at(Coords.playlistButton)
+        }
+    }
+    
+    @ViewBuilder
+    private func buildMonoStereoIndicator() -> some View {
+        // Mono/Stereo indicator
+        SimpleSpriteImage("MAIN_STEREO", width: 29, height: 12)
+            .at(x: 212, y: 41)
+    }
+    
+    private func openFileDialog() {
+        let openPanel = NSOpenPanel()
+        openPanel.allowedContentTypes = [.audio]
+        openPanel.allowsMultipleSelection = true  // Allow multiple files like Winamp
+        openPanel.canChooseDirectories = false
+        
+        openPanel.begin { response in
+            if response == .OK {
+                for url in openPanel.urls {
+                    audioPlayer.loadTrack(url: url)
+                }
+            }
+        }
+    }
+    
+    // MARK: - Helper Functions
+    
+    private func timeDigits(from seconds: Double) -> [Int] {
+        let totalSeconds = max(0, Int(seconds))
+        let minutes = totalSeconds / 60
+        let secs = totalSeconds % 60
+        
+        return [
+            minutes / 10,  // First minute digit
+            minutes % 10,  // Second minute digit  
+            secs / 10,     // First second digit
+            secs % 10      // Second second digit
+        ]
+    }
+    
+    private func handlePositionScrub(_ value: DragGesture.Value, in geometry: GeometryProxy) {
+        if !isScrubbing {
+            isScrubbing = true
+            wasPlayingPreScrub = audioPlayer.isPlaying
+            if wasPlayingPreScrub { audioPlayer.pause() }
+        }
+        
+        let width = geometry.size.width
+        let x = min(max(0, value.location.x), width)
+        let progress = Double(x / width)
+        
+        if audioPlayer.currentDuration > 0 {
+            let targetTime = progress * audioPlayer.currentDuration
+            audioPlayer.currentTime = targetTime
+            audioPlayer.playbackProgress = progress
+        }
+    }
+    
+    private func handlePositionScrubEnd(_ value: DragGesture.Value, in geometry: GeometryProxy) {
+        let width = geometry.size.width
+        let x = min(max(0, value.location.x), width)
+        let progress = Double(x / width)
+        let targetTime = progress * audioPlayer.currentDuration
+        
+        audioPlayer.seek(to: targetTime, resume: wasPlayingPreScrub)
+        isScrubbing = false
+    }
+}
+
+#Preview {
+    WinampMainWindow()
+        .environmentObject(SkinManager())
+        .environmentObject(AudioPlayer())
+}

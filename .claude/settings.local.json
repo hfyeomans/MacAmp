@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xcodebuild:*)",
+      "Bash(unzip:*)",
+      "Bash(open:*)",
+      "Bash(log stream:*)",
+      "Bash(log show:*)",
+      "Bash(xcodegen generate:*)",
+      "Bash(pkill:*)",
+      "Bash(kill:*)",
+      "Bash(sudo kill:*)",
+      "Read(/Users/hank/**)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

@@ -1,0 +1,31 @@
+######## macOS ########
+.DS_Store
+
+######## Xcode ########
+# User-specific files
+xcuserdata/
+*.xcuserdatad/
+*.xcuserstate
+
+# Workspaces and schemes (keep shared data)
+*.xcworkspace/xcuserdata/
+*.moved-aside
+*.xccheckout
+*.xcscmblueprint
+
+######## Swift / SwiftPM ########
+.build/
+.swiftpm/
+DerivedData/
+
+######## Media (large) ########
+*.mov
+*.mp4
+
+######## Markdown ########
+# Ignore all markdown except root README.md
+*.md
+!README.md
+
+######## Nested repositories ########
+webamp_clone/

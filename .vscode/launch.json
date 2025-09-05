@@ -1,0 +1,22 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:MacAmp}",
+            "name": "Debug MacAmpApp",
+            "program": "${workspaceFolder:MacAmp}/.build/debug/MacAmpApp",
+            "preLaunchTask": "swift: Build Debug MacAmpApp"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:MacAmp}",
+            "name": "Release MacAmpApp",
+            "program": "${workspaceFolder:MacAmp}/.build/release/MacAmpApp",
+            "preLaunchTask": "swift: Build Release MacAmpApp"
+        }
+    ]
+}
