@@ -100,7 +100,13 @@ class SkinManager: ObservableObject {
                 print("   Extracting \(sprites.count) sprites:")
 
                 for sprite in sprites {
-                    if let croppedImage = sheetImage.cropped(to: sprite.rect) {
+                    // CGImage crops from a bottom-left origin; our sprite rects are top-left based.
+                    let r = sprite.rect
+                    let corrected = CGRect(x: r.origin.x,
+                                           y: sheetImage.size.height - r.origin.y - r.size.height,
+                                           width: r.size.width,
+                                           height: r.size.height)
+                    if let croppedImage = sheetImage.cropped(to: corrected) {
                         extractedImages[sprite.name] = croppedImage
                         print("     ✅ \(sprite.name) at \(sprite.rect)")
                     } else {
@@ -163,6 +169,9 @@ class SkinManager: ObservableObject {
 
         } catch {
             print("Error loading skin: \(error)")
+            if let data = try? Data(contentsOf: url) {
+                print("Skin bytes: \(data.count)")
+            }
         }
     }
 }
