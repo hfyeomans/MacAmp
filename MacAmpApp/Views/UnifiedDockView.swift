@@ -96,9 +96,10 @@ struct UnifiedDockView: View {
         pane.isShaded ? 14 : naturalSize(for: pane.type).height
     }
     private func width(for pane: DockPaneState, in containerWidth: CGFloat) -> CGFloat {
-        // Do not stretch to container width. Use persisted idealWidth if present; otherwise natural size.
-        let w = pane.idealWidth ?? naturalSize(for: pane.type).width
-        return max(w, naturalSize(for: pane.type).width)
+        // Do not stretch to container width. Prefer per-row width, then legacy idealWidth, then natural size.
+        let base = naturalSize(for: pane.type).width
+        let w = pane.widthsByRow?[pane.row] ?? pane.idealWidth ?? base
+        return max(w, base)
     }
 
     private func rowWidth(_ row: Int) -> CGFloat {

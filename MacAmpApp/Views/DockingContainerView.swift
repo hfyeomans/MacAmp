@@ -353,7 +353,8 @@ extension DockingContainerView {
 
     private func dockingSetWidth(_ type: DockPaneType, _ width: CGFloat) {
         if let idx = docking.panes.firstIndex(where: { $0.type == type }) {
-            docking.panes[idx].idealWidth = width
+            let row = docking.panes[idx].row
+            docking.setWidth(type, row: row, width: width)
         }
     }
 }

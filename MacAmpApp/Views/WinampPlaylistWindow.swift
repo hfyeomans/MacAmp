@@ -46,10 +46,27 @@ struct WinampPlaylistWindow: View {
         static let durationRightPadding: CGFloat = 3 // playlist-track-durations > div { padding-right: 3px }
     }
     
+    // Metrics derived from current skin sprites for flexibility
+    private struct PLMetrics {
+        let topHeight: CGFloat
+        let bottomHeight: CGFloat
+        let leftBorderWidth: CGFloat
+        let rightScrollWidth: CGFloat
+        let centerPaddingTop: CGFloat
+        let centerPaddingBottom: CGFloat
+    }
+    private func metrics(from skin: Skin?) -> PLMetrics {
+        let th = skin?.images["PLAYLIST_TOP_LEFT_CORNER"]?.size.height ?? 20
+        let bh = skin?.images["PLAYLIST_BOTTOM_LEFT_CORNER"]?.size.height ?? 38
+        let lw = skin?.images["PLAYLIST_LEFT_TILE"]?.size.width ?? 12
+        let rw = skin?.images["PLAYLIST_RIGHT_TILE"]?.size.width ?? 20
+        return PLMetrics(topHeight: th, bottomHeight: bh, leftBorderWidth: lw, rightScrollWidth: rw, centerPaddingTop: 3, centerPaddingBottom: 3)
+    }
+    
     var body: some View {
         ZStack(alignment: .topLeading) {
             // Background chrome using PLEDIT sprites
-            buildPlaylistChrome()
+            buildPlaylistChrome(metrics(from: skinManager.currentSkin))
             
             // Main playlist content area
             buildPlaylistContent()
@@ -66,13 +83,15 @@ struct WinampPlaylistWindow: View {
             
             // Scrollbar (simplified for now)
             buildScrollbar()
+            // Bottom center fill (removes black gaps) using bottom tile
+            buildBottomBar(metrics(from: skinManager.currentSkin))
         }
         .frame(width: WinampSizes.playlistBase.width, height: WinampSizes.playlistBase.height)
         .background(Color.black) // Fallback
     }
     
     @ViewBuilder
-    private func buildPlaylistChrome() -> some View {
+    private func buildPlaylistChrome(_ m: PLMetrics) -> some View {
         // CORRECTED: Proper PLEDIT chrome structure from webamp
         Group {
             // Top section constructed per Webamp CSS layout
@@ -117,22 +136,22 @@ struct WinampPlaylistWindow: View {
                 .at(x: WinampSizes.playlistBase.width - 25, y: 0)
             
             // Left border tiles (CORRECTED count and positioning)
-            let sideHeight = WinampSizes.playlistBase.height - PLCoords.topHeight - PLCoords.bottomHeight
+            let sideHeight = WinampSizes.playlistBase.height - m.topHeight - m.bottomHeight
             let tileCount = Int(sideHeight / 29) + 1
             
             ForEach(0..<tileCount, id: \.self) { index in
                 SimpleSpriteImage("PLAYLIST_LEFT_TILE", width: 12, height: 29)
-                    .at(x: 0, y: PLCoords.topHeight + CGFloat(index) * 29)
+                    .at(x: 0, y: m.topHeight + CGFloat(index) * 29)
             }
             
             // Right border tiles (CORRECT)  
             ForEach(0..<tileCount, id: \.self) { index in
                 SimpleSpriteImage("PLAYLIST_RIGHT_TILE", width: 20, height: 29)
-                    .at(x: WinampSizes.playlistBase.width - 20, y: PLCoords.topHeight + CGFloat(index) * 29)
+                    .at(x: WinampSizes.playlistBase.width - m.rightScrollWidth, y: m.topHeight + CGFloat(index) * 29)
             }
             
             // Bottom corners (CORRECTED positioning)
-            let bottomY = WinampSizes.playlistBase.height - PLCoords.bottomHeight
+            let bottomY = WinampSizes.playlistBase.height - m.bottomHeight
             SimpleSpriteImage("PLAYLIST_BOTTOM_LEFT_CORNER", width: 125, height: 38)
                 .at(x: 0, y: bottomY)
             
@@ -144,14 +163,14 @@ struct WinampPlaylistWindow: View {
     @ViewBuilder
     private func buildPlaylistContent() -> some View {
         // Track list area with EXACT webamp styling
-        // Center area height minus 3px top + 3px bottom padding (matches Webamp CSS)
-        let contentHeight = WinampSizes.playlistBase.height - PLCoords.topHeight - PLCoords.bottomHeight - 6
+        let m = metrics(from: skinManager.currentSkin)
+        let contentHeight = WinampSizes.playlistBase.height - m.topHeight - m.bottomHeight - (m.centerPaddingTop + m.centerPaddingBottom)
         
         // Black background for track area (like Winamp)
         Rectangle()
             .fill(Color.black)
-            .frame(width: PLCoords.trackAreaWidth, height: contentHeight)
-            .at(x: PLCoords.trackAreaX, y: PLCoords.trackAreaY)
+            .frame(width: WinampSizes.playlistBase.width - m.leftBorderWidth - m.rightScrollWidth, height: contentHeight)
+            .at(x: m.leftBorderWidth, y: m.topHeight + m.centerPaddingTop)
         
         // Track list with proper scrolling
         ScrollView(.vertical, showsIndicators: false) {
@@ -194,8 +213,8 @@ struct WinampPlaylistWindow: View {
                 }
             }
         }
-        .frame(width: PLCoords.trackAreaWidth, height: contentHeight)
-        .at(x: PLCoords.trackAreaX, y: PLCoords.trackAreaY)
+        .frame(width: WinampSizes.playlistBase.width - m.leftBorderWidth - m.rightScrollWidth, height: contentHeight)
+        .at(x: m.leftBorderWidth, y: m.topHeight + m.centerPaddingTop)
         .clipped()
     }
     
@@ -238,7 +257,7 @@ struct WinampPlaylistWindow: View {
                 SimpleSpriteImage("MAIN_MINIMIZE_BUTTON", width: 9, height: 9)
             }
             .buttonStyle(.plain)
-            .at(PLCoords.minimizeButton)
+            .at(CGPoint(x: 244, y: 3))
             
             // Shade button
             Button(action: {
@@ -247,7 +266,7 @@ struct WinampPlaylistWindow: View {
                 SimpleSpriteImage("MAIN_SHADE_BUTTON", width: 9, height: 9)
             }
             .buttonStyle(.plain)
-            .at(PLCoords.shadeButton)
+            .at(CGPoint(x: 254, y: 3))
             
             // Close button
             Button(action: {
@@ -256,7 +275,7 @@ struct WinampPlaylistWindow: View {
                 SimpleSpriteImage("MAIN_CLOSE_BUTTON", width: 9, height: 9)
             }
             .buttonStyle(.plain)
-            .at(PLCoords.closeButton)
+            .at(CGPoint(x: 264, y: 3))
         }
     }
     
@@ -336,17 +355,33 @@ struct WinampPlaylistWindow: View {
     @ViewBuilder
     private func buildScrollbar() -> some View {
         // Scrollbar area (EXACT Webamp dimensions and positioning)
-        let scrollAreaX = WinampSizes.playlistBase.width - PLCoords.rightScrollWidth // 20px gutter
-        let scrollAreaY = PLCoords.topHeight                                        // starts below top (20px)
-        let scrollAreaHeight = WinampSizes.playlistBase.height - PLCoords.topHeight - PLCoords.bottomHeight // total - 58
+        let m = metrics(from: skinManager.currentSkin)
+        let scrollAreaX = WinampSizes.playlistBase.width - m.rightScrollWidth // gutter
+        let scrollAreaY = m.topHeight
+        let scrollAreaHeight = WinampSizes.playlistBase.height - m.topHeight - m.bottomHeight
         
-        // Scrollbar background (integrated with right chrome)
-        // This area is handled by the PLAYLIST_RIGHT_TILE sprites
+        // Scrollbar background (integrated with right chrome) via PLAYLIST_RIGHT_TILE
         
         // Scroll handle (Webamp: margin-left 5, width 8, height 18; slider height = total - 58)
         // For now, render at the top of the gutter (no scroll position state yet)
         SimpleSpriteImage("PLAYLIST_SCROLL_HANDLE", width: 8, height: 18)
             .at(x: scrollAreaX + 5, y: scrollAreaY)
+    }
+
+    // Bottom bar center fill
+    @ViewBuilder
+    private func buildBottomBar(_ m: PLMetrics) -> some View {
+        let bottomY = WinampSizes.playlistBase.height - m.bottomHeight
+        let leftCornerWidth: CGFloat = 125
+        let rightCornerWidth: CGFloat = 150
+        let centerStartX = leftCornerWidth
+        let centerWidth = WinampSizes.playlistBase.width - leftCornerWidth - rightCornerWidth
+        let tileWidth: CGFloat = skinManager.currentSkin?.images["PLAYLIST_BOTTOM_TILE"]?.size.width ?? 25
+        let tiles = Int(ceil(centerWidth / tileWidth))
+        ForEach(0..<tiles, id: \.self) { i in
+            SimpleSpriteImage("PLAYLIST_BOTTOM_TILE", width: tileWidth, height: m.bottomHeight)
+                .at(x: centerStartX + CGFloat(i) * tileWidth, y: bottomY)
+        }
     }
     
     // MARK: - Helper Functions
