@@ -15,11 +15,16 @@ struct UnifiedDockView: View {
 
     var body: some View {
         GeometryReader { geo in
+            // Canvas width is the max of both rows' intrinsic widths; rows do not stretch
+            let canvasWidth = max(rowWidth(0), rowWidth(1))
             ZStack(alignment: .topLeading) {
                 VStack(alignment: .leading, spacing: 0) {
                     rowView(row: 0, geo: geo)
+                        .frame(width: canvasWidth, alignment: .leading)
                     rowView(row: 1, geo: geo)
+                        .frame(width: canvasWidth, alignment: .leading)
                 }
+                .frame(width: canvasWidth, alignment: .leading)
                 .coordinateSpace(name: "dock2")
                 .onPreferenceChange(RowFramesKey.self) { frames = $0 }
 
@@ -31,6 +36,8 @@ struct UnifiedDockView: View {
                         .offset(x: guideX, y: rf.minY)
                 }
             }
+            // Keep the whole canvas left-aligned; outer window can be larger
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .background(Color.black)
         .onAppear(perform: ensureSkin)
@@ -89,18 +96,23 @@ struct UnifiedDockView: View {
         pane.isShaded ? 14 : naturalSize(for: pane.type).height
     }
     private func width(for pane: DockPaneState, in containerWidth: CGFloat) -> CGFloat {
-        let peers = docking.panes.filter { $0.visible && $0.row == pane.row }
-        let base = peers.reduce(CGFloat(0)) { $0 + naturalSize(for: $1.type).width }
-        let extra = max(0, containerWidth - base)
-        if peers.contains(where: { $0.type == .playlist }) {
-            return pane.type == .playlist ? naturalSize(for: pane.type).width + extra : naturalSize(for: pane.type).width
-        }
-        return pane.id == peers.last?.id ? naturalSize(for: pane.type).width + extra : naturalSize(for: pane.type).width
+        // Do not stretch to container width. Use persisted idealWidth if present; otherwise natural size.
+        let w = pane.idealWidth ?? naturalSize(for: pane.type).width
+        return max(w, naturalSize(for: pane.type).width)
+    }
+
+    private func rowWidth(_ row: Int) -> CGFloat {
+        let peers = docking.panes.filter { $0.visible && $0.row == row }
+        if peers.isEmpty { return 0 }
+        let bars = max(0, peers.count - 1)
+        let panesSum = peers.reduce(CGFloat(0)) { sum, p in sum + width(for: p, in: 10000) }
+        return panesSum + CGFloat(bars) * 1 // separator width (idle)
     }
 
     // MARK: - Drag/Snap
     private func updateInsertion(for point: CGPoint, container: CGSize) {
-        let topMaxY = rowFrame(row: 0).maxY
+        var topMaxY = rowFrame(row: 0).maxY
+        if topMaxY <= 0 { topMaxY = naturalSize(for: .main).height }
         let targetRow = point.y > topMaxY + 8 ? 1 : 0
         insertionRow = targetRow
         let panes = docking.panes.filter { $0.visible && $0.row == targetRow }
@@ -174,4 +186,3 @@ private struct Draggable2<Content: View>: View {
             )
     }
 }
-
