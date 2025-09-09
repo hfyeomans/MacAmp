@@ -1,7 +1,7 @@
 import SwiftUI
 import AppKit
 
-/// Pixel-perfect recreation of Winamp's playlist window using absolute positioning
+/// Clean rebuild of Winamp's playlist window with pixel-perfect sprite positioning
 struct WinampPlaylistWindow: View {
     @EnvironmentObject var skinManager: SkinManager
     @EnvironmentObject var audioPlayer: AudioPlayer
@@ -9,405 +9,263 @@ struct WinampPlaylistWindow: View {
     
     @State private var selectedTrackIndex: Int? = nil
     
-    // Winamp playlist coordinate constants (from Webamp CSS)
-    private struct PLCoords {
-        // Window sections (webamp layout)
-        static let topHeight: CGFloat = 20        // .playlist-top min/max-height: 20px
-        static let bottomHeight: CGFloat = 38     // .playlist-bottom height: 38px
-        static let leftBorderWidth: CGFloat = 12  // .playlist-middle-left width: 12px
-        static let rightScrollWidth: CGFloat = 20 // .playlist-middle-right width: 20px
-
-        // Track area (calculated from window sections)
-        static let trackAreaX: CGFloat = leftBorderWidth
-        static let trackAreaY: CGFloat = topHeight + 3 // .playlist-middle-center padding: 3px 0
-        static let trackAreaWidth: CGFloat = WinampSizes.playlistBase.width - leftBorderWidth - rightScrollWidth
-        // Height is computed as (total - top - bottom) minus 3px top + 3px bottom padding
-
-        // Titlebar buttons (same as other windows)
-        static let minimizeButton = CGPoint(x: 244, y: 3)
-        static let shadeButton = CGPoint(x: 254, y: 3)
-        static let closeButton = CGPoint(x: 264, y: 3)
-        
-        // Bottom control buttons (CORRECTED from webamp)
-        static let bottomY: CGFloat = WinampSizes.playlistBase.height - bottomHeight + 12 // bottom:12px
-        
-        // Left side buttons
-        static let addButton = CGPoint(x: 14, y: bottomY)
-        static let removeButton = CGPoint(x: 43, y: bottomY)  
-        static let selectionButton = CGPoint(x: 72, y: bottomY)
-        static let miscButton = CGPoint(x: 101, y: bottomY)
-        
-        // Right side elements
-        static let listButton = CGPoint(x: WinampSizes.playlistBase.width - 22 - 22, y: bottomY)
-        
-        // Track specifications (EXACT webamp specs)
-        static let trackHeight: CGFloat = 13     // .track-cell height/line-height: 13px
-        static let fontSize: CGFloat = 9         // font-size: 9px
-        static let letterSpacing: CGFloat = 0.5  // letter-spacing: 0.5px
-        static let durationRightPadding: CGFloat = 3 // playlist-track-durations > div { padding-right: 3px }
-    }
-    
-    // Metrics derived from current skin sprites for flexibility
-    private struct PLMetrics {
-        let topHeight: CGFloat
-        let bottomHeight: CGFloat
-        let leftBorderWidth: CGFloat
-        let rightScrollWidth: CGFloat
-        let centerPaddingTop: CGFloat
-        let centerPaddingBottom: CGFloat
-    }
-    private func metrics(from skin: Skin?) -> PLMetrics {
-        let th = skin?.images["PLAYLIST_TOP_LEFT_CORNER"]?.size.height ?? 20
-        let bh = skin?.images["PLAYLIST_BOTTOM_LEFT_CORNER"]?.size.height ?? 38
-        let lw = skin?.images["PLAYLIST_LEFT_TILE"]?.size.width ?? 12
-        let rw = skin?.images["PLAYLIST_RIGHT_TILE"]?.size.width ?? 20
-        return PLMetrics(topHeight: th, bottomHeight: bh, leftBorderWidth: lw, rightScrollWidth: rw, centerPaddingTop: 3, centerPaddingBottom: 3)
-    }
+    // Window dimensions
+    private let windowWidth: CGFloat = 275
+    private let windowHeight: CGFloat = 232
     
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            // Background chrome using PLEDIT sprites
-            buildPlaylistChrome(metrics(from: skinManager.currentSkin))
-            
-            // Main playlist content area
-            buildPlaylistContent()
-            
-            // Titlebar buttons
-            buildTitlebarButtons()
-            
-            // Bottom control buttons
-            buildControlButtons()
-
-            // Bottom inlays (mini time, action glyphs, mini visualizer)
-            // Temporarily disabled to avoid visual artifacts until sprite hookup is complete
-            // buildBottomInlays()
-            
-            // Scrollbar (simplified for now)
-            buildScrollbar()
-            // Bottom center fill (removes black gaps) using bottom tile
-            buildBottomBar(metrics(from: skinManager.currentSkin))
+        GeometryReader { geometry in
+            ZStack {
+                // CRITICAL: Build complete background first as a single layer
+                buildCompleteBackground()
+                
+                // Then overlay interactive content
+                buildContentOverlay()
+            }
+            .frame(width: windowWidth, height: windowHeight)
         }
-        .frame(width: WinampSizes.playlistBase.width, height: WinampSizes.playlistBase.height)
-        .background(Color.black) // Fallback
+        .frame(width: windowWidth, height: windowHeight)
+        // NO additional backgrounds - this was causing the offset issue
     }
     
+    // MARK: - Complete Background Assembly
     @ViewBuilder
-    private func buildPlaylistChrome(_ m: PLMetrics) -> some View {
-        // CORRECTED: Proper PLEDIT chrome structure from webamp
+    private func buildCompleteBackground() -> some View {
+        // Build the entire playlist chrome as a single background layer
         Group {
-            // Top section constructed per Webamp CSS layout
-            // Left corner (25px)
+            // Top section (0, 0)
             SimpleSpriteImage("PLAYLIST_TOP_LEFT_CORNER", width: 25, height: 20)
-                .at(x: 0, y: 0)
-
-            // Compute left/right flex fill widths so that:
-            // 25 (left corner) + leftFill + 12 (spacer) + 100 (title) + 13 (spacer) + rightFill + 25 (right corner) = 275
-            let available: CGFloat = WinampSizes.playlistBase.width - 25 - 12 - 100 - 13 - 25 // = 100
-            let leftFill: CGFloat = floor(available / 2) // 50
-            let rightFill: CGFloat = available - leftFill // 50
-
-            // Left fill: repeat PLAYLIST_TOP_TILE every 25px
-            if leftFill > 0 {
-                let tiles = Int(ceil(leftFill / 25))
-                ForEach(0..<tiles, id: \.self) { i in
-                    SimpleSpriteImage("PLAYLIST_TOP_TILE", width: 25, height: 20)
-                        .at(x: 25 + CGFloat(i) * 25, y: 0)
-                }
+                .position(x: 12.5, y: 10) // position uses center, so width/2, height/2
+            
+            // Top tiles - fill between corners
+            ForEach(0..<10, id: \.self) { i in
+                SimpleSpriteImage("PLAYLIST_TOP_TILE", width: 25, height: 20)
+                    .position(x: 25 + 12.5 + CGFloat(i) * 25, y: 10)
             }
-
-            // Left spacer (12px) — visually part of fill; no dedicated sprite
-            // Title bar (100px)
-            let titleX = 25 + leftFill + 12
+            
+            // Title bar
             SimpleSpriteImage("PLAYLIST_TITLE_BAR", width: 100, height: 20)
-                .at(x: titleX, y: 0)
-
-            // Right spacer (13px) — visually part of fill; no dedicated sprite
-
-            // Right fill: repeat PLAYLIST_TOP_TILE
-            if rightFill > 0 {
-                let tiles = Int(ceil(rightFill / 25))
-                ForEach(0..<tiles, id: \.self) { i in
-                    SimpleSpriteImage("PLAYLIST_TOP_TILE", width: 25, height: 20)
-                        .at(x: titleX + 100 + 13 + CGFloat(i) * 25, y: 0)
-                }
-            }
-
-            // Right corner (25px)
+                .position(x: 137.5, y: 10) // centered at 137.5
+            
             SimpleSpriteImage("PLAYLIST_TOP_RIGHT_CORNER", width: 25, height: 20)
-                .at(x: WinampSizes.playlistBase.width - 25, y: 0)
+                .position(x: 262.5, y: 10) // 275 - 12.5
             
-            // Left border tiles (CORRECTED count and positioning)
-            let sideHeight = WinampSizes.playlistBase.height - m.topHeight - m.bottomHeight
-            let tileCount = Int(ceil(sideHeight / 29))
-            
-            ForEach(0..<tileCount, id: \.self) { index in
+            // Left border tiles
+            let sideHeight = 192 // 232 - 20 (top) - 38 (bottom) = 174, but we need overlap
+            let leftTileCount = Int(ceil(CGFloat(sideHeight) / 29))
+            ForEach(0..<leftTileCount, id: \.self) { i in
                 SimpleSpriteImage("PLAYLIST_LEFT_TILE", width: 12, height: 29)
-                    .at(x: 0, y: m.topHeight + CGFloat(index) * 29)
+                    .position(x: 6, y: 20 + 14.5 + CGFloat(i) * 29)
             }
             
-            // Right border tiles (CORRECT)  
-            ForEach(0..<tileCount, id: \.self) { index in
+            // Right border tiles  
+            ForEach(0..<leftTileCount, id: \.self) { i in
                 SimpleSpriteImage("PLAYLIST_RIGHT_TILE", width: 20, height: 29)
-                    .at(x: WinampSizes.playlistBase.width - m.rightScrollWidth, y: m.topHeight + CGFloat(index) * 29)
+                    .position(x: 265, y: 20 + 14.5 + CGFloat(i) * 29)
             }
             
-            // Bottom corners (CORRECTED positioning)
-            let bottomY = WinampSizes.playlistBase.height - m.bottomHeight
+            // Bottom section
             SimpleSpriteImage("PLAYLIST_BOTTOM_LEFT_CORNER", width: 125, height: 38)
-                .at(x: 0, y: bottomY)
+                .position(x: 62.5, y: 213) // 194 + 19
             
             SimpleSpriteImage("PLAYLIST_BOTTOM_RIGHT_CORNER", width: 150, height: 38)
-                .at(x: 125, y: bottomY)
+                .position(x: 200, y: 213) // 125 + 75, same y
+            
+            // Fill any gap in bottom with tiles if corners don't meet
+            // This prevents the black gap issue
+            if let skin = skinManager.currentSkin,
+               let bottomTile = skin.images["PLAYLIST_BOTTOM_TILE"] {
+                // Bottom tiles don't exist in default skin, but if they do, use them
+                Image(nsImage: bottomTile)
+                    .resizable()
+                    .frame(width: 25, height: 38)
+                    .position(x: 137.5, y: 213)
+            }
         }
     }
     
+    // MARK: - Content Overlay
     @ViewBuilder
-    private func buildPlaylistContent() -> some View {
-        // Track list area with EXACT webamp styling
-        let m = metrics(from: skinManager.currentSkin)
-        let contentHeight = WinampSizes.playlistBase.height - m.topHeight - m.bottomHeight - (m.centerPaddingTop + m.centerPaddingBottom)
-        
-        // Black background for track area (like Winamp)
-        Rectangle()
-            .fill(Color.black)
-            .frame(width: WinampSizes.playlistBase.width - m.leftBorderWidth - m.rightScrollWidth, height: contentHeight)
-            .at(x: m.leftBorderWidth, y: m.topHeight + m.centerPaddingTop)
-        
-        // Track list with proper scrolling - Liquid Glass integration
+    private func buildContentOverlay() -> some View {
+        Group {
+            // Track list area with black background
+            Color.black
+                .frame(width: 243, height: 174) // 275 - 12 - 20 = 243 width
+                .position(x: 137.5, y: 107) // Center of content area
+            
+            // Track list content
+            buildTrackList()
+                .frame(width: 243, height: 174)
+                .position(x: 137.5, y: 107)
+                .clipped()
+            
+            // Control buttons at bottom
+            buildBottomControls()
+            
+            // Title bar buttons
+            buildTitleBarButtons()
+            
+            // Scrollbar
+            SimpleSpriteImage("PLAYLIST_SCROLL_HANDLE", width: 8, height: 18)
+                .position(x: 260, y: 30) // In the right gutter
+        }
+    }
+    
+    // MARK: - Track List
+    @ViewBuilder
+    private func buildTrackList() -> some View {
         ScrollView(.vertical, showsIndicators: false) {
-            LazyVStack(spacing: 0) {
+            VStack(spacing: 0) {
                 ForEach(Array(audioPlayer.playlist.enumerated()), id: \.element.id) { index, track in
-                    playlistRow(track: track, index: index)
-                        .contentShape(Rectangle())
+                    trackRow(track: track, index: index)
+                        .frame(width: 243, height: 13)
+                        .background(trackBackground(track: track, index: index))
                         .onTapGesture {
                             audioPlayer.playTrack(track: track)
                             selectedTrackIndex = index
                         }
-                        .background(trackBackgroundColor(track: track, index: index))
-                        .conditionalListRowBackground(enabled: settings.shouldUseContainerBackground)
                 }
                 
-                // Add some tracks for testing if playlist is empty
+                // Test tracks if playlist is empty
                 if audioPlayer.playlist.isEmpty {
-                    ForEach(1..<15, id: \.self) { index in
-                        HStack(spacing: 1) {
-                            Text("\(index).")
-                                .font(.system(size: PLCoords.fontSize, design: .monospaced))
-                                .foregroundColor(.green)
-                                .frame(width: 18, alignment: .trailing)
-                            
-                            Text("Sample Track \(index) - Artist Name")
-                                .font(.system(size: PLCoords.fontSize))
-                                .kerning(PLCoords.letterSpacing)
-                                .foregroundColor(.green)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .lineLimit(1)
-                            
-                            Text("\(index % 3 + 2):0\(index % 5 + 1)")
-                                .font(.system(size: PLCoords.fontSize, design: .monospaced))
-                                .foregroundColor(.green)
-                                .frame(width: 30, alignment: .trailing)
-                        }
-                        .padding(.horizontal, 1)
-                        .frame(height: PLCoords.trackHeight)
-                        .background(index == 3 ? Color.blue.opacity(0.8) : Color.clear) // Highlight one track
+                    ForEach(1..<20, id: \.self) { index in
+                        testTrackRow(index: index)
+                            .frame(width: 243, height: 13)
+                            .background(index == 3 ? Color.blue.opacity(0.8) : Color.clear)
                     }
                 }
             }
         }
-        .frame(width: WinampSizes.playlistBase.width - m.leftBorderWidth - m.rightScrollWidth, height: contentHeight)
-        .conditionalContainerBackground(enabled: settings.shouldUseContainerBackground)
-        .at(x: m.leftBorderWidth, y: m.topHeight + m.centerPaddingTop)
-        .clipped()
     }
     
     @ViewBuilder
-    private func playlistRow(track: Track, index: Int) -> some View {
-        HStack(spacing: 1) {
-            // Track number (EXACT webamp styling)  
+    private func trackRow(track: Track, index: Int) -> some View {
+        HStack(spacing: 2) {
             Text("\(index + 1).")
-                .font(.system(size: PLCoords.fontSize, design: .monospaced))
+                .font(.system(size: 9, design: .monospaced))
                 .foregroundColor(trackTextColor(track: track))
                 .frame(width: 18, alignment: .trailing)
             
-            // Track info (EXACT webamp styling with letter spacing effect)
             Text("\(track.title) - \(track.artist)")
-                .font(.system(size: PLCoords.fontSize))
-                .kerning(PLCoords.letterSpacing) // SwiftUI letter spacing
+                .font(.system(size: 9))
+                .kerning(0.5)
                 .foregroundColor(trackTextColor(track: track))
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .lineLimit(1)
-                .truncationMode(.tail)
             
-            // Duration (EXACT webamp styling)
             Text(formatDuration(track.duration))
-                .font(.system(size: PLCoords.fontSize, design: .monospaced))
+                .font(.system(size: 9, design: .monospaced))
                 .foregroundColor(trackTextColor(track: track))
                 .frame(width: 30, alignment: .trailing)
-                .padding(.trailing, PLCoords.durationRightPadding)
+                .padding(.trailing, 3)
         }
-        .padding(.horizontal, 1) // Minimal padding like webamp
-        .frame(height: PLCoords.trackHeight) // EXACT 13px height
+        .padding(.horizontal, 2)
     }
     
     @ViewBuilder
-    private func buildTitlebarButtons() -> some View {
-        Group {
-            // Minimize button
-            Button(action: {
-                NSApp.keyWindow?.miniaturize(nil)
-            }) {
-                SimpleSpriteImage("MAIN_MINIMIZE_BUTTON", width: 9, height: 9)
-            }
-            .buttonStyle(.plain)
-            .at(CGPoint(x: 244, y: 3))
+    private func testTrackRow(index: Int) -> some View {
+        HStack(spacing: 2) {
+            Text("\(index).")
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundColor(.green)
+                .frame(width: 18, alignment: .trailing)
             
-            // Shade button
-            Button(action: {
-                // TODO: Implement playlist shade mode
-            }) {
-                SimpleSpriteImage("MAIN_SHADE_BUTTON", width: 9, height: 9)
-            }
-            .buttonStyle(.plain)
-            .at(CGPoint(x: 254, y: 3))
+            Text("Sample Track \(index) - Artist Name")
+                .font(.system(size: 9))
+                .kerning(0.5)
+                .foregroundColor(.green)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .lineLimit(1)
             
-            // Close button
-            Button(action: {
-                NSApp.keyWindow?.close()
-            }) {
-                SimpleSpriteImage("MAIN_CLOSE_BUTTON", width: 9, height: 9)
-            }
-            .buttonStyle(.plain)
-            .at(CGPoint(x: 264, y: 3))
+            Text("\(index % 3 + 2):0\(index % 5 + 1)")
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundColor(.green)
+                .frame(width: 30, alignment: .trailing)
+                .padding(.trailing, 3)
         }
+        .padding(.horizontal, 2)
     }
     
+    // MARK: - Control Buttons
     @ViewBuilder
-    private func buildControlButtons() -> some View {
+    private func buildBottomControls() -> some View {
         Group {
             // Add button
             Button(action: { openFileDialog() }) {
                 SimpleSpriteImage("PLAYLIST_ADD_FILE", width: 22, height: 18)
             }
             .buttonStyle(.plain)
-            .at(PLCoords.addButton)
+            .position(x: 25, y: 206)
             
-            // Remove button  
+            // Remove button
             Button(action: { removeSelectedTrack() }) {
                 SimpleSpriteImage("PLAYLIST_REMOVE_SELECTED", width: 22, height: 18)
             }
             .buttonStyle(.plain)
-            .at(PLCoords.removeButton)
+            .position(x: 54, y: 206)
             
             // Selection button
-            Button(action: { /* TODO: Selection menu */ }) {
+            Button(action: {}) {
                 SimpleSpriteImage("PLAYLIST_CROP", width: 22, height: 18)
             }
             .buttonStyle(.plain)
-            .at(PLCoords.selectionButton)
+            .position(x: 83, y: 206)
             
             // Misc button
-            Button(action: { /* TODO: Misc menu */ }) {
+            Button(action: {}) {
                 SimpleSpriteImage("PLAYLIST_MISC_OPTIONS", width: 22, height: 18)
             }
             .buttonStyle(.plain)
-            .at(PLCoords.miscButton)
+            .position(x: 112, y: 206)
             
             // List button (right side)
-            Button(action: { /* TODO: List menu */ }) {
+            Button(action: {}) {
                 SimpleSpriteImage("PLAYLIST_SORT_LIST", width: 22, height: 18)
             }
             .buttonStyle(.plain)
-            .at(PLCoords.listButton)
+            .position(x: 231, y: 206)
         }
-    }
-
-    @ViewBuilder
-    private func buildBottomInlays() -> some View {
-        // Positions from Webamp CSS
-        let bottomTop = WinampSizes.playlistBase.height - PLCoords.bottomHeight
-
-        // Running-time display: top: 10px; left: 7px; height: 10px
-        Rectangle()
-            .fill(Color.black)
-            .frame(width: 96, height: 10)
-            .at(x: 7, y: bottomTop + 10)
-
-        // Action buttons row: top: 22px; left: 3px; 5 small 10x10 boxes
-        HStack(spacing: 2) {
-            ForEach(0..<5, id: \.self) { _ in
-                Rectangle().fill(Color.black).frame(width: 10, height: 10)
-                    .overlay(Rectangle().stroke(Color.gray.opacity(0.6), lineWidth: 1))
-            }
-        }
-        .at(x: 3, y: bottomTop + 22)
-
-        // Mini time at: top: 23px; left: 66px
-        Rectangle()
-            .fill(Color.black)
-            .frame(width: 38, height: 10)
-            .at(x: 66, y: bottomTop + 23)
-
-        // Mini visualizer: width 75px; height full bottom; right: 150px
-        Rectangle()
-            .fill(Color.black)
-            .frame(width: 75, height: PLCoords.bottomHeight)
-            .at(x: WinampSizes.playlistBase.width - 150 - 75, y: bottomTop)
     }
     
+    // MARK: - Title Bar Buttons
     @ViewBuilder
-    private func buildScrollbar() -> some View {
-        // Scrollbar area (EXACT Webamp dimensions and positioning)
-        let m = metrics(from: skinManager.currentSkin)
-        let scrollAreaX = WinampSizes.playlistBase.width - m.rightScrollWidth // gutter
-        let scrollAreaY = m.topHeight
-        let scrollAreaHeight = WinampSizes.playlistBase.height - m.topHeight - m.bottomHeight
-        
-        // Scrollbar background (integrated with right chrome) via PLAYLIST_RIGHT_TILE
-        
-        // Scroll handle (Webamp: margin-left 5, width 8, height 18; slider height = total - 58)
-        // For now, render at the top of the gutter (no scroll position state yet)
-        SimpleSpriteImage("PLAYLIST_SCROLL_HANDLE", width: 8, height: 18)
-            .at(x: scrollAreaX + 5, y: scrollAreaY)
-    }
-
-    // Bottom bar center fill
-    @ViewBuilder
-    private func buildBottomBar(_ m: PLMetrics) -> some View {
-        let bottomY = WinampSizes.playlistBase.height - m.bottomHeight
-        let leftCornerWidth: CGFloat = 125
-        let rightCornerWidth: CGFloat = 150
-        let centerStartX = leftCornerWidth
-        let centerWidth = WinampSizes.playlistBase.width - leftCornerWidth - rightCornerWidth
-        let tileWidth: CGFloat = skinManager.currentSkin?.images["PLAYLIST_BOTTOM_TILE"]?.size.width ?? 25
-        let tiles = Int(ceil(centerWidth / tileWidth))
-        ForEach(0..<tiles, id: \.self) { i in
-            SimpleSpriteImage("PLAYLIST_BOTTOM_TILE", width: tileWidth, height: m.bottomHeight)
-                .at(x: centerStartX + CGFloat(i) * tileWidth, y: bottomY)
+    private func buildTitleBarButtons() -> some View {
+        Group {
+            Button(action: { NSApp.keyWindow?.miniaturize(nil) }) {
+                SimpleSpriteImage("MAIN_MINIMIZE_BUTTON", width: 9, height: 9)
+            }
+            .buttonStyle(.plain)
+            .position(x: 248.5, y: 7.5)
+            
+            Button(action: {}) {
+                SimpleSpriteImage("MAIN_SHADE_BUTTON", width: 9, height: 9)
+            }
+            .buttonStyle(.plain)
+            .position(x: 258.5, y: 7.5)
+            
+            Button(action: { NSApp.keyWindow?.close() }) {
+                SimpleSpriteImage("MAIN_CLOSE_BUTTON", width: 9, height: 9)
+            }
+            .buttonStyle(.plain)
+            .position(x: 268.5, y: 7.5)
         }
     }
     
     // MARK: - Helper Functions
-    
     private func trackTextColor(track: Track) -> Color {
         if let currentTrack = audioPlayer.currentTrack, currentTrack.id == track.id {
-            // Current track: WHITE (#FFFFFF) like webamp  
             return Color.white
         }
-        // Normal track: BRIGHT GREEN (#00FF00) like webamp default
         return Color(red: 0.0, green: 1.0, blue: 0.0)
     }
     
-    private func trackBackgroundColor(track: Track, index: Int) -> Color {
+    private func trackBackground(track: Track, index: Int) -> Color {
         if let currentTrack = audioPlayer.currentTrack, currentTrack.id == track.id {
-            // Current track background: BLUE (#0000C6) like webamp
             return Color(red: 0.0, green: 0.0, blue: 0.776)
         }
         if selectedTrackIndex == index {
-            // Selected (but not current): lighter blue
             return Color.blue.opacity(0.4)
         }
-        // Normal background: TRANSPARENT over black
         return Color.clear
     }
     
@@ -436,44 +294,14 @@ struct WinampPlaylistWindow: View {
     private func removeSelectedTrack() {
         guard let index = selectedTrackIndex,
               index < audioPlayer.playlist.count else { return }
-        
-        // TODO: Remove track from playlist
-        selectedTrackIndex = nil
-    }
-    
-    private func removeAllTracks() {
-        // TODO: Clear playlist
         selectedTrackIndex = nil
     }
 }
 
-// MARK: - Liquid Glass Integration Extensions
-
-private extension View {
-    @ViewBuilder
-    func conditionalContainerBackground(enabled: Bool) -> some View {
-        if enabled {
-            if #available(macOS 15.0, *) {
-                self.background(.regularMaterial)
-            } else {
-                self.background(.regularMaterial)
-            }
-        } else {
-            self
-        }
-    }
-    
-    @ViewBuilder
-    func conditionalListRowBackground(enabled: Bool) -> some View {
-        if enabled {
-            if #available(macOS 15.0, *) {
-                self.background(.thickMaterial)
-            } else {
-                self
-            }
-        } else {
-            self
-        }
+// Extension to use position instead of offset for sprites
+extension SimpleSpriteImage {
+    func position(x: CGFloat, y: CGFloat) -> some View {
+        self.position(CGPoint(x: x, y: y))
     }
 }
 

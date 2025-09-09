@@ -39,7 +39,7 @@ struct UnifiedDockView: View {
                         ))
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .frame(width: 275, alignment: .topLeading) // Fixed width to match Winamp
             .background(backgroundView)
             .scaleEffect(dockGlow)
             .onAppear {
