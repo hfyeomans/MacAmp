@@ -4,7 +4,7 @@ import PackageDescription
 let package = Package(
     name: "MacAmp",
     platforms: [
-        .macOS(.v13)
+        .macOS("26.0")
     ],
     products: [
         .executable(name: "MacAmpApp", targets: ["MacAmpApp"])

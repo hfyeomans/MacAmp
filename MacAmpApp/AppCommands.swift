@@ -2,6 +2,8 @@ import SwiftUI
 
 struct AppCommands: Commands {
     let dockingController: DockingController
+    @StateObject private var settings = AppSettings.instance()
+    @Environment(\.openWindow) private var openWindow
 
     var body: some Commands {
         CommandMenu("View") {
@@ -28,6 +30,27 @@ struct AppCommands: Commands {
                 let count = dockingController.panes.filter{ $0.visible }.count
                 dockingController.moveVisiblePane(type: .main, toVisibleIndex: max(0, count - 1))
             }
+        }
+        
+        CommandMenu("Appearance") {
+            Menu("Material Integration: \(settings.materialIntegration.displayName)") {
+                ForEach(MaterialIntegrationLevel.allCases, id: \.rawValue) { level in
+                    Button(level.displayName) {
+                        settings.materialIntegration = level
+                    }
+                    .help(level.description)
+                }
+            }
+            
+            Toggle("Enable Liquid Glass", isOn: $settings.enableLiquidGlass)
+                .help("Enable modern macOS material effects")
+                
+            Divider()
+            
+            Button("Preferences...") {
+                openWindow(id: "preferences")
+            }
+            .keyboardShortcut(",")
         }
     }
 }
