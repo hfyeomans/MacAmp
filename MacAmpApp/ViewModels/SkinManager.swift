@@ -100,17 +100,18 @@ class SkinManager: ObservableObject {
                 print("   Extracting \(sprites.count) sprites:")
 
                 for sprite in sprites {
-                    // CGImage crops from a bottom-left origin; our sprite rects are top-left based.
+                    // The sprites are defined with top-left origin, same as NSImage
+                    // No coordinate correction needed - use rect directly
                     let r = sprite.rect
-                    let corrected = CGRect(x: r.origin.x,
-                                           y: sheetImage.size.height - r.origin.y - r.size.height,
-                                           width: r.size.width,
-                                           height: r.size.height)
-                    if let croppedImage = sheetImage.cropped(to: corrected) {
+                    if let croppedImage = sheetImage.cropped(to: r) {
                         extractedImages[sprite.name] = croppedImage
                         print("     ✅ \(sprite.name) at \(sprite.rect)")
                     } else {
                         print("     ❌ FAILED to crop \(sprite.name) from \(sheetName) at \(sprite.rect)")
+                        // Additional debug info
+                        print("       Sheet size: \(sheetImage.size)")
+                        print("       Requested rect: \(r)")
+                        print("       Rect within bounds: \(r.maxX <= sheetImage.size.width && r.maxY <= sheetImage.size.height)")
                     }
                 }
             }
