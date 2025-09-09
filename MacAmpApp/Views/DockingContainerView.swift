@@ -181,11 +181,8 @@ extension DockingContainerView {
         var target = insertionIndex
         // Adjust for removal if moving forward
         if insertionIndex > fromVisibleIndex { target -= 1 }
-        if target != fromVisibleIndex && target >= 0 {
-            if let type = panes.first(where: { $0.id == draggingID })?.type {
-                docking.moveVisiblePane(type: type, toVisibleIndex: target)
-            }
-        }
+        // Vertical stacking - no reordering needed
+        // Windows now stack in fixed order: Main -> EQ -> Playlist
         resetDragState()
     }
 
@@ -352,10 +349,8 @@ extension DockingContainerView {
     }
 
     private func dockingSetWidth(_ type: DockPaneType, _ width: CGFloat) {
-        if let idx = docking.panes.firstIndex(where: { $0.type == type }) {
-            let row = docking.panes[idx].row
-            docking.setWidth(type, row: row, width: width)
-        }
+        // Width is fixed in vertical stacking - all windows use standard Winamp width
+        // No need to persist width changes
     }
 }
 

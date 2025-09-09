@@ -138,7 +138,7 @@ struct WinampPlaylistWindow: View {
             
             // Left border tiles (CORRECTED count and positioning)
             let sideHeight = WinampSizes.playlistBase.height - m.topHeight - m.bottomHeight
-            let tileCount = Int(sideHeight / 29) + 1
+            let tileCount = Int(ceil(sideHeight / 29))
             
             ForEach(0..<tileCount, id: \.self) { index in
                 SimpleSpriteImage("PLAYLIST_LEFT_TILE", width: 12, height: 29)
