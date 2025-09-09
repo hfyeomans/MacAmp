@@ -21,10 +21,24 @@ struct UnifiedDockView: View {
     @State private var materialShimmer: Bool = false
 
     var body: some View {
-        GeometryReader { geo in
-            // Canvas width is the max of both rows' intrinsic widths; rows do not stretch
-            let canvasWidth = max(rowWidth(0), rowWidth(1))
-            ZStack(alignment: .topLeading) {
+        if skinManager.isLoading {
+            // Show loading state while skin loads
+            VStack {
+                ProgressView("Loading Winamp skin...")
+                    .progressViewStyle(CircularProgressViewStyle())
+                    .padding()
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(backgroundView)
+            .onAppear {
+                ensureSkin()
+            }
+        } else if skinManager.currentSkin != nil {
+            // Only render the dock when skin is ready
+            GeometryReader { geo in
+                // Canvas width is the max of both rows' intrinsic widths; rows do not stretch
+                let canvasWidth = max(rowWidth(0), rowWidth(1))
+                ZStack(alignment: .topLeading) {
                 VStack(alignment: .leading, spacing: 0) {
                     rowView(row: 0, geo: geo)
                         .frame(width: canvasWidth, alignment: .leading)
@@ -55,15 +69,21 @@ struct UnifiedDockView: View {
             }
             // Keep the whole canvas left-aligned; outer window can be larger
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        }
-        .background(backgroundView)
-        .scaleEffect(dockGlow)
-        .onAppear {
-            ensureSkin()
-            startDockAnimations()
-        }
-        .onChange(of: draggingID) { newValue in
-            handleDragStateChange(newValue)
+            }
+            .background(backgroundView)
+            .scaleEffect(dockGlow)
+            .onAppear {
+                startDockAnimations()
+            }
+            .onChange(of: draggingID) { newValue in
+                handleDragStateChange(newValue)
+            }
+        } else {
+            // Skin not loaded yet - trigger loading
+            Color.clear
+                .onAppear {
+                    ensureSkin()
+                }
         }
     }
 

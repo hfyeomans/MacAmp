@@ -12,18 +12,24 @@ import SwiftUI
 class SkinManager: ObservableObject {
 
     @Published var currentSkin: Skin?
+    @Published var isLoading: Bool = false
 
     // Try to find an entry for a given sheet name (case-insensitive), supporting .bmp and .png
     private func findSheetEntry(in archive: Archive, baseName: String) -> Entry? {
         let lowerBase = baseName.lowercased()
         var lastMatch: Entry?
+        NSLog("  findSheetEntry: Looking for \(baseName) (lowercased: \(lowerBase))")
         for entry in archive {
             let lowerPath = entry.path.lowercased()
             let afterSlash = lowerPath.components(separatedBy: "/").last ?? lowerPath
             let file = afterSlash.components(separatedBy: "\\").last ?? afterSlash
             if file == "\(lowerBase).bmp" || file == "\(lowerBase).png" {
+                NSLog("  ✅ FOUND MATCH: \(entry.path) for \(baseName)")
                 lastMatch = entry
             }
+        }
+        if lastMatch == nil {
+            NSLog("  ❌ NO MATCH FOUND for \(baseName)")
         }
         return lastMatch
     }
@@ -45,6 +51,7 @@ class SkinManager: ObservableObject {
 
     func loadSkin(from url: URL) {
         print("Loading skin from \(url.path)")
+        isLoading = true
 
         do {
             let archive = try Archive(url: url, accessMode: .read)
@@ -83,9 +90,16 @@ class SkinManager: ObservableObject {
                 NSLog("ℹ️ INFO: NUMS_EX.BMP not found (normal for many skins)")
             }
             
+            NSLog("=== PROCESSING \(sheetsToProcess.count) SHEETS ===")
             for (sheetName, sprites) in sheetsToProcess {
+                NSLog("🔍 Looking for sheet: \(sheetName)")
                 guard let entry = findSheetEntry(in: archive, baseName: sheetName) else {
-                    print("❌ MISSING SHEET: \(sheetName).bmp/.png not found in archive")
+                    NSLog("❌ MISSING SHEET: \(sheetName).bmp/.png not found in archive")
+                    NSLog("   Expected \(sprites.count) sprites from this sheet")
+                    // List the missing sprite names for debugging
+                    for sprite in sprites.prefix(5) {
+                        NSLog("   - Missing sprite: \(sprite.name)")
+                    }
                     continue
                 }
                 var data = Data()
@@ -163,16 +177,17 @@ class SkinManager: ObservableObject {
                 cursors: [:] // TODO: Parse cursors
             )
 
-            DispatchQueue.main.async {
-                self.currentSkin = newSkin
-                print("Skin loaded and set to currentSkin.")
-            }
+            // Set the skin immediately - this is synchronous
+            self.currentSkin = newSkin
+            self.isLoading = false
+            print("Skin loaded and set to currentSkin.")
 
         } catch {
             print("Error loading skin: \(error)")
             if let data = try? Data(contentsOf: url) {
                 print("Skin bytes: \(data.count)")
             }
+            isLoading = false
         }
     }
 }
