@@ -23,13 +23,8 @@ struct AppCommands: Commands {
             Button("Shade/Unshade Equalizer") { dockingController.toggleShade(.equalizer) }
                 .keyboardShortcut("3", modifiers: [.command, .option])
 
-            Divider()
-
-            Button("Move Main Left") { dockingController.moveVisiblePane(type: .main, toVisibleIndex: 0) }
-            Button("Move Main Right") {
-                let count = dockingController.panes.filter{ $0.visible }.count
-                dockingController.moveVisiblePane(type: .main, toVisibleIndex: max(0, count - 1))
-            }
+            // Vertical stacking - no horizontal movement needed
+            // Windows now stack vertically in fixed order: Main -> EQ -> Playlist
         }
         
         CommandMenu("Appearance") {
