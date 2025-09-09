@@ -5,10 +5,17 @@ import AppKit
 struct EqualizerWindowView: View {
     @EnvironmentObject var skinManager: SkinManager
     @EnvironmentObject var audioPlayer: AudioPlayer
-    // Auto follows AudioPlayer.eqAutoEnabled
-
+    @EnvironmentObject var settings: AppSettings
+    
     // Define the range for EQ sliders (typical Winamp range)
     let eqRange: ClosedRange<Float> = -12.0...12.0
+    
+    // MARK: - Whimsy & Animation States
+    @State private var sliderGlows: Set<Int> = []
+    @State private var eqVisualization: [Float] = Array(repeating: 0.0, count: 10)
+    @State private var graphPulse: Bool = false
+    @State private var preampGlow: Bool = false
+    @State private var buttonHovers: Set<String> = []
 
     var body: some View {
         ZStack {
@@ -31,30 +38,82 @@ struct EqualizerWindowView: View {
                     Text("Equalizer")
                         .font(.title)
                         .padding()
+                        .conditionalSemanticText(enabled: settings.shouldUseContainerBackground)
+                        .overlay(
+                            // Glass shimmer effect on title
+                            LinearGradient(
+                                colors: [.clear, .white.opacity(0.3), .clear],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                            .opacity(settings.shouldUseContainerBackground ? 0.6 : 0)
+                            .animation(
+                                .easeInOut(duration: 2.0).repeatForever(autoreverses: true),
+                                value: settings.shouldUseContainerBackground
+                            )
+                            .allowsHitTesting(false)
+                        )
 
                     HStack(spacing: 5) {
-                        // Preamp Slider
+                        // Preamp Slider with special glow
                         EQSliderView(
                             background: eqSliderBackground,
                             thumb: eqSliderThumb,
                             value: $audioPlayer.preamp,
                             range: eqRange
                         )
-                        .frame(width: eqSliderBackground.size.width / 10, height: eqSliderBackground.size.height) // Adjust frame as needed
+                        .frame(width: eqSliderBackground.size.width / 10, height: eqSliderBackground.size.height)
+                        .overlay(
+                            Rectangle()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [.clear, .yellow.opacity(0.3), .clear],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
+                                )
+                                .opacity(preampGlow ? 0.8 : 0)
+                                .animation(.easeInOut(duration: 0.3), value: preampGlow)
+                                .allowsHitTesting(false)
+                        )
+                        .onChange(of: audioPlayer.preamp) { _ in
+                            triggerPreampGlow()
+                        }
 
-                        // 10 EQ Bands
-                        ForEach(0..<audioPlayer.eqBands.count, id: \.self) {
-                            index in
+                        // 10 EQ Bands with individual glow effects
+                        ForEach(0..<audioPlayer.eqBands.count, id: \.self) { index in
                             EQSliderView(
                                 background: eqSliderBackground,
                                 thumb: eqSliderThumb,
                                 value: Binding(
                                     get: { audioPlayer.eqBands[index] },
-                                    set: { audioPlayer.setEqBand(index: index, value: $0) }
+                                    set: { newValue in
+                                        audioPlayer.setEqBand(index: index, value: newValue)
+                                        triggerSliderGlow(index: index)
+                                    }
                                 ),
                                 range: eqRange
                             )
-                            .frame(width: eqSliderBackground.size.width / 10, height: eqSliderBackground.size.height) // Adjust frame as needed
+                            .frame(width: eqSliderBackground.size.width / 10, height: eqSliderBackground.size.height)
+                            .overlay(
+                                Rectangle()
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [
+                                                .clear,
+                                                sliderColor(for: index).opacity(0.4),
+                                                .clear
+                                            ],
+                                            startPoint: .top,
+                                            endPoint: .bottom
+                                        )
+                                    )
+                                    .opacity(sliderGlows.contains(index) ? 1.0 : 0.2)
+                                    .animation(.easeInOut(duration: 0.3), value: sliderGlows.contains(index))
+                                    .allowsHitTesting(false)
+                            )
+                            .scaleEffect(sliderGlows.contains(index) ? 1.05 : 1.0)
+                            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: sliderGlows.contains(index))
                         }
                     }
                     .padding()
@@ -62,22 +121,47 @@ struct EqualizerWindowView: View {
                     // On/Off and Auto Buttons + EQF I/O
                     HStack(spacing: 8) {
                         Button(action: {
-                            audioPlayer.toggleEq(isOn: !audioPlayer.isEqOn)
+                            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                                audioPlayer.toggleEq(isOn: !audioPlayer.isEqOn)
+                                triggerGraphPulse()
+                            }
                         }) {
                             Image(nsImage: eqOnButton)
                                 .resizable()
                                 .frame(width: 26, height: 12)
+                                .scaleEffect(buttonHovers.contains("eq-on") ? 1.1 : 1.0)
+                                .shadow(
+                                    color: audioPlayer.isEqOn ? .green.opacity(0.6) : .gray.opacity(0.3),
+                                    radius: audioPlayer.isEqOn ? 3 : 1
+                                )
                         }
-                        .buttonStyle(PlainButtonStyle())
+                        .conditionalEqButtonStyle(enabled: settings.shouldUseContainerBackground)
+                        .onHover { hovering in
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                if hovering { buttonHovers.insert("eq-on") } else { buttonHovers.remove("eq-on") }
+                            }
+                        }
 
                         Button(action: {
-                            audioPlayer.eqAutoEnabled.toggle()
+                            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                                audioPlayer.eqAutoEnabled.toggle()
+                            }
                         }) {
                             Image(nsImage: eqAutoButton)
                                 .resizable()
                                 .frame(width: 32, height: 12)
+                                .scaleEffect(buttonHovers.contains("eq-auto") ? 1.1 : 1.0)
+                                .shadow(
+                                    color: audioPlayer.eqAutoEnabled ? .blue.opacity(0.6) : .gray.opacity(0.3),
+                                    radius: audioPlayer.eqAutoEnabled ? 3 : 1
+                                )
                         }
-                        .buttonStyle(PlainButtonStyle())
+                        .conditionalEqButtonStyle(enabled: settings.shouldUseContainerBackground)
+                        .onHover { hovering in
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                if hovering { buttonHovers.insert("eq-auto") } else { buttonHovers.remove("eq-auto") }
+                            }
+                        }
 
                         // Presets popover button
                         PresetsButton(eqPresetsBtn: eqPresetsBtn, eqPresetsBtnSel: eqPresetsBtnSel)
@@ -86,10 +170,28 @@ struct EqualizerWindowView: View {
                     }
                     .padding(.top, 10)
 
-                    // EQ Graph (ticks + curve + preamp line)
-                    EqGraphView(background: eqGraphBg, preampLine: eqPreampLine, lineColorsImage: skin.images["EQ_GRAPH_LINE_COLORS"])
-                        .environmentObject(audioPlayer)
+                    // EQ Graph with pulse effect
+                    EqGraphView(
+                        background: eqGraphBg, 
+                        preampLine: eqPreampLine, 
+                        lineColorsImage: skin.images["EQ_GRAPH_LINE_COLORS"]
+                    )
+                    .environmentObject(audioPlayer)
                     .padding(.top, 6)
+                    .scaleEffect(graphPulse ? 1.02 : 1.0)
+                    .overlay(
+                        Rectangle()
+                            .stroke(
+                                LinearGradient(
+                                    colors: [.clear, .cyan.opacity(0.4), .clear],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                ),
+                                lineWidth: 1
+                            )
+                            .opacity(graphPulse ? 0.8 : 0)
+                    )
+                    .animation(.spring(response: 0.4, dampingFraction: 0.6), value: graphPulse)
 
                     // Auto-applied indicator (skinned banner)
                     if let trackName = audioPlayer.appliedAutoPresetTrack {
@@ -108,9 +210,134 @@ struct EqualizerWindowView: View {
             }
         }
         .frame(width: WindowSpec.equalizer.size.width, height: WindowSpec.equalizer.size.height)
+        .background(semanticBackground)
         .background(WindowAccessor { window in
             WindowSnapManager.shared.register(window: window, kind: .equalizer)
         })
+        .onReceive(audioPlayer.$isEqOn) { isOn in
+            if isOn {
+                triggerGraphPulse()
+            }
+        }
+        .onAppear {
+            startVisualizationTimer()
+        }
+    }
+    
+    // MARK: - Whimsy Helper Functions
+    private func triggerSliderGlow(index: Int) {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            _ = sliderGlows.insert(index)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            withAnimation(.easeOut(duration: 0.3)) {
+                _ = sliderGlows.remove(index)
+            }
+        }
+    }
+    
+    private func triggerPreampGlow() {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            preampGlow = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            withAnimation(.easeOut(duration: 0.4)) {
+                preampGlow = false
+            }
+        }
+    }
+    
+    private func triggerGraphPulse() {
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
+            graphPulse = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            withAnimation(.easeOut(duration: 0.3)) {
+                graphPulse = false
+            }
+        }
+    }
+    
+    private func sliderColor(for index: Int) -> Color {
+        let colors: [Color] = [.red, .orange, .yellow, .green, .cyan, .blue, .purple, .pink, .mint, .indigo]
+        return colors[index % colors.count]
+    }
+    
+    private func startVisualizationTimer() {
+        // Audio-reactive EQ visualization (simplified)
+        Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
+            if audioPlayer.isPlaying && audioPlayer.isEqOn {
+                withAnimation(.easeInOut(duration: 0.1)) {
+                    eqVisualization = eqVisualization.map { _ in Float.random(in: 0...1) }
+                }
+            }
+        }
+    }
+    
+    // MARK: - Liquid Glass Background
+    @ViewBuilder
+    private var semanticBackground: some View {
+        if settings.shouldUseContainerBackground {
+            if #available(macOS 26.0, *) {
+                Rectangle()
+                    .fill(.regularMaterial)
+                    .opacity(0.6)
+                    .overlay(
+                        // Audio-reactive background glow
+                        Rectangle()
+                            .fill(
+                                RadialGradient(
+                                    colors: [
+                                        .purple.opacity(0.1),
+                                        .blue.opacity(0.05),
+                                        .clear
+                                    ],
+                                    center: .center,
+                                    startRadius: 0,
+                                    endRadius: 150
+                                )
+                            )
+                            .opacity(audioPlayer.isPlaying && audioPlayer.isEqOn ? 0.8 : 0.3)
+                            .animation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true),
+                                     value: audioPlayer.isPlaying && audioPlayer.isEqOn)
+                    )
+            } else {
+                Color.clear
+            }
+        } else {
+            Color.clear
+        }
+    }
+}
+
+// MARK: - Liquid Glass Integration Extensions
+
+private extension View {
+    @ViewBuilder
+    func conditionalSemanticText(enabled: Bool) -> some View {
+        if enabled {
+            if #available(macOS 26.0, *) {
+                self.foregroundStyle(.primary)
+            } else {
+                self
+            }
+        } else {
+            self
+        }
+    }
+    
+    @ViewBuilder
+    func conditionalEqButtonStyle(enabled: Bool) -> some View {
+        if enabled {
+            if #available(macOS 26.0, *) {
+                self.buttonStyle(.borderless)
+                    .controlSize(.small)
+            } else {
+                self.buttonStyle(PlainButtonStyle())
+            }
+        } else {
+            self.buttonStyle(PlainButtonStyle())
+        }
     }
 }
 
@@ -118,4 +345,5 @@ struct EqualizerWindowView: View {
     EqualizerWindowView()
         .environmentObject(SkinManager())
         .environmentObject(AudioPlayer())
+        .environmentObject(AppSettings.instance())
 }

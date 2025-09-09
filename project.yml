@@ -2,7 +2,7 @@ name: MacAmpApp
 options:
   minimumXcodeGenVersion: 2.38.0
   deploymentTarget:
-    macOS: '13.0'
+    macOS: '26.0'
 packages:
   ZIPFoundation:
     url: https://github.com/weichsel/ZIPFoundation.git
@@ -11,7 +11,7 @@ targets:
   MacAmpApp:
     type: application
     platform: macOS
-    deploymentTarget: '13.0'
+    deploymentTarget: '26.0'
     sources:
       - path: MacAmpApp
     resources:

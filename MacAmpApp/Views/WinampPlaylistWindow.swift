@@ -5,6 +5,7 @@ import AppKit
 struct WinampPlaylistWindow: View {
     @EnvironmentObject var skinManager: SkinManager
     @EnvironmentObject var audioPlayer: AudioPlayer
+    @EnvironmentObject var settings: AppSettings
     
     @State private var selectedTrackIndex: Int? = nil
     
@@ -172,7 +173,7 @@ struct WinampPlaylistWindow: View {
             .frame(width: WinampSizes.playlistBase.width - m.leftBorderWidth - m.rightScrollWidth, height: contentHeight)
             .at(x: m.leftBorderWidth, y: m.topHeight + m.centerPaddingTop)
         
-        // Track list with proper scrolling
+        // Track list with proper scrolling - Liquid Glass integration
         ScrollView(.vertical, showsIndicators: false) {
             LazyVStack(spacing: 0) {
                 ForEach(Array(audioPlayer.playlist.enumerated()), id: \.element.id) { index, track in
@@ -183,6 +184,7 @@ struct WinampPlaylistWindow: View {
                             selectedTrackIndex = index
                         }
                         .background(trackBackgroundColor(track: track, index: index))
+                        .conditionalListRowBackground(enabled: settings.shouldUseContainerBackground)
                 }
                 
                 // Add some tracks for testing if playlist is empty
@@ -214,6 +216,7 @@ struct WinampPlaylistWindow: View {
             }
         }
         .frame(width: WinampSizes.playlistBase.width - m.leftBorderWidth - m.rightScrollWidth, height: contentHeight)
+        .conditionalContainerBackground(enabled: settings.shouldUseContainerBackground)
         .at(x: m.leftBorderWidth, y: m.topHeight + m.centerPaddingTop)
         .clipped()
     }
@@ -444,8 +447,39 @@ struct WinampPlaylistWindow: View {
     }
 }
 
+// MARK: - Liquid Glass Integration Extensions
+
+private extension View {
+    @ViewBuilder
+    func conditionalContainerBackground(enabled: Bool) -> some View {
+        if enabled {
+            if #available(macOS 15.0, *) {
+                self.background(.regularMaterial)
+            } else {
+                self.background(.regularMaterial)
+            }
+        } else {
+            self
+        }
+    }
+    
+    @ViewBuilder
+    func conditionalListRowBackground(enabled: Bool) -> some View {
+        if enabled {
+            if #available(macOS 15.0, *) {
+                self.background(.thickMaterial)
+            } else {
+                self
+            }
+        } else {
+            self
+        }
+    }
+}
+
 #Preview {
     WinampPlaylistWindow()
         .environmentObject(SkinManager())
         .environmentObject(AudioPlayer())
+        .environmentObject(AppSettings.instance())
 }

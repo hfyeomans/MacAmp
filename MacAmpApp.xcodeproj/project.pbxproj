@@ -44,6 +44,8 @@
 		D077337C4C05A6658475376F /* VisualizerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 499433D5A14F2C47C9EB0931 /* VisualizerView.swift */; };
 		D1C8711941E449B2B86568DF /* SimpleTestMainWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61CCD7FBB76B81039F2887D7 /* SimpleTestMainWindow.swift */; };
 		EE878CCB3C1E4F7801C5430E /* DockingController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74EDF33D12E79F86166AF268 /* DockingController.swift */; };
+		AB123DEF4E567890ABCDEF12 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD234EF56789ABCD01234567 /* AppSettings.swift */; };
+		BC234EF567890ABCD1234567 /* PreferencesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE345F678901BCDE12345678 /* PreferencesView.swift */; };
 		FEF2451745AD29CA232322BF /* MainWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC46D7551B28A7B9FF034839 /* MainWindowView.swift */; };
 /* End PBXBuildFile section */
 
@@ -64,6 +66,8 @@
 		61CCD7FBB76B81039F2887D7 /* SimpleTestMainWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleTestMainWindow.swift; sourceTree = "<group>"; };
 		7324174AA2F7231F3B2508AE /* SpritePositions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpritePositions.swift; sourceTree = "<group>"; };
 		74EDF33D12E79F86166AF268 /* DockingController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DockingController.swift; sourceTree = "<group>"; };
+		CD234EF56789ABCD01234567 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
+		DE345F678901BCDE12345678 /* PreferencesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesView.swift; sourceTree = "<group>"; };
 		75C52A558EFD4C84BBA21F92 /* WinampPlaylistWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WinampPlaylistWindow.swift; sourceTree = "<group>"; };
 		77A0C7921140C73AB173A5E8 /* SimpleSpriteImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleSpriteImage.swift; sourceTree = "<group>"; };
 		77BEA1F1121A4B4633AD1083 /* EQSliderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EQSliderView.swift; sourceTree = "<group>"; };
@@ -145,6 +149,7 @@
 		BD7D477F80E8626CFB2297F5 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				CD234EF56789ABCD01234567 /* AppSettings.swift */,
 				FDF85EA8990A038079FC0CC3 /* EQF.swift */,
 				2D4BAA0F198BED23AAFABFEC /* ImageSlicing.swift */,
 				1883C37C0887C2C13F6C9563 /* PLEditParser.swift */,
@@ -168,6 +173,7 @@
 				8897A6072B979DC743DC44E3 /* EqualizerWindowView.swift */,
 				DC46D7551B28A7B9FF034839 /* MainWindowView.swift */,
 				C763742AA7B5615883A0BB97 /* PlaylistWindowView.swift */,
+				DE345F678901BCDE12345678 /* PreferencesView.swift */,
 				3D258350F99A800B8CBF8AEA /* PresetsButton.swift */,
 				61CCD7FBB76B81039F2887D7 /* SimpleTestMainWindow.swift */,
 				12C0A7D97E8D3B2E715D4EA0 /* SkinnedBanner.swift */,
@@ -288,6 +294,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AB123DEF4E567890ABCDEF12 /* AppSettings.swift in Sources */,
 				B3A2FD6D778A60B9F0D92258 /* AppCommands.swift in Sources */,
 				2A33850C38AA921D5659ECA7 /* AudioPlayer.swift in Sources */,
 				A08CECA8546ACA2C49A815D0 /* BalanceSliderView.swift in Sources */,
@@ -302,6 +309,7 @@
 				FEF2451745AD29CA232322BF /* MainWindowView.swift in Sources */,
 				41559151451B3CDCDAF46147 /* PLEditParser.swift in Sources */,
 				8F699CB7102EA261F8CF777B /* PlaylistWindowView.swift in Sources */,
+				BC234EF567890ABCD1234567 /* PreferencesView.swift in Sources */,
 				CEB39A994DFFE2DCA8FDE7EF /* PresetsButton.swift in Sources */,
 				8375D760955EEB75F8311F11 /* SimpleSpriteImage.swift in Sources */,
 				D1C8711941E449B2B86568DF /* SimpleTestMainWindow.swift in Sources */,
@@ -341,7 +349,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				SDKROOT = macosx;
 			};
 			name = Release;
@@ -397,7 +405,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -454,7 +462,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -475,7 +483,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				SDKROOT = macosx;
 			};
 			name = Debug;
