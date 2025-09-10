@@ -226,35 +226,33 @@ struct WinampVerticalSlider: View {
     
     var body: some View {
         ZStack(alignment: .topLeading) {
-            // CONSTRAINED: Temporary simple background to avoid sprite overflow  
+            // Background groove
             Rectangle()
-                .fill(Color.black.opacity(0.8))
-                .frame(width: width, height: height) // EXACTLY 14×62px
+                .fill(Color.black.opacity(0.9))
+                .frame(width: width, height: height)
                 .overlay(
                     Rectangle()
-                        .stroke(Color.gray.opacity(0.6), lineWidth: 1)
+                        .stroke(Color.gray.opacity(0.3), lineWidth: 1)
                 )
             
-            // Visual fill to show EQ level (like volume slider)
-            Rectangle()
-                .fill(LinearGradient(
-                    colors: [Color.yellow, Color.orange],
-                    startPoint: .bottom,
-                    endPoint: .top
-                ))
-                .frame(width: width - 2, height: sliderFillHeight)
-                .offset(x: 1, y: height - sliderFillHeight - 1)
+            // Visual fill with proper color gradient
+            if value != 0 {
+                Rectangle()
+                    .fill(sliderGradient)
+                    .frame(width: width - 4, height: abs(sliderFillHeight))
+                    .offset(x: 2, y: value > 0 ? (height / 2) - abs(sliderFillHeight) : height / 2)
+            }
             
-            // Center line at 0dB
+            // Center line at 0dB (yellow reference line)
             Rectangle()
-                .fill(Color.gray.opacity(0.5))
+                .fill(Color.yellow.opacity(0.6))
                 .frame(width: width - 4, height: 1)
                 .offset(x: 2, y: height / 2)
             
-            // Small thumb indicator
+            // Slider thumb (thin white line that moves with value)
             Rectangle()
-                .fill(isDragging ? Color.white : Color.gray)
-                .frame(width: width - 2, height: 3)
+                .fill(Color.white)
+                .frame(width: width - 2, height: 2)
                 .offset(x: 1, y: thumbPosition)
             
             // Invisible interaction area - EXACTLY constrained
@@ -278,24 +276,45 @@ struct WinampVerticalSlider: View {
         .clipped() // CRITICAL: Clip any overflow
     }
     
-    // Calculate visual fill height based on EQ value
-    private var sliderFillHeight: CGFloat {
-        if value >= 0 {
-            // Positive gain - fill from center upward
-            let normalizedValue = CGFloat(value) / CGFloat(range.upperBound)
-            return normalizedValue * (height / 2)
+    // Color gradient that changes based on slider position
+    private var sliderGradient: LinearGradient {
+        let normalizedValue = (value - range.lowerBound) / (range.upperBound - range.lowerBound)
+        
+        if normalizedValue < 0.4 {
+            // Bottom range - green
+            return LinearGradient(
+                colors: [Color(red: 0, green: 0.6, blue: 0), Color(red: 0, green: 0.8, blue: 0)],
+                startPoint: value > 0 ? .bottom : .top,
+                endPoint: value > 0 ? .top : .bottom
+            )
+        } else if normalizedValue < 0.6 {
+            // Middle range - yellow/green
+            return LinearGradient(
+                colors: [Color(red: 0.6, green: 0.8, blue: 0), Color(red: 0.8, green: 0.8, blue: 0)],
+                startPoint: value > 0 ? .bottom : .top,
+                endPoint: value > 0 ? .top : .bottom
+            )
         } else {
-            // Negative gain - fill from center downward  
-            let normalizedValue = CGFloat(abs(value)) / CGFloat(abs(range.lowerBound))
-            return normalizedValue * (height / 2)
+            // Top range - orange/red
+            return LinearGradient(
+                colors: [Color(red: 0.8, green: 0.6, blue: 0), Color(red: 1, green: 0.2, blue: 0)],
+                startPoint: value > 0 ? .bottom : .top,
+                endPoint: value > 0 ? .top : .bottom
+            )
         }
     }
     
+    // Calculate visual fill height based on EQ value
+    private var sliderFillHeight: CGFloat {
+        // Fill from center based on value
+        return abs(CGFloat(value) / CGFloat(range.upperBound)) * (height / 2)
+    }
+    
     private var thumbPosition: CGFloat {
+        // Position the white line based on value
         let normalizedValue = (value - range.lowerBound) / (range.upperBound - range.lowerBound)
-        let maxOffset = height - thumbHeight
         // Invert Y because slider moves from top (high) to bottom (low)
-        return maxOffset * CGFloat(1.0 - normalizedValue)
+        return height - (CGFloat(normalizedValue) * height) - 1
     }
     
     private func updateValue(from gesture: DragGesture.Value, in geometry: GeometryProxy) {
