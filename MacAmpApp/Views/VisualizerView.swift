@@ -25,7 +25,7 @@ struct VisualizerView: View {
     private let peakDecayRate: CGFloat = 0.95
     
     // Sensitivity adjustment
-    private let amplificationFactor: CGFloat = 2.5  // Boost signal for better visibility
+    private let amplificationFactor: CGFloat = 1.5  // Boost signal for better visibility
     private let minBarHeight: CGFloat = 1.0  // Minimum visible height when playing
     
     var body: some View {
@@ -85,7 +85,7 @@ struct VisualizerView: View {
             for i in 0..<barCount {
                 // Apply frequency-specific amplification
                 // Higher frequencies need more boost to be visible
-                let frequencyBoost: CGFloat = 1.0 + (CGFloat(i) / CGFloat(barCount)) * 1.5
+                let frequencyBoost: CGFloat = 1.0 + (CGFloat(i) / CGFloat(barCount)) * 0.5
                 
                 // Update bar height with amplified frequency data
                 var targetHeight = CGFloat(frequencyData[i]) * maxHeight * amplificationFactor * frequencyBoost
