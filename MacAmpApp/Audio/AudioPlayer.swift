@@ -464,7 +464,7 @@ class AudioPlayer: ObservableObject {
         var result = [Float](repeating: 0, count: bands)
         
         if isPlaying && !visualizerLevels.isEmpty {
-            // Map visualizer levels to requested bands
+            // Map visualizer levels to requested bands with logarithmic scaling
             let sourceCount = visualizerLevels.count
             
             for i in 0..<bands {
@@ -477,9 +477,20 @@ class AudioPlayer: ObservableObject {
                 let value1 = visualizerLevels[sourceIndex]
                 let value2 = visualizerLevels[nextIndex]
                 
-                // Interpolate and normalize to 0-1 range
+                // Interpolate and apply logarithmic scaling for better perception
                 let interpolated = value1 * (1 - fraction) + value2 * fraction
-                result[i] = min(1.0, max(0.0, interpolated))
+                
+                // Apply logarithmic scaling to make quiet sounds more visible
+                // This mimics how human hearing perceives sound levels
+                let scaled = log10(1.0 + interpolated * 9.0) // Maps 0-1 to log scale
+                
+                // Normalize to 0-1 range with slight boost
+                result[i] = min(1.0, max(0.0, scaled * 0.8))
+            }
+        } else if isPlaying {
+            // Provide some minimal random movement when no data available
+            for i in 0..<bands {
+                result[i] = Float.random(in: 0.0...0.1)
             }
         }
         

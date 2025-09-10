@@ -20,9 +20,13 @@ struct VisualizerView: View {
     
     // Animation timing
     private let updateInterval: TimeInterval = 1.0/30.0  // 30 FPS for classic feel
-    private let decayRate: CGFloat = 0.85
+    private let decayRate: CGFloat = 0.92  // Slower decay for more visible bars
     private let peakHoldTime: TimeInterval = 0.5
     private let peakDecayRate: CGFloat = 0.95
+    
+    // Sensitivity adjustment
+    private let amplificationFactor: CGFloat = 2.5  // Boost signal for better visibility
+    private let minBarHeight: CGFloat = 1.0  // Minimum visible height when playing
     
     var body: some View {
         HStack(spacing: barSpacing) {
@@ -79,8 +83,20 @@ struct VisualizerView: View {
         
         withAnimation(.linear(duration: updateInterval)) {
             for i in 0..<barCount {
-                // Update bar height with new frequency data
-                let targetHeight = CGFloat(frequencyData[i]) * maxHeight
+                // Apply frequency-specific amplification
+                // Higher frequencies need more boost to be visible
+                let frequencyBoost: CGFloat = 1.0 + (CGFloat(i) / CGFloat(barCount)) * 1.5
+                
+                // Update bar height with amplified frequency data
+                var targetHeight = CGFloat(frequencyData[i]) * maxHeight * amplificationFactor * frequencyBoost
+                
+                // Add minimum height when playing to ensure visibility
+                if audioPlayer.isPlaying && frequencyData[i] > 0.01 {
+                    targetHeight = max(minBarHeight, targetHeight)
+                }
+                
+                // Clamp to max height
+                targetHeight = min(maxHeight, targetHeight)
                 
                 // Apply smoothing for more natural movement
                 barHeights[i] = max(targetHeight, barHeights[i] * decayRate)
@@ -104,9 +120,9 @@ struct SpectrumBar: View {
     let peakPosition: CGFloat
     let maxHeight: CGFloat
     
-    // Classic Winamp colors
-    private let greenThreshold: CGFloat = 0.5
-    private let yellowThreshold: CGFloat = 0.75
+    // Classic Winamp colors - adjusted thresholds for better visibility
+    private let greenThreshold: CGFloat = 0.4  // Show green more often
+    private let yellowThreshold: CGFloat = 0.65  // Show yellow at medium levels
     
     var body: some View {
         GeometryReader { geometry in
