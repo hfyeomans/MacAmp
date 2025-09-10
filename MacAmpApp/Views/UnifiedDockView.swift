@@ -45,6 +45,12 @@ struct UnifiedDockView: View {
             .onAppear {
                 startDockAnimations()
             }
+            .onChange(of: settings.materialIntegration) { _, _ in
+                startDockAnimations()
+            }
+            .onChange(of: settings.enableLiquidGlass) { _, _ in
+                startDockAnimations()
+            }
         } else {
             // Skin not loaded yet - trigger loading
             Color.clear
@@ -64,72 +70,114 @@ struct UnifiedDockView: View {
         }
     }
     
-    // MARK: - Whimsy Helper Functions
+    // MARK: - Animation Helper Functions
     private func startDockAnimations() {
-        withAnimation(.easeInOut(duration: 2.5).repeatForever(autoreverses: true)) {
-            dockGlow = 1.005
+        // Only apply glow effect in modern mode
+        if settings.materialIntegration == .modern {
+            withAnimation(.easeInOut(duration: 2.5).repeatForever(autoreverses: true)) {
+                dockGlow = 1.005
+            }
+        } else {
+            dockGlow = 1.0
         }
-        let useGlass = settings.enableLiquidGlass && (settings.materialIntegration == .hybrid || settings.materialIntegration == .modern)
-        if useGlass {
+        
+        // Start material shimmer for hybrid and modern modes with liquid glass
+        if settings.enableLiquidGlass && (settings.materialIntegration == .hybrid || settings.materialIntegration == .modern) {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 materialShimmer = true
             }
+        } else {
+            materialShimmer = false
         }
     }
     
-    // MARK: - Liquid Glass Background
+    // MARK: - Appearance Mode Background
     @ViewBuilder
     private var backgroundView: some View {
-        // Explicitly depend on settings properties for proper reactivity
-        let useGlass = settings.enableLiquidGlass && (settings.materialIntegration == .hybrid || settings.materialIntegration == .modern)
-        
-        if useGlass {
-            if #available(macOS 26.0, *) {
+        switch settings.materialIntegration {
+        case .classic:
+            // Classic mode: Pure Winamp skin appearance
+            Color.black
+                .id("classic-mode")
+                
+        case .hybrid:
+            // Hybrid mode: Subtle material effects with Winamp chrome
+            ZStack {
+                Color.black
+                
+                if settings.enableLiquidGlass {
+                    // Subtle material overlay for hybrid mode
+                    Rectangle()
+                        .fill(.ultraThinMaterial)
+                        .opacity(0.3)
+                        .overlay(
+                            LinearGradient(
+                                colors: [
+                                    .clear,
+                                    .white.opacity(0.05),
+                                    .clear
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                            .opacity(materialShimmer ? 0.5 : 0.2)
+                            .animation(
+                                .easeInOut(duration: 6.0).repeatForever(autoreverses: true),
+                                value: materialShimmer
+                            )
+                        )
+                }
+            }
+            .id("hybrid-mode-\(settings.enableLiquidGlass)")
+            
+        case .modern:
+            // Modern mode: Full SwiftUI materials
+            if settings.enableLiquidGlass {
+                ZStack {
+                    // Base material layer
+                    Rectangle()
+                        .fill(.regularMaterial)
+                        .ignoresSafeArea()
+                    
+                    // Animated shimmer overlay
+                    LinearGradient(
+                        colors: [
+                            .clear,
+                            .white.opacity(0.1),
+                            .blue.opacity(0.05),
+                            .white.opacity(0.1),
+                            .clear
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    .opacity(materialShimmer ? 0.8 : 0.3)
+                    .animation(
+                        .easeInOut(duration: 4.0).repeatForever(autoreverses: true),
+                        value: materialShimmer
+                    )
+                    
+                    // Audio-reactive glow
+                    RadialGradient(
+                        colors: [
+                            audioPlayer.isPlaying ? .green.opacity(0.15) : .blue.opacity(0.1),
+                            .clear
+                        ],
+                        center: .center,
+                        startRadius: 0,
+                        endRadius: 200
+                    )
+                    .opacity(audioPlayer.isPlaying ? 0.6 : 0.3)
+                    .animation(.easeInOut(duration: 1.0), value: audioPlayer.isPlaying)
+                    .blendMode(.overlay)
+                }
+                .id("modern-mode-liquid")
+            } else {
+                // Modern without liquid glass - just material
                 Rectangle()
                     .fill(.regularMaterial)
-                    .ignoresSafeArea()
-                    .overlay(
-                        // Animated material shimmer
-                        LinearGradient(
-                            colors: [
-                                .clear,
-                                .white.opacity(0.1),
-                                .blue.opacity(0.05),
-                                .white.opacity(0.1),
-                                .clear
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                        .opacity(materialShimmer ? 0.8 : 0.3)
-                        .animation(
-                            .easeInOut(duration: 4.0).repeatForever(autoreverses: true),
-                            value: materialShimmer
-                        )
-                    )
-                    .overlay(
-                        // Audio-reactive glow
-                        Rectangle()
-                            .fill(
-                                RadialGradient(
-                                    colors: [.green.opacity(0.1), .clear],
-                                    center: .center,
-                                    startRadius: 0,
-                                    endRadius: 200
-                                )
-                            )
-                            .opacity(audioPlayer.isPlaying ? 0.6 : 0.2)
-                            .animation(.easeInOut(duration: 1.0), value: audioPlayer.isPlaying)
-                            .blendMode(.overlay)
-                    )
-                    .id("liquidGlass-\(settings.enableLiquidGlass)-\(settings.materialIntegration.rawValue)")
-            } else {
-                Color.black
-                    .id("fallback-\(settings.enableLiquidGlass)")
+                    .id("modern-mode-basic")
             }
-        } else {
-            Color.black
-                .id("classic-\(settings.enableLiquidGlass)")
         }
     }
 
