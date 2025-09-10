@@ -129,7 +129,10 @@ struct WinampEqualizerWindow: View {
     @ViewBuilder
     private func buildPreampSlider() -> some View {
         WinampVerticalSlider(
-            value: $audioPlayer.preamp,
+            value: Binding(
+                get: { audioPlayer.preamp },
+                set: { audioPlayer.setPreamp(value: $0) }  // Call setPreamp to affect audio
+            ),
             range: -12.0...12.0,
             width: sliderWidth,   // 14px exactly
             height: sliderHeight, // 62px exactly  
@@ -235,21 +238,19 @@ struct WinampVerticalSlider: View {
                         .stroke(Color.gray.opacity(0.3), lineWidth: 1)
                 )
             
-            // Visual fill with proper color gradient
-            if value != 0 {
-                Rectangle()
-                    .fill(sliderGradient)
-                    .frame(width: width - 4, height: abs(sliderFillHeight))
-                    .offset(x: 2, y: value > 0 ? (height / 2) - abs(sliderFillHeight) : height / 2)
-            }
-            
-            // Center line at 0dB (yellow reference line)
+            // Full-height gradient that changes color based on position
             Rectangle()
-                .fill(Color.yellow.opacity(0.6))
+                .fill(sliderGradient)
+                .frame(width: width - 4, height: height - 4)
+                .offset(x: 2, y: 2)
+            
+            // Center line at 0dB (thin dark line for reference)
+            Rectangle()
+                .fill(Color.black.opacity(0.5))
                 .frame(width: width - 4, height: 1)
                 .offset(x: 2, y: height / 2)
             
-            // Slider thumb (thin white line that moves with value)
+            // Slider thumb (white line that moves with value)
             Rectangle()
                 .fill(Color.white)
                 .frame(width: width - 2, height: 2)
@@ -278,37 +279,25 @@ struct WinampVerticalSlider: View {
     
     // Color gradient that changes based on slider position
     private var sliderGradient: LinearGradient {
-        let normalizedValue = (value - range.lowerBound) / (range.upperBound - range.lowerBound)
-        
-        if normalizedValue < 0.4 {
-            // Bottom range - green
-            return LinearGradient(
-                colors: [Color(red: 0, green: 0.6, blue: 0), Color(red: 0, green: 0.8, blue: 0)],
-                startPoint: value > 0 ? .bottom : .top,
-                endPoint: value > 0 ? .top : .bottom
-            )
-        } else if normalizedValue < 0.6 {
-            // Middle range - yellow/green
-            return LinearGradient(
-                colors: [Color(red: 0.6, green: 0.8, blue: 0), Color(red: 0.8, green: 0.8, blue: 0)],
-                startPoint: value > 0 ? .bottom : .top,
-                endPoint: value > 0 ? .top : .bottom
-            )
-        } else {
-            // Top range - orange/red
-            return LinearGradient(
-                colors: [Color(red: 0.8, green: 0.6, blue: 0), Color(red: 1, green: 0.2, blue: 0)],
-                startPoint: value > 0 ? .bottom : .top,
-                endPoint: value > 0 ? .top : .bottom
-            )
-        }
+        // Create a gradient that transitions through green -> yellow -> red
+        // The entire channel shows this gradient, giving the appearance of changing color
+        return LinearGradient(
+            colors: [
+                // Bottom (low values) - Green
+                Color(red: 0, green: 0.8, blue: 0),
+                Color(red: 0.2, green: 0.9, blue: 0),
+                // Middle - Yellow  
+                Color(red: 0.8, green: 0.8, blue: 0),
+                Color(red: 0.9, green: 0.7, blue: 0),
+                // Top (high values) - Red
+                Color(red: 1, green: 0.3, blue: 0),
+                Color(red: 1, green: 0, blue: 0)
+            ],
+            startPoint: .bottom,
+            endPoint: .top
+        )
     }
     
-    // Calculate visual fill height based on EQ value
-    private var sliderFillHeight: CGFloat {
-        // Fill from center based on value
-        return abs(CGFloat(value) / CGFloat(range.upperBound)) * (height / 2)
-    }
     
     private var thumbPosition: CGFloat {
         // Position the white line based on value

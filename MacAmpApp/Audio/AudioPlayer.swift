@@ -162,7 +162,11 @@ class AudioPlayer: ObservableObject {
     func setPreamp(value: Float) {
         preamp = value
         eqNode.globalGain = value
-        print("Set Preamp to \(value)")
+        // Ensure EQ is enabled when adjusting preamp
+        if !isEqOn && value != 0 {
+            toggleEq(isOn: true)
+        }
+        print("Set Preamp to \(value), EQ is \(isEqOn ? "ON" : "OFF")")
     }
 
     func setEqBand(index: Int, value: Float) {
