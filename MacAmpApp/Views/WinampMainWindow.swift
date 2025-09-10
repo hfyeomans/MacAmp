@@ -338,8 +338,21 @@ struct WinampMainWindow: View {
     @ViewBuilder
     private func buildTextSprites(for text: String) -> some View {
         HStack(spacing: 0) {
-            ForEach(Array(text.enumerated()), id: \.offset) { index, character in
-                let charCode = character.asciiValue ?? 32 // Default to space
+            ForEach(Array(text.uppercased().enumerated()), id: \.offset) { index, character in
+                // Convert character to proper sprite code
+                // Winamp TEXT.BMP uses lowercase ASCII codes for letters
+                let charCode: UInt8 = {
+                    if let ascii = character.asciiValue {
+                        if character.isLetter && character.isUppercase {
+                            // Convert uppercase letters to lowercase ASCII codes
+                            return ascii + 32
+                        } else {
+                            return ascii
+                        }
+                    }
+                    return 32 // Default to space
+                }()
+                
                 SimpleSpriteImage("CHARACTER_\(charCode)", width: 5, height: 6)
             }
         }
