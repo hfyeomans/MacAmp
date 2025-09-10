@@ -69,7 +69,8 @@ struct UnifiedDockView: View {
         withAnimation(.easeInOut(duration: 2.5).repeatForever(autoreverses: true)) {
             dockGlow = 1.005
         }
-        if settings.shouldUseContainerBackground {
+        let useGlass = settings.enableLiquidGlass && (settings.materialIntegration == .hybrid || settings.materialIntegration == .modern)
+        if useGlass {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 materialShimmer = true
             }
@@ -79,7 +80,10 @@ struct UnifiedDockView: View {
     // MARK: - Liquid Glass Background
     @ViewBuilder
     private var backgroundView: some View {
-        if settings.shouldUseContainerBackground {
+        // Explicitly depend on settings properties for proper reactivity
+        let useGlass = settings.enableLiquidGlass && (settings.materialIntegration == .hybrid || settings.materialIntegration == .modern)
+        
+        if useGlass {
             if #available(macOS 26.0, *) {
                 Rectangle()
                     .fill(.regularMaterial)
@@ -118,11 +122,14 @@ struct UnifiedDockView: View {
                             .animation(.easeInOut(duration: 1.0), value: audioPlayer.isPlaying)
                             .blendMode(.overlay)
                     )
+                    .id("liquidGlass-\(settings.enableLiquidGlass)-\(settings.materialIntegration.rawValue)")
             } else {
                 Color.black
+                    .id("fallback-\(settings.enableLiquidGlass)")
             }
         } else {
             Color.black
+                .id("classic-\(settings.enableLiquidGlass)")
         }
     }
 

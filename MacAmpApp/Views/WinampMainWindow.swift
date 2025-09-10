@@ -5,12 +5,17 @@ import AppKit
 struct WinampMainWindow: View {
     @EnvironmentObject var skinManager: SkinManager
     @EnvironmentObject var audioPlayer: AudioPlayer
+    @EnvironmentObject var dockingController: DockingController
     @Environment(\.openWindow) var openWindow
     
     @State private var isShadeMode: Bool = false
     @State private var showRemainingTime: Bool = false
     @State private var isScrubbing: Bool = false
     @State private var wasPlayingPreScrub: Bool = false
+    
+    // Track info scrolling state
+    @State private var scrollOffset: CGFloat = 0
+    @State private var scrollTimer: Timer?
     
     // Winamp coordinate constants (from original Winamp and webamp)
     private struct Coords {
@@ -27,6 +32,9 @@ struct WinampMainWindow: View {
         
         // Play/Pause indicator
         static let playPauseIndicator = CGPoint(x: 24, y: 28)
+        
+        // Track info display area (scrolling text)
+        static let trackInfo = CGRect(x: 111, y: 27, width: 152, height: 11)
         
         // Volume and Balance
         static let volumeSlider = CGPoint(x: 107, y: 57)
@@ -63,6 +71,10 @@ struct WinampMainWindow: View {
         .frame(width: WinampSizes.main.width, 
                height: isShadeMode ? WinampSizes.mainShade.height : WinampSizes.main.height)
         .background(Color.black) // Fallback
+        .onDisappear {
+            scrollTimer?.invalidate()
+            scrollTimer = nil
+        }
     }
     
     @ViewBuilder
@@ -76,6 +88,9 @@ struct WinampMainWindow: View {
             
             // Time display
             buildTimeDisplay()
+            
+            // Track info display
+            buildTrackInfoDisplay()
             
             // Transport buttons
             buildTransportButtons()
@@ -272,7 +287,7 @@ struct WinampMainWindow: View {
         Group {
             // EQ button
             Button(action: {
-                openWindow(id: "equalizerWindow")
+                dockingController.toggleEqualizer()
             }) {
                 SimpleSpriteImage("MAIN_EQ_BUTTON", width: 23, height: 12)
             }
@@ -281,12 +296,52 @@ struct WinampMainWindow: View {
             
             // Playlist button
             Button(action: {
-                openWindow(id: "playlistWindow")
+                dockingController.togglePlaylist()
             }) {
                 SimpleSpriteImage("MAIN_PLAYLIST_BUTTON", width: 23, height: 12)
             }
             .buttonStyle(.plain)
             .at(Coords.playlistButton)
+        }
+    }
+    
+    @ViewBuilder
+    private func buildTrackInfoDisplay() -> some View {
+        // Track info scrolling text display
+        let trackText = audioPlayer.currentTitle.isEmpty ? "MacAmp" : audioPlayer.currentTitle
+        let textWidth = trackText.count * 5 // Approximate character width in Winamp font
+        let displayWidth = Int(Coords.trackInfo.width)
+        
+        if textWidth > displayWidth {
+            // Need to scroll for long text
+            HStack(spacing: 0) {
+                buildTextSprites(for: trackText)
+                    .offset(x: scrollOffset)
+                    .onAppear {
+                        startScrolling()
+                    }
+                    .onChange(of: audioPlayer.currentTitle) { _ in
+                        resetScrolling()
+                    }
+            }
+            .frame(width: Coords.trackInfo.width, height: Coords.trackInfo.height)
+            .clipped()
+            .at(CGPoint(x: Coords.trackInfo.minX, y: Coords.trackInfo.minY))
+        } else {
+            // Static text for short names
+            buildTextSprites(for: trackText)
+                .frame(width: Coords.trackInfo.width, height: Coords.trackInfo.height, alignment: .leading)
+                .at(CGPoint(x: Coords.trackInfo.minX, y: Coords.trackInfo.minY))
+        }
+    }
+    
+    @ViewBuilder
+    private func buildTextSprites(for text: String) -> some View {
+        HStack(spacing: 0) {
+            ForEach(Array(text.enumerated()), id: \.offset) { index, character in
+                let charCode = character.asciiValue ?? 32 // Default to space
+                SimpleSpriteImage("CHARACTER_\(charCode)", width: 5, height: 6)
+            }
         }
     }
     
@@ -309,6 +364,40 @@ struct WinampMainWindow: View {
                     audioPlayer.loadTrack(url: url)
                 }
             }
+        }
+    }
+    
+    // MARK: - Scrolling Animation Functions
+    
+    private func startScrolling() {
+        guard scrollTimer == nil else { return }
+        
+        scrollTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { _ in
+            let trackText = audioPlayer.currentTitle.isEmpty ? "MacAmp" : audioPlayer.currentTitle
+            let textWidth = CGFloat(trackText.count * 5)
+            let displayWidth = Coords.trackInfo.width
+            
+            if textWidth > displayWidth {
+                withAnimation(.linear(duration: 0.15)) {
+                    scrollOffset -= 5 // Move left by one character width
+                    
+                    // Reset when we've scrolled past the end
+                    if abs(scrollOffset) >= textWidth + 20 { // Add some padding
+                        scrollOffset = displayWidth
+                    }
+                }
+            }
+        }
+    }
+    
+    private func resetScrolling() {
+        scrollTimer?.invalidate()
+        scrollTimer = nil
+        scrollOffset = 0
+        
+        // Restart scrolling if needed
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            startScrolling()
         }
     }
     
@@ -360,4 +449,5 @@ struct WinampMainWindow: View {
     WinampMainWindow()
         .environmentObject(SkinManager())
         .environmentObject(AudioPlayer())
+        .environmentObject(DockingController())
 }
