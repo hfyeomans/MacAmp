@@ -454,6 +454,37 @@ class AudioPlayer: ObservableObject {
             progressTimer?.invalidate()
         }
     }
+    
+    // MARK: - Visualizer Support
+    func getFrequencyData(bands: Int) -> [Float] {
+        // Return normalized frequency data for spectrum analyzer
+        // Map our 20 visualizer levels to the requested number of bands
+        guard bands > 0 else { return [] }
+        
+        var result = [Float](repeating: 0, count: bands)
+        
+        if isPlaying && !visualizerLevels.isEmpty {
+            // Map visualizer levels to requested bands
+            let sourceCount = visualizerLevels.count
+            
+            for i in 0..<bands {
+                // Map band index to source index
+                let sourceIndex = (i * sourceCount) / bands
+                let nextIndex = min(sourceIndex + 1, sourceCount - 1)
+                
+                // Interpolate between source values for smoother visualization
+                let fraction = Float(i * sourceCount % bands) / Float(bands)
+                let value1 = visualizerLevels[sourceIndex]
+                let value2 = visualizerLevels[nextIndex]
+                
+                // Interpolate and normalize to 0-1 range
+                let interpolated = value1 * (1 - fraction) + value2 * fraction
+                result[i] = min(1.0, max(0.0, interpolated))
+            }
+        }
+        
+        return result
+    }
 
     private func onPlaybackEnded() {
         DispatchQueue.main.async { [weak self] in

@@ -36,6 +36,9 @@ struct WinampMainWindow: View {
         // Track info display area (scrolling text)
         static let trackInfo = CGRect(x: 111, y: 27, width: 152, height: 11)
         
+        // Spectrum analyzer (visualizer)
+        static let spectrumAnalyzer = CGPoint(x: 24, y: 43)
+        
         // Volume and Balance
         static let volumeSlider = CGPoint(x: 107, y: 57)
         static let balanceSlider = CGPoint(x: 177, y: 57)
@@ -91,6 +94,9 @@ struct WinampMainWindow: View {
             
             // Track info display
             buildTrackInfoDisplay()
+            
+            // Spectrum analyzer (visualizer)
+            buildSpectrumAnalyzer()
             
             // Transport buttons
             buildTransportButtons()
@@ -363,6 +369,14 @@ struct WinampMainWindow: View {
         // Mono/Stereo indicator
         SimpleSpriteImage("MAIN_STEREO", width: 29, height: 12)
             .at(x: 212, y: 41)
+    }
+    
+    @ViewBuilder
+    private func buildSpectrumAnalyzer() -> some View {
+        VisualizerView()
+            .frame(width: 76, height: 16)
+            .background(Color.black.opacity(0.5))
+            .at(Coords.spectrumAnalyzer)
     }
     
     private func openFileDialog() {
