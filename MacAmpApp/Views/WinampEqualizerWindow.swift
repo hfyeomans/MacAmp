@@ -238,9 +238,9 @@ struct WinampVerticalSlider: View {
                         .stroke(Color.gray.opacity(0.3), lineWidth: 1)
                 )
             
-            // Full-height gradient that changes color based on position
+            // Solid color fill based on slider position
             Rectangle()
-                .fill(sliderGradient)
+                .fill(sliderColor)
                 .frame(width: width - 4, height: height - 4)
                 .offset(x: 2, y: 2)
             
@@ -277,25 +277,28 @@ struct WinampVerticalSlider: View {
         .clipped() // CRITICAL: Clip any overflow
     }
     
-    // Color gradient that changes based on slider position
-    private var sliderGradient: LinearGradient {
-        // Create a gradient that transitions through green -> yellow -> red
-        // The entire channel shows this gradient, giving the appearance of changing color
-        return LinearGradient(
-            colors: [
-                // Bottom (low values) - Green
-                Color(red: 0, green: 0.8, blue: 0),
-                Color(red: 0.2, green: 0.9, blue: 0),
-                // Middle - Yellow  
-                Color(red: 0.8, green: 0.8, blue: 0),
-                Color(red: 0.9, green: 0.7, blue: 0),
-                // Top (high values) - Red
-                Color(red: 1, green: 0.3, blue: 0),
-                Color(red: 1, green: 0, blue: 0)
-            ],
-            startPoint: .bottom,
-            endPoint: .top
-        )
+    // Solid color that changes based on slider position
+    private var sliderColor: Color {
+        // Map value to color: green (-12) -> yellow (0) -> red (+12)
+        let normalizedValue = (value - range.lowerBound) / (range.upperBound - range.lowerBound)
+        
+        if normalizedValue <= 0.5 {
+            // Green to Yellow (bottom to center)
+            let t = normalizedValue * 2 // 0 to 1 for this half
+            return Color(
+                red: Double(t * 0.9),      // 0 -> 0.9
+                green: Double(0.8),         // Stay high
+                blue: 0
+            )
+        } else {
+            // Yellow to Red (center to top)
+            let t = (normalizedValue - 0.5) * 2 // 0 to 1 for this half
+            return Color(
+                red: Double(0.9 + t * 0.1), // 0.9 -> 1.0
+                green: Double(0.8 * (1 - t)), // 0.8 -> 0
+                blue: 0
+            )
+        }
     }
     
     
@@ -312,7 +315,13 @@ struct WinampVerticalSlider: View {
         
         // Invert Y coordinate (top = high value, bottom = low value)
         let normalizedPosition = 1.0 - Float(y / gestureHeight)
-        let newValue = range.lowerBound + (normalizedPosition * (range.upperBound - range.lowerBound))
+        var newValue = range.lowerBound + (normalizedPosition * (range.upperBound - range.lowerBound))
+        
+        // Center snapping: if within ±0.5 of center (0), snap to exactly 0
+        let snapThreshold: Float = 0.5
+        if abs(newValue) < snapThreshold {
+            newValue = 0
+        }
         
         value = max(range.lowerBound, min(range.upperBound, newValue))
     }
