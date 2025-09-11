@@ -44,6 +44,12 @@ struct WinampEqualizerWindow: View {
                             width: WinampSizes.equalizer.width, 
                             height: WinampSizes.equalizer.height)
             
+            // Title bar with "Winamp Equalizer" text
+            SimpleSpriteImage("EQ_TITLE_BAR_SELECTED",
+                            width: 275,
+                            height: 14)
+                .at(CGPoint(x: 0, y: 0))
+            
             // Build all EQ components
             Group {
                 // Titlebar buttons

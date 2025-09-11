@@ -63,6 +63,12 @@ struct WinampMainWindow: View {
                             width: WinampSizes.main.width, 
                             height: WinampSizes.main.height)
             
+            // Title bar with "Winamp" text (overlays on background)
+            SimpleSpriteImage("MAIN_TITLE_BAR_SELECTED",
+                            width: 275,
+                            height: 14)
+                .at(CGPoint(x: 0, y: 0))
+            
             if !isShadeMode {
                 // Full window mode
                 buildFullWindow()
