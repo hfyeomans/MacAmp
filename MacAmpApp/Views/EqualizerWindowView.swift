@@ -62,7 +62,8 @@ struct EqualizerWindowView: View {
                             value: $audioPlayer.preamp,
                             range: eqRange
                         )
-                        .frame(width: eqSliderBackground.size.width / 10, height: eqSliderBackground.size.height)
+                        .environmentObject(skinManager)
+                        .frame(width: 14, height: 62)  // Correct Winamp specs: 14px wide, 62px active area
                         .overlay(
                             Rectangle()
                                 .fill(
@@ -94,7 +95,8 @@ struct EqualizerWindowView: View {
                                 ),
                                 range: eqRange
                             )
-                            .frame(width: eqSliderBackground.size.width / 10, height: eqSliderBackground.size.height)
+                            .environmentObject(skinManager)
+                            .frame(width: 14, height: 62)  // Correct Winamp specs: 14px wide, 62px active area
                             .overlay(
                                 Rectangle()
                                     .fill(

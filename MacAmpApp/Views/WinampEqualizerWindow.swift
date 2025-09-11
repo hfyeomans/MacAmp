@@ -241,11 +241,11 @@ struct WinampVerticalSlider: View {
                 .frame(width: width - 3, height: height)
                 .offset(x: 1.5, y: 0)
             
-            // Solid color fill based on slider position (narrower to show groove)
+            // Colored channel (6px wide)
             Rectangle()
                 .fill(sliderColor)
-                .frame(width: width - 6, height: height - 4)
-                .offset(x: 3, y: 2)
+                .frame(width: 6, height: height - 4)  // 6px wide channel
+                .offset(x: 4, y: 2)  // Center the channel
             
             // Center line at 0dB (thin dark line for reference)
             Rectangle()
@@ -253,11 +253,10 @@ struct WinampVerticalSlider: View {
                 .frame(width: width - 4, height: 1)
                 .offset(x: 2, y: height / 2)
             
-            // Slider thumb (white line that moves with value)
-            Rectangle()
-                .fill(Color.white)
-                .frame(width: width - 2, height: 2)
-                .offset(x: 1, y: thumbPosition)
+            // Slider thumb sprite (11x11 pixels) 
+            SimpleSpriteImage(isDragging ? "EQ_SLIDER_THUMB_SELECTED" : "EQ_SLIDER_THUMB", 
+                            width: 11, height: 11)
+                .offset(x: 1.5, y: thumbPosition - 4.5) // Center the 11px thumb
             
             // Invisible interaction area - EXACTLY constrained
             GeometryReader { geo in
@@ -306,10 +305,12 @@ struct WinampVerticalSlider: View {
     
     
     private var thumbPosition: CGFloat {
-        // Position the white line based on value
+        // Position the thumb sprite based on value
+        let thumbSize: CGFloat = 11 // Actual thumb sprite height
+        let trackHeight = height - thumbSize
         let normalizedValue = (value - range.lowerBound) / (range.upperBound - range.lowerBound)
         // Invert Y because slider moves from top (high) to bottom (low)
-        return height - (CGFloat(normalizedValue) * height) - 1
+        return trackHeight - (CGFloat(normalizedValue) * trackHeight)
     }
     
     private func updateValue(from gesture: DragGesture.Value, in geometry: GeometryProxy) {
