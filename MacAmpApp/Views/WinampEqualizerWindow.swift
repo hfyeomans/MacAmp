@@ -39,7 +39,7 @@ struct WinampEqualizerWindow: View {
     
     var body: some View {
         ZStack(alignment: .topLeading) {
-            // Background
+            // Background - The EQMAIN sprite includes preamp text and frequency labels
             SimpleSpriteImage("EQ_WINDOW_BACKGROUND", 
                             width: WinampSizes.equalizer.width, 
                             height: WinampSizes.equalizer.height)
@@ -229,20 +229,17 @@ struct WinampVerticalSlider: View {
     
     var body: some View {
         ZStack(alignment: .topLeading) {
-            // Background groove
+            // Groove overlay - transparent to show background through
             Rectangle()
-                .fill(Color.black.opacity(0.9))
-                .frame(width: width, height: height)
-                .overlay(
-                    Rectangle()
-                        .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                )
+                .fill(Color.black.opacity(0.3))
+                .frame(width: width - 3, height: height)
+                .offset(x: 1.5, y: 0)
             
-            // Solid color fill based on slider position
+            // Solid color fill based on slider position (narrower to show groove)
             Rectangle()
                 .fill(sliderColor)
-                .frame(width: width - 4, height: height - 4)
-                .offset(x: 2, y: 2)
+                .frame(width: width - 6, height: height - 4)
+                .offset(x: 3, y: 2)
             
             // Center line at 0dB (thin dark line for reference)
             Rectangle()
