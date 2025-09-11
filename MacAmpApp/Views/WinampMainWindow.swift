@@ -255,39 +255,35 @@ struct WinampMainWindow: View {
     
     @ViewBuilder
     private func buildPositionSlider() -> some View {
-        // Position slider background
-        SimpleSpriteImage("MAIN_POSITION_SLIDER_BACKGROUND", width: 248, height: 10)
-            .at(Coords.positionSlider)
-        
-        // Interactive scrubbing area - positioned exactly over the slider
-        Color.clear
-            .frame(width: 248, height: 10)
-            .contentShape(Rectangle())
-            .at(Coords.positionSlider)
-            .onTapGesture { location in
-                // Simple click-to-seek without scrubbing
-                let progress = min(1.0, max(0.0, Double(location.x / 248)))
-                if audioPlayer.currentDuration > 0 {
-                    let targetTime = progress * audioPlayer.currentDuration
-                    audioPlayer.seek(to: targetTime, resume: audioPlayer.isPlaying)
-                }
+        ZStack(alignment: .topLeading) {
+            // Position slider background
+            SimpleSpriteImage("MAIN_POSITION_SLIDER_BACKGROUND", width: 248, height: 10)
+                .at(Coords.positionSlider)
+            
+            // Position slider thumb (moves based on playback progress or scrubbing)
+            let currentProgress = isScrubbing ? scrubbingProgress : audioPlayer.playbackProgress
+            SimpleSpriteImage("MAIN_POSITION_SLIDER_THUMB", width: 29, height: 10)
+                .at(CGPoint(x: Coords.positionSlider.x + (248 - 29) * currentProgress,
+                           y: Coords.positionSlider.y))
+                .allowsHitTesting(false) // Thumb shouldn't block interaction
+            
+            // Interactive scrubbing area using GeometryReader (like volume slider)
+            GeometryReader { geo in
+                Color.clear
+                    .contentShape(Rectangle())
+                    .gesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { value in
+                                handlePositionDrag(value, in: geo)
+                            }
+                            .onEnded { value in
+                                handlePositionDragEnd(value, in: geo)
+                            }
+                    )
             }
-            .gesture(
-                DragGesture(minimumDistance: 3, coordinateSpace: .local)
-                    .onChanged { value in
-                        handlePositionScrub(value)
-                    }
-                    .onEnded { value in
-                        handlePositionScrubEnd(value)
-                    }
-            )
-        
-        // Position slider thumb (moves based on playback progress or scrubbing)
-        let currentProgress = isScrubbing ? scrubbingProgress : audioPlayer.playbackProgress
-        SimpleSpriteImage("MAIN_POSITION_SLIDER_THUMB", width: 29, height: 10)
-            .at(CGPoint(x: Coords.positionSlider.x + (248 - 29) * currentProgress,
-                       y: Coords.positionSlider.y))
-            .allowsHitTesting(false) // Thumb shouldn't block interaction
+            .frame(width: 248, height: 10)
+            .at(Coords.positionSlider)
+        }
     }
     
     @ViewBuilder
@@ -457,7 +453,7 @@ struct WinampMainWindow: View {
         ]
     }
     
-    private func handlePositionScrub(_ value: DragGesture.Value) {
+    private func handlePositionDrag(_ value: DragGesture.Value, in geometry: GeometryProxy) {
         if !isScrubbing {
             isScrubbing = true
             wasPlayingPreScrub = audioPlayer.isPlaying
@@ -467,18 +463,20 @@ struct WinampMainWindow: View {
             }
         }
         
-        // Calculate progress based on location in the 248px wide slider
-        let x = min(max(0, value.location.x), 248)
-        let progress = Double(x / 248)
+        // Calculate progress based on location in the geometry
+        let width = geometry.size.width
+        let x = min(max(0, value.location.x), width)
+        let progress = Double(x / width)
         
         // Only update visual position during scrubbing - don't seek audio yet
         scrubbingProgress = progress
     }
     
-    private func handlePositionScrubEnd(_ value: DragGesture.Value) {
+    private func handlePositionDragEnd(_ value: DragGesture.Value, in geometry: GeometryProxy) {
         // Calculate final position
-        let x = min(max(0, value.location.x), 248)
-        let progress = Double(x / 248)
+        let width = geometry.size.width
+        let x = min(max(0, value.location.x), width)
+        let progress = Double(x / width)
         
         // Perform single audio seek at the end
         if audioPlayer.currentDuration > 0 {
