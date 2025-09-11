@@ -15,6 +15,8 @@ struct MacAmpApp: App {
                 .environmentObject(dockingController)
                 .environmentObject(settings)
         }
+        .windowStyle(.hiddenTitleBar)
+        .windowResizability(.contentSize)
         
         WindowGroup("Preferences", id: "preferences") {
             PreferencesView()

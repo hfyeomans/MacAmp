@@ -39,7 +39,10 @@ struct UnifiedDockView: View {
                         ))
                 }
             }
-            .frame(width: 275, alignment: .topLeading) // Fixed width to match Winamp
+            .frame(width: calculateTotalWidth(), 
+                   height: calculateTotalHeight(),
+                   alignment: .topLeading)
+            .fixedSize() // This tells SwiftUI to use the exact frame size
             .background(backgroundView)
             .scaleEffect(dockGlow)
             .onAppear {
@@ -210,6 +213,24 @@ struct UnifiedDockView: View {
         case .playlist: 
             return CGSize(width: WinampSizes.playlistBase.width, 
                           height: WinampSizes.playlistBase.height)
+        }
+    }
+    
+    // Calculate total width - should be the width of the widest visible window
+    private func calculateTotalWidth() -> CGFloat {
+        guard !docking.sortedVisiblePanes.isEmpty else { return 275 }
+        
+        return docking.sortedVisiblePanes.map { pane in
+            naturalSize(for: pane.type).width
+        }.max() ?? 275
+    }
+    
+    // Calculate total height - sum of all visible window heights
+    private func calculateTotalHeight() -> CGFloat {
+        guard !docking.sortedVisiblePanes.isEmpty else { return WinampSizes.main.height }
+        
+        return docking.sortedVisiblePanes.reduce(0) { total, pane in
+            total + (pane.isShaded ? 14 : naturalSize(for: pane.type).height)
         }
     }
 }
