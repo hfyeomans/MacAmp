@@ -264,8 +264,16 @@ struct WinampMainWindow: View {
             .frame(width: 248, height: 10)
             .contentShape(Rectangle())
             .at(Coords.positionSlider)
+            .onTapGesture { location in
+                // Simple click-to-seek without scrubbing
+                let progress = min(1.0, max(0.0, Double(location.x / 248)))
+                if audioPlayer.currentDuration > 0 {
+                    let targetTime = progress * audioPlayer.currentDuration
+                    audioPlayer.seek(to: targetTime, resume: audioPlayer.isPlaying)
+                }
+            }
             .gesture(
-                DragGesture(minimumDistance: 0, coordinateSpace: .local)
+                DragGesture(minimumDistance: 3, coordinateSpace: .local)
                     .onChanged { value in
                         handlePositionScrub(value)
                     }
@@ -453,22 +461,18 @@ struct WinampMainWindow: View {
         if !isScrubbing {
             isScrubbing = true
             wasPlayingPreScrub = audioPlayer.isPlaying
-            // Don't pause during scrubbing - let audio continue
+            // Pause during scrubbing to avoid audio conflicts
+            if wasPlayingPreScrub {
+                audioPlayer.pause()
+            }
         }
         
         // Calculate progress based on location in the 248px wide slider
         let x = min(max(0, value.location.x), 248)
         let progress = Double(x / 248)
         
-        // Update visual position during scrubbing
+        // Only update visual position during scrubbing - don't seek audio yet
         scrubbingProgress = progress
-        
-        // Optionally seek in real-time for smoother feedback
-        if audioPlayer.currentDuration > 0 {
-            let targetTime = progress * audioPlayer.currentDuration
-            // Seek without changing play state for real-time preview
-            audioPlayer.seek(to: targetTime, resume: audioPlayer.isPlaying)
-        }
     }
     
     private func handlePositionScrubEnd(_ value: DragGesture.Value) {
@@ -476,7 +480,7 @@ struct WinampMainWindow: View {
         let x = min(max(0, value.location.x), 248)
         let progress = Double(x / 248)
         
-        // Perform final seek
+        // Perform single audio seek at the end
         if audioPlayer.currentDuration > 0 {
             let targetTime = progress * audioPlayer.currentDuration
             audioPlayer.seek(to: targetTime, resume: wasPlayingPreScrub)
