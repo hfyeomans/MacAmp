@@ -28,6 +28,7 @@ class AudioPlayer: ObservableObject {
     private var visualizerTapInstalled = false
     private var visualizerPeaks: [Float] = Array(repeating: 0.0, count: 20)
     private var lastUpdateTime: CFAbsoluteTime = CFAbsoluteTimeGetCurrent()
+    private var wasStopped = false // Track if playback was stopped manually
     @Published var useSpectrumVisualizer: Bool = true
     @Published var visualizerSmoothing: Float = 0.6 // 0..1 (higher = smoother)
     @Published var visualizerPeakFalloff: Float = 1.2 // units per second
@@ -131,6 +132,7 @@ class AudioPlayer: ObservableObject {
         }
         startProgressTimer()
         isPlaying = true
+        wasStopped = false
         print("AudioPlayer: Play")
     }
 
@@ -138,10 +140,12 @@ class AudioPlayer: ObservableObject {
         guard playerNode.isPlaying else { return }
         playerNode.pause()
         isPlaying = false
+        wasStopped = false // Allow normal completion handling after pause
         print("AudioPlayer: Pause")
     }
 
     func stop() {
+        wasStopped = true
         playerNode.stop()
         scheduleFrom(time: 0)
         currentTime = 0
@@ -445,6 +449,7 @@ class AudioPlayer: ObservableObject {
     // MARK: - Seeking / Scrubbing
     func seek(to time: Double, resume: Bool? = nil) {
         let shouldPlay = resume ?? isPlaying
+        wasStopped = false // Allow normal completion after seeking
         scheduleFrom(time: time)
         currentTime = time
         playbackProgress = currentDuration > 0 ? time / currentDuration : 0
@@ -504,6 +509,11 @@ class AudioPlayer: ObservableObject {
     private func onPlaybackEnded() {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
+            // Don't update progress if we stopped manually
+            guard !self.wasStopped else {
+                self.wasStopped = false
+                return
+            }
             self.isPlaying = false
             self.progressTimer?.invalidate()
             self.playbackProgress = 1
