@@ -256,7 +256,7 @@ struct WinampVerticalSlider: View {
             // Slider thumb sprite (11x11 pixels) 
             SimpleSpriteImage(isDragging ? "EQ_SLIDER_THUMB_SELECTED" : "EQ_SLIDER_THUMB", 
                             width: 11, height: 11)
-                .offset(x: 1.5, y: thumbPosition - 4.5) // Center the 11px thumb
+                .offset(x: 1.5, y: thumbPosition) // Position based on webamp formula
             
             // Invisible interaction area - EXACTLY constrained
             GeometryReader { geo in
@@ -305,12 +305,19 @@ struct WinampVerticalSlider: View {
     
     
     private var thumbPosition: CGFloat {
-        // Position the thumb sprite based on value
+        // Position the thumb sprite based on value using webamp's formula
         let thumbSize: CGFloat = 11 // Actual thumb sprite height
         let trackHeight = height - thumbSize
+        
+        // Normalize value from range to 0-1
+        // At -12dB: normalizedValue = 0 (bottom)
+        // At 0dB: normalizedValue = 0.5 (center)  
+        // At +12dB: normalizedValue = 1 (top)
         let normalizedValue = (value - range.lowerBound) / (range.upperBound - range.lowerBound)
-        // Invert Y because slider moves from top (high) to bottom (low)
-        return trackHeight - (CGFloat(normalizedValue) * trackHeight)
+        
+        // Use webamp's formula: offset = floor((height - handleHeight) * value)
+        // But inverted since our coordinate system has 0 at top
+        return floor(trackHeight * (1.0 - CGFloat(normalizedValue)))
     }
     
     private func updateValue(from gesture: DragGesture.Value, in geometry: GeometryProxy) {
@@ -321,7 +328,7 @@ struct WinampVerticalSlider: View {
         let normalizedPosition = 1.0 - Float(y / gestureHeight)
         var newValue = range.lowerBound + (normalizedPosition * (range.upperBound - range.lowerBound))
         
-        // Center snapping: if within ±0.5 of center (0), snap to exactly 0
+        // Center snapping: if within ±0.5dB of center (0), snap to exactly 0
         let snapThreshold: Float = 0.5
         if abs(newValue) < snapThreshold {
             newValue = 0

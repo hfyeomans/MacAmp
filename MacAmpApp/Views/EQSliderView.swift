@@ -58,8 +58,8 @@ struct EQSliderView: View {
                                 let normalizedY: Float = Float(1.0 - (newY / geo.size.height))
                                 var newValue: Float = range.lowerBound + (range.upperBound - range.lowerBound) * normalizedY
                                 
-                                // Center snapping: if within ±1dB of center (0), snap to exactly 0
-                                let snapThreshold: Float = 1.0
+                                // Center snapping: if within ±0.5dB of center (0), snap to exactly 0
+                                let snapThreshold: Float = 0.5
                                 if abs(newValue) < snapThreshold {
                                     newValue = 0
                                 }
@@ -80,15 +80,19 @@ struct EQSliderView: View {
     private func calculateThumbOffset(_ containerHeight: CGFloat) -> CGFloat {
         let thumbSize: CGFloat = 11 // Actual thumb sprite height
         let trackHeight = containerHeight - thumbSize
-        // Map value from range to 0 to 1, then apply to trackHeight
-        let normalizedValue = (CGFloat(value) - CGFloat(range.lowerBound)) / (CGFloat(range.upperBound) - CGFloat(range.lowerBound))
-        let offset = trackHeight * (1.0 - normalizedValue)
         
-        // When at 0dB (center), ensure thumb is centered on the middle line
-        // The middle line is at containerHeight / 2
-        if abs(value) < 0.01 {
-            return (containerHeight / 2) - (thumbSize / 2)
-        }
+        // Map value from range to 0 to 1 (normalized from -12 to +12)
+        // At -12dB: normalizedValue = 0 (bottom)
+        // At 0dB: normalizedValue = 0.5 (center)
+        // At +12dB: normalizedValue = 1 (top)
+        let normalizedValue = (CGFloat(value) - CGFloat(range.lowerBound)) / (CGFloat(range.upperBound) - CGFloat(range.lowerBound))
+        
+        // Use webamp's formula: offset = floor((height - handleHeight) * value)
+        // But we need to invert since our coordinate system has 0 at top
+        // At top (+12dB): offset = 0
+        // At center (0dB): offset = 25 (for 62px height)
+        // At bottom (-12dB): offset = 51
+        let offset = floor(trackHeight * (1.0 - normalizedValue))
         
         return offset
     }
