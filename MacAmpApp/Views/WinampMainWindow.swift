@@ -376,9 +376,21 @@ struct WinampMainWindow: View {
     
     @ViewBuilder
     private func buildMonoStereoIndicator() -> some View {
-        // Mono/Stereo indicator
-        SimpleSpriteImage("MAIN_STEREO", width: 29, height: 12)
-            .at(x: 212, y: 41)
+        // Mono/Stereo indicator - shows the appropriate indicator based on channel count
+        ZStack {
+            // Only show indicators when a track is loaded
+            let hasTrack = audioPlayer.currentTrack != nil
+            
+            // Show mono indicator first (at x: 212)
+            SimpleSpriteImage(hasTrack && audioPlayer.channelCount == 1 ? "MAIN_MONO_SELECTED" : "MAIN_MONO",
+                            width: 27, height: 12)
+                .at(x: 212, y: 41)
+            
+            // Show stereo indicator second (at x: 239)
+            SimpleSpriteImage(hasTrack && audioPlayer.channelCount == 2 ? "MAIN_STEREO_SELECTED" : "MAIN_STEREO", 
+                            width: 29, height: 12)
+                .at(x: 239, y: 41)
+        }
     }
     
     @ViewBuilder

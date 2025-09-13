@@ -60,6 +60,7 @@ class AudioPlayer: ObservableObject {
     private let presetsFileName = "perTrackPresets.json"
     @Published var visualizerLevels: [Float] = Array(repeating: 0.0, count: 20)
     @Published var appliedAutoPresetTrack: String? = nil
+    @Published var channelCount: Int = 2 // 1 = mono, 2 = stereo
 
     init() {
         setupEngine()
@@ -80,6 +81,20 @@ class AudioPlayer: ObservableObject {
             do {
                 let metadata = try await asset.load(.commonMetadata)
                 let durationCM = try await asset.load(.duration)
+                let audioTracks = try await asset.load(.tracks)
+                
+                // Detect channel count from the first audio track
+                if let firstAudioTrack = audioTracks.first(where: { $0.mediaType == .audio }) {
+                    let audioDesc = try await firstAudioTrack.load(.formatDescriptions)
+                    if let desc = audioDesc.first {
+                        let audioStreamBasicDescription = CMAudioFormatDescriptionGetStreamBasicDescription(desc as! CMAudioFormatDescription)
+                        if let channelsPerFrame = audioStreamBasicDescription?.pointee.mChannelsPerFrame {
+                            self.channelCount = Int(channelsPerFrame)
+                            print("AudioPlayer: Detected \(channelsPerFrame) channel(s) - \(channelsPerFrame == 1 ? "Mono" : "Stereo")")
+                        }
+                    }
+                }
+                
                 let titleItem = AVMetadataItem.metadataItems(from: metadata, filteredByIdentifier: .commonIdentifierTitle).first
                 let artistItem = AVMetadataItem.metadataItems(from: metadata, filteredByIdentifier: .commonIdentifierArtist).first
                 let title = (try? await titleItem?.load(.stringValue)) ?? url.lastPathComponent
@@ -285,13 +300,26 @@ class AudioPlayer: ObservableObject {
     }
 
     private func rewireForCurrentFile() {
+        // Stop the engine and reset it before rewiring to avoid format conflicts
+        if audioEngine.isRunning {
+            audioEngine.stop()
+            audioEngine.reset()
+        }
+        
         // Disconnect and reconnect graph for the file's format
         audioEngine.disconnectNodeOutput(playerNode)
         audioEngine.disconnectNodeOutput(eqNode)
-        guard let file = audioFile else { return }
-        let format = file.processingFormat
-        audioEngine.connect(playerNode, to: eqNode, format: format)
-        audioEngine.connect(eqNode, to: audioEngine.mainMixerNode, format: format)
+        
+        guard let _ = audioFile else { return }
+        
+        // Connect with the new format - use nil format to let the engine determine the best format
+        audioEngine.connect(playerNode, to: eqNode, format: nil)
+        audioEngine.connect(eqNode, to: audioEngine.mainMixerNode, format: nil)
+        
+        // Prepare the engine with the new configuration
+        audioEngine.prepare()
+        
+        // Restart the engine with the new configuration
         startEngineIfNeeded()
         installVisualizerTapIfNeeded()
     }
