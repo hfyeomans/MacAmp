@@ -61,6 +61,8 @@ class AudioPlayer: ObservableObject {
     @Published var visualizerLevels: [Float] = Array(repeating: 0.0, count: 20)
     @Published var appliedAutoPresetTrack: String? = nil
     @Published var channelCount: Int = 2 // 1 = mono, 2 = stereo
+    @Published var bitrate: Int = 0 // in kbps
+    @Published var sampleRate: Int = 0 // in Hz (will display as kHz)
 
     init() {
         setupEngine()
@@ -83,16 +85,30 @@ class AudioPlayer: ObservableObject {
                 let durationCM = try await asset.load(.duration)
                 let audioTracks = try await asset.load(.tracks)
                 
-                // Detect channel count from the first audio track
+                // Detect channel count, sample rate, and bitrate from the first audio track
                 if let firstAudioTrack = audioTracks.first(where: { $0.mediaType == .audio }) {
                     let audioDesc = try await firstAudioTrack.load(.formatDescriptions)
+                    let estimatedDataRate = try await firstAudioTrack.load(.estimatedDataRate)
+                    
                     if let desc = audioDesc.first {
                         let audioStreamBasicDescription = CMAudioFormatDescriptionGetStreamBasicDescription(desc as! CMAudioFormatDescription)
-                        if let channelsPerFrame = audioStreamBasicDescription?.pointee.mChannelsPerFrame {
+                        if let streamDesc = audioStreamBasicDescription?.pointee {
+                            // Channel count
+                            let channelsPerFrame = streamDesc.mChannelsPerFrame
                             self.channelCount = Int(channelsPerFrame)
                             print("AudioPlayer: Detected \(channelsPerFrame) channel(s) - \(channelsPerFrame == 1 ? "Mono" : "Stereo")")
+                            
+                            // Sample rate
+                            let sampleRateHz = Int(streamDesc.mSampleRate)
+                            self.sampleRate = sampleRateHz
+                            print("AudioPlayer: Sample rate: \(sampleRateHz) Hz (\(sampleRateHz/1000) kHz)")
                         }
                     }
+                    
+                    // Bitrate (convert from bits per second to kbps)
+                    let bitrateKbps = Int(estimatedDataRate / 1000)
+                    self.bitrate = bitrateKbps
+                    print("AudioPlayer: Bitrate: \(bitrateKbps) kbps")
                 }
                 
                 let titleItem = AVMetadataItem.metadataItems(from: metadata, filteredByIdentifier: .commonIdentifierTitle).first
@@ -167,6 +183,12 @@ class AudioPlayer: ObservableObject {
         playbackProgress = 0
         progressTimer?.invalidate()
         isPlaying = false
+        // Reset audio properties when stopping
+        if currentTrack == nil {
+            bitrate = 0
+            sampleRate = 0
+            channelCount = 2
+        }
         print("AudioPlayer: Stop")
     }
 

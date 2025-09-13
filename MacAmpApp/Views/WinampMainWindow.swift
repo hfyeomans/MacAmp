@@ -122,6 +122,10 @@ struct WinampMainWindow: View {
             
             // Additional Winamp elements (simplified)
             buildMonoStereoIndicator()
+            
+            // Bitrate and sample rate display
+            buildBitrateDisplay()
+            buildSampleRateDisplay()
         }
     }
     
@@ -390,6 +394,39 @@ struct WinampMainWindow: View {
             SimpleSpriteImage(hasTrack && audioPlayer.channelCount == 2 ? "MAIN_STEREO_SELECTED" : "MAIN_STEREO", 
                             width: 29, height: 12)
                 .at(x: 239, y: 41)
+        }
+    }
+    
+    @ViewBuilder
+    private func buildBitrateDisplay() -> some View {
+        // Only show when a track is loaded
+        if audioPlayer.currentTrack != nil && audioPlayer.bitrate > 0 {
+            let bitrateText = "\(audioPlayer.bitrate)"
+            HStack(spacing: 0) {
+                ForEach(Array(bitrateText.enumerated()), id: \.offset) { _, character in
+                    if let ascii = character.asciiValue {
+                        SimpleSpriteImage("CHARACTER_\(ascii)", width: 5, height: 6)
+                    }
+                }
+            }
+            .at(x: 111, y: 43)  // Position near the visualizer area
+        }
+    }
+    
+    @ViewBuilder
+    private func buildSampleRateDisplay() -> some View {
+        // Only show when a track is loaded
+        if audioPlayer.currentTrack != nil && audioPlayer.sampleRate > 0 {
+            let khz = audioPlayer.sampleRate / 1000
+            let sampleRateText = "\(khz)"
+            HStack(spacing: 0) {
+                ForEach(Array(sampleRateText.enumerated()), id: \.offset) { _, character in
+                    if let ascii = character.asciiValue {
+                        SimpleSpriteImage("CHARACTER_\(ascii)", width: 5, height: 6)
+                    }
+                }
+            }
+            .at(x: 156, y: 43)  // Position to the right of bitrate
         }
     }
     
