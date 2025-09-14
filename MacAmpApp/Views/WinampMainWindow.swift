@@ -17,6 +17,10 @@ struct WinampMainWindow: View {
     // Track info scrolling state
     @State private var scrollOffset: CGFloat = 0
     @State private var scrollTimer: Timer?
+
+    // Pause blinking state
+    @State private var pauseBlinkVisible: Bool = true
+    @State private var pauseBlinkTimer: Timer?
     
     // Winamp coordinate constants (from original Winamp and webamp)
     private struct Coords {
@@ -78,12 +82,29 @@ struct WinampMainWindow: View {
                 buildShadeMode()
             }
         }
-        .frame(width: WinampSizes.main.width, 
+        .frame(width: WinampSizes.main.width,
                height: isShadeMode ? WinampSizes.mainShade.height : WinampSizes.main.height)
         .background(Color.black) // Fallback
+        .onChange(of: audioPlayer.isPaused) { _, isPaused in
+            if isPaused {
+                // Start blinking timer
+                pauseBlinkTimer?.invalidate()
+                pauseBlinkVisible = true
+                pauseBlinkTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
+                    pauseBlinkVisible.toggle()
+                }
+            } else {
+                // Stop blinking timer
+                pauseBlinkTimer?.invalidate()
+                pauseBlinkTimer = nil
+                pauseBlinkVisible = true
+            }
+        }
         .onDisappear {
             scrollTimer?.invalidate()
             scrollTimer = nil
+            pauseBlinkTimer?.invalidate()
+            pauseBlinkTimer = nil
         }
     }
     
@@ -167,12 +188,17 @@ struct WinampMainWindow: View {
         }
     }
     
-    @ViewBuilder
     private func buildPlayPauseIndicator() -> some View {
-        let spriteKey = audioPlayer.isPlaying ? "MAIN_PLAYING_INDICATOR" : 
-                       "MAIN_STOPPED_INDICATOR"
-        
-        SimpleSpriteImage(spriteKey, width: 9, height: 9)
+        let spriteKey: String
+        if audioPlayer.isPlaying {
+            spriteKey = "MAIN_PLAYING_INDICATOR"
+        } else if audioPlayer.isPaused {
+            spriteKey = "MAIN_PAUSED_INDICATOR"
+        } else {
+            spriteKey = "MAIN_STOPPED_INDICATOR"
+        }
+
+        return SimpleSpriteImage(spriteKey, width: 9, height: 9)
             .at(Coords.playPauseIndicator)
     }
     
@@ -197,25 +223,32 @@ struct WinampMainWindow: View {
             let digits = timeDigits(from: timeToShow)
 
             // Position each digit with proper Winamp spacing
+            // Only hide digits when paused and blink is off, colon always visible
+            let shouldShowDigits = !audioPlayer.isPaused || pauseBlinkVisible
+
             // Minutes (with 2px gap between digits)
-            SimpleSpriteImage("DIGIT_\(digits[0])", width: 9, height: 13)
-                .offset(x: 6, y: 0)
+            if shouldShowDigits {
+                SimpleSpriteImage("DIGIT_\(digits[0])", width: 9, height: 13)
+                    .offset(x: 6, y: 0)
 
-            SimpleSpriteImage("DIGIT_\(digits[1])", width: 9, height: 13)
-                .offset(x: 17, y: 0)  // 6 + 9 + 2px gap = 17
+                SimpleSpriteImage("DIGIT_\(digits[1])", width: 9, height: 13)
+                    .offset(x: 17, y: 0)  // 6 + 9 + 2px gap = 17
+            }
 
-            // Colon between minutes and seconds (with more spacing)
+            // Colon between minutes and seconds (always visible)
             Text(":")
                 .font(.system(size: 13, weight: .bold, design: .monospaced))
                 .foregroundColor(Color(red: 0, green: 1, blue: 0))
                 .offset(x: 26, y: -1)  // Centered between groups
 
             // Seconds (with 2px gap between digits)
-            SimpleSpriteImage("DIGIT_\(digits[2])", width: 9, height: 13)
-                .offset(x: 35, y: 0)  // After colon with proper gap
+            if shouldShowDigits {
+                SimpleSpriteImage("DIGIT_\(digits[2])", width: 9, height: 13)
+                    .offset(x: 35, y: 0)  // After colon with proper gap
 
-            SimpleSpriteImage("DIGIT_\(digits[3])", width: 9, height: 13)
-                .offset(x: 46, y: 0)  // 35 + 9 + 2px gap = 46
+                SimpleSpriteImage("DIGIT_\(digits[3])", width: 9, height: 13)
+                    .offset(x: 46, y: 0)  // 35 + 9 + 2px gap = 46
+            }
         }
         .at(Coords.timeDisplay)
         .contentShape(Rectangle())

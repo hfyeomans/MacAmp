@@ -34,6 +34,7 @@ class AudioPlayer: ObservableObject {
     @Published var visualizerPeakFalloff: Float = 1.2 // units per second
 
     @Published var isPlaying: Bool = false
+    @Published var isPaused: Bool = false
     @Published var currentTrackURL: URL? // Placeholder for the currently playing track
     @Published var currentTitle: String = "No Track Loaded"
     @Published var currentDuration: Double = 0.0
@@ -75,6 +76,7 @@ class AudioPlayer: ObservableObject {
     func loadTrack(url: URL) {
         stop()
         currentTrackURL = url
+        isPaused = false
         print("AudioPlayer: Loaded track from \(url.lastPathComponent)")
 
         // Load metadata and duration via modern async APIs
@@ -163,6 +165,7 @@ class AudioPlayer: ObservableObject {
         }
         startProgressTimer()
         isPlaying = true
+        isPaused = false
         wasStopped = false
         print("AudioPlayer: Play")
     }
@@ -171,6 +174,7 @@ class AudioPlayer: ObservableObject {
         guard playerNode.isPlaying else { return }
         playerNode.pause()
         isPlaying = false
+        isPaused = true
         wasStopped = false // Allow normal completion handling after pause
         print("AudioPlayer: Pause")
     }
@@ -183,6 +187,7 @@ class AudioPlayer: ObservableObject {
         playbackProgress = 0
         progressTimer?.invalidate()
         isPlaying = false
+        isPaused = false
         // Reset audio properties when stopping
         if currentTrack == nil {
             bitrate = 0
@@ -508,6 +513,7 @@ class AudioPlayer: ObservableObject {
             playerNode.play()
             startProgressTimer()
             isPlaying = true
+            isPaused = false
         } else {
             isPlaying = false
             progressTimer?.invalidate()
