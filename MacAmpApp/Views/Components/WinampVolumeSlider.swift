@@ -32,10 +32,13 @@ struct WinampVolumeSlider: View {
                 .frame(width: sliderWidth - 2, height: trackFillHeight - 2)
                 .offset(x: 1, y: (sliderHeight - trackFillHeight + 2) / 2)
 
-            // Sprite thumb (from skin)
+            // Sprite thumb (from skin) - vertically centered on the colored channel
             let thumbSprite = isDragging ? "MAIN_VOLUME_THUMB_SELECTED" : "MAIN_VOLUME_THUMB"
+            // Colored channel is at y:4 with height:5, so center is at y:6.5
+            // Thumb height:11, so to center it at 6.5: top should be at 6.5 - 5.5 = 1
+            // Adding 1 more to properly center since bottom was aligning with center
             SimpleSpriteImage(thumbSprite, width: thumbWidth, height: thumbHeight)
-                .at(x: thumbPosition, y: (sliderHeight - thumbHeight) / 2)
+                .at(x: thumbPosition, y: 3)  // Center thumb on channel
 
             // Invisible interaction area
             GeometryReader { geo in
@@ -141,10 +144,13 @@ struct WinampBalanceSlider: View {
                 .frame(width: 1, height: trackFillHeight)
                 .offset(x: sliderWidth / 2 - 0.5, y: (sliderHeight - trackFillHeight) / 2)
 
-            // Sprite thumb (from skin)
+            // Sprite thumb (from skin) - vertically centered on the colored channel
             let thumbSprite = isDragging ? "MAIN_BALANCE_THUMB_ACTIVE" : "MAIN_BALANCE_THUMB"
+            // Colored channel is at y:4 with height:5, so center is at y:6.5
+            // Thumb height:11, so to center it at 6.5: top should be at 6.5 - 5.5 = 1
+            // Adding 1 more to properly center since bottom was aligning with center
             SimpleSpriteImage(thumbSprite, width: thumbWidth, height: thumbHeight)
-                .at(x: thumbPosition, y: (sliderHeight - thumbHeight) / 2)
+                .at(x: thumbPosition, y: 3)  // Center thumb on channel
 
             // Invisible interaction area
             GeometryReader { geo in
@@ -175,7 +181,14 @@ struct WinampBalanceSlider: View {
         let width = geometry.size.width
         let x = min(max(0, gesture.location.x), width)
         let normalizedPosition = Float(x / width) // 0..1
-        let newBalance = (normalizedPosition * 2.0) - 1.0 // Convert to -1..1
+        var newBalance = (normalizedPosition * 2.0) - 1.0 // Convert to -1..1
+
+        // Snap to center (0) when close - more sensitive
+        let snapThreshold: Float = 0.1  // 10% threshold for stronger snapping
+        if abs(newBalance) < snapThreshold {
+            newBalance = 0
+        }
+
         balance = max(-1, min(1, newBalance))
     }
 
