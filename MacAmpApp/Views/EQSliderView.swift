@@ -17,14 +17,14 @@ struct EQSliderView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            // Groove overlay - dark channel
-            Rectangle()
+            // Groove overlay - dark channel with rounded ends
+            RoundedRectangle(cornerRadius: (sliderWidth - 3) / 2)
                 .fill(Color.black.opacity(0.3))
                 .frame(width: sliderWidth - 3, height: sliderHeight)
                 .offset(x: 1.5, y: 0)
             
-            // Colored channel (6px wide)
-            Rectangle()
+            // Colored channel (6px wide) with rounded ends
+            RoundedRectangle(cornerRadius: 3)  // Half of 6px width for fully rounded ends
                 .fill(sliderColor)
                 .frame(width: 6, height: sliderHeight - 4)  // 6px wide channel
                 .offset(x: 4, y: 2)  // Center the channel

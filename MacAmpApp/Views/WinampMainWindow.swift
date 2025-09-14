@@ -178,28 +178,44 @@ struct WinampMainWindow: View {
     
     @ViewBuilder
     private func buildTimeDisplay() -> some View {
-        HStack(spacing: 0) {
-            // Show minus sign for remaining time
+        ZStack(alignment: .leading) {
+            // Time display background (includes the colon)
+            Color.clear
+                .frame(width: 48, height: 13)
+
+            // Show minus sign for remaining time (position 1)
             if showRemainingTime {
                 SimpleSpriteImage("MINUS_SIGN", width: 5, height: 1)
-                    .padding(.top, 6) // Align with digit baseline
+                    .offset(x: 1, y: 6) // Position at x:1, align with digit baseline
             }
-            
-            // Time digits (MM:SS format)
-            let timeToShow = showRemainingTime ? 
+
+            // Time digits (MM:SS format) with absolute positioning
+            let timeToShow = showRemainingTime ?
                 max(0.0, audioPlayer.currentDuration - audioPlayer.currentTime) :
                 audioPlayer.currentTime
-            
+
             let digits = timeDigits(from: timeToShow)
-            
-            ForEach(0..<digits.count, id: \.self) { index in
-                SimpleSpriteImage("DIGIT_\(digits[index])", width: 9, height: 13)
-                
-                // Add colon after minutes (background has colon, but we position digits around it)
-                if index == 1 {
-                    Spacer().frame(width: 3) // Space for colon in background
-                }
-            }
+
+            // Position each digit with proper Winamp spacing
+            // Minutes (with 2px gap between digits)
+            SimpleSpriteImage("DIGIT_\(digits[0])", width: 9, height: 13)
+                .offset(x: 6, y: 0)
+
+            SimpleSpriteImage("DIGIT_\(digits[1])", width: 9, height: 13)
+                .offset(x: 17, y: 0)  // 6 + 9 + 2px gap = 17
+
+            // Colon between minutes and seconds (with more spacing)
+            Text(":")
+                .font(.system(size: 13, weight: .bold, design: .monospaced))
+                .foregroundColor(Color(red: 0, green: 1, blue: 0))
+                .offset(x: 26, y: -1)  // Centered between groups
+
+            // Seconds (with 2px gap between digits)
+            SimpleSpriteImage("DIGIT_\(digits[2])", width: 9, height: 13)
+                .offset(x: 35, y: 0)  // After colon with proper gap
+
+            SimpleSpriteImage("DIGIT_\(digits[3])", width: 9, height: 13)
+                .offset(x: 46, y: 0)  // 35 + 9 + 2px gap = 46
         }
         .at(Coords.timeDisplay)
         .contentShape(Rectangle())
