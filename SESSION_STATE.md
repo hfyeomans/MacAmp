@@ -1,833 +1,1000 @@
-# MacAmp Session State - Architectural Revelation Phase
+# MacAmp Session State - SpriteResolver Architecture Refactor
 
 **Date:** 2025-10-12
-**Time:** End of Session (4:40 PM EDT)
-**Branch:** `swiftui-ui-detail-fixes`
-**Session Focus:** Critical bug fixes → Architectural understanding → Refactor planning
+**Time:** Start of Refactor Session (4:45 PM EDT)
+**Branch:** `feature/sprite-resolver-architecture` (NEW)
+**Session Focus:** Implement proper mechanism/presentation separation
 
 ---
 
-## 🎯 Current Status: Ready for Architectural Refactor
+## 🎯 Current Status: Fresh Branch for Architectural Refactor
 
-**Session Achievement:** Fixed critical bugs AND discovered fundamental architectural issue
-
-**Next Step:** Create PR, merge, then start fresh branch for SpriteResolver integration
-
----
-
-## 📊 This Session's Accomplishments
-
-### Commits Pushed: 7
-
-1. **3d0597e** - fix(skins): SPM bundle discovery
-2. **2f55e2d** - fix(skins): Xcode bundle discovery + Skins menu
-3. **70aead9** - fix(ui): Remove duplicate menus
-4. **b4eb163** - docs: Comprehensive skin lessons
-5. **f821edc** - fix(skins): Sprite aliasing + crash fix
-6. **7e8629d** - fix(rendering): Skin bitmaps for sliders + digit updates
-7. **[Pending]** - docs: Architecture revelation
-
-### Issues Fixed: 4/4
-
-✅ **Issue #1:** App crash on import (bundle identifier nil)
-✅ **Issue #2:** Digits not incrementing (sprite aliasing + .onChange)
-✅ **Issue #3:** Invisible volume thumbs (thumb aliases)
-✅ **Issue #4:** Sliders using wrong colors (frame-based backgrounds)
-
-### Code Changes
-
-**Files Modified:** 12
-- MacAmpApp/Models/Skin.swift
-- MacAmpApp/ViewModels/SkinManager.swift
-- MacAmpApp/MacAmpApp.swift
-- MacAmpApp/AppCommands.swift
-- MacAmpApp/SkinsCommands.swift (NEW)
-- MacAmpApp/Views/VolumeSliderView.swift
-- MacAmpApp/Views/BalanceSliderView.swift
-- MacAmpApp/Views/EQSliderView.swift
-- MacAmpApp/Views/WinampMainWindow.swift
-- MacAmpApp.xcodeproj/project.pbxproj
-- Package.swift
-- Moved MacAmpApp/Assets/ → MacAmpApp/Skins/
-
-**Lines Changed:** +738, -815 (net -77 lines)
+**Previous Session:** Fixed critical bugs, discovered architecture must change
+**This Session:** Implement SpriteResolver system, fix Internet Archive skin
+**Goal:** Proper decoupling of mechanism from presentation (webamp pattern)
 
 ---
 
-## 🔍 Critical Discovery: Architecture Must Change
+## ⭐ CORE FINDINGS (Essential Understanding)
 
-### The Revelation
+### 1. Webamp's Three-Layer Architecture (The Model to Follow)
 
-**User Insight:**
-> "We must build the mechanisms that do the work, but are allowed to be covered by skins as they change. We must decouple the action and mechanisms from the skin that is put over the top."
-
-### Current Problem
-
-**MacAmp's code HARDCODES sprite names:**
-```swift
-SimpleSpriteImage("DIGIT_0", width: 9, height: 13)  // ❌ Breaks with DIGIT_0_EX skins
+```
+┌─────────────────────────────────────────┐
+│ Layer 3: PRESENTATION                   │
+│ - CSS maps .digit-0 to sprite coords    │
+│ - Swappable per skin                    │
+│ - skin.css changes = visual change only │
+├─────────────────────────────────────────┤
+│ Layer 2: BRIDGE (Semantic Layer)        │
+│ - <div className="digit digit-0" />     │
+│ - Stable interface                      │
+│ - Never changes across skins            │
+├─────────────────────────────────────────┤
+│ Layer 1: MECHANISM (Pure Logic)         │
+│ - Timer updates currentTime             │
+│ - Volume tracks 0-100                   │
+│ - No visual knowledge                   │
+└─────────────────────────────────────────┘
 ```
 
-**Result:**
-- Classic Winamp skin: Works (has DIGIT_0) ✅
-- Internet Archive skin: Broken (has DIGIT_0_EX) ❌
-- Winamp3 Classified: Works (has both) ✅
+**Key Insight:** Bottom 2 layers NEVER change. Only CSS (presentation) changes per skin.
 
-### Root Cause
+### 2. Sprite Variant Patterns (Why Hardcoding Fails)
 
-**All three architectural layers collapsed into one:**
+**Different skins use different sprite names:**
 
-Webamp separates:
-1. **MECHANISM:** Timer updates (pure logic)
-2. **BRIDGE:** Semantic elements (className="digit digit-0")
-3. **PRESENTATION:** CSS maps to sprites
+| Skin | Numbers Sheet | Sprite Names | Result |
+|------|--------------|--------------|--------|
+| Classic Winamp | NUMBERS.bmp | DIGIT_0-9 | ✅ Works |
+| Internet Archive | NUMS_EX.bmp | DIGIT_0_EX-9_EX | ❌ Broken |
+| Winamp3 Classified | BOTH | Both variants | ✅ Works |
 
-MacAmp mixes all three:
+**Current MacAmp Code:**
 ```swift
-let time = audioPlayer.currentTime           // MECHANISM
-let digits = timeDigits(from: time)          // MECHANISM
-SimpleSpriteImage("DIGIT_\(digits[0])")      // PRESENTATION (hardcoded!)
+SimpleSpriteImage("DIGIT_0")  // ❌ Hardcoded - breaks with DIGIT_0_EX skins
 ```
 
-### Solution: SpriteResolver System
-
-**Already Designed & Implemented (Not Yet Integrated):**
-
-**File:** `MacAmpApp/Models/SpriteResolver.swift` (390 lines)
-
+**Required MacAmp Code:**
 ```swift
-// Request semantic sprite
-spriteResolver.resolve(.digit(0))
-
-// Returns: "DIGIT_0_EX" if skin has it
-//          "DIGIT_0" if skin has standard
-//          nil if neither (show plain text fallback)
+SimpleSpriteImage(.digit(0))  // ✅ Semantic - resolver maps to actual sprite
 ```
 
-**Status:**
-- ✅ Fully implemented
-- ✅ Extensively documented (2,000+ lines across 3 docs)
-- ⚠️ NOT in Xcode project
-- ⚠️ SimpleSpriteImage needs update
-- ⚠️ Views not migrated yet
+### 3. Bundle Discovery Differences (SPM vs Xcode)
 
----
+**Critical Fix Already Applied:**
 
-## 🐛 Known Issues (Require Architectural Fix)
-
-### Issue: Internet Archive Digits Don't Increment
-
-**Symptom:** Time shows "0 0: 0 0" (static, doesn't update)
-
-**Why:**
-1. Skin has DIGIT_0_EX (from NUMS_EX.bmp)
-2. Code looks for DIGIT_0 (hardcoded)
-3. Sprite aliasing creates DIGIT_0 → DIGIT_0_EX mapping
-4. But SwiftUI doesn't re-render properly
-5. .onChange(of: currentTime) not sufficient
-
-**Proper Fix:** Use SpriteResolver with semantic .digit(0) request
-
-### Issue: Sliders Still Show Green in Some Skins
-
-**Symptom:** Internet Archive should show chrome/silver, but might still show green
-
-**Why:**
-1. Current fix uses skin's VOLUME.BMP background ✅
-2. But doesn't fall back to plain slider if sprite missing
-3. Might be using cached/wrong background
-
-**Proper Fix:** Base mechanism layer + skin overlay
-
-### Issue: No Fallback to Plain Rendering
-
-**Symptom:** If skin missing sprites, UI breaks
-
-**Why:**
-- No base functional layer
-- Transparent fallbacks look broken
-- UI depends on sprites to function
-
-**Proper Fix:** Always have functional base, skin enhances visually
-
----
-
-## 📚 Documentation Created (15+ Files)
-
-### Essential Reading (Start Here)
-
-1. **SESSION_STATE.md** - THIS FILE
-2. **DOCUMENTATION_INDEX.md** - Navigate all docs
-3. **TESTING_GUIDE.md** - Manual testing procedures
-4. **docs/ARCHITECTURE_REVELATION.md** ⭐⭐ CRITICAL!
-5. **docs/winamp-skins-lessons.md** - Complete knowledge base
-
-### Implementation Guides
-
-6. **docs/SpriteResolver-Architecture.md** - Solution design (650 lines)
-7. **docs/SpriteResolver-Implementation-Summary.md** - Integration guide
-8. **docs/SpriteResolver-Visual-Guide.md** - Visual diagrams
-
-### Bug Tracking
-
-9. **docs/ISSUE_FIXES_2025-10-12.md** - 4 critical bug fixes
-10. **CRITICAL_FIXES_COMPLETE.md** - Fix summary
-
-### Research
-
-11. **tasks/winamp-skin-research-2025.md** - Webamp analysis (8,300 words)
-12. **SLIDER_RESEARCH.md** - Slider implementation research
-13. **docs/WINAMP_SKIN_VARIATIONS.md** - Skin format reference
-
-### See DOCUMENTATION_INDEX.md for complete catalog (40+ files)
-
----
-
-## 🔧 Technical Details
-
-### Bundle Discovery (FIXED ✅)
-
-**SPM Build:**
 ```swift
 #if SWIFT_PACKAGE
-bundleURL = Bundle.module.bundleURL  // MacAmp_MacAmpApp.bundle/
-#endif
-```
-
-**Xcode Build:**
-```swift
+bundleURL = Bundle.module.bundleURL              // SPM: MacAmp_MacAmpApp.bundle/
 #else
-bundleURL = Bundle.main.resourceURL  // MacAmpApp.app/Contents/Resources/
+bundleURL = Bundle.main.resourceURL ?? Bundle.main.bundleURL  // Xcode: Contents/Resources/
 #endif
 ```
 
-**Result:** Both builds discover 2 bundled skins correctly
+**Result:** Both builds discover skins correctly ✅
 
-### Sprite Aliasing (BAND-AID, Not Architectural Fix)
+### 4. Frame-Based Background Positioning (Slider Implementation)
 
-**File:** MacAmpApp/ViewModels/SkinManager.swift (lines 373-425)
+**Webamp's Approach:**
+```javascript
+// VOLUME.BMP: 68×420px with 28 frames (each 15px tall)
+const offset = (sprite - 1) * 15;  // Calculate frame position
+backgroundPosition: `0 -${offset}px`;  // Shift background to show frame
+```
 
+**MacAmp Implementation:**
 ```swift
-// If NUMS_EX exists but NUMBERS doesn't, create aliases
-if extractedImages["DIGIT_0"] == nil && extractedImages["DIGIT_0_EX"] != nil {
-    for i in 0...9 {
-        extractedImages["DIGIT_\(i)"] = extractedImages["DIGIT_\(i)_EX"]
+// VolumeSliderView.swift
+let frameIndex = floor(CGFloat(value) * (frameCount - 1))
+let yOffset = -(frameIndex * frameHeight)
+
+Image(nsImage: background)
+    .offset(y: yOffset)  // Show appropriate frame
+    .clipped()
+```
+
+**Result:** Classic shows green, Internet Archive shows chrome/silver ✅
+
+### 5. Why Internet Archive Doesn't Work (Architectural Coupling)
+
+**The Problem:**
+```swift
+// Current code hardcodes sprite names
+SimpleSpriteImage("DIGIT_0", width: 9, height: 13)
+```
+
+**What Happens:**
+1. Internet Archive has DIGIT_0_EX (not DIGIT_0)
+2. Code requests "DIGIT_0"
+3. Sprite aliasing creates DIGIT_0 → DIGIT_0_EX mapping
+4. SwiftUI doesn't re-render properly even with .onChange()
+5. Result: Digits visible but static ❌
+
+**Why Aliasing Isn't Enough:**
+- One-time copy at skin load
+- Views still hardcode names
+- Doesn't scale to hundreds of variants
+- Treats symptom, not root cause
+
+**The Proper Fix:**
+- Semantic sprite requests: `.digit(0)`
+- Runtime resolution: Check what skin actually has
+- Dynamic fallback priority: DIGIT_0_EX → DIGIT_0
+- Plain rendering if both missing
+
+---
+
+## 🎨 SpriteResolver System (Ready to Integrate)
+
+### Files Already Created (From Previous Agent Work)
+
+**1. MacAmpApp/Models/SpriteResolver.swift** (390 lines)
+- ✅ Fully implemented
+- ⚠️ NOT in Xcode project yet
+- ⚠️ Needs to be added to project.pbxproj
+
+**Features:**
+```swift
+enum SemanticSprite {
+    case digit(Int)           // 0-9
+    case minusSign
+    case playButton
+    case volumeThumb
+    // ... 40+ sprite types
+}
+
+struct SpriteResolver {
+    func resolve(_ semantic: SemanticSprite) -> String? {
+        // Returns actual sprite name based on what skin has
+        // Example: .digit(0) → "DIGIT_0_EX" or "DIGIT_0"
     }
 }
 ```
 
-**Why it's not enough:**
-- Treats symptom, not root cause
-- Views still hardcode sprite names
-- Doesn't scale to all sprite variants
-- Proper fix: SpriteResolver
-
-### Slider Backgrounds (IMPROVED ✅)
-
-**File:** MacAmpApp/Views/VolumeSliderView.swift (68 lines, was 94)
-
-```swift
-// Now uses actual VOLUME.BMP with frame-based positioning
-Image(nsImage: background)
-    .frame(width: 68, height: 420)
-    .offset(y: calculateBackgroundOffset())  // Shift to show correct frame
-    .frame(width: 68, height: 13)
-    .clipped()
-```
-
-**Result:** Classic Winamp shows green, Internet Archive shows chrome/silver
+**2. Documentation (2,000+ lines total)**
+- docs/SpriteResolver-Architecture.md (650 lines)
+- docs/SpriteResolver-Implementation-Summary.md (300 lines)
+- docs/SpriteResolver-Visual-Guide.md (450 lines)
 
 ---
 
-## 🎨 Skins System Status
+## 🚀 Refactor Plan (Next 4 Phases)
 
-### Working Features ✅
+### Phase 1: Integration (This Session - 1-2 hours)
 
-- **Discovery:** Both bundled skins found in both build systems
-- **Menu:** Single "Skins" menu with shortcuts (⌘⇧1, ⌘⇧2)
-- **Import:** File picker imports .wsz to user directory
-- **Switching:** Hot-reload between skins (instant update)
-- **Persistence:** Remembers last-used skin across restarts
-
-### Partially Working ⚠️
-
-- **Digit Display:**
-  - Classic Winamp: Increments ✅
-  - Internet Archive: Static ❌ (architectural issue)
-  - Winamp3 Classified: Increments ✅
-
-- **Sliders:**
-  - Backgrounds use skin bitmaps ✅
-  - But no fallback if sprites missing ❌
-  - Depends on specific sprite names ❌
-
-### Not Working ❌
-
-- **Semantic sprite resolution:** Not integrated yet
-- **Plain fallback rendering:** Not implemented
-- **Internet Archive full compatibility:** Architectural fix needed
-
----
-
-## 🚀 Next Session Plan: Architectural Refactor
-
-### Create New Branch
-
-```bash
-git checkout main
-git pull origin main
-git checkout -b feature/sprite-resolver-architecture
-```
-
-### Phase 1: Integration (1-2 hours)
+**Goal:** Get SpriteResolver working in project
 
 **Tasks:**
 1. Add SpriteResolver.swift to Xcode project
-   - Add to Models group
-   - Add to project.pbxproj
-   - Verify builds
+   - Open Xcode
+   - Add file to Models group
+   - Verify in project.pbxproj
+   - Build to verify no errors
 
 2. Update SimpleSpriteImage.swift
-   - Add init(_ semantic: SemanticSprite)
-   - Keep init(_ key: String) for backward compat
-   - Implement resolution logic
-   - Test both APIs work
+   ```swift
+   // Add new init for semantic sprites
+   init(_ semantic: SemanticSprite, width: CGFloat? = nil, height: CGFloat? = nil)
 
-3. Add SpriteResolver to SkinManager
-   - Create resolver when skin loads
-   - Inject into SwiftUI environment
+   // Keep old init for backward compatibility
+   init(_ key: String, width: CGFloat? = nil, height: CGFloat? = nil)
+
+   // Body resolves based on type
+   var body: some View {
+       if case semantic sprite:
+           use resolver
+       else:
+           use hardcoded key
+   }
+   ```
+
+3. Inject SpriteResolver into environment
+   - Update SkinManager to create resolver when skin loads
+   - Add .spriteResolver() modifier in MacAmpApp.swift
    - Make available to all views
 
-**Verification:**
-- Clean build ✅
-- Both init methods work
-- Can request .digit(0) successfully
+**Success Criteria:**
+- ✅ Clean build
+- ✅ Both init methods work
+- ✅ Can compile SimpleSpriteImage(.digit(0))
 
 ### Phase 2: Proof of Concept (1 hour)
 
+**Goal:** Fix Internet Archive time display
+
 **Tasks:**
-1. Migrate `buildTimeDisplay()` in WinampMainWindow.swift
-   - Change "DIGIT_\(n)" to .digit(n)
-   - Change "CHARACTER_58" to .character(58)
-   - Change "MINUS_SIGN" to .minusSign
+1. Migrate buildTimeDisplay() in WinampMainWindow.swift
+   ```swift
+   // Change from:
+   SimpleSpriteImage("DIGIT_\(digits[0])", width: 9, height: 13)
 
-2. Test with THREE skins:
-   - Classic Winamp (DIGIT_0)
-   - Internet Archive (DIGIT_0_EX)
-   - Winamp3 Classified (both variants)
+   // To:
+   SimpleSpriteImage(.digit(digits[0]), width: 9, height: 13)
+   ```
 
-3. Verify:
-   - All three skins show digits ✅
-   - All three increment correctly ✅
-   - No hardcoded sprite names remaining ✅
+2. Also fix colon and minus sign:
+   ```swift
+   SimpleSpriteImage(.character(58))  // Colon
+   SimpleSpriteImage(.minusSign)      // Minus sign
+   ```
+
+3. Test with THREE skins:
+   - Launch app
+   - Load Classic Winamp (⌘⇧1)
+   - Play audio → digits should increment ✅
+   - Switch to Internet Archive (⌘⇧2)
+   - Play audio → **digits should increment ✅** (THIS IS THE PROOF!)
+   - Switch to Winamp3 Classified
+   - Play audio → digits should increment ✅
 
 **Success Criteria:**
-- Internet Archive digits INCREMENT! ✅✅✅
+- ✅ Internet Archive digits INCREMENT!
+- ✅ All three skins work correctly
+- ✅ No hardcoded sprite names in time display
 
 ### Phase 3: Add Base Mechanisms (2-3 hours)
 
-**Tasks:**
-1. Create BaseVolumeControl (plain SwiftUI slider)
-2. Wrap with SkinnedVolumeControl (sprite overlay)
-3. Test with skin AND without skin
-4. Repeat for balance, EQ sliders
+**Goal:** Ensure functionality without skins
 
-**Verification:**
-- Works without any skin loaded
-- Works with minimal skins
-- Works with complete skins
+**Tasks:**
+1. Create BaseVolumeControl
+   ```swift
+   // Plain functional slider (no sprites required)
+   GeometryReader { geo in
+       Color.clear
+           .gesture(DragGesture()...)
+   }
+   ```
+
+2. Create SkinnedVolumeControl
+   ```swift
+   ZStack {
+       BaseVolumeControl()  // Always present
+
+       if let skin = skinManager.currentSkin {
+           // Skin overlay (optional)
+           if let bg = skin.images["MAIN_VOLUME_BACKGROUND"] {
+               // Render with skin
+           } else {
+               // Plain visual feedback
+               Rectangle().fill(Color.green)
+           }
+       }
+   }
+   ```
+
+3. Repeat for:
+   - Balance slider
+   - EQ sliders
+   - Position slider
+
+**Success Criteria:**
+- ✅ Sliders work WITHOUT skin loaded
+- ✅ Sliders work WITH skin loaded
+- ✅ Graceful fallback if sprites missing
 
 ### Phase 4: Full Migration (4-6 hours)
 
-**Tasks:**
-1. Migrate all buttons (.playButton, .pauseButton, etc.)
-2. Migrate all indicators (.playingIndicator, etc.)
-3. Migrate all window elements
-4. Remove sprite aliasing code
-5. Clean up fallback generation
-6. Full testing across 10+ skins
+**Goal:** Zero hardcoded sprite names across entire app
 
-**Completion Criteria:**
-- Zero hardcoded sprite names
-- All components use semantic sprites
-- Works with any skin variant
-- Graceful fallback when sprites missing
+**Tasks:**
+1. Migrate all transport buttons
+   - .playButton, .pauseButton, .stopButton, etc.
+
+2. Migrate all indicators
+   - .playingIndicator, .pausedIndicator, etc.
+
+3. Migrate all window elements
+   - Title bars, backgrounds, etc.
+
+4. Remove sprite aliasing code (no longer needed)
+   - Delete lines 373-425 in SkinManager.swift
+   - Resolver handles this now
+
+5. Test with 10+ different skins
+   - Download from skins.webamp.org
+   - Verify all work correctly
+
+**Success Criteria:**
+- ✅ Zero hardcoded sprite names (search codebase)
+- ✅ Works with any skin variant
+- ✅ Graceful degradation if sprites missing
+- ✅ Internet Archive fully functional
+
+---
+
+## 📁 Current Project State
+
+### Branch Structure
+```
+main (just merged PR #5)
+  └─ feature/sprite-resolver-architecture (NEW - you are here)
+```
+
+### What's in Main Now (From Merged PR)
+- ✅ Skin discovery system (SPM + Xcode)
+- ✅ Skins menu with import
+- ✅ Sprite aliasing (band-aid fix)
+- ✅ Slider background improvements
+- ✅ Bundle identifier fix
+- ✅ Comprehensive documentation
+
+### What's Missing (To Be Added This Branch)
+- ⚠️ SpriteResolver integration
+- ⚠️ Semantic sprite API
+- ⚠️ Base mechanism layer
+- ⚠️ Plain rendering fallbacks
 
 ---
 
 ## 🔨 Build Commands
 
-### Current Build (Swift Package Manager)
+### Swift Package Manager
 ```bash
 cd /Users/hank/dev/src/MacAmp
 swift build
 .build/debug/MacAmpApp
 ```
 
-**Status:** ✅ Builds clean (0 warnings, 0 errors)
+**Expected:** Clean build (0 warnings, 0 errors)
 
-### Xcode Build (via MCP)
+### Xcode Build
 ```bash
-# Use Xcode MCP tools
+# Via MCP
 # mcp__XcodeBuildMCP__build_macos
 # mcp__XcodeBuildMCP__launch_mac_app
 ```
 
-**Status:** ✅ Builds successfully
+**Expected:** Successful build
 
-### Verify Skins
+### Verify Current State
 ```bash
-# SPM build skins
-ls -la .build/arm64-apple-macosx/debug/MacAmp_MacAmpApp.bundle/*.wsz
+# Check branch
+git branch
+# Should show: * feature/sprite-resolver-architecture
 
-# Xcode build skins
-ls -la ~/Library/Developer/Xcode/DerivedData/MacAmpApp-*/Build/Products/Debug/MacAmpApp.app/Contents/Resources/*.wsz
+# Check status
+git status
+# Should be clean (just branched from main)
 
-# Should show:
-# Internet-Archive.wsz
-# Winamp.wsz
+# Verify skins present
+ls -la MacAmpApp/Skins/
+# Should show: Internet-Archive.wsz, Winamp.wsz
 ```
 
 ---
 
-## 📁 Project Structure
+## 📐 Architecture Reference
 
-### Source Code
+### Webamp Components (Reference Implementation)
+
+**Time Display:**
+```javascript
+// Time.tsx (lines 17-38)
+const timeObj = Utils.getTimeObj(seconds);  // Mechanism: seconds → digits
+
+return (
+  <div id="time">
+    <div className="digit digit-{timeObj.minutesFirstDigit}" />  // Bridge: semantic
+  </div>
+);
+
+// CSS (Presentation layer):
+// .digit-0 { background-position: 0px 0px; }
 ```
-MacAmpApp/
-├── MacAmpApp.swift           # App entry point
-├── AppCommands.swift          # View/Appearance menus
-├── SkinsCommands.swift        # Skins menu (NEW)
-├── Skins/                     # Bundled skins (NEW)
-│   ├── Internet-Archive.wsz
-│   └── Winamp.wsz
-├── Models/
-│   ├── Skin.swift            # Skin data structure + discovery
-│   ├── SkinSprites.swift     # Sprite coordinates
-│   ├── SpriteResolver.swift  # ⚠️ NOT in Xcode project yet
-│   ├── AppSettings.swift
-│   └── ...
-├── ViewModels/
-│   └── SkinManager.swift     # Skin loading + sprite aliasing
-├── Views/
-│   ├── MainWindowView.swift
-│   ├── WinampMainWindow.swift
-│   ├── VolumeSliderView.swift
-│   ├── BalanceSliderView.swift
-│   ├── EQSliderView.swift
-│   └── Components/
-│       └── SimpleSpriteImage.swift
-└── Audio/
-    └── AudioPlayer.swift
+
+**Volume Slider:**
+```javascript
+// MainVolume.tsx (lines 7-23)
+const offset = (sprite - 1) * 15;  // Mechanism: calculate frame
+
+return (
+  <div id="volume" style={{ backgroundPosition: `0 -${offset}px` }}>  // Bridge
+    <input type="range" />  // Functional input
+  </div>
+);
+
+// CSS: #volume { background-image: url(VOLUME.BMP); }
+```
+
+### MacAmp Current (Before Refactor)
+
+**Time Display:**
+```swift
+// WinampMainWindow.swift (buildTimeDisplay)
+let digits = timeDigits(from: audioPlayer.currentTime)  // Mechanism ✅
+
+SimpleSpriteImage("DIGIT_\(digits[0])", width: 9, height: 13)  // ❌ Hardcoded!
+// No semantic layer, no resolver, mixed presentation with mechanism
+```
+
+**Volume Slider:**
+```swift
+// VolumeSliderView.swift
+Image(nsImage: background)  // Uses skin background ✅
+// But REQUIRES background parameter (no fallback) ❌
+```
+
+### MacAmp Target (After Refactor)
+
+**Time Display:**
+```swift
+let digits = timeDigits(from: audioPlayer.currentTime)  // Mechanism ✅
+
+SimpleSpriteImage(.digit(digits[0]))  // Bridge: semantic ✅
+
+// SpriteResolver (presentation):
+// .digit(0) → "DIGIT_0_EX" or "DIGIT_0" (skin decides)
+```
+
+**Volume Slider:**
+```swift
+ZStack {
+    BaseVolumeControl(volume: $volume)  // Mechanism: always works ✅
+
+    if let skin = skinManager.currentSkin {
+        SkinOverlay(background: skin.images["MAIN_VOLUME_BACKGROUND"])
+    } else {
+        PlainVisualFeedback()  // Green rectangle
+    }
+}
+```
+
+---
+
+## 🎯 Phase 1 Implementation Checklist
+
+### Step 1: Add SpriteResolver to Xcode Project
+
+**Method A: Via Xcode GUI**
+1. Open MacAmpApp.xcodeproj in Xcode
+2. Right-click on Models folder
+3. Add Files to "MacAmpApp"
+4. Select MacAmpApp/Models/SpriteResolver.swift
+5. Ensure "MacAmpApp" target is checked
+6. Click Add
+
+**Method B: Via project.pbxproj Edit**
+```bash
+# Add file reference and build file entries
+# See docs/SpriteResolver-Implementation-Summary.md for details
+```
+
+**Verification:**
+```bash
+# Should compile
+swift build
+
+# Should appear in project
+grep "SpriteResolver" MacAmpApp.xcodeproj/project.pbxproj
+```
+
+### Step 2: Update SimpleSpriteImage
+
+**File:** MacAmpApp/Views/Components/SimpleSpriteImage.swift
+
+**Add enum for source type:**
+```swift
+enum SpriteSource {
+    case legacy(String)           // Old: hardcoded sprite names
+    case semantic(SemanticSprite) // New: semantic sprite requests
+}
+```
+
+**Add new initializer:**
+```swift
+init(_ semantic: SemanticSprite, width: CGFloat? = nil, height: CGFloat? = nil) {
+    self.source = .semantic(semantic)
+    self.width = width
+    self.height = height
+}
+
+// Keep existing init unchanged!
+init(_ spriteKey: String, width: CGFloat? = nil, height: CGFloat? = nil) {
+    self.source = .legacy(spriteKey)
+    self.width = width
+    self.height = height
+}
+```
+
+**Update body to resolve:**
+```swift
+var body: some View {
+    @EnvironmentObject var skinManager: SkinManager
+
+    let actualSpriteName: String? = {
+        switch source {
+        case .legacy(let name):
+            return name  // Use directly (backward compat)
+
+        case .semantic(let semantic):
+            // Use resolver to map semantic → actual
+            if let skin = skinManager.currentSkin {
+                let resolver = SpriteResolver(skin: skin)
+                return resolver.resolve(semantic)
+            }
+            return nil
+        }
+    }()
+
+    // Rest of rendering logic unchanged
+    if let name = actualSpriteName,
+       let image = skinManager.currentSkin?.images[name] {
+        Image(nsImage: image)
+            // ... existing rendering ...
+    }
+}
+```
+
+**Test:**
+```bash
+swift build
+# Should compile both APIs:
+# SimpleSpriteImage("DIGIT_0")     // Legacy
+# SimpleSpriteImage(.digit(0))     // Semantic
+```
+
+### Step 3: Inject Resolver into Environment
+
+**File:** MacAmpApp/ViewModels/SkinManager.swift
+
+**Add after skin loading:**
+```swift
+// In loadSkin(from url: URL), after creating newSkin:
+self.currentSkin = newSkin
+self.isLoading = false
+
+// Create resolver for this skin
+let resolver = SpriteResolver(skin: newSkin)
+// Store or inject into environment
+```
+
+**File:** MacAmpApp/MacAmpApp.swift
+
+**Add environment modifier:**
+```swift
+WindowGroup {
+    UnifiedDockView()
+        .environmentObject(skinManager)
+        // Add resolver if available
+        .spriteResolver(skinManager.currentSkin.map { SpriteResolver(skin: $0) })
+}
+```
+
+---
+
+## 🧪 Phase 2 Testing Plan
+
+### Critical Test: Internet Archive Time Display
+
+**File to Modify:** MacAmpApp/Views/WinampMainWindow.swift (buildTimeDisplay function)
+
+**Changes:**
+```swift
+// Line 282: BEFORE
+SimpleSpriteImage("DIGIT_\(digits[0])", width: 9, height: 13)
+
+// Line 282: AFTER
+SimpleSpriteImage(.digit(digits[0]), width: 9, height: 13)
+
+// Line 285: BEFORE
+SimpleSpriteImage("DIGIT_\(digits[1])", width: 9, height: 13)
+
+// Line 285: AFTER
+SimpleSpriteImage(.digit(digits[1]), width: 9, height: 13)
+
+// Lines 297, 300: Same pattern for seconds digits
+
+// Line 290: BEFORE
+SimpleSpriteImage("CHARACTER_58", width: 5, height: 6)
+
+// Line 290: AFTER
+SimpleSpriteImage(.character(58), width: 5, height: 6)
+
+// Line 265: BEFORE (if showing minus)
+SimpleSpriteImage("MINUS_SIGN", width: 5, height: 1)
+
+// Line 265: AFTER
+SimpleSpriteImage(.minusSign, width: 5, height: 1)
+```
+
+**Expected Console Output:**
+```
+🔄 SpriteResolver: .digit(0) → "DIGIT_0_EX" (Internet Archive)
+🔄 SpriteResolver: .digit(1) → "DIGIT_1_EX"
+...
+```
+
+**Test Procedure:**
+1. Build and launch app
+2. Switch to Classic Winamp (⌘⇧1)
+3. Load audio file (drag MP3 or use Eject button)
+4. Press Play
+5. **Verify:** Digits increment (green) ✅
+6. Switch to Internet Archive (⌘⇧2)
+7. **Verify:** Digits increment (white) ✅✅✅
+8. Switch to Winamp3 Classified
+9. **Verify:** Digits increment ✅
+
+**Success = Internet Archive digits finally work!**
+
+---
+
+## 📊 Known Issues (What Still Needs Fixing)
+
+### Issue 1: Internet Archive Digits Static ❌
+
+**Status:** Will be fixed in Phase 2
+**Fix:** Migrate to semantic .digit(0) requests
+**Expected:** Digits will increment correctly
+
+### Issue 2: No Plain Fallback Rendering ❌
+
+**Status:** Will be fixed in Phase 3
+**Fix:** Add base mechanism layer
+**Expected:** App works without any skin loaded
+
+### Issue 3: Hundreds of Hardcoded Sprite Names ❌
+
+**Status:** Will be fixed in Phase 4
+**Fix:** Migrate all components to semantic sprites
+**Expected:** Codebase search for "SimpleSpriteImage(\"" returns zero results
+
+---
+
+## 🔬 Research References
+
+### Essential Webamp Files (Local Copy)
+
+**Architecture:**
+- `/Users/hank/dev/src/MacAmp/webamp_clone/packages/webamp/js/components/MainWindow/Time.tsx`
+  - Lines 17-38: Semantic time display
+- `/Users/hank/dev/src/MacAmp/webamp_clone/packages/webamp/js/components/MainWindow/MainVolume.tsx`
+  - Lines 7-23: Background positioning
+
+**Styling:**
+- `/Users/hank/dev/src/MacAmp/webamp_clone/packages/webamp/css/main-window.css`
+  - Lines 228-250: #volume styling
+  - Sprite mapping via CSS background-position
+
+**Sprite Definitions:**
+- `/Users/hank/dev/src/MacAmp/webamp_clone/packages/webamp/js/skinSprites.ts`
+  - Lines 145-158: NUMBERS sprite coordinates
+  - Lines 159-172: NUMS_EX sprite coordinates
+
+### Key Documentation (Local)
+
+**Must Read:**
+1. **docs/ARCHITECTURE_REVELATION.md** - Why refactor needed
+2. **docs/SpriteResolver-Architecture.md** - Solution design
+3. **docs/BASE_PLAYER_ARCHITECTURE.md** - Base mechanism principles
+
+**Reference:**
+4. **docs/winamp-skins-lessons.md** - Complete knowledge base
+5. **docs/SpriteResolver-Implementation-Summary.md** - Integration steps
+6. **DOCUMENTATION_INDEX.md** - All docs catalog
+
+---
+
+## 🎨 Test Skins Available
+
+### Bundled Skins (In MacAmpApp/Skins/)
+1. **Winamp.wsz** (102KB) - Classic Winamp v2.91
+   - Has: NUMBERS.bmp (DIGIT_0-9)
+   - Missing: NUMS_EX.bmp
+   - Works: ✅ With current code
+
+2. **Internet-Archive.wsz** (129KB) - Modern Internet Archive theme
+   - Has: NUMS_EX.bmp (DIGIT_0_EX-9_EX)
+   - Missing: NUMBERS.bmp
+   - Works: ❌ Digits don't increment (requires Phase 2 fix)
+
+### Additional Test Skins (In tmp/)
+3. **Winamp3_Classified_v5.5.wsz** - Complete skin
+   - Has: BOTH NUMBERS.bmp AND NUMS_EX.bmp
+   - Works: ✅ With current code
+
+**Download More:**
+- https://skins.webamp.org (70,000+ skins)
+- Use for extensive testing after Phase 4
+
+---
+
+## 💻 Quick Start Commands
+
+### Start Working (This Session)
+
+```bash
+# 1. Verify on correct branch
+git branch
+# Should show: * feature/sprite-resolver-architecture
+
+# 2. Open Xcode
+open MacAmpApp.xcodeproj
+
+# 3. Add SpriteResolver.swift to project
+# (Use Xcode GUI - see Phase 1, Step 1 above)
+
+# 4. Build
+swift build
+
+# 5. If errors, check:
+grep "SpriteResolver" MacAmpApp.xcodeproj/project.pbxproj
+```
+
+### After Phase 1 Complete
+
+```bash
+# Build and run
+swift build && .build/debug/MacAmpApp
+
+# Check if SpriteResolver compiling
+swift build 2>&1 | grep "SpriteResolver"
+
+# Verify no errors
+swift build 2>&1 | grep error
+```
+
+### After Phase 2 Complete
+
+```bash
+# Run app
+.build/debug/MacAmpApp
+
+# Test sequence:
+# 1. Switch to Internet Archive (Cmd+Shift+2)
+# 2. Load audio file
+# 3. Press Play
+# 4. Watch time display
+# Expected: 00:01, 00:02, 00:03... (digits INCREMENT!)
+```
+
+---
+
+## 📝 Console Logging (How to Monitor)
+
+### Expected Console Output (Phase 2)
+
+```
+🎨 SkinManager: Switching to skin: Internet Archive
+Loading skin from .../Internet-Archive.wsz
+
+✅ OPTIONAL: Found NUMS_EX.BMP - adding extended digit sprites
+
+🔄 Creating sprite aliases: NUMS_EX → NUMBERS
+✅ Created 12 digit sprite aliases
+
+[After migration to semantic sprites:]
+🔄 SpriteResolver: Resolving .digit(0)
+    Checking: DIGIT_0_EX ✅ Found!
+    → Returning: "DIGIT_0_EX"
+
+🔄 SpriteResolver: Resolving .digit(1)
+    Checking: DIGIT_1_EX ✅ Found!
+    → Returning: "DIGIT_1_EX"
+```
+
+---
+
+## 🗺️ File Locations Quick Reference
+
+### Implementation Files
+```
+MacAmpApp/Models/SpriteResolver.swift       ⚠️ Add to Xcode project (Phase 1)
+MacAmpApp/Views/Components/SimpleSpriteImage.swift   📝 Update (Phase 1)
+MacAmpApp/ViewModels/SkinManager.swift      📝 Update (Phase 1)
+MacAmpApp/MacAmpApp.swift                   📝 Update (Phase 1)
+MacAmpApp/Views/WinampMainWindow.swift      📝 Migrate (Phase 2)
 ```
 
 ### Documentation
 ```
-/docs/
-├── ARCHITECTURE_REVELATION.md          ⭐⭐ MUST READ!
-├── BASE_PLAYER_ARCHITECTURE.md         ⭐ Design principles
-├── winamp-skins-lessons.md            📚 Complete guide
-├── WINAMP_SKIN_VARIATIONS.md          📚 Quick reference
-├── ISSUE_FIXES_2025-10-12.md          🐛 Bug tracking
-├── SpriteResolver-Architecture.md      🔧 Solution design
-├── SpriteResolver-Implementation-Summary.md
-└── SpriteResolver-Visual-Guide.md
-
-/tasks/
-├── winamp-skin-research-2025.md       📖 Research
-├── skin-loading-research/
-├── skin-switching-plan/
-└── sprite-fallback-system/
-
-/(root)/
-├── SESSION_STATE.md                   📍 THIS FILE
-├── DOCUMENTATION_INDEX.md              📋 All docs catalog
-├── TESTING_GUIDE.md                    🧪 Testing procedures
-└── ... (various other docs)
+SESSION_STATE.md                            📍 THIS FILE
+DOCUMENTATION_INDEX.md                       📋 All docs
+docs/ARCHITECTURE_REVELATION.md             ⭐⭐ MUST READ
+docs/SpriteResolver-Architecture.md         🔧 Implementation guide
+docs/winamp-skins-lessons.md               📚 Knowledge base
+TESTING_GUIDE.md                            🧪 Testing procedures
 ```
 
 ---
 
-## 🎓 Key Learnings
+## 🎓 Key Concepts for This Refactor
 
-### 1. Winamp Skins Are NOT Standardized
+### Concept 1: Semantic Sprites
 
-**Different skins use different sprite sheets:**
-- Classic: NUMBERS.bmp (DIGIT_0-9)
-- Modern: NUMS_EX.bmp (DIGIT_0_EX-9_EX)
-- Some: Both sheets
-- Some: Neither (broken skin)
-
-**Impact:** Can't hardcode sprite names!
-
-### 2. Bundle Discovery Differs (SPM vs Xcode)
-
-**SPM:** `Bundle.module.bundleURL` → resource bundle
-**Xcode:** `Bundle.main.resourceURL` → Contents/Resources/
-
-**Fix:** Conditional compilation with fallback paths
-
-### 3. Sprite Aliasing is a Band-Aid
-
-**Current approach:**
+**Old (Hardcoded):**
 ```swift
-// Copy DIGIT_0_EX to DIGIT_0 after skin loads
-extractedImages["DIGIT_0"] = extractedImages["DIGIT_0_EX"]
+SimpleSpriteImage("DIGIT_0")  // Assumes skin has this exact name
 ```
 
-**Why insufficient:**
-- One-time fix at load
-- Doesn't scale to hundreds of variants
-- Views still hardcode names
-- Not architectural solution
-
-**Proper approach:** Semantic sprite resolution at render time
-
-### 4. Webamp's Architecture is Superior
-
-**Webamp's Three Layers:**
-```
-STATE (currentTime: number)
-  ↓
-COMPONENT (<div className="digit digit-0" />)
-  ↓
-CSS (.digit-0 { background-position: -0px -0px; })
+**New (Semantic):**
+```swift
+SimpleSpriteImage(.digit(0))  // Resolver finds actual sprite
 ```
 
 **Benefits:**
-- Swap CSS = change skin (no code changes)
-- Works with any sprite names
-- Graceful degradation if sprites missing
+- Works with DIGIT_0, DIGIT_0_EX, or any variant
+- Type-safe (can't typo)
+- Autocomplete shows all options
+- Centralized resolution logic
 
-**MacAmp Must Adopt:**
-```
-STATE (audioPlayer.currentTime: Double)
-  ↓
-VIEW (SimpleSpriteImage(.digit(0)))
-  ↓
-RESOLVER (.digit(0) → "DIGIT_0_EX" or "DIGIT_0")
-```
+### Concept 2: Fallback Priority
 
----
-
-## 📋 Testing Status
-
-### Manual Testing Performed
-
-**User tested with Internet Archive skin:**
-- ❌ Digits visible but don't increment
-- ❌ Colon shows (might have green artifact)
-- ⚠️ Sliders use chrome backgrounds (partial success)
-- ❌ Overall: Skin not fully functional
-
-**Comparison Screenshots:**
-- `Screenshot 2025-10-12 at 3.20.00 PM.png` - Reference (how it should look)
-- `Screenshot 2025-10-12 at 4.03.45 PM.png` - Current (shows issues)
-
-### What Works
-
-✅ Classic Winamp skin (fully functional)
-✅ Skins menu and import
-✅ No crashes
-✅ Sliders use skin backgrounds (not programmatic gradients)
-✅ Both build systems work
-
-### What Doesn't Work
-
-❌ Internet Archive digits don't increment
-❌ Some sprite resolution issues
-❌ No plain fallback if sprites missing
-❌ Architecture depends on specific sprite names
-
----
-
-## 🛠️ Current Branch State
-
-### Branch: `swiftui-ui-detail-fixes`
-
-**Status:** Ready for PR
-
-**Commits:** 7 (all pushed to GitHub)
-
-**Changes Since Main:**
-- Skin discovery system
-- Skins menu with import
-- Bundle identifier fix
-- Sprite aliasing system
-- Slider background improvements
-- Extensive documentation
-
-**Recommendation:** Merge this branch, then start fresh for refactor
-
----
-
-## 🎯 Immediate Next Steps (Before New Session)
-
-### Step 1: Create PR for Current Branch
-
-```bash
-gh pr create \
-  --title "feat(skins): Dynamic skin switching + critical bug fixes" \
-  --body "See DOCUMENTATION_INDEX.md for complete documentation."
-```
-
-### Step 2: Merge PR (Wait for User)
-
-**User will review and merge**
-
-### Step 3: Start Fresh Branch for Refactor
-
-```bash
-git checkout main
-git pull origin main
-git checkout -b feature/sprite-resolver-architecture
-```
-
-### Step 4: Begin Architectural Refactor (New Session)
-
-**Follow plan in:** docs/SpriteResolver-Implementation-Summary.md
-
----
-
-## 📖 Quick Resume Guide
-
-### If Starting New Session Tomorrow
-
-1. **Read:** DOCUMENTATION_INDEX.md (orientation)
-2. **Read:** docs/ARCHITECTURE_REVELATION.md (understand problem)
-3. **Check:** Has PR been merged?
-   - If yes: Create new branch `feature/sprite-resolver-architecture`
-   - If no: Wait for merge
-4. **Begin:** SpriteResolver integration (Phase 1)
-
-### If Continuing Testing Today
-
-1. **Launch:** App from Xcode
-2. **Follow:** TESTING_GUIDE.md
-3. **Focus on:** Internet Archive skin
-4. **Test:** Do digits increment when playing audio?
-5. **Report:** Findings
-
-### If Debugging Issues
-
-1. **Check:** docs/ISSUE_FIXES_2025-10-12.md (known issues)
-2. **Review:** docs/winamp-skins-lessons.md → "Debugging Guide"
-3. **Console:** Look for sprite resolution logs
-4. **Compare:** Current behavior vs reference screenshots
-
----
-
-## 🌳 Git Workflow
-
-### Current Branch Structure
-
-```
-main (stable)
-  └─ swiftui-ui-detail-fixes (7 commits ahead)
-       └─ [Next: feature/sprite-resolver-architecture]
-```
-
-### Recent Commits (This Branch)
-
-```
-7e8629d fix(rendering): use skin bitmaps for sliders + digit updates
-f821edc fix(skins): add sprite aliasing for NUMS_EX and slider variants
-b4eb163 docs: add comprehensive Winamp skin lessons and testing guide
-70aead9 fix(ui): remove duplicate menus + document skin variations
-2f55e2d fix(skins): resolve Xcode bundle discovery + add Skins menu
-3d0597e fix(skins): resolve SPM bundle discovery for Phase 1 completion
-```
-
-### Pending Commit (Documentation)
-
-**Files to commit:**
-- DOCUMENTATION_INDEX.md (NEW)
-- SESSION_STATE.md (UPDATED)
-- docs/ARCHITECTURE_REVELATION.md (force add with -f)
-- docs/BASE_PLAYER_ARCHITECTURE.md (force add with -f)
-
----
-
-## 🔬 Research Findings
-
-### Webamp Architecture (Proven Pattern)
-
-**Volume Slider:**
-```javascript
-// Mechanism: Native HTML input
-<input type="range" min="0" max="100" value={volume} />
-
-// Presentation: CSS background
-#volume { background-position: 0 -${offset}px; }
-```
-
-**Without CSS:** Ugly but functional native slider
-**With CSS:** Beautiful skinned slider
-
-### EQMAIN.bmp Structure
-
-**From visual inspection:**
-- Blue areas = Transparent = App renders functional elements
-- Chrome areas = Skin artwork = Visual decoration
-- **EQ_SLIDER_BACKGROUND is ONE static image** showing all 11 sliders
-- NOT animated frames like VOLUME.BMP
-
-### Time Display Pattern
-
-**Webamp:**
-```javascript
-<div className="digit digit-0" />  // Semantic
-```
-
-**CSS handles sprite mapping:**
-```css
-.digit-0 { background-position: 0px 0px; }
-```
-
-**MacAmp needs equivalent:**
+**Resolver tries sprites in order:**
 ```swift
-SimpleSpriteImage(.digit(0))  // Semantic
+.digit(0) → ["DIGIT_0_EX", "DIGIT_0"]
+// Prefers extended, falls back to standard
 
-// SpriteResolver handles mapping:
-.digit(0) → "DIGIT_0_EX" or "DIGIT_0"
+.volumeThumb → ["MAIN_VOLUME_THUMB_SELECTED", "MAIN_VOLUME_THUMB"]
+// Prefers selected for visual consistency
 ```
 
----
+**If none found:** Return nil → view shows plain rendering
 
-## 💎 SpriteResolver System (Ready to Integrate)
+### Concept 3: Base Mechanism Layer
 
-### Files Created by Agent
+**Always provide functional base:**
+```swift
+// Base: Works without skin
+GeometryReader { geo in
+    Color.clear.gesture(DragGesture()...)
+}
 
-1. **MacAmpApp/Models/SpriteResolver.swift** (390 lines)
-   - SemanticSprite enum (40+ sprite types)
-   - Resolution logic with priority fallbacks
-   - Environment integration for SwiftUI
-
-2. **docs/SpriteResolver-Architecture.md** (650 lines)
-   - Complete architecture documentation
-   - Webamp alignment proof
-   - Migration strategy
-   - API reference
-
-3. **docs/SpriteResolver-Implementation-Summary.md** (300 lines)
-   - Integration steps
-   - Example usage
-   - Testing procedures
-
-4. **docs/SpriteResolver-Visual-Guide.md** (450 lines)
-   - Visual diagrams
-   - Before/after comparisons
-   - Flow charts
-
-### Integration Checklist
-
-- [ ] Add SpriteResolver.swift to Xcode project
-- [ ] Update SimpleSpriteImage with semantic init
-- [ ] Migrate time display (proof of concept)
-- [ ] Test with 3 skins (Classic, Internet Archive, Winamp3)
-- [ ] Verify digits increment in Internet Archive ✅
-- [ ] Incrementally migrate remaining components
-
----
-
-## 🎬 What to Do RIGHT NOW
-
-### Option A: Create PR and End Session (RECOMMENDED)
-
-```bash
-# 1. Commit final documentation
-git add -f DOCUMENTATION_INDEX.md SESSION_STATE.md \
-  docs/ARCHITECTURE_REVELATION.md \
-  docs/BASE_PLAYER_ARCHITECTURE.md
-
-git commit -m "docs: architecture revelation + session state for clean resumption"
-
-git push
-
-# 2. Create PR
-gh pr create \
-  --title "feat(skins): Dynamic skin switching Phase 1 + architecture insights" \
-  --body "$(cat <<'EOF'
-## Summary
-
-Phase 1 of dynamic skin switching is complete with critical bug fixes and architectural insights that will guide Phase 2 refactor.
-
-## What's Included
-
-### Features ✅
-- Dynamic skin discovery (bundled + user directory)
-- Skins menu with keyboard shortcuts (⌘⇧1, ⌘⇧2)
-- Skin import via file picker (⌘⇧O)
-- Hot-reload skin switching
-- Persistence across app restarts
-
-### Critical Fixes ✅
-- Fixed Xcode build skin discovery (Bundle.main.resourceURL)
-- Fixed app crash on import (bundle identifier + defensive notifications)
-- Fixed slider rendering (now use skin bitmaps, not programmatic gradients)
-- Fixed sprite aliasing for NUMS_EX variants
-- Removed duplicate menus
-
-### Documentation 📚
-- Comprehensive skin lessons (1,700+ lines)
-- Architecture revelation (mechanism vs presentation)
-- Complete testing guide
-- Bug fix tracking
-- 40+ documentation files indexed
-
-## Known Issues ⚠️
-
-### Internet Archive Skin Partially Broken
-- Digits visible but don't increment when playing
-- Requires architectural refactor (SpriteResolver integration)
-- Solution designed and documented, ready for Phase 2
-
-## Architecture Discovery 🔍
-
-**Critical Insight:** MacAmp's UI is tightly coupled to specific sprite names. Need to decouple:
-- MECHANISM (timer, volume control) from
-- PRESENTATION (which sprites to use)
-
-**Solution:** SpriteResolver system (fully designed, ready to integrate)
-
-## Next Steps
-
-1. Merge this PR
-2. Create new branch: `feature/sprite-resolver-architecture`
-3. Integrate SpriteResolver system
-4. Migrate components to semantic sprites
-5. Test with multiple skin variants
-
-## Documentation
-
-See **DOCUMENTATION_INDEX.md** for complete catalog of all documentation.
-
-Key files:
-- SESSION_STATE.md - Current status and next steps
-- docs/ARCHITECTURE_REVELATION.md - Why refactor needed
-- docs/SpriteResolver-Architecture.md - Solution design
-
-## Verification
-
-- ✅ SPM build: Clean (0 warnings)
-- ✅ Xcode build: Success
-- ✅ Classic Winamp skin: Fully functional
-- ⚠️ Internet Archive skin: Needs Phase 2 fixes
-- ✅ Skin import: Works without crashing
-- ✅ Menus: Clean structure
-
-This lays the foundation for Phase 2: Complete architectural refactor with proper mechanism/presentation separation.
-EOF
-)"
-
-# 3. Wait for merge, then continue
+// Overlay: Enhanced visuals
+if let skin = skinManager.currentSkin {
+    Image(nsImage: skin.images["BACKGROUND"])
+}
 ```
 
+**Result:** App never breaks due to missing sprites
+
 ---
 
-**Session Status:** Complete
-**Documentation:** Indexed and ready
-**Code:** Committed and pushed
-**Next:** Create PR → Merge → Fresh branch for refactor
+## 🚨 Critical Success Criteria
 
-**Ready to create PR?**
+### Must Achieve in This Session
+
+1. **SpriteResolver compiles** in Xcode project ✅
+2. **SimpleSpriteImage supports both APIs** (legacy + semantic) ✅
+3. **Time display migrated** to semantic sprites ✅
+4. **Internet Archive digits INCREMENT** when playing audio ✅✅✅
+
+### Nice to Have
+
+5. Base mechanism layer for one slider
+6. Plain rendering fallback example
+7. Migration of transport buttons
+
+### Can Wait for Later
+
+8. Full component migration (Phase 4)
+9. Remove sprite aliasing code
+10. Extensive multi-skin testing
+
+---
+
+## 📌 Important Notes
+
+### Backward Compatibility
+
+**Critical:** Don't break existing code!
+
+**Strategy:**
+- Keep old SimpleSpriteImage("string") init
+- Add new SimpleSpriteImage(.semantic) init
+- Migrate incrementally (no big bang)
+- Test after each component migration
+
+### Testing Strategy
+
+**After EACH change:**
+1. Build (verify no errors)
+2. Launch app
+3. Test Classic Winamp ✅
+4. Test Internet Archive ✅
+5. Test Winamp3 Classified ✅
+
+**Don't proceed until all three work!**
+
+### Documentation Updates
+
+**After Phase 2 (Proof of Concept):**
+- Update SESSION_STATE.md → "Phase 2 Complete"
+- Document what works
+- Note any issues discovered
+
+**After Full Refactor:**
+- Update ARCHITECTURE_REVELATION.md → "Solution Implemented"
+- Update winamp-skins-lessons.md → Add SpriteResolver section
+- Create REFACTOR_COMPLETE.md summary
+
+---
+
+## 🏁 Session Goals Summary
+
+### Primary Goal
+**Fix Internet Archive skin so digits increment correctly**
+
+**Measure of Success:**
+- Load Internet Archive skin
+- Play audio file
+- Time displays: 00:01 → 00:02 → 00:03... ✅
+
+### Secondary Goals
+- Demonstrate SpriteResolver works
+- Prove webamp architecture in Swift
+- Clean up hardcoded sprite names (time display only)
+- Document integration process
+
+### Stretch Goals
+- Migrate one slider to base mechanism pattern
+- Show plain rendering fallback
+- Begin migration of other components
+
+---
+
+## 🔄 Session Workflow
+
+### Start of Session Checklist
+
+- [x] PR merged
+- [x] Switched to main
+- [x] Pulled latest changes
+- [x] Created feature/sprite-resolver-architecture branch
+- [ ] Read ARCHITECTURE_REVELATION.md
+- [ ] Read SpriteResolver-Architecture.md
+- [ ] Begin Phase 1 implementation
+
+### During Session
+
+- [ ] Add SpriteResolver to Xcode (Phase 1)
+- [ ] Update SimpleSpriteImage (Phase 1)
+- [ ] Inject into environment (Phase 1)
+- [ ] Migrate time display (Phase 2)
+- [ ] Test with 3 skins (Phase 2)
+- [ ] Verify Internet Archive works! (Phase 2)
+
+### End of Session
+
+- [ ] Commit all changes
+- [ ] Update SESSION_STATE.md with progress
+- [ ] Push to GitHub
+- [ ] Document what's complete, what's next
+
+---
+
+## 📖 If Session Interrupted
+
+### Resume Instructions
+
+1. **Check branch:**
+   ```bash
+   git branch
+   # Should be: feature/sprite-resolver-architecture
+   ```
+
+2. **Check last commit:**
+   ```bash
+   git log --oneline -5
+   ```
+
+3. **Read SESSION_STATE.md** (this file)
+
+4. **Check phase completion:**
+   - Is SpriteResolver in Xcode project? → Continue from there
+   - Is SimpleSpriteImage updated? → Continue from there
+   - Is time display migrated? → Test and continue
+
+5. **Resume at appropriate phase**
+
+---
+
+**Session Status:** Fresh Start
+**Branch:** feature/sprite-resolver-architecture (clean, based on merged main)
+**Next Action:** Read ARCHITECTURE_REVELATION.md, then begin Phase 1
+**Goal:** Fix Internet Archive, implement proper architecture
+**Documentation:** Complete and indexed
+
+**Ready to begin Phase 1! 🚀**
