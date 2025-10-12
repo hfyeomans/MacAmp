@@ -15,7 +15,9 @@ struct MacAmpApp: App {
                 .environmentObject(dockingController)
                 .environmentObject(settings)
         }
-        
+        .windowStyle(.hiddenTitleBar)
+        .windowResizability(.contentSize)
+
         WindowGroup("Preferences", id: "preferences") {
             PreferencesView()
                 .environmentObject(settings)
@@ -24,27 +26,10 @@ struct MacAmpApp: App {
         .windowResizability(.contentSize)
         .defaultPosition(.center)
 
-        // Legacy auxiliary windows kept for debugging only (may be removed later)
-        // WindowGroup("Playlist", id: "playlistWindow") { ... }
-        // WindowGroup("Equalizer", id: "equalizerWindow") { ... }
-
+        // Commands are defined once here and apply to all window groups
         .commands {
-            AppCommands(dockingController: dockingController)
+            AppCommands(dockingController: dockingController, skinManager: skinManager)
+            SkinsCommands(skinManager: skinManager)
         }
     }
-}
-
-private extension NSApplication {
-    @objc func showPlaylist() {
-        NSApp.keyWindow?.windowController?.document // no-op; keep selector
-        NSApp.sendAction(#selector(AppCommandsShim.openPlaylist), to: nil, from: nil)
-    }
-    @objc func showEqualizer() {
-        NSApp.sendAction(#selector(AppCommandsShim.openEqualizer), to: nil, from: nil)
-    }
-}
-
-@objc final class AppCommandsShim: NSObject {
-    @objc func openPlaylist() {}
-    @objc func openEqualizer() {}
 }

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct AppCommands: Commands {
     let dockingController: DockingController
+    let skinManager: SkinManager
     @StateObject private var settings = AppSettings.instance()
     @Environment(\.openWindow) private var openWindow
 
@@ -36,12 +37,12 @@ struct AppCommands: Commands {
                     .help(level.description)
                 }
             }
-            
+
             Toggle("Enable Liquid Glass", isOn: $settings.enableLiquidGlass)
                 .help("Enable modern macOS material effects")
-                
+
             Divider()
-            
+
             Button("Preferences...") {
                 openWindow(id: "preferences")
             }

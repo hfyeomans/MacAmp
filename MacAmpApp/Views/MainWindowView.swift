@@ -178,7 +178,7 @@ struct MainWindowView: View {
                                     .animation(.easeInOut(duration: 0.3), value: volumeGlow)
                                     .blendMode(.overlay)
                             )
-                            .onChange(of: audioPlayer.volume) { _ in
+                            .onChange(of: audioPlayer.volume) { _, _ in
                                 triggerVolumeGlow()
                             }
 

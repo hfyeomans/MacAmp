@@ -37,6 +37,12 @@ struct SkinSprites {
         allSpritesByName[name]
     }
 
+    /// Get the dimensions for a sprite by name
+    func dimensions(forSprite name: String) -> CGSize? {
+        guard let sprite = sprite(named: name) else { return nil }
+        return CGSize(width: sprite.width, height: sprite.height)
+    }
+
     static let defaultSprites = SkinSprites(sheets: [
         // MAIN.bmp
         "MAIN": [

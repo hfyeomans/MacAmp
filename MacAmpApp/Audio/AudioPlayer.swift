@@ -28,11 +28,13 @@ class AudioPlayer: ObservableObject {
     private var visualizerTapInstalled = false
     private var visualizerPeaks: [Float] = Array(repeating: 0.0, count: 20)
     private var lastUpdateTime: CFAbsoluteTime = CFAbsoluteTimeGetCurrent()
+    private var wasStopped = false // Track if playback was stopped manually
     @Published var useSpectrumVisualizer: Bool = true
     @Published var visualizerSmoothing: Float = 0.6 // 0..1 (higher = smoother)
     @Published var visualizerPeakFalloff: Float = 1.2 // units per second
 
     @Published var isPlaying: Bool = false
+    @Published var isPaused: Bool = false
     @Published var currentTrackURL: URL? // Placeholder for the currently playing track
     @Published var currentTitle: String = "No Track Loaded"
     @Published var currentDuration: Double = 0.0
@@ -59,6 +61,9 @@ class AudioPlayer: ObservableObject {
     private let presetsFileName = "perTrackPresets.json"
     @Published var visualizerLevels: [Float] = Array(repeating: 0.0, count: 20)
     @Published var appliedAutoPresetTrack: String? = nil
+    @Published var channelCount: Int = 2 // 1 = mono, 2 = stereo
+    @Published var bitrate: Int = 0 // in kbps
+    @Published var sampleRate: Int = 0 // in Hz (will display as kHz)
 
     init() {
         setupEngine()
@@ -71,6 +76,7 @@ class AudioPlayer: ObservableObject {
     func loadTrack(url: URL) {
         stop()
         currentTrackURL = url
+        isPaused = false
         print("AudioPlayer: Loaded track from \(url.lastPathComponent)")
 
         // Load metadata and duration via modern async APIs
@@ -79,6 +85,34 @@ class AudioPlayer: ObservableObject {
             do {
                 let metadata = try await asset.load(.commonMetadata)
                 let durationCM = try await asset.load(.duration)
+                let audioTracks = try await asset.load(.tracks)
+                
+                // Detect channel count, sample rate, and bitrate from the first audio track
+                if let firstAudioTrack = audioTracks.first(where: { $0.mediaType == .audio }) {
+                    let audioDesc = try await firstAudioTrack.load(.formatDescriptions)
+                    let estimatedDataRate = try await firstAudioTrack.load(.estimatedDataRate)
+                    
+                    if let desc = audioDesc.first {
+                        let audioStreamBasicDescription = CMAudioFormatDescriptionGetStreamBasicDescription(desc)
+                        if let streamDesc = audioStreamBasicDescription?.pointee {
+                            // Channel count
+                            let channelsPerFrame = streamDesc.mChannelsPerFrame
+                            self.channelCount = Int(channelsPerFrame)
+                            print("AudioPlayer: Detected \(channelsPerFrame) channel(s) - \(channelsPerFrame == 1 ? "Mono" : "Stereo")")
+                            
+                            // Sample rate
+                            let sampleRateHz = Int(streamDesc.mSampleRate)
+                            self.sampleRate = sampleRateHz
+                            print("AudioPlayer: Sample rate: \(sampleRateHz) Hz (\(sampleRateHz/1000) kHz)")
+                        }
+                    }
+                    
+                    // Bitrate (convert from bits per second to kbps)
+                    let bitrateKbps = Int(estimatedDataRate / 1000)
+                    self.bitrate = bitrateKbps
+                    print("AudioPlayer: Bitrate: \(bitrateKbps) kbps")
+                }
+                
                 let titleItem = AVMetadataItem.metadataItems(from: metadata, filteredByIdentifier: .commonIdentifierTitle).first
                 let artistItem = AVMetadataItem.metadataItems(from: metadata, filteredByIdentifier: .commonIdentifierArtist).first
                 let title = (try? await titleItem?.load(.stringValue)) ?? url.lastPathComponent
@@ -131,6 +165,8 @@ class AudioPlayer: ObservableObject {
         }
         startProgressTimer()
         isPlaying = true
+        isPaused = false
+        wasStopped = false
         print("AudioPlayer: Play")
     }
 
@@ -138,16 +174,26 @@ class AudioPlayer: ObservableObject {
         guard playerNode.isPlaying else { return }
         playerNode.pause()
         isPlaying = false
+        isPaused = true
+        wasStopped = false // Allow normal completion handling after pause
         print("AudioPlayer: Pause")
     }
 
     func stop() {
+        wasStopped = true
         playerNode.stop()
         scheduleFrom(time: 0)
         currentTime = 0
         playbackProgress = 0
         progressTimer?.invalidate()
         isPlaying = false
+        isPaused = false
+        // Reset audio properties when stopping
+        if currentTrack == nil {
+            bitrate = 0
+            sampleRate = 0
+            channelCount = 2
+        }
         print("AudioPlayer: Stop")
     }
 
@@ -162,7 +208,11 @@ class AudioPlayer: ObservableObject {
     func setPreamp(value: Float) {
         preamp = value
         eqNode.globalGain = value
-        print("Set Preamp to \(value)")
+        // Ensure EQ is enabled when adjusting preamp
+        if !isEqOn && value != 0 {
+            toggleEq(isOn: true)
+        }
+        print("Set Preamp to \(value), EQ is \(isEqOn ? "ON" : "OFF")")
     }
 
     func setEqBand(index: Int, value: Float) {
@@ -277,13 +327,26 @@ class AudioPlayer: ObservableObject {
     }
 
     private func rewireForCurrentFile() {
+        // Stop the engine and reset it before rewiring to avoid format conflicts
+        if audioEngine.isRunning {
+            audioEngine.stop()
+            audioEngine.reset()
+        }
+        
         // Disconnect and reconnect graph for the file's format
         audioEngine.disconnectNodeOutput(playerNode)
         audioEngine.disconnectNodeOutput(eqNode)
-        guard let file = audioFile else { return }
-        let format = file.processingFormat
-        audioEngine.connect(playerNode, to: eqNode, format: format)
-        audioEngine.connect(eqNode, to: audioEngine.mainMixerNode, format: format)
+        
+        guard let _ = audioFile else { return }
+        
+        // Connect with the new format - use nil format to let the engine determine the best format
+        audioEngine.connect(playerNode, to: eqNode, format: nil)
+        audioEngine.connect(eqNode, to: audioEngine.mainMixerNode, format: nil)
+        
+        // Prepare the engine with the new configuration
+        audioEngine.prepare()
+        
+        // Restart the engine with the new configuration
         startEngineIfNeeded()
         installVisualizerTapIfNeeded()
     }
@@ -441,6 +504,7 @@ class AudioPlayer: ObservableObject {
     // MARK: - Seeking / Scrubbing
     func seek(to time: Double, resume: Bool? = nil) {
         let shouldPlay = resume ?? isPlaying
+        wasStopped = false // Allow normal completion after seeking
         scheduleFrom(time: time)
         currentTime = time
         playbackProgress = currentDuration > 0 ? time / currentDuration : 0
@@ -449,15 +513,63 @@ class AudioPlayer: ObservableObject {
             playerNode.play()
             startProgressTimer()
             isPlaying = true
+            isPaused = false
         } else {
             isPlaying = false
             progressTimer?.invalidate()
         }
     }
+    
+    // MARK: - Visualizer Support
+    func getFrequencyData(bands: Int) -> [Float] {
+        // Return normalized frequency data for spectrum analyzer
+        // Map our 20 visualizer levels to the requested number of bands
+        guard bands > 0 else { return [] }
+        
+        var result = [Float](repeating: 0, count: bands)
+        
+        if isPlaying && !visualizerLevels.isEmpty {
+            // Map visualizer levels to requested bands with logarithmic scaling
+            let sourceCount = visualizerLevels.count
+            
+            for i in 0..<bands {
+                // Map band index to source index
+                let sourceIndex = (i * sourceCount) / bands
+                let nextIndex = min(sourceIndex + 1, sourceCount - 1)
+                
+                // Interpolate between source values for smoother visualization
+                let fraction = Float(i * sourceCount % bands) / Float(bands)
+                let value1 = visualizerLevels[sourceIndex]
+                let value2 = visualizerLevels[nextIndex]
+                
+                // Interpolate and apply logarithmic scaling for better perception
+                let interpolated = value1 * (1 - fraction) + value2 * fraction
+                
+                // Apply logarithmic scaling to make quiet sounds more visible
+                // This mimics how human hearing perceives sound levels
+                let scaled = log10(1.0 + interpolated * 9.0) // Maps 0-1 to log scale
+                
+                // Normalize to 0-1 range with slight boost
+                result[i] = min(1.0, max(0.0, scaled * 0.8))
+            }
+        } else if isPlaying {
+            // Provide some minimal random movement when no data available
+            for i in 0..<bands {
+                result[i] = Float.random(in: 0.0...0.1)
+            }
+        }
+        
+        return result
+    }
 
     private func onPlaybackEnded() {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
+            // Don't update progress if we stopped manually
+            guard !self.wasStopped else {
+                self.wasStopped = false
+                return
+            }
             self.isPlaying = false
             self.progressTimer?.invalidate()
             self.playbackProgress = 1

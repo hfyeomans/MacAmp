@@ -39,10 +39,19 @@ struct UnifiedDockView: View {
                         ))
                 }
             }
-            .frame(width: 275, alignment: .topLeading) // Fixed width to match Winamp
+            .frame(width: calculateTotalWidth(), 
+                   height: calculateTotalHeight(),
+                   alignment: .topLeading)
+            .fixedSize() // This tells SwiftUI to use the exact frame size
             .background(backgroundView)
             .scaleEffect(dockGlow)
             .onAppear {
+                startDockAnimations()
+            }
+            .onChange(of: settings.materialIntegration) { _, _ in
+                startDockAnimations()
+            }
+            .onChange(of: settings.enableLiquidGlass) { _, _ in
                 startDockAnimations()
             }
         } else {
@@ -56,73 +65,118 @@ struct UnifiedDockView: View {
 
     private func ensureSkin() {
         if skinManager.currentSkin == nil {
-            var urlToLoad: URL? = Bundle.main.url(forResource: "Winamp", withExtension: "wsz")
-            #if SWIFT_PACKAGE
-            if urlToLoad == nil { urlToLoad = Bundle.module.url(forResource: "Winamp", withExtension: "wsz") }
-            #endif
-            if let skinURL = urlToLoad { skinManager.loadSkin(from: skinURL) }
+            skinManager.loadInitialSkin()
         }
     }
     
-    // MARK: - Whimsy Helper Functions
+    // MARK: - Animation Helper Functions
     private func startDockAnimations() {
-        withAnimation(.easeInOut(duration: 2.5).repeatForever(autoreverses: true)) {
-            dockGlow = 1.005
+        // Only apply glow effect in modern mode
+        if settings.materialIntegration == .modern {
+            withAnimation(.easeInOut(duration: 2.5).repeatForever(autoreverses: true)) {
+                dockGlow = 1.005
+            }
+        } else {
+            dockGlow = 1.0
         }
-        if settings.shouldUseContainerBackground {
+        
+        // Start material shimmer for hybrid and modern modes with liquid glass
+        if settings.enableLiquidGlass && (settings.materialIntegration == .hybrid || settings.materialIntegration == .modern) {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 materialShimmer = true
             }
+        } else {
+            materialShimmer = false
         }
     }
     
-    // MARK: - Liquid Glass Background
+    // MARK: - Appearance Mode Background
     @ViewBuilder
     private var backgroundView: some View {
-        if settings.shouldUseContainerBackground {
-            if #available(macOS 26.0, *) {
+        switch settings.materialIntegration {
+        case .classic:
+            // Classic mode: Pure Winamp skin appearance
+            Color.black
+                .id("classic-mode")
+                
+        case .hybrid:
+            // Hybrid mode: Subtle material effects with Winamp chrome
+            ZStack {
+                Color.black
+                
+                if settings.enableLiquidGlass {
+                    // Subtle material overlay for hybrid mode
+                    Rectangle()
+                        .fill(.ultraThinMaterial)
+                        .opacity(0.3)
+                        .overlay(
+                            LinearGradient(
+                                colors: [
+                                    .clear,
+                                    .white.opacity(0.05),
+                                    .clear
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                            .opacity(materialShimmer ? 0.5 : 0.2)
+                            .animation(
+                                .easeInOut(duration: 6.0).repeatForever(autoreverses: true),
+                                value: materialShimmer
+                            )
+                        )
+                }
+            }
+            .id("hybrid-mode-\(settings.enableLiquidGlass)")
+            
+        case .modern:
+            // Modern mode: Full SwiftUI materials
+            if settings.enableLiquidGlass {
+                ZStack {
+                    // Base material layer
+                    Rectangle()
+                        .fill(.regularMaterial)
+                        .ignoresSafeArea()
+                    
+                    // Animated shimmer overlay
+                    LinearGradient(
+                        colors: [
+                            .clear,
+                            .white.opacity(0.1),
+                            .blue.opacity(0.05),
+                            .white.opacity(0.1),
+                            .clear
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    .opacity(materialShimmer ? 0.8 : 0.3)
+                    .animation(
+                        .easeInOut(duration: 4.0).repeatForever(autoreverses: true),
+                        value: materialShimmer
+                    )
+                    
+                    // Audio-reactive glow
+                    RadialGradient(
+                        colors: [
+                            audioPlayer.isPlaying ? .green.opacity(0.15) : .blue.opacity(0.1),
+                            .clear
+                        ],
+                        center: .center,
+                        startRadius: 0,
+                        endRadius: 200
+                    )
+                    .opacity(audioPlayer.isPlaying ? 0.6 : 0.3)
+                    .animation(.easeInOut(duration: 1.0), value: audioPlayer.isPlaying)
+                    .blendMode(.overlay)
+                }
+                .id("modern-mode-liquid")
+            } else {
+                // Modern without liquid glass - just material
                 Rectangle()
                     .fill(.regularMaterial)
-                    .ignoresSafeArea()
-                    .overlay(
-                        // Animated material shimmer
-                        LinearGradient(
-                            colors: [
-                                .clear,
-                                .white.opacity(0.1),
-                                .blue.opacity(0.05),
-                                .white.opacity(0.1),
-                                .clear
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                        .opacity(materialShimmer ? 0.8 : 0.3)
-                        .animation(
-                            .easeInOut(duration: 4.0).repeatForever(autoreverses: true),
-                            value: materialShimmer
-                        )
-                    )
-                    .overlay(
-                        // Audio-reactive glow
-                        Rectangle()
-                            .fill(
-                                RadialGradient(
-                                    colors: [.green.opacity(0.1), .clear],
-                                    center: .center,
-                                    startRadius: 0,
-                                    endRadius: 200
-                                )
-                            )
-                            .opacity(audioPlayer.isPlaying ? 0.6 : 0.2)
-                            .animation(.easeInOut(duration: 1.0), value: audioPlayer.isPlaying)
-                            .blendMode(.overlay)
-                    )
-            } else {
-                Color.black
+                    .id("modern-mode-basic")
             }
-        } else {
-            Color.black
         }
     }
 
@@ -155,6 +209,24 @@ struct UnifiedDockView: View {
         case .playlist: 
             return CGSize(width: WinampSizes.playlistBase.width, 
                           height: WinampSizes.playlistBase.height)
+        }
+    }
+    
+    // Calculate total width - should be the width of the widest visible window
+    private func calculateTotalWidth() -> CGFloat {
+        guard !docking.sortedVisiblePanes.isEmpty else { return 275 }
+        
+        return docking.sortedVisiblePanes.map { pane in
+            naturalSize(for: pane.type).width
+        }.max() ?? 275
+    }
+    
+    // Calculate total height - sum of all visible window heights
+    private func calculateTotalHeight() -> CGFloat {
+        guard !docking.sortedVisiblePanes.isEmpty else { return WinampSizes.main.height }
+        
+        return docking.sortedVisiblePanes.reduce(0) { total, pane in
+            total + (pane.isShaded ? 14 : naturalSize(for: pane.type).height)
         }
     }
 }

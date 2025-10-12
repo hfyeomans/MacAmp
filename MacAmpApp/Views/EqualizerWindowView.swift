@@ -62,7 +62,8 @@ struct EqualizerWindowView: View {
                             value: $audioPlayer.preamp,
                             range: eqRange
                         )
-                        .frame(width: eqSliderBackground.size.width / 10, height: eqSliderBackground.size.height)
+                        .environmentObject(skinManager)
+                        .frame(width: 14, height: 62)  // Correct Winamp specs: 14px wide, 62px active area
                         .overlay(
                             Rectangle()
                                 .fill(
@@ -76,7 +77,7 @@ struct EqualizerWindowView: View {
                                 .animation(.easeInOut(duration: 0.3), value: preampGlow)
                                 .allowsHitTesting(false)
                         )
-                        .onChange(of: audioPlayer.preamp) { _ in
+                        .onChange(of: audioPlayer.preamp) { _, _ in
                             triggerPreampGlow()
                         }
 
@@ -94,7 +95,8 @@ struct EqualizerWindowView: View {
                                 ),
                                 range: eqRange
                             )
-                            .frame(width: eqSliderBackground.size.width / 10, height: eqSliderBackground.size.height)
+                            .environmentObject(skinManager)
+                            .frame(width: 14, height: 62)  // Correct Winamp specs: 14px wide, 62px active area
                             .overlay(
                                 Rectangle()
                                     .fill(
@@ -265,10 +267,13 @@ struct EqualizerWindowView: View {
     
     private func startVisualizationTimer() {
         // Audio-reactive EQ visualization (simplified)
-        Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
-            if audioPlayer.isPlaying && audioPlayer.isEqOn {
-                withAnimation(.easeInOut(duration: 0.1)) {
-                    eqVisualization = eqVisualization.map { _ in Float.random(in: 0...1) }
+        Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak audioPlayer] _ in
+            Task { @MainActor in
+                guard let audioPlayer = audioPlayer else { return }
+                if audioPlayer.isPlaying && audioPlayer.isEqOn {
+                    withAnimation(.easeInOut(duration: 0.1)) {
+                        eqVisualization = eqVisualization.map { _ in Float.random(in: 0...1) }
+                    }
                 }
             }
         }

@@ -18,39 +18,27 @@ struct WinampVolumeSlider: View {
     private let thumbHeight: CGFloat = 11
     
     var body: some View {
-        // Winamp-style volume slider - matches position slider appearance  
+        // Winamp-style volume slider - matches position slider appearance
         ZStack(alignment: .leading) {
-            // Dark recessed background like Winamp
-            Rectangle()
-                .fill(Color.black)
-                .frame(width: sliderWidth, height: sliderHeight)
-                .overlay(
-                    Rectangle()
-                        .stroke(Color.gray.opacity(0.8), lineWidth: 1)
-                )
+            // Dark groove background with rounded ends
+            RoundedRectangle(cornerRadius: trackFillHeight / 2)
+                .fill(Color.black.opacity(0.3))
+                .frame(width: sliderWidth, height: trackFillHeight)
+                .offset(y: (sliderHeight - trackFillHeight) / 2)
 
-            // Orange volume bar (thinner to match Winamp look)
-            // Orange fill centered vertically, confined inside the recess
-            // Note: Thumb runs over the fill; we do not subtract thumb width
-            Rectangle()
-                .fill(LinearGradient(
-                    colors: [
-                        Color(red: 1.0, green: 0.6, blue: 0.0), // Winamp orange
-                        Color(red: 1.0, green: 0.8, blue: 0.0)  // Winamp yellow
-                    ],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                ))
-                .frame(
-                    width: max(0, (sliderWidth - trackInset * 2) * CGFloat(volume)),
-                    height: trackFillHeight
-                )
-                .offset(x: trackInset, y: (sliderHeight - trackFillHeight) / 2 + trackYBias)
+            // Colored channel with rounded ends (solid color that changes)
+            RoundedRectangle(cornerRadius: (trackFillHeight - 2) / 2)
+                .fill(sliderColor)
+                .frame(width: sliderWidth - 2, height: trackFillHeight - 2)
+                .offset(x: 1, y: (sliderHeight - trackFillHeight + 2) / 2)
 
-            // Sprite thumb (from skin)
+            // Sprite thumb (from skin) - vertically centered on the colored channel
             let thumbSprite = isDragging ? "MAIN_VOLUME_THUMB_SELECTED" : "MAIN_VOLUME_THUMB"
+            // Colored channel is at y:4 with height:5, so center is at y:6.5
+            // Thumb height:11, so to center it at 6.5: top should be at 6.5 - 5.5 = 1
+            // Adding 1 more to properly center since bottom was aligning with center
             SimpleSpriteImage(thumbSprite, width: thumbWidth, height: thumbHeight)
-                .at(x: thumbPosition, y: (sliderHeight - thumbHeight) / 2)
+                .at(x: thumbPosition, y: 3)  // Center thumb on channel
 
             // Invisible interaction area
             GeometryReader { geo in
@@ -82,6 +70,40 @@ struct WinampVolumeSlider: View {
         let newVolume = Float(x / width)
         volume = max(0, min(1, newVolume))
     }
+
+    // Calculate color based on volume (green -> yellow -> orange -> red)
+    private var sliderColor: Color {
+        let normalizedValue = volume
+
+        if normalizedValue <= 0.25 {
+            // Pure green at low volume
+            return Color(red: 0, green: 0.8, blue: 0)
+        } else if normalizedValue <= 0.5 {
+            // Green to Yellow (25% to 50%)
+            let t = (normalizedValue - 0.25) * 4
+            return Color(
+                red: Double(t * 0.9),
+                green: 0.8,
+                blue: 0
+            )
+        } else if normalizedValue <= 0.75 {
+            // Yellow to Orange (50% to 75%)
+            let t = (normalizedValue - 0.5) * 4
+            return Color(
+                red: 0.9,
+                green: Double(0.8 - t * 0.3),
+                blue: 0
+            )
+        } else {
+            // Orange to Red (75% to 100%)
+            let t = (normalizedValue - 0.75) * 4
+            return Color(
+                red: Double(0.9 + t * 0.1),
+                green: Double(0.5 - t * 0.5),
+                blue: 0
+            )
+        }
+    }
 }
 
 /// Winamp-style balance slider using sprite backgrounds  
@@ -104,38 +126,31 @@ struct WinampBalanceSlider: View {
     var body: some View {
         // Winamp-style balance slider - matches volume/position slider appearance
         ZStack(alignment: .leading) {
-            // Dark recessed background like volume slider
+            // Dark groove background with rounded ends
+            RoundedRectangle(cornerRadius: trackFillHeight / 2)
+                .fill(Color.black.opacity(0.3))
+                .frame(width: sliderWidth, height: trackFillHeight)
+                .offset(y: (sliderHeight - trackFillHeight) / 2)
+
+            // Colored channel with rounded ends (solid color that changes)
+            RoundedRectangle(cornerRadius: (trackFillHeight - 2) / 2)
+                .fill(sliderColor)
+                .frame(width: sliderWidth - 2, height: trackFillHeight - 2)
+                .offset(x: 1, y: (sliderHeight - trackFillHeight + 2) / 2)
+
+            // Center notch indicator (visual reference for center position)
             Rectangle()
-                .fill(Color.black)
-                .frame(width: sliderWidth, height: sliderHeight)
-                .overlay(
-                    Rectangle()
-                        .stroke(Color.gray.opacity(0.8), lineWidth: 1)
-                )
+                .fill(Color.black.opacity(0.5))
+                .frame(width: 1, height: trackFillHeight)
+                .offset(x: sliderWidth / 2 - 0.5, y: (sliderHeight - trackFillHeight) / 2)
 
-            // Green balance fill from center, visible even at center
-            let centerX = sliderWidth / 2
-            let halfTrack = (sliderWidth - trackInset * 2) / 2
-            let dynWidth = CGFloat(abs(balance)) * halfTrack
-            let fillWidth = max(minCenterFill, dynWidth)
-            let fillX = balance >= 0 ? centerX : (centerX - fillWidth)
-
-            Rectangle()
-                .fill(LinearGradient(
-                    colors: [
-                        Color(red: 0.15, green: 0.8, blue: 0.25),
-                        Color(red: 0.05, green: 0.6, blue: 0.15)
-                    ],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                ))
-                .frame(width: fillWidth, height: trackFillHeight)
-                .offset(x: fillX, y: (sliderHeight - trackFillHeight) / 2 + trackYBias)
-
-            // Sprite thumb (from skin)
+            // Sprite thumb (from skin) - vertically centered on the colored channel
             let thumbSprite = isDragging ? "MAIN_BALANCE_THUMB_ACTIVE" : "MAIN_BALANCE_THUMB"
+            // Colored channel is at y:4 with height:5, so center is at y:6.5
+            // Thumb height:11, so to center it at 6.5: top should be at 6.5 - 5.5 = 1
+            // Adding 1 more to properly center since bottom was aligning with center
             SimpleSpriteImage(thumbSprite, width: thumbWidth, height: thumbHeight)
-                .at(x: thumbPosition, y: (sliderHeight - thumbHeight) / 2)
+                .at(x: thumbPosition, y: 3)  // Center thumb on channel
 
             // Invisible interaction area
             GeometryReader { geo in
@@ -166,8 +181,50 @@ struct WinampBalanceSlider: View {
         let width = geometry.size.width
         let x = min(max(0, gesture.location.x), width)
         let normalizedPosition = Float(x / width) // 0..1
-        let newBalance = (normalizedPosition * 2.0) - 1.0 // Convert to -1..1
+        var newBalance = (normalizedPosition * 2.0) - 1.0 // Convert to -1..1
+
+        // Snap to center (0) when close - more sensitive
+        let snapThreshold: Float = 0.1  // 10% threshold for stronger snapping
+        if abs(newBalance) < snapThreshold {
+            newBalance = 0
+        }
+
         balance = max(-1, min(1, newBalance))
+    }
+
+    // Calculate color based on balance distance from center
+    // Green at center (0), transitions to red as it moves away
+    private var sliderColor: Color {
+        let absValue = abs(balance)
+
+        if absValue <= 0.25 {
+            // Pure green at center
+            return Color(red: 0, green: 0.8, blue: 0)
+        } else if absValue <= 0.5 {
+            // Green to Yellow (25% to 50% off-center)
+            let t = (absValue - 0.25) * 4
+            return Color(
+                red: Double(t * 0.9),
+                green: 0.8,
+                blue: 0
+            )
+        } else if absValue <= 0.75 {
+            // Yellow to Orange (50% to 75% off-center)
+            let t = (absValue - 0.5) * 4
+            return Color(
+                red: 0.9,
+                green: Double(0.8 - t * 0.3),
+                blue: 0
+            )
+        } else {
+            // Orange to Red (75% to 100% off-center)
+            let t = (absValue - 0.75) * 4
+            return Color(
+                red: Double(0.9 + t * 0.1),
+                green: Double(0.5 - t * 0.5),
+                blue: 0
+            )
+        }
     }
 }
 

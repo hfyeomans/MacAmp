@@ -5,12 +5,22 @@ import AppKit
 struct WinampMainWindow: View {
     @EnvironmentObject var skinManager: SkinManager
     @EnvironmentObject var audioPlayer: AudioPlayer
+    @EnvironmentObject var dockingController: DockingController
     @Environment(\.openWindow) var openWindow
     
     @State private var isShadeMode: Bool = false
     @State private var showRemainingTime: Bool = false
     @State private var isScrubbing: Bool = false
     @State private var wasPlayingPreScrub: Bool = false
+    @State private var scrubbingProgress: Double = 0.0
+    
+    // Track info scrolling state
+    @State private var scrollOffset: CGFloat = 0
+    @State private var scrollTimer: Timer?
+
+    // Pause blinking state
+    @State private var pauseBlinkVisible: Bool = true
+    @State private var pauseBlinkTimer: Timer?
     
     // Winamp coordinate constants (from original Winamp and webamp)
     private struct Coords {
@@ -27,6 +37,12 @@ struct WinampMainWindow: View {
         
         // Play/Pause indicator
         static let playPauseIndicator = CGPoint(x: 24, y: 28)
+        
+        // Track info display area (scrolling text)
+        static let trackInfo = CGRect(x: 111, y: 27, width: 152, height: 11)
+        
+        // Spectrum analyzer (visualizer)
+        static let spectrumAnalyzer = CGPoint(x: 24, y: 43)
         
         // Volume and Balance
         static let volumeSlider = CGPoint(x: 107, y: 57)
@@ -52,6 +68,12 @@ struct WinampMainWindow: View {
                             width: WinampSizes.main.width, 
                             height: WinampSizes.main.height)
             
+            // Title bar with "Winamp" text (overlays on background)
+            SimpleSpriteImage("MAIN_TITLE_BAR_SELECTED",
+                            width: 275,
+                            height: 14)
+                .at(CGPoint(x: 0, y: 0))
+            
             if !isShadeMode {
                 // Full window mode
                 buildFullWindow()
@@ -60,9 +82,30 @@ struct WinampMainWindow: View {
                 buildShadeMode()
             }
         }
-        .frame(width: WinampSizes.main.width, 
+        .frame(width: WinampSizes.main.width,
                height: isShadeMode ? WinampSizes.mainShade.height : WinampSizes.main.height)
         .background(Color.black) // Fallback
+        .onChange(of: audioPlayer.isPaused) { _, isPaused in
+            if isPaused {
+                // Start blinking timer
+                pauseBlinkTimer?.invalidate()
+                pauseBlinkVisible = true
+                pauseBlinkTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
+                    pauseBlinkVisible.toggle()
+                }
+            } else {
+                // Stop blinking timer
+                pauseBlinkTimer?.invalidate()
+                pauseBlinkTimer = nil
+                pauseBlinkVisible = true
+            }
+        }
+        .onDisappear {
+            scrollTimer?.invalidate()
+            scrollTimer = nil
+            pauseBlinkTimer?.invalidate()
+            pauseBlinkTimer = nil
+        }
     }
     
     @ViewBuilder
@@ -76,6 +119,12 @@ struct WinampMainWindow: View {
             
             // Time display
             buildTimeDisplay()
+            
+            // Track info display
+            buildTrackInfoDisplay()
+            
+            // Spectrum analyzer (visualizer)
+            buildSpectrumAnalyzer()
             
             // Transport buttons
             buildTransportButtons()
@@ -94,13 +143,68 @@ struct WinampMainWindow: View {
             
             // Additional Winamp elements (simplified)
             buildMonoStereoIndicator()
+            
+            // Bitrate and sample rate display
+            buildBitrateDisplay()
+            buildSampleRateDisplay()
         }
     }
     
     @ViewBuilder
     private func buildShadeMode() -> some View {
-        // In shade mode, only show essential controls in compact form
-        buildTitlebarButtons()
+        // Shade mode shows a compact 275×14px bar with essential controls
+        ZStack {
+            // Shade background
+            SimpleSpriteImage("MAIN_SHADE_BACKGROUND", width: 275, height: 14)
+                .at(CGPoint(x: 0, y: 0))
+
+            // Transport controls (compact layout)
+            HStack(spacing: 2) {
+                // Previous
+                Button(action: { audioPlayer.previousTrack() }) {
+                    SimpleSpriteImage("MAIN_PREVIOUS_BUTTON", width: 23, height: 18)
+                        .scaleEffect(0.6) // Scale down for shade mode
+                }
+                .buttonStyle(.plain)
+
+                // Play
+                Button(action: { audioPlayer.play() }) {
+                    SimpleSpriteImage("MAIN_PLAY_BUTTON", width: 23, height: 18)
+                        .scaleEffect(0.6)
+                }
+                .buttonStyle(.plain)
+
+                // Pause
+                Button(action: { audioPlayer.pause() }) {
+                    SimpleSpriteImage("MAIN_PAUSE_BUTTON", width: 23, height: 18)
+                        .scaleEffect(0.6)
+                }
+                .buttonStyle(.plain)
+
+                // Stop
+                Button(action: { audioPlayer.stop() }) {
+                    SimpleSpriteImage("MAIN_STOP_BUTTON", width: 23, height: 18)
+                        .scaleEffect(0.6)
+                }
+                .buttonStyle(.plain)
+
+                // Next
+                Button(action: { audioPlayer.nextTrack() }) {
+                    SimpleSpriteImage("MAIN_NEXT_BUTTON", width: 22, height: 18)
+                        .scaleEffect(0.6)
+                }
+                .buttonStyle(.plain)
+            }
+            .at(CGPoint(x: 45, y: 3))
+
+            // Time display (compact)
+            buildTimeDisplay()
+                .scaleEffect(0.7)
+                .at(CGPoint(x: 150, y: 7))
+
+            // Titlebar buttons (keep same position)
+            buildTitlebarButtons()
+        }
     }
     
     @ViewBuilder
@@ -135,44 +239,74 @@ struct WinampMainWindow: View {
         }
     }
     
-    @ViewBuilder
     private func buildPlayPauseIndicator() -> some View {
-        let spriteKey = audioPlayer.isPlaying ? "MAIN_PLAYING_INDICATOR" : 
-                       "MAIN_STOPPED_INDICATOR"
-        
-        SimpleSpriteImage(spriteKey, width: 9, height: 9)
+        let spriteKey: String
+        if audioPlayer.isPlaying {
+            spriteKey = "MAIN_PLAYING_INDICATOR"
+        } else if audioPlayer.isPaused {
+            spriteKey = "MAIN_PAUSED_INDICATOR"
+        } else {
+            spriteKey = "MAIN_STOPPED_INDICATOR"
+        }
+
+        return SimpleSpriteImage(spriteKey, width: 9, height: 9)
             .at(Coords.playPauseIndicator)
     }
     
     @ViewBuilder
     private func buildTimeDisplay() -> some View {
-        HStack(spacing: 0) {
-            // Show minus sign for remaining time
+        ZStack(alignment: .leading) {
+            // Time display background (includes the colon)
+            Color.clear
+                .frame(width: 48, height: 13)
+
+            // Show minus sign for remaining time (position 1)
             if showRemainingTime {
                 SimpleSpriteImage("MINUS_SIGN", width: 5, height: 1)
-                    .padding(.top, 6) // Align with digit baseline
+                    .offset(x: 1, y: 6) // Position at x:1, align with digit baseline
             }
-            
-            // Time digits (MM:SS format)
-            let timeToShow = showRemainingTime ? 
+
+            // Time digits (MM:SS format) with absolute positioning
+            let timeToShow = showRemainingTime ?
                 max(0.0, audioPlayer.currentDuration - audioPlayer.currentTime) :
                 audioPlayer.currentTime
-            
+
             let digits = timeDigits(from: timeToShow)
-            
-            ForEach(0..<digits.count, id: \.self) { index in
-                SimpleSpriteImage("DIGIT_\(digits[index])", width: 9, height: 13)
-                
-                // Add colon after minutes (background has colon, but we position digits around it)
-                if index == 1 {
-                    Spacer().frame(width: 3) // Space for colon in background
-                }
+
+            // Position each digit with proper Winamp spacing
+            // Only hide digits when paused and blink is off, colon always visible
+            let shouldShowDigits = !audioPlayer.isPaused || pauseBlinkVisible
+
+            // Minutes (with 2px gap between digits)
+            if shouldShowDigits {
+                SimpleSpriteImage("DIGIT_\(digits[0])", width: 9, height: 13)
+                    .offset(x: 6, y: 0)
+
+                SimpleSpriteImage("DIGIT_\(digits[1])", width: 9, height: 13)
+                    .offset(x: 17, y: 0)  // 6 + 9 + 2px gap = 17
+            }
+
+            // Colon between minutes and seconds (always visible, using proper sprite)
+            SimpleSpriteImage("CHARACTER_58", width: 5, height: 6)
+                .offset(x: 28, y: 3)  // Centered between groups, vertically aligned
+
+            // Seconds (with 2px gap between digits)
+            if shouldShowDigits {
+                SimpleSpriteImage("DIGIT_\(digits[2])", width: 9, height: 13)
+                    .offset(x: 35, y: 0)  // After colon with proper gap
+
+                SimpleSpriteImage("DIGIT_\(digits[3])", width: 9, height: 13)
+                    .offset(x: 46, y: 0)  // 35 + 9 + 2px gap = 46
             }
         }
         .at(Coords.timeDisplay)
         .contentShape(Rectangle())
         .onTapGesture {
             showRemainingTime.toggle()
+        }
+        .onChange(of: audioPlayer.currentTime) { _, _ in
+            // Force SwiftUI to re-evaluate buildTimeDisplay() when currentTime changes
+            // This ensures digit sprites update visually as the track plays
         }
     }
     
@@ -227,32 +361,35 @@ struct WinampMainWindow: View {
     
     @ViewBuilder
     private func buildPositionSlider() -> some View {
-        // Position slider background
-        SimpleSpriteImage("MAIN_POSITION_SLIDER_BACKGROUND", width: 248, height: 10)
-            .at(Coords.positionSlider)
-            .overlay(
-                // Interactive scrubbing area
-                GeometryReader { geo in
-                    Color.clear
-                        .contentShape(Rectangle())
-                        .gesture(
-                            DragGesture(minimumDistance: 0)
-                                .onChanged { value in
-                                    handlePositionScrub(value, in: geo)
-                                }
-                                .onEnded { value in
-                                    handlePositionScrubEnd(value, in: geo)
-                                }
-                        )
-                }
-                .frame(width: 248, height: 10)
+        ZStack(alignment: .topLeading) {
+            // Position slider background
+            SimpleSpriteImage("MAIN_POSITION_SLIDER_BACKGROUND", width: 248, height: 10)
                 .at(Coords.positionSlider)
-            )
-        
-        // Position slider thumb (moves based on playback progress)
-        SimpleSpriteImage("MAIN_POSITION_SLIDER_THUMB", width: 29, height: 10)
-            .at(CGPoint(x: Coords.positionSlider.x + (248 - 29) * audioPlayer.playbackProgress,
-                       y: Coords.positionSlider.y))
+            
+            // Position slider thumb (moves based on playback progress or scrubbing)
+            let currentProgress = isScrubbing ? scrubbingProgress : audioPlayer.playbackProgress
+            SimpleSpriteImage("MAIN_POSITION_SLIDER_THUMB", width: 29, height: 10)
+                .at(CGPoint(x: Coords.positionSlider.x + (248 - 29) * currentProgress,
+                           y: Coords.positionSlider.y))
+                .allowsHitTesting(false) // Thumb shouldn't block interaction
+            
+            // Interactive scrubbing area using GeometryReader (like volume slider)
+            GeometryReader { geo in
+                Color.clear
+                    .contentShape(Rectangle())
+                    .gesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { value in
+                                handlePositionDrag(value, in: geo)
+                            }
+                            .onEnded { value in
+                                handlePositionDragEnd(value, in: geo)
+                            }
+                    )
+            }
+            .frame(width: 248, height: 10)
+            .at(Coords.positionSlider)
+        }
     }
     
     @ViewBuilder
@@ -272,7 +409,7 @@ struct WinampMainWindow: View {
         Group {
             // EQ button
             Button(action: {
-                openWindow(id: "equalizerWindow")
+                dockingController.toggleEqualizer()
             }) {
                 SimpleSpriteImage("MAIN_EQ_BUTTON", width: 23, height: 12)
             }
@@ -281,7 +418,7 @@ struct WinampMainWindow: View {
             
             // Playlist button
             Button(action: {
-                openWindow(id: "playlistWindow")
+                dockingController.togglePlaylist()
             }) {
                 SimpleSpriteImage("MAIN_PLAYLIST_BUTTON", width: 23, height: 12)
             }
@@ -291,10 +428,116 @@ struct WinampMainWindow: View {
     }
     
     @ViewBuilder
+    private func buildTrackInfoDisplay() -> some View {
+        // Track info scrolling text display
+        let trackText = audioPlayer.currentTitle.isEmpty ? "MacAmp" : audioPlayer.currentTitle
+        let textWidth = trackText.count * 5 // Approximate character width in Winamp font
+        let displayWidth = Int(Coords.trackInfo.width)
+        
+        if textWidth > displayWidth {
+            // Need to scroll for long text
+            HStack(spacing: 0) {
+                buildTextSprites(for: trackText)
+                    .offset(x: scrollOffset)
+                    .onAppear {
+                        startScrolling()
+                    }
+                    .onChange(of: audioPlayer.currentTitle) { _, _ in
+                        resetScrolling()
+                    }
+            }
+            .frame(width: Coords.trackInfo.width, height: Coords.trackInfo.height)
+            .clipped()
+            .at(CGPoint(x: Coords.trackInfo.minX, y: Coords.trackInfo.minY))
+        } else {
+            // Static text for short names
+            buildTextSprites(for: trackText)
+                .frame(width: Coords.trackInfo.width, height: Coords.trackInfo.height, alignment: .leading)
+                .at(CGPoint(x: Coords.trackInfo.minX, y: Coords.trackInfo.minY))
+        }
+    }
+    
+    @ViewBuilder
+    private func buildTextSprites(for text: String) -> some View {
+        HStack(spacing: 0) {
+            ForEach(Array(text.uppercased().enumerated()), id: \.offset) { index, character in
+                // Convert character to proper sprite code
+                // Winamp TEXT.BMP uses lowercase ASCII codes for letters
+                let charCode: UInt8 = {
+                    if let ascii = character.asciiValue {
+                        if character.isLetter && character.isUppercase {
+                            // Convert uppercase letters to lowercase ASCII codes
+                            return ascii + 32
+                        } else {
+                            return ascii
+                        }
+                    }
+                    return 32 // Default to space
+                }()
+                
+                SimpleSpriteImage("CHARACTER_\(charCode)", width: 5, height: 6)
+            }
+        }
+    }
+    
+    @ViewBuilder
     private func buildMonoStereoIndicator() -> some View {
-        // Mono/Stereo indicator
-        SimpleSpriteImage("MAIN_STEREO", width: 29, height: 12)
-            .at(x: 212, y: 41)
+        // Mono/Stereo indicator - shows the appropriate indicator based on channel count
+        ZStack {
+            // Only show indicators when a track is loaded
+            let hasTrack = audioPlayer.currentTrack != nil
+            
+            // Show mono indicator first (at x: 212)
+            SimpleSpriteImage(hasTrack && audioPlayer.channelCount == 1 ? "MAIN_MONO_SELECTED" : "MAIN_MONO",
+                            width: 27, height: 12)
+                .at(x: 212, y: 41)
+            
+            // Show stereo indicator second (at x: 239)
+            SimpleSpriteImage(hasTrack && audioPlayer.channelCount == 2 ? "MAIN_STEREO_SELECTED" : "MAIN_STEREO", 
+                            width: 29, height: 12)
+                .at(x: 239, y: 41)
+        }
+    }
+    
+    @ViewBuilder
+    private func buildBitrateDisplay() -> some View {
+        // Only show when a track is loaded
+        if audioPlayer.currentTrack != nil && audioPlayer.bitrate > 0 {
+            let bitrateText = "\(audioPlayer.bitrate)"
+            HStack(spacing: 0) {
+                ForEach(Array(bitrateText.enumerated()), id: \.offset) { _, character in
+                    if let ascii = character.asciiValue {
+                        SimpleSpriteImage("CHARACTER_\(ascii)", width: 5, height: 6)
+                    }
+                }
+            }
+            .at(x: 111, y: 43)  // Position near the visualizer area
+        }
+    }
+    
+    @ViewBuilder
+    private func buildSampleRateDisplay() -> some View {
+        // Only show when a track is loaded
+        if audioPlayer.currentTrack != nil && audioPlayer.sampleRate > 0 {
+            let khz = audioPlayer.sampleRate / 1000
+            let sampleRateText = "\(khz)"
+            HStack(spacing: 0) {
+                ForEach(Array(sampleRateText.enumerated()), id: \.offset) { _, character in
+                    if let ascii = character.asciiValue {
+                        SimpleSpriteImage("CHARACTER_\(ascii)", width: 5, height: 6)
+                    }
+                }
+            }
+            .at(x: 156, y: 43)  // Position to the right of bitrate
+        }
+    }
+    
+    @ViewBuilder
+    private func buildSpectrumAnalyzer() -> some View {
+        VisualizerView()
+            .frame(width: 76, height: 16)
+            .background(Color.black.opacity(0.5))
+            .at(Coords.spectrumAnalyzer)
     }
     
     private func openFileDialog() {
@@ -309,6 +552,46 @@ struct WinampMainWindow: View {
                     audioPlayer.loadTrack(url: url)
                 }
             }
+        }
+    }
+    
+    // MARK: - Scrolling Animation Functions
+    
+    private func startScrolling() {
+        guard scrollTimer == nil else { return }
+
+        scrollTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { [weak audioPlayer] _ in
+            // Access main actor properties synchronously to prevent race conditions
+            // The timer already fires on the main thread, so we can use assumeIsolated
+            guard let audioPlayer = audioPlayer else { return }
+
+            MainActor.assumeIsolated {
+                let trackText = audioPlayer.currentTitle.isEmpty ? "MacAmp" : audioPlayer.currentTitle
+                let textWidth = CGFloat(trackText.count * 5)
+                let displayWidth = Coords.trackInfo.width
+
+                if textWidth > displayWidth {
+                    withAnimation(.linear(duration: 0.15)) {
+                        scrollOffset -= 5 // Move left by one character width
+
+                        // Reset when we've scrolled past the end
+                        if abs(scrollOffset) >= textWidth + 20 { // Add some padding
+                            scrollOffset = displayWidth
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    private func resetScrolling() {
+        scrollTimer?.invalidate()
+        scrollTimer = nil
+        scrollOffset = 0
+        
+        // Restart scrolling if needed
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            startScrolling()
         }
     }
     
@@ -327,32 +610,40 @@ struct WinampMainWindow: View {
         ]
     }
     
-    private func handlePositionScrub(_ value: DragGesture.Value, in geometry: GeometryProxy) {
+    private func handlePositionDrag(_ value: DragGesture.Value, in geometry: GeometryProxy) {
         if !isScrubbing {
             isScrubbing = true
             wasPlayingPreScrub = audioPlayer.isPlaying
-            if wasPlayingPreScrub { audioPlayer.pause() }
+            // Pause during scrubbing to avoid audio conflicts
+            if wasPlayingPreScrub {
+                audioPlayer.pause()
+            }
         }
         
+        // Calculate progress based on location in the geometry
         let width = geometry.size.width
         let x = min(max(0, value.location.x), width)
         let progress = Double(x / width)
         
-        if audioPlayer.currentDuration > 0 {
-            let targetTime = progress * audioPlayer.currentDuration
-            audioPlayer.currentTime = targetTime
-            audioPlayer.playbackProgress = progress
-        }
+        // Only update visual position during scrubbing - don't seek audio yet
+        scrubbingProgress = progress
     }
     
-    private func handlePositionScrubEnd(_ value: DragGesture.Value, in geometry: GeometryProxy) {
+    private func handlePositionDragEnd(_ value: DragGesture.Value, in geometry: GeometryProxy) {
+        // Calculate final position
         let width = geometry.size.width
         let x = min(max(0, value.location.x), width)
         let progress = Double(x / width)
-        let targetTime = progress * audioPlayer.currentDuration
         
-        audioPlayer.seek(to: targetTime, resume: wasPlayingPreScrub)
+        // Perform single audio seek at the end
+        if audioPlayer.currentDuration > 0 {
+            let targetTime = progress * audioPlayer.currentDuration
+            audioPlayer.seek(to: targetTime, resume: wasPlayingPreScrub)
+        }
+        
+        // End scrubbing mode - let playbackProgress take over
         isScrubbing = false
+        // Don't reset scrubbingProgress - it will be ignored once isScrubbing is false
     }
 }
 
@@ -360,4 +651,5 @@ struct WinampMainWindow: View {
     WinampMainWindow()
         .environmentObject(SkinManager())
         .environmentObject(AudioPlayer())
+        .environmentObject(DockingController())
 }

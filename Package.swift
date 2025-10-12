@@ -20,7 +20,7 @@ let package = Package(
             ],
             path: "MacAmpApp",
             resources: [
-                .process("Assets")
+                .process("Skins")
             ]
         )
     ]

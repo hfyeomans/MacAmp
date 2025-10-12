@@ -16,42 +16,49 @@ struct PreferencesView: View {
             
             Divider()
             
-            GroupBox("Liquid Glass Materials") {
+            GroupBox("Appearance Mode") {
                 VStack(alignment: .leading, spacing: 12) {
-                    Toggle("Enable Liquid Glass Effects", isOn: $settings.enableLiquidGlass)
-                        .help("Enable modern macOS Tahoe material effects")
+                    Text("Visual Style")
+                        .font(.headline)
                     
-                    if settings.enableLiquidGlass {
-                        Text("Material Integration Level")
-                            .font(.headline)
-                            .padding(.top, 8)
-                        
-                        VStack(alignment: .leading, spacing: 8) {
-                            ForEach(MaterialIntegrationLevel.allCases, id: \.rawValue) { level in
-                                HStack {
-                                    Button(action: {
-                                        settings.materialIntegration = level
-                                    }) {
-                                        Image(systemName: settings.materialIntegration == level ? "largecircle.fill.circle" : "circle")
-                                            .foregroundColor(.accentColor)
-                                    }
-                                    .buttonStyle(PlainButtonStyle())
-                                    
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(level.displayName)
-                                            .font(.body)
-                                            .fontWeight(.medium)
-                                        Text(level.description)
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                    }
-                                }
-                                .contentShape(Rectangle())
-                                .onTapGesture {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(MaterialIntegrationLevel.allCases, id: \.rawValue) { level in
+                            HStack {
+                                Button(action: {
                                     settings.materialIntegration = level
+                                }) {
+                                    Image(systemName: settings.materialIntegration == level ? "largecircle.fill.circle" : "circle")
+                                        .foregroundColor(.accentColor)
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                                
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(level.displayName)
+                                        .font(.body)
+                                        .fontWeight(.medium)
+                                    Text(level.description)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
                                 }
                             }
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                settings.materialIntegration = level
+                            }
                         }
+                    }
+                    
+                    Divider()
+                        .padding(.vertical, 8)
+                    
+                    Toggle("Enable Liquid Glass Effects", isOn: $settings.enableLiquidGlass)
+                        .help("Add animated material effects to Hybrid and Modern modes")
+                        .disabled(settings.materialIntegration == .classic)
+                    
+                    if settings.materialIntegration != .classic && !settings.enableLiquidGlass {
+                        Text("Liquid Glass enhances \(settings.materialIntegration.displayName) mode with animated materials")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                     }
                 }
                 .padding()

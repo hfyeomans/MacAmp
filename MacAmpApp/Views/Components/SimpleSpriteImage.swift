@@ -55,8 +55,10 @@ extension View {
 struct WinampSizes {
     static let main = CGSize(width: 275, height: 116)
     static let mainShade = CGSize(width: 275, height: 14)
-    static let equalizer = CGSize(width: 275, height: 116) 
+    static let equalizer = CGSize(width: 275, height: 116)
+    static let equalizerShade = CGSize(width: 275, height: 14)
     static let playlistBase = CGSize(width: 275, height: 232)
+    static let playlistShade = CGSize(width: 275, height: 14)
 }
 
 #Preview {

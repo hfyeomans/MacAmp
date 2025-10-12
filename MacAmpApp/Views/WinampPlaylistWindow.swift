@@ -6,9 +6,10 @@ struct WinampPlaylistWindow: View {
     @EnvironmentObject var skinManager: SkinManager
     @EnvironmentObject var audioPlayer: AudioPlayer
     @EnvironmentObject var settings: AppSettings
-    
+
     @State private var selectedTrackIndex: Int? = nil
-    
+    @State private var isShadeMode: Bool = false
+
     // Window dimensions
     private let windowWidth: CGFloat = 275
     private let windowHeight: CGFloat = 232
@@ -16,15 +17,21 @@ struct WinampPlaylistWindow: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                // CRITICAL: Build complete background first as a single layer
-                buildCompleteBackground()
-                
-                // Then overlay interactive content
-                buildContentOverlay()
+                if !isShadeMode {
+                    // Full window mode
+                    // CRITICAL: Build complete background first as a single layer
+                    buildCompleteBackground()
+
+                    // Then overlay interactive content
+                    buildContentOverlay()
+                } else {
+                    // Shade mode
+                    buildShadeMode()
+                }
             }
-            .frame(width: windowWidth, height: windowHeight)
+            .frame(width: windowWidth, height: isShadeMode ? 14 : windowHeight)
         }
-        .frame(width: windowWidth, height: windowHeight)
+        .frame(width: windowWidth, height: isShadeMode ? 14 : windowHeight)
         // NO additional backgrounds - this was causing the offset issue
     }
     
@@ -91,12 +98,12 @@ struct WinampPlaylistWindow: View {
             // Track list area with black background
             Color.black
                 .frame(width: 243, height: 174) // 275 - 12 - 20 = 243 width
-                .position(x: 137.5, y: 107) // Center of content area
-            
+                .position(x: 133.5, y: 107) // Center of content area: 12 + 243/2 = 133.5
+
             // Track list content
             buildTrackList()
                 .frame(width: 243, height: 174)
-                .position(x: 137.5, y: 107)
+                .position(x: 133.5, y: 107)
                 .clipped()
             
             // Control buttons at bottom
@@ -125,15 +132,6 @@ struct WinampPlaylistWindow: View {
                             selectedTrackIndex = index
                         }
                 }
-                
-                // Test tracks if playlist is empty
-                if audioPlayer.playlist.isEmpty {
-                    ForEach(1..<20, id: \.self) { index in
-                        testTrackRow(index: index)
-                            .frame(width: 243, height: 13)
-                            .background(index == 3 ? Color.blue.opacity(0.8) : Color.clear)
-                    }
-                }
             }
         }
     }
@@ -156,30 +154,6 @@ struct WinampPlaylistWindow: View {
             Text(formatDuration(track.duration))
                 .font(.system(size: 9, design: .monospaced))
                 .foregroundColor(trackTextColor(track: track))
-                .frame(width: 30, alignment: .trailing)
-                .padding(.trailing, 3)
-        }
-        .padding(.horizontal, 2)
-    }
-    
-    @ViewBuilder
-    private func testTrackRow(index: Int) -> some View {
-        HStack(spacing: 2) {
-            Text("\(index).")
-                .font(.system(size: 9, design: .monospaced))
-                .foregroundColor(.green)
-                .frame(width: 18, alignment: .trailing)
-            
-            Text("Sample Track \(index) - Artist Name")
-                .font(.system(size: 9))
-                .kerning(0.5)
-                .foregroundColor(.green)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .lineLimit(1)
-            
-            Text("\(index % 3 + 2):0\(index % 5 + 1)")
-                .font(.system(size: 9, design: .monospaced))
-                .foregroundColor(.green)
                 .frame(width: 30, alignment: .trailing)
                 .padding(.trailing, 3)
         }
@@ -237,7 +211,9 @@ struct WinampPlaylistWindow: View {
             .buttonStyle(.plain)
             .position(x: 248.5, y: 7.5)
             
-            Button(action: {}) {
+            Button(action: {
+                isShadeMode.toggle()
+            }) {
                 SimpleSpriteImage("MAIN_SHADE_BUTTON", width: 9, height: 9)
             }
             .buttonStyle(.plain)
@@ -250,7 +226,37 @@ struct WinampPlaylistWindow: View {
             .position(x: 268.5, y: 7.5)
         }
     }
-    
+
+    // MARK: - Shade Mode
+    @ViewBuilder
+    private func buildShadeMode() -> some View {
+        // Playlist shade mode shows compact title bar with current track info
+        ZStack {
+            // Use the playlist title bar sprite as background
+            SimpleSpriteImage("PLAYLIST_TITLE_BAR", width: 275, height: 14)
+                .position(x: 137.5, y: 7)
+
+            // Show current track name in shade mode
+            if let currentTrack = audioPlayer.currentTrack {
+                Text("\(currentTrack.title) - \(currentTrack.artist)")
+                    .font(.system(size: 8))
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+                    .frame(width: 200)
+                    .position(x: 100, y: 7)
+            } else {
+                Text("Winamp Playlist")
+                    .font(.system(size: 8))
+                    .foregroundColor(.white)
+                    .position(x: 100, y: 7)
+            }
+
+            // Titlebar buttons
+            buildTitleBarButtons()
+        }
+        .frame(width: windowWidth, height: 14)
+    }
+
     // MARK: - Helper Functions
     private func trackTextColor(track: Track) -> Color {
         if let currentTrack = audioPlayer.currentTrack, currentTrack.id == track.id {
