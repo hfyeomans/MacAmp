@@ -1,6 +1,9 @@
 
 import SwiftUI
 import AppKit
+import Foundation
+
+// MARK: - Fully Parsed Skin
 
 // Represents a fully parsed Winamp skin.
 struct Skin {
@@ -27,4 +30,62 @@ struct PlaylistStyle {
     let backgroundColor: Color
     let selectedBackgroundColor: Color
     let fontName: String?
+}
+
+// MARK: - Skin Metadata (for skin picker/switcher)
+
+/// Metadata about an available skin (before it's fully loaded)
+struct SkinMetadata: Identifiable, Hashable {
+    let id: String          // Unique identifier (e.g., "bundled:Winamp" or "user:MySkin")
+    let name: String        // Display name (e.g., "Classic Winamp")
+    let url: URL            // Path to .wsz file
+    let source: SkinSource  // Where the skin comes from
+
+    /// Optional preview thumbnail (for future enhancement)
+    var thumbnailURL: URL? = nil
+
+    init(id: String, name: String, url: URL, source: SkinSource) {
+        self.id = id
+        self.name = name
+        self.url = url
+        self.source = source
+    }
+}
+
+/// Source type for skin
+enum SkinSource: Hashable {
+    case bundled     // Shipped with app
+    case user        // User-installed in ~/Library/Application Support/MacAmp/Skins/
+    case temporary   // One-time load from arbitrary location
+}
+
+// MARK: - Bundled Skins
+
+extension SkinMetadata {
+    /// Built-in bundled skins
+    static var bundledSkins: [SkinMetadata] {
+        var skins: [SkinMetadata] = []
+
+        // Winamp default skin
+        if let url = Bundle.main.url(forResource: "Winamp", withExtension: "wsz") {
+            skins.append(SkinMetadata(
+                id: "bundled:Winamp",
+                name: "Classic Winamp",
+                url: url,
+                source: .bundled
+            ))
+        }
+
+        // Internet Archive skin
+        if let url = Bundle.main.url(forResource: "Internet-Archive", withExtension: "wsz") {
+            skins.append(SkinMetadata(
+                id: "bundled:Internet-Archive",
+                name: "Internet Archive",
+                url: url,
+                source: .bundled
+            ))
+        }
+
+        return skins
+    }
 }

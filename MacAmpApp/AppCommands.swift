@@ -2,6 +2,7 @@ import SwiftUI
 
 struct AppCommands: Commands {
     let dockingController: DockingController
+    let skinManager: SkinManager
     @StateObject private var settings = AppSettings.instance()
     @Environment(\.openWindow) private var openWindow
 
@@ -46,6 +47,35 @@ struct AppCommands: Commands {
                 openWindow(id: "preferences")
             }
             .keyboardShortcut(",")
+        }
+
+        // MARK: - Debug Menu for Phase 1 Testing
+        CommandMenu("Debug") {
+            Section("Skin Switching Test") {
+                Button("Switch to Classic Winamp") {
+                    skinManager.switchToSkin(identifier: "bundled:Winamp")
+                }
+                .keyboardShortcut("1", modifiers: [.command, .control])
+
+                Button("Switch to Internet Archive") {
+                    skinManager.switchToSkin(identifier: "bundled:Internet-Archive")
+                }
+                .keyboardShortcut("2", modifiers: [.command, .control])
+            }
+
+            Divider()
+
+            Section("Skin Info") {
+                Text("Available Skins: \(skinManager.availableSkins.count)")
+                    .disabled(true)
+
+                if let current = skinManager.availableSkins.first(where: {
+                    AppSettings.instance().selectedSkinIdentifier == $0.id
+                }) {
+                    Text("Current: \(current.name)")
+                        .disabled(true)
+                }
+            }
         }
     }
 }

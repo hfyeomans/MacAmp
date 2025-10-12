@@ -13,6 +13,76 @@ class SkinManager: ObservableObject {
 
     @Published var currentSkin: Skin?
     @Published var isLoading: Bool = false
+    @Published var availableSkins: [SkinMetadata] = []
+    @Published var loadingError: String? = nil
+
+    nonisolated init() {
+        // Scan will happen on first access since we're @MainActor
+    }
+
+    // MARK: - Skin Discovery
+
+    /// Scans for all available skins (bundled + user directory)
+    func scanAvailableSkins() {
+        var skins: [SkinMetadata] = []
+
+        // Add bundled skins
+        skins.append(contentsOf: SkinMetadata.bundledSkins)
+
+        // Scan user skins directory
+        let userSkinsDir = AppSettings.userSkinsDirectory
+        if let userSkinFiles = try? FileManager.default.contentsOfDirectory(
+            at: userSkinsDir,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        ) {
+            for fileURL in userSkinFiles where fileURL.pathExtension.lowercased() == "wsz" {
+                let skinName = fileURL.deletingPathExtension().lastPathComponent
+                let skinID = "user:\(skinName)"
+                skins.append(SkinMetadata(
+                    id: skinID,
+                    name: skinName,
+                    url: fileURL,
+                    source: .user
+                ))
+            }
+        }
+
+        self.availableSkins = skins
+        NSLog("📦 SkinManager: Discovered \(skins.count) skins")
+        for skin in skins {
+            NSLog("   - \(skin.id): \(skin.name) (\(skin.source))")
+        }
+    }
+
+    // MARK: - Skin Switching
+
+    /// Switch to a different skin by identifier
+    func switchToSkin(identifier: String) {
+        guard let skinMetadata = availableSkins.first(where: { $0.id == identifier }) else {
+            loadingError = "Skin not found: \(identifier)"
+            NSLog("❌ SkinManager: Skin not found: \(identifier)")
+            return
+        }
+
+        NSLog("🎨 SkinManager: Switching to skin: \(skinMetadata.name)")
+        loadSkin(from: skinMetadata.url)
+
+        // Save selection to UserDefaults
+        AppSettings.instance().selectedSkinIdentifier = identifier
+    }
+
+    /// Load the initial skin (from UserDefaults or default to "bundled:Winamp")
+    func loadInitialSkin() {
+        // First, discover all available skins
+        scanAvailableSkins()
+
+        let selectedID = AppSettings.instance().selectedSkinIdentifier ?? "bundled:Winamp"
+        NSLog("🔄 SkinManager: Loading initial skin: \(selectedID)")
+        switchToSkin(identifier: selectedID)
+    }
+
+    // MARK: - Existing Methods
 
     // Try to find an entry for a given sheet name (case-insensitive), supporting .bmp and .png
     private func findSheetEntry(in archive: Archive, baseName: String) -> Entry? {

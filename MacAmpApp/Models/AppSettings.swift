@@ -74,4 +74,39 @@ final class AppSettings: ObservableObject {
         guard enableLiquidGlass else { return false }
         return materialIntegration == .modern
     }
+
+    // MARK: - Skin Settings
+
+    /// Key for storing the selected skin identifier
+    private static let selectedSkinKey = "SelectedSkinIdentifier"
+
+    /// The currently selected skin identifier
+    var selectedSkinIdentifier: String? {
+        get {
+            UserDefaults.standard.string(forKey: Self.selectedSkinKey)
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: Self.selectedSkinKey)
+        }
+    }
+
+    /// Directory for user-installed skins
+    static var userSkinsDirectory: URL {
+        let appSupport = FileManager.default.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        ).first!
+
+        let macampDir = appSupport.appendingPathComponent("MacAmp", isDirectory: true)
+        let skinsDir = macampDir.appendingPathComponent("Skins", isDirectory: true)
+
+        // Create directory if it doesn't exist
+        try? FileManager.default.createDirectory(
+            at: skinsDir,
+            withIntermediateDirectories: true,
+            attributes: nil
+        )
+
+        return skinsDir
+    }
 }

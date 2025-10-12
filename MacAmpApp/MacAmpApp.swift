@@ -26,7 +26,7 @@ struct MacAmpApp: App {
         .windowResizability(.contentSize)
         .defaultPosition(.center)
         .commands {
-            AppCommands(dockingController: dockingController)
+            AppCommands(dockingController: dockingController, skinManager: skinManager)
         }
     }
 }
