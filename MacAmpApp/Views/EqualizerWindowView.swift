@@ -77,7 +77,7 @@ struct EqualizerWindowView: View {
                                 .animation(.easeInOut(duration: 0.3), value: preampGlow)
                                 .allowsHitTesting(false)
                         )
-                        .onChange(of: audioPlayer.preamp) { _ in
+                        .onChange(of: audioPlayer.preamp) { _, _ in
                             triggerPreampGlow()
                         }
 

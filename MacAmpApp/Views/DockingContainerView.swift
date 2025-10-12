@@ -82,7 +82,7 @@ struct DockingContainerView: View {
                 loadDefaultSkinIfNeeded()
                 restoreWindowFrameIfAvailable()
             }
-            .onChange(of: geo.size) { _ in
+            .onChange(of: geo.size) { _, _ in
                 saveWindowFrame()
             }
         }

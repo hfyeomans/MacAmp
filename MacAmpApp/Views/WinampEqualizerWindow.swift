@@ -5,7 +5,9 @@ import AppKit
 struct WinampEqualizerWindow: View {
     @EnvironmentObject var skinManager: SkinManager
     @EnvironmentObject var audioPlayer: AudioPlayer
-    
+
+    @State private var isShadeMode: Bool = false
+
     // Winamp EQ coordinate constants (CORRECTED from webamp reference)
     private struct EQCoords {
         // Preamp slider (leftmost) - CORRECTED
@@ -39,39 +41,46 @@ struct WinampEqualizerWindow: View {
     
     var body: some View {
         ZStack(alignment: .topLeading) {
-            // Background - The EQMAIN sprite includes preamp text and frequency labels
-            SimpleSpriteImage("EQ_WINDOW_BACKGROUND", 
-                            width: WinampSizes.equalizer.width, 
-                            height: WinampSizes.equalizer.height)
-            
-            // Title bar with "Winamp Equalizer" text
-            SimpleSpriteImage("EQ_TITLE_BAR_SELECTED",
-                            width: 275,
-                            height: 14)
-                .at(CGPoint(x: 0, y: 0))
-            
-            // Build all EQ components
-            Group {
-                // Titlebar buttons
-                buildTitlebarButtons()
-                
-                // ON/AUTO buttons
-                buildControlButtons()
-                
-                // Preamp slider
-                buildPreampSlider()
-                
-                // 10-band EQ sliders
-                buildEQSliders()
-                
-                // Presets button
-                buildPresetsButton()
-                
-                // EQ curve visualization (simplified for now)
-                buildEQCurve()
+            if !isShadeMode {
+                // Full window mode
+                // Background - The EQMAIN sprite includes preamp text and frequency labels
+                SimpleSpriteImage("EQ_WINDOW_BACKGROUND",
+                                width: WinampSizes.equalizer.width,
+                                height: WinampSizes.equalizer.height)
+
+                // Title bar with "Winamp Equalizer" text
+                SimpleSpriteImage("EQ_TITLE_BAR_SELECTED",
+                                width: 275,
+                                height: 14)
+                    .at(CGPoint(x: 0, y: 0))
+
+                // Build all EQ components
+                Group {
+                    // Titlebar buttons
+                    buildTitlebarButtons()
+
+                    // ON/AUTO buttons
+                    buildControlButtons()
+
+                    // Preamp slider
+                    buildPreampSlider()
+
+                    // 10-band EQ sliders
+                    buildEQSliders()
+
+                    // Presets button
+                    buildPresetsButton()
+
+                    // EQ curve visualization (simplified for now)
+                    buildEQCurve()
+                }
+            } else {
+                // Shade mode
+                buildShadeMode()
             }
         }
-        .frame(width: WinampSizes.equalizer.width, height: WinampSizes.equalizer.height)
+        .frame(width: WinampSizes.equalizer.width,
+               height: isShadeMode ? WinampSizes.equalizerShade.height : WinampSizes.equalizer.height)
         .background(Color.black) // Fallback
     }
     
@@ -89,7 +98,7 @@ struct WinampEqualizerWindow: View {
             
             // Shade button
             Button(action: {
-                // TODO: Implement EQ shade mode
+                isShadeMode.toggle()
             }) {
                 SimpleSpriteImage("MAIN_SHADE_BUTTON", width: 9, height: 9)
             }
@@ -185,6 +194,36 @@ struct WinampEqualizerWindow: View {
         .at(EQCoords.presetsButton)
     }
     
+    @ViewBuilder
+    private func buildShadeMode() -> some View {
+        // EQ shade mode shows a compact 275×14px bar
+        ZStack {
+            // Shade background
+            SimpleSpriteImage("EQ_SHADE_BACKGROUND", width: 275, height: 14)
+                .at(CGPoint(x: 0, y: 0))
+
+            // Compact volume and balance sliders in shade mode
+            // Volume slider (left side)
+            HStack(spacing: 1) {
+                SimpleSpriteImage("EQ_SHADE_VOLUME_SLIDER_LEFT", width: 3, height: 7)
+                SimpleSpriteImage("EQ_SHADE_VOLUME_SLIDER_CENTER", width: 3, height: 7)
+                SimpleSpriteImage("EQ_SHADE_VOLUME_SLIDER_RIGHT", width: 3, height: 7)
+            }
+            .at(CGPoint(x: 20, y: 4))
+
+            // Balance slider (right side)
+            HStack(spacing: 1) {
+                SimpleSpriteImage("EQ_SHADE_BALANCE_SLIDER_LEFT", width: 3, height: 7)
+                SimpleSpriteImage("EQ_SHADE_BALANCE_SLIDER_CENTER", width: 3, height: 7)
+                SimpleSpriteImage("EQ_SHADE_BALANCE_SLIDER_RIGHT", width: 3, height: 7)
+            }
+            .at(CGPoint(x: 180, y: 4))
+
+            // Titlebar buttons
+            buildTitlebarButtons()
+        }
+    }
+
     @ViewBuilder
     private func buildEQCurve() -> some View {
         // Simplified EQ curve visualization

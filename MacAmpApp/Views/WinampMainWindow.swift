@@ -152,8 +152,59 @@ struct WinampMainWindow: View {
     
     @ViewBuilder
     private func buildShadeMode() -> some View {
-        // In shade mode, only show essential controls in compact form
-        buildTitlebarButtons()
+        // Shade mode shows a compact 275×14px bar with essential controls
+        ZStack {
+            // Shade background
+            SimpleSpriteImage("MAIN_SHADE_BACKGROUND", width: 275, height: 14)
+                .at(CGPoint(x: 0, y: 0))
+
+            // Transport controls (compact layout)
+            HStack(spacing: 2) {
+                // Previous
+                Button(action: { audioPlayer.previousTrack() }) {
+                    SimpleSpriteImage("MAIN_PREVIOUS_BUTTON", width: 23, height: 18)
+                        .scaleEffect(0.6) // Scale down for shade mode
+                }
+                .buttonStyle(.plain)
+
+                // Play
+                Button(action: { audioPlayer.play() }) {
+                    SimpleSpriteImage("MAIN_PLAY_BUTTON", width: 23, height: 18)
+                        .scaleEffect(0.6)
+                }
+                .buttonStyle(.plain)
+
+                // Pause
+                Button(action: { audioPlayer.pause() }) {
+                    SimpleSpriteImage("MAIN_PAUSE_BUTTON", width: 23, height: 18)
+                        .scaleEffect(0.6)
+                }
+                .buttonStyle(.plain)
+
+                // Stop
+                Button(action: { audioPlayer.stop() }) {
+                    SimpleSpriteImage("MAIN_STOP_BUTTON", width: 23, height: 18)
+                        .scaleEffect(0.6)
+                }
+                .buttonStyle(.plain)
+
+                // Next
+                Button(action: { audioPlayer.nextTrack() }) {
+                    SimpleSpriteImage("MAIN_NEXT_BUTTON", width: 22, height: 18)
+                        .scaleEffect(0.6)
+                }
+                .buttonStyle(.plain)
+            }
+            .at(CGPoint(x: 45, y: 3))
+
+            // Time display (compact)
+            buildTimeDisplay()
+                .scaleEffect(0.7)
+                .at(CGPoint(x: 150, y: 7))
+
+            // Titlebar buttons (keep same position)
+            buildTitlebarButtons()
+        }
     }
     
     @ViewBuilder
@@ -389,7 +440,7 @@ struct WinampMainWindow: View {
                     .onAppear {
                         startScrolling()
                     }
-                    .onChange(of: audioPlayer.currentTitle) { _ in
+                    .onChange(of: audioPlayer.currentTitle) { _, _ in
                         resetScrolling()
                     }
             }

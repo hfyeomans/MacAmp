@@ -46,7 +46,7 @@ struct VisualizerView: View {
         .onDisappear {
             stopVisualization()
         }
-        .onChange(of: audioPlayer.isPlaying) { isPlaying in
+        .onChange(of: audioPlayer.isPlaying) { _, isPlaying in
             if isPlaying {
                 startVisualization()
             } else {
