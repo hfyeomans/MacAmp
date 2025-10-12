@@ -1,4 +1,3 @@
-
 import SwiftUI
 import AppKit
 
@@ -13,28 +12,26 @@ struct EQSliderView: View {
     // Winamp EQ slider dimensions
     let sliderWidth: CGFloat = 14  // Correct Winamp spec
     let sliderHeight: CGFloat = 62 // Correct Winamp spec
-    let thumbHeight: CGFloat = 2   // Thin white line
+
+    // EQ_SLIDER_BACKGROUND from EQMAIN.bmp is 209x129px
+    // This contains 19 vertical sliders (11 bands + preamp) laid out horizontally
+    // Each individual slider column is 14px wide
+    // The full height shows all possible positions (129px contains multiple frames)
+    let backgroundFullWidth: CGFloat = 209
+    let backgroundFullHeight: CGFloat = 129
 
     var body: some View {
         ZStack(alignment: .top) {
-            // Groove overlay - dark channel with rounded ends
-            RoundedRectangle(cornerRadius: (sliderWidth - 3) / 2)
-                .fill(Color.black.opacity(0.3))
-                .frame(width: sliderWidth - 3, height: sliderHeight)
-                .offset(x: 1.5, y: 0)
-            
-            // Colored channel (6px wide) with rounded ends
-            RoundedRectangle(cornerRadius: 3)  // Half of 6px width for fully rounded ends
-                .fill(sliderColor)
-                .frame(width: 6, height: sliderHeight - 4)  // 6px wide channel
-                .offset(x: 4, y: 2)  // Center the channel
-            
-            // Center line at 0dB reference
-            Rectangle()
-                .fill(Color.black.opacity(0.5))
-                .frame(width: sliderWidth - 4, height: 1)
-                .offset(x: 2, y: sliderHeight / 2)
-            
+            // Use actual EQ_SLIDER_BACKGROUND from skin
+            // For vertical EQ sliders, the background shifts vertically based on value
+            Image(nsImage: background)
+                .resizable()
+                .interpolation(.none)
+                .frame(width: sliderWidth, height: backgroundFullHeight)
+                .offset(y: calculateBackgroundOffset())
+                .frame(width: sliderWidth, height: sliderHeight)
+                .clipped()
+
             // Slider thumb sprite (11x11 pixels)
             if let thumbImage = skinManager.currentSkin?.images[isDragging ? "EQ_SLIDER_THUMB_SELECTED" : "EQ_SLIDER_THUMB"] {
                 Image(nsImage: thumbImage)
@@ -42,9 +39,9 @@ struct EQSliderView: View {
                     .interpolation(.none)
                     .antialiased(false)
                     .frame(width: 11, height: 11)
-                    .offset(x: 1.5, y: calculateThumbOffset(sliderHeight)) // Properly centered
+                    .offset(x: 1.5, y: calculateThumbOffset(sliderHeight))
             }
-            
+
             // Invisible interaction area
             GeometryReader { geo in
                 Color.clear
@@ -57,13 +54,13 @@ struct EQSliderView: View {
                                 // Normalize Y from 0 to 1, then map to the given range
                                 let normalizedY: Float = Float(1.0 - (newY / geo.size.height))
                                 var newValue: Float = range.lowerBound + (range.upperBound - range.lowerBound) * normalizedY
-                                
+
                                 // Center snapping: if within ±0.5dB of center (0), snap to exactly 0
                                 let snapThreshold: Float = 0.5
                                 if abs(newValue) < snapThreshold {
                                     newValue = 0
                                 }
-                                
+
                                 self.value = min(max(newValue, range.lowerBound), range.upperBound)
                             }
                             .onEnded { _ in
@@ -74,49 +71,32 @@ struct EQSliderView: View {
             .frame(width: sliderWidth, height: sliderHeight)
         }
         .frame(width: sliderWidth, height: sliderHeight)
-        .clipped() // Prevent any overflow
+        .clipped()
     }
 
     private func calculateThumbOffset(_ containerHeight: CGFloat) -> CGFloat {
-        let thumbSize: CGFloat = 11 // Actual thumb sprite height
+        let thumbSize: CGFloat = 11
         let trackHeight = containerHeight - thumbSize
-        
+
         // Map value from range to 0 to 1 (normalized from -12 to +12)
-        // At -12dB: normalizedValue = 0 (bottom)
-        // At 0dB: normalizedValue = 0.5 (center)
-        // At +12dB: normalizedValue = 1 (top)
         let normalizedValue = (CGFloat(value) - CGFloat(range.lowerBound)) / (CGFloat(range.upperBound) - CGFloat(range.lowerBound))
-        
-        // Use webamp's formula: offset = floor((height - handleHeight) * value)
-        // But we need to invert since our coordinate system has 0 at top
-        // At top (+12dB): offset = 0
-        // At center (0dB): offset = 25 (for 62px height)
-        // At bottom (-12dB): offset = 51
+
+        // Invert since our coordinate system has 0 at top
         let offset = floor(trackHeight * (1.0 - normalizedValue))
-        
+
         return offset
     }
-    
-    // Gradient color that changes based on slider position (green->yellow->red)
-    private var sliderColor: Color {
-        let normalizedValue = (value - range.lowerBound) / (range.upperBound - range.lowerBound)
-        
-        if normalizedValue <= 0.5 {
-            // Green to Yellow (bottom to center)
-            let t = normalizedValue * 2
-            return Color(
-                red: Double(t * 0.9),
-                green: Double(0.8),
-                blue: 0
-            )
-        } else {
-            // Yellow to Red (center to top)
-            let t = (normalizedValue - 0.5) * 2
-            return Color(
-                red: Double(0.9 + t * 0.1),
-                green: Double(0.8 * (1 - t)),
-                blue: 0
-            )
-        }
+
+    private func calculateBackgroundOffset() -> CGFloat {
+        // Map value from range to 0 to 1
+        let normalizedValue = (CGFloat(value) - CGFloat(range.lowerBound)) / (CGFloat(range.upperBound) - CGFloat(range.lowerBound))
+
+        // The EQ slider background is 129px tall and represents all possible positions
+        // We need to shift the background to show the appropriate section
+        // Similar to volume/balance but for vertical orientation
+        let totalBackgroundRange = backgroundFullHeight - sliderHeight
+        let yOffset = -(totalBackgroundRange * (1.0 - normalizedValue))
+
+        return yOffset
     }
 }

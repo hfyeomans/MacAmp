@@ -286,11 +286,9 @@ struct WinampMainWindow: View {
                     .offset(x: 17, y: 0)  // 6 + 9 + 2px gap = 17
             }
 
-            // Colon between minutes and seconds (always visible)
-            Text(":")
-                .font(.system(size: 13, weight: .bold, design: .monospaced))
-                .foregroundColor(Color(red: 0, green: 1, blue: 0))
-                .offset(x: 26, y: -1)  // Centered between groups
+            // Colon between minutes and seconds (always visible, using proper sprite)
+            SimpleSpriteImage("CHARACTER_58", width: 5, height: 6)
+                .offset(x: 28, y: 3)  // Centered between groups, vertically aligned
 
             // Seconds (with 2px gap between digits)
             if shouldShowDigits {
@@ -305,6 +303,10 @@ struct WinampMainWindow: View {
         .contentShape(Rectangle())
         .onTapGesture {
             showRemainingTime.toggle()
+        }
+        .onChange(of: audioPlayer.currentTime) { _, _ in
+            // Force SwiftUI to re-evaluate buildTimeDisplay() when currentTime changes
+            // This ensures digit sprites update visually as the track plays
         }
     }
     

@@ -11,21 +11,23 @@ struct VolumeSliderView: View {
     let sliderHeight: CGFloat = 13
     let thumbWidth: CGFloat = 14
     let thumbHeight: CGFloat = 11
-    let channelHeight: CGFloat = 6  // Height of the colored channel
+
+    // VOLUME.BMP is 68x420px with 28 frames (each 15px tall)
+    let backgroundFullHeight: CGFloat = 420
+    let frameHeight: CGFloat = 15
+    let frameCount: CGFloat = 28
 
     var body: some View {
         ZStack(alignment: .leading) {
-            // Dark groove background with rounded ends
-            RoundedRectangle(cornerRadius: channelHeight / 2)
-                .fill(Color.black.opacity(0.3))
-                .frame(width: sliderWidth, height: channelHeight)
-                .offset(y: (sliderHeight - channelHeight) / 2)
-
-            // Colored channel with rounded ends (solid color that changes)
-            RoundedRectangle(cornerRadius: channelHeight / 2)
-                .fill(sliderColor)
-                .frame(width: sliderWidth, height: channelHeight - 2)  // Slightly smaller than groove
-                .offset(y: (sliderHeight - channelHeight + 2) / 2)
+            // Use actual VOLUME.BMP background with frame-based positioning
+            // Following webamp's approach: calculate which frame to show based on volume
+            Image(nsImage: background)
+                .resizable()
+                .interpolation(.none)
+                .frame(width: sliderWidth, height: backgroundFullHeight)
+                .offset(y: calculateBackgroundOffset())
+                .frame(width: sliderWidth, height: sliderHeight)
+                .clipped()
 
             // Draw the thumb slider
             Image(nsImage: thumb)
@@ -58,37 +60,11 @@ struct VolumeSliderView: View {
         return offset
     }
 
-    // Calculate color based on volume (green -> yellow -> orange -> red)
-    private var sliderColor: Color {
-        let normalizedValue = value
-
-        if normalizedValue <= 0.25 {
-            // Pure green at low volume
-            return Color(red: 0, green: 0.8, blue: 0)
-        } else if normalizedValue <= 0.5 {
-            // Green to Yellow (25% to 50%)
-            let t = (normalizedValue - 0.25) * 4
-            return Color(
-                red: Double(t * 0.9),
-                green: 0.8,
-                blue: 0
-            )
-        } else if normalizedValue <= 0.75 {
-            // Yellow to Orange (50% to 75%)
-            let t = (normalizedValue - 0.5) * 4
-            return Color(
-                red: 0.9,
-                green: Double(0.8 - t * 0.3),
-                blue: 0
-            )
-        } else {
-            // Orange to Red (75% to 100%)
-            let t = (normalizedValue - 0.75) * 4
-            return Color(
-                red: Double(0.9 + t * 0.1),
-                green: Double(0.5 - t * 0.5),
-                blue: 0
-            )
-        }
+    private func calculateBackgroundOffset() -> CGFloat {
+        // Calculate which frame to show: frameNumber = round(volume * 28)
+        // Each frame is 15px tall, so offset = -(frameNumber * 15)
+        let frameIndex = floor(CGFloat(value) * (frameCount - 1))
+        let yOffset = -(frameIndex * frameHeight)
+        return yOffset
     }
 }
