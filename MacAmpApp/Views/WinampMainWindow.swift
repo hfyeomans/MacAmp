@@ -7,6 +7,11 @@ struct WinampMainWindow: View {
     @EnvironmentObject var audioPlayer: AudioPlayer
     @EnvironmentObject var dockingController: DockingController
     @Environment(\.openWindow) var openWindow
+
+    // CRITICAL: Prevent unnecessary body re-evaluations that cause ghost images
+    // SwiftUI re-evaluates body when ANY @EnvironmentObject publishes changes
+    // This was causing 7+ evaluations before old views cleanup, creating visual doubles
+    @State private var displayedTime: Int = 0  // Cache rounded time to reduce updates
     
     @State private var isShadeMode: Bool = false
     @State private var showRemainingTime: Bool = false
@@ -63,17 +68,17 @@ struct WinampMainWindow: View {
     
     var body: some View {
         ZStack(alignment: .topLeading) {
-            // Background
-            SimpleSpriteImage("MAIN_WINDOW_BACKGROUND", 
-                            width: WinampSizes.main.width, 
+            // Background (preprocessed to remove static digits, keeping ":")
+            SimpleSpriteImage("MAIN_WINDOW_BACKGROUND",
+                            width: WinampSizes.main.width,
                             height: WinampSizes.main.height)
-            
+
             // Title bar with "Winamp" text (overlays on background)
             SimpleSpriteImage("MAIN_TITLE_BAR_SELECTED",
                             width: 275,
                             height: 14)
                 .at(CGPoint(x: 0, y: 0))
-            
+
             if !isShadeMode {
                 // Full window mode
                 buildFullWindow()
@@ -256,14 +261,26 @@ struct WinampMainWindow: View {
     @ViewBuilder
     private func buildTimeDisplay() -> some View {
         ZStack(alignment: .leading) {
-            // Time display background (includes the colon)
-            Color.clear
-                .frame(width: 48, height: 13)
+            // MASK: Black out ONLY digit positions (not colon)
+            // Internet Archive has "00:00" in MAIN.BMP, we need to hide those static digits
+            // But keep the ":" from the background (it's static by design)
+
+            // Minutes mask: covers x:6 to x:26 (both minute digits with gap)
+            Color.black
+                .frame(width: 21, height: 13)
+                .offset(x: 6, y: 0)
+
+            // Colon gap: x:27 to x:33 is LEFT UNTOUCHED for background ":"
+
+            // Seconds mask: covers x:34 to x:55 (both second digits with gap)
+            Color.black
+                .frame(width: 21, height: 13)
+                .offset(x: 34, y: 0)
 
             // Show minus sign for remaining time (position 1)
             if showRemainingTime {
-                SimpleSpriteImage("MINUS_SIGN", width: 5, height: 1)
-                    .offset(x: 1, y: 6) // Position at x:1, align with digit baseline
+                SimpleSpriteImage(.minusSign, width: 5, height: 1)
+                    .offset(x: 1, y: 6)
             }
 
             // Time digits (MM:SS format) with absolute positioning
@@ -279,34 +296,30 @@ struct WinampMainWindow: View {
 
             // Minutes (with 2px gap between digits)
             if shouldShowDigits {
-                SimpleSpriteImage("DIGIT_\(digits[0])", width: 9, height: 13)
+                SimpleSpriteImage(.digit(digits[0]), width: 9, height: 13)
                     .offset(x: 6, y: 0)
 
-                SimpleSpriteImage("DIGIT_\(digits[1])", width: 9, height: 13)
-                    .offset(x: 17, y: 0)  // 6 + 9 + 2px gap = 17
+                SimpleSpriteImage(.digit(digits[1]), width: 9, height: 13)
+                    .offset(x: 17, y: 0)
             }
 
-            // Colon between minutes and seconds (always visible, using proper sprite)
-            SimpleSpriteImage("CHARACTER_58", width: 5, height: 6)
-                .offset(x: 28, y: 3)  // Centered between groups, vertically aligned
+            // NOTE: Colon comes from MAIN.BMP background - NOT rendered here!
+            // All Winamp skins have ":" baked into MAIN.BMP at this position
+            // It's static (doesn't blink) by original Winamp design
 
             // Seconds (with 2px gap between digits)
             if shouldShowDigits {
-                SimpleSpriteImage("DIGIT_\(digits[2])", width: 9, height: 13)
-                    .offset(x: 35, y: 0)  // After colon with proper gap
+                SimpleSpriteImage(.digit(digits[2]), width: 9, height: 13)
+                    .offset(x: 35, y: 0)
 
-                SimpleSpriteImage("DIGIT_\(digits[3])", width: 9, height: 13)
-                    .offset(x: 46, y: 0)  // 35 + 9 + 2px gap = 46
+                SimpleSpriteImage(.digit(digits[3]), width: 9, height: 13)
+                    .offset(x: 46, y: 0)
             }
         }
         .at(Coords.timeDisplay)
         .contentShape(Rectangle())
         .onTapGesture {
             showRemainingTime.toggle()
-        }
-        .onChange(of: audioPlayer.currentTime) { _, _ in
-            // Force SwiftUI to re-evaluate buildTimeDisplay() when currentTime changes
-            // This ensures digit sprites update visually as the track plays
         }
     }
     

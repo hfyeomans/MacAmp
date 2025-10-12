@@ -30,6 +30,7 @@
 		93E376C1200386F617D37563 /* Skin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93E9913A6D48005436618474 /* Skin.swift */; };
 		93EBD6FADA9285C58A329F5C /* VisColorParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6D5886DD239C58D98785419 /* VisColorParser.swift */; };
 		9C74995B7081637EB964D3AA /* SkinnedBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12C0A7D97E8D3B2E715D4EA0 /* SkinnedBanner.swift */; };
+		70120b5751e24a3084c04a0b /* SpriteResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = b220e925d4d54168a0d0f84b /* SpriteResolver.swift */; };
 		9C8F5A2DD13F19EDAABA8130 /* UnifiedDockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 590BF37A22DF8EAB2B27DE50 /* UnifiedDockView.swift */; };
 		A08CECA8546ACA2C49A815D0 /* BalanceSliderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D670AF21099D18D7C29C12D /* BalanceSliderView.swift */; };
 		A2EC01D7DB6A48D968B6F339 /* VolumeSliderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB12B8B4E500692FEC97C025 /* VolumeSliderView.swift */; };
@@ -92,6 +93,7 @@
 		C763742AA7B5615883A0BB97 /* PlaylistWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaylistWindowView.swift; sourceTree = "<group>"; };
 		DC46D7551B28A7B9FF034839 /* MainWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindowView.swift; sourceTree = "<group>"; };
 		E51E7515EE6862B4F445AC81 /* SkinSprites.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkinSprites.swift; sourceTree = "<group>"; };
+		b220e925d4d54168a0d0f84b /* SpriteResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpriteResolver.swift; sourceTree = "<group>"; };
 		E5AF78956321BB7B21810429 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		F8A2F2CBA9954B0B144DA072 /* WindowAccessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowAccessor.swift; sourceTree = "<group>"; };
 		FDF85EA8990A038079FC0CC3 /* EQF.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EQF.swift; sourceTree = "<group>"; };
@@ -162,6 +164,7 @@
 				E51E7515EE6862B4F445AC81 /* SkinSprites.swift */,
 				43358BDD8D9B537C9109DF62 /* SnapUtils.swift */,
 				7324174AA2F7231F3B2508AE /* SpritePositions.swift */,
+				b220e925d4d54168a0d0f84b /* SpriteResolver.swift */,
 				A6D5886DD239C58D98785419 /* VisColorParser.swift */,
 				195F00AABD5483A18861EC8A /* WindowSpec.swift */,
 			);
@@ -328,6 +331,7 @@
 				00818CBB70425D395EE2B862 /* SkinnedText.swift in Sources */,
 				77129ADBBBC75DF6BA1EC1C8 /* SnapUtils.swift in Sources */,
 				5E12F332C6929193D1EBFB8D /* SpritePositions.swift in Sources */,
+				70120b5751e24a3084c04a0b /* SpriteResolver.swift in Sources */,
 				9C8F5A2DD13F19EDAABA8130 /* UnifiedDockView.swift in Sources */,
 				93EBD6FADA9285C58A329F5C /* VisColorParser.swift in Sources */,
 				11C6F38CB7C5AADA7B5AFE57 /* VisualizerOptions.swift in Sources */,

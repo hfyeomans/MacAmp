@@ -188,6 +188,57 @@ class SkinManager: ObservableObject {
         }
     }
 
+    // MARK: - Background Preprocessing
+
+    /// Preprocess MAIN_WINDOW_BACKGROUND to black out static digit positions
+    /// Some skins (e.g., Internet Archive) have "00:00" baked into MAIN.BMP
+    /// We black out ONLY the 4 digit areas (9×13 each), keeping the ":" visible
+    ///
+    /// Time display coordinates: (39, 26) from top-left
+    /// Digit positions (relative to 39, 26):
+    /// - Minute tens: x:6, y:0 → absolute (45, 26)
+    /// - Minute ones: x:17, y:0 → absolute (56, 26)
+    /// - Colon: x:28, y:3 → absolute (67, 29) ← NOT masked!
+    /// - Second tens: x:35, y:0 → absolute (74, 26)
+    /// - Second ones: x:46, y:0 → absolute (85, 26)
+    private func preprocessMainBackground(_ image: NSImage) -> NSImage {
+        let size = image.size
+        let processedImage = NSImage(size: size)
+
+        processedImage.lockFocus()
+
+        // Draw original image
+        image.draw(at: .zero, from: NSRect(origin: .zero, size: size), operation: .copy, fraction: 1.0)
+
+        // Black out digit areas using TWO BLOCKS (leaving colon gap)
+        // CRITICAL: NSImage uses BOTTOM-LEFT origin, SwiftUI uses TOP-LEFT
+        // Time display is at (39, 26) from top-left in SwiftUI
+        // Digits are offset within that: x:6, x:17, [colon at x:28], x:35, x:46
+        // Absolute positions: 39+6=45, 39+17=56, 39+28=67, 39+35=74, 39+46=85
+
+        // Flip y: imageHeight is 116, time display starts at y:26 from top
+        // NSImage bottom-left: y = 116 - 26 - 13 = 77
+        let timeDisplayY = size.height - 26 - 13
+
+        NSColor.black.setFill()
+
+        // MINUTES BLOCK: x:45 to x:66 (both minute digits: 45-54, 56-65)
+        // Start at 45 (minute-tens), width 22 to cover up to x:67 (before colon)
+        NSRect(x: 45, y: timeDisplayY, width: 22, height: 13).fill()
+
+        // COLON GAP: x:67-72 is LEFT UNTOUCHED
+
+        // SECONDS BLOCK: x:74 to x:97 (both second digits: 74-83, 85-94)
+        // Start at 74 (second-tens), width 24 to cover both second digits completely
+        // Extended by 2px to ensure rightmost digit is fully covered
+        NSRect(x: 74, y: timeDisplayY, width: 24, height: 13).fill()
+
+        processedImage.unlockFocus()
+
+        NSLog("🎨 Preprocessed MAIN_WINDOW_BACKGROUND: 2 blocks (24×14) leaving colon gap at y:\(timeDisplayY)")
+        return processedImage
+    }
+
     // MARK: - Fallback Sprite Generation
 
     /// Create a transparent fallback image for a missing sprite
@@ -354,7 +405,16 @@ class SkinManager: ObservableObject {
                     // No coordinate correction needed - use rect directly
                     let r = sprite.rect
                     if let croppedImage = sheetImage.cropped(to: r) {
-                        extractedImages[sprite.name] = croppedImage
+                        var finalImage = croppedImage
+
+                        // CRITICAL: Preprocess MAIN_WINDOW_BACKGROUND to black out static digits
+                        // Some skins (e.g., Internet Archive) have "00:00" baked into MAIN.BMP
+                        // We black out ONLY the 4 digit positions, keeping the ":" visible
+                        if sprite.name == "MAIN_WINDOW_BACKGROUND" {
+                            finalImage = preprocessMainBackground(croppedImage)
+                        }
+
+                        extractedImages[sprite.name] = finalImage
                         print("     ✅ \(sprite.name) at \(sprite.rect)")
                     } else {
                         NSLog("     ⚠️ FAILED to crop \(sprite.name) from \(sheetName) at \(sprite.rect)")
@@ -373,30 +433,12 @@ class SkinManager: ObservableObject {
             // MARK: - Smart Sprite Aliasing
             // Create aliases for sprite variants to ensure view compatibility
             // Different skins use different naming conventions (_EX variants, _SELECTED only, etc.)
+            //
+            // NOTE: Digit aliasing (DIGIT_0 → DIGIT_0_EX) has been REMOVED.
+            // The SpriteResolver now handles digit variant resolution through semantic sprites.
+            // This prevents double-rendering of digits when both DIGIT_0 and DIGIT_0_EX exist.
 
             var aliasCount = 0
-
-            // NUMBERS → NUMS_EX aliasing
-            // If NUMS_EX exists but NUMBERS doesn't, create aliases so views work without modification
-            if extractedImages["DIGIT_0"] == nil && extractedImages["DIGIT_0_EX"] != nil {
-                NSLog("🔄 Creating sprite aliases: NUMS_EX → NUMBERS (for view compatibility)")
-                for i in 0...9 {
-                    if extractedImages["DIGIT_\(i)"] == nil, let exDigit = extractedImages["DIGIT_\(i)_EX"] {
-                        extractedImages["DIGIT_\(i)"] = exDigit
-                        aliasCount += 1
-                    }
-                }
-                if extractedImages["MINUS_SIGN"] == nil, let exMinus = extractedImages["MINUS_SIGN_EX"] {
-                    extractedImages["MINUS_SIGN"] = exMinus
-                    aliasCount += 1
-                }
-                if extractedImages["NO_MINUS_SIGN"] == nil, let exNoMinus = extractedImages["NO_MINUS_SIGN_EX"] {
-                    extractedImages["NO_MINUS_SIGN"] = exNoMinus
-                    aliasCount += 1
-                }
-                NSLog("✅ Created \(aliasCount) digit sprite aliases")
-                aliasCount = 0
-            }
 
             // VOLUME THUMB aliasing
             // Use SELECTED variant as fallback for normal state
@@ -434,6 +476,7 @@ class SkinManager: ObservableObject {
             } else {
                 NSLog("✅ All sprites loaded successfully!")
             }
+
             
             // List all extracted sprite names for debugging
             let sortedNames = extractedImages.keys.sorted()
