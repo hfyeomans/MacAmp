@@ -66,8 +66,26 @@ extension SkinMetadata {
     static var bundledSkins: [SkinMetadata] {
         var skins: [SkinMetadata] = []
 
+        // For SPM, resources are in Assets/ subdirectory
+        // Try both paths for compatibility
+        func findSkin(named name: String) -> URL? {
+            NSLog("🔍 Searching for bundled skin: \(name)")
+            // Try direct path first
+            if let url = Bundle.main.url(forResource: name, withExtension: "wsz") {
+                NSLog("✅ Found skin at root: \(url.path)")
+                return url
+            }
+            // Try in Assets subdirectory
+            if let url = Bundle.main.url(forResource: name, withExtension: "wsz", subdirectory: "Assets") {
+                NSLog("✅ Found skin in Assets/: \(url.path)")
+                return url
+            }
+            NSLog("❌ Skin not found in bundle: \(name).wsz")
+            return nil
+        }
+
         // Winamp default skin
-        if let url = Bundle.main.url(forResource: "Winamp", withExtension: "wsz") {
+        if let url = findSkin(named: "Winamp") {
             skins.append(SkinMetadata(
                 id: "bundled:Winamp",
                 name: "Classic Winamp",
@@ -77,7 +95,7 @@ extension SkinMetadata {
         }
 
         // Internet Archive skin
-        if let url = Bundle.main.url(forResource: "Internet-Archive", withExtension: "wsz") {
+        if let url = findSkin(named: "Internet-Archive") {
             skins.append(SkinMetadata(
                 id: "bundled:Internet-Archive",
                 name: "Internet Archive",
@@ -86,6 +104,7 @@ extension SkinMetadata {
             ))
         }
 
+        NSLog("🎁 SkinMetadata.bundledSkins: Found \(skins.count) bundled skins")
         return skins
     }
 }
