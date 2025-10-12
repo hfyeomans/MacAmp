@@ -140,7 +140,16 @@ class SkinManager: ObservableObject {
     }
 
     /// Show a system notification using modern UserNotifications framework
+    /// Falls back to NSAlert if bundle identifier is not configured (Xcode debug builds)
     private func showNotification(title: String, message: String) {
+        // Check if bundle identifier exists before using UNUserNotificationCenter
+        // UNUserNotificationCenter requires a valid bundle identifier and crashes if nil
+        guard Bundle.main.bundleIdentifier != nil else {
+            NSLog("⚠️ Bundle identifier is nil, falling back to NSAlert for notification")
+            showNotificationAlert(title: title, message: message)
+            return
+        }
+
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = message
@@ -155,7 +164,27 @@ class SkinManager: ObservableObject {
         UNUserNotificationCenter.current().add(request) { error in
             if let error = error {
                 NSLog("❌ Failed to show notification: \(error.localizedDescription)")
+                // Fall back to alert on error
+                Task { @MainActor in
+                    self.showNotificationAlert(title: title, message: message)
+                }
             }
+        }
+    }
+
+    /// Fallback notification method using NSAlert when UNUserNotificationCenter is unavailable
+    private func showNotificationAlert(title: String, message: String) {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = message
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "OK")
+
+        // Show as floating alert without blocking
+        if let window = NSApp.keyWindow ?? NSApp.windows.first {
+            alert.beginSheetModal(for: window) { _ in }
+        } else {
+            alert.runModal()
         }
     }
 
@@ -340,7 +369,61 @@ class SkinManager: ObservableObject {
                     }
                 }
             }
-            
+
+            // MARK: - Smart Sprite Aliasing
+            // Create aliases for sprite variants to ensure view compatibility
+            // Different skins use different naming conventions (_EX variants, _SELECTED only, etc.)
+
+            var aliasCount = 0
+
+            // NUMBERS → NUMS_EX aliasing
+            // If NUMS_EX exists but NUMBERS doesn't, create aliases so views work without modification
+            if extractedImages["DIGIT_0"] == nil && extractedImages["DIGIT_0_EX"] != nil {
+                NSLog("🔄 Creating sprite aliases: NUMS_EX → NUMBERS (for view compatibility)")
+                for i in 0...9 {
+                    if extractedImages["DIGIT_\(i)"] == nil, let exDigit = extractedImages["DIGIT_\(i)_EX"] {
+                        extractedImages["DIGIT_\(i)"] = exDigit
+                        aliasCount += 1
+                    }
+                }
+                if extractedImages["MINUS_SIGN"] == nil, let exMinus = extractedImages["MINUS_SIGN_EX"] {
+                    extractedImages["MINUS_SIGN"] = exMinus
+                    aliasCount += 1
+                }
+                if extractedImages["NO_MINUS_SIGN"] == nil, let exNoMinus = extractedImages["NO_MINUS_SIGN_EX"] {
+                    extractedImages["NO_MINUS_SIGN"] = exNoMinus
+                    aliasCount += 1
+                }
+                NSLog("✅ Created \(aliasCount) digit sprite aliases")
+                aliasCount = 0
+            }
+
+            // VOLUME THUMB aliasing
+            // Use SELECTED variant as fallback for normal state
+            if extractedImages["MAIN_VOLUME_THUMB"] == nil, let selected = extractedImages["MAIN_VOLUME_THUMB_SELECTED"] {
+                NSLog("🔄 Creating alias: MAIN_VOLUME_THUMB_SELECTED → MAIN_VOLUME_THUMB")
+                extractedImages["MAIN_VOLUME_THUMB"] = selected
+                aliasCount += 1
+            }
+
+            // BALANCE THUMB aliasing
+            if extractedImages["MAIN_BALANCE_THUMB"] == nil, let selected = extractedImages["MAIN_BALANCE_THUMB_ACTIVE"] {
+                NSLog("🔄 Creating alias: MAIN_BALANCE_THUMB_ACTIVE → MAIN_BALANCE_THUMB")
+                extractedImages["MAIN_BALANCE_THUMB"] = selected
+                aliasCount += 1
+            }
+
+            // EQ SLIDER THUMB aliasing
+            if extractedImages["EQ_SLIDER_THUMB"] == nil, let selected = extractedImages["EQ_SLIDER_THUMB_SELECTED"] {
+                NSLog("🔄 Creating alias: EQ_SLIDER_THUMB_SELECTED → EQ_SLIDER_THUMB")
+                extractedImages["EQ_SLIDER_THUMB"] = selected
+                aliasCount += 1
+            }
+
+            if aliasCount > 0 {
+                NSLog("✅ Created \(aliasCount) slider sprite aliases")
+            }
+
             let expectedCount = sheetsToProcess.values.flatMap{$0}.count
             let extractedCount = extractedImages.count
             NSLog("=== SPRITE EXTRACTION SUMMARY ===")

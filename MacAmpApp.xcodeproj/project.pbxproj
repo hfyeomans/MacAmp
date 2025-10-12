@@ -358,6 +358,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.MacAmpApp;
 				SDKROOT = macosx;
 			};
 			name = Release;
@@ -492,6 +493,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.MacAmpApp;
 				SDKROOT = macosx;
 			};
 			name = Debug;
