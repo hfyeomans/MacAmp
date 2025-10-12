@@ -559,8 +559,11 @@ struct WinampMainWindow: View {
         guard scrollTimer == nil else { return }
 
         scrollTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { [weak audioPlayer] _ in
-            Task { @MainActor in
-                guard let audioPlayer = audioPlayer else { return }
+            // Access main actor properties synchronously to prevent race conditions
+            // The timer already fires on the main thread, so we can use assumeIsolated
+            guard let audioPlayer = audioPlayer else { return }
+
+            MainActor.assumeIsolated {
                 let trackText = audioPlayer.currentTitle.isEmpty ? "MacAmp" : audioPlayer.currentTitle
                 let textWidth = CGFloat(trackText.count * 5)
                 let displayWidth = Coords.trackInfo.width
