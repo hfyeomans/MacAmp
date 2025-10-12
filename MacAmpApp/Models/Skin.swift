@@ -67,15 +67,20 @@ extension SkinMetadata {
         var skins: [SkinMetadata] = []
         let fileManager = FileManager.default
 
-        // Use Bundle.module for SPM builds, Bundle.main for regular builds
+        // Determine the correct bundle URL based on build type
+        let bundleURL: URL
         #if SWIFT_PACKAGE
-        let bundleURL = Bundle.module.bundleURL
+        // For SPM command-line builds: Use Bundle.module which points to the resource bundle
+        bundleURL = Bundle.module.bundleURL
         #else
-        let bundleURL = Bundle.main.bundleURL
+        // For Xcode app builds: Use Bundle.main.resourceURL which points to Contents/Resources/
+        // Fall back to bundleURL if resourceURL is nil (shouldn't happen in practice)
+        bundleURL = Bundle.main.resourceURL ?? Bundle.main.bundleURL
         #endif
 
         NSLog("🔍 Bundle path: \(bundleURL.path)")
         NSLog("🔍 Bundle identifier: \(Bundle.main.bundleIdentifier ?? "unknown")")
+        NSLog("🔍 Resource URL: \(Bundle.main.resourceURL?.path ?? "nil")")
 
         // SPM places resources directly at bundle root, not in subdirectories
         // Use direct path construction instead of url(forResource:withExtension:)
@@ -92,13 +97,13 @@ extension SkinMetadata {
                 return bundleRootURL
             }
 
-            // Fallback: Try Assets subdirectory (for non-SPM builds)
-            let assetsURL = bundleURL.appendingPathComponent("Assets").appendingPathComponent(filename)
-            NSLog("🔍 Checking fallback path: \(assetsURL.path)")
+            // Fallback: Try Skins subdirectory (for cases where SPM nests resources)
+            let skinsURL = bundleURL.appendingPathComponent("Skins").appendingPathComponent(filename)
+            NSLog("🔍 Checking fallback path: \(skinsURL.path)")
 
-            if fileManager.fileExists(atPath: assetsURL.path) {
-                NSLog("✅ Found \(filename) in Assets/: \(assetsURL.path)")
-                return assetsURL
+            if fileManager.fileExists(atPath: skinsURL.path) {
+                NSLog("✅ Found \(filename) in Skins/: \(skinsURL.path)")
+                return skinsURL
             }
 
             NSLog("❌ Skin not found in bundle: \(filename)")

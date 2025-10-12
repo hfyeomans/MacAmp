@@ -4,6 +4,7 @@ import ZIPFoundation
 import AppKit
 import CoreGraphics // For CGRect
 import SwiftUI
+import UserNotifications
 
 // This class is responsible for loading and parsing Winamp skins.
 // It will be an ObservableObject so that our SwiftUI views can
@@ -80,6 +81,82 @@ class SkinManager: ObservableObject {
         let selectedID = AppSettings.instance().selectedSkinIdentifier ?? "bundled:Winamp"
         NSLog("🔄 SkinManager: Loading initial skin: \(selectedID)")
         switchToSkin(identifier: selectedID)
+    }
+
+    // MARK: - Skin Import
+
+    /// Import a skin from an external URL (copies to user skins directory)
+    func importSkin(from sourceURL: URL) async {
+        let fileManager = FileManager.default
+        let skinName = sourceURL.deletingPathExtension().lastPathComponent
+        let destinationURL = AppSettings.userSkinsDirectory.appendingPathComponent(sourceURL.lastPathComponent)
+
+        do {
+            // Check if file already exists
+            if fileManager.fileExists(atPath: destinationURL.path) {
+                // Show alert and ask to replace
+                let alert = NSAlert()
+                alert.messageText = "Skin Already Exists"
+                alert.informativeText = "A skin named \"\(skinName)\" already exists. Do you want to replace it?"
+                alert.alertStyle = .warning
+                alert.addButton(withTitle: "Replace")
+                alert.addButton(withTitle: "Cancel")
+
+                let response = await alert.beginSheetModal(for: NSApp.keyWindow ?? NSApp.windows.first!)
+                if response == .alertSecondButtonReturn {
+                    return // User cancelled
+                }
+
+                // Remove existing file
+                try fileManager.removeItem(at: destinationURL)
+            }
+
+            // Copy the file
+            try fileManager.copyItem(at: sourceURL, to: destinationURL)
+            NSLog("✅ Imported skin: \(skinName) to \(destinationURL.path)")
+
+            // Refresh available skins
+            scanAvailableSkins()
+
+            // Switch to the newly imported skin
+            let newSkinID = "user:\(skinName)"
+            switchToSkin(identifier: newSkinID)
+
+            // Show success notification
+            showNotification(title: "Skin Imported", message: "\(skinName) has been imported successfully.")
+
+        } catch {
+            NSLog("❌ Failed to import skin: \(error.localizedDescription)")
+            loadingError = "Failed to import skin: \(error.localizedDescription)"
+
+            // Show error alert
+            let alert = NSAlert()
+            alert.messageText = "Import Failed"
+            alert.informativeText = "Could not import \"\(skinName)\": \(error.localizedDescription)"
+            alert.alertStyle = .critical
+            alert.addButton(withTitle: "OK")
+            await alert.beginSheetModal(for: NSApp.keyWindow ?? NSApp.windows.first!)
+        }
+    }
+
+    /// Show a system notification using modern UserNotifications framework
+    private func showNotification(title: String, message: String) {
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = message
+        content.sound = .default
+
+        let request = UNNotificationRequest(
+            identifier: UUID().uuidString,
+            content: content,
+            trigger: nil // Deliver immediately
+        )
+
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                NSLog("❌ Failed to show notification: \(error.localizedDescription)")
+            }
+        }
     }
 
     // MARK: - Existing Methods

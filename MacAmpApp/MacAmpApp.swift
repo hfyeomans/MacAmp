@@ -17,7 +17,11 @@ struct MacAmpApp: App {
         }
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)
-        
+        .commands {
+            AppCommands(dockingController: dockingController, skinManager: skinManager)
+            SkinsCommands(skinManager: skinManager)
+        }
+
         WindowGroup("Preferences", id: "preferences") {
             PreferencesView()
                 .environmentObject(settings)
@@ -27,6 +31,7 @@ struct MacAmpApp: App {
         .defaultPosition(.center)
         .commands {
             AppCommands(dockingController: dockingController, skinManager: skinManager)
+            SkinsCommands(skinManager: skinManager)
         }
     }
 }
