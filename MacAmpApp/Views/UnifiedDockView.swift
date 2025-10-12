@@ -65,11 +65,7 @@ struct UnifiedDockView: View {
 
     private func ensureSkin() {
         if skinManager.currentSkin == nil {
-            var urlToLoad: URL? = Bundle.main.url(forResource: "Winamp", withExtension: "wsz")
-            #if SWIFT_PACKAGE
-            if urlToLoad == nil { urlToLoad = Bundle.module.url(forResource: "Winamp", withExtension: "wsz") }
-            #endif
-            if let skinURL = urlToLoad { skinManager.loadSkin(from: skinURL) }
+            skinManager.loadInitialSkin()
         }
     }
     

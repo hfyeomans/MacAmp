@@ -65,22 +65,43 @@ extension SkinMetadata {
     /// Built-in bundled skins
     static var bundledSkins: [SkinMetadata] {
         var skins: [SkinMetadata] = []
+        let fileManager = FileManager.default
 
-        // For SPM, resources are in Assets/ subdirectory
-        // Try both paths for compatibility
+        // Use Bundle.module for SPM builds, Bundle.main for regular builds
+        #if SWIFT_PACKAGE
+        let bundleURL = Bundle.module.bundleURL
+        #else
+        let bundleURL = Bundle.main.bundleURL
+        #endif
+
+        NSLog("🔍 Bundle path: \(bundleURL.path)")
+        NSLog("🔍 Bundle identifier: \(Bundle.main.bundleIdentifier ?? "unknown")")
+
+        // SPM places resources directly at bundle root, not in subdirectories
+        // Use direct path construction instead of url(forResource:withExtension:)
         func findSkin(named name: String) -> URL? {
-            NSLog("🔍 Searching for bundled skin: \(name)")
-            // Try direct path first
-            if let url = Bundle.main.url(forResource: name, withExtension: "wsz") {
-                NSLog("✅ Found skin at root: \(url.path)")
-                return url
+            let filename = "\(name).wsz"
+            NSLog("🔍 Searching for bundled skin: \(filename)")
+
+            // Construct direct path to bundle root
+            let bundleRootURL = bundleURL.appendingPathComponent(filename)
+            NSLog("🔍 Checking path: \(bundleRootURL.path)")
+
+            if fileManager.fileExists(atPath: bundleRootURL.path) {
+                NSLog("✅ Found \(filename) at: \(bundleRootURL.path)")
+                return bundleRootURL
             }
-            // Try in Assets subdirectory
-            if let url = Bundle.main.url(forResource: name, withExtension: "wsz", subdirectory: "Assets") {
-                NSLog("✅ Found skin in Assets/: \(url.path)")
-                return url
+
+            // Fallback: Try Assets subdirectory (for non-SPM builds)
+            let assetsURL = bundleURL.appendingPathComponent("Assets").appendingPathComponent(filename)
+            NSLog("🔍 Checking fallback path: \(assetsURL.path)")
+
+            if fileManager.fileExists(atPath: assetsURL.path) {
+                NSLog("✅ Found \(filename) in Assets/: \(assetsURL.path)")
+                return assetsURL
             }
-            NSLog("❌ Skin not found in bundle: \(name).wsz")
+
+            NSLog("❌ Skin not found in bundle: \(filename)")
             return nil
         }
 
@@ -104,7 +125,11 @@ extension SkinMetadata {
             ))
         }
 
-        NSLog("🎁 SkinMetadata.bundledSkins: Found \(skins.count) bundled skins")
+        NSLog("🎁 Total bundled skins found: \(skins.count)")
+        for skin in skins {
+            NSLog("  📦 \(skin.name) [\(skin.id)] -> \(skin.url.path)")
+        }
+
         return skins
     }
 }
