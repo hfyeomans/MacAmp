@@ -159,6 +159,54 @@ class SkinManager: ObservableObject {
         }
     }
 
+    // MARK: - Fallback Sprite Generation
+
+    /// Create a transparent fallback image for a missing sprite
+    /// - Parameter spriteName: Name of the missing sprite
+    /// - Returns: A transparent NSImage with appropriate dimensions, or a default size if dimensions unknown
+    private func createFallbackSprite(named spriteName: String) -> NSImage {
+        // Try to get dimensions from sprite definitions
+        let size: CGSize
+        if let definedSize = SkinSprites.defaultSprites.dimensions(forSprite: spriteName) {
+            size = definedSize
+            NSLog("⚠️ Creating fallback for '\(spriteName)' with defined size: \(definedSize.width)x\(definedSize.height)")
+        } else {
+            // Use a reasonable default size for unknown sprites
+            size = CGSize(width: 16, height: 16)
+            NSLog("⚠️ Creating fallback for '\(spriteName)' with default size: 16x16 (no definition found)")
+        }
+
+        // Create a transparent image
+        let image = NSImage(size: size)
+        image.lockFocus()
+
+        // Fill with transparent color
+        NSColor.clear.setFill()
+        NSRect(origin: .zero, size: size).fill()
+
+        image.unlockFocus()
+
+        return image
+    }
+
+    /// Generate fallback sprites for all missing sprites from a sheet
+    /// - Parameters:
+    ///   - sheetName: Name of the missing sheet
+    ///   - sprites: Array of sprite definitions that should have been in the sheet
+    /// - Returns: Dictionary mapping sprite names to fallback images
+    private func createFallbackSprites(forSheet sheetName: String, sprites: [Sprite]) -> [String: NSImage] {
+        var fallbacks: [String: NSImage] = [:]
+
+        NSLog("⚠️ Sheet '\(sheetName)' is missing - generating \(sprites.count) fallback sprites")
+
+        for sprite in sprites {
+            let fallbackImage = createFallbackSprite(named: sprite.name)
+            fallbacks[sprite.name] = fallbackImage
+        }
+
+        return fallbacks
+    }
+
     // MARK: - Existing Methods
 
     // Try to find an entry for a given sheet name (case-insensitive), supporting .bmp and .png
@@ -241,18 +289,30 @@ class SkinManager: ObservableObject {
             for (sheetName, sprites) in sheetsToProcess {
                 NSLog("🔍 Looking for sheet: \(sheetName)")
                 guard let entry = findSheetEntry(in: archive, baseName: sheetName) else {
-                    NSLog("❌ MISSING SHEET: \(sheetName).bmp/.png not found in archive")
+                    NSLog("⚠️ MISSING SHEET: \(sheetName).bmp/.png not found in archive")
                     NSLog("   Expected \(sprites.count) sprites from this sheet")
                     // List the missing sprite names for debugging
                     for sprite in sprites.prefix(5) {
                         NSLog("   - Missing sprite: \(sprite.name)")
                     }
+
+                    // Generate fallback sprites for this missing sheet
+                    let fallbackSprites = createFallbackSprites(forSheet: sheetName, sprites: sprites)
+                    for (name, image) in fallbackSprites {
+                        extractedImages[name] = image
+                    }
+
                     continue
                 }
                 var data = Data()
                 _ = try archive.extract(entry, consumer: { data.append($0) })
                 guard let sheetImage = NSImage(data: data) else {
-                    print("❌ FAILED to create image for sheet: \(sheetName)")
+                    NSLog("❌ FAILED to create image for sheet: \(sheetName)")
+                    // Generate fallbacks for this corrupted sheet
+                    let fallbackSprites = createFallbackSprites(forSheet: sheetName, sprites: sprites)
+                    for (name, image) in fallbackSprites {
+                        extractedImages[name] = image
+                    }
                     continue
                 }
                 
@@ -268,19 +328,29 @@ class SkinManager: ObservableObject {
                         extractedImages[sprite.name] = croppedImage
                         print("     ✅ \(sprite.name) at \(sprite.rect)")
                     } else {
-                        print("     ❌ FAILED to crop \(sprite.name) from \(sheetName) at \(sprite.rect)")
-                        // Additional debug info
-                        print("       Sheet size: \(sheetImage.size)")
-                        print("       Requested rect: \(r)")
-                        print("       Rect within bounds: \(r.maxX <= sheetImage.size.width && r.maxY <= sheetImage.size.height)")
+                        NSLog("     ⚠️ FAILED to crop \(sprite.name) from \(sheetName) at \(sprite.rect)")
+                        NSLog("       Sheet size: \(sheetImage.size)")
+                        NSLog("       Requested rect: \(r)")
+                        NSLog("       Rect within bounds: \(r.maxX <= sheetImage.size.width && r.maxY <= sheetImage.size.height)")
+
+                        // Generate a fallback sprite for this failed crop
+                        let fallbackImage = createFallbackSprite(named: sprite.name)
+                        extractedImages[sprite.name] = fallbackImage
+                        NSLog("       Generated fallback sprite for '\(sprite.name)'")
                     }
                 }
             }
             
-            print("=== SPRITE EXTRACTION SUMMARY ===")
-            print("Total sprites extracted: \(extractedImages.count)")
-            print("Expected sprites: \(sheetsToProcess.values.flatMap{$0}.count)")
-            print("Success rate: \(extractedImages.count)/\(sheetsToProcess.values.flatMap{$0}.count)")
+            let expectedCount = sheetsToProcess.values.flatMap{$0}.count
+            let extractedCount = extractedImages.count
+            NSLog("=== SPRITE EXTRACTION SUMMARY ===")
+            NSLog("Total sprites available: \(extractedCount)")
+            NSLog("Expected sprites: \(expectedCount)")
+            if extractedCount < expectedCount {
+                NSLog("⚠️ Note: Some sprites are using transparent fallbacks due to missing/corrupted sheets")
+            } else {
+                NSLog("✅ All sprites loaded successfully!")
+            }
             
             // List all extracted sprite names for debugging
             let sortedNames = extractedImages.keys.sorted()

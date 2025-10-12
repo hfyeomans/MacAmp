@@ -17,10 +17,6 @@ struct MacAmpApp: App {
         }
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)
-        .commands {
-            AppCommands(dockingController: dockingController, skinManager: skinManager)
-            SkinsCommands(skinManager: skinManager)
-        }
 
         WindowGroup("Preferences", id: "preferences") {
             PreferencesView()
@@ -29,6 +25,8 @@ struct MacAmpApp: App {
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)
         .defaultPosition(.center)
+
+        // Commands are defined once here and apply to all window groups
         .commands {
             AppCommands(dockingController: dockingController, skinManager: skinManager)
             SkinsCommands(skinManager: skinManager)
