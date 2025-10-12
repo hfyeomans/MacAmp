@@ -93,7 +93,7 @@ class AudioPlayer: ObservableObject {
                     let estimatedDataRate = try await firstAudioTrack.load(.estimatedDataRate)
                     
                     if let desc = audioDesc.first {
-                        let audioStreamBasicDescription = CMAudioFormatDescriptionGetStreamBasicDescription(desc as! CMAudioFormatDescription)
+                        let audioStreamBasicDescription = CMAudioFormatDescriptionGetStreamBasicDescription(desc)
                         if let streamDesc = audioStreamBasicDescription?.pointee {
                             // Channel count
                             let channelsPerFrame = streamDesc.mChannelsPerFrame

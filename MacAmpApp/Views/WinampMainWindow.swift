@@ -557,19 +557,22 @@ struct WinampMainWindow: View {
     
     private func startScrolling() {
         guard scrollTimer == nil else { return }
-        
-        scrollTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { _ in
-            let trackText = audioPlayer.currentTitle.isEmpty ? "MacAmp" : audioPlayer.currentTitle
-            let textWidth = CGFloat(trackText.count * 5)
-            let displayWidth = Coords.trackInfo.width
-            
-            if textWidth > displayWidth {
-                withAnimation(.linear(duration: 0.15)) {
-                    scrollOffset -= 5 // Move left by one character width
-                    
-                    // Reset when we've scrolled past the end
-                    if abs(scrollOffset) >= textWidth + 20 { // Add some padding
-                        scrollOffset = displayWidth
+
+        scrollTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { [weak audioPlayer] _ in
+            Task { @MainActor in
+                guard let audioPlayer = audioPlayer else { return }
+                let trackText = audioPlayer.currentTitle.isEmpty ? "MacAmp" : audioPlayer.currentTitle
+                let textWidth = CGFloat(trackText.count * 5)
+                let displayWidth = Coords.trackInfo.width
+
+                if textWidth > displayWidth {
+                    withAnimation(.linear(duration: 0.15)) {
+                        scrollOffset -= 5 // Move left by one character width
+
+                        // Reset when we've scrolled past the end
+                        if abs(scrollOffset) >= textWidth + 20 { // Add some padding
+                            scrollOffset = displayWidth
+                        }
                     }
                 }
             }

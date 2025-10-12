@@ -267,10 +267,13 @@ struct EqualizerWindowView: View {
     
     private func startVisualizationTimer() {
         // Audio-reactive EQ visualization (simplified)
-        Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
-            if audioPlayer.isPlaying && audioPlayer.isEqOn {
-                withAnimation(.easeInOut(duration: 0.1)) {
-                    eqVisualization = eqVisualization.map { _ in Float.random(in: 0...1) }
+        Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak audioPlayer] _ in
+            Task { @MainActor in
+                guard let audioPlayer = audioPlayer else { return }
+                if audioPlayer.isPlaying && audioPlayer.isEqOn {
+                    withAnimation(.easeInOut(duration: 0.1)) {
+                        eqVisualization = eqVisualization.map { _ in Float.random(in: 0...1) }
+                    }
                 }
             }
         }
