@@ -50,9 +50,10 @@ struct WinampPlaylistWindow: View {
                     .position(x: 25 + 12.5 + CGFloat(i) * 25, y: 10)
             }
             
-            // Title bar
+            // Title bar - Make ONLY this draggable using macOS 15's WindowDragGesture
             SimpleSpriteImage("PLAYLIST_TITLE_BAR", width: 100, height: 20)
                 .position(x: 137.5, y: 10) // centered at 137.5
+                .gesture(WindowDragGesture())
             
             SimpleSpriteImage("PLAYLIST_TOP_RIGHT_CORNER", width: 25, height: 20)
                 .position(x: 262.5, y: 10) // 275 - 12.5

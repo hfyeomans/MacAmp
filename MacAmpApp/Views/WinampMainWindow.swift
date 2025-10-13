@@ -26,7 +26,7 @@ struct WinampMainWindow: View {
     // Pause blinking state
     @State private var pauseBlinkVisible: Bool = true
     @State private var pauseBlinkTimer: Timer?
-    
+
     // Winamp coordinate constants (from original Winamp and webamp)
     private struct Coords {
         // Transport buttons (all at y: 88)
@@ -78,10 +78,12 @@ struct WinampMainWindow: View {
                             height: WinampSizes.main.height)
 
             // Title bar with "Winamp" text (overlays on background)
+            // Make ONLY the title bar draggable using macOS 15's WindowDragGesture
             SimpleSpriteImage("MAIN_TITLE_BAR_SELECTED",
                             width: 275,
                             height: 14)
                 .at(CGPoint(x: 0, y: 0))
+                .gesture(WindowDragGesture())
 
             if !isShadeMode {
                 // Full window mode
@@ -406,34 +408,37 @@ struct WinampMainWindow: View {
 
     @ViewBuilder
     private func buildPositionSlider() -> some View {
-        ZStack(alignment: .topLeading) {
-            // Position slider background
-            SimpleSpriteImage("MAIN_POSITION_SLIDER_BACKGROUND", width: 248, height: 10)
+        // Only show position slider when a track is loaded
+        if audioPlayer.currentTrack != nil {
+            ZStack(alignment: .topLeading) {
+                // Position slider background
+                SimpleSpriteImage("MAIN_POSITION_SLIDER_BACKGROUND", width: 248, height: 10)
+                    .at(Coords.positionSlider)
+
+                // Position slider thumb (moves based on playback progress or scrubbing)
+                let currentProgress = isScrubbing ? scrubbingProgress : audioPlayer.playbackProgress
+                SimpleSpriteImage("MAIN_POSITION_SLIDER_THUMB", width: 29, height: 10)
+                    .at(CGPoint(x: Coords.positionSlider.x + (248 - 29) * currentProgress,
+                               y: Coords.positionSlider.y))
+                    .allowsHitTesting(false) // Thumb shouldn't block interaction
+
+                // Interactive scrubbing area using GeometryReader (like volume slider)
+                GeometryReader { geo in
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .gesture(
+                            DragGesture(minimumDistance: 0)
+                                .onChanged { value in
+                                    handlePositionDrag(value, in: geo)
+                                }
+                                .onEnded { value in
+                                    handlePositionDragEnd(value, in: geo)
+                                }
+                        )
+                }
+                .frame(width: 248, height: 10)
                 .at(Coords.positionSlider)
-            
-            // Position slider thumb (moves based on playback progress or scrubbing)
-            let currentProgress = isScrubbing ? scrubbingProgress : audioPlayer.playbackProgress
-            SimpleSpriteImage("MAIN_POSITION_SLIDER_THUMB", width: 29, height: 10)
-                .at(CGPoint(x: Coords.positionSlider.x + (248 - 29) * currentProgress,
-                           y: Coords.positionSlider.y))
-                .allowsHitTesting(false) // Thumb shouldn't block interaction
-            
-            // Interactive scrubbing area using GeometryReader (like volume slider)
-            GeometryReader { geo in
-                Color.clear
-                    .contentShape(Rectangle())
-                    .gesture(
-                        DragGesture(minimumDistance: 0)
-                            .onChanged { value in
-                                handlePositionDrag(value, in: geo)
-                            }
-                            .onEnded { value in
-                                handlePositionDragEnd(value, in: geo)
-                            }
-                    )
             }
-            .frame(width: 248, height: 10)
-            .at(Coords.positionSlider)
         }
     }
     
@@ -642,7 +647,7 @@ struct WinampMainWindow: View {
     }
     
     // MARK: - Helper Functions
-    
+
     private func timeDigits(from seconds: Double) -> [Int] {
         let totalSeconds = max(0, Int(seconds))
         let minutes = totalSeconds / 60
@@ -680,16 +685,35 @@ struct WinampMainWindow: View {
         let width = geometry.size.width
         let x = min(max(0, value.location.x), width)
         let progress = Double(x / width)
-        
-        // Perform single audio seek at the end
-        if audioPlayer.currentDuration > 0 {
-            let targetTime = progress * audioPlayer.currentDuration
-            audioPlayer.seek(to: targetTime, resume: wasPlayingPreScrub)
+
+        #if DEBUG
+        print("DEBUG handlePositionDragEnd: progress=\(progress), scrubbingProgress=\(scrubbingProgress)")
+        #endif
+
+        // Update visual progress immediately so slider shows where user dragged
+        scrubbingProgress = progress
+
+        #if DEBUG
+        print("DEBUG handlePositionDragEnd: Calling seekToPercent(\(progress))")
+        #endif
+
+        // Perform seek - use seekToPercent which handles file duration correctly
+        audioPlayer.seekToPercent(progress, resume: wasPlayingPreScrub)
+
+        #if DEBUG
+        print("DEBUG handlePositionDragEnd: After seek, audioPlayer.playbackProgress=\(audioPlayer.playbackProgress)")
+        #endif
+
+        // CRITICAL: Keep isScrubbing = true until the progress timer has had at least
+        // 2-3 cycles to update with the new seek position. This prevents the slider
+        // from jumping to an incorrect position due to stale AVAudioPlayerNode render times.
+        // The progress timer runs every 0.1s, so 0.3s gives it 3 cycles to stabilize.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            #if DEBUG
+            print("DEBUG handlePositionDragEnd: Setting isScrubbing=false, final playbackProgress=\(self.audioPlayer.playbackProgress)")
+            #endif
+            isScrubbing = false
         }
-        
-        // End scrubbing mode - let playbackProgress take over
-        isScrubbing = false
-        // Don't reset scrubbingProgress - it will be ignored once isScrubbing is false
     }
 }
 

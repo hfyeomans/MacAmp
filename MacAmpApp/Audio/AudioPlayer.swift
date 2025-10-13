@@ -35,6 +35,7 @@ class AudioPlayer: ObservableObject {
 
     @Published var isPlaying: Bool = false
     @Published var isPaused: Bool = false
+    @Published var isSeeking: Bool = false // NEW: Prevents completion handler from firing during seek
     @Published var currentTrackURL: URL? // Placeholder for the currently playing track
     @Published var currentTitle: String = "No Track Loaded"
     @Published var currentDuration: Double = 0.0
@@ -365,28 +366,62 @@ class AudioPlayer: ObservableObject {
     }
 
     private func scheduleFrom(time: Double) {
-        guard let file = audioFile else { return }
+        guard let file = audioFile else {
+            #if DEBUG
+            NSLog("⚠️ scheduleFrom: No audio file loaded")
+            #endif
+            return
+        }
+
         let sampleRate = file.processingFormat.sampleRate
-        let startFrame = AVAudioFramePosition(max(0, min(time, currentDuration)) * sampleRate)
+
+        // FIX: Use file.length directly instead of currentDuration
+        // This eliminates race condition with async track loading
+        let fileDuration = Double(file.length) / sampleRate
+        let startFrame = AVAudioFramePosition(max(0, min(time, fileDuration)) * sampleRate)
+
         let totalFrames = file.length
         let framesRemaining = max(0, totalFrames - startFrame)
+
+        #if DEBUG
+        print("DEBUG scheduleFrom: time=\(time), fileDuration=\(fileDuration), startFrame=\(startFrame), framesRemaining=\(framesRemaining)")
+        #endif
+
+        // Store the new starting time for progress tracking
         playheadOffset = Double(startFrame) / sampleRate
+
+        // Stop the player and clear existing buffers
         playerNode.stop()
+
+        // Schedule the new segment if there's audio left to play
         if framesRemaining > 0 {
+            #if DEBUG
+            print("DEBUG scheduleFrom: Scheduling \(framesRemaining) frames from frame \(startFrame)")
+            #endif
             playerNode.scheduleSegment(
                 file,
                 startingFrame: startFrame,
                 frameCount: AVAudioFrameCount(framesRemaining),
                 at: nil,
-                completionHandler: { [weak self] in DispatchQueue.main.async { self?.onPlaybackEnded() } }
+                completionHandler: { [weak self] in
+                    DispatchQueue.main.async {
+                        #if DEBUG
+                        print("DEBUG scheduleFrom: Completion handler called!")
+                        #endif
+                        self?.onPlaybackEnded()
+                    }
+                }
             )
         } else {
+            #if DEBUG
+            print("DEBUG scheduleFrom: No frames remaining, calling onPlaybackEnded immediately!")
+            #endif
             onPlaybackEnded()
         }
-        // Ensure we have currentDuration
-        let duration = Double(file.length) / file.processingFormat.sampleRate
-        if duration.isFinite && duration > 0 {
-            DispatchQueue.main.async { self.currentDuration = duration }
+
+        // Ensure we have currentDuration for UI (non-critical for seeking)
+        if fileDuration.isFinite && fileDuration > 0 {
+            DispatchQueue.main.async { self.currentDuration = fileDuration }
         }
     }
 
@@ -407,7 +442,14 @@ class AudioPlayer: ObservableObject {
                     let current = Double(playerTime.sampleTime) / playerTime.sampleRate + self.playheadOffset
                     self.currentTime = current
                     if self.currentDuration > 0 {
-                        self.playbackProgress = current / self.currentDuration
+                        let newProgress = current / self.currentDuration
+                        #if DEBUG
+                        // Only log when progress changes significantly (avoid spam)
+                        if abs(newProgress - self.playbackProgress) > 0.01 {
+                            print("DEBUG progressTimer: currentTime=\(current), currentDuration=\(self.currentDuration), newProgress=\(newProgress)")
+                        }
+                        #endif
+                        self.playbackProgress = newProgress
                     } else {
                         self.playbackProgress = 0
                     }
@@ -515,21 +557,83 @@ class AudioPlayer: ObservableObject {
     }
 
     // MARK: - Seeking / Scrubbing
+
+    /// Seek to a percentage of the track (0.0 to 1.0)
+    /// This method calculates time using file.length directly, avoiding race conditions
+    func seekToPercent(_ percent: Double, resume: Bool? = nil) {
+        guard let file = audioFile else {
+            #if DEBUG
+            NSLog("⚠️ seekToPercent: No audio file loaded")
+            #endif
+            return
+        }
+
+        // Calculate target time using file.length directly (no dependency on currentDuration)
+        let sampleRate = file.processingFormat.sampleRate
+        let fileDuration = Double(file.length) / sampleRate
+        let targetTime = percent * fileDuration
+
+        // Use regular seek with the calculated time
+        seek(to: targetTime, resume: resume)
+    }
+
     func seek(to time: Double, resume: Bool? = nil) {
+        // Guard: Ensure file is loaded before seeking
+        guard let file = audioFile else {
+            #if DEBUG
+            NSLog("⚠️ seek: Cannot seek - no audio file loaded")
+            #endif
+            return
+        }
+
         let shouldPlay = resume ?? isPlaying
         wasStopped = false // Allow normal completion after seeking
+
+        // CRITICAL FIX: Set isSeeking flag to prevent old completion handler from corrupting state
+        // When playerNode.stop() is called in scheduleFrom, it triggers the completion handler
+        // from the PREVIOUS segment, which calls onPlaybackEnded() and sets playbackProgress=1.0
+        isSeeking = true
+
+        // Stop progress timer BEFORE seeking
+        progressTimer?.invalidate()
+
+        // Calculate playbackProgress using file duration directly BEFORE scheduling
+        let sampleRate = file.processingFormat.sampleRate
+        let fileDuration = Double(file.length) / sampleRate
+        let targetProgress = fileDuration > 0 ? time / fileDuration : 0
+
+        #if DEBUG
+        print("DEBUG seek: time=\(time), fileDuration=\(fileDuration), targetProgress=\(targetProgress), isSeeking=true")
+        #endif
+
+        // Schedule the new audio segment
         scheduleFrom(time: time)
+
+        // Update state AFTER scheduling to ensure consistency
         currentTime = time
-        playbackProgress = currentDuration > 0 ? time / currentDuration : 0
+        playbackProgress = targetProgress
+
+        #if DEBUG
+        print("DEBUG seek: Set playbackProgress=\(playbackProgress), currentTime=\(currentTime)")
+        #endif
+
         if shouldPlay {
             startEngineIfNeeded()
             playerNode.play()
-            startProgressTimer()
+            startProgressTimer()  // Restart timer with fresh state
             isPlaying = true
             isPaused = false
         } else {
             isPlaying = false
-            progressTimer?.invalidate()
+            // Timer already invalidated above
+        }
+
+        // Clear isSeeking flag after a brief delay to allow old completion handler to fire and be ignored
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            #if DEBUG
+            print("DEBUG seek: Setting isSeeking=false")
+            #endif
+            self.isSeeking = false
         }
     }
     
@@ -578,11 +682,26 @@ class AudioPlayer: ObservableObject {
     private func onPlaybackEnded() {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
+
+            // CRITICAL: Don't process completion if we're in the middle of a seek
+            // playerNode.stop() triggers the old segment's completion handler
+            guard !self.isSeeking else {
+                #if DEBUG
+                print("DEBUG onPlaybackEnded: Ignoring because isSeeking=true (old segment completion)")
+                #endif
+                return
+            }
+
             // Don't update progress if we stopped manually
             guard !self.wasStopped else {
                 self.wasStopped = false
                 return
             }
+
+            #if DEBUG
+            print("DEBUG onPlaybackEnded: Track actually ended, setting playbackProgress=1")
+            #endif
+
             self.isPlaying = false
             self.progressTimer?.invalidate()
             self.playbackProgress = 1
