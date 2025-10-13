@@ -11,36 +11,43 @@ struct EQSliderView: View {
 
     // Winamp EQ slider dimensions
     let sliderWidth: CGFloat = 14  // Correct Winamp spec
-    let sliderHeight: CGFloat = 62 // Correct Winamp spec
+    let sliderHeight: CGFloat = 63 // Correct Winamp spec (was 62, should be 63)
 
-    // EQ_SLIDER_BACKGROUND from EQMAIN.bmp is 209x129px
-    // This contains 19 vertical sliders (11 bands + preamp) laid out horizontally
-    // Each individual slider column is 14px wide
-    // The full height shows all possible positions (129px contains multiple frames)
-    let backgroundFullWidth: CGFloat = 209
-    let backgroundFullHeight: CGFloat = 129
+    // EQ_SLIDER_BACKGROUND from EQMAIN.bmp is 209×129px
+    // Contains 28 colored gradient frames in 14×2 grid layout:
+    // Row 0 (frames 0-13):  Green → Yellow (left to right)
+    // Row 1 (frames 14-27): Orange → Red (left to right)
+    // Each frame: ~15px wide × ~65px tall
+    let frameWidth: CGFloat = 15
+    let frameHeight: CGFloat = 65
+    let gridColumns: Int = 14
+    let totalFrames: Int = 28
 
     var body: some View {
         ZStack(alignment: .top) {
-            // Use actual EQ_SLIDER_BACKGROUND from skin
-            // For vertical EQ sliders, the background shifts vertically based on value
-            Image(nsImage: background)
-                .resizable()
-                .interpolation(.none)
-                .frame(width: sliderWidth, height: backgroundFullHeight)
-                .offset(y: calculateBackgroundOffset())
-                .frame(width: sliderWidth, height: sliderHeight)
-                .clipped()
-
-            // Slider thumb sprite (11x11 pixels)
-            if let thumbImage = skinManager.currentSkin?.images[isDragging ? "EQ_SLIDER_THUMB_SELECTED" : "EQ_SLIDER_THUMB"] {
-                Image(nsImage: thumbImage)
-                    .resizable()
+            // Render colored gradient background from EQ_SLIDER_BACKGROUND
+            // Uses 2D grid positioning (like Volume but with X+Y offsets)
+            if let skin = skinManager.currentSkin,
+               let eqBackground = skin.images["EQ_SLIDER_BACKGROUND"] {
+                // CRITICAL: frame→offset→clip order (proven from Volume slider)
+                Image(nsImage: eqBackground)
                     .interpolation(.none)
-                    .antialiased(false)
-                    .frame(width: 11, height: 11)
-                    .offset(x: 1.5, y: calculateThumbOffset(sliderHeight))
+                    .frame(width: sliderWidth, height: sliderHeight, alignment: .topLeading)
+                    .offset(x: calculateFrameXOffset(), y: calculateFrameYOffset())
+                    .clipped()
+                    .allowsHitTesting(false)
+            } else {
+                // Fallback: simple gradient based on value
+                Rectangle()
+                    .fill(fallbackColor)
+                    .frame(width: sliderWidth, height: sliderHeight)
             }
+
+            // Thumb sprite moves over the colored gradient
+            let thumbSprite = isDragging ? "EQ_SLIDER_THUMB_SELECTED" : "EQ_SLIDER_THUMB"
+            SimpleSpriteImage(thumbSprite, width: 11, height: 11)
+                .offset(x: 1.5, y: calculateThumbOffset(sliderHeight))
+                .allowsHitTesting(false)
 
             // Invisible interaction area
             GeometryReader { geo in
@@ -87,16 +94,46 @@ struct EQSliderView: View {
         return offset
     }
 
-    private func calculateBackgroundOffset() -> CGFloat {
-        // Map value from range to 0 to 1
-        let normalizedValue = (CGFloat(value) - CGFloat(range.lowerBound)) / (CGFloat(range.upperBound) - CGFloat(range.lowerBound))
+    // Calculate which frame (0-27) to display based on EQ value
+    private func calculateFrameIndex() -> Int {
+        // Normalize value from range (-12 to +12) to 0.0-1.0
+        let normalizedValue = (value - range.lowerBound) / (range.upperBound - range.lowerBound)
+        let percent = min(max(CGFloat(normalizedValue), 0), 1)
 
-        // The EQ slider background is 129px tall and represents all possible positions
-        // We need to shift the background to show the appropriate section
-        // Similar to volume/balance but for vertical orientation
-        let totalBackgroundRange = backgroundFullHeight - sliderHeight
-        let yOffset = -(totalBackgroundRange * (1.0 - normalizedValue))
-
-        return yOffset
+        // Map to frame 0-27
+        let frameIndex = Int(round(percent * CGFloat(totalFrames - 1)))
+        return min(max(frameIndex, 0), totalFrames - 1)
     }
+
+    // Calculate X offset for 2D grid (column selection)
+    private func calculateFrameXOffset() -> CGFloat {
+        let frameIndex = calculateFrameIndex()
+        let gridX = frameIndex % gridColumns  // Column: 0-13
+        return -CGFloat(gridX) * frameWidth
+    }
+
+    // Calculate Y offset for 2D grid (row selection)
+    private func calculateFrameYOffset() -> CGFloat {
+        let frameIndex = calculateFrameIndex()
+        let gridY = frameIndex / gridColumns  // Row: 0-1
+        return -CGFloat(gridY) * frameHeight
+    }
+
+    // Fallback color when no skin loaded
+    private var fallbackColor: Color {
+        let normalizedValue = (value - range.lowerBound) / (range.upperBound - range.lowerBound)
+        let percent = min(max(CGFloat(normalizedValue), 0), 1)
+
+        if percent <= 0.5 {
+            // Green to yellow (0-50%)
+            let t = percent * 2
+            return Color(red: Double(t), green: 0.8, blue: 0)
+        } else {
+            // Yellow to red (50-100%)
+            let t = (percent - 0.5) * 2
+            return Color(red: 1.0, green: Double(0.8 - t * 0.8), blue: 0)
+        }
+    }
+
 }
+

@@ -1,0 +1,100 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║           FORENSIC ANALYSIS: MAIN.BMP TIME DISPLAY INVESTIGATION            ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+QUESTION: Do MAIN.BMP backgrounds contain pre-rendered time displays that cause
+          the double digit rendering issue?
+
+ANSWER:   NO - The backgrounds are clean!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SKINS ANALYZED:
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Classic Winamp (Winamp.wsz)
+   ├─ File: MAIN.BMP (275x116, 8-bit, 26KB)
+   ├─ Time Region (39,26 → 87,39): CLEAN - No digits
+   └─ Status: ✅ No pre-rendered content
+
+2. Internet Archive (Internet-Archive.wsz)
+   ├─ File: MAIN.bmp (275x116, 8-bit, 26KB)
+   ├─ Time Region (39,26 → 87,39): CLEAN - No digits
+   └─ Status: ✅ No pre-rendered content
+   
+   Note: Identical to Classic Winamp skin
+
+3. Winamp3 Classified v5.5
+   ├─ File: main.bmp (275x116, 24-bit, 94KB)
+   ├─ Time Region (39,26 → 87,39): Contains colon separator ":"
+   └─ Status: ⚠️  Partial content (separator only, no digits)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+VISUAL INSPECTION RESULTS:
+═══════════════════════════════════════════════════════════════════════════════
+
+Time Display Region Contents (48x13 pixels at position 39, 26):
+
+Classic & Internet Archive:
+┌────────────────────────────────────────────────┐
+│  [Solid background - dark blue/grey]          │
+│  [Small indicator pixel on right edge]        │
+└────────────────────────────────────────────────┘
+Result: No digit content whatsoever
+
+Winamp3:
+┌────────────────────────────────────────────────┐
+│  [Background with colon ":" in middle]         │
+└────────────────────────────────────────────────┘
+Result: Separator present, but no digit content
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+CONCLUSION:
+═══════════════════════════════════════════════════════════════════════════════
+
+❌ MAIN.BMP backgrounds do NOT contain pre-rendered time digits
+❌ No "00:00" or "88:88" baked into the background images
+✅ Time display area is clean and ready for dynamic rendering
+
+THEREFORE: The double rendering issue is NOT caused by the background images.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ROOT CAUSE LOCATION:
+═══════════════════════════════════════════════════════════════════════════════
+
+The double digit rendering is happening in the SwiftUI rendering pipeline:
+
+Possible causes:
+  1. Multiple draw calls rendering NUMBERS.BMP sprites twice
+  2. Layer stacking issue (digits on background + foreground layers)
+  3. State management triggering duplicate render commands
+  4. View hierarchy compositing digits multiple times
+
+Next investigation targets:
+  → TimeDisplayView.swift rendering logic
+  → PlayerView.swift layer composition  
+  → SkinRenderer draw call sequencing
+  → State observation and update handlers
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+FILES GENERATED:
+═══════════════════════════════════════════════════════════════════════════════
+
+Documentation:
+  /Users/hank/dev/src/MacAmp/tasks/sprite-resolver-architecture/
+    └─ forensic-analysis-main-bmp.md
+
+Visual Evidence:
+  /Users/hank/dev/src/MacAmp/tmp/sprite-analysis/
+    ├─ MAIN-classic.png (full background)
+    ├─ MAIN-internet-archive.png (full background)
+    ├─ MAIN-winamp3.png (full background)
+    ├─ time-region-classic.png (cropped)
+    ├─ time-region-internet-archive.png (cropped)
+    └─ time-region-winamp3.png (cropped)
+
+╚══════════════════════════════════════════════════════════════════════════════╝

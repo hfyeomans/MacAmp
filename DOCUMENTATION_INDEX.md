@@ -68,6 +68,43 @@
 - **tasks/sprite-fallback-system/implementation.md** - Technical details
 - **tasks/sprite-fallback-system/verification.md** - Testing guide
 
+### SpriteResolver Architecture Investigation (2025-10-12) ✅ COMPLETED
+**Purpose:** Investigation and fix of double digit rendering issue
+**Result:** SOLVED via MAIN_WINDOW_BACKGROUND preprocessing
+**Lifetime:** Long-term (permanent record of architecture solution)
+
+- **tasks/sprite-resolver-architecture/README.md** - Investigation index
+  - *Status:* ✅ RESOLVED - Preprocessing solution implemented
+  - *Lifetime:* Permanent (historical reference)
+
+- **SPRITERESOLVER_INTEGRATION_COMPLETE.md** - ⭐ Phase 1 & 2 summary
+  - *Why:* Complete record of SpriteResolver integration achievement
+  - *Lifetime:* Long-term (permanent achievement record)
+  - *Content:* Architecture, discoveries, testing results, success criteria
+
+### Phase 3: Slider BMP Frame Rendering (2025-10-12) ⚠️ IN PROGRESS
+**Purpose:** Fix slider gradient rendering using skin BMP files
+**Result:** Volume & Balance ✅ WORKING | EQ/Preamp ⚠️ PARTIAL
+**Lifetime:** Long-term (critical implementation reference)
+
+- **tasks/phase3-base-mechanism/VOLUME_BMP_SOLUTION.md** - ⭐⭐ CRITICAL REFERENCE
+  - *Why:* Documents THE solution to BMP frame rendering (SwiftUI modifier order!)
+  - *Lifetime:* Permanent (applies to all future sprite sheet rendering)
+  - *Content:* Working code, modifier order, frame calculations, lessons learned
+  - *Apply to:* Balance, EQ, Preamp, any future frame-based sprites
+
+- **tasks/phase3-base-mechanism/plan.md** - Phase 3 implementation tracking
+  - *Why:* Tracks progress, documents discoveries
+  - *Lifetime:* Medium-term (until Phase 3 complete)
+
+- **PHASE3_BRANCHING_STRATEGY.md** - Branch structure explanation
+  - *Why:* Documents nested branch approach (Option A vs Option B)
+  - *Lifetime:* Short-term (until branches merged)
+
+- **CODEX_VOLUME_SLIDER_ANALYSIS.txt** - Debugging investigation prompt
+  - *Why:* Led to discovering modifier order issue
+  - *Lifetime:* Short-term (archive after Phase 3 complete)
+
 ---
 
 ## 📦 Archived Documentation (Reference Only)
@@ -98,19 +135,36 @@
 
 ---
 
-## 🎨 Implementation Files (Not Yet Integrated)
+## 🎨 Implementation Files
 
-### Ready for Integration
-- **MacAmpApp/Models/SpriteResolver.swift** - Complete implementation (390 lines)
-  - ⚠️ NOT in Xcode project yet
-  - ⚠️ Needs SimpleSpriteImage updates
-  - ✅ Fully documented
-  - ✅ Ready to integrate
+### ✅ Integrated (2025-10-12) - COMPLETE
+- **MacAmpApp/Models/SpriteResolver.swift** - Semantic sprite resolution (390 lines)
+  - ✅ Added to Xcode project
+  - ✅ Priority-based fallback (DIGIT_0_EX → DIGIT_0)
+  - ✅ Full SemanticSprite enum (40+ sprite types)
+
+- **MacAmpApp/Views/Components/SimpleSpriteImage.swift** - Dual-mode sprite rendering
+  - ✅ Legacy mode: SimpleSpriteImage("DIGIT_0")
+  - ✅ Semantic mode: SimpleSpriteImage(.digit(0))
+  - ✅ Simplified direct rendering (no wrapper views)
+
+- **MacAmpApp/Views/WinampMainWindow.swift** - Time display migration
+  - ✅ Migrated to semantic sprites (.digit, .minusSign)
+  - ✅ Uses background ":" from MAIN.BMP (not rendered)
+  - ✅ Digits increment and blink correctly
+
+- **MacAmpApp/ViewModels/SkinManager.swift** - Background preprocessing
+  - ✅ preprocessMainBackground() blacks out static digits
+  - ✅ Preserves static ":" from background
+  - ✅ Works across all skin variants
+
+*Status:* ✅ **Phase 1 & 2 COMPLETE** - Proof of concept successful!
 
 ### Example Code
 - **MacAmpApp/Views/Components/TimeDisplayExample.swift** - Migration examples
   - ⚠️ Removed due to compilation errors
   - ✅ Concepts documented in architecture docs
+  - ✅ Real implementation in WinampMainWindow.swift:257-311
 
 ---
 

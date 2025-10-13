@@ -134,8 +134,19 @@ struct SkinSprites {
             Sprite(name: "MAIN_BALANCE_THUMB_ACTIVE", x: 0, y: 422, width: 14, height: 11),
         ],
 
-        // SHUFREP.bmp (EQ/Playlist buttons live here too)
+        // SHUFREP.bmp (Shuffle/Repeat/EQ/Playlist buttons)
         "SHUFREP": [
+            // Shuffle button (left side of button pair)
+            Sprite(name: "MAIN_SHUFFLE_BUTTON", x: 28, y: 0, width: 47, height: 15),
+            Sprite(name: "MAIN_SHUFFLE_BUTTON_DEPRESSED", x: 28, y: 15, width: 47, height: 15),
+            Sprite(name: "MAIN_SHUFFLE_BUTTON_SELECTED", x: 28, y: 30, width: 47, height: 15),
+            Sprite(name: "MAIN_SHUFFLE_BUTTON_SELECTED_DEPRESSED", x: 28, y: 45, width: 47, height: 15),
+            // Repeat button (right side of button pair)
+            Sprite(name: "MAIN_REPEAT_BUTTON", x: 0, y: 0, width: 28, height: 15),
+            Sprite(name: "MAIN_REPEAT_BUTTON_DEPRESSED", x: 0, y: 15, width: 28, height: 15),
+            Sprite(name: "MAIN_REPEAT_BUTTON_SELECTED", x: 0, y: 30, width: 28, height: 15),
+            Sprite(name: "MAIN_REPEAT_BUTTON_SELECTED_DEPRESSED", x: 0, y: 45, width: 28, height: 15),
+            // EQ/Playlist buttons
             Sprite(name: "MAIN_EQ_BUTTON", x: 0, y: 61, width: 23, height: 12),
             Sprite(name: "MAIN_EQ_BUTTON_SELECTED", x: 0, y: 73, width: 23, height: 12),
             Sprite(name: "MAIN_EQ_BUTTON_DEPRESSED", x: 46, y: 61, width: 23, height: 12),

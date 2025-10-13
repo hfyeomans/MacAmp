@@ -1,28 +1,61 @@
 import SwiftUI
 
+/// Sprite source type - supports both legacy hardcoded names and semantic sprite resolution
+enum SpriteSource {
+    case legacy(String)              // Old: hardcoded sprite names
+    case semantic(SemanticSprite)    // New: semantic sprite requests
+
+    var isDigit: Bool {
+        if case .semantic(let s) = self, case .digit(_) = s {
+            return true
+        }
+        return false
+    }
+}
+
 /// Simple, pixel-perfect sprite rendering component (replaces over-engineered PixelGrid)
+/// Now supports both legacy sprite names and semantic sprite resolution.
+///
+/// Usage:
+/// ```swift
+/// // Legacy (backward compatible):
+/// SimpleSpriteImage("DIGIT_0", width: 9, height: 13)
+///
+/// // Semantic (new architecture):
+/// SimpleSpriteImage(.digit(0), width: 9, height: 13)
+/// ```
 struct SimpleSpriteImage: View {
-    let spriteKey: String
+    let source: SpriteSource
     let width: CGFloat?
     let height: CGFloat?
-    
+
     @EnvironmentObject var skinManager: SkinManager
-    
-    init(_ spriteKey: String, width: CGFloat? = nil, height: CGFloat? = nil) {
-        self.spriteKey = spriteKey
+
+    /// Initialize with semantic sprite (new architecture)
+    init(_ semantic: SemanticSprite, width: CGFloat? = nil, height: CGFloat? = nil) {
+        self.source = .semantic(semantic)
         self.width = width
         self.height = height
     }
-    
+
+    /// Initialize with legacy sprite name (backward compatible)
+    init(_ spriteKey: String, width: CGFloat? = nil, height: CGFloat? = nil) {
+        self.source = .legacy(spriteKey)
+        self.width = width
+        self.height = height
+    }
+
     var body: some View {
-        if let skin = skinManager.currentSkin,
-           let image = skin.images[spriteKey] {
+        // Resolve sprite name ONCE when view is created
+        // Pass the resolved name (not the semantic) to prevent re-resolution
+        let spriteName = resolveSpriteName()
+
+        if let name = spriteName, let image = skinManager.currentSkin?.images[name] {
             Image(nsImage: image)
-                .interpolation(.none)      // Pixel-perfect rendering
-                .antialiased(false)        // No antialiasing
+                .interpolation(.none)
+                .antialiased(false)
                 .frame(width: width, height: height)
         } else {
-            // Missing sprite placeholder - obvious purple rectangle for debugging
             Rectangle()
                 .fill(Color.purple)
                 .frame(width: width ?? 32, height: height ?? 32)
@@ -31,9 +64,16 @@ struct SimpleSpriteImage: View {
                         .font(.system(size: min(width ?? 32, height ?? 32) / 4, weight: .bold))
                         .foregroundColor(.white)
                 )
-                .onAppear {
-                    print("❌ MISSING SPRITE: '\(spriteKey)' not found in skin")
-                }
+        }
+    }
+
+    private func resolveSpriteName() -> String? {
+        switch source {
+        case .legacy(let name):
+            return name
+        case .semantic(let semantic):
+            guard let skin = skinManager.currentSkin else { return nil }
+            return SpriteResolver(skin: skin).resolve(semantic)
         }
     }
 }
