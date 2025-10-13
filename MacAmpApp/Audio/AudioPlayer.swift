@@ -235,6 +235,17 @@ class AudioPlayer: ObservableObject {
         toggleEq(isOn: true)
     }
 
+    func applyEQPreset(_ preset: EQPreset) {
+        setPreamp(value: preset.preamp)
+        for (i, g) in preset.bands.enumerated() { setEqBand(index: i, value: g) }
+        toggleEq(isOn: true)
+        print("Applied EQ preset: \(preset.name)")
+    }
+
+    func getCurrentEQPreset(name: String) -> EQPreset {
+        return EQPreset(name: name, preamp: preamp, bands: Array(eqBands))
+    }
+
     func savePresetForCurrentTrack() {
         guard let t = currentTrack else { return }
         let p = EqfPreset(name: t.title, preampDB: preamp, bandsDB: eqBands)

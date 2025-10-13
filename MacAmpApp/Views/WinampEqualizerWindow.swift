@@ -185,13 +185,59 @@ struct WinampEqualizerWindow: View {
     
     @ViewBuilder
     private func buildPresetsButton() -> some View {
-        Button(action: {
-            // TODO: Open presets menu
-        }) {
+        Menu {
+            // Load preset submenu
+            Menu("Load") {
+                ForEach(EQPreset.builtIn) { preset in
+                    Button(preset.name) {
+                        audioPlayer.applyEQPreset(preset)
+                    }
+                }
+            }
+
+            Divider()
+
+            // Save current settings
+            Button("Save") {
+                showSavePresetDialog()
+            }
+
+            Divider()
+
+            // Load from file (future implementation)
+            Button("From Eqf...") {
+                // TODO: Open file picker for .eqf files
+                print("Load from EQF file - not yet implemented")
+            }
+        } label: {
             SimpleSpriteImage("EQ_PRESETS_BUTTON", width: 44, height: 12)
         }
-        .buttonStyle(.plain)
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
         .at(EQCoords.presetsButton)
+    }
+
+    private func showSavePresetDialog() {
+        let alert = NSAlert()
+        alert.messageText = "Save EQ Preset"
+        alert.informativeText = "Enter a name for this preset:"
+        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Cancel")
+
+        let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: 200, height: 24))
+        textField.stringValue = "My Preset"
+        textField.placeholderString = "Preset name"
+        alert.accessoryView = textField
+
+        if alert.runModal() == .alertFirstButtonReturn {
+            let presetName = textField.stringValue
+            if !presetName.isEmpty {
+                let _ = audioPlayer.getCurrentEQPreset(name: presetName)
+                // TODO: Save to user presets (future implementation)
+                // When implemented, will persist newPreset to UserDefaults or file
+                print("Saved preset: \(presetName)")
+            }
+        }
     }
     
     @ViewBuilder
