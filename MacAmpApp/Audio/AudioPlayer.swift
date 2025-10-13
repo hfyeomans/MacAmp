@@ -37,6 +37,7 @@ class AudioPlayer: ObservableObject {
     @Published var isPaused: Bool = false
     @Published var isSeeking: Bool = false // NEW: Prevents completion handler from firing during seek
     private var isHandlingCompletion: Bool = false // NEW: Prevents re-entrant onPlaybackEnded calls
+    private var trackHasEnded: Bool = false // NEW: Tracks when playlist has finished
     @Published var currentTrackURL: URL? // Placeholder for the currently playing track
     @Published var currentTitle: String = "No Track Loaded"
     @Published var currentDuration: Double = 0.0
@@ -120,6 +121,7 @@ class AudioPlayer: ObservableObject {
         isPaused = false
         isPlaying = false
         wasStopped = false  // Clear any stop flag
+        trackHasEnded = false  // Reset playlist end flag
 
         print("AudioPlayer: Playing track '\(track.title)'")
 
@@ -218,10 +220,32 @@ class AudioPlayer: ObservableObject {
     }
 
     func play() {
-        guard audioFile != nil else {
+        // If playlist has ended, restart from the beginning
+        if trackHasEnded && !playlist.isEmpty {
+            #if DEBUG
+            print("DEBUG play: trackHasEnded=true, restarting playlist from first track")
+            #endif
+            playTrack(track: playlist[0])
+            return
+        }
+
+        guard let file = audioFile else {
             print("AudioPlayer: No track loaded to play.")
             return
         }
+
+        // Check if we're at the end of the track (within 0.01s threshold)
+        let sampleRate = file.processingFormat.sampleRate
+        let fileDuration = Double(file.length) / sampleRate
+        if currentTime >= fileDuration - 0.01 {
+            #if DEBUG
+            print("DEBUG play: At end of track (currentTime=\(currentTime) >= fileDuration-0.01=\(fileDuration - 0.01)), advancing to next")
+            #endif
+            // We're at the end - move to next track instead of trying to play
+            onPlaybackEnded()
+            return
+        }
+
         startEngineIfNeeded()
         if !playerNode.isPlaying {
             playerNode.play()
@@ -850,6 +874,12 @@ class AudioPlayer: ObservableObject {
             } else if repeatEnabled {
                 // Repeat: loop back to first track
                 playTrack(track: playlist[0])
+            } else {
+                // End of playlist reached, no repeat
+                trackHasEnded = true
+                #if DEBUG
+                print("DEBUG nextTrack: Playlist ended, set trackHasEnded=true")
+                #endif
             }
         } else if !playlist.isEmpty {
             // No current track, start from beginning
