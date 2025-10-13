@@ -82,9 +82,11 @@ Available presets: Classical, Club, Dance, Full Bass, Full Bass & Treble, Full T
 ### Skins
 
 1. **Switch Skins** - Use keyboard shortcuts:
-   - `Cmd+Shift+1` - Classic skin
-   - `Cmd+Shift+2` - Internet Archive skin
-2. **Import Skins** - Place `.wsz` files in `~/MacAmp/Skins/`
+   - `Cmd+Shift+1` - Classic Winamp
+   - `Cmd+Shift+2` - Internet Archive
+   - `Cmd+Shift+3` - Tron Vaporwave
+   - `Cmd+Shift+4` - Winamp3 Classified
+2. **Import Skins** - Place `.wsz` files in `~/Library/Application Support/MacAmp/Skins/`
 3. **Supported Formats** - Standard ZIP-based skin files
 
 ## Architecture
@@ -141,8 +143,10 @@ MacAmp/
 | `Cmd+O` | Open file |
 | `Cmd+Shift+E` | Toggle equalizer window |
 | `Cmd+Shift+P` | Toggle playlist window |
-| `Cmd+Shift+1` | Switch to Classic skin |
+| `Cmd+Shift+1` | Switch to Classic Winamp skin |
 | `Cmd+Shift+2` | Switch to Internet Archive skin |
+| `Cmd+Shift+3` | Switch to Tron Vaporwave skin |
+| `Cmd+Shift+4` | Switch to Winamp3 Classified skin |
 | `←` / `→` | Previous/Next track |
 | `↑` / `↓` | Volume up/down |
 
