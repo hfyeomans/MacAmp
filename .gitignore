@@ -24,10 +24,15 @@ dist/
 *.mov
 *.mp4
 
-######## Markdown ########
-# Ignore all markdown except root README.md
+######## Documentation ########
+# Ignore all markdown except essential root files
 *.md
 !README.md
+!AGENTS.md
+!SESSION_STATE.md
+
+# Ignore all text files
+*.txt
 
 ######## Nested repositories ########
 webamp_clone/
