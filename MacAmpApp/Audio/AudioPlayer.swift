@@ -36,6 +36,7 @@ class AudioPlayer: ObservableObject {
     @Published var isPlaying: Bool = false
     @Published var isPaused: Bool = false
     @Published var isSeeking: Bool = false // NEW: Prevents completion handler from firing during seek
+    private var isHandlingCompletion: Bool = false // NEW: Prevents re-entrant onPlaybackEnded calls
     @Published var currentTrackURL: URL? // Placeholder for the currently playing track
     @Published var currentTitle: String = "No Track Loaded"
     @Published var currentDuration: Double = 0.0
@@ -76,25 +77,112 @@ class AudioPlayer: ObservableObject {
 
     deinit {}
 
-    func loadTrack(url: URL) {
-        stop()
-        currentTrackURL = url
-        isPaused = false
-        print("AudioPlayer: Loaded track from \(url.lastPathComponent)")
+    // MARK: - Track Management
 
-        // Load metadata and duration via modern async APIs
+    /// Add a NEW track to the playlist (e.g., from file picker)
+    /// Loads metadata asynchronously and auto-plays if it's the first track
+    func addTrack(url: URL) {
+        // Check for duplicates
+        if playlist.contains(where: { $0.url == url }) {
+            print("AudioPlayer: Track already in playlist: \(url.lastPathComponent)")
+            return
+        }
+
+        print("AudioPlayer: Adding track from \(url.lastPathComponent)")
+
+        // Load metadata asynchronously
+        Task { @MainActor in
+            let track = await loadTrackMetadata(url: url)
+            self.playlist.append(track)
+            print("AudioPlayer: Added '\(track.title)' to playlist (total: \(self.playlist.count) tracks)")
+
+            // Auto-play if this is the first track
+            if self.currentTrack == nil {
+                self.playTrack(track: track)
+            }
+        }
+    }
+
+    /// Play an EXISTING track from the playlist
+    /// Does NOT modify the playlist - only plays the specified track
+    func playTrack(track: Track) {
+        // CRITICAL: Don't call stop() - it triggers onPlaybackEnded via wasStopped flag
+        // Instead, directly stop the player node and reset state
+        playerNode.stop()
+        progressTimer?.invalidate()
+
+        currentTrack = track
+        currentTitle = "\(track.title) - \(track.artist)"
+        currentDuration = track.duration
+        currentTrackURL = track.url
+        currentTime = 0
+        playbackProgress = 0
+        isPaused = false
+        isPlaying = false
+        wasStopped = false  // Clear any stop flag
+
+        print("AudioPlayer: Playing track '\(track.title)'")
+
+        // Load the audio file for playback
+        loadAudioFile(url: track.url)
+
+        // Apply EQ auto preset if enabled
+        if eqAutoEnabled {
+            applyAutoPreset(for: track)
+        }
+
+        // Start playback
+        play()
+    }
+
+    /// Private: Load audio file for playback (does NOT modify playlist)
+    private func loadAudioFile(url: URL) {
+        do {
+            audioFile = try AVAudioFile(forReading: url)
+            rewireForCurrentFile()
+            let _ = scheduleFrom(time: 0)
+            playerNode.volume = volume
+            playerNode.pan = balance
+
+            // Update audio properties synchronously
+            updateAudioProperties(for: url)
+        } catch {
+            print("AudioEngine: Failed to open file: \(error)")
+        }
+    }
+
+    /// Private: Load track metadata asynchronously
+    private func loadTrackMetadata(url: URL) async -> Track {
+        let asset = AVURLAsset(url: url)
+
+        do {
+            let metadata = try await asset.load(.commonMetadata)
+            let durationCM = try await asset.load(.duration)
+
+            let titleItem = AVMetadataItem.metadataItems(from: metadata, filteredByIdentifier: .commonIdentifierTitle).first
+            let artistItem = AVMetadataItem.metadataItems(from: metadata, filteredByIdentifier: .commonIdentifierArtist).first
+            let title = (try? await titleItem?.load(.stringValue)) ?? url.lastPathComponent
+            let artist = (try? await artistItem?.load(.stringValue)) ?? "Unknown Artist"
+            let duration = durationCM.seconds
+
+            return Track(url: url, title: title, artist: artist, duration: duration)
+        } catch {
+            print("AudioPlayer: Failed to load metadata for \(url.lastPathComponent): \(error)")
+            return Track(url: url, title: url.lastPathComponent, artist: "Unknown", duration: 0.0)
+        }
+    }
+
+    /// Private: Update audio properties (channel count, bitrate, sample rate)
+    private func updateAudioProperties(for url: URL) {
         let asset = AVURLAsset(url: url)
         Task { @MainActor in
             do {
-                let metadata = try await asset.load(.commonMetadata)
-                let durationCM = try await asset.load(.duration)
                 let audioTracks = try await asset.load(.tracks)
-                
-                // Detect channel count, sample rate, and bitrate from the first audio track
+
                 if let firstAudioTrack = audioTracks.first(where: { $0.mediaType == .audio }) {
                     let audioDesc = try await firstAudioTrack.load(.formatDescriptions)
                     let estimatedDataRate = try await firstAudioTrack.load(.estimatedDataRate)
-                    
+
                     if let desc = audioDesc.first {
                         let audioStreamBasicDescription = CMAudioFormatDescriptionGetStreamBasicDescription(desc)
                         if let streamDesc = audioStreamBasicDescription?.pointee {
@@ -102,59 +190,31 @@ class AudioPlayer: ObservableObject {
                             let channelsPerFrame = streamDesc.mChannelsPerFrame
                             self.channelCount = Int(channelsPerFrame)
                             print("AudioPlayer: Detected \(channelsPerFrame) channel(s) - \(channelsPerFrame == 1 ? "Mono" : "Stereo")")
-                            
+
                             // Sample rate
                             let sampleRateHz = Int(streamDesc.mSampleRate)
                             self.sampleRate = sampleRateHz
                             print("AudioPlayer: Sample rate: \(sampleRateHz) Hz (\(sampleRateHz/1000) kHz)")
                         }
                     }
-                    
+
                     // Bitrate (convert from bits per second to kbps)
                     let bitrateKbps = Int(estimatedDataRate / 1000)
                     self.bitrate = bitrateKbps
                     print("AudioPlayer: Bitrate: \(bitrateKbps) kbps")
                 }
-                
-                let titleItem = AVMetadataItem.metadataItems(from: metadata, filteredByIdentifier: .commonIdentifierTitle).first
-                let artistItem = AVMetadataItem.metadataItems(from: metadata, filteredByIdentifier: .commonIdentifierArtist).first
-                let title = (try? await titleItem?.load(.stringValue)) ?? url.lastPathComponent
-                let artist = (try? await artistItem?.load(.stringValue)) ?? "Unknown Artist"
-                let duration = durationCM.seconds
-
-                self.currentTitle = "\(title) - \(artist)"
-                self.currentDuration = duration
-                let newTrack = Track(url: url, title: title, artist: artist, duration: duration)
-                self.playlist.append(newTrack)
-                if self.currentTrack == nil { self.currentTrack = newTrack }
-                if self.eqAutoEnabled { self.applyAutoPreset(for: newTrack) }
             } catch {
-                self.currentTitle = url.lastPathComponent
-                self.currentDuration = 0.0
-                let newTrack = Track(url: url, title: url.lastPathComponent, artist: "Unknown", duration: 0.0)
-                self.playlist.append(newTrack)
-                if self.currentTrack == nil { self.currentTrack = newTrack }
-                if self.eqAutoEnabled { self.applyAutoPreset(for: newTrack) }
+                print("AudioPlayer: Failed to load audio properties: \(error)")
             }
-        }
-
-        // Prepare audio file and schedule from start
-        do {
-            audioFile = try AVAudioFile(forReading: url)
-            rewireForCurrentFile()
-            scheduleFrom(time: 0)
-            // Ensure volume/pan applied
-            playerNode.volume = volume
-            playerNode.pan = balance
-        } catch {
-            print("AudioEngine: Failed to open file: \(error)")
         }
     }
 
-    func playTrack(track: Track) {
-        loadTrack(url: track.url)
-        currentTrack = track
-        play()
+    /// Legacy method: Load track and add to playlist
+    /// DEPRECATED: Use addTrack(url:) for new tracks or playTrack(track:) for existing tracks
+    @available(*, deprecated, message: "Use addTrack(url:) for new tracks or playTrack(track:) for existing tracks")
+    func loadTrack(url: URL) {
+        print("AudioPlayer: WARNING - loadTrack() is deprecated, use addTrack() instead")
+        addTrack(url: url)
     }
 
     func play() {
@@ -185,7 +245,7 @@ class AudioPlayer: ObservableObject {
     func stop() {
         wasStopped = true
         playerNode.stop()
-        scheduleFrom(time: 0)
+        let _ = scheduleFrom(time: 0)  // Ignore return - reset to beginning
         currentTime = 0
         playbackProgress = 0
         progressTimer?.invalidate()
@@ -365,12 +425,14 @@ class AudioPlayer: ObservableObject {
         installVisualizerTapIfNeeded()
     }
 
-    private func scheduleFrom(time: Double) {
+    /// Schedules audio playback from a specific time
+    /// Returns: true if audio was scheduled, false if track ended
+    private func scheduleFrom(time: Double) -> Bool {
         guard let file = audioFile else {
             #if DEBUG
             NSLog("⚠️ scheduleFrom: No audio file loaded")
             #endif
-            return
+            return false
         }
 
         let sampleRate = file.processingFormat.sampleRate
@@ -378,6 +440,21 @@ class AudioPlayer: ObservableObject {
         // FIX: Use file.length directly instead of currentDuration
         // This eliminates race condition with async track loading
         let fileDuration = Double(file.length) / sampleRate
+
+        // SPECIAL CASE: If seeking to or past the end (within 0.01s threshold), trigger completion immediately
+        // This prevents frame calculation wrap-around issues when time == fileDuration exactly
+        if time >= fileDuration - 0.01 {
+            #if DEBUG
+            print("DEBUG scheduleFrom: time=\(time) >= fileDuration-0.01=\(fileDuration - 0.01), triggering completion immediately")
+            #endif
+            playheadOffset = fileDuration
+            playerNode.stop()
+
+            // Don't call onPlaybackEnded here - let seek() handle track completion
+            // Instead, just return false to signal no audio was scheduled
+            return false  // No audio scheduled - track ended
+        }
+
         let startFrame = AVAudioFramePosition(max(0, min(time, fileDuration)) * sampleRate)
 
         let totalFrames = file.length
@@ -412,16 +489,19 @@ class AudioPlayer: ObservableObject {
                     }
                 }
             )
+
+            // Ensure we have currentDuration for UI (non-critical for seeking)
+            if fileDuration.isFinite && fileDuration > 0 {
+                DispatchQueue.main.async { self.currentDuration = fileDuration }
+            }
+
+            return true  // Audio was scheduled successfully
         } else {
             #if DEBUG
             print("DEBUG scheduleFrom: No frames remaining, calling onPlaybackEnded immediately!")
             #endif
             onPlaybackEnded()
-        }
-
-        // Ensure we have currentDuration for UI (non-critical for seeking)
-        if fileDuration.isFinite && fileDuration > 0 {
-            DispatchQueue.main.async { self.currentDuration = fileDuration }
+            return false  // No audio scheduled - track ended
         }
     }
 
@@ -606,8 +686,12 @@ class AudioPlayer: ObservableObject {
         print("DEBUG seek: time=\(time), fileDuration=\(fileDuration), targetProgress=\(targetProgress), isSeeking=true")
         #endif
 
-        // Schedule the new audio segment
-        scheduleFrom(time: time)
+        // Schedule the new audio segment - returns false if track ended
+        let audioScheduled = scheduleFrom(time: time)
+
+        #if DEBUG
+        print("DEBUG seek: scheduleFrom returned audioScheduled=\(audioScheduled)")
+        #endif
 
         // Update state AFTER scheduling to ensure consistency
         currentTime = time
@@ -617,15 +701,37 @@ class AudioPlayer: ObservableObject {
         print("DEBUG seek: Set playbackProgress=\(playbackProgress), currentTime=\(currentTime)")
         #endif
 
-        if shouldPlay {
+        // CRITICAL: Only start playback if audio was actually scheduled
+        // If scheduleFrom returned false, it means we sought to the end
+        if audioScheduled && shouldPlay {
             startEngineIfNeeded()
             playerNode.play()
             startProgressTimer()  // Restart timer with fresh state
             isPlaying = true
             isPaused = false
+            #if DEBUG
+            print("DEBUG seek: Started playback (audioScheduled=true, shouldPlay=true)")
+            #endif
+        } else if !audioScheduled {
+            // No audio scheduled - we're at the end of the track
+            #if DEBUG
+            print("DEBUG seek: Track ended (audioScheduled=false), handling completion")
+            #endif
+            isPlaying = false
+            isPaused = false
+            // Timer already invalidated above
+
+            // Trigger track completion logic AFTER isSeeking is cleared
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                // Now safe to call onPlaybackEnded (isSeeking will be false)
+                self.onPlaybackEnded()
+            }
         } else {
             isPlaying = false
             // Timer already invalidated above
+            #if DEBUG
+            print("DEBUG seek: NOT starting playback (audioScheduled=\(audioScheduled), shouldPlay=\(shouldPlay))")
+            #endif
         }
 
         // Clear isSeeking flag after a brief delay to allow old completion handler to fire and be ignored
@@ -683,6 +789,14 @@ class AudioPlayer: ObservableObject {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
 
+            // CRITICAL: Prevent re-entrant calls (infinite loop protection)
+            guard !self.isHandlingCompletion else {
+                #if DEBUG
+                print("DEBUG onPlaybackEnded: Ignoring re-entrant call (already handling completion)")
+                #endif
+                return
+            }
+
             // CRITICAL: Don't process completion if we're in the middle of a seek
             // playerNode.stop() triggers the old segment's completion handler
             guard !self.isSeeking else {
@@ -702,11 +816,19 @@ class AudioPlayer: ObservableObject {
             print("DEBUG onPlaybackEnded: Track actually ended, setting playbackProgress=1")
             #endif
 
+            // Set re-entrancy guard
+            self.isHandlingCompletion = true
+
             self.isPlaying = false
             self.progressTimer?.invalidate()
             self.playbackProgress = 1
             self.currentTime = self.currentDuration
             self.nextTrack()
+
+            // Clear re-entrancy guard after nextTrack completes
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                self.isHandlingCompletion = false
+            }
         }
     }
 

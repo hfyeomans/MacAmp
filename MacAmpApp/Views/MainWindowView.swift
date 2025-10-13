@@ -324,7 +324,7 @@ struct MainWindowView: View {
                                 if response == .OK {
                                     if let selectedURL = openPanel.url {
                                         withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
-                                            audioPlayer.loadTrack(url: selectedURL)
+                                            audioPlayer.addTrack(url: selectedURL)
                                             showPlaySuccessFeedback = true
                                         }
                                         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
