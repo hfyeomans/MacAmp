@@ -451,7 +451,7 @@ struct WinampMainWindow: View {
             // Need to scroll for long text
             HStack(spacing: 0) {
                 buildTextSprites(for: trackText)
-                    .offset(x: scrollOffset)
+                    .offset(x: scrollOffset, y: -2)  // Move UP to center: 6px text in 11px area
                     .onAppear {
                         startScrolling()
                     }
@@ -465,6 +465,7 @@ struct WinampMainWindow: View {
         } else {
             // Static text for short names
             buildTextSprites(for: trackText)
+                .offset(y: -2)  // Move UP to center: 6px text in 11px area
                 .frame(width: Coords.trackInfo.width, height: Coords.trackInfo.height, alignment: .leading)
                 .at(CGPoint(x: Coords.trackInfo.minX, y: Coords.trackInfo.minY))
         }
