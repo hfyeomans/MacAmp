@@ -16,8 +16,8 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "DD89FFD3419B7EF1BC0409DB"
-               BuildableName = "MacAmpApp.app"
-               BlueprintName = "MacAmpApp"
+               BuildableName = "MacAmp.app"
+               BlueprintName = "MacAmp"
                ReferencedContainer = "container:MacAmpApp.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -45,8 +45,8 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "DD89FFD3419B7EF1BC0409DB"
-            BuildableName = "MacAmpApp.app"
-            BlueprintName = "MacAmpApp"
+            BuildableName = "MacAmp.app"
+            BlueprintName = "MacAmp"
             ReferencedContainer = "container:MacAmpApp.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
@@ -62,8 +62,8 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "DD89FFD3419B7EF1BC0409DB"
-            BuildableName = "MacAmpApp.app"
-            BlueprintName = "MacAmpApp"
+            BuildableName = "MacAmp.app"
+            BlueprintName = "MacAmp"
             ReferencedContainer = "container:MacAmpApp.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
