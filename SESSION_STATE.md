@@ -1,17 +1,21 @@
 # MacAmp Session State - SpriteResolver Architecture Refactor
 
 **Date:** 2025-10-12
-**Time:** 7:45 PM EDT - Phase 1 & 2 COMPLETE ✅
-**Branch:** `feature/sprite-resolver-architecture`
-**Session Focus:** Implement proper mechanism/presentation separation
+**Time:** 11:06 PM EDT - Phase 1, 2 COMPLETE ✅ | Phase 3 IN PROGRESS
+**Branch:** `phase3-base-mechanism-layer` (off `feature/sprite-resolver-architecture`)
+**Session Focus:** Implement proper mechanism/presentation separation + slider fixes
 
 ---
 
-## 🎯 Current Status: PHASE 1 & 2 SUCCESSFULLY COMPLETED! ✅
+## 🎯 Current Status: PHASE 3 IN PROGRESS - Slider Refactoring
 
-**Previous Session:** Fixed critical bugs, discovered architecture must change
-**This Session:** ✅ Implemented SpriteResolver, fixed Internet Archive, solved double digit issue
-**Achievement:** Proper 3-layer decoupling working across all skins!
+**Completed This Session:**
+- ✅ Phase 1 & 2: SpriteResolver integration, Internet Archive fixed
+- ✅ Phase 3a: Volume slider uses VOLUME.BMP frames correctly
+- ✅ Phase 3b: Balance slider with mirrored gradient + center snap
+- ⚠️ Phase 3c: EQ sliders PARTIAL - thumbs work, gradient frames need implementation
+
+**Current Issue:** EQ sliders need to read bottom half of EQMAIN.bmp (14×2 sprite grid)
 
 ---
 
@@ -995,13 +999,40 @@ Per WinampandWebampFunctionalityResearch.md guidance:
 > dependent modules that consume the state exposed by this core via accessor
 > functions (e.g., getPlaybackStatus(), getVolume())"
 
-### Phase 3 Progress
-- [x] ✅ Volume slider VOLUME.BMP rendering SOLVED!
-- [x] ✅ Discovered critical SwiftUI modifier order requirement
-- [ ] Apply solution to Balance slider (BALANCE.BMP)
-- [ ] Apply solution to EQ sliders (vertical orientation)
-- [ ] Apply solution to Preamp slider
-- [ ] Test all sliders across multiple skins
+### Phase 3 Progress ✅ Volume & Balance | ⚠️ EQ Partial
+
+**COMPLETED:**
+- [x] ✅ Volume slider: VOLUME.BMP frames working (green→red)
+- [x] ✅ Balance slider: BALANCE.BMP mirrored gradient (red→green→red)
+- [x] ✅ Discovered critical SwiftUI modifier order: frame→offset→clip
+- [x] ✅ Added center snap + haptics to balance slider
+
+**IN PROGRESS - NEXT SESSION:**
+- [ ] ⚠️ EQ sliders: Extract bottom half of EQMAIN.bmp as 14×2 sprite grid
+- [ ] ⚠️ Implement 2D grid column selection for each EQ band
+- [ ] Preamp slider: Same approach as EQ bands
+
+**CRITICAL DISCOVERY - EQ Architecture (from EQMAIN.bmp analysis):**
+
+EQ sliders work EXACTLY like VOLUME.BMP but with 2D layout:
+- ❌ NO separate EQ_SLIDER_BACKGROUND sprite!
+- ✅ **EQMAIN.bmp structure** (e.g., /Users/hank/dev/src/MacAmp/tmp/Winamp/EQMAIN.BMP):
+  ```
+  Top half (y:0-163):    Window background/chrome (static overlay)
+  Bottom half (y:164+):  Colored gradient FRAMES in 14×2 grid:
+                         Row 0: Sprites 0-13  (green→yellow)
+                         Row 1: Sprites 14-27 (orange→red)
+                         Each sprite: ~15px wide × ~65px tall
+  ```
+
+**How EQ should work (like VOLUME but 2D):**
+1. Extract bottom half of EQMAIN.bmp (y:164+, 209×129)
+2. Calculate sprite based on EQ value: `sprite = round(percent * 27)`
+3. Get 2D position: `gridX = sprite % 14`, `gridY = sprite / 14`
+4. Use frame→offset→clip: `.frame(14×63).offset(x: -gridX*15, y: -gridY*65).clipped()`
+5. Result: Shows appropriate colored gradient column for that EQ value
+
+**Reference:** webamp Band.tsx lines 19-48 (2D sprite positioning)
 
 ### 🎓 Critical Lessons Learned (Phase 3)
 
@@ -1069,3 +1100,100 @@ Per WinampandWebampFunctionalityResearch.md guidance:
 **Documentation:** Complete and indexed
 
 **Ready to begin Phase 1! 🚀**
+
+---
+
+## 🌳 Current GitHub Branch Structure
+
+```
+main
+  └─ feature/sprite-resolver-architecture (Phase 1 & 2 ✅)
+       └─ phase3-base-mechanism-layer (Phase 3 ⚠️ IN PROGRESS - YOU ARE HERE)
+```
+
+**Commits on current branch:**
+```
+e7182c7 - feat(balance): mirrored gradient + center snap with haptics
+2295514 - feat(sliders): fix VOLUME.BMP frame rendering  
+5c7cbd0 - docs: Phase 3 implementation plan
+```
+
+**Upstream branches:**
+```
+feature/sprite-resolver-architecture:
+  05c3eba - SpriteResolver integration + preprocessing
+  d9262df - Phase 1 & 2 completion docs
+  07f3d4b - Session initialization
+```
+
+**To resume next session:**
+```bash
+git checkout phase3-base-mechanism-layer
+git log --oneline -5  # Review recent work
+cat SESSION_STATE.md   # Read this file
+# Continue with EQ slider 2D grid extraction
+```
+
+---
+
+## 🔨 Next Session Quick Start
+
+### Immediate Task: Fix EQ Sliders
+
+**Goal:** Extract and render bottom half of EQMAIN.bmp as 2D sprite grid
+
+**Steps:**
+1. Load EQMAIN.bmp from skin
+2. Extract region: x:13, y:164, width:209, height:129
+3. Calculate 2D sprite position from EQ value (0-27)
+4. Apply frame→offset→clip with BOTH x and y offsets
+5. Test across Classic & Internet Archive skins
+
+**Reference Files:**
+- /Users/hank/dev/src/MacAmp/tmp/Winamp/EQMAIN.BMP (Classic)
+- /Users/hank/dev/src/MacAmp/tmp/skin-inspection/internet-archive/EQMAIN.bmp (IA)
+- webamp_clone/packages/webamp/js/components/EqualizerWindow/Band.tsx
+
+**Working pattern from Volume:**
+```swift
+Image(nsImage: background)
+    .frame(width: 14, height: 63, alignment: .topLeading)
+    .offset(x: xOff, y: yOff)
+    .clipped()
+```
+
+### Context
+- **Tokens used:** ~520K / 1M (52%)
+- **Tokens remaining:** ~480K (48%)
+- **Estimated for EQ fix:** 20-50K tokens
+- **Plenty of room to complete Phase 3**
+
+---
+
+## 📁 Key Files Modified This Session
+
+### Core Implementation
+- `MacAmpApp/Models/SpriteResolver.swift` ✅ NEW
+- `MacAmpApp/Views/Components/SimpleSpriteImage.swift` ✅ Dual-mode
+- `MacAmpApp/Views/Components/WinampVolumeSlider.swift` ✅ VOLUME.BMP frames
+- `MacAmpApp/Views/Components/BaseSliderControl.swift` ✅ NEW (not used yet)
+- `MacAmpApp/Views/WinampMainWindow.swift` ✅ Time display + preprocessing
+- `MacAmpApp/ViewModels/SkinManager.swift` ✅ preprocessMainBackground()
+- `MacAmpApp/Views/EQSliderView.swift` ⚠️ PARTIAL (thumbs only)
+
+### Documentation
+- `SESSION_STATE.md` ✅ This file
+- `DOCUMENTATION_INDEX.md` ⏳ To update
+- `tasks/phase3-base-mechanism/plan.md` ✅ Updated
+- `tasks/phase3-base-mechanism/VOLUME_BMP_SOLUTION.md` ✅ Reference
+- `tasks/phase3-base-mechanism/EQ_SLIDER_PLAN.md` ⚠️ Needs update
+
+### Analysis Documents
+- `CODEX_VOLUME_SLIDER_ANALYSIS.txt` (debugging prompts)
+- `SPRITERESOLVER_INTEGRATION_COMPLETE.md` (Phase 1 & 2 summary)
+
+---
+
+**Session Status:** Pausing at 52% context
+**Next:** Complete EQ slider 2D grid rendering
+**Ready to resume!** 🚀
