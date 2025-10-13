@@ -50,6 +50,8 @@ class AudioPlayer: ObservableObject {
 
     @Published var playlist: [Track] = [] // New: List of tracks
     @Published var currentTrack: Track? // New: Currently playing track
+    @Published var shuffleEnabled: Bool = false
+    @Published var repeatEnabled: Bool = false
 
     // Equalizer properties
     @Published var preamp: Float = 0.0 // -12.0 to 12.0 dB (typical range)
@@ -591,13 +593,26 @@ class AudioPlayer: ObservableObject {
 
     // MARK: - Playlist navigation
     func nextTrack() {
-        guard let current = currentTrack, let idx = playlist.firstIndex(of: current) else {
-            return
-        }
-        let nextIdx = playlist.index(after: idx)
-        if nextIdx < playlist.count {
-            let next = playlist[nextIdx]
-            playTrack(track: next)
+        guard !playlist.isEmpty else { return }
+
+        if shuffleEnabled {
+            // Shuffle: pick random track
+            if let randomTrack = playlist.randomElement() {
+                playTrack(track: randomTrack)
+            }
+        } else if let current = currentTrack, let idx = playlist.firstIndex(of: current) {
+            // Sequential playback
+            let nextIdx = playlist.index(after: idx)
+            if nextIdx < playlist.count {
+                let next = playlist[nextIdx]
+                playTrack(track: next)
+            } else if repeatEnabled {
+                // Repeat: loop back to first track
+                playTrack(track: playlist[0])
+            }
+        } else if !playlist.isEmpty {
+            // No current track, start from beginning
+            playTrack(track: playlist[0])
         }
     }
 

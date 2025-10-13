@@ -56,6 +56,10 @@ struct WinampMainWindow: View {
         // Position slider
         static let positionSlider = CGPoint(x: 16, y: 72)
         
+        // Shuffle/Repeat buttons (to the right of eject)
+        static let shuffleButton = CGPoint(x: 164, y: 89)
+        static let repeatButton = CGPoint(x: 211, y: 89)
+
         // EQ/Playlist buttons
         static let eqButton = CGPoint(x: 219, y: 58)
         static let playlistButton = CGPoint(x: 242, y: 58)
@@ -133,7 +137,10 @@ struct WinampMainWindow: View {
             
             // Transport buttons
             buildTransportButtons()
-            
+
+            // Shuffle/Repeat buttons
+            buildShuffleRepeatButtons()
+
             // Position slider
             buildPositionSlider()
             
@@ -371,7 +378,32 @@ struct WinampMainWindow: View {
             .at(Coords.ejectButton)
         }
     }
-    
+
+    @ViewBuilder
+    private func buildShuffleRepeatButtons() -> some View {
+        Group {
+            // Shuffle button
+            Button(action: {
+                audioPlayer.shuffleEnabled.toggle()
+            }) {
+                let spriteKey = audioPlayer.shuffleEnabled ? "MAIN_SHUFFLE_BUTTON_SELECTED" : "MAIN_SHUFFLE_BUTTON"
+                SimpleSpriteImage(spriteKey, width: 47, height: 15)
+            }
+            .buttonStyle(.plain)
+            .at(Coords.shuffleButton)
+
+            // Repeat button
+            Button(action: {
+                audioPlayer.repeatEnabled.toggle()
+            }) {
+                let spriteKey = audioPlayer.repeatEnabled ? "MAIN_REPEAT_BUTTON_SELECTED" : "MAIN_REPEAT_BUTTON"
+                SimpleSpriteImage(spriteKey, width: 28, height: 15)
+            }
+            .buttonStyle(.plain)
+            .at(Coords.repeatButton)
+        }
+    }
+
     @ViewBuilder
     private func buildPositionSlider() -> some View {
         ZStack(alignment: .topLeading) {
