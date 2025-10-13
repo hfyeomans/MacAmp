@@ -25,11 +25,9 @@ dist/
 *.mp4
 
 ######## Documentation ########
-# Ignore all markdown except essential root files
+# Ignore all markdown except README
 *.md
 !README.md
-!AGENTS.md
-!SESSION_STATE.md
 
 # Ignore all text files
 *.txt
