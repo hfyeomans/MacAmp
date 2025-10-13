@@ -2,7 +2,39 @@
 
 **Branch:** phase3-base-mechanism-layer
 **Goal:** Separate slider functionality from skin presentation
-**Status:** Planning
+**Status:** IN PROGRESS - Volume Slider ✅ SOLVED
+
+---
+
+## 🎉 BREAKTHROUGH: Volume Slider Working!
+
+### The Solution (After Much Debugging)
+
+**CRITICAL INSIGHT:** SwiftUI modifier order determines rendering behavior!
+
+**WORKING CODE:**
+```swift
+Image(nsImage: volumeBg)
+    .interpolation(.none)
+    .frame(width: 68, height: 13, alignment: .top)  // 1. FRAME FIRST!
+    .offset(y: calculateOffset())                    // 2. THEN OFFSET
+    .clipped()                                       // 3. THEN CLIP
+```
+
+**Frame calculation:**
+```swift
+let sprite = Int(round(percent * 28.0))
+let frameIndex = min(27, max(0, sprite - 1))
+return -CGFloat(frameIndex) * 15.0  // Negative shifts UP
+```
+
+### Lessons Learned
+
+1. **Modifier order is critical** - `.frame()` before `.offset()` before `.clipped()`
+2. **Avoid premature complexity** - Tried containers, masks, wrappers - simple is better
+3. **Don't use .resizable()** - Image already correct dimensions
+4. **Use exact frame height (15px)** - Not fractional (15.46px causes drift)
+5. **Test iteratively** - One change at a time, verify each step
 
 ---
 

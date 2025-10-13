@@ -988,18 +988,46 @@ if let skin = skinManager.currentSkin {
 
 ---
 
-## 🚀 NEXT: Phase 3 - Base Mechanism Layer
+## 🚀 CURRENT: Phase 3 - Base Mechanism Layer (IN PROGRESS)
 
 Per WinampandWebampFunctionalityResearch.md guidance:
 > "The skin rendering and visualization systems should be developed as separate,
 > dependent modules that consume the state exposed by this core via accessor
 > functions (e.g., getPlaybackStatus(), getVolume())"
 
-### Phase 3 Goals
-1. Create BaseSliderControl (functional, no sprites)
-2. Separate slider center channel rendering (always present)
-3. Make skin backgrounds OPTIONAL overlays
-4. Test sliders work WITHOUT any skin loaded
+### Phase 3 Progress
+- [x] ✅ Volume slider VOLUME.BMP rendering SOLVED!
+- [x] ✅ Discovered critical SwiftUI modifier order requirement
+- [ ] Apply solution to Balance slider (BALANCE.BMP)
+- [ ] Apply solution to EQ sliders (vertical orientation)
+- [ ] Apply solution to Preamp slider
+- [ ] Test all sliders across multiple skins
+
+### 🎓 Critical Lessons Learned (Phase 3)
+
+**Lesson 1: SwiftUI Modifier Order Matters**
+```swift
+// ❌ WRONG: offset before frame = broken rendering
+.offset(y: -210) → .frame(height: 13) → .clipped()
+
+// ✅ RIGHT: frame before offset = works perfectly
+.frame(height: 13, alignment: .top) → .offset(y: -210) → .clipped()
+```
+
+**Lesson 2: Avoid Premature Complexity**
+- Tried: Wrapper views, masks, containers, BaseSliderControl abstraction
+- Worked: Direct Image with correct modifier chain
+- **Keep it simple first, add complexity only when proven necessary**
+
+**Lesson 3: Test Incrementally**
+- Don't change multiple things at once
+- Verify each small change before proceeding
+- Use logging to diagnose exact failure points
+
+**Lesson 4: Exact Values Matter**
+- Frame height must be EXACTLY 15px (not 15.46px)
+- Small drift accumulates across 28 frames
+- Match reference implementation precisely
 
 ### Phase 4 Goals
 1. Migrate all remaining components to semantic sprites
