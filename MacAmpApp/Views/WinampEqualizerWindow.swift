@@ -261,6 +261,7 @@ struct WinampEqualizerWindow: View {
 
 /// Vertical slider component for EQ bands
 struct WinampVerticalSlider: View {
+    @EnvironmentObject var skinManager: SkinManager
     @Binding var value: Float
     let range: ClosedRange<Float>
     let width: CGFloat
@@ -269,34 +270,40 @@ struct WinampVerticalSlider: View {
     let backgroundSprite: String
     let thumbSprite: String
     let thumbActiveSprite: String
-    
+
     @State private var isDragging = false
-    
+
+    // EQ_SLIDER_BACKGROUND 2D grid constants (14×2 layout, 28 frames total)
+    private let frameWidth: CGFloat = 15
+    private let frameHeight: CGFloat = 65
+    private let gridColumns: Int = 14
+    private let totalFrames: Int = 28
+
     var body: some View {
         ZStack(alignment: .topLeading) {
-            // Groove overlay - transparent to show background through
-            Rectangle()
-                .fill(Color.black.opacity(0.3))
-                .frame(width: width - 3, height: height)
-                .offset(x: 1.5, y: 0)
-            
-            // Colored channel (6px wide)
-            Rectangle()
-                .fill(sliderColor)
-                .frame(width: 6, height: height - 4)  // 6px wide channel
-                .offset(x: 4, y: 2)  // Center the channel
-            
-            // Center line at 0dB (thin dark line for reference)
-            Rectangle()
-                .fill(Color.black.opacity(0.5))
-                .frame(width: width - 4, height: 1)
-                .offset(x: 2, y: height / 2)
-            
-            // Slider thumb sprite (11x11 pixels) 
-            SimpleSpriteImage(isDragging ? "EQ_SLIDER_THUMB_SELECTED" : "EQ_SLIDER_THUMB", 
+            // Render colored gradient background from EQ_SLIDER_BACKGROUND
+            // Uses 2D grid positioning (14 columns × 2 rows)
+            if let skin = skinManager.currentSkin,
+               let eqBackground = skin.images[backgroundSprite] {
+                // CRITICAL: frame→offset→clip order (proven from Volume slider)
+                Image(nsImage: eqBackground)
+                    .interpolation(.none)
+                    .frame(width: width, height: height, alignment: .topLeading)
+                    .offset(x: calculateFrameXOffset(), y: calculateFrameYOffset())
+                    .clipped()
+                    .allowsHitTesting(false)
+            } else {
+                // Fallback: programmatic gradient if sprite missing
+                Rectangle()
+                    .fill(sliderColor)
+                    .frame(width: width, height: height)
+            }
+
+            // Slider thumb sprite (11x11 pixels)
+            SimpleSpriteImage(isDragging ? thumbActiveSprite : thumbSprite,
                             width: 11, height: 11)
                 .offset(x: 1.5, y: thumbPosition) // Position based on webamp formula
-            
+
             // Invisible interaction area - EXACTLY constrained
             GeometryReader { geo in
                 Color.clear
@@ -362,18 +369,43 @@ struct WinampVerticalSlider: View {
     private func updateValue(from gesture: DragGesture.Value, in geometry: GeometryProxy) {
         let gestureHeight = geometry.size.height
         let y = min(max(0, gesture.location.y), gestureHeight)
-        
+
         // Invert Y coordinate (top = high value, bottom = low value)
         let normalizedPosition = 1.0 - Float(y / gestureHeight)
         var newValue = range.lowerBound + (normalizedPosition * (range.upperBound - range.lowerBound))
-        
+
         // Center snapping: if within ±0.5dB of center (0), snap to exactly 0
         let snapThreshold: Float = 0.5
         if abs(newValue) < snapThreshold {
             newValue = 0
         }
-        
+
         value = max(range.lowerBound, min(range.upperBound, newValue))
+    }
+
+    // Calculate which frame (0-27) to display based on EQ value
+    private func calculateFrameIndex() -> Int {
+        // Normalize value from range (-12 to +12) to 0.0-1.0
+        let normalizedValue = (value - range.lowerBound) / (range.upperBound - range.lowerBound)
+        let percent = min(max(CGFloat(normalizedValue), 0), 1)
+
+        // Map to frame 0-27
+        let frameIndex = Int(round(percent * CGFloat(totalFrames - 1)))
+        return min(max(frameIndex, 0), totalFrames - 1)
+    }
+
+    // Calculate X offset for 2D grid (column selection)
+    private func calculateFrameXOffset() -> CGFloat {
+        let frameIndex = calculateFrameIndex()
+        let gridX = frameIndex % gridColumns  // Column: 0-13
+        return -CGFloat(gridX) * frameWidth
+    }
+
+    // Calculate Y offset for 2D grid (row selection)
+    private func calculateFrameYOffset() -> CGFloat {
+        let frameIndex = calculateFrameIndex()
+        let gridY = frameIndex / gridColumns  // Row: 0-1
+        return -CGFloat(gridY) * frameHeight
     }
 }
 
