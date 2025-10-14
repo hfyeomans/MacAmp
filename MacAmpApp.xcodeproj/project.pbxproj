@@ -84,6 +84,7 @@
 		A5F876BD10A8CBDE81C28D51 /* Winamp.wsz */ = {isa = PBXFileReference; lastKnownFileType = file; path = Winamp.wsz; sourceTree = "<group>"; };
 		A6D5886DD239C58D98785419 /* VisColorParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisColorParser.swift; sourceTree = "<group>"; };
 		A7CCE1500578ECAEED8FAA42 /* AppCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCommands.swift; sourceTree = "<group>"; };
+		AA11BB22CC33DD44EE55FF66 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		AB12B8B4E500692FEC97C025 /* VolumeSliderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeSliderView.swift; sourceTree = "<group>"; };
 		B361EDCFD1F533FD16157EC1 /* VisualizerOptions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisualizerOptions.swift; sourceTree = "<group>"; };
 		B36F1C1954EE4A8EBB993CB6 /* MacAmp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MacAmp.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -102,7 +103,6 @@
 		FDF85EA8990A038079FC0CC3 /* EQF.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EQF.swift; sourceTree = "<group>"; };
 		b220e925d4d54168a0d0f84b /* SpriteResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpriteResolver.swift; sourceTree = "<group>"; };
 		dd963a186e614d3190884b5e /* BaseSliderControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BaseSliderControl.swift; sourceTree = "<group>"; };
-		AA11BB22CC33DD44EE55FF66 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -299,8 +299,8 @@
 		99343DBA52E4D9CABDAC849D /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
-			files = (				FF66EE55DD44CC33BB22AA11 /* Assets.xcassets in Resources */,
-
+			files = (
+				FF66EE55DD44CC33BB22AA11 /* Assets.xcassets in Resources */,
 				BB499C96994EF9FC3DE4DDB4 /* Internet-Archive.wsz in Resources */,
 				AA399B95993DF8EB2CD3CCA3 /* Winamp.wsz in Resources */,
 			);
@@ -365,7 +365,8 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				"ASSETCATALOG_COMPILER_APPICON_NAME[sdk=macosx*]" = AppIcon;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
@@ -519,7 +520,8 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				"ASSETCATALOG_COMPILER_APPICON_NAME[sdk=macosx*]" = AppIcon;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
