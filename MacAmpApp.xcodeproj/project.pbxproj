@@ -52,6 +52,7 @@
 		D1C8711941E449B2B86568DF /* SimpleTestMainWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61CCD7FBB76B81039F2887D7 /* SimpleTestMainWindow.swift */; };
 		EE878CCB3C1E4F7801C5430E /* DockingController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74EDF33D12E79F86166AF268 /* DockingController.swift */; };
 		FEF2451745AD29CA232322BF /* MainWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC46D7551B28A7B9FF034839 /* MainWindowView.swift */; };
+		FF66EE55DD44CC33BB22AA11 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA11BB22CC33DD44EE55FF66 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -101,6 +102,7 @@
 		FDF85EA8990A038079FC0CC3 /* EQF.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EQF.swift; sourceTree = "<group>"; };
 		b220e925d4d54168a0d0f84b /* SpriteResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpriteResolver.swift; sourceTree = "<group>"; };
 		dd963a186e614d3190884b5e /* BaseSliderControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BaseSliderControl.swift; sourceTree = "<group>"; };
+		AA11BB22CC33DD44EE55FF66 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -218,6 +220,7 @@
 			children = (
 				A7CCE1500578ECAEED8FAA42 /* AppCommands.swift */,
 				E5AF78956321BB7B21810429 /* Info.plist */,
+				AA11BB22CC33DD44EE55FF66 /* Assets.xcassets */,
 				C32D1ED0603B1A1497664E37 /* MacAmpApp.swift */,
 				D5C4GF8F990H31I0H2G04370 /* SkinsCommands.swift */,
 				9A7B4D25533F4BB078F35DC3 /* Skins */,
@@ -296,7 +299,8 @@
 		99343DBA52E4D9CABDAC849D /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
-			files = (
+			files = (				FF66EE55DD44CC33BB22AA11 /* Assets.xcassets in Resources */,
+
 				BB499C96994EF9FC3DE4DDB4 /* Internet-Archive.wsz in Resources */,
 				AA399B95993DF8EB2CD3CCA3 /* Winamp.wsz in Resources */,
 			);
