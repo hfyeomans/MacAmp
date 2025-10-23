@@ -50,9 +50,8 @@ struct VisualizerView: View {
             if isPlaying {
                 startVisualization()
             } else {
-                // Keep bars visible when paused
-                updateTimer?.invalidate()
-                updateTimer = nil
+                // Stop animation and drop bars to zero when stopped
+                stopVisualization()
             }
         }
     }
@@ -114,71 +113,100 @@ struct VisualizerView: View {
     }
 }
 
-/// Individual spectrum analyzer bar with gradient colors
+/// Individual spectrum analyzer bar with VISCOLOR.TXT gradient
 struct SpectrumBar: View {
     let height: CGFloat
     let peakPosition: CGFloat
     let maxHeight: CGFloat
-    
-    // Classic Winamp colors - adjusted thresholds for better visibility
-    private let greenThreshold: CGFloat = 0.4  // Show green more often
-    private let yellowThreshold: CGFloat = 0.65  // Show yellow at medium levels
-    
+
+    @EnvironmentObject var skinManager: SkinManager
+
     var body: some View {
         GeometryReader { geometry in
             ZStack(alignment: .bottom) {
-                // Background (dark)
+                // Background (VISCOLOR color 0 = black)
                 Rectangle()
-                    .fill(Color.black.opacity(0.8))
-                
-                // Active bar with gradient
+                    .fill(backgroundColor)
+
+                // Active bar with VISCOLOR gradient (colors 2-17)
                 Rectangle()
-                    .fill(gradient)
+                    .fill(spectrumGradient)
                     .frame(height: height)
-                
-                // Peak indicator (single pixel line)
+
+                // Peak indicator (VISCOLOR color 23 = peak dots)
                 if peakPosition > 0 {
                     Rectangle()
-                        .fill(Color.white)
+                        .fill(peakColor)
                         .frame(height: 1)
                         .offset(y: -peakPosition)
                 }
             }
         }
     }
-    
-    private var gradient: LinearGradient {
+
+    /// Get VISCOLOR color by index with fallback
+    private func getColor(_ index: Int, fallback: Color) -> Color {
+        guard let colors = skinManager.currentSkin?.visualizerColors,
+              index >= 0 && index < colors.count else {
+            return fallback
+        }
+        return colors[index]
+    }
+
+    /// Background color from VISCOLOR (color 0 = black)
+    private var backgroundColor: Color {
+        getColor(0, fallback: Color.black.opacity(0.8))
+    }
+
+    /// Peak dot color from VISCOLOR (color 23 = peak dots)
+    private var peakColor: Color {
+        getColor(23, fallback: Color.white)
+    }
+
+    /// Spectrum gradient using VISCOLOR colors 2-17 (16-color gradient)
+    /// Color 2 (red) = top of spectrum, Color 17 (green) = bottom
+    private var spectrumGradient: LinearGradient {
+        guard let colors = skinManager.currentSkin?.visualizerColors,
+              colors.count >= 18 else {
+            // Fallback to classic green/yellow/red gradient
+            return defaultGradient
+        }
+
+        // Map bar height to VISCOLOR indices 2-17
+        // height 0 → bottom (color 17, green)
+        // height maxHeight → top (color 2, red)
         let normalizedHeight = height / maxHeight
-        
-        if normalizedHeight < greenThreshold {
-            // Green gradient for low levels
+
+        // Create gradient from bottom (17) to current height position
+        let colorStops: [Color] = stride(from: 17, through: 2, by: -1).map { index in
+            colors[index]
+        }
+
+        return LinearGradient(
+            colors: colorStops,
+            startPoint: .bottom,
+            endPoint: .top
+        )
+    }
+
+    /// Fallback gradient if VISCOLOR not available
+    private var defaultGradient: LinearGradient {
+        let normalizedHeight = height / maxHeight
+
+        if normalizedHeight < 0.4 {
             return LinearGradient(
-                colors: [
-                    Color(red: 0, green: 0.6, blue: 0),
-                    Color(red: 0, green: 1, blue: 0)
-                ],
-                startPoint: .bottom,
-                endPoint: .top
+                colors: [Color(red: 0, green: 0.6, blue: 0), Color(red: 0, green: 1, blue: 0)],
+                startPoint: .bottom, endPoint: .top
             )
-        } else if normalizedHeight < yellowThreshold {
-            // Yellow gradient for medium levels
+        } else if normalizedHeight < 0.65 {
             return LinearGradient(
-                colors: [
-                    Color(red: 0.8, green: 0.8, blue: 0),
-                    Color(red: 1, green: 1, blue: 0)
-                ],
-                startPoint: .bottom,
-                endPoint: .top
+                colors: [Color(red: 0.8, green: 0.8, blue: 0), Color(red: 1, green: 1, blue: 0)],
+                startPoint: .bottom, endPoint: .top
             )
         } else {
-            // Red gradient for high levels
             return LinearGradient(
-                colors: [
-                    Color(red: 0.8, green: 0, blue: 0),
-                    Color(red: 1, green: 0, blue: 0)
-                ],
-                startPoint: .bottom,
-                endPoint: .top
+                colors: [Color(red: 0.8, green: 0, blue: 0), Color(red: 1, green: 0, blue: 0)],
+                startPoint: .bottom, endPoint: .top
             )
         }
     }
