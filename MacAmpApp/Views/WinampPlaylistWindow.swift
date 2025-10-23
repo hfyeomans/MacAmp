@@ -13,7 +13,54 @@ struct WinampPlaylistWindow: View {
     // Window dimensions
     private let windowWidth: CGFloat = 275
     private let windowHeight: CGFloat = 232
-    
+
+    // MARK: - Time Display Computed Properties
+
+    /// Total duration of all tracks in the playlist
+    private var totalPlaylistDuration: Double {
+        audioPlayer.playlist.reduce(0.0) { total, track in
+            total + track.duration
+        }
+    }
+
+    /// Remaining time in current track (always positive)
+    private var remainingTime: Double {
+        guard audioPlayer.currentDuration > 0 else { return 0 }
+        return max(0, audioPlayer.currentDuration - audioPlayer.currentTime)
+    }
+
+    /// Format time as MM:SS
+    private func formatTime(_ seconds: Double) -> String {
+        let totalSeconds = max(0, Int(seconds))
+        let minutes = totalSeconds / 60
+        let secs = totalSeconds % 60
+        return String(format: "%d:%02d", minutes, secs)
+    }
+
+    /// Track time display text: "MM:SS / MM:SS" or just ":" when idle
+    private var trackTimeText: String {
+        guard audioPlayer.currentTrack != nil,
+              audioPlayer.currentDuration > 0 else {
+            return ":"  // Show only colon when idle
+        }
+
+        let current = formatTime(audioPlayer.currentTime)
+        let total = formatTime(totalPlaylistDuration)
+        return "\(current) / \(total)"
+    }
+
+    /// Remaining time display text: "-MM:SS" or empty when not playing
+    private var remainingTimeText: String {
+        guard audioPlayer.isPlaying,
+              audioPlayer.currentTrack != nil,
+              audioPlayer.currentDuration > 0 else {
+            return ""  // Hidden when not playing
+        }
+
+        let remaining = formatTime(remainingTime)
+        return "-\(remaining)"
+    }
+
     var body: some View {
         GeometryReader { geometry in
             ZStack {
@@ -112,6 +159,9 @@ struct WinampPlaylistWindow: View {
 
             // Transport control buttons (play, pause, stop, next, prev)
             buildPlaylistTransportButtons()
+
+            // Time displays (track time and remaining time)
+            buildTimeDisplays()
 
             // Title bar buttons
             buildTitleBarButtons()
@@ -277,6 +327,28 @@ struct WinampPlaylistWindow: View {
             }
             .buttonStyle(.plain)
             .position(x: 241, y: 218)
+        }
+    }
+
+    // MARK: - Time Displays
+    @ViewBuilder
+    private func buildTimeDisplays() -> some View {
+        Group {
+            // Track Time Display (MM:SS / MM:SS format)
+            // Bottom right corner, aligned with transport buttons
+            Text(trackTimeText)
+                .font(.system(size: 8, weight: .medium, design: .monospaced))
+                .foregroundColor(Color(red: 0, green: 1.0, blue: 0))  // Green from PLEDIT.TXT (#00FF00)
+                .position(x: 260, y: 218)
+
+            // Remaining Time Display (-MM:SS format)
+            // Only shows when playing, positioned above track time
+            if !remainingTimeText.isEmpty {
+                Text(remainingTimeText)
+                    .font(.system(size: 8, weight: .medium, design: .monospaced))
+                    .foregroundColor(Color(red: 0, green: 1.0, blue: 0))  // Green (#00FF00)
+                    .position(x: 260, y: 206)
+            }
         }
     }
 
