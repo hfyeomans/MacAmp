@@ -123,11 +123,12 @@ struct WinampPlaylistWindow: View {
             // Bottom left corner - left-aligned (0 to 125)
             SimpleSpriteImage("PLAYLIST_BOTTOM_LEFT_CORNER", width: 125, height: 38)
                 .position(x: 62.5, y: 213)  // Center at 62.5 (spans 0-125)
+                .border(Color.red, width: 1)  // DEBUG: Show bounds
 
-            // Bottom right corner - positioned to create slight overlap with left corner
-            // This eliminates any gap between corners
+            // Bottom right corner - meets left corner at X:125 (no overlap, no gap)
             SimpleSpriteImage("PLAYLIST_BOTTOM_RIGHT_CORNER", width: 150, height: 38)
-                .position(x: 195, y: 213)  // Center at 195 (left edge at 120, overlaps with left corner)
+                .position(x: 200, y: 213)  // Center at 200 (left edge at 125, right edge at 275)
+                .border(Color.green, width: 1)  // DEBUG: Show bounds
             
             // Fill any gap in bottom with tiles if corners don't meet
             // This prevents the black gap issue
@@ -273,7 +274,7 @@ struct WinampPlaylistWindow: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .position(x: 128, y: 220)  // 120 + 8
+            .position(x: 133, y: 220)  // 120 + 8
 
             // Play button
             Button(action: {
@@ -288,7 +289,7 @@ struct WinampPlaylistWindow: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .position(x: 139, y: 220)  // 125 + 19
+            .position(x: 144, y: 220)  // 125 + 19
 
             // Pause button
             Button(action: {
@@ -299,7 +300,7 @@ struct WinampPlaylistWindow: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .position(x: 150, y: 220)  // 125 + 30
+            .position(x: 155, y: 220)  // 125 + 30
 
             // Stop button
             Button(action: {
@@ -310,7 +311,7 @@ struct WinampPlaylistWindow: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .position(x: 161, y: 220)  // 125 + 41
+            .position(x: 166, y: 220)  // 125 + 41
 
             // Next button
             Button(action: {
@@ -321,7 +322,7 @@ struct WinampPlaylistWindow: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .position(x: 172, y: 220)  // 125 + 52
+            .position(x: 177, y: 220)  // 125 + 52
 
             // Eject button
             Button(action: {
@@ -332,7 +333,7 @@ struct WinampPlaylistWindow: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .position(x: 183, y: 220)  // 125 + 63
+            .position(x: 188, y: 220)  // 125 + 63
         }
     }
 
@@ -346,7 +347,7 @@ struct WinampPlaylistWindow: View {
             Text(trackTimeText)
                 .font(.system(size: 8, weight: .medium, design: .monospaced))
                 .foregroundColor(Color(red: 0, green: 1.0, blue: 0))  // Green from PLEDIT.TXT (#00FF00)
-                .position(x: 186, y: 217)
+                .position(x: 191, y: 217)
 
             // Remaining Time Display (-MM:SS format)
             // Positioned above mini-time
@@ -354,7 +355,7 @@ struct WinampPlaylistWindow: View {
                 Text(remainingTimeText)
                     .font(.system(size: 8, weight: .medium, design: .monospaced))
                     .foregroundColor(Color(red: 0, green: 1.0, blue: 0))  // Green (#00FF00)
-                    .position(x: 186, y: 205)
+                    .position(x: 191, y: 205)
             }
         }
     }
