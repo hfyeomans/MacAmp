@@ -119,14 +119,18 @@ struct WinampPlaylistWindow: View {
                     .position(x: 265, y: 20 + 14.5 + CGFloat(i) * 29)
             }
             
-            // Bottom section
-            // Bottom left corner - contains 4 menu buttons baked into graphic
-            SimpleSpriteImage("PLAYLIST_BOTTOM_LEFT_CORNER", width: 125, height: 38)
-                .position(x: 62.5, y: 213)  // Center at 62.5 (spans 0-125)
-
-            // Bottom right corner - contains 6 transport buttons and info bar baked into graphic
-            SimpleSpriteImage("PLAYLIST_BOTTOM_RIGHT_CORNER", width: 150, height: 38)
-                .position(x: 200, y: 213)  // Center at 200 (left edge at 125, right edge at 275)
+            // Bottom section - Webamp 3-section layout
+            // Left (125px) anchored to left:0, Right (150px) anchored to right:0
+            ZStack(alignment: .topLeading) {
+                // Left section background - anchored to left edge
+                HStack(spacing: 0) {
+                    SimpleSpriteImage("PLAYLIST_BOTTOM_LEFT_CORNER", width: 125, height: 38)
+                    Spacer()  // Center spacer (flexible width)
+                    SimpleSpriteImage("PLAYLIST_BOTTOM_RIGHT_CORNER", width: 150, height: 38)
+                }
+                .frame(height: 38)
+                .position(x: windowWidth / 2, y: 213)
+            }
             
             // Fill any gap in bottom with tiles if corners don't meet
             // This prevents the black gap issue
