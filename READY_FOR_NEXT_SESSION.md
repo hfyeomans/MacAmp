@@ -1,6 +1,6 @@
 # Ready for Next Session - Playlist State Sync
 
-## ✅ Current State: ALMOST COMPLETE!
+## ✅ Current State: COMPLETE! 🎉
 
 ### Working Features:
 1. ✅ **Track Selection** - Click any track, it plays correctly (Bug B FIXED!)
@@ -8,21 +8,27 @@
 3. ✅ **State Sync** - Main window and playlist stay synchronized
 4. ✅ **Clean Layout** - No gaps, no overlapping elements
 5. ✅ **Sprite-Based Time Display** - Uses CHARACTER sprites with PLEDIT.TXT colors
+6. ✅ **Transport Buttons** - 5/6 buttons working (Previous, Play, Pause, Stop, Next)
 
 ---
 
-## 🎯 Next Task (30 minutes to completion):
+## 📋 Known Limitations (Documented for Future)
 
-### Task 1: Test Button Clicks ✨ FINAL TASK
-**What:** Verify 6 transparent click targets align with transport icons
-**Why:** Code exists, just needs testing and potential position adjustments
-**Test:**
-- Run app: `open /Users/hank/Library/Developer/Xcode/DerivedData/MacAmpApp-*/Build/Products/Debug/MacAmp.app`
-- Open playlist window
-- Add some tracks
-- Click each transport button (Previous, Play, Pause, Stop, Next, Eject)
-- Verify actions trigger correctly
-- Adjust X/Y positions if needed (currently at Y:220)
+### Threading Issue: Main Thread Blocking
+**File:** `tasks/playlist-state-sync/KNOWN_LIMITATIONS.md`
+
+**Symptoms:**
+- Track switching freezes UI temporarily
+- Slider dragging freezes visualizer/numbers
+- Eject button triggers nextTrack() unexpectedly
+
+**Root Cause:** `loadAudioFile()` blocks main thread (synchronous I/O)
+
+**Fix:** Async audio loading refactor (2-3 hours, separate task)
+
+**Priority:** P1 before 1.0 release
+
+**Decision:** Documented and deferred (outside playlist scope)
 
 ---
 
