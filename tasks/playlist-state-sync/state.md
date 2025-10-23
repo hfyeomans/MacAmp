@@ -66,26 +66,24 @@
 
 **Time:** Completed in ~1 hour
 
-### Task 2: Make Transport Icons Clickable
-**Goal:** Add transparent click targets over the 6 baked-in transport button icons
+### Task 2: Make Transport Icons Clickable - TESTING RESULTS
 
-**Current:** buildPlaylistTransportButtons() has 6 transparent buttons at Y:220
-**Status:** Code exists but positions may need adjustment
+**Status:** ✅ MOSTLY WORKING
 
-**Buttons:**
-1. Previous (◄◄) → audioPlayer.previousTrack()
-2. Play (►) → audioPlayer.play()
-3. Pause (❚❚) → audioPlayer.pause()
-4. Stop (■) → audioPlayer.stop()
-5. Next (►►) → audioPlayer.nextTrack()
-6. Eject (⏏) → openFileDialog()
+**Buttons Tested:**
+1. ✅ Previous (X:133, Y:220) → audioPlayer.previousTrack() - **WORKS**
+2. ✅ Play (X:144, Y:220) → audioPlayer.play() - **WORKS**
+3. ✅ Pause (X:155, Y:220) → audioPlayer.pause() - **WORKS**
+4. ✅ Stop (X:166, Y:220) → audioPlayer.stop() - **WORKS**
+5. ✅ Next (X:177, Y:220) → audioPlayer.nextTrack() - **WORKS**
+6. ⚠️ Eject (X:188, Y:220) → openFileDialog() - **PARTIAL**
+   - Triggers `nextTrack()` incorrectly (logs show "DEBUG nextTrack: Playlist ended")
+   - File dialog may/may not open
+   - Needs investigation
 
-**Testing Needed:**
-- Verify click targets align with visible icons
-- Test all 6 buttons trigger correct actions
-- Verify state synchronization (button presses update both windows)
+**Alignment:** All buttons properly aligned with visible gold icons
 
-**Estimated Time:** 30 minutes (code already exists, just test/adjust)
+**State Sync:** ✅ Buttons work from playlist, state reflects in both windows
 
 ---
 
