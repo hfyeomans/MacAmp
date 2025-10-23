@@ -42,24 +42,29 @@
 
 ---
 
-## 🔄 IN PROGRESS - Next Tasks
+## ✅ COMPLETED - Track Time Numbers in Black Bars
 
-### Task 1: Implement Track Time Numbers in Black Bars
-**Goal:** Display track timing info in the black bars using PLEDIT digit sprites
+**Status:** ✅ IMPLEMENTED (Commit: 2b240e7)
 
-**Current:** Time displays use SwiftUI Text (green color, monospaced)
-**Needed:**
-- Use PLEDIT.BMP digit sprites for pixel-perfect rendering
-- Position numbers in black info bar areas
-- Follow PLEDIT.TXT for font/color configuration
-- Format: Current time / Total playlist time above transport buttons
-- Format: Remaining time (negative countdown)
+**Solution:** Created PlaylistTimeText component using CHARACTER sprites from TEXT.BMP
 
-**Files to Modify:**
-- `WinampPlaylistWindow.swift` - Update buildTimeDisplays() method
-- May need to add PLEDIT digit sprite definitions to SkinSprites.swift
+**Implementation:**
+- Uses existing CHARACTER sprites (5×6px) from TEXT.BMP font
+- Applies PLEDIT.TXT normalTextColor via `.colorMultiply()`
+- Positioned in black info bars: Y:217 (track time), Y:205 (remaining)
+- Supports all time formatting: "MM:SS / MM:SS", "-MM:SS", ":"
 
-**Estimated Time:** 1-2 hours
+**Architecture:**
+- `PlaylistTimeText.swift`: New sprite-based text renderer (65 lines)
+- `WinampPlaylistWindow.swift`: Updated buildTimeDisplays() to use PlaylistTimeText
+- Colors adapt automatically per skin via PLEDIT.TXT Normal= property
+
+**Key Discovery:**
+- PLEDIT.BMP does NOT contain digit sprites
+- Winamp playlists use TEXT.BMP CHARACTER sprites (same as SkinnedText)
+- Difference: PlaylistTimeText applies PLEDIT.TXT colors, SkinnedText doesn't
+
+**Time:** Completed in ~1 hour
 
 ### Task 2: Make Transport Icons Clickable
 **Goal:** Add transparent click targets over the 6 baked-in transport button icons
@@ -85,6 +90,18 @@
 ---
 
 ## 🏗️ Architecture Notes
+
+### Time Display Architecture:
+**Component:** `PlaylistTimeText` (sprite-based text renderer)
+- Uses CHARACTER sprites from TEXT.BMP (5×6px ASCII font)
+- Applies PLEDIT.TXT Normal color via `.colorMultiply()`
+- HStack layout with 1px spacing for monospaced appearance
+- Falls back to system font if sprites missing
+
+**Color Application:**
+- Classic Winamp: Normal=#00FF00 (green)
+- Internet Archive: Normal=#7f7f7f (gray)
+- Colors load automatically from PLEDIT.TXT in each skin
 
 ### Bottom Section Layout (CONFIRMED WORKING):
 ```
@@ -161,7 +178,7 @@ main
 ### Must Have (Before Merge):
 - [x] Track selection works reliably
 - [x] All 6 transport icons visible
-- [ ] Track time numbers display in black bars
+- [x] Track time numbers display in black bars (sprite-based)
 - [ ] Transport buttons clickable and functional
 - [ ] State syncs between main and playlist windows
 - [ ] Works with Classic Winamp skin
