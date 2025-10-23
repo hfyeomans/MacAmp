@@ -262,16 +262,16 @@ struct WinampPlaylistWindow: View {
     @ViewBuilder
     private func buildPlaylistTransportButtons() -> some View {
         Group {
-            // Previous button (tiny 10x9 gold button from PLEDIT.BMP)
-            // Positioned in bottom info bar per webamp layout
+            // NOTE: Gold button icons are BAKED INTO the PLAYLIST_BOTTOM_RIGHT_CORNER sprite!
+            // These are transparent click targets positioned over the visual icons in the background.
+
+            // Previous button - transparent click target
             Button(action: {
                 audioPlayer.previousTrack()
             }) {
-                SimpleSpriteImage(
-                    audioPlayer.isPlaying ? "PLAYLIST_PREV_BUTTON_ACTIVE" : "PLAYLIST_PREV_BUTTON",
-                    width: 10,
-                    height: 9
-                )
+                Color.clear
+                    .frame(width: 10, height: 9)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .position(x: 133, y: 216)
@@ -284,11 +284,9 @@ struct WinampPlaylistWindow: View {
                     audioPlayer.play()
                 }
             }) {
-                SimpleSpriteImage(
-                    (audioPlayer.isPlaying && !audioPlayer.isPaused) ? "PLAYLIST_PLAY_BUTTON_ACTIVE" : "PLAYLIST_PLAY_BUTTON",
-                    width: 10,
-                    height: 9
-                )
+                Color.clear
+                    .frame(width: 10, height: 9)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .position(x: 144, y: 216)
@@ -297,11 +295,9 @@ struct WinampPlaylistWindow: View {
             Button(action: {
                 audioPlayer.pause()
             }) {
-                SimpleSpriteImage(
-                    audioPlayer.isPaused ? "PLAYLIST_PAUSE_BUTTON_ACTIVE" : "PLAYLIST_PAUSE_BUTTON",
-                    width: 10,
-                    height: 9
-                )
+                Color.clear
+                    .frame(width: 10, height: 9)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .position(x: 155, y: 216)
@@ -310,11 +306,9 @@ struct WinampPlaylistWindow: View {
             Button(action: {
                 audioPlayer.stop()
             }) {
-                SimpleSpriteImage(
-                    "PLAYLIST_STOP_BUTTON",
-                    width: 10,
-                    height: 9
-                )
+                Color.clear
+                    .frame(width: 10, height: 9)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .position(x: 166, y: 216)
@@ -323,14 +317,23 @@ struct WinampPlaylistWindow: View {
             Button(action: {
                 audioPlayer.nextTrack()
             }) {
-                SimpleSpriteImage(
-                    audioPlayer.isPlaying ? "PLAYLIST_NEXT_BUTTON_ACTIVE" : "PLAYLIST_NEXT_BUTTON",
-                    width: 10,
-                    height: 9
-                )
+                Color.clear
+                    .frame(width: 10, height: 9)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .position(x: 177, y: 216)
+
+            // Eject button (6th button)
+            Button(action: {
+                openFileDialog()
+            }) {
+                Color.clear
+                    .frame(width: 10, height: 9)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .position(x: 188, y: 216)
         }
     }
 

@@ -258,8 +258,8 @@ struct SkinSprites {
             Sprite(name: "PLAYLIST_LOAD_LIST", x: 204, y: 149, width: 22, height: 18),
             Sprite(name: "PLAYLIST_LOAD_LIST_SELECTED", x: 227, y: 149, width: 22, height: 18),
 
-            // Transport control buttons (tiny gold buttons in info bar)
-            // Located in dark horizontal bar of PLEDIT.BMP sprite sheet
+            // Transport control buttons (tiny gold buttons in info bar) - 6 buttons total
+            // Located in dark horizontal bar of PLEDIT.BMP sprite sheet (Y:62 normal, Y:72 active)
             Sprite(name: "PLAYLIST_PREV_BUTTON", x: 136, y: 62, width: 10, height: 9),
             Sprite(name: "PLAYLIST_PREV_BUTTON_ACTIVE", x: 136, y: 72, width: 10, height: 9),
             Sprite(name: "PLAYLIST_PLAY_BUTTON", x: 147, y: 62, width: 10, height: 9),
@@ -270,6 +270,8 @@ struct SkinSprites {
             Sprite(name: "PLAYLIST_STOP_BUTTON_ACTIVE", x: 169, y: 72, width: 10, height: 9),
             Sprite(name: "PLAYLIST_NEXT_BUTTON", x: 180, y: 62, width: 10, height: 9),
             Sprite(name: "PLAYLIST_NEXT_BUTTON_ACTIVE", x: 180, y: 72, width: 10, height: 9),
+            Sprite(name: "PLAYLIST_EJECT_BUTTON", x: 191, y: 62, width: 10, height: 9),
+            Sprite(name: "PLAYLIST_EJECT_BUTTON_ACTIVE", x: 191, y: 72, width: 10, height: 9),
         ],
 
         // TEXT.bmp (font characters) – indices computed dynamically similar to Webamp
