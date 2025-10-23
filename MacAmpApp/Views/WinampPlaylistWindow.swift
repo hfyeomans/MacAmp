@@ -133,12 +133,12 @@ struct WinampPlaylistWindow: View {
 
                 // RIGHT: 154px (125 to 279) - uses full PLEDIT.BMP width!
                 ZStack {
-                    SimpleSpriteImage("PLAYLIST_BOTTOM_RIGHT_CORNER", width: 154, height: 38)
+                    SimpleSpriteImage("PLAYLIST_BOTTOM_RIGHT_CORNER", width: 160, height: 38)
                     Text("R-154px")
                         .foregroundColor(.yellow)
                         .font(.system(size: 20, weight: .bold))
                 }
-                .frame(width: 154, height: 38)
+                .frame(width: 160, height: 38)
                 .border(Color.orange, width: 2)  // DEBUG: Orange border
             }
             .frame(width: windowWidth, height: 38)
