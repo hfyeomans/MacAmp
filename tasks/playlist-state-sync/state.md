@@ -177,10 +177,10 @@ main
 - [x] Track selection works reliably
 - [x] All 6 transport icons visible
 - [x] Track time numbers display in black bars (sprite-based)
-- [ ] Transport buttons clickable and functional
-- [ ] State syncs between main and playlist windows
-- [ ] Works with Classic Winamp skin
-- [ ] Works with Internet Archive skin
+- [x] Transport buttons clickable and functional (5/6 working)
+- [x] State syncs between main and playlist windows
+- [x] Works with Classic Winamp skin
+- [x] Works with Internet Archive skin (colors adapt)
 
 ### Nice to Have:
 - [ ] Remaining time countdown working
