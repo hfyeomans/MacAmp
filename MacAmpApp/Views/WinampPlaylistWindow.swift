@@ -120,15 +120,13 @@ struct WinampPlaylistWindow: View {
             }
             
             // Bottom section
-            // Bottom left corner - left-aligned (0 to 125)
+            // Bottom left corner - contains 4 menu buttons baked into graphic
             SimpleSpriteImage("PLAYLIST_BOTTOM_LEFT_CORNER", width: 125, height: 38)
                 .position(x: 62.5, y: 213)  // Center at 62.5 (spans 0-125)
-                .border(Color.red, width: 1)  // DEBUG: Show bounds
 
-            // Bottom right corner - meets left corner at X:125 (no overlap, no gap)
+            // Bottom right corner - contains 6 transport buttons and info bar baked into graphic
             SimpleSpriteImage("PLAYLIST_BOTTOM_RIGHT_CORNER", width: 150, height: 38)
                 .position(x: 200, y: 213)  // Center at 200 (left edge at 125, right edge at 275)
-                .border(Color.green, width: 1)  // DEBUG: Show bounds
             
             // Fill any gap in bottom with tiles if corners don't meet
             // This prevents the black gap issue
@@ -221,39 +219,48 @@ struct WinampPlaylistWindow: View {
         .padding(.horizontal, 2)
     }
     
-    // MARK: - Control Buttons
+    // MARK: - Bottom Button Click Targets
     @ViewBuilder
     private func buildBottomControls() -> some View {
         Group {
-            // Add button
+            // NOTE: The 4 menu button graphics (ADD, REM, SEL, MISC) are BAKED INTO
+            // the PLAYLIST_BOTTOM_LEFT_CORNER sprite. These are just transparent click targets.
+
+            // Add File button - transparent click target over baked-in button graphic
             Button(action: { openFileDialog() }) {
-                SimpleSpriteImage("PLAYLIST_ADD_FILE", width: 22, height: 18)
+                Color.clear
+                    .frame(width: 22, height: 18)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .position(x: 25, y: 206)
-            
-            // Remove button
+
+            // Remove Selected button
             Button(action: { removeSelectedTrack() }) {
-                SimpleSpriteImage("PLAYLIST_REMOVE_SELECTED", width: 22, height: 18)
+                Color.clear
+                    .frame(width: 22, height: 18)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .position(x: 54, y: 206)
-            
-            // Selection button
+
+            // Selection/Crop button
             Button(action: {}) {
-                SimpleSpriteImage("PLAYLIST_CROP", width: 22, height: 18)
+                Color.clear
+                    .frame(width: 22, height: 18)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .position(x: 83, y: 206)
-            
-            // Misc button
+
+            // Misc Options button
             Button(action: {}) {
-                SimpleSpriteImage("PLAYLIST_MISC_OPTIONS", width: 22, height: 18)
+                Color.clear
+                    .frame(width: 22, height: 18)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .position(x: 112, y: 206)
-
-            // Note: SORT LIST button removed - it's actually a menu item under MISC, not a separate button
         }
     }
 
