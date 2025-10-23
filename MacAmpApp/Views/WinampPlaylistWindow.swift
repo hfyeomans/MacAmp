@@ -346,15 +346,15 @@ struct WinampPlaylistWindow: View {
     @ViewBuilder
     private func buildTimeDisplays() -> some View {
         Group {
-            // Track Time Display (MM:SS / MM:SS) - positioned in black info bar
+            // Track Time Display (MM:SS / MM:SS) - positioned in TOP black info bar
             // Uses CHARACTER sprites from TEXT.BMP with PLEDIT.TXT color
             PlaylistTimeText(trackTimeText)
-                .position(x: 191, y: 217)
+                .position(x: 191, y: 205)
 
-            // Remaining Time Display (-MM:SS) - positioned above track time
+            // Remaining Time Display (-MM:SS) - positioned in BOTTOM black info bar
             if !remainingTimeText.isEmpty {
                 PlaylistTimeText(remainingTimeText)
-                    .position(x: 191, y: 205)
+                    .position(x: 191, y: 217)
             }
         }
     }
