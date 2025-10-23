@@ -109,7 +109,10 @@ struct WinampPlaylistWindow: View {
             
             // Control buttons at bottom
             buildBottomControls()
-            
+
+            // Transport control buttons (play, pause, stop, next, prev)
+            buildPlaylistTransportButtons()
+
             // Title bar buttons
             buildTitleBarButtons()
             
@@ -201,7 +204,82 @@ struct WinampPlaylistWindow: View {
             .position(x: 231, y: 206)
         }
     }
-    
+
+    // MARK: - Transport Controls (Playback Buttons)
+    @ViewBuilder
+    private func buildPlaylistTransportButtons() -> some View {
+        Group {
+            // Previous button
+            Button(action: {
+                audioPlayer.previousTrack()
+            }) {
+                SimpleSpriteImage(
+                    audioPlayer.isPlaying ? "PLAYLIST_PREV_BUTTON_ACTIVE" : "PLAYLIST_PREV_BUTTON",
+                    width: 22,
+                    height: 18
+                )
+            }
+            .buttonStyle(.plain)
+            .position(x: 145, y: 218)
+
+            // Play button
+            Button(action: {
+                if audioPlayer.isPaused {
+                    audioPlayer.play()  // Resume if paused
+                } else if !audioPlayer.isPlaying {
+                    audioPlayer.play()  // Start if stopped
+                }
+            }) {
+                SimpleSpriteImage(
+                    (audioPlayer.isPlaying && !audioPlayer.isPaused) ? "PLAYLIST_PLAY_BUTTON_ACTIVE" : "PLAYLIST_PLAY_BUTTON",
+                    width: 22,
+                    height: 18
+                )
+            }
+            .buttonStyle(.plain)
+            .position(x: 169, y: 218)
+
+            // Pause button
+            Button(action: {
+                audioPlayer.pause()
+            }) {
+                SimpleSpriteImage(
+                    audioPlayer.isPaused ? "PLAYLIST_PAUSE_BUTTON_ACTIVE" : "PLAYLIST_PAUSE_BUTTON",
+                    width: 22,
+                    height: 18
+                )
+            }
+            .buttonStyle(.plain)
+            .position(x: 193, y: 218)
+
+            // Stop button
+            Button(action: {
+                audioPlayer.stop()
+            }) {
+                SimpleSpriteImage(
+                    "PLAYLIST_STOP_BUTTON",  // No active state for stop
+                    width: 22,
+                    height: 18
+                )
+            }
+            .buttonStyle(.plain)
+            .position(x: 217, y: 218)
+
+            // Next button
+            Button(action: {
+                audioPlayer.nextTrack()
+            }) {
+                SimpleSpriteImage(
+                    audioPlayer.isPlaying ? "PLAYLIST_NEXT_BUTTON_ACTIVE" : "PLAYLIST_NEXT_BUTTON",
+                    width: 22,
+                    height: 18
+                )
+            }
+            .buttonStyle(.plain)
+            .position(x: 241, y: 218)
+        }
+    }
+
     // MARK: - Title Bar Buttons
     @ViewBuilder
     private func buildTitleBarButtons() -> some View {
