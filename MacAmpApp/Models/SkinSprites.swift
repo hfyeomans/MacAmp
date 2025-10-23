@@ -230,7 +230,7 @@ struct SkinSprites {
             Sprite(name: "PLAYLIST_RIGHT_TILE", x: 31, y: 42, width: 20, height: 29),
             Sprite(name: "PLAYLIST_BOTTOM_TILE", x: 179, y: 0, width: 25, height: 38),
             Sprite(name: "PLAYLIST_BOTTOM_LEFT_CORNER", x: 0, y: 72, width: 125, height: 38),
-            Sprite(name: "PLAYLIST_BOTTOM_RIGHT_CORNER", x: 126, y: 72, width: 150, height: 38),
+            Sprite(name: "PLAYLIST_BOTTOM_RIGHT_CORNER", x: 126, y: 72, width: 154, height: 38),
             Sprite(name: "PLAYLIST_SCROLL_HANDLE", x: 52, y: 53, width: 8, height: 18),
             Sprite(name: "PLAYLIST_SCROLL_HANDLE_SELECTED", x: 61, y: 53, width: 8, height: 18),
             Sprite(name: "PLAYLIST_ADD_URL", x: 0, y: 111, width: 22, height: 18),
@@ -257,6 +257,21 @@ struct SkinSprites {
             Sprite(name: "PLAYLIST_SAVE_LIST_SELECTED", x: 227, y: 130, width: 22, height: 18),
             Sprite(name: "PLAYLIST_LOAD_LIST", x: 204, y: 149, width: 22, height: 18),
             Sprite(name: "PLAYLIST_LOAD_LIST_SELECTED", x: 227, y: 149, width: 22, height: 18),
+
+            // Transport control buttons (tiny gold buttons in info bar) - 6 buttons total
+            // Located in dark horizontal bar of PLEDIT.BMP sprite sheet (Y:62 normal, Y:72 active)
+            Sprite(name: "PLAYLIST_PREV_BUTTON", x: 136, y: 62, width: 10, height: 9),
+            Sprite(name: "PLAYLIST_PREV_BUTTON_ACTIVE", x: 136, y: 72, width: 10, height: 9),
+            Sprite(name: "PLAYLIST_PLAY_BUTTON", x: 147, y: 62, width: 10, height: 9),
+            Sprite(name: "PLAYLIST_PLAY_BUTTON_ACTIVE", x: 147, y: 72, width: 10, height: 9),
+            Sprite(name: "PLAYLIST_PAUSE_BUTTON", x: 158, y: 62, width: 10, height: 9),
+            Sprite(name: "PLAYLIST_PAUSE_BUTTON_ACTIVE", x: 158, y: 72, width: 10, height: 9),
+            Sprite(name: "PLAYLIST_STOP_BUTTON", x: 169, y: 62, width: 10, height: 9),
+            Sprite(name: "PLAYLIST_STOP_BUTTON_ACTIVE", x: 169, y: 72, width: 10, height: 9),
+            Sprite(name: "PLAYLIST_NEXT_BUTTON", x: 180, y: 62, width: 10, height: 9),
+            Sprite(name: "PLAYLIST_NEXT_BUTTON_ACTIVE", x: 180, y: 72, width: 10, height: 9),
+            Sprite(name: "PLAYLIST_EJECT_BUTTON", x: 191, y: 62, width: 10, height: 9),
+            Sprite(name: "PLAYLIST_EJECT_BUTTON_ACTIVE", x: 191, y: 72, width: 10, height: 9),
         ],
 
         // TEXT.bmp (font characters) – indices computed dynamically similar to Webamp
