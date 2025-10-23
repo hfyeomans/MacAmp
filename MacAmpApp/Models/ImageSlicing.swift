@@ -9,21 +9,16 @@ extension NSImage {
             print("❌ ImageSlicing: Failed to get CGImage from NSImage")
             return nil
         }
-
-        // CRITICAL FIX: CGImage uses bottom-left origin, but our sprite rects use top-left origin
-        // Must flip the Y coordinate before cropping
-        var flippedRect = rect
-        flippedRect.origin.y = CGFloat(cgImage.height) - rect.origin.y - rect.height
-
-        // Verify the flipped rect is within bounds
+        
+        // Verify the rect is within bounds
         let imageBounds = CGRect(x: 0, y: 0, width: CGFloat(cgImage.width), height: CGFloat(cgImage.height))
-        if !imageBounds.contains(flippedRect) && !imageBounds.intersects(flippedRect) {
-            print("❌ ImageSlicing: Flipped rect \(flippedRect) is outside image bounds \(imageBounds)")
+        if !imageBounds.contains(rect) && !imageBounds.intersects(rect) {
+            print("❌ ImageSlicing: Rect \(rect) is outside image bounds \(imageBounds)")
             return nil
         }
 
-        guard let croppedCGImage = cgImage.cropping(to: flippedRect) else {
-            print("❌ ImageSlicing: CGImage.cropping failed for flipped rect \(flippedRect)")
+        guard let croppedCGImage = cgImage.cropping(to: rect) else {
+            print("❌ ImageSlicing: CGImage.cropping failed for rect \(rect)")
             return nil
         }
 

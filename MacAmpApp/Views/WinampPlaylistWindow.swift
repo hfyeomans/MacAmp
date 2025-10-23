@@ -119,16 +119,31 @@ struct WinampPlaylistWindow: View {
                     .position(x: 265, y: 20 + 14.5 + CGFloat(i) * 29)
             }
             
-            // Bottom section - Two sprites meeting at X:125
+            // Bottom section - NO SPACER, sections meet at X:125
             HStack(spacing: 0) {
-                SimpleSpriteImage("PLAYLIST_BOTTOM_LEFT_CORNER", width: 125, height: 38)
-                    .frame(width: 125, height: 38)
+                // LEFT: 125px (0 to 125)
+                ZStack {
+                    SimpleSpriteImage("PLAYLIST_BOTTOM_LEFT_CORNER", width: 125, height: 38)
+                    Text("L")
+                        .foregroundColor(.yellow)
+                        .font(.system(size: 20, weight: .bold))
+                }
+                .frame(width: 125, height: 38)
+                .border(Color.blue, width: 2)  // DEBUG: Blue border
 
-                SimpleSpriteImage("PLAYLIST_BOTTOM_RIGHT_CORNER", width: 154, height: 38)
-                    .frame(width: 154, height: 38)
+                // RIGHT: 154px (125 to 279) - uses full PLEDIT.BMP width!
+                ZStack {
+                    SimpleSpriteImage("PLAYLIST_BOTTOM_RIGHT_CORNER", width: 160, height: 38)
+                    Text("R-154px")
+                        .foregroundColor(.yellow)
+                        .font(.system(size: 20, weight: .bold))
+                }
+                .frame(width: 160, height: 38)
+                .border(Color.orange, width: 2)  // DEBUG: Orange border
             }
             .frame(width: windowWidth, height: 38)
             .position(x: windowWidth / 2, y: 213)
+            .background(Color.pink.opacity(0.2))  // DEBUG: Pink background on whole HStack
             
             // DISABLED: Bottom tile was covering the right sprite in the gap area
             // Since we're using HStack layout, no gap should exist anyway
@@ -158,10 +173,10 @@ struct WinampPlaylistWindow: View {
                 .position(x: 133.5, y: 107)
                 .clipped()
             
-            // Control buttons and time displays
-            buildBottomControls()
-            buildPlaylistTransportButtons()
-            buildTimeDisplays()
+            // TEMPORARILY COMMENTED to test sprite rendering
+            // buildBottomControls()
+            // buildPlaylistTransportButtons()
+            // buildTimeDisplays()
 
             // Title bar buttons
             buildTitleBarButtons()
@@ -346,6 +361,13 @@ struct WinampPlaylistWindow: View {
     @ViewBuilder
     private func buildTimeDisplays() -> some View {
         Group {
+            // DEBUG: Black rectangle to show full info bar area above transport buttons
+            // This should extend from left edge of right section to almost the right edge
+            Rectangle()
+                .fill(Color.red.opacity(0.3))  // Semi-transparent red to see boundaries
+                .frame(width: 140, height: 12)  // Wide bar above transport buttons
+                .position(x: 125 + 70, y: 204)  // Positioned in upper portion of right section
+
             // Mini Time Display (MM:SS format) - positioned in info bar
             Text(trackTimeText)
                 .font(.system(size: 8, weight: .medium, design: .monospaced))
