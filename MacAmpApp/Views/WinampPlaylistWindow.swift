@@ -349,12 +349,12 @@ struct WinampPlaylistWindow: View {
             // Track Time Display (MM:SS / MM:SS) - positioned in TOP black info bar
             // Uses CHARACTER sprites from TEXT.BMP with PLEDIT.TXT color
             PlaylistTimeText(trackTimeText)
-                .position(x: 191, y: 205)
+                .position(x: 168, y: 206)  // Moved left 23px total (191 → 168), down 1px (205 → 206)
 
             // Remaining Time Display (-MM:SS) - positioned in BOTTOM black info bar
             if !remainingTimeText.isEmpty {
                 PlaylistTimeText(remainingTimeText)
-                    .position(x: 191, y: 217)
+                    .position(x: 203, y: 219)  // Moved right 12px total (191 → 203), down 2px (217 → 219)
             }
         }
     }
