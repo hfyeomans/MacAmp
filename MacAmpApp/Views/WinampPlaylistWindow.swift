@@ -145,16 +145,15 @@ struct WinampPlaylistWindow: View {
             .position(x: windowWidth / 2, y: 213)
             .background(Color.pink.opacity(0.2))  // DEBUG: Pink background on whole HStack
             
-            // Fill any gap in bottom with tiles if corners don't meet
-            // This prevents the black gap issue
-            if let skin = skinManager.currentSkin,
-               let bottomTile = skin.images["PLAYLIST_BOTTOM_TILE"] {
-                // Bottom tiles don't exist in default skin, but if they do, use them
-                Image(nsImage: bottomTile)
-                    .resizable()
-                    .frame(width: 25, height: 38)
-                    .position(x: 137.5, y: 213)
-            }
+            // DISABLED: Bottom tile was covering the right sprite in the gap area
+            // Since we're using HStack layout, no gap should exist anyway
+            // if let skin = skinManager.currentSkin,
+            //    let bottomTile = skin.images["PLAYLIST_BOTTOM_TILE"] {
+            //     Image(nsImage: bottomTile)
+            //         .resizable()
+            //         .frame(width: 25, height: 38)
+            //         .position(x: 137.5, y: 213)
+            // }
         }
     }
     
