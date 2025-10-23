@@ -274,7 +274,7 @@ struct WinampPlaylistWindow: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .position(x: 133, y: 216)
+            .position(x: 138, y: 220)
 
             // Play button
             Button(action: {
@@ -289,7 +289,7 @@ struct WinampPlaylistWindow: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .position(x: 144, y: 216)
+            .position(x: 149, y: 220)
 
             // Pause button
             Button(action: {
@@ -300,7 +300,7 @@ struct WinampPlaylistWindow: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .position(x: 155, y: 216)
+            .position(x: 160, y: 220)
 
             // Stop button
             Button(action: {
@@ -311,7 +311,7 @@ struct WinampPlaylistWindow: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .position(x: 166, y: 216)
+            .position(x: 171, y: 220)
 
             // Next button
             Button(action: {
@@ -322,7 +322,7 @@ struct WinampPlaylistWindow: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .position(x: 177, y: 216)
+            .position(x: 182, y: 220)
 
             // Eject button (6th button)
             Button(action: {
@@ -333,7 +333,7 @@ struct WinampPlaylistWindow: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .position(x: 188, y: 216)
+            .position(x: 193, y: 220)
         }
     }
 
