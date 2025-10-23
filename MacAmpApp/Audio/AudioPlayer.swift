@@ -36,6 +36,7 @@ class AudioPlayer: ObservableObject {
     @Published var isPlaying: Bool = false
     @Published var isPaused: Bool = false
     @Published var isSeeking: Bool = false // NEW: Prevents completion handler from firing during seek
+    private var currentSeekID: UUID = UUID() // NEW: Identifies which seek operation scheduled the current audio
     private var isHandlingCompletion: Bool = false // NEW: Prevents re-entrant onPlaybackEnded calls
     private var trackHasEnded: Bool = false // NEW: Tracks when playlist has finished
     @Published var currentTrackURL: URL? // Placeholder for the currently playing track
@@ -451,7 +452,7 @@ class AudioPlayer: ObservableObject {
 
     /// Schedules audio playback from a specific time
     /// Returns: true if audio was scheduled, false if track ended
-    private func scheduleFrom(time: Double) -> Bool {
+    private func scheduleFrom(time: Double, seekID: UUID? = nil) -> Bool {
         guard let file = audioFile else {
             #if DEBUG
             NSLog("⚠️ scheduleFrom: No audio file loaded")
@@ -499,6 +500,8 @@ class AudioPlayer: ObservableObject {
             #if DEBUG
             print("DEBUG scheduleFrom: Scheduling \(framesRemaining) frames from frame \(startFrame)")
             #endif
+            // Capture the seek ID to identify this completion
+            let capturedSeekID = seekID
             playerNode.scheduleSegment(
                 file,
                 startingFrame: startFrame,
@@ -507,9 +510,9 @@ class AudioPlayer: ObservableObject {
                 completionHandler: { [weak self] in
                     DispatchQueue.main.async {
                         #if DEBUG
-                        print("DEBUG scheduleFrom: Completion handler called!")
+                        print("DEBUG scheduleFrom: Completion handler called! seekID=\(String(describing: capturedSeekID))")
                         #endif
-                        self?.onPlaybackEnded()
+                        self?.onPlaybackEnded(fromSeekID: capturedSeekID)
                     }
                 }
             )
@@ -696,6 +699,8 @@ class AudioPlayer: ObservableObject {
         // CRITICAL FIX: Set isSeeking flag to prevent old completion handler from corrupting state
         // When playerNode.stop() is called in scheduleFrom, it triggers the completion handler
         // from the PREVIOUS segment, which calls onPlaybackEnded() and sets playbackProgress=1.0
+        // Generate new seek ID to identify completions from THIS seek operation
+        currentSeekID = UUID()
         isSeeking = true
 
         // Stop progress timer BEFORE seeking
@@ -711,7 +716,8 @@ class AudioPlayer: ObservableObject {
         #endif
 
         // Schedule the new audio segment - returns false if track ended
-        let audioScheduled = scheduleFrom(time: time)
+        // Pass current seek ID so completion handler can identify itself
+        let audioScheduled = scheduleFrom(time: time, seekID: currentSeekID)
 
         #if DEBUG
         print("DEBUG seek: scheduleFrom returned audioScheduled=\(audioScheduled)")
@@ -809,7 +815,7 @@ class AudioPlayer: ObservableObject {
         return result
     }
 
-    private func onPlaybackEnded() {
+    private func onPlaybackEnded(fromSeekID: UUID? = nil) {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
 
@@ -821,14 +827,21 @@ class AudioPlayer: ObservableObject {
                 return
             }
 
-            // CRITICAL: Don't process completion if we're in the middle of a seek
+            // CRITICAL: Don't process completion if it's from an old seek operation
             // playerNode.stop() triggers the old segment's completion handler
-            guard !self.isSeeking else {
+            // But allow completions from the CURRENT seek operation (matching seekID)
+            if self.isSeeking && fromSeekID != self.currentSeekID {
                 #if DEBUG
-                print("DEBUG onPlaybackEnded: Ignoring because isSeeking=true (old segment completion)")
+                print("DEBUG onPlaybackEnded: Ignoring OLD completion (seekID mismatch: \(String(describing: fromSeekID)) != \(self.currentSeekID))")
                 #endif
                 return
             }
+
+            #if DEBUG
+            if self.isSeeking && fromSeekID == self.currentSeekID {
+                print("DEBUG onPlaybackEnded: Allowing NEW completion (seekID match: \(String(describing: fromSeekID)))")
+            }
+            #endif
 
             // Don't update progress if we stopped manually
             guard !self.wasStopped else {
