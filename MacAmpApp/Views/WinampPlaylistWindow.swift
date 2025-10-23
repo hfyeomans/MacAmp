@@ -262,18 +262,18 @@ struct WinampPlaylistWindow: View {
     @ViewBuilder
     private func buildPlaylistTransportButtons() -> some View {
         Group {
-            // Previous button
+            // Previous button (small 9x9 gold button)
             Button(action: {
                 audioPlayer.previousTrack()
             }) {
                 SimpleSpriteImage(
                     audioPlayer.isPlaying ? "PLAYLIST_PREV_BUTTON_ACTIVE" : "PLAYLIST_PREV_BUTTON",
-                    width: 22,
-                    height: 18
+                    width: 9,
+                    height: 9
                 )
             }
             .buttonStyle(.plain)
-            .position(x: 145, y: 218)
+            .position(x: 169, y: 194)
 
             // Play button
             Button(action: {
@@ -285,12 +285,12 @@ struct WinampPlaylistWindow: View {
             }) {
                 SimpleSpriteImage(
                     (audioPlayer.isPlaying && !audioPlayer.isPaused) ? "PLAYLIST_PLAY_BUTTON_ACTIVE" : "PLAYLIST_PLAY_BUTTON",
-                    width: 22,
-                    height: 18
+                    width: 9,
+                    height: 9
                 )
             }
             .buttonStyle(.plain)
-            .position(x: 169, y: 218)
+            .position(x: 180, y: 194)
 
             // Pause button
             Button(action: {
@@ -298,25 +298,25 @@ struct WinampPlaylistWindow: View {
             }) {
                 SimpleSpriteImage(
                     audioPlayer.isPaused ? "PLAYLIST_PAUSE_BUTTON_ACTIVE" : "PLAYLIST_PAUSE_BUTTON",
-                    width: 22,
-                    height: 18
+                    width: 9,
+                    height: 9
                 )
             }
             .buttonStyle(.plain)
-            .position(x: 193, y: 218)
+            .position(x: 191, y: 194)
 
             // Stop button
             Button(action: {
                 audioPlayer.stop()
             }) {
                 SimpleSpriteImage(
-                    "PLAYLIST_STOP_BUTTON",  // No active state for stop
-                    width: 22,
-                    height: 18
+                    "PLAYLIST_STOP_BUTTON",
+                    width: 9,
+                    height: 9
                 )
             }
             .buttonStyle(.plain)
-            .position(x: 217, y: 218)
+            .position(x: 202, y: 194)
 
             // Next button
             Button(action: {
@@ -324,12 +324,12 @@ struct WinampPlaylistWindow: View {
             }) {
                 SimpleSpriteImage(
                     audioPlayer.isPlaying ? "PLAYLIST_NEXT_BUTTON_ACTIVE" : "PLAYLIST_NEXT_BUTTON",
-                    width: 22,
-                    height: 18
+                    width: 9,
+                    height: 9
                 )
             }
             .buttonStyle(.plain)
-            .position(x: 241, y: 218)
+            .position(x: 213, y: 194)
         }
     }
 
@@ -338,19 +338,19 @@ struct WinampPlaylistWindow: View {
     private func buildTimeDisplays() -> some View {
         Group {
             // Track Time Display (MM:SS / MM:SS format)
-            // Bottom right corner, aligned with transport buttons
+            // Positioned in the info bar to the right of transport buttons
             Text(trackTimeText)
                 .font(.system(size: 8, weight: .medium, design: .monospaced))
                 .foregroundColor(Color(red: 0, green: 1.0, blue: 0))  // Green from PLEDIT.TXT (#00FF00)
-                .position(x: 260, y: 218)
+                .position(x: 242, y: 194)
 
             // Remaining Time Display (-MM:SS format)
-            // Only shows when playing, positioned above track time
+            // Only shows when playing, positioned to the left of track time
             if !remainingTimeText.isEmpty {
                 Text(remainingTimeText)
                     .font(.system(size: 8, weight: .medium, design: .monospaced))
                     .foregroundColor(Color(red: 0, green: 1.0, blue: 0))  // Green (#00FF00)
-                    .position(x: 260, y: 206)
+                    .position(x: 220, y: 194)
             }
         }
     }

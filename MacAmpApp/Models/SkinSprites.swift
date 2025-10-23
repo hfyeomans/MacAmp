@@ -258,18 +258,19 @@ struct SkinSprites {
             Sprite(name: "PLAYLIST_LOAD_LIST", x: 204, y: 149, width: 22, height: 18),
             Sprite(name: "PLAYLIST_LOAD_LIST_SELECTED", x: 227, y: 149, width: 22, height: 18),
 
-            // Transport control buttons (play, pause, stop, etc.) - Bottom bar
-            // Note: These may vary by skin, positions are for classic Winamp skin
-            Sprite(name: "PLAYLIST_PLAY_BUTTON", x: 136, y: 42, width: 22, height: 18),
-            Sprite(name: "PLAYLIST_PLAY_BUTTON_ACTIVE", x: 136, y: 60, width: 22, height: 18),
-            Sprite(name: "PLAYLIST_PAUSE_BUTTON", x: 158, y: 42, width: 22, height: 18),
-            Sprite(name: "PLAYLIST_PAUSE_BUTTON_ACTIVE", x: 158, y: 60, width: 22, height: 18),
-            Sprite(name: "PLAYLIST_STOP_BUTTON", x: 180, y: 42, width: 22, height: 18),
-            Sprite(name: "PLAYLIST_STOP_BUTTON_ACTIVE", x: 180, y: 60, width: 22, height: 18),
-            Sprite(name: "PLAYLIST_NEXT_BUTTON", x: 202, y: 42, width: 22, height: 18),
-            Sprite(name: "PLAYLIST_NEXT_BUTTON_ACTIVE", x: 202, y: 60, width: 22, height: 18),
-            Sprite(name: "PLAYLIST_PREV_BUTTON", x: 224, y: 42, width: 22, height: 18),
-            Sprite(name: "PLAYLIST_PREV_BUTTON_ACTIVE", x: 224, y: 60, width: 22, height: 18),
+            // Transport control buttons (small gold buttons in center of bottom bar)
+            // These are the tiny 8-10px buttons visible in Winamp playlist
+            // Located in bottom-right section of PLEDIT.BMP sprite sheet
+            Sprite(name: "PLAYLIST_PREV_BUTTON", x: 253, y: 171, width: 9, height: 9),
+            Sprite(name: "PLAYLIST_PREV_BUTTON_ACTIVE", x: 253, y: 180, width: 9, height: 9),
+            Sprite(name: "PLAYLIST_PLAY_BUTTON", x: 264, y: 171, width: 9, height: 9),
+            Sprite(name: "PLAYLIST_PLAY_BUTTON_ACTIVE", x: 264, y: 180, width: 9, height: 9),
+            Sprite(name: "PLAYLIST_PAUSE_BUTTON", x: 275, y: 171, width: 9, height: 9),
+            Sprite(name: "PLAYLIST_PAUSE_BUTTON_ACTIVE", x: 275, y: 180, width: 9, height: 9),
+            Sprite(name: "PLAYLIST_STOP_BUTTON", x: 285, y: 171, width: 9, height: 9),
+            Sprite(name: "PLAYLIST_STOP_BUTTON_ACTIVE", x: 285, y: 180, width: 9, height: 9),
+            Sprite(name: "PLAYLIST_NEXT_BUTTON", x: 295, y: 171, width: 9, height: 9),
+            Sprite(name: "PLAYLIST_NEXT_BUTTON_ACTIVE", x: 295, y: 180, width: 9, height: 9),
         ],
 
         // TEXT.bmp (font characters) – indices computed dynamically similar to Webamp
