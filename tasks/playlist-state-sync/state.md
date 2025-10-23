@@ -189,6 +189,26 @@ main
 
 ---
 
-**Current Status:** ✅ READY FOR NEXT TASKS
-**Next Session:** Implement track time numbers, test button clicks
-**Estimated Remaining Time:** 2-3 hours to completion
+**Current Status:** ✅ COMPLETE - READY FOR MERGE
+**Total Commits:** 35 commits on fix/playlist-state-sync branch
+**Time Invested:** ~10 hours total
+**Ready For:** Merge to feature/phase4-polish-bugfixes
+
+---
+
+## 📋 Deferred Features
+
+### Playlist Menu System (Separate Task)
+**Identified:** During this task
+**Status:** Researched and documented in `tasks/playlist-menu-system/`
+**Priority:** P2 (Enhancement)
+**Estimated:** 2-3 hours
+**Decision:** Defer to separate task after merge
+
+**Menu buttons requiring implementation:**
+- ADD (URL, Dir, File)
+- REM (All, Crop, Selected)
+- SEL (All, None, Invert)
+- MISC (New, Save, Load)
+
+Requires sprite-based NSMenu with hover states.
