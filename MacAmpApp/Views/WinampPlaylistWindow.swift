@@ -182,7 +182,10 @@ struct WinampPlaylistWindow: View {
                         .frame(width: 243, height: 13)
                         .background(trackBackground(track: track, index: index))
                         .onTapGesture {
-                            audioPlayer.playTrack(track: track)
+                            // Only play if it's a different track (avoid restarting same track)
+                            if audioPlayer.currentTrack?.url != track.url {
+                                audioPlayer.playTrack(track: track)
+                            }
                             selectedTrackIndex = index
                         }
                 }
@@ -410,18 +413,20 @@ struct WinampPlaylistWindow: View {
 
     // MARK: - Helper Functions
     private func trackTextColor(track: Track) -> Color {
-        if let currentTrack = audioPlayer.currentTrack, currentTrack.id == track.id {
-            return Color.white
+        // Use URL comparison for reliable track matching (IDs are UUID and may change)
+        if let currentTrack = audioPlayer.currentTrack, currentTrack.url == track.url {
+            return Color.white  // White text for currently playing track (PLEDIT.TXT)
         }
-        return Color(red: 0.0, green: 1.0, blue: 0.0)
+        return Color(red: 0.0, green: 1.0, blue: 0.0)  // Green text for normal tracks
     }
-    
+
     private func trackBackground(track: Track, index: Int) -> Color {
-        if let currentTrack = audioPlayer.currentTrack, currentTrack.id == track.id {
-            return Color(red: 0.0, green: 0.0, blue: 0.776)
+        // Use URL comparison for reliable track matching (IDs are UUID and may change)
+        if let currentTrack = audioPlayer.currentTrack, currentTrack.url == track.url {
+            return Color(red: 0.0, green: 0.0, blue: 0.776)  // Blue background for playing (#0000C6)
         }
         if selectedTrackIndex == index {
-            return Color.blue.opacity(0.4)
+            return Color.blue.opacity(0.4)  // Lighter blue for selection
         }
         return Color.clear
     }
