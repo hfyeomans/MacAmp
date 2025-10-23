@@ -121,10 +121,11 @@ struct WinampPlaylistWindow: View {
             
             // Bottom section
             SimpleSpriteImage("PLAYLIST_BOTTOM_LEFT_CORNER", width: 125, height: 38)
-                .position(x: 62.5, y: 213) // 194 + 19
-            
+                .position(x: 62.5, y: 213)
+
+            // Position RIGHT corner to align right edge with window right edge
             SimpleSpriteImage("PLAYLIST_BOTTOM_RIGHT_CORNER", width: 150, height: 38)
-                .position(x: 200, y: 213) // 125 + 75, same y
+                .position(x: 275 - 75, y: 213) // Right-aligned: windowWidth - (width/2)
             
             // Fill any gap in bottom with tiles if corners don't meet
             // This prevents the black gap issue
@@ -265,7 +266,8 @@ struct WinampPlaylistWindow: View {
             // NOTE: Gold button icons are BAKED INTO the PLAYLIST_BOTTOM_RIGHT_CORNER sprite!
             // These are transparent click targets positioned over the visual icons in the background.
 
-            // Previous button - transparent click target
+            // Previous button - transparent click target over gold icon in background
+            // Icons are at Y:22 from top of corner, corner top is at Y:194, so button Y = 194+22+4 = 220
             Button(action: {
                 audioPlayer.previousTrack()
             }) {
@@ -274,9 +276,9 @@ struct WinampPlaylistWindow: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .position(x: 138, y: 220)
+            .position(x: 133, y: 220)  // Back to original X, icons start at left edge of corner
 
-            // Play button
+            // Play button (11px spacing)
             Button(action: {
                 if audioPlayer.isPaused {
                     audioPlayer.play()
@@ -289,7 +291,7 @@ struct WinampPlaylistWindow: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .position(x: 149, y: 220)
+            .position(x: 144, y: 220)
 
             // Pause button
             Button(action: {
@@ -300,7 +302,7 @@ struct WinampPlaylistWindow: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .position(x: 160, y: 220)
+            .position(x: 155, y: 220)
 
             // Stop button
             Button(action: {
@@ -311,7 +313,7 @@ struct WinampPlaylistWindow: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .position(x: 171, y: 220)
+            .position(x: 166, y: 220)
 
             // Next button
             Button(action: {
@@ -322,7 +324,7 @@ struct WinampPlaylistWindow: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .position(x: 182, y: 220)
+            .position(x: 177, y: 220)
 
             // Eject button (6th button)
             Button(action: {
@@ -333,7 +335,7 @@ struct WinampPlaylistWindow: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .position(x: 193, y: 220)
+            .position(x: 188, y: 220)
         }
     }
 
