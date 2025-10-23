@@ -50,9 +50,8 @@ struct VisualizerView: View {
             if isPlaying {
                 startVisualization()
             } else {
-                // Keep bars visible when paused
-                updateTimer?.invalidate()
-                updateTimer = nil
+                // Stop animation and drop bars to zero when stopped
+                stopVisualization()
             }
         }
     }
