@@ -37,11 +37,14 @@ struct PlaylistTimeText: View {
             ForEach(Array(text.enumerated()), id: \.offset) { _, ch in
                 if let img = imageForChar(ch) {
                     // Render CHARACTER sprite with PLEDIT.TXT color overlay
+                    // IMPORTANT: Flip vertically because NSImage uses bottom-left origin
+                    // but SwiftUI uses top-left origin
                     Image(nsImage: img)
                         .interpolation(.none)
                         .antialiased(false)
                         .resizable()
                         .frame(width: img.size.width, height: img.size.height)
+                        .rotation3DEffect(.degrees(180), axis: (x: 1, y: 0, z: 0))  // Flip vertically
                         .colorMultiply(textColor)  // Apply PLEDIT.TXT Normal color
                 } else {
                     // Fallback: Use system font if character sprite missing
