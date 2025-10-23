@@ -121,16 +121,17 @@ struct WinampPlaylistWindow: View {
             
             // Bottom section - Webamp 3-section layout
             // Left (125px) anchored to left:0, Right (150px) anchored to right:0
-            ZStack(alignment: .topLeading) {
-                // Left section background - anchored to left edge
-                HStack(spacing: 0) {
-                    SimpleSpriteImage("PLAYLIST_BOTTOM_LEFT_CORNER", width: 125, height: 38)
-                    Spacer()  // Center spacer (flexible width)
-                    SimpleSpriteImage("PLAYLIST_BOTTOM_RIGHT_CORNER", width: 150, height: 38)
-                }
-                .frame(height: 38)
-                .position(x: windowWidth / 2, y: 213)
+            HStack(spacing: 0) {
+                SimpleSpriteImage("PLAYLIST_BOTTOM_LEFT_CORNER", width: 125, height: 38)
+                    .frame(width: 125, height: 38)
+
+                Spacer(minLength: 0)  // Center spacer (should be 0px in 275px window)
+
+                SimpleSpriteImage("PLAYLIST_BOTTOM_RIGHT_CORNER", width: 150, height: 38)
+                    .frame(width: 150, height: 38, alignment: .leading)  // Left-align content within frame
             }
+            .frame(width: windowWidth, height: 38)
+            .position(x: windowWidth / 2, y: 213)
             
             // Fill any gap in bottom with tiles if corners don't meet
             // This prevents the black gap issue
@@ -352,9 +353,14 @@ struct WinampPlaylistWindow: View {
     @ViewBuilder
     private func buildTimeDisplays() -> some View {
         Group {
+            // DEBUG: Black rectangle to show full info bar area above transport buttons
+            // This should extend from left edge of right section to almost the right edge
+            Rectangle()
+                .fill(Color.red.opacity(0.3))  // Semi-transparent red to see boundaries
+                .frame(width: 140, height: 12)  // Wide bar above transport buttons
+                .position(x: 125 + 70, y: 204)  // Positioned in upper portion of right section
+
             // Mini Time Display (MM:SS format) - positioned in info bar
-            // Corner left edge at 120, webamp offset is left:66px from corner
-            // Time position: 120 + 66 = 186
             Text(trackTimeText)
                 .font(.system(size: 8, weight: .medium, design: .monospaced))
                 .foregroundColor(Color(red: 0, green: 1.0, blue: 0))  // Green from PLEDIT.TXT (#00FF00)
