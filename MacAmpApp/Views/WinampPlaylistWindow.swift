@@ -262,74 +262,75 @@ struct WinampPlaylistWindow: View {
     @ViewBuilder
     private func buildPlaylistTransportButtons() -> some View {
         Group {
-            // Previous button (small 9x9 gold button)
+            // Previous button - Use CBUTTONS sprites (same as main window) scaled down
+            // Positioned in bottom-right corner info bar area
             Button(action: {
                 audioPlayer.previousTrack()
             }) {
                 SimpleSpriteImage(
-                    audioPlayer.isPlaying ? "PLAYLIST_PREV_BUTTON_ACTIVE" : "PLAYLIST_PREV_BUTTON",
-                    width: 9,
-                    height: 9
+                    audioPlayer.isPlaying ? "MAIN_PREVIOUS_BUTTON_ACTIVE" : "MAIN_PREVIOUS_BUTTON",
+                    width: 10,
+                    height: 8
                 )
             }
             .buttonStyle(.plain)
-            .position(x: 169, y: 194)
+            .position(x: 133, y: 216)
 
             // Play button
             Button(action: {
                 if audioPlayer.isPaused {
-                    audioPlayer.play()  // Resume if paused
+                    audioPlayer.play()
                 } else if !audioPlayer.isPlaying {
-                    audioPlayer.play()  // Start if stopped
+                    audioPlayer.play()
                 }
             }) {
                 SimpleSpriteImage(
-                    (audioPlayer.isPlaying && !audioPlayer.isPaused) ? "PLAYLIST_PLAY_BUTTON_ACTIVE" : "PLAYLIST_PLAY_BUTTON",
-                    width: 9,
-                    height: 9
+                    (audioPlayer.isPlaying && !audioPlayer.isPaused) ? "MAIN_PLAY_BUTTON_ACTIVE" : "MAIN_PLAY_BUTTON",
+                    width: 10,
+                    height: 8
                 )
             }
             .buttonStyle(.plain)
-            .position(x: 180, y: 194)
+            .position(x: 143, y: 216)
 
             // Pause button
             Button(action: {
                 audioPlayer.pause()
             }) {
                 SimpleSpriteImage(
-                    audioPlayer.isPaused ? "PLAYLIST_PAUSE_BUTTON_ACTIVE" : "PLAYLIST_PAUSE_BUTTON",
-                    width: 9,
-                    height: 9
+                    audioPlayer.isPaused ? "MAIN_PAUSE_BUTTON_ACTIVE" : "MAIN_PAUSE_BUTTON",
+                    width: 10,
+                    height: 8
                 )
             }
             .buttonStyle(.plain)
-            .position(x: 191, y: 194)
+            .position(x: 153, y: 216)
 
             // Stop button
             Button(action: {
                 audioPlayer.stop()
             }) {
                 SimpleSpriteImage(
-                    "PLAYLIST_STOP_BUTTON",
-                    width: 9,
-                    height: 9
+                    "MAIN_STOP_BUTTON",
+                    width: 10,
+                    height: 8
                 )
             }
             .buttonStyle(.plain)
-            .position(x: 202, y: 194)
+            .position(x: 163, y: 216)
 
             // Next button
             Button(action: {
                 audioPlayer.nextTrack()
             }) {
                 SimpleSpriteImage(
-                    audioPlayer.isPlaying ? "PLAYLIST_NEXT_BUTTON_ACTIVE" : "PLAYLIST_NEXT_BUTTON",
-                    width: 9,
-                    height: 9
+                    audioPlayer.isPlaying ? "MAIN_NEXT_BUTTON_ACTIVE" : "MAIN_NEXT_BUTTON",
+                    width: 10,
+                    height: 8
                 )
             }
             .buttonStyle(.plain)
-            .position(x: 213, y: 194)
+            .position(x: 173, y: 216)
         }
     }
 
@@ -337,20 +338,21 @@ struct WinampPlaylistWindow: View {
     @ViewBuilder
     private func buildTimeDisplays() -> some View {
         Group {
-            // Track Time Display (MM:SS / MM:SS format)
-            // Positioned in the info bar to the right of transport buttons
+            // Mini Time Display (MM:SS format) - positioned like webamp mini-time
+            // Webamp: top:23px, left:66px relative to bottom corner
+            // Bottom corner top-left is ~(125, 194), so: X: 125+66=191, Y: 194+23=217
             Text(trackTimeText)
                 .font(.system(size: 8, weight: .medium, design: .monospaced))
                 .foregroundColor(Color(red: 0, green: 1.0, blue: 0))  // Green from PLEDIT.TXT (#00FF00)
-                .position(x: 242, y: 194)
+                .position(x: 191, y: 217)
 
             // Remaining Time Display (-MM:SS format)
-            // Only shows when playing, positioned to the left of track time
+            // Positioned above mini-time
             if !remainingTimeText.isEmpty {
                 Text(remainingTimeText)
                     .font(.system(size: 8, weight: .medium, design: .monospaced))
                     .foregroundColor(Color(red: 0, green: 1.0, blue: 0))  // Green (#00FF00)
-                    .position(x: 220, y: 194)
+                    .position(x: 191, y: 205)
             }
         }
     }

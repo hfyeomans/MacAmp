@@ -258,19 +258,8 @@ struct SkinSprites {
             Sprite(name: "PLAYLIST_LOAD_LIST", x: 204, y: 149, width: 22, height: 18),
             Sprite(name: "PLAYLIST_LOAD_LIST_SELECTED", x: 227, y: 149, width: 22, height: 18),
 
-            // Transport control buttons (small gold buttons in center of bottom bar)
-            // These are the tiny 8-10px buttons visible in Winamp playlist
-            // Located in bottom-right section of PLEDIT.BMP sprite sheet
-            Sprite(name: "PLAYLIST_PREV_BUTTON", x: 253, y: 171, width: 9, height: 9),
-            Sprite(name: "PLAYLIST_PREV_BUTTON_ACTIVE", x: 253, y: 180, width: 9, height: 9),
-            Sprite(name: "PLAYLIST_PLAY_BUTTON", x: 264, y: 171, width: 9, height: 9),
-            Sprite(name: "PLAYLIST_PLAY_BUTTON_ACTIVE", x: 264, y: 180, width: 9, height: 9),
-            Sprite(name: "PLAYLIST_PAUSE_BUTTON", x: 275, y: 171, width: 9, height: 9),
-            Sprite(name: "PLAYLIST_PAUSE_BUTTON_ACTIVE", x: 275, y: 180, width: 9, height: 9),
-            Sprite(name: "PLAYLIST_STOP_BUTTON", x: 285, y: 171, width: 9, height: 9),
-            Sprite(name: "PLAYLIST_STOP_BUTTON_ACTIVE", x: 285, y: 180, width: 9, height: 9),
-            Sprite(name: "PLAYLIST_NEXT_BUTTON", x: 295, y: 171, width: 9, height: 9),
-            Sprite(name: "PLAYLIST_NEXT_BUTTON_ACTIVE", x: 295, y: 180, width: 9, height: 9),
+            // Note: Playlist window transport buttons use CBUTTONS sprites (MAIN_*_BUTTON)
+            // scaled down to 10x8 pixels and positioned over PLAYLIST_BOTTOM_RIGHT_CORNER
         ],
 
         // TEXT.bmp (font characters) – indices computed dynamically similar to Webamp
