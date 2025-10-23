@@ -258,8 +258,18 @@ struct SkinSprites {
             Sprite(name: "PLAYLIST_LOAD_LIST", x: 204, y: 149, width: 22, height: 18),
             Sprite(name: "PLAYLIST_LOAD_LIST_SELECTED", x: 227, y: 149, width: 22, height: 18),
 
-            // Note: Playlist window transport buttons use CBUTTONS sprites (MAIN_*_BUTTON)
-            // scaled down to 10x8 pixels and positioned over PLAYLIST_BOTTOM_RIGHT_CORNER
+            // Transport control buttons (tiny gold buttons in info bar)
+            // Located in dark horizontal bar of PLEDIT.BMP sprite sheet
+            Sprite(name: "PLAYLIST_PREV_BUTTON", x: 136, y: 62, width: 10, height: 9),
+            Sprite(name: "PLAYLIST_PREV_BUTTON_ACTIVE", x: 136, y: 72, width: 10, height: 9),
+            Sprite(name: "PLAYLIST_PLAY_BUTTON", x: 147, y: 62, width: 10, height: 9),
+            Sprite(name: "PLAYLIST_PLAY_BUTTON_ACTIVE", x: 147, y: 72, width: 10, height: 9),
+            Sprite(name: "PLAYLIST_PAUSE_BUTTON", x: 158, y: 62, width: 10, height: 9),
+            Sprite(name: "PLAYLIST_PAUSE_BUTTON_ACTIVE", x: 158, y: 72, width: 10, height: 9),
+            Sprite(name: "PLAYLIST_STOP_BUTTON", x: 169, y: 62, width: 10, height: 9),
+            Sprite(name: "PLAYLIST_STOP_BUTTON_ACTIVE", x: 169, y: 72, width: 10, height: 9),
+            Sprite(name: "PLAYLIST_NEXT_BUTTON", x: 180, y: 62, width: 10, height: 9),
+            Sprite(name: "PLAYLIST_NEXT_BUTTON_ACTIVE", x: 180, y: 72, width: 10, height: 9),
         ],
 
         // TEXT.bmp (font characters) – indices computed dynamically similar to Webamp

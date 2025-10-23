@@ -262,15 +262,15 @@ struct WinampPlaylistWindow: View {
     @ViewBuilder
     private func buildPlaylistTransportButtons() -> some View {
         Group {
-            // Previous button - Use CBUTTONS sprites (same as main window) scaled down
-            // Positioned in bottom-right corner info bar area
+            // Previous button (tiny 10x9 gold button from PLEDIT.BMP)
+            // Positioned in bottom info bar per webamp layout
             Button(action: {
                 audioPlayer.previousTrack()
             }) {
                 SimpleSpriteImage(
-                    audioPlayer.isPlaying ? "MAIN_PREVIOUS_BUTTON_ACTIVE" : "MAIN_PREVIOUS_BUTTON",
+                    audioPlayer.isPlaying ? "PLAYLIST_PREV_BUTTON_ACTIVE" : "PLAYLIST_PREV_BUTTON",
                     width: 10,
-                    height: 8
+                    height: 9
                 )
             }
             .buttonStyle(.plain)
@@ -285,52 +285,52 @@ struct WinampPlaylistWindow: View {
                 }
             }) {
                 SimpleSpriteImage(
-                    (audioPlayer.isPlaying && !audioPlayer.isPaused) ? "MAIN_PLAY_BUTTON_ACTIVE" : "MAIN_PLAY_BUTTON",
+                    (audioPlayer.isPlaying && !audioPlayer.isPaused) ? "PLAYLIST_PLAY_BUTTON_ACTIVE" : "PLAYLIST_PLAY_BUTTON",
                     width: 10,
-                    height: 8
+                    height: 9
                 )
             }
             .buttonStyle(.plain)
-            .position(x: 143, y: 216)
+            .position(x: 144, y: 216)
 
             // Pause button
             Button(action: {
                 audioPlayer.pause()
             }) {
                 SimpleSpriteImage(
-                    audioPlayer.isPaused ? "MAIN_PAUSE_BUTTON_ACTIVE" : "MAIN_PAUSE_BUTTON",
+                    audioPlayer.isPaused ? "PLAYLIST_PAUSE_BUTTON_ACTIVE" : "PLAYLIST_PAUSE_BUTTON",
                     width: 10,
-                    height: 8
+                    height: 9
                 )
             }
             .buttonStyle(.plain)
-            .position(x: 153, y: 216)
+            .position(x: 155, y: 216)
 
             // Stop button
             Button(action: {
                 audioPlayer.stop()
             }) {
                 SimpleSpriteImage(
-                    "MAIN_STOP_BUTTON",
+                    "PLAYLIST_STOP_BUTTON",
                     width: 10,
-                    height: 8
+                    height: 9
                 )
             }
             .buttonStyle(.plain)
-            .position(x: 163, y: 216)
+            .position(x: 166, y: 216)
 
             // Next button
             Button(action: {
                 audioPlayer.nextTrack()
             }) {
                 SimpleSpriteImage(
-                    audioPlayer.isPlaying ? "MAIN_NEXT_BUTTON_ACTIVE" : "MAIN_NEXT_BUTTON",
+                    audioPlayer.isPlaying ? "PLAYLIST_NEXT_BUTTON_ACTIVE" : "PLAYLIST_NEXT_BUTTON",
                     width: 10,
-                    height: 8
+                    height: 9
                 )
             }
             .buttonStyle(.plain)
-            .position(x: 173, y: 216)
+            .position(x: 177, y: 216)
         }
     }
 
