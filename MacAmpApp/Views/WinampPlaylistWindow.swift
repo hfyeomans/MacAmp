@@ -163,9 +163,10 @@ struct WinampPlaylistWindow: View {
     private func buildContentOverlay() -> some View {
         Group {
             // Track list area with black background
+            // Height reduced from 174 to 170 to avoid overlapping bottom sprites
             Color.black
-                .frame(width: 243, height: 174) // 275 - 12 - 20 = 243 width
-                .position(x: 133.5, y: 107) // Center of content area: 12 + 243/2 = 133.5
+                .frame(width: 243, height: 170) // Reduced by 4px to clear bottom section
+                .position(x: 133.5, y: 105) // Adjusted Y to keep top aligned
 
             // Track list content
             buildTrackList()
@@ -173,14 +174,10 @@ struct WinampPlaylistWindow: View {
                 .position(x: 133.5, y: 107)
                 .clipped()
             
-            // Control buttons at bottom
-            buildBottomControls()
-
-            // Transport control buttons (play, pause, stop, next, prev)
-            buildPlaylistTransportButtons()
-
-            // Time displays (track time and remaining time)
-            buildTimeDisplays()
+            // TEMPORARILY COMMENTED to test sprite rendering
+            // buildBottomControls()
+            // buildPlaylistTransportButtons()
+            // buildTimeDisplays()
 
             // Title bar buttons
             buildTitleBarButtons()
