@@ -12,9 +12,9 @@
 
 ---
 
-## 📋 Known Limitations (Documented for Future)
+## 📋 Deferred Features (Documented for Future)
 
-### Threading Issue: Main Thread Blocking
+### 1. Threading Issue: Main Thread Blocking (P1)
 **File:** `tasks/playlist-state-sync/KNOWN_LIMITATIONS.md`
 
 **Symptoms:**
@@ -23,12 +23,21 @@
 - Eject button triggers nextTrack() unexpectedly
 
 **Root Cause:** `loadAudioFile()` blocks main thread (synchronous I/O)
-
-**Fix:** Async audio loading refactor (2-3 hours, separate task)
-
+**Fix:** Async audio loading refactor (2-3 hours)
 **Priority:** P1 before 1.0 release
 
-**Decision:** Documented and deferred (outside playlist scope)
+### 2. Playlist Menu System (P2)
+**Files:** `tasks/playlist-menu-system/` (research + plan)
+
+**Features:**
+- ADD menu (URL, Dir, File)
+- REM menu (All, Crop, Selected)
+- SEL menu (All, None, Invert)
+- MISC menu (New, Save, Load)
+
+**Requirements:** Sprite-based NSMenu with hover states
+**Estimated:** 2-3 hours
+**Priority:** P2 (enhancement)
 
 ---
 
@@ -54,17 +63,20 @@ Step 3: Merge to main
 
 ---
 
-## 📊 Session Stats:
+## 📊 Final Session Stats:
 
-- **Commits:** 28 commits on fix/playlist-state-sync
-- **Time:** ~8 hours of work
-- **Files Modified:** 5 files (+ Xcode project)
-- **Lines Changed:** ~300 lines
+- **Commits:** 36 commits on fix/playlist-state-sync
+- **Time:** ~10 hours of work
+- **Files Modified:** 6 files (+ Xcode project)
+- **Lines Added:** ~470 lines
+- **Lines Changed:** ~50 lines
 - **Major Bugs Fixed:** 1 (Bug B - Track Selection)
 - **Architecture Improvements:**
   - Complete sprite rendering system
   - Sprite-based time display with PLEDIT.TXT color support
   - PlaylistTimeText component (reusable)
+  - Threading issues identified and documented
+  - Menu system researched and planned
 
 ---
 
