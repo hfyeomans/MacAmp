@@ -119,19 +119,31 @@ struct WinampPlaylistWindow: View {
                     .position(x: 265, y: 20 + 14.5 + CGFloat(i) * 29)
             }
             
-            // Bottom section - Webamp 3-section layout
-            // Left (125px) anchored to left:0, Right (150px) anchored to right:0
+            // Bottom section - NO SPACER, sections meet at X:125
             HStack(spacing: 0) {
-                SimpleSpriteImage("PLAYLIST_BOTTOM_LEFT_CORNER", width: 125, height: 38)
-                    .frame(width: 125, height: 38)
+                // LEFT: 125px (0 to 125)
+                ZStack {
+                    SimpleSpriteImage("PLAYLIST_BOTTOM_LEFT_CORNER", width: 125, height: 38)
+                    Text("L")
+                        .foregroundColor(.yellow)
+                        .font(.system(size: 20, weight: .bold))
+                }
+                .frame(width: 125, height: 38)
+                .border(Color.blue, width: 2)  // DEBUG: Blue border
 
-                Spacer(minLength: 0)  // Center spacer (should be 0px in 275px window)
-
-                SimpleSpriteImage("PLAYLIST_BOTTOM_RIGHT_CORNER", width: 150, height: 38)
-                    .frame(width: 150, height: 38, alignment: .leading)  // Left-align content within frame
+                // RIGHT: 150px (125 to 275) - NO SPACER BETWEEN!
+                ZStack {
+                    SimpleSpriteImage("PLAYLIST_BOTTOM_RIGHT_CORNER", width: 150, height: 38)
+                    Text("R-150px")
+                        .foregroundColor(.yellow)
+                        .font(.system(size: 20, weight: .bold))
+                }
+                .frame(width: 150, height: 38)
+                .border(Color.orange, width: 2)  // DEBUG: Orange border
             }
             .frame(width: windowWidth, height: 38)
             .position(x: windowWidth / 2, y: 213)
+            .background(Color.pink.opacity(0.2))  // DEBUG: Pink background on whole HStack
             
             // Fill any gap in bottom with tiles if corners don't meet
             // This prevents the black gap issue
