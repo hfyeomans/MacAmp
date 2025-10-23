@@ -21,6 +21,13 @@
    - Time numbers stop updating
    - UI resumes when slider released
 
+3. **Eject button behavior (playlist window):**
+   - Clicking Eject triggers `nextTrack()` unexpectedly
+   - Logs show: "DEBUG nextTrack: Playlist ended, set trackHasEnded=true"
+   - File dialog may/may not open
+   - **Likely related:** Main thread blocking prevents proper dialog presentation
+   - NSOpenPanel.begin() callback may race with AudioPlayer state updates
+
 ### Root Cause (Identified by Gemini Analysis)
 
 **Issue 1: Synchronous File I/O on Main Thread**
@@ -185,7 +192,14 @@ Add visual feedback during file loading:
 4. Implement deferred seeking for volume/balance sliders
 5. Add loading indicators
 6. Test with large files (>50MB)
-7. Verify no regressions in state management
+7. Fix Eject button/file dialog interaction (likely resolves with async fix)
+8. Verify no regressions in state management
+
+**Eject Button Investigation:**
+- Check if NSOpenPanel.begin() callback races with AudioPlayer state
+- May need to ensure dialog presentation happens on main thread after loading
+- Could be related to trackHasEnded flag being set incorrectly
+- Test if async loading fixes the nextTrack() trigger issue
 
 ---
 
