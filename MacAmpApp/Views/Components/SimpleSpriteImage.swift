@@ -52,6 +52,7 @@ struct SimpleSpriteImage: View {
 
         if let name = spriteName, let image = skinManager.currentSkin?.images[name] {
             Image(nsImage: image)
+                .resizable()  // Force image to fill frame completely
                 .interpolation(.none)
                 .antialiased(false)
                 .frame(width: width, height: height)
