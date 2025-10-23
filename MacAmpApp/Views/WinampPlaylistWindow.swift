@@ -13,7 +13,54 @@ struct WinampPlaylistWindow: View {
     // Window dimensions
     private let windowWidth: CGFloat = 275
     private let windowHeight: CGFloat = 232
-    
+
+    // MARK: - Time Display Computed Properties
+
+    /// Total duration of all tracks in the playlist
+    private var totalPlaylistDuration: Double {
+        audioPlayer.playlist.reduce(0.0) { total, track in
+            total + track.duration
+        }
+    }
+
+    /// Remaining time in current track (always positive)
+    private var remainingTime: Double {
+        guard audioPlayer.currentDuration > 0 else { return 0 }
+        return max(0, audioPlayer.currentDuration - audioPlayer.currentTime)
+    }
+
+    /// Format time as MM:SS
+    private func formatTime(_ seconds: Double) -> String {
+        let totalSeconds = max(0, Int(seconds))
+        let minutes = totalSeconds / 60
+        let secs = totalSeconds % 60
+        return String(format: "%d:%02d", minutes, secs)
+    }
+
+    /// Track time display text: "MM:SS / MM:SS" or just ":" when idle
+    private var trackTimeText: String {
+        guard audioPlayer.currentTrack != nil,
+              audioPlayer.currentDuration > 0 else {
+            return ":"  // Show only colon when idle
+        }
+
+        let current = formatTime(audioPlayer.currentTime)
+        let total = formatTime(totalPlaylistDuration)
+        return "\(current) / \(total)"
+    }
+
+    /// Remaining time display text: "-MM:SS" or empty when not playing
+    private var remainingTimeText: String {
+        guard audioPlayer.isPlaying,
+              audioPlayer.currentTrack != nil,
+              audioPlayer.currentDuration > 0 else {
+            return ""  // Hidden when not playing
+        }
+
+        let remaining = formatTime(remainingTime)
+        return "-\(remaining)"
+    }
+
     var body: some View {
         GeometryReader { geometry in
             ZStack {
@@ -50,9 +97,10 @@ struct WinampPlaylistWindow: View {
                     .position(x: 25 + 12.5 + CGFloat(i) * 25, y: 10)
             }
             
-            // Title bar
+            // Title bar - Make ONLY this draggable using macOS 15's WindowDragGesture
             SimpleSpriteImage("PLAYLIST_TITLE_BAR", width: 100, height: 20)
                 .position(x: 137.5, y: 10) // centered at 137.5
+                .gesture(WindowDragGesture())
             
             SimpleSpriteImage("PLAYLIST_TOP_RIGHT_CORNER", width: 25, height: 20)
                 .position(x: 262.5, y: 10) // 275 - 12.5
@@ -71,23 +119,26 @@ struct WinampPlaylistWindow: View {
                     .position(x: 265, y: 20 + 14.5 + CGFloat(i) * 29)
             }
             
-            // Bottom section
-            SimpleSpriteImage("PLAYLIST_BOTTOM_LEFT_CORNER", width: 125, height: 38)
-                .position(x: 62.5, y: 213) // 194 + 19
-            
-            SimpleSpriteImage("PLAYLIST_BOTTOM_RIGHT_CORNER", width: 150, height: 38)
-                .position(x: 200, y: 213) // 125 + 75, same y
-            
-            // Fill any gap in bottom with tiles if corners don't meet
-            // This prevents the black gap issue
-            if let skin = skinManager.currentSkin,
-               let bottomTile = skin.images["PLAYLIST_BOTTOM_TILE"] {
-                // Bottom tiles don't exist in default skin, but if they do, use them
-                Image(nsImage: bottomTile)
-                    .resizable()
-                    .frame(width: 25, height: 38)
-                    .position(x: 137.5, y: 213)
+            // Bottom section - Two sprites meeting edge-to-edge
+            HStack(spacing: 0) {
+                SimpleSpriteImage("PLAYLIST_BOTTOM_LEFT_CORNER", width: 125, height: 38)
+                    .frame(width: 125, height: 38)
+
+                SimpleSpriteImage("PLAYLIST_BOTTOM_RIGHT_CORNER", width: 154, height: 38)
+                    .frame(width: 154, height: 38)
             }
+            .frame(width: windowWidth, height: 38)
+            .position(x: windowWidth / 2, y: 213)
+            
+            // DISABLED: Bottom tile was covering the right sprite in the gap area
+            // Since we're using HStack layout, no gap should exist anyway
+            // if let skin = skinManager.currentSkin,
+            //    let bottomTile = skin.images["PLAYLIST_BOTTOM_TILE"] {
+            //     Image(nsImage: bottomTile)
+            //         .resizable()
+            //         .frame(width: 25, height: 38)
+            //         .position(x: 137.5, y: 213)
+            // }
         }
     }
     
@@ -96,9 +147,10 @@ struct WinampPlaylistWindow: View {
     private func buildContentOverlay() -> some View {
         Group {
             // Track list area with black background
+            // Height reduced from 174 to 170 to avoid overlapping bottom sprites
             Color.black
-                .frame(width: 243, height: 174) // 275 - 12 - 20 = 243 width
-                .position(x: 133.5, y: 107) // Center of content area: 12 + 243/2 = 133.5
+                .frame(width: 243, height: 170) // Reduced by 4px to clear bottom section
+                .position(x: 133.5, y: 105) // Adjusted Y to keep top aligned
 
             // Track list content
             buildTrackList()
@@ -106,9 +158,11 @@ struct WinampPlaylistWindow: View {
                 .position(x: 133.5, y: 107)
                 .clipped()
             
-            // Control buttons at bottom
+            // Bottom controls and transport buttons
             buildBottomControls()
-            
+            buildPlaylistTransportButtons()
+            buildTimeDisplays()
+
             // Title bar buttons
             buildTitleBarButtons()
             
@@ -128,7 +182,10 @@ struct WinampPlaylistWindow: View {
                         .frame(width: 243, height: 13)
                         .background(trackBackground(track: track, index: index))
                         .onTapGesture {
-                            audioPlayer.playTrack(track: track)
+                            // Only play if it's a different track (avoid restarting same track)
+                            if audioPlayer.currentTrack?.url != track.url {
+                                audioPlayer.playTrack(track: track)
+                            }
                             selectedTrackIndex = index
                         }
                 }
@@ -160,47 +217,148 @@ struct WinampPlaylistWindow: View {
         .padding(.horizontal, 2)
     }
     
-    // MARK: - Control Buttons
+    // MARK: - Bottom Button Click Targets
     @ViewBuilder
     private func buildBottomControls() -> some View {
         Group {
-            // Add button
+            // NOTE: The 4 menu button graphics (ADD, REM, SEL, MISC) are BAKED INTO
+            // the PLAYLIST_BOTTOM_LEFT_CORNER sprite. These are just transparent click targets.
+
+            // Add File button - transparent click target over baked-in button graphic
             Button(action: { openFileDialog() }) {
-                SimpleSpriteImage("PLAYLIST_ADD_FILE", width: 22, height: 18)
+                Color.clear
+                    .frame(width: 22, height: 18)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .position(x: 25, y: 206)
-            
-            // Remove button
+
+            // Remove Selected button
             Button(action: { removeSelectedTrack() }) {
-                SimpleSpriteImage("PLAYLIST_REMOVE_SELECTED", width: 22, height: 18)
+                Color.clear
+                    .frame(width: 22, height: 18)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .position(x: 54, y: 206)
-            
-            // Selection button
+
+            // Selection/Crop button
             Button(action: {}) {
-                SimpleSpriteImage("PLAYLIST_CROP", width: 22, height: 18)
+                Color.clear
+                    .frame(width: 22, height: 18)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .position(x: 83, y: 206)
-            
-            // Misc button
+
+            // Misc Options button
             Button(action: {}) {
-                SimpleSpriteImage("PLAYLIST_MISC_OPTIONS", width: 22, height: 18)
+                Color.clear
+                    .frame(width: 22, height: 18)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .position(x: 112, y: 206)
-            
-            // List button (right side)
-            Button(action: {}) {
-                SimpleSpriteImage("PLAYLIST_SORT_LIST", width: 22, height: 18)
-            }
-            .buttonStyle(.plain)
-            .position(x: 231, y: 206)
         }
     }
-    
+
+    // MARK: - Transport Controls (Playback Buttons)
+    @ViewBuilder
+    private func buildPlaylistTransportButtons() -> some View {
+        Group {
+            // NOTE: Gold button icons are BAKED INTO the PLAYLIST_BOTTOM_RIGHT_CORNER sprite!
+            // These are transparent click targets positioned over the visual icons in the background.
+
+            // Previous button - transparent click target over gold icon in background
+            // Corner at X:195 (left edge at 120), buttons at offsets 8, 19, 30, 41, 52, 63
+            Button(action: {
+                audioPlayer.previousTrack()
+            }) {
+                Color.clear
+                    .frame(width: 10, height: 9)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .position(x: 133, y: 220)  // 120 + 8
+
+            // Play button
+            Button(action: {
+                if audioPlayer.isPaused {
+                    audioPlayer.play()
+                } else if !audioPlayer.isPlaying {
+                    audioPlayer.play()
+                }
+            }) {
+                Color.clear
+                    .frame(width: 10, height: 9)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .position(x: 144, y: 220)  // 125 + 19
+
+            // Pause button
+            Button(action: {
+                audioPlayer.pause()
+            }) {
+                Color.clear
+                    .frame(width: 10, height: 9)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .position(x: 155, y: 220)  // 125 + 30
+
+            // Stop button
+            Button(action: {
+                audioPlayer.stop()
+            }) {
+                Color.clear
+                    .frame(width: 10, height: 9)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .position(x: 166, y: 220)  // 125 + 41
+
+            // Next button
+            Button(action: {
+                audioPlayer.nextTrack()
+            }) {
+                Color.clear
+                    .frame(width: 10, height: 9)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .position(x: 177, y: 220)  // 125 + 52
+
+            // Eject button
+            Button(action: {
+                openFileDialog()
+            }) {
+                Color.clear
+                    .frame(width: 10, height: 9)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .position(x: 188, y: 220)  // 125 + 63
+        }
+    }
+
+    // MARK: - Time Displays (Sprite-Based)
+    @ViewBuilder
+    private func buildTimeDisplays() -> some View {
+        Group {
+            // Track Time Display (MM:SS / MM:SS) - positioned in TOP black info bar
+            // Uses CHARACTER sprites from TEXT.BMP with PLEDIT.TXT color
+            PlaylistTimeText(trackTimeText)
+                .position(x: 168, y: 206)  // Moved left 23px total (191 → 168), down 1px (205 → 206)
+
+            // Remaining Time Display (-MM:SS) - positioned in BOTTOM black info bar
+            if !remainingTimeText.isEmpty {
+                PlaylistTimeText(remainingTimeText)
+                    .position(x: 203, y: 219)  // Moved right 12px total (191 → 203), down 2px (217 → 219)
+            }
+        }
+    }
+
     // MARK: - Title Bar Buttons
     @ViewBuilder
     private func buildTitleBarButtons() -> some View {
@@ -259,18 +417,20 @@ struct WinampPlaylistWindow: View {
 
     // MARK: - Helper Functions
     private func trackTextColor(track: Track) -> Color {
-        if let currentTrack = audioPlayer.currentTrack, currentTrack.id == track.id {
-            return Color.white
+        // Use URL comparison for reliable track matching (IDs are UUID and may change)
+        if let currentTrack = audioPlayer.currentTrack, currentTrack.url == track.url {
+            return Color.white  // White text for currently playing track (PLEDIT.TXT)
         }
-        return Color(red: 0.0, green: 1.0, blue: 0.0)
+        return Color(red: 0.0, green: 1.0, blue: 0.0)  // Green text for normal tracks
     }
-    
+
     private func trackBackground(track: Track, index: Int) -> Color {
-        if let currentTrack = audioPlayer.currentTrack, currentTrack.id == track.id {
-            return Color(red: 0.0, green: 0.0, blue: 0.776)
+        // Use URL comparison for reliable track matching (IDs are UUID and may change)
+        if let currentTrack = audioPlayer.currentTrack, currentTrack.url == track.url {
+            return Color(red: 0.0, green: 0.0, blue: 0.776)  // Blue background for playing (#0000C6)
         }
         if selectedTrackIndex == index {
-            return Color.blue.opacity(0.4)
+            return Color.blue.opacity(0.4)  // Lighter blue for selection
         }
         return Color.clear
     }
@@ -287,11 +447,11 @@ struct WinampPlaylistWindow: View {
         openPanel.allowedContentTypes = [.audio]
         openPanel.allowsMultipleSelection = true
         openPanel.canChooseDirectories = false
-        
+
         openPanel.begin { response in
             if response == .OK {
                 for url in openPanel.urls {
-                    audioPlayer.loadTrack(url: url)
+                    audioPlayer.addTrack(url: url)
                 }
             }
         }

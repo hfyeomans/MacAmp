@@ -30,7 +30,7 @@ struct UnifiedDockView: View {
                 // Windows in proper vertical order
                 ForEach(docking.sortedVisiblePanes) { pane in
                     windowContent(for: pane.type)
-                        .frame(width: naturalSize(for: pane.type).width, 
+                        .frame(width: naturalSize(for: pane.type).width,
                                height: pane.isShaded ? 14 : naturalSize(for: pane.type).height,
                                alignment: .topLeading)
                         .transition(.asymmetric(
@@ -39,7 +39,7 @@ struct UnifiedDockView: View {
                         ))
                 }
             }
-            .frame(width: calculateTotalWidth(), 
+            .frame(width: calculateTotalWidth(),
                    height: calculateTotalHeight(),
                    alignment: .topLeading)
             .fixedSize() // This tells SwiftUI to use the exact frame size
@@ -54,6 +54,11 @@ struct UnifiedDockView: View {
             .onChange(of: settings.enableLiquidGlass) { _, _ in
                 startDockAnimations()
             }
+            .background(
+                WindowAccessor { window in
+                    configureWindow(window)
+                }
+            )
         } else {
             // Skin not loaded yet - trigger loading
             Color.clear
@@ -68,7 +73,37 @@ struct UnifiedDockView: View {
             skinManager.loadInitialSkin()
         }
     }
-    
+
+    // MARK: - Window Configuration
+    private func configureWindow(_ window: NSWindow) {
+        // Configure window style mask to remove title bar completely
+        window.styleMask.insert(.borderless)
+        window.styleMask.remove(.titled)
+
+        // DO NOT make entire window draggable - causes slider conflicts
+        // We'll use custom DragGesture on title bars only
+        window.isMovableByWindowBackground = false
+
+        // Remove title bar appearance completely
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+
+        // Ensure no separator line between title bar and content
+        if #available(macOS 11.0, *) {
+            window.toolbar = nil
+        }
+
+        // Allow window to be in front of other windows
+        window.level = .normal
+
+        // Remove shadow if you want truly pixel-perfect edges (optional)
+        // Uncomment if you want no shadow:
+        // window.hasShadow = false
+
+        // Prevent window from being resized (already handled by .windowResizability(.contentSize))
+        window.isMovable = true
+    }
+
     // MARK: - Animation Helper Functions
     private func startDockAnimations() {
         // Only apply glow effect in modern mode

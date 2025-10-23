@@ -130,6 +130,26 @@ extension SkinMetadata {
             ))
         }
 
+        // Tron Vaporwave skin
+        if let url = findSkin(named: "Tron-Vaporwave-by-LuigiHann") {
+            skins.append(SkinMetadata(
+                id: "bundled:Tron-Vaporwave",
+                name: "Tron Vaporwave",
+                url: url,
+                source: .bundled
+            ))
+        }
+
+        // Winamp3 Classified skin
+        if let url = findSkin(named: "Winamp3_Classified_v5.5") {
+            skins.append(SkinMetadata(
+                id: "bundled:Winamp3-Classified",
+                name: "Winamp3 Classified",
+                url: url,
+                source: .bundled
+            ))
+        }
+
         NSLog("🎁 Total bundled skins found: \(skins.count)")
         for skin in skins {
             NSLog("  📦 \(skin.name) [\(skin.id)] -> \(skin.url.path)")

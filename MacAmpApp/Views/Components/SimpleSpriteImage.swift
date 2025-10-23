@@ -54,7 +54,10 @@ struct SimpleSpriteImage: View {
             Image(nsImage: image)
                 .interpolation(.none)
                 .antialiased(false)
+                .resizable()  // Force image to fill frame completely
+                .aspectRatio(contentMode: .fill)  // Fill frame, ignore aspect ratio
                 .frame(width: width, height: height)
+                .clipped()  // Clip overflow from .fill mode
         } else {
             Rectangle()
                 .fill(Color.purple)

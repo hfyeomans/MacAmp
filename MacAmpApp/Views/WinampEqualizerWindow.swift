@@ -7,6 +7,7 @@ struct WinampEqualizerWindow: View {
     @EnvironmentObject var audioPlayer: AudioPlayer
 
     @State private var isShadeMode: Bool = false
+    @State private var showPresetPicker: Bool = false
 
     // Winamp EQ coordinate constants (CORRECTED from webamp reference)
     private struct EQCoords {
@@ -49,10 +50,12 @@ struct WinampEqualizerWindow: View {
                                 height: WinampSizes.equalizer.height)
 
                 // Title bar with "Winamp Equalizer" text
+                // Make ONLY the title bar draggable using macOS 15's WindowDragGesture
                 SimpleSpriteImage("EQ_TITLE_BAR_SELECTED",
                                 width: 275,
                                 height: 14)
                     .at(CGPoint(x: 0, y: 0))
+                    .gesture(WindowDragGesture())
 
                 // Build all EQ components
                 Group {
@@ -185,35 +188,25 @@ struct WinampEqualizerWindow: View {
     
     @ViewBuilder
     private func buildPresetsButton() -> some View {
-        Menu {
-            // Load preset submenu
-            Menu("Load") {
-                ForEach(EQPreset.builtIn) { preset in
-                    Button(preset.name) {
-                        audioPlayer.applyEQPreset(preset)
-                    }
-                }
-            }
-
-            Divider()
-
-            // Save current settings
-            Button("Save") {
-                showSavePresetDialog()
-            }
-
-            Divider()
-
-            // Load from file (future implementation)
-            Button("From Eqf...") {
-                // TODO: Open file picker for .eqf files
-                print("Load from EQF file - not yet implemented")
-            }
+        Button {
+            showPresetPicker.toggle()
         } label: {
             SimpleSpriteImage("EQ_PRESETS_BUTTON", width: 44, height: 12)
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
+        .buttonStyle(.plain)
+        .popover(isPresented: $showPresetPicker, arrowEdge: .bottom) {
+            PresetPickerView(
+                presets: EQPreset.builtIn,
+                onSelect: { preset in
+                    audioPlayer.applyEQPreset(preset)
+                    showPresetPicker = false
+                },
+                onSave: {
+                    showSavePresetDialog()
+                    showPresetPicker = false
+                }
+            )
+        }
         .at(EQCoords.presetsButton)
     }
 
@@ -452,6 +445,98 @@ struct WinampVerticalSlider: View {
         let frameIndex = calculateFrameIndex()
         let gridY = frameIndex / gridColumns  // Row: 0-1
         return -CGFloat(gridY) * frameHeight
+    }
+}
+
+/// Modern popover view for selecting EQ presets
+struct PresetPickerView: View {
+    let presets: [EQPreset]
+    let onSelect: (EQPreset) -> Void
+    let onSave: () -> Void
+
+    @State private var hoveredPreset: EQPreset.ID?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Header
+            HStack {
+                Text("EQ Presets")
+                    .font(.headline)
+                Spacer()
+                Button {
+                    onSave()
+                } label: {
+                    Image(systemName: "plus.circle.fill")
+                        .foregroundColor(.accentColor)
+                }
+                .buttonStyle(.plain)
+                .help("Save custom preset")
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+
+            Divider()
+
+            // Scrollable preset list
+            ScrollView {
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(presets) { preset in
+                        Button {
+                            onSelect(preset)
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "waveform")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .frame(width: 16)
+
+                                Text(preset.name)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                                if hoveredPreset == preset.id {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundColor(.green)
+                                        .font(.caption)
+                                }
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                        }
+                        .buttonStyle(.plain)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(hoveredPreset == preset.id ? Color.accentColor.opacity(0.15) : Color.clear)
+                        )
+                        .onHover { hovering in
+                            hoveredPreset = hovering ? preset.id : nil
+                        }
+                    }
+                }
+                .padding(.vertical, 6)
+                .padding(.horizontal, 4)
+            }
+            .frame(width: 240, height: 320)
+
+            Divider()
+
+            // Footer with file import option
+            HStack {
+                Image(systemName: "folder")
+                    .foregroundColor(.secondary)
+                Text("Load from .eqf file")
+                    .foregroundColor(.secondary)
+                    .font(.caption)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .frame(maxWidth: .infinity)
+            .background(Color.secondary.opacity(0.05))
+            .onTapGesture {
+                // TODO: Implement .eqf file picker
+                print("Load from EQF file - not yet implemented")
+            }
+        }
+        .frame(width: 240)
     }
 }
 
