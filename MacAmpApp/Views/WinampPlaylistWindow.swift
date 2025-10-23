@@ -158,10 +158,10 @@ struct WinampPlaylistWindow: View {
                 .position(x: 133.5, y: 107)
                 .clipped()
             
-            // TEMPORARILY COMMENTED to test sprite rendering
-            // buildBottomControls()
-            // buildPlaylistTransportButtons()
-            // buildTimeDisplays()
+            // Bottom controls and transport buttons
+            buildBottomControls()
+            buildPlaylistTransportButtons()
+            buildTimeDisplays()
 
             // Title bar buttons
             buildTitleBarButtons()
@@ -342,22 +342,18 @@ struct WinampPlaylistWindow: View {
         }
     }
 
-    // MARK: - Time Displays
+    // MARK: - Time Displays (Sprite-Based)
     @ViewBuilder
     private func buildTimeDisplays() -> some View {
         Group {
-            // Mini Time Display (MM:SS format) - positioned in info bar
-            Text(trackTimeText)
-                .font(.system(size: 8, weight: .medium, design: .monospaced))
-                .foregroundColor(Color(red: 0, green: 1.0, blue: 0))  // Green from PLEDIT.TXT (#00FF00)
+            // Track Time Display (MM:SS / MM:SS) - positioned in black info bar
+            // Uses CHARACTER sprites from TEXT.BMP with PLEDIT.TXT color
+            PlaylistTimeText(trackTimeText)
                 .position(x: 191, y: 217)
 
-            // Remaining Time Display (-MM:SS format)
-            // Positioned above mini-time
+            // Remaining Time Display (-MM:SS) - positioned above track time
             if !remainingTimeText.isEmpty {
-                Text(remainingTimeText)
-                    .font(.system(size: 8, weight: .medium, design: .monospaced))
-                    .foregroundColor(Color(red: 0, green: 1.0, blue: 0))  // Green (#00FF00)
+                PlaylistTimeText(remainingTimeText)
                     .position(x: 191, y: 205)
             }
         }
