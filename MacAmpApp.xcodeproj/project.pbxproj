@@ -28,7 +28,6 @@
 		8375D760955EEB75F8311F11 /* SimpleSpriteImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77A0C7921140C73AB173A5E8 /* SimpleSpriteImage.swift */; };
 		AC7BAF317F478CEB2F36F3DB /* PlaylistTimeText.swift in Sources */ = {isa = PBXBuildFile; fileRef = CABDEB04D5D23C3DAAAFEEFC /* PlaylistTimeText.swift */; };
 		878F770AF1608311F0C9BA09 /* WindowAccessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8A2F2CBA9954B0B144DA072 /* WindowAccessor.swift */; };
-		8D904211B7B13AF3D346AAC4 /* DockingContainerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 545ACEB67244E17A46293AF3 /* DockingContainerView.swift */; };
 		93E376C1200386F617D37563 /* Skin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93E9913A6D48005436618474 /* Skin.swift */; };
 		93EBD6FADA9285C58A329F5C /* VisColorParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6D5886DD239C58D98785419 /* VisColorParser.swift */; };
 		9C74995B7081637EB964D3AA /* SkinnedBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12C0A7D97E8D3B2E715D4EA0 /* SkinnedBanner.swift */; };
@@ -61,7 +60,6 @@
 		43358BDD8D9B537C9109DF62 /* SnapUtils.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapUtils.swift; sourceTree = "<group>"; };
 		499433D5A14F2C47C9EB0931 /* VisualizerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisualizerView.swift; sourceTree = "<group>"; };
 		4A489CA15E452302405E6FAE /* WinampEqualizerWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WinampEqualizerWindow.swift; sourceTree = "<group>"; };
-		545ACEB67244E17A46293AF3 /* DockingContainerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DockingContainerView.swift; sourceTree = "<group>"; };
 		590BF37A22DF8EAB2B27DE50 /* UnifiedDockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnifiedDockView.swift; sourceTree = "<group>"; };
 		7324174AA2F7231F3B2508AE /* SpritePositions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpritePositions.swift; sourceTree = "<group>"; };
 		74EDF33D12E79F86166AF268 /* DockingController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DockingController.swift; sourceTree = "<group>"; };
@@ -168,7 +166,6 @@
 		D4D715C613A4E03DDE1E814A /* Views */ = {
 			isa = PBXGroup;
 			children = (
-				545ACEB67244E17A46293AF3 /* DockingContainerView.swift */,
 				032A0DEAD316CCA0CDA2645D /* EqGraphView.swift */,
 				DE345F678901BCDE12345678 /* PreferencesView.swift */,
 				3D258350F99A800B8CBF8AEA /* PresetsButton.swift */,
@@ -295,7 +292,6 @@
 				AB123DEF4E567890ABCDEF12 /* AppSettings.swift in Sources */,
 				B3A2FD6D778A60B9F0D92258 /* AppCommands.swift in Sources */,
 				2A33850C38AA921D5659ECA7 /* AudioPlayer.swift in Sources */,
-				8D904211B7B13AF3D346AAC4 /* DockingContainerView.swift in Sources */,
 				EE878CCB3C1E4F7801C5430E /* DockingController.swift in Sources */,
 				397CD3DA0D75924BD0B90FBE /* EQF.swift in Sources */,
 				4F952CA93D32BF2FB737DFBA /* EqGraphView.swift in Sources */,
