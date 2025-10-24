@@ -65,6 +65,8 @@ class AudioPlayer: ObservableObject {
     @Published var useLogScaleBands: Bool = true
     var perTrackPresets: [String: EqfPreset] = [:]
     private let presetsFileName = "perTrackPresets.json"
+    @Published private(set) var userPresets: [EQPreset] = []
+    private let userPresetDefaultsKey = "MacAmp.UserEQPresets.v1"
     @Published var visualizerLevels: [Float] = Array(repeating: 0.0, count: 20)
     @Published var appliedAutoPresetTrack: String? = nil
     @Published var channelCount: Int = 2 // 1 = mono, 2 = stereo
@@ -75,6 +77,7 @@ class AudioPlayer: ObservableObject {
         setupEngine()
         configureEQ()
         loadPerTrackPresets()
+        loadUserPresets()
     }
 
     deinit {}
@@ -223,9 +226,6 @@ class AudioPlayer: ObservableObject {
     func play() {
         // If playlist has ended, restart from the beginning
         if trackHasEnded && !playlist.isEmpty {
-            #if DEBUG
-            print("DEBUG play: trackHasEnded=true, restarting playlist from first track")
-            #endif
             playTrack(track: playlist[0])
             return
         }
@@ -239,9 +239,6 @@ class AudioPlayer: ObservableObject {
         let sampleRate = file.processingFormat.sampleRate
         let fileDuration = Double(file.length) / sampleRate
         if currentTime >= fileDuration - 0.01 {
-            #if DEBUG
-            print("DEBUG play: At end of track (currentTime=\(currentTime) >= fileDuration-0.01=\(fileDuration - 0.01)), advancing to next")
-            #endif
             // We're at the end - move to next track instead of trying to play
             onPlaybackEnded()
             return
@@ -288,8 +285,21 @@ class AudioPlayer: ObservableObject {
     
 
     func eject() {
-        print("AudioPlayer: Eject (Not yet implemented)")
-        // TODO: Implement eject logic (e.g., clear playlist)
+        stop()
+        playlist.removeAll()
+        currentTrack = nil
+        currentTrackURL = nil
+        currentTitle = "No Track Loaded"
+        currentDuration = 0.0
+        currentTime = 0.0
+        playbackProgress = 0.0
+        trackHasEnded = false
+        appliedAutoPresetTrack = nil
+        audioFile = nil
+        bitrate = 0
+        sampleRate = 0
+        channelCount = 2
+        print("AudioPlayer: Eject - cleared playlist and reset playback state")
     }
 
     // Equalizer control methods
@@ -332,6 +342,41 @@ class AudioPlayer: ObservableObject {
 
     func getCurrentEQPreset(name: String) -> EQPreset {
         return EQPreset(name: name, preamp: preamp, bands: Array(eqBands))
+    }
+
+    func saveUserPreset(named rawName: String) {
+        let trimmedName = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else { return }
+        let preset = getCurrentEQPreset(name: trimmedName)
+        storeUserPreset(preset)
+        print("AudioPlayer: Saved user EQ preset '\(trimmedName)'")
+    }
+
+    func deleteUserPreset(id: UUID) {
+        if let index = userPresets.firstIndex(where: { $0.id == id }) {
+            let removed = userPresets.remove(at: index)
+            persistUserPresets()
+            print("AudioPlayer: Deleted user EQ preset '\(removed.name)'")
+        }
+    }
+
+    func importEqfPreset(from url: URL) {
+        do {
+            let data = try Data(contentsOf: url)
+            guard let eqfPreset = EQFCodec.parse(data: data) else {
+                print("AudioPlayer: Failed to parse EQF preset at \(url.lastPathComponent)")
+                return
+            }
+            let suggestedName = eqfPreset.name?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let fallbackName = url.deletingPathExtension().lastPathComponent
+            let finalName = (suggestedName?.isEmpty == false ? suggestedName! : fallbackName)
+            let preset = EQPreset(name: finalName, preamp: eqfPreset.preampDB, bands: eqfPreset.bandsDB)
+            storeUserPreset(preset)
+            applyEQPreset(preset)
+            print("AudioPlayer: Imported EQ preset '\(finalName)' from EQF")
+        } catch {
+            print("AudioPlayer: Failed to load EQF preset: \(error)")
+        }
     }
 
     func savePresetForCurrentTrack() {
@@ -394,6 +439,39 @@ class AudioPlayer: ObservableObject {
         } catch {
             print("Failed to save per-track presets: \(error)")
         }
+    }
+
+    private func loadUserPresets() {
+        let defaults = UserDefaults.standard
+        guard let data = defaults.data(forKey: userPresetDefaultsKey) else { return }
+        do {
+            var decoded = try JSONDecoder().decode([EQPreset].self, from: data)
+            decoded.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+            userPresets = decoded
+            print("AudioPlayer: Loaded \(decoded.count) user EQ presets")
+        } catch {
+            print("AudioPlayer: Failed to decode user EQ presets: \(error)")
+            userPresets = []
+        }
+    }
+
+    private func persistUserPresets() {
+        do {
+            let data = try JSONEncoder().encode(userPresets)
+            UserDefaults.standard.set(data, forKey: userPresetDefaultsKey)
+        } catch {
+            print("AudioPlayer: Failed to persist user EQ presets: \(error)")
+        }
+    }
+
+    private func storeUserPreset(_ preset: EQPreset) {
+        if let index = userPresets.firstIndex(where: { $0.name.caseInsensitiveCompare(preset.name) == .orderedSame }) {
+            userPresets[index] = preset
+        } else {
+            userPresets.append(preset)
+        }
+        userPresets.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        persistUserPresets()
     }
 
     // MARK: - Engine Wiring
@@ -469,9 +547,6 @@ class AudioPlayer: ObservableObject {
         // SPECIAL CASE: If seeking to or past the end (within 0.01s threshold), trigger completion immediately
         // This prevents frame calculation wrap-around issues when time == fileDuration exactly
         if time >= fileDuration - 0.01 {
-            #if DEBUG
-            print("DEBUG scheduleFrom: time=\(time) >= fileDuration-0.01=\(fileDuration - 0.01), triggering completion immediately")
-            #endif
             playheadOffset = fileDuration
             playerNode.stop()
 
@@ -485,10 +560,6 @@ class AudioPlayer: ObservableObject {
         let totalFrames = file.length
         let framesRemaining = max(0, totalFrames - startFrame)
 
-        #if DEBUG
-        print("DEBUG scheduleFrom: time=\(time), fileDuration=\(fileDuration), startFrame=\(startFrame), framesRemaining=\(framesRemaining)")
-        #endif
-
         // Store the new starting time for progress tracking
         playheadOffset = Double(startFrame) / sampleRate
 
@@ -497,9 +568,6 @@ class AudioPlayer: ObservableObject {
 
         // Schedule the new segment if there's audio left to play
         if framesRemaining > 0 {
-            #if DEBUG
-            print("DEBUG scheduleFrom: Scheduling \(framesRemaining) frames from frame \(startFrame)")
-            #endif
             // Capture the seek ID to identify this completion
             let capturedSeekID = seekID
             playerNode.scheduleSegment(
@@ -509,9 +577,6 @@ class AudioPlayer: ObservableObject {
                 at: nil,
                 completionHandler: { [weak self] in
                     DispatchQueue.main.async {
-                        #if DEBUG
-                        print("DEBUG scheduleFrom: Completion handler called! seekID=\(String(describing: capturedSeekID))")
-                        #endif
                         self?.onPlaybackEnded(fromSeekID: capturedSeekID)
                     }
                 }
@@ -524,9 +589,6 @@ class AudioPlayer: ObservableObject {
 
             return true  // Audio was scheduled successfully
         } else {
-            #if DEBUG
-            print("DEBUG scheduleFrom: No frames remaining, calling onPlaybackEnded immediately!")
-            #endif
             onPlaybackEnded()
             return false  // No audio scheduled - track ended
         }
@@ -550,12 +612,6 @@ class AudioPlayer: ObservableObject {
                     self.currentTime = current
                     if self.currentDuration > 0 {
                         let newProgress = current / self.currentDuration
-                        #if DEBUG
-                        // Only log when progress changes significantly (avoid spam)
-                        if abs(newProgress - self.playbackProgress) > 0.01 {
-                            print("DEBUG progressTimer: currentTime=\(current), currentDuration=\(self.currentDuration), newProgress=\(newProgress)")
-                        }
-                        #endif
                         self.playbackProgress = newProgress
                     } else {
                         self.playbackProgress = 0
@@ -711,25 +767,13 @@ class AudioPlayer: ObservableObject {
         let fileDuration = Double(file.length) / sampleRate
         let targetProgress = fileDuration > 0 ? time / fileDuration : 0
 
-        #if DEBUG
-        print("DEBUG seek: time=\(time), fileDuration=\(fileDuration), targetProgress=\(targetProgress), isSeeking=true")
-        #endif
-
         // Schedule the new audio segment - returns false if track ended
         // Pass current seek ID so completion handler can identify itself
         let audioScheduled = scheduleFrom(time: time, seekID: currentSeekID)
 
-        #if DEBUG
-        print("DEBUG seek: scheduleFrom returned audioScheduled=\(audioScheduled)")
-        #endif
-
         // Update state AFTER scheduling to ensure consistency
         currentTime = time
         playbackProgress = targetProgress
-
-        #if DEBUG
-        print("DEBUG seek: Set playbackProgress=\(playbackProgress), currentTime=\(currentTime)")
-        #endif
 
         // CRITICAL: Only start playback if audio was actually scheduled
         // If scheduleFrom returned false, it means we sought to the end
@@ -739,14 +783,8 @@ class AudioPlayer: ObservableObject {
             startProgressTimer()  // Restart timer with fresh state
             isPlaying = true
             isPaused = false
-            #if DEBUG
-            print("DEBUG seek: Started playback (audioScheduled=true, shouldPlay=true)")
-            #endif
         } else if !audioScheduled {
             // No audio scheduled - we're at the end of the track
-            #if DEBUG
-            print("DEBUG seek: Track ended (audioScheduled=false), handling completion")
-            #endif
             isPlaying = false
             isPaused = false
             // Timer already invalidated above
@@ -759,16 +797,10 @@ class AudioPlayer: ObservableObject {
         } else {
             isPlaying = false
             // Timer already invalidated above
-            #if DEBUG
-            print("DEBUG seek: NOT starting playback (audioScheduled=\(audioScheduled), shouldPlay=\(shouldPlay))")
-            #endif
         }
 
         // Clear isSeeking flag after a brief delay to allow old completion handler to fire and be ignored
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            #if DEBUG
-            print("DEBUG seek: Setting isSeeking=false")
-            #endif
             self.isSeeking = false
         }
     }
@@ -820,38 +852,20 @@ class AudioPlayer: ObservableObject {
             guard let self = self else { return }
 
             // CRITICAL: Prevent re-entrant calls (infinite loop protection)
-            guard !self.isHandlingCompletion else {
-                #if DEBUG
-                print("DEBUG onPlaybackEnded: Ignoring re-entrant call (already handling completion)")
-                #endif
-                return
-            }
+            guard !self.isHandlingCompletion else { return }
 
             // CRITICAL: Don't process completion if it's from an old seek operation
             // playerNode.stop() triggers the old segment's completion handler
             // But allow completions from the CURRENT seek operation (matching seekID)
             if self.isSeeking && fromSeekID != self.currentSeekID {
-                #if DEBUG
-                print("DEBUG onPlaybackEnded: Ignoring OLD completion (seekID mismatch: \(String(describing: fromSeekID)) != \(self.currentSeekID))")
-                #endif
                 return
             }
-
-            #if DEBUG
-            if self.isSeeking && fromSeekID == self.currentSeekID {
-                print("DEBUG onPlaybackEnded: Allowing NEW completion (seekID match: \(String(describing: fromSeekID)))")
-            }
-            #endif
 
             // Don't update progress if we stopped manually
             guard !self.wasStopped else {
                 self.wasStopped = false
                 return
             }
-
-            #if DEBUG
-            print("DEBUG onPlaybackEnded: Track actually ended, setting playbackProgress=1")
-            #endif
 
             // Set re-entrancy guard
             self.isHandlingCompletion = true
@@ -890,9 +904,6 @@ class AudioPlayer: ObservableObject {
             } else {
                 // End of playlist reached, no repeat
                 trackHasEnded = true
-                #if DEBUG
-                print("DEBUG nextTrack: Playlist ended, set trackHasEnded=true")
-                #endif
             }
         } else if !playlist.isEmpty {
             // No current track, start from beginning

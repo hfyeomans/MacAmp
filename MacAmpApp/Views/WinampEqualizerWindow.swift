@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 
 /// Pixel-perfect recreation of Winamp's equalizer window using absolute positioning
 struct WinampEqualizerWindow: View {
@@ -32,6 +33,22 @@ struct WinampEqualizerWindow: View {
         
         // EQ curve graph area - CORRECTED
         static let graphArea = CGPoint(x: 86, y: 17)
+    }
+
+    private func importPresetFromFile() {
+        let panel = NSOpenPanel()
+        if let eqfType = UTType(filenameExtension: "eqf") {
+            panel.allowedContentTypes = [eqfType]
+        }
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.allowsMultipleSelection = false
+        panel.begin { response in
+            if response == .OK, let url = panel.url {
+                audioPlayer.importEqfPreset(from: url)
+                showPresetPicker = false
+            }
+        }
     }
     
     // EQ slider specs - CORRECTED to match webamp exactly
@@ -196,7 +213,8 @@ struct WinampEqualizerWindow: View {
         .buttonStyle(.plain)
         .popover(isPresented: $showPresetPicker, arrowEdge: .bottom) {
             PresetPickerView(
-                presets: EQPreset.builtIn,
+                builtInPresets: EQPreset.builtIn,
+                userPresets: audioPlayer.userPresets,
                 onSelect: { preset in
                     audioPlayer.applyEQPreset(preset)
                     showPresetPicker = false
@@ -204,6 +222,12 @@ struct WinampEqualizerWindow: View {
                 onSave: {
                     showSavePresetDialog()
                     showPresetPicker = false
+                },
+                onDeleteUserPreset: { presetID in
+                    audioPlayer.deleteUserPreset(id: presetID)
+                },
+                onImport: {
+                    importPresetFromFile()
                 }
             )
         }
@@ -224,12 +248,7 @@ struct WinampEqualizerWindow: View {
 
         if alert.runModal() == .alertFirstButtonReturn {
             let presetName = textField.stringValue
-            if !presetName.isEmpty {
-                let _ = audioPlayer.getCurrentEQPreset(name: presetName)
-                // TODO: Save to user presets (future implementation)
-                // When implemented, will persist newPreset to UserDefaults or file
-                print("Saved preset: \(presetName)")
-            }
+            audioPlayer.saveUserPreset(named: presetName)
         }
     }
     
@@ -450,9 +469,12 @@ struct WinampVerticalSlider: View {
 
 /// Modern popover view for selecting EQ presets
 struct PresetPickerView: View {
-    let presets: [EQPreset]
+    let builtInPresets: [EQPreset]
+    let userPresets: [EQPreset]
     let onSelect: (EQPreset) -> Void
     let onSave: () -> Void
+    let onDeleteUserPreset: (UUID) -> Void
+    let onImport: () -> Void
 
     @State private var hoveredPreset: EQPreset.ID?
 
@@ -479,41 +501,22 @@ struct PresetPickerView: View {
 
             // Scrollable preset list
             ScrollView {
-                VStack(alignment: .leading, spacing: 2) {
-                    ForEach(presets) { preset in
-                        Button {
-                            onSelect(preset)
-                        } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: "waveform")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                    .frame(width: 16)
-
-                                Text(preset.name)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                                if hoveredPreset == preset.id {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundColor(.green)
-                                        .font(.caption)
-                                }
-                            }
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                        }
-                        .buttonStyle(.plain)
-                        .background(
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(hoveredPreset == preset.id ? Color.accentColor.opacity(0.15) : Color.clear)
-                        )
-                        .onHover { hovering in
-                            hoveredPreset = hovering ? preset.id : nil
-                        }
+                VStack(alignment: .leading, spacing: 12) {
+                    if !userPresets.isEmpty {
+                        Text("Saved Presets")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 12)
+                        presetSection(userPresets, allowDeletion: true)
                     }
+
+                    Text("Built-in Presets")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 12)
+                    presetSection(builtInPresets, allowDeletion: false)
                 }
-                .padding(.vertical, 6)
-                .padding(.horizontal, 4)
+                .padding(.vertical, 8)
             }
             .frame(width: 240, height: 320)
 
@@ -532,11 +535,56 @@ struct PresetPickerView: View {
             .frame(maxWidth: .infinity)
             .background(Color.secondary.opacity(0.05))
             .onTapGesture {
-                // TODO: Implement .eqf file picker
-                print("Load from EQF file - not yet implemented")
+                onImport()
             }
         }
         .frame(width: 240)
+    }
+
+    private func presetSection(_ presets: [EQPreset], allowDeletion: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            ForEach(presets) { preset in
+                Button {
+                    onSelect(preset)
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "waveform")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .frame(width: 16)
+
+                        Text(preset.name)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+
+                        if hoveredPreset == preset.id {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(.green)
+                                .font(.caption)
+                        }
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                }
+                .buttonStyle(.plain)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(hoveredPreset == preset.id ? Color.accentColor.opacity(0.15) : Color.clear)
+                )
+                .onHover { hovering in
+                    hoveredPreset = hovering ? preset.id : nil
+                }
+                .contextMenu {
+                    if allowDeletion {
+                        Button(role: .destructive) {
+                            onDeleteUserPreset(preset.id)
+                        } label: {
+                            Text("Delete")
+                        }
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 4)
     }
 }
 

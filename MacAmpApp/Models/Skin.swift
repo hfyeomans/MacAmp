@@ -20,8 +20,7 @@ struct Skin {
     // A dictionary mapping cursor names to NSCursor objects.
     let cursors: [String: NSCursor]
 
-    // TODO: Add properties for the other skin elements like
-    // region, genLetterWidths, etc.
+    // Additional skin elements (region maps, letter widths, etc.) can be added as parsing expands.
 }
 
 struct PlaylistStyle {
