@@ -335,11 +335,13 @@ class SkinManager: ObservableObject {
             var extractedImages: [String: NSImage] = [:]
             
             // DEBUG: List all available files in the archive
+            #if DEBUG
             NSLog("=== SPRITE DEBUG: Archive Contents ===")
             for entry in archive {
                 NSLog("  Available file: \(entry.path)")
             }
             NSLog("========================================")
+            #endif
             
             // First, build the list of available sheets including optional ones
             var sheetsToProcess = SkinSprites.defaultSprites.sheets
@@ -384,7 +386,7 @@ class SkinManager: ObservableObject {
 
                     continue
                 }
-                var data = Data()
+                var data = Data(capacity: Int(entry.uncompressedSize))
                 _ = try archive.extract(entry, consumer: { data.append($0) })
                 guard let sheetImage = NSImage(data: data) else {
                     NSLog("❌ FAILED to create image for sheet: \(sheetName)")
@@ -396,9 +398,11 @@ class SkinManager: ObservableObject {
                     continue
                 }
                 
+                #if DEBUG
                 print("✅ FOUND SHEET: \(sheetName) -> \(entry.path) (\(data.count) bytes)")
                 print("   Sheet size: \(sheetImage.size.width)x\(sheetImage.size.height)")
                 print("   Extracting \(sprites.count) sprites:")
+                #endif
 
                 for sprite in sprites {
                     // The sprites are defined with top-left origin, same as NSImage
@@ -415,7 +419,9 @@ class SkinManager: ObservableObject {
                         }
 
                         extractedImages[sprite.name] = finalImage
+                        #if DEBUG
                         print("     ✅ \(sprite.name) at \(sprite.rect)")
+                        #endif
                     } else {
                         NSLog("     ⚠️ FAILED to crop \(sprite.name) from \(sheetName) at \(sprite.rect)")
                         NSLog("       Sheet size: \(sheetImage.size)")
@@ -479,12 +485,14 @@ class SkinManager: ObservableObject {
 
             
             // List all extracted sprite names for debugging
+            #if DEBUG
             let sortedNames = extractedImages.keys.sorted()
             print("Extracted sprite names:")
             for name in sortedNames {
                 print("  - \(name)")
             }
             print("==================================")
+            #endif
 
             // 2. Parse PLEDIT.TXT if present
             var playlistStyle: PlaylistStyle = PlaylistStyle(
@@ -495,7 +503,7 @@ class SkinManager: ObservableObject {
                 fontName: nil
             )
             if let pleditEntry = findTextEntry(in: archive, fileName: "pledit.txt") {
-                var pleditData = Data()
+                var pleditData = Data(capacity: Int(pleditEntry.uncompressedSize))
                 _ = try archive.extract(pleditEntry, consumer: { pleditData.append($0) })
                 if let parsed = PLEditParser.parse(from: pleditData) {
                     playlistStyle = parsed
@@ -505,7 +513,7 @@ class SkinManager: ObservableObject {
             // 2b. Parse VISCOLOR.TXT if present
             var visualizerColors: [Color] = []
             if let visEntry = findTextEntry(in: archive, fileName: "viscolor.txt") {
-                var visData = Data()
+                var visData = Data(capacity: Int(visEntry.uncompressedSize))
                 _ = try archive.extract(visEntry, consumer: { visData.append($0) })
                 if let colors = VisColorParser.parse(from: visData) {
                     visualizerColors = colors
