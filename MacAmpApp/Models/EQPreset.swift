@@ -10,8 +10,16 @@ struct EQPreset: Codable, Identifiable {
     init(id: UUID = UUID(), name: String, preamp: Float, bands: [Float]) {
         self.id = id
         self.name = name
-        self.preamp = preamp
-        self.bands = bands
+        self.preamp = EQPreset.clamp(db: preamp)
+        if bands.count == 10 {
+            self.bands = bands.map { EQPreset.clamp(db: $0) }
+        } else {
+            var filled = Array(repeating: 0.0 as Float, count: 10)
+            for (index, value) in bands.enumerated().prefix(10) {
+                filled[index] = EQPreset.clamp(db: value)
+            }
+            self.bands = filled
+        }
     }
 
     /// Create from Winamp 0-63 values (Winamp format compatibility)
@@ -22,12 +30,30 @@ struct EQPreset: Codable, Identifiable {
         // Winamp uses 0-63 range where 33 = 0dB (center)
         // Convert: winampValue -> (winampValue - 33) * (24/63) -> -12 to +12 dB
         func winampToDb(_ value: Int) -> Float {
-            return Float(value - 33) * (24.0 / 63.0)
+            let db = Float(value - 33) * (24.0 / 63.0)
+            return EQPreset.clamp(db: db)
         }
 
         // First value is preamp, rest are 10 bands
-        self.preamp = winampToDb(winampValues[0])
-        self.bands = winampValues.dropFirst().map { winampToDb($0) }
+        if let first = winampValues.first {
+            self.preamp = winampToDb(first)
+        } else {
+            self.preamp = 0
+        }
+        let bandValues = winampValues.dropFirst().map { winampToDb($0) }
+        if bandValues.count == 10 {
+            self.bands = bandValues
+        } else {
+            var filled = Array(repeating: 0.0 as Float, count: 10)
+            for (index, value) in bandValues.enumerated().prefix(10) {
+                filled[index] = value
+            }
+            self.bands = filled
+        }
+    }
+
+    private static func clamp(db: Float) -> Float {
+        return min(max(db, -12.0), 12.0)
     }
 }
 

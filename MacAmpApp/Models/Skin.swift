@@ -66,16 +66,19 @@ extension SkinMetadata {
         var skins: [SkinMetadata] = []
         let fileManager = FileManager.default
 
-        // Determine the correct bundle URL based on build type
-        let bundleURL: URL
+        // Determine the correct bundle URL based on build type, guarding against missing resources
         #if SWIFT_PACKAGE
-        // For SPM command-line builds: Use Bundle.module which points to the resource bundle
-        bundleURL = Bundle.module.bundleURL
+        let baseURL = Bundle.module.resourceURL ?? Bundle.module.bundleURL
         #else
-        // For Xcode app builds: Use Bundle.main.resourceURL which points to Contents/Resources/
-        // Fall back to bundleURL if resourceURL is nil (shouldn't happen in practice)
-        bundleURL = Bundle.main.resourceURL ?? Bundle.main.bundleURL
+        let baseURL = Bundle.main.resourceURL ?? Bundle.main.bundleURL
         #endif
+
+        var bundleURL = baseURL
+        var isDir: ObjCBool = false
+        if !fileManager.fileExists(atPath: bundleURL.path, isDirectory: &isDir) || !isDir.boolValue {
+            // Fall back to bundle root if resource path isn't a directory
+            bundleURL = Bundle.main.bundleURL
+        }
 
         NSLog("🔍 Bundle path: \(bundleURL.path)")
         NSLog("🔍 Bundle identifier: \(Bundle.main.bundleIdentifier ?? "unknown")")
@@ -87,11 +90,21 @@ extension SkinMetadata {
             let filename = "\(name).wsz"
             NSLog("🔍 Searching for bundled skin: \(filename)")
 
+            func isUsableSkin(at url: URL) -> Bool {
+                var isDirectory: ObjCBool = false
+                guard fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory),
+                      !isDirectory.boolValue,
+                      fileManager.isReadableFile(atPath: url.path) else {
+                    return false
+                }
+                return true
+            }
+
             // Construct direct path to bundle root
             let bundleRootURL = bundleURL.appendingPathComponent(filename)
             NSLog("🔍 Checking path: \(bundleRootURL.path)")
 
-            if fileManager.fileExists(atPath: bundleRootURL.path) {
+            if isUsableSkin(at: bundleRootURL) {
                 NSLog("✅ Found \(filename) at: \(bundleRootURL.path)")
                 return bundleRootURL
             }
@@ -100,7 +113,7 @@ extension SkinMetadata {
             let skinsURL = bundleURL.appendingPathComponent("Skins").appendingPathComponent(filename)
             NSLog("🔍 Checking fallback path: \(skinsURL.path)")
 
-            if fileManager.fileExists(atPath: skinsURL.path) {
+            if isUsableSkin(at: skinsURL) {
                 NSLog("✅ Found \(filename) in Skins/: \(skinsURL.path)")
                 return skinsURL
             }

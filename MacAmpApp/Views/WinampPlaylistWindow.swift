@@ -61,6 +61,20 @@ struct WinampPlaylistWindow: View {
         return "-\(remaining)"
     }
 
+    private var playlistStyle: PlaylistStyle {
+        skinManager.currentSkin?.playlistStyle ?? PlaylistStyle(
+            normalTextColor: Color(red: 0, green: 1.0, blue: 0),
+            currentTextColor: .white,
+            backgroundColor: Color.black,
+            selectedBackgroundColor: Color(red: 0, green: 0, blue: 0.776),
+            fontName: nil
+        )
+    }
+
+    private var playlistBackgroundColor: Color {
+        playlistStyle.backgroundColor
+    }
+
     var body: some View {
         GeometryReader { geometry in
             ZStack {
@@ -148,7 +162,7 @@ struct WinampPlaylistWindow: View {
         Group {
             // Track list area with black background
             // Height reduced from 174 to 170 to avoid overlapping bottom sprites
-            Color.black
+            playlistBackgroundColor
                 .frame(width: 243, height: 170) // Reduced by 4px to clear bottom section
                 .position(x: 133.5, y: 105) // Adjusted Y to keep top aligned
 
@@ -195,24 +209,36 @@ struct WinampPlaylistWindow: View {
     
     @ViewBuilder
     private func trackRow(track: Track, index: Int) -> some View {
+        let textColor = trackTextColor(track: track)
         HStack(spacing: 2) {
-            Text("\(index + 1).")
-                .font(.system(size: 9, design: .monospaced))
-                .foregroundColor(trackTextColor(track: track))
-                .frame(width: 18, alignment: .trailing)
-            
-            Text("\(track.title) - \(track.artist)")
-                .font(.system(size: 9))
-                .kerning(0.5)
-                .foregroundColor(trackTextColor(track: track))
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .lineLimit(1)
-            
-            Text(formatDuration(track.duration))
-                .font(.system(size: 9, design: .monospaced))
-                .foregroundColor(trackTextColor(track: track))
-                .frame(width: 30, alignment: .trailing)
-                .padding(.trailing, 3)
+            PlaylistBitmapText(
+                "\(index + 1).",
+                color: textColor,
+                spacing: 1,
+                fallbackSize: 9,
+                fallbackDesign: Font.Design.monospaced
+            )
+            .frame(width: 18, alignment: .trailing)
+
+            PlaylistBitmapText(
+                "\(track.title) - \(track.artist)",
+                color: textColor,
+                spacing: 1,
+                fallbackSize: 9
+            )
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .clipped()
+            .layoutPriority(1)
+
+            PlaylistBitmapText(
+                formatDuration(track.duration),
+                color: textColor,
+                spacing: 1,
+                fallbackSize: 9,
+                fallbackDesign: Font.Design.monospaced
+            )
+            .frame(width: 38, alignment: .trailing)
+            .padding(.trailing, 3)
         }
         .padding(.horizontal, 2)
     }
@@ -419,18 +445,18 @@ struct WinampPlaylistWindow: View {
     private func trackTextColor(track: Track) -> Color {
         // Use URL comparison for reliable track matching (IDs are UUID and may change)
         if let currentTrack = audioPlayer.currentTrack, currentTrack.url == track.url {
-            return Color.white  // White text for currently playing track (PLEDIT.TXT)
+            return playlistStyle.currentTextColor
         }
-        return Color(red: 0.0, green: 1.0, blue: 0.0)  // Green text for normal tracks
+        return playlistStyle.normalTextColor
     }
 
     private func trackBackground(track: Track, index: Int) -> Color {
         // Use URL comparison for reliable track matching (IDs are UUID and may change)
         if let currentTrack = audioPlayer.currentTrack, currentTrack.url == track.url {
-            return Color(red: 0.0, green: 0.0, blue: 0.776)  // Blue background for playing (#0000C6)
+            return playlistStyle.selectedBackgroundColor
         }
         if selectedTrackIndex == index {
-            return Color.blue.opacity(0.4)  // Lighter blue for selection
+            return playlistStyle.selectedBackgroundColor.opacity(0.6)
         }
         return Color.clear
     }

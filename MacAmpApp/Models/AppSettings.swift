@@ -42,16 +42,8 @@ final class AppSettings: ObservableObject {
     private static let shared = AppSettings()
     
     private init() {
-        // Load material integration preference
-        if let savedRaw = UserDefaults.standard.string(forKey: "MaterialIntegration"),
-           let saved = MaterialIntegrationLevel(rawValue: savedRaw) {
-            self.materialIntegration = saved
-        } else {
-            self.materialIntegration = .hybrid // Default for macOS 26 Tahoe
-        }
-        
-        // Load Liquid Glass preference (defaults to true for macOS 26 Tahoe)
-        self.enableLiquidGlass = UserDefaults.standard.object(forKey: "EnableLiquidGlass") as? Bool ?? true
+        self.materialIntegration = Self.loadMaterialIntegration()
+        self.enableLiquidGlass = Self.loadLiquidGlassSetting()
     }
     
     static func instance() -> AppSettings {
@@ -91,22 +83,49 @@ final class AppSettings: ObservableObject {
     }
 
     /// Directory for user-installed skins
-    static var userSkinsDirectory: URL {
-        let appSupport = FileManager.default.urls(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask
-        ).first!
+    static func userSkinsDirectory(fileManager: FileManager = .default) throws -> URL {
+        try ensureSkinsDirectory(fileManager: fileManager)
+    }
 
+    private static func loadMaterialIntegration() -> MaterialIntegrationLevel {
+        guard let savedRaw = UserDefaults.standard.string(forKey: "MaterialIntegration"),
+              let saved = MaterialIntegrationLevel(rawValue: savedRaw) else {
+            return .hybrid
+        }
+        return saved
+    }
+
+    private static func loadLiquidGlassSetting() -> Bool {
+        guard let stored = UserDefaults.standard.object(forKey: "EnableLiquidGlass") as? Bool else {
+            return true
+        }
+        return stored
+    }
+
+    @discardableResult
+    static func ensureSkinsDirectory(
+        fileManager: FileManager = .default,
+        base: URL? = nil
+    ) throws -> URL {
+        let appSupport: URL
+        if let base {
+            appSupport = base
+        } else {
+            appSupport = try fileManager.url(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask,
+                appropriateFor: nil,
+                create: true
+            )
+        }
         let macampDir = appSupport.appendingPathComponent("MacAmp", isDirectory: true)
         let skinsDir = macampDir.appendingPathComponent("Skins", isDirectory: true)
-
-        // Create directory if it doesn't exist
-        try? FileManager.default.createDirectory(
-            at: skinsDir,
-            withIntermediateDirectories: true,
-            attributes: nil
-        )
-
+        try fileManager.createDirectory(at: skinsDir, withIntermediateDirectories: true)
         return skinsDir
+    }
+
+    static func fallbackSkinsDirectory(fileManager: FileManager = .default) -> URL {
+        let caches = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first!
+        return caches.appendingPathComponent("MacAmp/FallbackSkins", isDirectory: true)
     }
 }

@@ -40,6 +40,7 @@
 		BB499C96994EF9FC3DE4DDB4 /* Internet-Archive.wsz in Resources */ = {isa = PBXBuildFile; fileRef = B6G987CE11B9DCEF82D39E62 /* Internet-Archive.wsz */; };
 		BC234EF567890ABCD1234567 /* PreferencesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE345F678901BCDE12345678 /* PreferencesView.swift */; };
 		C4B3FE7E889G20H9G1F93269 /* SkinsCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5C4GF8F990H31I0H2G04370 /* SkinsCommands.swift */; };
+		CFF2E4B6A5D74592AA2B78CD /* PlaylistBitmapText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B08C7931E5A4A0A8D4F1B27 /* PlaylistBitmapText.swift */; };
 		C71871258DD93C12C88EBED2 /* SkinSprites.swift in Sources */ = {isa = PBXBuildFile; fileRef = E51E7515EE6862B4F445AC81 /* SkinSprites.swift */; };
 		CEB39A994DFFE2DCA8FDE7EF /* PresetsButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D258350F99A800B8CBF8AEA /* PresetsButton.swift */; };
 		D077337C4C05A6658475376F /* VisualizerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 499433D5A14F2C47C9EB0931 /* VisualizerView.swift */; };
@@ -54,6 +55,7 @@
 		1883C37C0887C2C13F6C9563 /* PLEditParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PLEditParser.swift; sourceTree = "<group>"; };
 		195F00AABD5483A18861EC8A /* WindowSpec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowSpec.swift; sourceTree = "<group>"; };
 		2878CED72AA74CF1B0417AC5 /* EQPreset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EQPreset.swift; sourceTree = "<group>"; };
+		5B08C7931E5A4A0A8D4F1B27 /* PlaylistBitmapText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaylistBitmapText.swift; sourceTree = "<group>"; };
 		2D4BAA0F198BED23AAFABFEC /* ImageSlicing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageSlicing.swift; sourceTree = "<group>"; };
 		3D258350F99A800B8CBF8AEA /* PresetsButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresetsButton.swift; sourceTree = "<group>"; };
 		3DCDB09162242F5E73FF35F6 /* SkinnedText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkinnedText.swift; sourceTree = "<group>"; };
@@ -104,6 +106,7 @@
 		0542534C840178895387FEE4 /* Components */ = {
 			isa = PBXGroup;
 			children = (
+				5B08C7931E5A4A0A8D4F1B27 /* PlaylistBitmapText.swift */,
 				CABDEB04D5D23C3DAAAFEEFC /* PlaylistTimeText.swift */,
 				77A0C7921140C73AB173A5E8 /* SimpleSpriteImage.swift */,
 				BAA63D879B46D5FFF6BA8BE9 /* WinampVolumeSlider.swift */,
@@ -302,6 +305,7 @@
 				CEB39A994DFFE2DCA8FDE7EF /* PresetsButton.swift in Sources */,
 				8375D760955EEB75F8311F11 /* SimpleSpriteImage.swift in Sources */,
 				AC7BAF317F478CEB2F36F3DB /* PlaylistTimeText.swift in Sources */,
+				CFF2E4B6A5D74592AA2B78CD /* PlaylistBitmapText.swift in Sources */,
 				93E376C1200386F617D37563 /* Skin.swift in Sources */,
 				09ABEB45DA77F1178E0F5317 /* SkinManager.swift in Sources */,
 				C4B3FE7E889G20H9G1F93269 /* SkinsCommands.swift in Sources */,

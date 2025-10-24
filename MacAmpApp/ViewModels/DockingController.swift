@@ -34,10 +34,13 @@ final class DockingController: ObservableObject {
     let snapDistance: CGFloat = 15
 
     private let persistKey = "DockLayoutV1"
+    private let defaults: UserDefaults
     private var cancellables = Set<AnyCancellable>()
 
-    init() {
-        if let data = UserDefaults.standard.data(forKey: persistKey),
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+
+        if let data = defaults.data(forKey: persistKey),
            let decoded = try? JSONDecoder().decode([DockPaneState].self, from: data),
            !decoded.isEmpty {
             self.panes = decoded
@@ -52,11 +55,9 @@ final class DockingController: ObservableObject {
 
         $panes
             .dropFirst()
+            .debounce(for: .milliseconds(150), scheduler: RunLoop.main)
             .sink { [weak self] panes in
-                guard let self else { return }
-                if let data = try? JSONEncoder().encode(panes) {
-                    UserDefaults.standard.set(data, forKey: self.persistKey)
-                }
+                self?.persist(panes: panes)
             }
             .store(in: &cancellables)
     }
@@ -99,5 +100,14 @@ final class DockingController: ObservableObject {
         let visible = getVisibleWindowsInOrder()
         guard visible.count == 3 else { return false }
         return visible[0] == .main && visible[1] == .equalizer && visible[2] == .playlist
+    }
+
+    private func persist(panes: [DockPaneState]) {
+        do {
+            let data = try JSONEncoder().encode(panes)
+            defaults.set(data, forKey: persistKey)
+        } catch {
+            NSLog("DockingController: failed to persist panes: \(error.localizedDescription)")
+        }
     }
 }

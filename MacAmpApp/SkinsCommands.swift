@@ -52,7 +52,12 @@ struct SkinsCommands: Commands {
                 .keyboardShortcut("o", modifiers: [.command, .shift])
 
                 Button("Open Skins Folder") {
-                    NSWorkspace.shared.open(AppSettings.userSkinsDirectory)
+                    do {
+                        let directory = try AppSettings.userSkinsDirectory()
+                        NSWorkspace.shared.open(directory)
+                    } catch {
+                        skinManager.loadingError = "Unable to open skins folder: \(error.localizedDescription)"
+                    }
                 }
                 .keyboardShortcut("l", modifiers: [.command, .shift])
             }

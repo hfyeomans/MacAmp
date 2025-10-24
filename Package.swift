@@ -19,9 +19,19 @@ let package = Package(
                 .product(name: "ZIPFoundation", package: "ZIPFoundation")
             ],
             path: "MacAmpApp",
+            exclude: [
+                "Info.plist",
+                "MacAmp.entitlements"
+            ],
             resources: [
-                .process("Skins")
+                .process("Skins"),
+                .process("Assets.xcassets")
             ]
+        ),
+        .testTarget(
+            name: "MacAmpTests",
+            dependencies: ["MacAmp"],
+            path: "Tests/MacAmpTests"
         )
     ]
 )
