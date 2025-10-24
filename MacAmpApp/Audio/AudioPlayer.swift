@@ -109,6 +109,7 @@ class AudioPlayer: ObservableObject {
     private var trackHasEnded = false // Tracks when playlist has finished
     private var seekGuardActive = false
     private var autoEQTask: Task<Void, Never>?
+    private var pendingTrackURLs = Set<URL>()
     @Published var currentTrackURL: URL? // Placeholder for the currently playing track
     @Published var currentTitle: String = "No Track Loaded"
     @Published var currentDuration: Double = 0.0
@@ -175,7 +176,10 @@ class AudioPlayer: ObservableObject {
     }
 
     private func shouldIgnoreCompletion(from seekID: UUID?) -> Bool {
-        if seekGuardActive && seekID != currentSeekID {
+        if let seekID, seekID != currentSeekID {
+            return true
+        }
+        if seekGuardActive && seekID == nil {
             return true
         }
         if case .stopped(let reason) = playbackState,
@@ -187,27 +191,54 @@ class AudioPlayer: ObservableObject {
 
     // MARK: - Track Management
 
-    /// Add a NEW track to the playlist (e.g., from file picker)
-    /// Loads metadata asynchronously and auto-plays if it's the first track
     func addTrack(url: URL) {
-        // Check for duplicates
-        if playlist.contains(where: { $0.url == url }) {
-            print("AudioPlayer: Track already in playlist: \(url.lastPathComponent)")
+        let normalizedURL = url.standardizedFileURL
+
+        let duplicateInPlaylist = playlist.contains { $0.url.standardizedFileURL == normalizedURL }
+        if duplicateInPlaylist || pendingTrackURLs.contains(normalizedURL) {
+            print("AudioPlayer: Track already pending or in playlist: \(normalizedURL.lastPathComponent)")
             return
         }
 
-        print("AudioPlayer: Adding track from \(url.lastPathComponent)")
+        print("AudioPlayer: Adding track from \(normalizedURL.lastPathComponent)")
+        pendingTrackURLs.insert(normalizedURL)
 
-        // Load metadata asynchronously
-        Task { @MainActor in
-            let track = await loadTrackMetadata(url: url)
-            self.playlist.append(track)
-            print("AudioPlayer: Added '\(track.title)' to playlist (total: \(self.playlist.count) tracks)")
+        let placeholder = Track(
+            url: normalizedURL,
+            title: normalizedURL.lastPathComponent,
+            artist: "Loading...",
+            duration: 0.0
+        )
 
-            // Auto-play if this is the first track
-            if self.currentTrack == nil {
-                self.playTrack(track: track)
+        let shouldAutoplay = currentTrack == nil
+
+        playlist.append(placeholder)
+        print("AudioPlayer: Queued placeholder '\(placeholder.title)' (total: \(playlist.count) tracks)")
+
+        if shouldAutoplay {
+            playTrack(track: placeholder)
+        }
+
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer { self.pendingTrackURLs.remove(normalizedURL) }
+
+            let track = await self.loadTrackMetadata(url: normalizedURL)
+
+            if let index = self.playlist.firstIndex(where: { $0.id == placeholder.id }) {
+                self.playlist[index] = track
+
+                if self.currentTrack?.id == placeholder.id {
+                    self.currentTrack = track
+                    self.currentTitle = "\(track.title) - \(track.artist)"
+                    self.currentDuration = track.duration
+                    self.currentTrackURL = track.url
+                }
+            } else if !self.playlist.contains(where: { $0.url.standardizedFileURL == normalizedURL }) {
+                self.playlist.append(track)
             }
+
+            print("AudioPlayer: Added '\(track.title)' to playlist (total: \(self.playlist.count) tracks)")
         }
     }
 
@@ -248,7 +279,8 @@ class AudioPlayer: ObservableObject {
         do {
             audioFile = try AVAudioFile(forReading: url)
             rewireForCurrentFile()
-            let _ = scheduleFrom(time: 0)
+            currentSeekID = UUID()
+            let _ = scheduleFrom(time: 0, seekID: currentSeekID)
             playerNode.volume = volume
             playerNode.pan = balance
 
@@ -368,7 +400,8 @@ class AudioPlayer: ObservableObject {
     func stop() {
         transition(to: .stopped(.manual))
         playerNode.stop()
-        let _ = scheduleFrom(time: 0)  // Ignore return - reset to beginning
+        currentSeekID = UUID()
+        let _ = scheduleFrom(time: 0, seekID: currentSeekID)  // Ignore return - reset to beginning
         currentTime = 0
         playbackProgress = 0
         progressTimer?.invalidate()
@@ -690,8 +723,8 @@ class AudioPlayer: ObservableObject {
 
         // Schedule the new segment if there's audio left to play
         if framesRemaining > 0 {
-            // Capture the seek ID to identify this completion
-            let capturedSeekID = seekID
+            // Capture the seek ID to identify this completion (defaults to currentSeekID)
+            let completionID = seekID ?? currentSeekID
             playerNode.scheduleSegment(
                 file,
                 startingFrame: startFrame,
@@ -699,7 +732,7 @@ class AudioPlayer: ObservableObject {
                 at: nil,
                 completionHandler: { [weak self] in
                     DispatchQueue.main.async {
-                        self?.onPlaybackEnded(fromSeekID: capturedSeekID)
+                        self?.onPlaybackEnded(fromSeekID: completionID)
                     }
                 }
             )
