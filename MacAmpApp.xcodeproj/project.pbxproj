@@ -10,7 +10,6 @@
 		00818CBB70425D395EE2B862 /* SkinnedText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DCDB09162242F5E73FF35F6 /* SkinnedText.swift */; };
 		09ABEB45DA77F1178E0F5317 /* SkinManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97F3E1419E231E886A674A64 /* SkinManager.swift */; };
 		11C6F38CB7C5AADA7B5AFE57 /* VisualizerOptions.swift in Sources */ = {isa = PBXBuildFile; fileRef = B361EDCFD1F533FD16157EC1 /* VisualizerOptions.swift */; };
-		24d3ff461bf0498f8afd6013 /* BaseSliderControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = dd963a186e614d3190884b5e /* BaseSliderControl.swift */; };
 		2A33850C38AA921D5659ECA7 /* AudioPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC875DDD2BE621229D463CB9 /* AudioPlayer.swift */; };
 		2BEEA991452D4A86CD1AC9F7 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = EA5D7D010AE0DE961C9470AC /* ZIPFoundation */; };
 		34EEE95E7D965A0D94D12C30 /* WinampMainWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C3495B177A8BA24181B484E /* WinampMainWindow.swift */; };
@@ -30,16 +29,11 @@
 		AC7BAF317F478CEB2F36F3DB /* PlaylistTimeText.swift in Sources */ = {isa = PBXBuildFile; fileRef = CABDEB04D5D23C3DAAAFEEFC /* PlaylistTimeText.swift */; };
 		878F770AF1608311F0C9BA09 /* WindowAccessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8A2F2CBA9954B0B144DA072 /* WindowAccessor.swift */; };
 		8D904211B7B13AF3D346AAC4 /* DockingContainerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 545ACEB67244E17A46293AF3 /* DockingContainerView.swift */; };
-		8F699CB7102EA261F8CF777B /* PlaylistWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C763742AA7B5615883A0BB97 /* PlaylistWindowView.swift */; };
 		93E376C1200386F617D37563 /* Skin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93E9913A6D48005436618474 /* Skin.swift */; };
 		93EBD6FADA9285C58A329F5C /* VisColorParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6D5886DD239C58D98785419 /* VisColorParser.swift */; };
 		9C74995B7081637EB964D3AA /* SkinnedBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12C0A7D97E8D3B2E715D4EA0 /* SkinnedBanner.swift */; };
 		9C8F5A2DD13F19EDAABA8130 /* UnifiedDockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 590BF37A22DF8EAB2B27DE50 /* UnifiedDockView.swift */; };
-		A08CECA8546ACA2C49A815D0 /* BalanceSliderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D670AF21099D18D7C29C12D /* BalanceSliderView.swift */; };
-		A2EC01D7DB6A48D968B6F339 /* VolumeSliderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB12B8B4E500692FEC97C025 /* VolumeSliderView.swift */; };
-		A3E0DBA5AC381AB3F23130A1 /* EqualizerWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8897A6072B979DC743DC44E3 /* EqualizerWindowView.swift */; };
 		AA399B95993DF8EB2CD3CCA3 /* Winamp.wsz in Resources */ = {isa = PBXBuildFile; fileRef = A5F876BD10A8CBDE81C28D51 /* Winamp.wsz */; };
-		AAF5D9A50EE387DBADF446D2 /* EQSliderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77BEA1F1121A4B4633AD1083 /* EQSliderView.swift */; };
 		AB123DEF4E567890ABCDEF12 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD234EF56789ABCD01234567 /* AppSettings.swift */; };
 		ADDBF8E53028E97A7A005307 /* WinampPlaylistWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75C52A558EFD4C84BBA21F92 /* WinampPlaylistWindow.swift */; };
 		B3A2FD6D778A60B9F0D92258 /* AppCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7CCE1500578ECAEED8FAA42 /* AppCommands.swift */; };
@@ -50,9 +44,7 @@
 		C71871258DD93C12C88EBED2 /* SkinSprites.swift in Sources */ = {isa = PBXBuildFile; fileRef = E51E7515EE6862B4F445AC81 /* SkinSprites.swift */; };
 		CEB39A994DFFE2DCA8FDE7EF /* PresetsButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D258350F99A800B8CBF8AEA /* PresetsButton.swift */; };
 		D077337C4C05A6658475376F /* VisualizerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 499433D5A14F2C47C9EB0931 /* VisualizerView.swift */; };
-		D1C8711941E449B2B86568DF /* SimpleTestMainWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61CCD7FBB76B81039F2887D7 /* SimpleTestMainWindow.swift */; };
 		EE878CCB3C1E4F7801C5430E /* DockingController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74EDF33D12E79F86166AF268 /* DockingController.swift */; };
-		FEF2451745AD29CA232322BF /* MainWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC46D7551B28A7B9FF034839 /* MainWindowView.swift */; };
 		FF66EE55DD44CC33BB22AA11 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA11BB22CC33DD44EE55FF66 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
@@ -71,40 +63,32 @@
 		4A489CA15E452302405E6FAE /* WinampEqualizerWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WinampEqualizerWindow.swift; sourceTree = "<group>"; };
 		545ACEB67244E17A46293AF3 /* DockingContainerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DockingContainerView.swift; sourceTree = "<group>"; };
 		590BF37A22DF8EAB2B27DE50 /* UnifiedDockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnifiedDockView.swift; sourceTree = "<group>"; };
-		61CCD7FBB76B81039F2887D7 /* SimpleTestMainWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleTestMainWindow.swift; sourceTree = "<group>"; };
 		7324174AA2F7231F3B2508AE /* SpritePositions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpritePositions.swift; sourceTree = "<group>"; };
 		74EDF33D12E79F86166AF268 /* DockingController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DockingController.swift; sourceTree = "<group>"; };
 		75C52A558EFD4C84BBA21F92 /* WinampPlaylistWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WinampPlaylistWindow.swift; sourceTree = "<group>"; };
 		77A0C7921140C73AB173A5E8 /* SimpleSpriteImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleSpriteImage.swift; sourceTree = "<group>"; };
 		CABDEB04D5D23C3DAAAFEEFC /* PlaylistTimeText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaylistTimeText.swift; sourceTree = "<group>"; };
-		77BEA1F1121A4B4633AD1083 /* EQSliderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EQSliderView.swift; sourceTree = "<group>"; };
 		7FF88FFEFCC2A65D88029ADB /* WindowSnapManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowSnapManager.swift; sourceTree = "<group>"; };
-		8897A6072B979DC743DC44E3 /* EqualizerWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EqualizerWindowView.swift; sourceTree = "<group>"; };
 		93E9913A6D48005436618474 /* Skin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Skin.swift; sourceTree = "<group>"; };
 		97F3E1419E231E886A674A64 /* SkinManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkinManager.swift; sourceTree = "<group>"; };
-		9D670AF21099D18D7C29C12D /* BalanceSliderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BalanceSliderView.swift; sourceTree = "<group>"; };
 		A5F876BD10A8CBDE81C28D51 /* Winamp.wsz */ = {isa = PBXFileReference; lastKnownFileType = file; path = Winamp.wsz; sourceTree = "<group>"; };
 		A6D5886DD239C58D98785419 /* VisColorParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisColorParser.swift; sourceTree = "<group>"; };
 		A7CCE1500578ECAEED8FAA42 /* AppCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCommands.swift; sourceTree = "<group>"; };
 		AA11BB22CC33DD44EE55FF66 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		AB12B8B4E500692FEC97C025 /* VolumeSliderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeSliderView.swift; sourceTree = "<group>"; };
 		B361EDCFD1F533FD16157EC1 /* VisualizerOptions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisualizerOptions.swift; sourceTree = "<group>"; };
 		B36F1C1954EE4A8EBB993CB6 /* MacAmp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MacAmp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B6G987CE11B9DCEF82D39E62 /* Internet-Archive.wsz */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Internet-Archive.wsz"; sourceTree = "<group>"; };
 		BAA63D879B46D5FFF6BA8BE9 /* WinampVolumeSlider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WinampVolumeSlider.swift; sourceTree = "<group>"; };
 		BC875DDD2BE621229D463CB9 /* AudioPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlayer.swift; sourceTree = "<group>"; };
 		C32D1ED0603B1A1497664E37 /* MacAmpApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacAmpApp.swift; sourceTree = "<group>"; };
-		C763742AA7B5615883A0BB97 /* PlaylistWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaylistWindowView.swift; sourceTree = "<group>"; };
 		CD234EF56789ABCD01234567 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		D5C4GF8F990H31I0H2G04370 /* SkinsCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkinsCommands.swift; sourceTree = "<group>"; };
-		DC46D7551B28A7B9FF034839 /* MainWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindowView.swift; sourceTree = "<group>"; };
 		DE345F678901BCDE12345678 /* PreferencesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesView.swift; sourceTree = "<group>"; };
 		E51E7515EE6862B4F445AC81 /* SkinSprites.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkinSprites.swift; sourceTree = "<group>"; };
 		E5AF78956321BB7B21810429 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		F8A2F2CBA9954B0B144DA072 /* WindowAccessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowAccessor.swift; sourceTree = "<group>"; };
 		FDF85EA8990A038079FC0CC3 /* EQF.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EQF.swift; sourceTree = "<group>"; };
 		b220e925d4d54168a0d0f84b /* SpriteResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpriteResolver.swift; sourceTree = "<group>"; };
-		dd963a186e614d3190884b5e /* BaseSliderControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BaseSliderControl.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -122,7 +106,6 @@
 		0542534C840178895387FEE4 /* Components */ = {
 			isa = PBXGroup;
 			children = (
-				dd963a186e614d3190884b5e /* BaseSliderControl.swift */,
 				CABDEB04D5D23C3DAAAFEEFC /* PlaylistTimeText.swift */,
 				77A0C7921140C73AB173A5E8 /* SimpleSpriteImage.swift */,
 				BAA63D879B46D5FFF6BA8BE9 /* WinampVolumeSlider.swift */,
@@ -185,22 +168,15 @@
 		D4D715C613A4E03DDE1E814A /* Views */ = {
 			isa = PBXGroup;
 			children = (
-				9D670AF21099D18D7C29C12D /* BalanceSliderView.swift */,
 				545ACEB67244E17A46293AF3 /* DockingContainerView.swift */,
 				032A0DEAD316CCA0CDA2645D /* EqGraphView.swift */,
-				77BEA1F1121A4B4633AD1083 /* EQSliderView.swift */,
-				8897A6072B979DC743DC44E3 /* EqualizerWindowView.swift */,
-				DC46D7551B28A7B9FF034839 /* MainWindowView.swift */,
-				C763742AA7B5615883A0BB97 /* PlaylistWindowView.swift */,
 				DE345F678901BCDE12345678 /* PreferencesView.swift */,
 				3D258350F99A800B8CBF8AEA /* PresetsButton.swift */,
-				61CCD7FBB76B81039F2887D7 /* SimpleTestMainWindow.swift */,
 				12C0A7D97E8D3B2E715D4EA0 /* SkinnedBanner.swift */,
 				3DCDB09162242F5E73FF35F6 /* SkinnedText.swift */,
 				590BF37A22DF8EAB2B27DE50 /* UnifiedDockView.swift */,
 				B361EDCFD1F533FD16157EC1 /* VisualizerOptions.swift */,
 				499433D5A14F2C47C9EB0931 /* VisualizerView.swift */,
-				AB12B8B4E500692FEC97C025 /* VolumeSliderView.swift */,
 				4A489CA15E452302405E6FAE /* WinampEqualizerWindow.swift */,
 				0C3495B177A8BA24181B484E /* WinampMainWindow.swift */,
 				75C52A558EFD4C84BBA21F92 /* WinampPlaylistWindow.swift */,
@@ -319,23 +295,17 @@
 				AB123DEF4E567890ABCDEF12 /* AppSettings.swift in Sources */,
 				B3A2FD6D778A60B9F0D92258 /* AppCommands.swift in Sources */,
 				2A33850C38AA921D5659ECA7 /* AudioPlayer.swift in Sources */,
-				A08CECA8546ACA2C49A815D0 /* BalanceSliderView.swift in Sources */,
 				8D904211B7B13AF3D346AAC4 /* DockingContainerView.swift in Sources */,
 				EE878CCB3C1E4F7801C5430E /* DockingController.swift in Sources */,
 				397CD3DA0D75924BD0B90FBE /* EQF.swift in Sources */,
-				AAF5D9A50EE387DBADF446D2 /* EQSliderView.swift in Sources */,
 				4F952CA93D32BF2FB737DFBA /* EqGraphView.swift in Sources */,
-				A3E0DBA5AC381AB3F23130A1 /* EqualizerWindowView.swift in Sources */,
 				4007DF219A7FEAB6FFC1AE73 /* ImageSlicing.swift in Sources */,
 				B9F51DB9B3BAF8611108D699 /* MacAmpApp.swift in Sources */,
-				FEF2451745AD29CA232322BF /* MainWindowView.swift in Sources */,
 				41559151451B3CDCDAF46147 /* PLEditParser.swift in Sources */,
-				8F699CB7102EA261F8CF777B /* PlaylistWindowView.swift in Sources */,
 				BC234EF567890ABCD1234567 /* PreferencesView.swift in Sources */,
 				CEB39A994DFFE2DCA8FDE7EF /* PresetsButton.swift in Sources */,
 				8375D760955EEB75F8311F11 /* SimpleSpriteImage.swift in Sources */,
 				AC7BAF317F478CEB2F36F3DB /* PlaylistTimeText.swift in Sources */,
-				D1C8711941E449B2B86568DF /* SimpleTestMainWindow.swift in Sources */,
 				93E376C1200386F617D37563 /* Skin.swift in Sources */,
 				09ABEB45DA77F1178E0F5317 /* SkinManager.swift in Sources */,
 				C4B3FE7E889G20H9G1F93269 /* SkinsCommands.swift in Sources */,
@@ -345,13 +315,11 @@
 				77129ADBBBC75DF6BA1EC1C8 /* SnapUtils.swift in Sources */,
 				5E12F332C6929193D1EBFB8D /* SpritePositions.swift in Sources */,
 				70120b5751e24a3084c04a0b /* SpriteResolver.swift in Sources */,
-				24d3ff461bf0498f8afd6013 /* BaseSliderControl.swift in Sources */,
 				49B5BA3F742A4C3CB430A8E3 /* EQPreset.swift in Sources */,
 				9C8F5A2DD13F19EDAABA8130 /* UnifiedDockView.swift in Sources */,
 				93EBD6FADA9285C58A329F5C /* VisColorParser.swift in Sources */,
 				11C6F38CB7C5AADA7B5AFE57 /* VisualizerOptions.swift in Sources */,
 				D077337C4C05A6658475376F /* VisualizerView.swift in Sources */,
-				A2EC01D7DB6A48D968B6F339 /* VolumeSliderView.swift in Sources */,
 				3D5787FD4B060D13BE690E2A /* WinampEqualizerWindow.swift in Sources */,
 				34EEE95E7D965A0D94D12C30 /* WinampMainWindow.swift in Sources */,
 				ADDBF8E53028E97A7A005307 /* WinampPlaylistWindow.swift in Sources */,
