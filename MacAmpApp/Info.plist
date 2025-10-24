@@ -22,6 +22,93 @@
     <string>15.0</string>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
+
+    <!-- App Category -->
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.music</string>
+
+    <!-- App Transport Security: Allow HTTP for media streaming -->
+    <!-- Required for internet radio stations that use HTTP instead of HTTPS -->
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <!-- Allow HTTP connections for audio/video streaming only -->
+        <!-- This is App Store approved for media apps -->
+        <key>NSAllowsArbitraryLoadsInMedia</key>
+        <true/>
+    </dict>
+
+    <!-- Prevent automatic termination while audio is playing -->
+    <key>NSSupportsAutomaticTermination</key>
+    <false/>
+    <key>NSSupportsSuddenTermination</key>
+    <false/>
+
+    <!-- Document Types: Support for playlist files -->
+    <key>CFBundleDocumentTypes</key>
+    <array>
+        <!-- M3U Playlists -->
+        <dict>
+            <key>CFBundleTypeName</key>
+            <string>M3U Playlist</string>
+            <key>CFBundleTypeRole</key>
+            <string>Viewer</string>
+            <key>LSHandlerRank</key>
+            <string>Default</string>
+            <key>LSItemContentTypes</key>
+            <array>
+                <string>public.m3u-playlist</string>
+            </array>
+            <key>NSDocumentClass</key>
+            <string>NSDocument</string>
+        </dict>
+        <!-- PLS Playlists -->
+        <dict>
+            <key>CFBundleTypeName</key>
+            <string>PLS Playlist</string>
+            <key>CFBundleTypeRole</key>
+            <string>Viewer</string>
+            <key>LSHandlerRank</key>
+            <string>Default</string>
+            <key>LSItemContentTypes</key>
+            <array>
+                <string>public.pls-playlist</string>
+            </array>
+            <key>NSDocumentClass</key>
+            <string>NSDocument</string>
+        </dict>
+        <!-- Winamp Skins -->
+        <dict>
+            <key>CFBundleTypeName</key>
+            <string>Winamp Skin</string>
+            <key>CFBundleTypeRole</key>
+            <string>Viewer</string>
+            <key>LSHandlerRank</key>
+            <string>Default</string>
+            <key>LSItemContentTypes</key>
+            <array>
+                <string>public.zip-archive</string>
+            </array>
+            <key>CFBundleTypeExtensions</key>
+            <array>
+                <string>wsz</string>
+            </array>
+            <key>NSDocumentClass</key>
+            <string>NSDocument</string>
+        </dict>
+    </array>
+
+    <!-- URL Schemes: Support for custom macamp:// URLs -->
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>MacAmp URL</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>macamp</string>
+            </array>
+        </dict>
+    </array>
 </dict>
 </plist>
 

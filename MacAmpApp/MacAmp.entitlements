@@ -18,14 +18,22 @@
 	<key>com.apple.security.device.audio-input</key>
 	<false/>
 
+	<!-- Audio Playback (output device access) -->
+	<key>com.apple.security.device.audio-output</key>
+	<true/>
+
 	<!-- User Selected File Access (for opening music files) -->
 	<key>com.apple.security.files.user-selected.read-only</key>
 	<true/>
 	<key>com.apple.security.files.user-selected.read-write</key>
 	<true/>
 
-	<!-- Network (if you add streaming in the future) -->
+	<!-- Network (for streaming, skin downloads, album art, etc.) -->
 	<key>com.apple.security.network.client</key>
+	<true/>
+
+	<!-- Downloads Folder Access (for saving downloaded skins) -->
+	<key>com.apple.security.files.downloads.read-write</key>
 	<true/>
 
 	<!-- Apple Events (for system integration if needed) -->

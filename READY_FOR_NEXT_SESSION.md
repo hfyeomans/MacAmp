@@ -39,6 +39,29 @@
 **Estimated:** 2-3 hours
 **Priority:** P2 (enhancement)
 
+### 3. Internet Radio Streaming (P5)
+**Files:** `tasks/distribution-setup/` (documentation complete)
+
+**Status:** Configuration complete, implementation ready
+
+**Features:**
+- HTTP/HTTPS streaming support
+- HLS (HTTP Live Streaming) support
+- M3U/PLS playlist parsing
+- Internet radio station library
+- URL-based streaming
+
+**Configuration Complete:**
+- ✅ Entitlements (network client, audio output)
+- ✅ App Transport Security (HTTP media streaming)
+- ✅ File handlers (M3U, PLS, WSZ)
+- ✅ Custom macamp:// URL scheme
+- ✅ Distribution setup documented
+
+**Requirements:** AVPlayer integration, playlist parsers
+**Estimated:** 6-8 hours
+**Priority:** P5 (future feature)
+
 ---
 
 ## 🔀 Branch Merge Plan:
