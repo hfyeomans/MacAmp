@@ -686,32 +686,17 @@ struct WinampMainWindow: View {
         let x = min(max(0, value.location.x), width)
         let progress = Double(x / width)
 
-        #if DEBUG
-        print("DEBUG handlePositionDragEnd: progress=\(progress), scrubbingProgress=\(scrubbingProgress)")
-        #endif
-
         // Update visual progress immediately so slider shows where user dragged
         scrubbingProgress = progress
 
-        #if DEBUG
-        print("DEBUG handlePositionDragEnd: Calling seekToPercent(\(progress))")
-        #endif
-
         // Perform seek - use seekToPercent which handles file duration correctly
         audioPlayer.seekToPercent(progress, resume: wasPlayingPreScrub)
-
-        #if DEBUG
-        print("DEBUG handlePositionDragEnd: After seek, audioPlayer.playbackProgress=\(audioPlayer.playbackProgress)")
-        #endif
 
         // CRITICAL: Keep isScrubbing = true until the progress timer has had at least
         // 2-3 cycles to update with the new seek position. This prevents the slider
         // from jumping to an incorrect position due to stale AVAudioPlayerNode render times.
         // The progress timer runs every 0.1s, so 0.3s gives it 3 cycles to stabilize.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            #if DEBUG
-            print("DEBUG handlePositionDragEnd: Setting isScrubbing=false, final playbackProgress=\(self.audioPlayer.playbackProgress)")
-            #endif
             isScrubbing = false
         }
     }
