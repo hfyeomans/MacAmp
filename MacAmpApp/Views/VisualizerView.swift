@@ -175,8 +175,6 @@ struct SpectrumBar: View {
         // Map bar height to VISCOLOR indices 2-17
         // height 0 → bottom (color 17, green)
         // height maxHeight → top (color 2, red)
-        let normalizedHeight = height / maxHeight
-
         // Create gradient from bottom (17) to current height position
         let colorStops: [Color] = stride(from: 17, through: 2, by: -1).map { index in
             colors[index]
