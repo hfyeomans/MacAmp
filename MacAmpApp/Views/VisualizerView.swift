@@ -63,6 +63,9 @@ struct VisualizerView: View {
         updateTimer = Timer.scheduledTimer(withTimeInterval: updateInterval, repeats: true) { _ in
             updateBars()
         }
+        if let timer = updateTimer {
+            RunLoop.main.add(timer, forMode: .common)
+        }
     }
     
     private func stopVisualization() {

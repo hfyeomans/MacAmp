@@ -26,6 +26,7 @@ struct WinampMainWindow: View {
     // Pause blinking state
     @State private var pauseBlinkVisible: Bool = true
     @State private var pauseBlinkTimer: Timer?
+    @State private var isViewVisible: Bool = false
 
     // Winamp coordinate constants (from original Winamp and webamp)
     private struct Coords {
@@ -96,6 +97,9 @@ struct WinampMainWindow: View {
         .frame(width: WinampSizes.main.width,
                height: isShadeMode ? WinampSizes.mainShade.height : WinampSizes.main.height)
         .background(Color.black) // Fallback
+        .onAppear {
+            isViewVisible = true
+        }
         .onChange(of: audioPlayer.isPaused) { _, isPaused in
             if isPaused {
                 // Start blinking timer
@@ -103,6 +107,9 @@ struct WinampMainWindow: View {
                 pauseBlinkVisible = true
                 pauseBlinkTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
                     pauseBlinkVisible.toggle()
+                }
+                if let timer = pauseBlinkTimer {
+                    RunLoop.main.add(timer, forMode: .common)
                 }
             } else {
                 // Stop blinking timer
@@ -112,6 +119,7 @@ struct WinampMainWindow: View {
             }
         }
         .onDisappear {
+            isViewVisible = false
             scrollTimer?.invalidate()
             scrollTimer = nil
             pauseBlinkTimer?.invalidate()
@@ -610,6 +618,7 @@ struct WinampMainWindow: View {
     
     private func startScrolling() {
         guard scrollTimer == nil else { return }
+        guard isViewVisible else { return }
 
         scrollTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { [weak audioPlayer] _ in
             // Access main actor properties synchronously to prevent race conditions
@@ -633,8 +642,11 @@ struct WinampMainWindow: View {
                 }
             }
         }
+        if let timer = scrollTimer {
+            RunLoop.main.add(timer, forMode: .common)
+        }
     }
-    
+
     private func resetScrolling() {
         scrollTimer?.invalidate()
         scrollTimer = nil
@@ -642,7 +654,8 @@ struct WinampMainWindow: View {
         
         // Restart scrolling if needed
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            startScrolling()
+            guard self.isViewVisible else { return }
+            self.startScrolling()
         }
     }
     

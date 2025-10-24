@@ -4,6 +4,55 @@ import Combine
 import AVFoundation
 import Accelerate
 
+private final class VisualizerScratchBuffers {
+    private(set) var mono: [Float] = []
+    private(set) var rms: [Float] = []
+    private(set) var spectrum: [Float] = []
+
+    func prepare(frameCount: Int, bars: Int) {
+        if mono.count != frameCount {
+            mono = Array(repeating: 0, count: frameCount)
+        } else {
+            mono.withUnsafeMutableBufferPointer { pointer in
+                guard let baseAddress = pointer.baseAddress else { return }
+                vDSP_vclr(baseAddress, 1, vDSP_Length(frameCount))
+            }
+        }
+
+        if rms.count != bars {
+            rms = Array(repeating: 0, count: bars)
+        }
+
+        if spectrum.count != bars {
+            spectrum = Array(repeating: 0, count: bars)
+        }
+    }
+
+    func withMono<R>(_ body: (inout [Float]) -> R) -> R {
+        body(&mono)
+    }
+
+    func withMonoReadOnly<R>(_ body: ([Float]) -> R) -> R {
+        body(mono)
+    }
+
+    func withRms<R>(_ body: (inout [Float]) -> R) -> R {
+        body(&rms)
+    }
+
+    func withSpectrum<R>(_ body: (inout [Float]) -> R) -> R {
+        body(&spectrum)
+    }
+
+    func snapshotRms() -> [Float] {
+        rms
+    }
+
+    func snapshotSpectrum() -> [Float] {
+        spectrum
+    }
+}
+
 struct Track: Identifiable, Equatable {
     let id = UUID()
     let url: URL
@@ -245,6 +294,7 @@ class AudioPlayer: ObservableObject {
         }
 
         startEngineIfNeeded()
+        installVisualizerTapIfNeeded()
         if !playerNode.isPlaying {
             playerNode.play()
         }
@@ -271,6 +321,7 @@ class AudioPlayer: ObservableObject {
         currentTime = 0
         playbackProgress = 0
         progressTimer?.invalidate()
+        removeVisualizerTapIfNeeded()
         isPlaying = false
         isPaused = false
         // Reset audio properties when stopping
@@ -626,6 +677,8 @@ class AudioPlayer: ObservableObject {
         guard !visualizerTapInstalled else { return }
         let mixer = audioEngine.mainMixerNode
         mixer.removeTap(onBus: 0)
+        visualizerTapInstalled = false
+        let scratch = VisualizerScratchBuffers()
         // Pass nil format to adopt the node's format; safer during graph changes.
         mixer.installTap(onBus: 0, bufferSize: 1024, format: nil) { [weak self] buffer, _ in
             // Compute raw levels off-main; avoid touching self here.
@@ -634,73 +687,86 @@ class AudioPlayer: ObservableObject {
             let frameCount = Int(buffer.frameLength)
             if frameCount == 0 { return }
 
-            // Mix down to mono
-            var mono: [Float] = Array(repeating: 0, count: frameCount)
-            let invCount = 1.0 / Float(channelCount)
-            for i in 0..<frameCount {
-                var sum: Float = 0
-                for ch in 0..<channelCount {
-                    sum += ptr[ch][i]
-                }
-                mono[i] = sum * invCount
-            }
             let bars = 20
-            // Compute RMS bars raw
-            var rms = Array(repeating: Float(0), count: bars)
-            do {
-                let bucketSize = max(1, frameCount / bars)
-                var idx = 0
-                for b in 0..<bars {
-                    let start = idx
-                    let end = min(frameCount, start + bucketSize)
-                    if end > start {
-                        var sumSq: Float = 0
-                        let len = end - start
-                        var j = start
-                        while j < end {
-                            let s = mono[j]
-                            sumSq += s * s
-                            j += 1
-                        }
-                        var v = sqrt(sumSq / Float(len))
-                        v = min(1.0, v * 4.0)
-                        rms[b] = v
+            scratch.prepare(frameCount: frameCount, bars: bars)
+
+            scratch.withMono { mono in
+                let invCount = 1.0 / Float(channelCount)
+                for frame in 0..<frameCount {
+                    var sum: Float = 0
+                    for channel in 0..<channelCount {
+                        sum += ptr[channel][frame]
                     }
-                    idx = end
+                    mono[frame] = sum * invCount
                 }
             }
-            // Compute spectrum bars (log scale) raw
-            var spec = Array(repeating: Float(0), count: bars)
-            do {
-                let fs = Float(buffer.format.sampleRate)
-                let n = min(1024, frameCount)
-                if n > 0 {
-                    let fMin: Float = 50
-                    let fMax: Float = min(16000, fs * 0.45)
+
+            scratch.withMonoReadOnly { mono in
+                scratch.withRms { rms in
+                    let bucketSize = max(1, frameCount / bars)
+                    var cursor = 0
                     for b in 0..<bars {
-                        let t = Float(b) / Float(max(1, bars - 1))
-                        let fc = fMin * pow(fMax / fMin, t)
-                        let w = 2 * Float.pi * fc / fs
-                        let coeff = 2 * cos(w)
-                        var s0: Float = 0, s1: Float = 0, s2: Float = 0
-                        var j = 0
-                        while j < n {
-                            s0 = mono[j] + coeff * s1 - s2
-                            s2 = s1
-                            s1 = s0
-                            j += 1
+                        let start = cursor
+                        let end = min(frameCount, start + bucketSize)
+                        if end > start {
+                            var sumSq: Float = 0
+                            var index = start
+                            while index < end {
+                                let sample = mono[index]
+                                sumSq += sample * sample
+                                index += 1
+                            }
+                            var value = sqrt(sumSq / Float(end - start))
+                            value = min(1.0, value * 4.0)
+                            rms[b] = value
+                        } else {
+                            rms[b] = 0
                         }
-                        let power = s1 * s1 + s2 * s2 - coeff * s1 * s2
-                        var val = sqrt(max(0, power)) / Float(n)
-                        val = min(1.0, val * 4.0)
-                        spec[b] = val
+                        cursor = end
+                    }
+                }
+
+                scratch.withSpectrum { spectrum in
+                    let sampleRate = Float(buffer.format.sampleRate)
+                    let sampleCount = min(1024, frameCount)
+                    if sampleCount > 0 {
+                        let minimumFrequency: Float = 50
+                        let maximumFrequency: Float = min(16000, sampleRate * 0.45)
+                        for b in 0..<bars {
+                            let normalized = Float(b) / Float(max(1, bars - 1))
+                            let centerFrequency = minimumFrequency * pow(maximumFrequency / minimumFrequency, normalized)
+                            let omega = 2 * Float.pi * centerFrequency / sampleRate
+                            let coefficient = 2 * cos(omega)
+                            var s0: Float = 0
+                            var s1: Float = 0
+                            var s2: Float = 0
+                            var index = 0
+                            while index < sampleCount {
+                                let sample = mono[index]
+                                s0 = sample + coefficient * s1 - s2
+                                s2 = s1
+                                s1 = s0
+                                index += 1
+                            }
+                            let power = s1 * s1 + s2 * s2 - coefficient * s1 * s2
+                            var value = sqrt(max(0, power)) / Float(sampleCount)
+                            value = min(1.0, value * 4.0)
+                            spectrum[b] = value
+                        }
+                    } else {
+                        for b in 0..<bars {
+                            spectrum[b] = 0
+                        }
                     }
                 }
             }
+
+            let rmsSnapshot = scratch.snapshotRms()
+            let spectrumSnapshot = scratch.snapshotSpectrum()
             // Hop to main actor for smoothing and state updates using latest settings
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
-                let used = self.useSpectrumVisualizer ? spec : rms
+                let used = self.useSpectrumVisualizer ? spectrumSnapshot : rmsSnapshot
                 let now = CFAbsoluteTimeGetCurrent()
                 let dt = max(0, Float(now - self.lastUpdateTime))
                 self.lastUpdateTime = now
@@ -717,6 +783,12 @@ class AudioPlayer: ObservableObject {
             }
         }
         visualizerTapInstalled = true
+    }
+
+    private func removeVisualizerTapIfNeeded() {
+        guard visualizerTapInstalled else { return }
+        audioEngine.mainMixerNode.removeTap(onBus: 0)
+        visualizerTapInstalled = false
     }
 
     // MARK: - Seeking / Scrubbing
@@ -875,6 +947,9 @@ class AudioPlayer: ObservableObject {
             self.playbackProgress = 1
             self.currentTime = self.currentDuration
             self.nextTrack()
+            if !self.isPlaying {
+                self.removeVisualizerTapIfNeeded()
+            }
 
             // Clear re-entrancy guard after nextTrack completes
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {

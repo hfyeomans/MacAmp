@@ -1,6 +1,9 @@
 ######## macOS ########
 .DS_Store
 
+# Leaks baseline
+baseline-leaks-test.trace/
+
 ######## Xcode ########
 # User-specific files
 xcuserdata/
