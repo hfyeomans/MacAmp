@@ -151,7 +151,7 @@ struct WinampEqualizerWindow: View {
             
             // AUTO button
             Button(action: {
-                audioPlayer.eqAutoEnabled.toggle()
+                audioPlayer.setAutoEQEnabled(!audioPlayer.eqAutoEnabled)
             }) {
                 let spriteKey = audioPlayer.eqAutoEnabled ? "EQ_AUTO_BUTTON_SELECTED" : "EQ_AUTO_BUTTON"
                 SimpleSpriteImage(spriteKey, width: 32, height: 12)

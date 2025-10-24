@@ -19,38 +19,19 @@ struct PlaylistTimeText: View {
         self.spacing = spacing
     }
 
-    /// Get CHARACTER sprite image for a given character
-    private func imageForChar(_ ch: Character) -> NSImage? {
-        // Convert character to UTF-16 code (ASCII-compatible)
-        let code = String(ch).utf16.first ?? 32
-        let key = "CHARACTER_\(code)"
-        return skinManager.currentSkin?.images[key]
-    }
-
     /// Get the text color from PLEDIT.TXT (Normal=#00FF00 or skin-specific)
     private var textColor: Color {
         skinManager.currentSkin?.playlistStyle.normalTextColor ?? Color(red: 0, green: 1.0, blue: 0)
     }
 
     var body: some View {
-        HStack(spacing: spacing) {
-            ForEach(Array(text.enumerated()), id: \.offset) { _, ch in
-                if let img = imageForChar(ch) {
-                    // Render CHARACTER sprite with PLEDIT.TXT color overlay
-                    Image(nsImage: img)
-                        .interpolation(.none)
-                        .antialiased(false)
-                        .resizable()
-                        .frame(width: img.size.width, height: img.size.height)
-                        .colorMultiply(textColor)  // Apply PLEDIT.TXT Normal color
-                } else {
-                    // Fallback: Use system font if character sprite missing
-                    Text(String(ch))
-                        .font(.system(size: 8, design: .monospaced))
-                        .foregroundColor(textColor)
-                }
-            }
-        }
+        PlaylistBitmapText(
+            text,
+            color: textColor,
+            spacing: spacing,
+            fallbackSize: 8,
+            fallbackDesign: Font.Design.monospaced
+        )
     }
 }
 

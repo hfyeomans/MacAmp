@@ -13,43 +13,55 @@ enum EQFCodec {
     private static let presetValueCount = 11 // 10 bands + preamp
 
     static func parse(data: Data) -> EqfPreset? {
-        var i = 0
+        var index = 0
         let bytes = [UInt8](data)
-        guard bytes.count >= header.count + 4 + nameFieldLength + presetValueCount else { return nil }
-        // Header
-        let headerBytes = Array(bytes[i..<i+header.count])
+        let minimumLength = header.count + 4 + nameFieldLength + presetValueCount
+        guard bytes.count >= minimumLength else { return nil }
+
+        let headerBytes = Array(bytes[index..<index + header.count])
         guard String(bytes: headerBytes, encoding: .ascii) == header else { return nil }
-        i += header.count
-        // Skip <ctrl-z>!--
-        i += 4
-        guard i + nameFieldLength + presetValueCount <= bytes.count else { return nil }
-        // Name (null-terminated within 257 bytes)
-        let nameSlice = bytes[i..<i+nameFieldLength]
+        index += header.count
+
+        // Skip <ctrl-z>!-- marker
+        index += 4
+        guard index + nameFieldLength + presetValueCount <= bytes.count else { return nil }
+
+        let nameSlice = bytes[index..<index + nameFieldLength]
+        let name: String?
         if let zeroIndex = nameSlice.firstIndex(of: 0) {
             let nameBytes = Array(nameSlice.prefix(upTo: zeroIndex))
-            let name = String(bytes: nameBytes, encoding: .ascii)
-            // Advance to end of fixed field
-            i += nameFieldLength
-            // Values are stored as bytes: stored = 64 - value(1..64)
-            guard i + presetValueCount <= bytes.count else { return nil }
-            var values: [Int] = []
-            for _ in 0..<presetValueCount {
-                values.append(Int(64) - Int(bytes[i]))
-                i += 1
-            }
-            // Clamp 1..64
-            values = values.map { max(1, min(64, $0)) }
-            // Convert to percent 0..100 then to dB [-12, 12]
-            func valueToDB(_ v: Int) -> Float {
-                let percent = Float(v - 1) / 63.0 * 100.0
-                return (percent / 100.0) * 24.0 - 12.0
-            }
-            let bandsDB = values.prefix(10).map { valueToDB($0) }
-            let preampDB = valueToDB(values[10])
-            return EqfPreset(name: name, preampDB: preampDB, bandsDB: bandsDB)
+            name = String(bytes: nameBytes, encoding: .ascii)
         } else {
-            return nil
+            name = String(bytes: nameSlice, encoding: .ascii)
         }
+        index += nameFieldLength
+
+        guard index + presetValueCount <= bytes.count else { return nil }
+
+        var values: [Int] = []
+        values.reserveCapacity(presetValueCount)
+        for offset in 0..<presetValueCount {
+            let stored = Int(bytes[index + offset])
+            let decoded = 64 - stored
+            values.append(decoded)
+        }
+        index += presetValueCount
+
+        guard values.count == presetValueCount else { return nil }
+
+        values = values.map { min(max($0, 1), 64) }
+
+        func valueToDB(_ value: Int) -> Float {
+            let clamped = min(max(value, 1), 64)
+            let percent = Float(clamped - 1) / 63.0
+            let db = percent * 24.0 - 12.0
+            return min(max(db, -12.0), 12.0)
+        }
+
+        let bandsDB = values.prefix(10).map { valueToDB($0) }
+        guard values.indices.contains(10) else { return nil }
+        let preampDB = valueToDB(values[10])
+        return EqfPreset(name: name, preampDB: preampDB, bandsDB: bandsDB)
     }
 
     static func serialize(_ preset: EqfPreset) -> Data? {

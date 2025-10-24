@@ -53,6 +53,12 @@ private final class VisualizerScratchBuffers {
     }
 }
 
+private extension Float {
+    func clamped(to range: ClosedRange<Float>) -> Float {
+        return min(max(self, range.lowerBound), range.upperBound)
+    }
+}
+
 struct Track: Identifiable, Equatable {
     let id = UUID()
     let url: URL
@@ -63,6 +69,20 @@ struct Track: Identifiable, Equatable {
     static func == (lhs: Track, rhs: Track) -> Bool {
         lhs.id == rhs.id
     }
+}
+
+enum PlaybackStopReason: Equatable {
+    case manual
+    case completed
+    case ejected
+}
+
+enum PlaybackState: Equatable {
+    case idle
+    case preparing
+    case playing
+    case paused
+    case stopped(PlaybackStopReason)
 }
 
 @MainActor
@@ -77,17 +97,18 @@ class AudioPlayer: ObservableObject {
     private var visualizerTapInstalled = false
     private var visualizerPeaks: [Float] = Array(repeating: 0.0, count: 20)
     private var lastUpdateTime: CFAbsoluteTime = CFAbsoluteTimeGetCurrent()
-    private var wasStopped = false // Track if playback was stopped manually
     @Published var useSpectrumVisualizer: Bool = true
     @Published var visualizerSmoothing: Float = 0.6 // 0..1 (higher = smoother)
     @Published var visualizerPeakFalloff: Float = 1.2 // units per second
 
-    @Published var isPlaying: Bool = false
-    @Published var isPaused: Bool = false
-    @Published var isSeeking: Bool = false // NEW: Prevents completion handler from firing during seek
-    private var currentSeekID: UUID = UUID() // NEW: Identifies which seek operation scheduled the current audio
-    private var isHandlingCompletion: Bool = false // NEW: Prevents re-entrant onPlaybackEnded calls
-    private var trackHasEnded: Bool = false // NEW: Tracks when playlist has finished
+    @Published private(set) var playbackState: PlaybackState = .idle
+    @Published private(set) var isPlaying: Bool = false
+    @Published private(set) var isPaused: Bool = false
+    private var currentSeekID: UUID = UUID() // Identifies which seek operation scheduled the current audio
+    private var isHandlingCompletion = false // Prevents re-entrant onPlaybackEnded calls
+    private var trackHasEnded = false // Tracks when playlist has finished
+    private var seekGuardActive = false
+    private var autoEQTask: Task<Void, Never>?
     @Published var currentTrackURL: URL? // Placeholder for the currently playing track
     @Published var currentTitle: String = "No Track Loaded"
     @Published var currentDuration: Double = 0.0
@@ -131,6 +152,39 @@ class AudioPlayer: ObservableObject {
 
     deinit {}
 
+    private func transition(to newState: PlaybackState) {
+        guard playbackState != newState else { return }
+        playbackState = newState
+        switch newState {
+        case .playing:
+            setDerivedState(isPlaying: true, isPaused: false)
+        case .paused:
+            setDerivedState(isPlaying: false, isPaused: true)
+        default:
+            setDerivedState(isPlaying: false, isPaused: false)
+        }
+    }
+
+    private func setDerivedState(isPlaying: Bool, isPaused: Bool) {
+        if self.isPlaying != isPlaying {
+            self.isPlaying = isPlaying
+        }
+        if self.isPaused != isPaused {
+            self.isPaused = isPaused
+        }
+    }
+
+    private func shouldIgnoreCompletion(from seekID: UUID?) -> Bool {
+        if seekGuardActive && seekID != currentSeekID {
+            return true
+        }
+        if case .stopped(let reason) = playbackState,
+           reason == .manual || reason == .ejected {
+            return true
+        }
+        return false
+    }
+
     // MARK: - Track Management
 
     /// Add a NEW track to the playlist (e.g., from file picker)
@@ -160,7 +214,7 @@ class AudioPlayer: ObservableObject {
     /// Play an EXISTING track from the playlist
     /// Does NOT modify the playlist - only plays the specified track
     func playTrack(track: Track) {
-        // CRITICAL: Don't call stop() - it triggers onPlaybackEnded via wasStopped flag
+        // CRITICAL: Don't call stop() here - it triggers completion handlers mid-transition.
         // Instead, directly stop the player node and reset state
         playerNode.stop()
         progressTimer?.invalidate()
@@ -171,9 +225,8 @@ class AudioPlayer: ObservableObject {
         currentTrackURL = track.url
         currentTime = 0
         playbackProgress = 0
-        isPaused = false
-        isPlaying = false
-        wasStopped = false  // Clear any stop flag
+        transition(to: .preparing)
+        seekGuardActive = false
         trackHasEnded = false  // Reset playlist end flag
 
         print("AudioPlayer: Playing track '\(track.title)'")
@@ -299,37 +352,34 @@ class AudioPlayer: ObservableObject {
             playerNode.play()
         }
         startProgressTimer()
-        isPlaying = true
-        isPaused = false
-        wasStopped = false
+        transition(to: .playing)
+        seekGuardActive = false
         print("AudioPlayer: Play")
     }
 
     func pause() {
         guard playerNode.isPlaying else { return }
         playerNode.pause()
-        isPlaying = false
-        isPaused = true
-        wasStopped = false // Allow normal completion handling after pause
+        transition(to: .paused)
+        seekGuardActive = false
         print("AudioPlayer: Pause")
     }
 
     func stop() {
-        wasStopped = true
+        transition(to: .stopped(.manual))
         playerNode.stop()
         let _ = scheduleFrom(time: 0)  // Ignore return - reset to beginning
         currentTime = 0
         playbackProgress = 0
         progressTimer?.invalidate()
         removeVisualizerTapIfNeeded()
-        isPlaying = false
-        isPaused = false
         // Reset audio properties when stopping
         if currentTrack == nil {
             bitrate = 0
             sampleRate = 0
             channelCount = 2
         }
+        seekGuardActive = false
         print("AudioPlayer: Stop")
     }
 
@@ -337,6 +387,7 @@ class AudioPlayer: ObservableObject {
 
     func eject() {
         stop()
+        transition(to: .stopped(.ejected))
         playlist.removeAll()
         currentTrack = nil
         currentTrackURL = nil
@@ -439,18 +490,38 @@ class AudioPlayer: ObservableObject {
     }
 
     private func applyAutoPreset(for track: Track) {
-        if let p = perTrackPresets[track.url.absoluteString] {
-            applyPreset(p)
+        guard eqAutoEnabled else { return }
+        if let preset = perTrackPresets[track.url.absoluteString] {
+            applyPreset(preset)
             appliedAutoPresetTrack = track.title
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
                 guard let self = self else { return }
-                // Clear only if unchanged
                 if self.appliedAutoPresetTrack == track.title {
                     self.appliedAutoPresetTrack = nil
                 }
             }
             print("Applied per-track EQ preset for \(track.title)")
+        } else {
+            generateAutoPreset(for: track)
         }
+    }
+
+    func setAutoEQEnabled(_ isEnabled: Bool) {
+        guard eqAutoEnabled != isEnabled else { return }
+        eqAutoEnabled = isEnabled
+        if isEnabled, let current = currentTrack {
+            applyAutoPreset(for: current)
+        } else {
+            autoEQTask?.cancel()
+            autoEQTask = nil
+            appliedAutoPresetTrack = nil
+        }
+    }
+
+    private func generateAutoPreset(for track: Track) {
+        autoEQTask?.cancel()
+        autoEQTask = nil
+        NSLog("AutoEQ: automatic analysis disabled, no preset generated for \(track.title)")
     }
 
     // MARK: - Preset persistence
@@ -822,14 +893,13 @@ class AudioPlayer: ObservableObject {
         }
 
         let shouldPlay = resume ?? isPlaying
-        wasStopped = false // Allow normal completion after seeking
+        seekGuardActive = true
 
-        // CRITICAL FIX: Set isSeeking flag to prevent old completion handler from corrupting state
+        // CRITICAL FIX: Activate seek guard to prevent old completion handlers from corrupting state.
         // When playerNode.stop() is called in scheduleFrom, it triggers the completion handler
         // from the PREVIOUS segment, which calls onPlaybackEnded() and sets playbackProgress=1.0
         // Generate new seek ID to identify completions from THIS seek operation
         currentSeekID = UUID()
-        isSeeking = true
 
         // Stop progress timer BEFORE seeking
         progressTimer?.invalidate()
@@ -853,27 +923,25 @@ class AudioPlayer: ObservableObject {
             startEngineIfNeeded()
             playerNode.play()
             startProgressTimer()  // Restart timer with fresh state
-            isPlaying = true
-            isPaused = false
+            transition(to: .playing)
         } else if !audioScheduled {
             // No audio scheduled - we're at the end of the track
-            isPlaying = false
-            isPaused = false
+            transition(to: .stopped(.completed))
             // Timer already invalidated above
 
-            // Trigger track completion logic AFTER isSeeking is cleared
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                // Now safe to call onPlaybackEnded (isSeeking will be false)
-                self.onPlaybackEnded()
+            // Trigger track completion logic after the seek guard is cleared
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+                // Now safe to call onPlaybackEnded once seek guard is relaxed
+                self?.onPlaybackEnded()
             }
         } else {
-            isPlaying = false
+            transition(to: .paused)
             // Timer already invalidated above
         }
 
-        // Clear isSeeking flag after a brief delay to allow old completion handler to fire and be ignored
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            self.isSeeking = false
+        // Clear seek guard after a brief delay to allow old completion handler to fire and be ignored
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            self?.seekGuardActive = false
         }
     }
     
@@ -929,20 +997,14 @@ class AudioPlayer: ObservableObject {
             // CRITICAL: Don't process completion if it's from an old seek operation
             // playerNode.stop() triggers the old segment's completion handler
             // But allow completions from the CURRENT seek operation (matching seekID)
-            if self.isSeeking && fromSeekID != self.currentSeekID {
-                return
-            }
-
-            // Don't update progress if we stopped manually
-            guard !self.wasStopped else {
-                self.wasStopped = false
+            if self.shouldIgnoreCompletion(from: fromSeekID) {
                 return
             }
 
             // Set re-entrancy guard
             self.isHandlingCompletion = true
 
-            self.isPlaying = false
+            self.transition(to: .stopped(.completed))
             self.progressTimer?.invalidate()
             self.playbackProgress = 1
             self.currentTime = self.currentDuration
@@ -950,6 +1012,7 @@ class AudioPlayer: ObservableObject {
             if !self.isPlaying {
                 self.removeVisualizerTapIfNeeded()
             }
+            self.seekGuardActive = false
 
             // Clear re-entrancy guard after nextTrack completes
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {

@@ -2,108 +2,105 @@
 
 ## Overview
 
-This analysis identified **critical state management issues** in the MacAmp codebase that could lead to crashes, data loss, and inconsistent UI behavior. The most severe issues are in the AudioPlayer, SkinManager, and AppSettings components.
+Latest review confirms several state management risks that affect stability and UX, but the earlier write-up overstated concurrency hazards. The focus now is on clarifying core state flows, tightening validation, and ensuring feedback loops reset correctly. The most important targets are `AudioPlayer`, `SkinManager`, and `AppSettings`.
 
 ## 🚨 Critical Issues (Fix Immediately)
 
-### 1. AudioPlayer State Machine - **CRASH RISK**
-**File:** `MacAmpApp/Audio/AudioPlayer.swift`
-**Problem:** Complex boolean flag system creates race conditions
-**Impact:** Random crashes during playback, seeking, and track changes
-**Fix:** Replace with enum-based state machine
+### 1. AudioPlayer State Clarity - **INCONSISTENT BEHAVIOR RISK**
+**File:** `MacAmpApp/Audio/AudioPlayer.swift`  
+**Problem:** Playback flow relies on multiple booleans (`isPlaying`, `isPaused`, `wasStopped`, `trackHasEnded`, etc.), making transitions difficult to audit.  
+**Impact:** Conflicting flags create edge cases after seeks/ejects and make regressions likely during future changes.  
+**Fix:** Replace the boolean matrix with a single enum-driven state machine and audit transitions (play, pause, stop, seek, completion).
 
-### 2. SkinManager Concurrent Loading - **CORRUPTION RISK**
-**File:** `MacAmpApp/ViewModels/SkinManager.swift`
-**Problem:** No protection against concurrent skin loading
-**Impact:** Skin state corruption, memory issues, crashes
-**Fix:** Add loading queue and state protection
+### 2. SkinManager Loading Lifecycle - **STATE STALENESS RISK**
+**File:** `MacAmpApp/ViewModels/SkinManager.swift`  
+**Problem:** Errors remain in `loadingError` even after successful loads; heavy parsing still runs on the main actor.  
+**Impact:** Users see stale error banners and the UI stalls for large imports.  
+**Fix:** Clear `loadingError` on success and move heavyweight parsing to a background worker that safely hops back to the main actor.
 
-### 3. AppSettings Singleton - **THREAD SAFETY RISK**
-**File:** `MacAmpApp/Models/AppSettings.swift`
-**Problem:** Singleton not thread-safe despite @MainActor
-**Impact:** Crashes during concurrent access to settings
-**Fix:** Proper @MainActor isolation and validation
+### 3. AppSettings Persistence - **DATA LOSS RISK**
+**File:** `MacAmpApp/Models/AppSettings.swift`  
+**Problem:** `userSkinsDirectory` silently ignores directory-creation failures; no validation of UserDefaults payloads.  
+**Impact:** Skins can fail to install without feedback and corrupt defaults remain undetected.  
+**Fix:** Handle file-system errors explicitly and validate persisted values before publishing them.
 
 ## ⚠️ High Priority Issues
 
-### 4. Timer Management - **MEMORY LEAK**
-**File:** `MacAmpApp/Audio/AudioPlayer.swift`
-**Problem:** Multiple timers can be created without cleanup
-**Impact:** Memory leaks, inaccurate progress updates
-**Fix:** Ensure single timer instance with proper lifecycle
+### 4. Skin Import Guardrails - **ROBUSTNESS RISK**
+**File:** `MacAmpApp/ViewModels/SkinManager.swift`  
+**Problem:** Import logic trusts incoming archive paths and size.  
+**Impact:** Malformed or oversized skins can lock the UI or cause crashes.  
+**Fix:** Add path validation, sane size limits, and targeted user feedback.
 
-### 5. UserDefaults Race Conditions - **DATA CORRUPTION**
-**File:** `MacAmpApp/ViewModels/DockingController.swift`
-**Problem:** Rapid writes to UserDefaults without debouncing
-**Impact:** Corrupted dock layout, performance issues
-**Fix:** Add debouncing to persistence operations
+### 5. UserDefaults Write Throttling - **PERFORMANCE RISK**
+**File:** `MacAmpApp/ViewModels/DockingController.swift`  
+**Problem:** Layout writes occur on every `panes` mutation with no coalescing.  
+**Impact:** Bursty changes can thrash UserDefaults and slow UI updates.  
+**Fix:** Debounce or batch persistence updates and surface failure logging.
 
-### 6. Array Bounds Issues - **CRASH RISK**
-**Files:** Multiple files including EQF.swift, DockingController.swift
-**Problem:** Unsafe array access without bounds checking
-**Impact:** Array index out of bounds crashes
-**Fix:** Add comprehensive bounds checking
+### 6. EQF Parsing Validation - **CORRUPTION RISK**
+**File:** `MacAmpApp/Models/EQF.swift`  
+**Problem:** Parser lacks strict bounds checks and value clamps.  
+**Impact:** Malformed EQF files can produce undefined presets.  
+**Fix:** Add length checks, guard clauses, and range clamping around parsed values.
 
 ## 📋 Complete Analysis Files
 
 - **`analysis.md`** - Detailed technical analysis of all issues
 - **`fixes.md`** - Implementation plan with code examples
-- **`critical-issues.md`** - Deep dive into critical problems
 
 ## 🔧 Quick Fix Summary
 
 ### Immediate Actions (This Week)
 
-1. **Fix AudioPlayer State Machine**
+1. **Refactor AudioPlayer State**
    ```swift
    enum PlaybackState {
        case stopped, playing, paused, seeking, ended
    }
    ```
 
-2. **Protect SkinManager Loading**
+2. **Reset SkinManager Errors**
    ```swift
-   private let loadingQueue = DispatchQueue(label: "com.macamp.skinloading")
-   private var isLoadingSkin = false
+   loadingError = nil
    ```
 
-3. **Make AppSettings Thread-Safe**
+3. **Harden AppSettings Persistence**
    ```swift
-   @MainActor
-   static func instance() -> AppSettings {
-       return shared
-   }
+   guard let directory = try? ensureSkinsDirectory() else { return nil }
    ```
+
+> **Auto EQ Note:** Automatic per-track EQ generation via the EQ window's “Auto” button is temporarily disabled due to repeated crashes during background analysis. See `notes/auto-eq-issues.md` for the error log and follow-up plan.
 
 ## 🎯 Risk Assessment
 
 | Component | Risk Level | Impact | Priority |
 |-----------|------------|--------|----------|
-| AudioPlayer | Critical | Crashes | P0 |
-| SkinManager | Critical | Corruption | P0 |
-| AppSettings | High | Crashes | P1 |
-| DockingController | High | Data Loss | P1 |
-| EQF Parser | Medium | Crashes | P2 |
+| AudioPlayer | Critical | Playback regressions | P0 |
+| SkinManager | Critical | Stale UI + blocking | P0 |
+| AppSettings | High | Missing skins / bad defaults | P1 |
+| DockingController | Medium | Perf + persistence stress | P1 |
+| EQF Parser | Medium | Invalid presets | P2 |
 
 ## 📊 Issue Statistics
 
-- **Total Issues Found:** 23
-- **Critical Issues:** 3
-- **High Priority:** 6
-- **Medium Priority:** 8
-- **Low Priority:** 6
+- **Total Issues Found:** 16
+- **Critical Issues:** 2
+- **High Priority:** 5
+- **Medium Priority:** 6
+- **Low Priority:** 3
 
 ## 🚀 Implementation Timeline
 
 ### Week 1: Critical Fixes
 - [ ] AudioPlayer state machine refactor
-- [ ] SkinManager loading protection
-- [ ] AppSettings thread safety
+- [ ] SkinManager error-reset and background parsing
+- [ ] AppSettings persistence validation
 
 ### Week 2: High Priority
-- [ ] Timer management fixes
-- [ ] UserDefaults debouncing
-- [ ] Array bounds checking
+- [ ] Skin import guardrails
+- [ ] UserDefaults debouncing and logging
+- [ ] EQF parsing validation
 
 ### Week 3: Medium Priority
 - [ ] Input validation
@@ -117,27 +114,15 @@ This analysis identified **critical state management issues** in the MacAmp code
 
 ## 🧪 Testing Strategy
 
-1. **Unit Tests** for all state management logic
-2. **Concurrency Tests** for race conditions
-3. **Stress Tests** for memory leaks
+1. **Unit Tests** for all state management logic  
+2. **Concurrency Tests** for async parsing hand-offs  
+3. **Stress Tests** for heavy asset imports and playback loops  
 4. **Integration Tests** for component interactions
 
 ## 📝 Next Steps
 
-1. **Review** the detailed analysis in `analysis.md`
-2. **Prioritize** critical fixes for immediate implementation
-3. **Create** branches for each fix
-4. **Implement** fixes with proper testing
+1. **Review** the detailed analysis in `analysis.md`  
+2. **Prioritize** critical fixes for immediate implementation  
+3. **Create** branches for each fix  
+4. **Implement** fixes with proper testing  
 5. **Monitor** for regressions after deployment
-
-## 🤝 Contributing
-
-When implementing fixes:
-1. Follow the code examples in `fixes.md`
-2. Add comprehensive tests
-3. Update documentation
-4. Include crash logs/reproduction steps in PRs
-
----
-
-**Note:** This analysis focuses on logic problems that could lead to crashes, data loss, or inconsistent UI behavior. Each issue includes file paths, line numbers, and recommended fix approaches.

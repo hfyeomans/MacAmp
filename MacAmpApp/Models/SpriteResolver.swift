@@ -134,7 +134,10 @@ struct SpriteResolver {
         switch semantic {
         // MARK: - Time Display
         case .digit(let n):
-            guard n >= 0 && n <= 9 else { return [] }
+            guard (0...9).contains(n) else {
+                NSLog("SpriteResolver: digit out of range (\(n)). Expected 0-9.")
+                return []
+            }
             return [
                 "DIGIT_\(n)_EX",      // Prefer extended digits (NUMS_EX.BMP)
                 "DIGIT_\(n)"          // Fall back to standard digits (NUMBERS.BMP)
