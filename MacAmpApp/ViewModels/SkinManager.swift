@@ -517,7 +517,7 @@ class SkinManager: ObservableObject {
                 visualizerColors: visualizerColors,
                 playlistStyle: playlistStyle,
                 images: extractedImages,
-                cursors: [:] // TODO: Parse cursors
+                cursors: [:] // Cursor sprites are not yet extracted from the skin archive
             )
 
             // Set the skin immediately - this is synchronous
