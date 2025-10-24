@@ -12,6 +12,80 @@ This document tracks all deferred tasks by priority level for future implementat
 
 ---
 
+## P0 - Blocker (Immediate Fix Required)
+
+### 0. M3U File Support
+**Status:** Research complete, ready for implementation
+**Location:** `tasks/m3u-file-support/`
+**Branch:** `feature/m3u-file-support` (to create)
+
+**Problem:**
+M3U playlist files appear **grayed out** and cannot be selected in file dialogs, blocking:
+- Internet radio playlist loading
+- Winamp playlist import
+- M3U file compatibility
+
+**Root Cause:**
+1. **NSOpenPanel restriction** - `allowedContentTypes = [.audio]` excludes playlists
+2. **Missing UTI import** - No `UTImportedTypeDeclarations` in Info.plist
+
+**Solution:**
+```swift
+// File: WinampPlaylistWindow.swift
+openPanel.allowedContentTypes = [.audio, .m3uPlaylist]  // One line fix!
+```
+
+**Estimated Time:** 4-6 hours total (6 phases)
+- Phase 1: Fix NSOpenPanel (30 min) ⚡ QUICK WIN
+- Phase 2: Add UTI declaration (15 min)
+- Phase 3: Implement M3U parser (2-3 hours)
+- Phase 4: Integration (1-2 hours)
+- Phase 5: Radio integration (P5 task)
+- Phase 6: Export (optional, 1-2 hours)
+
+**Impact:** Critical - Blocks P5 (Internet Radio Streaming)
+
+**Implementation Checklist:**
+- [ ] Change NSOpenPanel allowedContentTypes (30 min quick fix)
+- [ ] Add UTImportedTypeDeclarations to Info.plist (15 min)
+- [ ] Create M3UEntry model
+- [ ] Create M3UParser with parse methods
+- [ ] Handle standard M3U format
+- [ ] Handle extended M3U (#EXTM3U, #EXTINF)
+- [ ] Handle M3U8 (UTF-8 encoding)
+- [ ] Resolve relative file paths
+- [ ] Integrate with playlist loading
+- [ ] Test with local file M3U
+- [ ] Test with internet radio M3U
+- [ ] Add error handling for malformed files
+
+**Files to Create:**
+- `MacAmpApp/Models/M3UEntry.swift`
+- `MacAmpApp/Parsers/M3UParser.swift`
+- `MacAmpAppTests/M3UParserTests.swift` (optional)
+
+**Files to Modify:**
+- `MacAmpApp/Views/WinampPlaylistWindow.swift` (openFileDialog + integration)
+- `MacAmpApp/Info.plist` (add UTImportedTypeDeclarations)
+
+**Documentation:**
+- `tasks/m3u-file-support/README.md` - Overview
+- `tasks/m3u-file-support/research.md` - Technical research
+- `tasks/m3u-file-support/plan.md` - Implementation plan
+- `tasks/m3u-file-support/state.md` - Current status
+- `tasks/m3u-file-support/todo.md` - Detailed checklist
+
+**Test Streams:**
+```m3u
+#EXTM3U
+#EXTINF:-1,SomaFM: Groove Salad
+http://ice1.somafm.com/groovesalad-256-mp3
+#EXTINF:-1,Radio Paradise
+http://stream.radioparadise.com/mp3-192
+```
+
+---
+
 ## P1 - Critical (Before 1.0 Release)
 
 ### 1. Async Audio Loading (threading-fixes)
@@ -388,17 +462,44 @@ http://stream.radioparadise.com/aac-320
 
 | Priority | Task | Status | Time | Impact |
 |----------|------|--------|------|--------|
+| **P0** | **M3U File Support** | **Ready** | **4-6h** | **Critical** |
 | P1 | Async Audio Loading | Ready | 2-3h | High |
 | P2 | Playlist Menu System | Planned | 4-6h | Med-High |
 | P3 | Magnetic Window Snapping | Analyzed | 3-4h | Medium |
 | P4 | Playlist Window Resize | Researched | 10h | Low |
 | P5 | Internet Radio Streaming | Configured | 6-8h | Medium |
 
-**Total Deferred Work:** ~25-31 hours
+**Total Deferred Work:** ~29-37 hours
 
 ---
 
 ## ✅ Recently Completed
+
+### M3U File Support Research (2025-10-23)
+**Status:** ✅ Research complete, ready for implementation
+
+**Problem Identified:**
+- M3U files grayed out in file dialogs (cannot be selected)
+- Root cause: NSOpenPanel only allows .audio types
+- Secondary: Missing UTImportedTypeDeclarations
+
+**Research Delivered:**
+1. ✅ Root cause analysis (NSOpenPanel + UTI configuration)
+2. ✅ M3U format specifications (standard vs extended)
+3. ✅ Internet radio M3U structure research
+4. ✅ Winamp/webamp behavior analysis
+5. ✅ Complete 6-phase implementation plan
+6. ✅ Parser algorithm designed
+7. ✅ Test files documented
+
+**Quick Win Available:** 30-minute one-line fix makes M3U files selectable!
+
+**Documentation:**
+- `tasks/m3u-file-support/README.md` - Quick overview
+- `tasks/m3u-file-support/research.md` - Technical findings (14KB)
+- `tasks/m3u-file-support/plan.md` - Implementation phases (13KB)
+- `tasks/m3u-file-support/state.md` - Current status (7.4KB)
+- `tasks/m3u-file-support/todo.md` - Detailed checklist (9.3KB)
 
 ### Distribution & Streaming Configuration (2025-10-23)
 **Status:** ✅ Complete
@@ -409,11 +510,13 @@ http://stream.radioparadise.com/aac-320
 3. ✅ File handlers for M3U, PLS, and WSZ files
 4. ✅ Custom macamp:// URL scheme
 5. ✅ Distribution setup documented (Developer ID + App Store)
-6. ✅ ExportOptions.plist created for distribution
+6. ✅ TestFlight research and comparison vs Sparkle
+7. ✅ ExportOptions.plist created for distribution
 
 **Documentation:**
 - `tasks/distribution-setup/distribution-guide.md` - Complete distribution workflow
 - `tasks/distribution-setup/internet-radio-streaming.md` - Streaming implementation guide
+- `tasks/distribution-setup/testflight-beta-testing.md` - TestFlight vs Sparkle analysis
 
 ### Playlist State Sync (2025-10-22 to 2025-10-23)
 **Branch:** `fix/playlist-state-sync` (merged to main)
@@ -473,6 +576,15 @@ git checkout -b feature/internet-radio-streaming
 ---
 
 ## 🎯 Recommended Next Steps
+
+### **RECOMMENDED: Start with P0 (Blocker)**
+Fix **M3U file support** to unblock internet radio (has 30-min quick win!):
+1. Create branch `feature/m3u-file-support`
+2. Review `tasks/m3u-file-support/README.md`
+3. **Quick Win:** Implement Phase 1 (30 min) - Makes M3U files selectable
+4. Implement Phases 2-4 (4-6 hours total)
+5. Test with local and internet radio M3U files
+6. Merge to main
 
 ### Option 1: Fix Critical Issues First (P1)
 Start with **async-audio-loading** to fix the main thread blocking issue:
@@ -544,6 +656,22 @@ open MacAmpApp.xcodeproj
 
 ---
 
-**Last Session:** 2025-10-23 (Distribution & Streaming Configuration)
-**Next Session:** Choose from P1-P5 priorities above
+**Last Session:** 2025-10-23 (Distribution, Streaming, TestFlight Research, M3U Investigation)
+**Next Session:** **START WITH P0** (M3U File Support) - 30-min quick win available!
 **Status:** ✅ Ready to continue development
+
+---
+
+## 🚀 Quick Start for Next Session
+
+**Recommended Order:**
+1. **P0: M3U File Support** (4-6h) - Blocker, enables internet radio
+   - Quick win: 30-min fix makes files selectable
+   - Full implementation: 4-6 hours
+2. **P1: Async Audio Loading** (2-3h) - Fixes UI freezing
+3. **P5: Internet Radio Streaming** (6-8h) - Modern feature
+4. **P2: Playlist Menu System** (4-6h) - Power user features
+5. **P3: Magnetic Window Snapping** (3-4h) - Nostalgic polish
+6. **P4: Playlist Window Resize** (10h) - Future enhancement
+
+**Total Work:** 29-37 hours across all priorities
