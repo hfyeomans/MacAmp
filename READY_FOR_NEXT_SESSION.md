@@ -1,8 +1,72 @@
 # Ready for Next Session - MacAmp Development
 
-**Last Updated:** 2025-10-23
+**Last Updated:** 2025-10-24
 **Current Branch:** `main`
-**Build Status:** ✅ Successful
+**Build Status:** ✅ Successful (v0.8 - Signed Release in /Applications)
+
+---
+
+## 🎉 Today's Accomplishments (2025-10-24)
+
+**4 Pull Requests Merged + Documentation Updates:**
+
+1. **PR #15: M3U Playlist File Support** ✅ COMPLETE
+   - M3U/M3U8 file selection (`.playlist` UTType)
+   - Local audio file loading from playlists
+   - Thread-safe implementation
+   - Remote stream detection (deferred to P5)
+   - Parser with #EXTINF metadata support
+
+2. **PR #16: Release Build Configuration** ✅ COMPLETE
+   - Fixed ZIPFoundation bundle copy issue
+   - Developer ID Application signing working
+   - Builds output to dist/ directory
+   - /Applications installation ready
+
+3. **PR #17: Spectrum Analyzer Balance** ✅ COMPLETE
+   - Applied Webamp-style hybrid frequency mapping
+   - Midpoint: 758 Hz → 1,800 Hz (2.4x improvement)
+   - Increased activity: 4.0x → 4.4x gain
+   - Reduced bass bias, better mid-range representation
+
+4. **PR #18: P0 Code Signing Hotfix** ✅ COMPLETE
+   - Fixed unsigned dist/ builds
+   - Moved copy to scheme post-action (after CodeSign)
+   - Automatic signature verification
+   - Distribution-ready builds
+
+5. **Documentation Cleanup** ✅ COMPLETE
+   - Updated README.md with complete feature set
+   - Archived 21 session .md files
+   - Archived 3 .txt files
+   - Clean professional root directory
+
+**Fresh Signed Release:** v0.8 installed in /Applications
+
+---
+
+## 📋 Current MacAmp Status (v0.8)
+
+### ✅ Working Features
+- **Audio Playback:** MP3, FLAC, AAC, WAV, ALAC
+- **M3U Playlists:** Load M3U/M3U8 files with local audio tracks
+- **Spectrum Analyzer:** Webamp-style balanced frequency distribution
+- **10-Band Equalizer:** 17 built-in presets
+- **Skin Support:** VISCOLOR.TXT gradients, dynamic skin switching
+- **Multi-Window:** Main, Equalizer, Playlist with shade modes
+- **Distribution:** Developer ID signed, ready for notarization
+
+### ⏸️ Deferred to P5 (Internet Radio)
+- **M3U Remote Streams:** Detected but not playable yet
+- **Radio Station Library:** Needs InternetRadioPlayer class
+- **Integration Point:** WinampPlaylistWindow.swift:497-498
+- **Test File:** DarkAmbientRadio.m3u in /Users/hank/Downloads/
+
+### 🐛 Known Issues
+- None blocking - all critical bugs resolved!
+
+### 🎯 Next Priority
+**P1: Async Audio Loading** - Fix main thread blocking during track switches
 
 ---
 
@@ -12,12 +76,46 @@ This document tracks all deferred tasks by priority level for future implementat
 
 ---
 
-## P0 - Blocker (Immediate Fix Required)
+## P5 - Future Feature (Distribution Ready)
 
-### 0. M3U File Support
-**Status:** Research complete, ready for implementation
+### 0. Internet Radio - M3U Remote Stream Playback
+**Status:** ✅ M3U parsing complete, playback deferred
+**Location:** `tasks/internet-radio-file-types/`
+**Dependencies:** P5 Internet Radio Streaming task
+**Branch:** Will integrate with `feature/internet-radio-streaming`
+
+**Current State:**
+- ✅ M3U remote stream URLs detected and parsed
+- ✅ Metadata extracted from #EXTINF
+- ✅ Integration point ready (WinampPlaylistWindow.swift:497-498)
+- ⏸️ Playback requires InternetRadioPlayer implementation
+
+**What Works:**
+```
+M3U: Loaded 1 entries from DarkAmbientRadio.m3u
+M3U: Found stream: Dark Ambient Radio
+```
+
+**What's Needed (P5):**
+1. Create InternetRadioPlayer class (AVPlayer-based)
+2. Create RadioStationLibrary for persistence
+3. Update WinampPlaylistWindow.swift line 498
+4. Test with DarkAmbientRadio.m3u
+
+**Estimated Time:** 2-3 hours (after P5 core complete)
+
+**Documentation:**
+- `tasks/internet-radio-file-types/README.md` - Complete integration plan
+- `tasks/internet-radio-file-types/state.md` - Current status (git ignored)
+
+---
+
+## P0 - Blocker (COMPLETED ✅)
+
+### ~~0. M3U File Support~~
+**Status:** ✅ COMPLETE (PR #15 merged 2025-10-24)
 **Location:** `tasks/m3u-file-support/`
-**Branch:** `feature/m3u-file-support` (to create)
+**Branch:** Merged to main
 
 **Problem:**
 M3U playlist files appear **grayed out** and cannot be selected in file dialogs, blocking:
@@ -577,17 +675,16 @@ git checkout -b feature/internet-radio-streaming
 
 ## 🎯 Recommended Next Steps
 
-### **RECOMMENDED: Start with P0 (Blocker)**
-Fix **M3U file support** to unblock internet radio (has 30-min quick win!):
-1. Create branch `feature/m3u-file-support`
-2. Review `tasks/m3u-file-support/README.md`
-3. **Quick Win:** Implement Phase 1 (30 min) - Makes M3U files selectable
-4. Implement Phases 2-4 (4-6 hours total)
-5. Test with local and internet radio M3U files
-6. Merge to main
+### **RECOMMENDED: P1 - Async Audio Loading (Critical UX Fix)**
+Fix **main thread blocking** during track switching:
+1. Create branch `fix/async-audio-loading`
+2. Review `tasks/playlist-state-sync/KNOWN_LIMITATIONS.md`
+3. Refactor loadAudioFile() to async/await (2-3 hours)
+4. Test with large files
+5. Merge to main
 
-### Option 1: Fix Critical Issues First (P1)
-Start with **async-audio-loading** to fix the main thread blocking issue:
+### Option 1: P5 - Internet Radio Streaming
+Complete **internet radio** with M3U remote stream support:
 1. Create branch `fix/async-audio-loading`
 2. Review `tasks/playlist-state-sync/KNOWN_LIMITATIONS.md`
 3. Implement async file loading (2-3 hours)
@@ -656,22 +753,27 @@ open MacAmpApp.xcodeproj
 
 ---
 
-**Last Session:** 2025-10-23 (Distribution, Streaming, TestFlight Research, M3U Investigation)
-**Next Session:** **START WITH P0** (M3U File Support) - 30-min quick win available!
-**Status:** ✅ Ready to continue development
+**Last Session:** 2025-10-24 (M3U Support, Release Builds, Spectrum Balance, P0 Hotfix)
+**Next Session:** **START WITH P1** (Async Audio Loading) - Critical UX fix!
+**Status:** ✅ Ready for next development sprint
 
 ---
 
 ## 🚀 Quick Start for Next Session
 
-**Recommended Order:**
-1. **P0: M3U File Support** (4-6h) - Blocker, enables internet radio
-   - Quick win: 30-min fix makes files selectable
-   - Full implementation: 4-6 hours
-2. **P1: Async Audio Loading** (2-3h) - Fixes UI freezing
-3. **P5: Internet Radio Streaming** (6-8h) - Modern feature
-4. **P2: Playlist Menu System** (4-6h) - Power user features
-5. **P3: Magnetic Window Snapping** (3-4h) - Nostalgic polish
-6. **P4: Playlist Window Resize** (10h) - Future enhancement
+**Recommended Priority Order:**
+1. **P1: Async Audio Loading** (2-3h) - Fixes UI freezing during track switches
+2. **P5: Internet Radio Streaming** (6-8h) - Enables M3U remote stream playback
+3. **P2: Playlist Menu System** (4-6h) - Power user features
+4. **P3: Magnetic Window Snapping** (3-4h) - Nostalgic polish
+5. **P4: Playlist Window Resize** (10h) - Future enhancement
 
-**Total Work:** 29-37 hours across all priorities
+**Total Remaining Work:** ~24-33 hours across all priorities
+
+### Session 2025-10-24 Completed:
+- ✅ M3U local file support (PR #15)
+- ✅ Release builds fixed (PR #16)
+- ✅ Spectrum analyzer balanced (PR #17)
+- ✅ Code signing fixed (PR #18)
+- ✅ Documentation organized
+- ✅ v0.8 in /Applications
