@@ -470,9 +470,13 @@ struct WinampPlaylistWindow: View {
     
     private func openFileDialog() {
         let openPanel = NSOpenPanel()
-        openPanel.allowedContentTypes = [.audio, .m3uPlaylist]
+        // Use .playlist instead of .m3uPlaylist to allow all playlist formats
+        // This is more reliable than .m3uPlaylist and allows M3U, PLS, etc.
+        openPanel.allowedContentTypes = [.audio, .playlist]
         openPanel.allowsMultipleSelection = true
         openPanel.canChooseDirectories = false
+        openPanel.title = "Add Files to Playlist"
+        openPanel.message = "Select audio files or playlists"
 
         openPanel.begin { response in
             if response == .OK {
