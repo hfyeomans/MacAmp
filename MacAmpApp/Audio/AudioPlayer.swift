@@ -97,7 +97,6 @@ class AudioPlayer: ObservableObject {
     private var visualizerTapInstalled = false
     private var visualizerPeaks: [Float] = Array(repeating: 0.0, count: 20)
     private var lastUpdateTime: CFAbsoluteTime = CFAbsoluteTimeGetCurrent()
-    private var lastLoggedFreqMode: SpectrumFrequencyMapping? = nil
     @Published var useSpectrumVisualizer: Bool = true
     @Published var visualizerSmoothing: Float = 0.6 // 0..1 (higher = smoother)
     @Published var visualizerPeakFalloff: Float = 1.2 // units per second
@@ -842,35 +841,15 @@ class AudioPlayer: ObservableObject {
                     if sampleCount > 0 {
                         let minimumFrequency: Float = 50
                         let maximumFrequency: Float = min(16000, sampleRate * 0.45)
-                        // Read current mapping mode on main thread (safe - read-only atomic access)
-                        let freqMapping = DispatchQueue.main.sync { AppSettings.instance().spectrumFrequencyMapping }
-
-                        // Debug: Log mode changes to verify real-time switching
-                        if let selfRef = self, selfRef.lastLoggedFreqMode != freqMapping {
-                            DispatchQueue.main.async { [weak self] in
-                                self?.lastLoggedFreqMode = freqMapping
-                                print("SPECTRUM: Mode = \(freqMapping.displayName) | Midpoint ≈ \(freqMapping == .logarithmic ? "758 Hz" : freqMapping == .adjustedLog ? "1200 Hz" : "1800 Hz")")
-                            }
-                        }
 
                         for b in 0..<bars {
                             let normalized = Float(b) / Float(max(1, bars - 1))
 
-                            // Calculate center frequency based on selected mapping mode
-                            let centerFrequency: Float
-                            switch freqMapping {
-                            case .logarithmic:
-                                // Original: Pure logarithmic (midpoint ~758 Hz)
-                                centerFrequency = minimumFrequency * pow(maximumFrequency / minimumFrequency, normalized)
-                            case .adjustedLog:
-                                // Adjusted: Gentler curve (midpoint ~1,200 Hz)
-                                centerFrequency = minimumFrequency * pow(maximumFrequency / minimumFrequency, pow(normalized, 0.7))
-                            case .hybrid:
-                                // Hybrid: 91% log + 9% linear (midpoint ~1,800 Hz, Webamp-style)
-                                let logScale = minimumFrequency * pow(maximumFrequency / minimumFrequency, normalized)
-                                let linScale = minimumFrequency + normalized * (maximumFrequency - minimumFrequency)
-                                centerFrequency = 0.91 * logScale + 0.09 * linScale
-                            }
+                            // Hybrid frequency mapping: 91% log + 9% linear (Webamp-style, midpoint ~1,800 Hz)
+                            let logScale = minimumFrequency * pow(maximumFrequency / minimumFrequency, normalized)
+                            let linScale = minimumFrequency + normalized * (maximumFrequency - minimumFrequency)
+                            let centerFrequency = 0.91 * logScale + 0.09 * linScale
+
                             let omega = 2 * Float.pi * centerFrequency / sampleRate
                             let coefficient = 2 * cos(omega)
                             var s0: Float = 0

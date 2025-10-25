@@ -65,54 +65,12 @@ struct PreferencesView: View {
             }
             .conditionalGroupBoxBackground(enabled: settings.shouldUseContainerBackground)
 
-            GroupBox("Spectrum Analyzer") {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Frequency Mapping")
-                        .font(.headline)
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(SpectrumFrequencyMapping.allCases, id: \.rawValue) { mode in
-                            HStack {
-                                Button(action: {
-                                    settings.spectrumFrequencyMapping = mode
-                                }) {
-                                    Image(systemName: settings.spectrumFrequencyMapping == mode ? "largecircle.fill.circle" : "circle")
-                                        .foregroundColor(.accentColor)
-                                }
-                                .buttonStyle(PlainButtonStyle())
-
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(mode.displayName)
-                                        .font(.body)
-                                        .fontWeight(.medium)
-                                    Text(mode.description)
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                settings.spectrumFrequencyMapping = mode
-                            }
-                        }
-                    }
-
-                    Text("Adjusts how frequencies are distributed across spectrum bars. Try each mode while playing music to find your preference.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .padding(.top, 4)
-                }
-                .padding()
-            }
-            .conditionalGroupBoxBackground(enabled: settings.shouldUseContainerBackground)
-
             Spacer()
 
             HStack {
                 Button("Restore Defaults") {
                     settings.enableLiquidGlass = true
                     settings.materialIntegration = .hybrid
-                    settings.spectrumFrequencyMapping = .hybrid
                 }
 
                 Spacer()
@@ -124,7 +82,7 @@ struct PreferencesView: View {
             }
         }
         .padding(20)
-        .frame(width: 500, height: 550)
+        .frame(width: 500, height: 400)
         .conditionalPreferencesBackground(enabled: true)
     }
     
