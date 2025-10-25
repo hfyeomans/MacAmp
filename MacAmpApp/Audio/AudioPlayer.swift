@@ -782,14 +782,63 @@ class AudioPlayer: ObservableObject {
         RunLoop.main.add(progressTimer!, forMode: .common)
     }
 
+    // Debug: Print spectrum analyzer frequency distribution
+    private func printSpectrumFrequencyDistribution(sampleRate: Float, bars: Int) {
+        let minimumFrequency: Float = 50
+        let maximumFrequency: Float = min(16000, sampleRate * 0.45)
+
+        print("\n==== Spectrum Analyzer Frequency Distribution ====")
+        print("Sample Rate: \(sampleRate) Hz")
+        print("Bars: \(bars)")
+        print("Range: \(minimumFrequency) Hz - \(maximumFrequency) Hz")
+        print("\nBar | Center Freq | Equalization | Typical Content")
+        print("----+-------------+--------------+------------------------------------------")
+
+        for b in 0..<bars {
+            let normalized = Float(b) / Float(max(1, bars - 1))
+            let logScale = minimumFrequency * pow(maximumFrequency / minimumFrequency, normalized)
+            let linScale = minimumFrequency + normalized * (maximumFrequency - minimumFrequency)
+            let centerFrequency = 0.91 * logScale + 0.09 * linScale
+
+            let normalizedFreq = (centerFrequency - minimumFrequency) / (maximumFrequency - minimumFrequency)
+            let dbAdjustment = -8.0 + 16.0 * normalizedFreq
+            let equalizationGain = pow(10.0, dbAdjustment / 20.0)
+
+            let content: String
+            switch centerFrequency {
+            case ..<100: content = "Sub-bass, kick drum"
+            case 100..<200: content = "Bass, low vocals"
+            case 200..<400: content = "Vocal fundamentals, warmth"
+            case 400..<800: content = "Vocal body, instrument clarity"
+            case 800..<2000: content = "Vocal presence, definition"
+            case 2000..<4000: content = "Vocal consonants, attack"
+            case 4000..<8000: content = "Brightness, sibilance"
+            case 8000...: content = "Air, shimmer, harmonics"
+            default: content = "Unknown"
+            }
+
+            print(String(format: "%3d | %7.0f Hz  | %+.1f dB (×%.2f) | %@",
+                         b, centerFrequency, dbAdjustment, equalizationGain, content))
+        }
+        print("==================================================\n")
+    }
+
+    private static var didPrintFrequencyDistribution = false
+
     private func installVisualizerTapIfNeeded() {
         guard !visualizerTapInstalled else { return }
         let mixer = audioEngine.mainMixerNode
         mixer.removeTap(onBus: 0)
         visualizerTapInstalled = false
         let scratch = VisualizerScratchBuffers()
+
         // Pass nil format to adopt the node's format; safer during graph changes.
         mixer.installTap(onBus: 0, bufferSize: 1024, format: nil) { [weak self] buffer, _ in
+
+            if !Self.didPrintFrequencyDistribution {
+                self?.printSpectrumFrequencyDistribution(sampleRate: Float(buffer.format.sampleRate), bars: 20)
+                Self.didPrintFrequencyDistribution = true
+            }
             // Compute raw levels off-main; avoid touching self here.
             let channelCount = Int(buffer.format.channelCount)
             guard channelCount > 0, let ptr = buffer.floatChannelData else { return }
@@ -845,11 +894,12 @@ class AudioPlayer: ObservableObject {
                         for b in 0..<bars {
                             let normalized = Float(b) / Float(max(1, bars - 1))
 
-                            // Hybrid frequency mapping: 91% log + 9% linear (Webamp-style, midpoint ~1,800 Hz)
+                            // Hybrid frequency mapping: 91% log + 9% linear (Webamp-style)
                             let logScale = minimumFrequency * pow(maximumFrequency / minimumFrequency, normalized)
                             let linScale = minimumFrequency + normalized * (maximumFrequency - minimumFrequency)
                             let centerFrequency = 0.91 * logScale + 0.09 * linScale
 
+                            // Goertzel algorithm for this frequency band
                             let omega = 2 * Float.pi * centerFrequency / sampleRate
                             let coefficient = 2 * cos(omega)
                             var s0: Float = 0
@@ -865,7 +915,20 @@ class AudioPlayer: ObservableObject {
                             }
                             let power = s1 * s1 + s2 * s2 - coefficient * s1 * s2
                             var value = sqrt(max(0, power)) / Float(sampleCount)
-                            value = min(1.0, value * 4.4)  // Increased from 4.0 for ~10% more activity
+
+                            // Apply frequency-dependent gain compensation (pinking filter)
+                            // Compensates for natural 10-20 dB bass dominance in music
+                            // Uses dB-based adjustment: -8 dB (bass) to +8 dB (treble)
+                            let normalizedFreq = (centerFrequency - minimumFrequency) / (maximumFrequency - minimumFrequency)
+                            let dbAdjustment = -8.0 + 16.0 * normalizedFreq  // -8 dB to +8 dB range
+                            let equalizationGain = pow(10.0, dbAdjustment / 20.0)  // Convert dB to linear gain
+
+                            // Apply equalization and overall sensitivity boost
+                            // - Bass (50 Hz): -8 dB = 0.40x (reduce 60%)
+                            // - Mid (1 kHz): 0 dB = 1.0x (no change)
+                            // - Treble (16 kHz): +8 dB = 2.5x (boost 250%)
+                            value *= equalizationGain
+                            value = min(1.0, value * 15.0)  // Overall gain tuned for good visibility at normal volume
                             spectrum[b] = value
                         }
                     } else {
