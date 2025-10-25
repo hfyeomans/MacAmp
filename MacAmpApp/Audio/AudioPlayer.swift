@@ -192,17 +192,15 @@ class AudioPlayer: ObservableObject {
     // MARK: - Track Management
 
     func addTrack(url: URL) {
-        print("DEBUG AudioPlayer: addTrack() called with: \(url.path)")
         let normalizedURL = url.standardizedFileURL
-        print("DEBUG AudioPlayer: Normalized URL: \(normalizedURL.path)")
 
         let duplicateInPlaylist = playlist.contains { $0.url.standardizedFileURL == normalizedURL }
         if duplicateInPlaylist || pendingTrackURLs.contains(normalizedURL) {
-            print("DEBUG AudioPlayer: Track already pending or in playlist: \(normalizedURL.lastPathComponent)")
+            print("AudioPlayer: Track already pending or in playlist: \(normalizedURL.lastPathComponent)")
             return
         }
 
-        print("DEBUG AudioPlayer: Adding track from \(normalizedURL.lastPathComponent)")
+        print("AudioPlayer: Adding track from \(normalizedURL.lastPathComponent)")
         pendingTrackURLs.insert(normalizedURL)
 
         let placeholder = Track(
@@ -213,13 +211,11 @@ class AudioPlayer: ObservableObject {
         )
 
         let shouldAutoplay = currentTrack == nil
-        print("DEBUG AudioPlayer: shouldAutoplay = \(shouldAutoplay)")
 
         playlist.append(placeholder)
-        print("DEBUG AudioPlayer: Queued placeholder '\(placeholder.title)' (total: \(playlist.count) tracks)")
+        print("AudioPlayer: Queued placeholder '\(placeholder.title)' (total: \(playlist.count) tracks)")
 
         if shouldAutoplay {
-            print("DEBUG AudioPlayer: Auto-playing first track")
             playTrack(track: placeholder)
         }
 

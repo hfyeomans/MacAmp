@@ -478,41 +478,30 @@ struct WinampPlaylistWindow: View {
         openPanel.title = "Add Files to Playlist"
         openPanel.message = "Select audio files or playlists"
 
-        print("DEBUG: openFileDialog() called")
         openPanel.begin { response in
-            print("DEBUG: File dialog response: \(response == .OK ? "OK" : "Cancel")")
             if response == .OK {
-                print("DEBUG: Selected \(openPanel.urls.count) file(s)")
-                // CRITICAL FIX: NSOpenPanel.begin callback is NOT on MainActor
+                // CRITICAL: NSOpenPanel.begin callback is NOT on MainActor
                 // Must dispatch to main thread before calling @MainActor methods
                 Task { @MainActor [audioPlayer] in
                     for url in openPanel.urls {
-                        print("DEBUG: Processing file: \(url.lastPathComponent)")
                         // Check if this is an M3U playlist
                         let fileExtension = url.pathExtension.lowercased()
-                        print("DEBUG: File extension: '\(fileExtension)'")
                         if fileExtension == "m3u" || fileExtension == "m3u8" {
-                            print("DEBUG: Detected M3U playlist, calling loadM3UPlaylist()")
                             do {
                                 let entries = try M3UParser.parse(fileURL: url)
-                                print("DEBUG: M3U: Loaded \(entries.count) entries from \(url.lastPathComponent)")
+                                print("M3U: Loaded \(entries.count) entries from \(url.lastPathComponent)")
 
-                                for (index, entry) in entries.enumerated() {
-                                    print("DEBUG: Entry \(index + 1): URL=\(entry.url.path), isStream=\(entry.isRemoteStream)")
+                                for entry in entries {
                                     if entry.isRemoteStream {
                                         // Log remote streams for now - will be handled by P5 (Internet Radio)
-                                        print("DEBUG: M3U: Found stream: \(entry.title ?? entry.url.absoluteString)")
+                                        print("M3U: Found stream: \(entry.title ?? entry.url.absoluteString)")
                                         // TODO: Add to internet radio library when P5 is implemented
                                     } else {
-                                        print("DEBUG: M3U: Adding local file to playlist: \(entry.url.lastPathComponent)")
                                         // Add local file to playlist
                                         audioPlayer.addTrack(url: entry.url)
-                                        print("DEBUG: audioPlayer.addTrack() completed for: \(entry.url.lastPathComponent)")
                                     }
                                 }
-                                print("DEBUG: M3U loading completed successfully")
                             } catch {
-                                print("DEBUG: M3U loading FAILED with error: \(error)")
                                 // Show error alert
                                 let alert = NSAlert()
                                 alert.messageText = "Failed to Load M3U Playlist"
@@ -522,7 +511,6 @@ struct WinampPlaylistWindow: View {
                                 alert.runModal()
                             }
                         } else {
-                            print("DEBUG: Regular audio file, calling audioPlayer.addTrack()")
                             // Regular audio file
                             audioPlayer.addTrack(url: url)
                         }
