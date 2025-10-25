@@ -788,6 +788,8 @@ class AudioPlayer: ObservableObject {
         mixer.removeTap(onBus: 0)
         visualizerTapInstalled = false
         let scratch = VisualizerScratchBuffers()
+        // Capture frequency mapping mode before entering audio thread closure
+        let freqMapping = AppSettings.instance().spectrumFrequencyMapping
         // Pass nil format to adopt the node's format; safer during graph changes.
         mixer.installTap(onBus: 0, bufferSize: 1024, format: nil) { [weak self] buffer, _ in
             // Compute raw levels off-main; avoid touching self here.
@@ -843,7 +845,22 @@ class AudioPlayer: ObservableObject {
                         let maximumFrequency: Float = min(16000, sampleRate * 0.45)
                         for b in 0..<bars {
                             let normalized = Float(b) / Float(max(1, bars - 1))
-                            let centerFrequency = minimumFrequency * pow(maximumFrequency / minimumFrequency, normalized)
+
+                            // Calculate center frequency based on selected mapping mode
+                            let centerFrequency: Float
+                            switch freqMapping {
+                            case .logarithmic:
+                                // Original: Pure logarithmic (midpoint ~758 Hz)
+                                centerFrequency = minimumFrequency * pow(maximumFrequency / minimumFrequency, normalized)
+                            case .adjustedLog:
+                                // Adjusted: Gentler curve (midpoint ~1,200 Hz)
+                                centerFrequency = minimumFrequency * pow(maximumFrequency / minimumFrequency, pow(normalized, 0.7))
+                            case .hybrid:
+                                // Hybrid: 91% log + 9% linear (midpoint ~1,800 Hz, Webamp-style)
+                                let logScale = minimumFrequency * pow(maximumFrequency / minimumFrequency, normalized)
+                                let linScale = minimumFrequency + normalized * (maximumFrequency - minimumFrequency)
+                                centerFrequency = 0.91 * logScale + 0.09 * linScale
+                            }
                             let omega = 2 * Float.pi * centerFrequency / sampleRate
                             let coefficient = 2 * cos(omega)
                             var s0: Float = 0
@@ -984,6 +1001,7 @@ class AudioPlayer: ObservableObject {
     }
     
     // MARK: - Visualizer Support
+
     func getFrequencyData(bands: Int) -> [Float] {
         // Return normalized frequency data for spectrum analyzer
         // Map our 20 visualizer levels to the requested number of bands

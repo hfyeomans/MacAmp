@@ -5,9 +5,25 @@ import UniformTypeIdentifiers
 struct AppCommands: Commands {
     let dockingController: DockingController
     let audioPlayer: AudioPlayer
+    @ObservedObject var settings: AppSettings
     @Environment(\.openWindow) private var openWindow
 
     var body: some Commands {
+        CommandMenu("View") {
+            Menu("Spectrum Frequency Mapping") {
+                ForEach(SpectrumFrequencyMapping.allCases, id: \.self) { mode in
+                    Button(action: { settings.spectrumFrequencyMapping = mode }) {
+                        HStack {
+                            Text(mode.displayName)
+                            if settings.spectrumFrequencyMapping == mode {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         CommandMenu("Windows") {
             Button(dockingController.showMain ? "Hide Main" : "Show Main") { dockingController.toggleMain() }
                 .keyboardShortcut("1", modifiers: [.command, .shift])

@@ -1,12 +1,35 @@
 import Foundation
 import SwiftUI
 
+/// Spectrum analyzer frequency mapping modes
+enum SpectrumFrequencyMapping: String, CaseIterable, Codable {
+    case logarithmic = "logarithmic"
+    case adjustedLog = "adjustedLog"
+    case hybrid = "hybrid"
+
+    var displayName: String {
+        switch self {
+        case .logarithmic: return "Logarithmic (Original)"
+        case .adjustedLog: return "Adjusted Log (Balanced)"
+        case .hybrid: return "Hybrid (Webamp-style)"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .logarithmic: return "Original logarithmic scaling - bass-focused"
+        case .adjustedLog: return "Gentler curve - more mid-range representation"
+        case .hybrid: return "91% log + 9% linear - matches Winamp feel"
+        }
+    }
+}
+
 /// Material integration levels for Liquid Glass UI support
 enum MaterialIntegrationLevel: String, CaseIterable, Codable {
     case classic = "classic"
-    case hybrid = "hybrid" 
+    case hybrid = "hybrid"
     case modern = "modern"
-    
+
     var displayName: String {
         switch self {
         case .classic: return "Classic"
@@ -14,7 +37,7 @@ enum MaterialIntegrationLevel: String, CaseIterable, Codable {
         case .modern: return "Modern"
         }
     }
-    
+
     var description: String {
         switch self {
         case .classic: return "Traditional Winamp appearance with custom backgrounds"
@@ -27,21 +50,28 @@ enum MaterialIntegrationLevel: String, CaseIterable, Codable {
 /// Global app settings for MacAmp
 @MainActor
 final class AppSettings: ObservableObject {
+    @Published var spectrumFrequencyMapping: SpectrumFrequencyMapping {
+        didSet {
+            UserDefaults.standard.set(spectrumFrequencyMapping.rawValue, forKey: "SpectrumFrequencyMapping")
+        }
+    }
+
     @Published var materialIntegration: MaterialIntegrationLevel {
         didSet {
             UserDefaults.standard.set(materialIntegration.rawValue, forKey: "MaterialIntegration")
         }
     }
-    
+
     @Published var enableLiquidGlass: Bool {
         didSet {
             UserDefaults.standard.set(enableLiquidGlass, forKey: "EnableLiquidGlass")
         }
     }
-    
+
     private static let shared = AppSettings()
-    
+
     private init() {
+        self.spectrumFrequencyMapping = Self.loadSpectrumMapping()
         self.materialIntegration = Self.loadMaterialIntegration()
         self.enableLiquidGlass = Self.loadLiquidGlassSetting()
     }
@@ -85,6 +115,14 @@ final class AppSettings: ObservableObject {
     /// Directory for user-installed skins
     static func userSkinsDirectory(fileManager: FileManager = .default) throws -> URL {
         try ensureSkinsDirectory(fileManager: fileManager)
+    }
+
+    private static func loadSpectrumMapping() -> SpectrumFrequencyMapping {
+        guard let savedRaw = UserDefaults.standard.string(forKey: "SpectrumFrequencyMapping"),
+              let saved = SpectrumFrequencyMapping(rawValue: savedRaw) else {
+            return .hybrid  // Default to webamp-style hybrid
+        }
+        return saved
     }
 
     private static func loadMaterialIntegration() -> MaterialIntegrationLevel {
