@@ -865,7 +865,7 @@ class AudioPlayer: ObservableObject {
                             }
                             let power = s1 * s1 + s2 * s2 - coefficient * s1 * s2
                             var value = sqrt(max(0, power)) / Float(sampleCount)
-                            value = min(1.0, value * 4.0)
+                            value = min(1.0, value * 4.4)  // Increased from 4.0 for ~10% more activity
                             spectrum[b] = value
                         }
                     } else {
