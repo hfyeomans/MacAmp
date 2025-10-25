@@ -97,6 +97,7 @@ class AudioPlayer: ObservableObject {
     private var visualizerTapInstalled = false
     private var visualizerPeaks: [Float] = Array(repeating: 0.0, count: 20)
     private var lastUpdateTime: CFAbsoluteTime = CFAbsoluteTimeGetCurrent()
+    private var lastLoggedFreqMode: SpectrumFrequencyMapping? = nil
     @Published var useSpectrumVisualizer: Bool = true
     @Published var visualizerSmoothing: Float = 0.6 // 0..1 (higher = smoother)
     @Published var visualizerPeakFalloff: Float = 1.2 // units per second
@@ -788,8 +789,6 @@ class AudioPlayer: ObservableObject {
         mixer.removeTap(onBus: 0)
         visualizerTapInstalled = false
         let scratch = VisualizerScratchBuffers()
-        // Capture frequency mapping mode before entering audio thread closure
-        let freqMapping = AppSettings.instance().spectrumFrequencyMapping
         // Pass nil format to adopt the node's format; safer during graph changes.
         mixer.installTap(onBus: 0, bufferSize: 1024, format: nil) { [weak self] buffer, _ in
             // Compute raw levels off-main; avoid touching self here.
@@ -843,6 +842,17 @@ class AudioPlayer: ObservableObject {
                     if sampleCount > 0 {
                         let minimumFrequency: Float = 50
                         let maximumFrequency: Float = min(16000, sampleRate * 0.45)
+                        // Read current mapping mode on main thread (safe - read-only atomic access)
+                        let freqMapping = DispatchQueue.main.sync { AppSettings.instance().spectrumFrequencyMapping }
+
+                        // Debug: Log mode changes to verify real-time switching
+                        if let selfRef = self, selfRef.lastLoggedFreqMode != freqMapping {
+                            DispatchQueue.main.async { [weak self] in
+                                self?.lastLoggedFreqMode = freqMapping
+                                print("SPECTRUM: Mode = \(freqMapping.displayName) | Midpoint ≈ \(freqMapping == .logarithmic ? "758 Hz" : freqMapping == .adjustedLog ? "1200 Hz" : "1800 Hz")")
+                            }
+                        }
+
                         for b in 0..<bars {
                             let normalized = Float(b) / Float(max(1, bars - 1))
 
