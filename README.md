@@ -10,15 +10,17 @@ MacAmp is a SwiftUI-based audio player for macOS that recreates the iconic deskt
 
 ### Key Features
 
-- 🎨 **Full Skin Support** - Load and switch between classic `.wsz` skins
+- 🎨 **Full Skin Support** - Load and switch between classic `.wsz` skins with VISCOLOR.TXT gradients
 - 🎵 **Native Audio Engine** - Built on AVFoundation for optimal macOS performance
 - 🎚️ **10-Band Equalizer** - Professional audio control with 17 built-in presets
-- 📊 **Real-time Spectrum Analyzer** - Visual audio feedback
+- 📊 **Improved Spectrum Analyzer** - Webamp-style balanced frequency distribution with skin-specific colors
+- 📋 **M3U Playlist Support** - Load M3U/M3U8 playlist files with local audio tracks
 - 🎛️ **Advanced Controls** - Volume, balance, position seeking, shuffle, and repeat
-- 🪟 **Multi-Window Interface** - Main player, equalizer, and playlist windows
+- 🪟 **Multi-Window Interface** - Main player, equalizer, and playlist windows with shade modes
 - 🎯 **Native macOS Integration** - Borderless windows with custom title bars
 - ⚡ **Modern SwiftUI** - Utilizes WindowDragGesture and latest macOS APIs
 - 🔄 **Dynamic Skin Switching** - Hot-swap skins without restart
+- 📦 **Distribution Ready** - Developer ID signed builds for /Applications installation
 
 ## Requirements
 
@@ -74,10 +76,11 @@ Available presets: Classical, Club, Dance, Full Bass, Full Bass & Treble, Full T
 ### Playlist
 
 1. **Open Playlist** - Press `Cmd+Shift+P` or click the PL button
-2. **Add Files** - Click the + button to add audio files
-3. **Remove** - Select tracks and click the - button
-4. **Shuffle** - Click the shuffle button to randomize playback order
-5. **Repeat** - Click the repeat button to loop playlist
+2. **Add Files** - Click the + button to add audio files or M3U playlists
+3. **Load M3U Playlists** - Select .m3u or .m3u8 files to load multiple tracks
+4. **Remove** - Select tracks and click the - button
+5. **Shuffle** - Click the shuffle button to randomize playback order
+6. **Repeat** - Click the repeat button to loop playlist
 
 ### Skins
 
@@ -150,13 +153,25 @@ MacAmp/
 | `←` / `→` | Previous/Next track |
 | `↑` / `↓` | Volume up/down |
 
-## Supported Audio Formats
+## Supported Formats
 
+### Audio Files
 - MP3 (all bitrates)
 - FLAC (lossless)
 - AAC/M4A
 - WAV/AIFF
 - Apple Lossless (ALAC)
+
+### Playlists
+- M3U (standard playlists)
+- M3U8 (extended format with metadata)
+- Local file paths (absolute and relative)
+- Remote stream URLs (internet radio - P5 planned)
+
+### Skins
+- WSZ (ZIP-based Winamp skins)
+- VISCOLOR.TXT gradients
+- Classic skin sprite sheets
 
 ## Technical Highlights
 
