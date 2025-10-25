@@ -1,13 +1,14 @@
 import SwiftUI
+import AppKit
+import UniformTypeIdentifiers
 
 struct AppCommands: Commands {
     let dockingController: DockingController
-    let skinManager: SkinManager
-    @StateObject private var settings = AppSettings.instance()
+    let audioPlayer: AudioPlayer
     @Environment(\.openWindow) private var openWindow
 
     var body: some Commands {
-        CommandMenu("View") {
+        CommandMenu("Windows") {
             Button(dockingController.showMain ? "Hide Main" : "Show Main") { dockingController.toggleMain() }
                 .keyboardShortcut("1", modifiers: [.command, .shift])
             Button(dockingController.showPlaylist ? "Hide Playlist" : "Show Playlist") { dockingController.togglePlaylist() }
@@ -28,25 +29,33 @@ struct AppCommands: Commands {
             // Windows now stack vertically in fixed order: Main -> EQ -> Playlist
         }
         
-        CommandMenu("Appearance") {
-            Menu("Material Integration: \(settings.materialIntegration.displayName)") {
-                ForEach(MaterialIntegrationLevel.allCases, id: \.rawValue) { level in
-                    Button(level.displayName) {
-                        settings.materialIntegration = level
-                    }
-                    .help(level.description)
-                }
+        CommandGroup(replacing: .newItem) {
+            Button("Open Files...") {
+                presentOpenPanel()
             }
+            .keyboardShortcut("o", modifiers: [.command])
+        }
 
-            Toggle("Enable Liquid Glass", isOn: $settings.enableLiquidGlass)
-                .help("Enable modern macOS material effects")
-
-            Divider()
-
+        CommandGroup(replacing: .appSettings) {
             Button("Preferences...") {
                 openWindow(id: "preferences")
             }
-            .keyboardShortcut(",")
+            .keyboardShortcut(",", modifiers: [.command])
+        }
+    }
+
+    private func presentOpenPanel() {
+        let panel = NSOpenPanel()
+        panel.title = "Open Audio Files"
+        panel.allowedContentTypes = [.audio]
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = false
+
+        panel.begin { response in
+            guard response == .OK else { return }
+            for url in panel.urls {
+                audioPlayer.addTrack(url: url)
+            }
         }
     }
 }
