@@ -23,6 +23,37 @@
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
 
+    <!-- UTI Import Declarations: Define M3U playlist format -->
+    <key>UTImportedTypeDeclarations</key>
+    <array>
+        <dict>
+            <key>UTTypeIdentifier</key>
+            <string>public.m3u-playlist</string>
+            <key>UTTypeDescription</key>
+            <string>M3U Playlist</string>
+            <key>UTTypeConformsTo</key>
+            <array>
+                <string>public.text</string>
+                <string>public.playlist</string>
+            </array>
+            <key>UTTypeTagSpecification</key>
+            <dict>
+                <key>public.filename-extension</key>
+                <array>
+                    <string>m3u</string>
+                    <string>m3u8</string>
+                </array>
+                <key>public.mime-type</key>
+                <array>
+                    <string>audio/x-mpegurl</string>
+                    <string>audio/mpegurl</string>
+                    <string>application/x-mpegurl</string>
+                    <string>application/vnd.apple.mpegurl</string>
+                </array>
+            </dict>
+        </dict>
+    </array>
+
     <!-- App Category -->
     <key>LSApplicationCategoryType</key>
     <string>public.app-category.music</string>
