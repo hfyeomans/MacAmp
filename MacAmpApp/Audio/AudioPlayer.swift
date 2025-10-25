@@ -841,9 +841,15 @@ class AudioPlayer: ObservableObject {
                     if sampleCount > 0 {
                         let minimumFrequency: Float = 50
                         let maximumFrequency: Float = min(16000, sampleRate * 0.45)
+
                         for b in 0..<bars {
                             let normalized = Float(b) / Float(max(1, bars - 1))
-                            let centerFrequency = minimumFrequency * pow(maximumFrequency / minimumFrequency, normalized)
+
+                            // Hybrid frequency mapping: 91% log + 9% linear (Webamp-style, midpoint ~1,800 Hz)
+                            let logScale = minimumFrequency * pow(maximumFrequency / minimumFrequency, normalized)
+                            let linScale = minimumFrequency + normalized * (maximumFrequency - minimumFrequency)
+                            let centerFrequency = 0.91 * logScale + 0.09 * linScale
+
                             let omega = 2 * Float.pi * centerFrequency / sampleRate
                             let coefficient = 2 * cos(omega)
                             var s0: Float = 0
@@ -859,7 +865,7 @@ class AudioPlayer: ObservableObject {
                             }
                             let power = s1 * s1 + s2 * s2 - coefficient * s1 * s2
                             var value = sqrt(max(0, power)) / Float(sampleCount)
-                            value = min(1.0, value * 4.0)
+                            value = min(1.0, value * 4.4)  // Increased from 4.0 for ~10% more activity
                             spectrum[b] = value
                         }
                     } else {
@@ -984,6 +990,7 @@ class AudioPlayer: ObservableObject {
     }
     
     // MARK: - Visualizer Support
+
     func getFrequencyData(bands: Int) -> [Float] {
         // Return normalized frequency data for spectrum analyzer
         // Map our 20 visualizer levels to the requested number of bands

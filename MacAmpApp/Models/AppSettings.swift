@@ -4,9 +4,9 @@ import SwiftUI
 /// Material integration levels for Liquid Glass UI support
 enum MaterialIntegrationLevel: String, CaseIterable, Codable {
     case classic = "classic"
-    case hybrid = "hybrid" 
+    case hybrid = "hybrid"
     case modern = "modern"
-    
+
     var displayName: String {
         switch self {
         case .classic: return "Classic"
@@ -14,7 +14,7 @@ enum MaterialIntegrationLevel: String, CaseIterable, Codable {
         case .modern: return "Modern"
         }
     }
-    
+
     var description: String {
         switch self {
         case .classic: return "Traditional Winamp appearance with custom backgrounds"
@@ -32,15 +32,15 @@ final class AppSettings: ObservableObject {
             UserDefaults.standard.set(materialIntegration.rawValue, forKey: "MaterialIntegration")
         }
     }
-    
+
     @Published var enableLiquidGlass: Bool {
         didSet {
             UserDefaults.standard.set(enableLiquidGlass, forKey: "EnableLiquidGlass")
         }
     }
-    
+
     private static let shared = AppSettings()
-    
+
     private init() {
         self.materialIntegration = Self.loadMaterialIntegration()
         self.enableLiquidGlass = Self.loadLiquidGlassSetting()

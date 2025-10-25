@@ -64,17 +64,17 @@ struct PreferencesView: View {
                 .padding()
             }
             .conditionalGroupBoxBackground(enabled: settings.shouldUseContainerBackground)
-            
+
             Spacer()
-            
+
             HStack {
                 Button("Restore Defaults") {
                     settings.enableLiquidGlass = true
                     settings.materialIntegration = .hybrid
                 }
-                
+
                 Spacer()
-                
+
                 Button("Done") {
                     dismiss()
                 }
