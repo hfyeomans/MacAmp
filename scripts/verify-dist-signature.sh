@@ -5,7 +5,12 @@
 
 set -e
 
-DIST_APP="/Users/hank/dev/src/MacAmp/dist/MacAmp.app"
+# Get the repository root (parent of scripts directory)
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Allow override via command-line argument or environment variable
+DIST_APP="${1:-${DIST_APP:-$REPO_ROOT/dist/MacAmp.app}}"
 
 echo "=================================================="
 echo "MacAmp Distribution Signature Verification"
@@ -14,7 +19,14 @@ echo ""
 
 if [ ! -d "$DIST_APP" ]; then
     echo "ERROR: $DIST_APP does not exist"
-    echo "Run: xcodebuild -project MacAmpApp.xcodeproj -scheme MacAmpApp -configuration Release build"
+    echo ""
+    echo "Usage: $0 [path-to-MacAmp.app]"
+    echo ""
+    echo "If no path is provided, defaults to: \$REPO_ROOT/dist/MacAmp.app"
+    echo "You can also set DIST_APP environment variable"
+    echo ""
+    echo "To build the distribution app, run:"
+    echo "  xcodebuild -project MacAmpApp.xcodeproj -scheme MacAmpApp -configuration Release build"
     exit 1
 fi
 
