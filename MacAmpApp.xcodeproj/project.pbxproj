@@ -237,7 +237,6 @@
 				2697386ECDD0CA030FD7D5C8 /* Sources */,
 				99343DBA52E4D9CABDAC849D /* Resources */,
 				744B8AD2A52687019623EAA9 /* Frameworks */,
-				A1B2C3D4E5F6789012345678 /* Copy to dist */,
 			);
 			buildRules = (
 			);
@@ -340,24 +339,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
-
-/* Begin PBXShellScriptBuildPhase section */
-		A1B2C3D4E5F6789012345678 /* Copy to dist */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-			);
-			name = "Copy to dist";
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "# Copy Release build to dist directory\nif [ \"${CONFIGURATION}\" = \"Release\" ]; then\n    echo \"Copying ${BUILT_PRODUCTS_DIR}/${PRODUCT_NAME}.app to ${PROJECT_DIR}/dist/\"\n    mkdir -p \"${PROJECT_DIR}/dist\"\n    /usr/bin/ditto \"${BUILT_PRODUCTS_DIR}/${PRODUCT_NAME}.app\" \"${PROJECT_DIR}/dist/${PRODUCT_NAME}.app\"\n    echo \"Copy completed successfully\"\nfi\n";
-		};
-/* End PBXShellScriptBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
 		1C70FC63A02D0BF514D3DA6C /* Release */ = {
