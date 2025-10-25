@@ -25,26 +25,34 @@ enum M3UParseError: Error, LocalizedError {
 struct M3UParser {
     /// Parse an M3U file from disk
     static func parse(fileURL: URL) throws -> [M3UEntry] {
+        print("DEBUG M3UParser: Parsing file at: \(fileURL.path)")
         guard FileManager.default.fileExists(atPath: fileURL.path) else {
+            print("DEBUG M3UParser: File not found!")
             throw M3UParseError.fileNotFound
         }
 
+        print("DEBUG M3UParser: File exists, reading content...")
         guard let content = try? String(contentsOf: fileURL, encoding: .utf8) else {
+            print("DEBUG M3UParser: Encoding error!")
             throw M3UParseError.encodingError
         }
 
+        print("DEBUG M3UParser: Content loaded, length: \(content.count) chars")
+        print("DEBUG M3UParser: First 200 chars: \(String(content.prefix(200)))")
         return try parse(content: content, relativeTo: fileURL)
     }
 
     /// Parse M3U content from a string
     static func parse(content: String, relativeTo baseURL: URL? = nil) throws -> [M3UEntry] {
+        print("DEBUG M3UParser: parse() called, baseURL: \(baseURL?.path ?? "nil")")
         var entries: [M3UEntry] = []
         let lines = content.components(separatedBy: .newlines)
+        print("DEBUG M3UParser: Split into \(lines.count) lines")
 
         var currentTitle: String?
         var currentDuration: Int?
 
-        for line in lines {
+        for (lineNum, line) in lines.enumerated() {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
 
             // Skip empty lines
@@ -62,12 +70,14 @@ struct M3UParser {
                     if parts.count > 1 {
                         currentTitle = parts.dropFirst().joined(separator: ",").trimmingCharacters(in: .whitespaces)
                     }
+                    print("DEBUG M3UParser: Line \(lineNum): EXTINF - title: \(currentTitle ?? "nil"), duration: \(currentDuration ?? -1)")
                 }
                 // Skip other comments (including #EXTM3U header)
                 continue
             }
 
             // This is a URL/path line
+            print("DEBUG M3UParser: Line \(lineNum): URL/path line: '\(trimmed)'")
             if let url = resolveURL(trimmed, relativeTo: baseURL) {
                 let entry = M3UEntry(
                     url: url,
@@ -75,14 +85,19 @@ struct M3UParser {
                     duration: currentDuration
                 )
                 entries.append(entry)
+                print("DEBUG M3UParser: Added entry: \(url.path)")
 
                 // Reset metadata for next entry
                 currentTitle = nil
                 currentDuration = nil
+            } else {
+                print("DEBUG M3UParser: WARNING - Failed to resolve URL: '\(trimmed)'")
             }
         }
 
+        print("DEBUG M3UParser: Parsed \(entries.count) entries total")
         guard !entries.isEmpty else {
+            print("DEBUG M3UParser: Empty playlist!")
             throw M3UParseError.emptyPlaylist
         }
 
