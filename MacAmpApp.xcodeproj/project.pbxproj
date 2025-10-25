@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		00818CBB70425D395EE2B862 /* SkinnedText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DCDB09162242F5E73FF35F6 /* SkinnedText.swift */; };
 		09ABEB45DA77F1178E0F5317 /* SkinManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97F3E1419E231E886A674A64 /* SkinManager.swift */; };
+		0E00109AB5375E26C755CA89 /* M3UEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31F32D02E5A363D621708145 /* M3UEntry.swift */; };
 		11C6F38CB7C5AADA7B5AFE57 /* VisualizerOptions.swift in Sources */ = {isa = PBXBuildFile; fileRef = B361EDCFD1F533FD16157EC1 /* VisualizerOptions.swift */; };
 		2A33850C38AA921D5659ECA7 /* AudioPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC875DDD2BE621229D463CB9 /* AudioPlayer.swift */; };
 		2BEEA991452D4A86CD1AC9F7 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = EA5D7D010AE0DE961C9470AC /* ZIPFoundation */; };
@@ -26,28 +27,27 @@
 		77129ADBBBC75DF6BA1EC1C8 /* SnapUtils.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43358BDD8D9B537C9109DF62 /* SnapUtils.swift */; };
 		7C97F7855F700CA55821BFD1 /* WindowSnapManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FF88FFEFCC2A65D88029ADB /* WindowSnapManager.swift */; };
 		8375D760955EEB75F8311F11 /* SimpleSpriteImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77A0C7921140C73AB173A5E8 /* SimpleSpriteImage.swift */; };
-		AC7BAF317F478CEB2F36F3DB /* PlaylistTimeText.swift in Sources */ = {isa = PBXBuildFile; fileRef = CABDEB04D5D23C3DAAAFEEFC /* PlaylistTimeText.swift */; };
 		878F770AF1608311F0C9BA09 /* WindowAccessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8A2F2CBA9954B0B144DA072 /* WindowAccessor.swift */; };
+		8806F9498EDA22C217C91D30 /* M3UParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57E5034E9E8C3E0CDB64AC2D /* M3UParser.swift */; };
 		93E376C1200386F617D37563 /* Skin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93E9913A6D48005436618474 /* Skin.swift */; };
 		93EBD6FADA9285C58A329F5C /* VisColorParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6D5886DD239C58D98785419 /* VisColorParser.swift */; };
 		9C74995B7081637EB964D3AA /* SkinnedBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12C0A7D97E8D3B2E715D4EA0 /* SkinnedBanner.swift */; };
 		9C8F5A2DD13F19EDAABA8130 /* UnifiedDockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 590BF37A22DF8EAB2B27DE50 /* UnifiedDockView.swift */; };
 		AA399B95993DF8EB2CD3CCA3 /* Winamp.wsz in Resources */ = {isa = PBXBuildFile; fileRef = A5F876BD10A8CBDE81C28D51 /* Winamp.wsz */; };
 		AB123DEF4E567890ABCDEF12 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD234EF56789ABCD01234567 /* AppSettings.swift */; };
+		AC7BAF317F478CEB2F36F3DB /* PlaylistTimeText.swift in Sources */ = {isa = PBXBuildFile; fileRef = CABDEB04D5D23C3DAAAFEEFC /* PlaylistTimeText.swift */; };
 		ADDBF8E53028E97A7A005307 /* WinampPlaylistWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75C52A558EFD4C84BBA21F92 /* WinampPlaylistWindow.swift */; };
 		B3A2FD6D778A60B9F0D92258 /* AppCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7CCE1500578ECAEED8FAA42 /* AppCommands.swift */; };
 		B9F51DB9B3BAF8611108D699 /* MacAmpApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C32D1ED0603B1A1497664E37 /* MacAmpApp.swift */; };
 		BB499C96994EF9FC3DE4DDB4 /* Internet-Archive.wsz in Resources */ = {isa = PBXBuildFile; fileRef = B6G987CE11B9DCEF82D39E62 /* Internet-Archive.wsz */; };
 		BC234EF567890ABCD1234567 /* PreferencesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE345F678901BCDE12345678 /* PreferencesView.swift */; };
 		C4B3FE7E889G20H9G1F93269 /* SkinsCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5C4GF8F990H31I0H2G04370 /* SkinsCommands.swift */; };
-		CFF2E4B6A5D74592AA2B78CD /* PlaylistBitmapText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B08C7931E5A4A0A8D4F1B27 /* PlaylistBitmapText.swift */; };
 		C71871258DD93C12C88EBED2 /* SkinSprites.swift in Sources */ = {isa = PBXBuildFile; fileRef = E51E7515EE6862B4F445AC81 /* SkinSprites.swift */; };
 		CEB39A994DFFE2DCA8FDE7EF /* PresetsButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D258350F99A800B8CBF8AEA /* PresetsButton.swift */; };
+		CFF2E4B6A5D74592AA2B78CD /* PlaylistBitmapText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B08C7931E5A4A0A8D4F1B27 /* PlaylistBitmapText.swift */; };
 		D077337C4C05A6658475376F /* VisualizerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 499433D5A14F2C47C9EB0931 /* VisualizerView.swift */; };
 		EE878CCB3C1E4F7801C5430E /* DockingController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74EDF33D12E79F86166AF268 /* DockingController.swift */; };
 		FF66EE55DD44CC33BB22AA11 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA11BB22CC33DD44EE55FF66 /* Assets.xcassets */; };
-		0E00109AB5375E26C755CA89 /* M3UEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31F32D02E5A363D621708145 /* M3UEntry.swift */; };
-		8806F9498EDA22C217C91D30 /* M3UParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57E5034E9E8C3E0CDB64AC2D /* M3UParser.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -57,19 +57,20 @@
 		1883C37C0887C2C13F6C9563 /* PLEditParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PLEditParser.swift; sourceTree = "<group>"; };
 		195F00AABD5483A18861EC8A /* WindowSpec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowSpec.swift; sourceTree = "<group>"; };
 		2878CED72AA74CF1B0417AC5 /* EQPreset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EQPreset.swift; sourceTree = "<group>"; };
-		5B08C7931E5A4A0A8D4F1B27 /* PlaylistBitmapText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaylistBitmapText.swift; sourceTree = "<group>"; };
 		2D4BAA0F198BED23AAFABFEC /* ImageSlicing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageSlicing.swift; sourceTree = "<group>"; };
+		31F32D02E5A363D621708145 /* M3UEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = M3UEntry.swift; sourceTree = "<group>"; };
 		3D258350F99A800B8CBF8AEA /* PresetsButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresetsButton.swift; sourceTree = "<group>"; };
 		3DCDB09162242F5E73FF35F6 /* SkinnedText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkinnedText.swift; sourceTree = "<group>"; };
 		43358BDD8D9B537C9109DF62 /* SnapUtils.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapUtils.swift; sourceTree = "<group>"; };
 		499433D5A14F2C47C9EB0931 /* VisualizerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisualizerView.swift; sourceTree = "<group>"; };
 		4A489CA15E452302405E6FAE /* WinampEqualizerWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WinampEqualizerWindow.swift; sourceTree = "<group>"; };
+		57E5034E9E8C3E0CDB64AC2D /* M3UParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = M3UParser.swift; sourceTree = "<group>"; };
 		590BF37A22DF8EAB2B27DE50 /* UnifiedDockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnifiedDockView.swift; sourceTree = "<group>"; };
+		5B08C7931E5A4A0A8D4F1B27 /* PlaylistBitmapText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaylistBitmapText.swift; sourceTree = "<group>"; };
 		7324174AA2F7231F3B2508AE /* SpritePositions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpritePositions.swift; sourceTree = "<group>"; };
 		74EDF33D12E79F86166AF268 /* DockingController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DockingController.swift; sourceTree = "<group>"; };
 		75C52A558EFD4C84BBA21F92 /* WinampPlaylistWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WinampPlaylistWindow.swift; sourceTree = "<group>"; };
 		77A0C7921140C73AB173A5E8 /* SimpleSpriteImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleSpriteImage.swift; sourceTree = "<group>"; };
-		CABDEB04D5D23C3DAAAFEEFC /* PlaylistTimeText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaylistTimeText.swift; sourceTree = "<group>"; };
 		7FF88FFEFCC2A65D88029ADB /* WindowSnapManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowSnapManager.swift; sourceTree = "<group>"; };
 		93E9913A6D48005436618474 /* Skin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Skin.swift; sourceTree = "<group>"; };
 		97F3E1419E231E886A674A64 /* SkinManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkinManager.swift; sourceTree = "<group>"; };
@@ -83,6 +84,7 @@
 		BAA63D879B46D5FFF6BA8BE9 /* WinampVolumeSlider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WinampVolumeSlider.swift; sourceTree = "<group>"; };
 		BC875DDD2BE621229D463CB9 /* AudioPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlayer.swift; sourceTree = "<group>"; };
 		C32D1ED0603B1A1497664E37 /* MacAmpApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacAmpApp.swift; sourceTree = "<group>"; };
+		CABDEB04D5D23C3DAAAFEEFC /* PlaylistTimeText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaylistTimeText.swift; sourceTree = "<group>"; };
 		CD234EF56789ABCD01234567 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		D5C4GF8F990H31I0H2G04370 /* SkinsCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkinsCommands.swift; sourceTree = "<group>"; };
 		DE345F678901BCDE12345678 /* PreferencesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesView.swift; sourceTree = "<group>"; };
@@ -91,8 +93,6 @@
 		F8A2F2CBA9954B0B144DA072 /* WindowAccessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowAccessor.swift; sourceTree = "<group>"; };
 		FDF85EA8990A038079FC0CC3 /* EQF.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EQF.swift; sourceTree = "<group>"; };
 		b220e925d4d54168a0d0f84b /* SpriteResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpriteResolver.swift; sourceTree = "<group>"; };
-		31F32D02E5A363D621708145 /* M3UEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = M3UEntry.swift; sourceTree = "<group>"; };
-		57E5034E9E8C3E0CDB64AC2D /* M3UParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = M3UParser.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -237,6 +237,7 @@
 				2697386ECDD0CA030FD7D5C8 /* Sources */,
 				99343DBA52E4D9CABDAC849D /* Resources */,
 				744B8AD2A52687019623EAA9 /* Frameworks */,
+				A1B2C3D4E5F6789012345678 /* Copy to dist */,
 			);
 			buildRules = (
 			);
@@ -340,6 +341,24 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXShellScriptBuildPhase section */
+		A1B2C3D4E5F6789012345678 /* Copy to dist */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Copy to dist";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# Copy Release build to dist directory\nif [ \"${CONFIGURATION}\" = \"Release\" ]; then\n    echo \"Copying ${BUILT_PRODUCTS_DIR}/${PRODUCT_NAME}.app to ${PROJECT_DIR}/dist/\"\n    mkdir -p \"${PROJECT_DIR}/dist\"\n    /usr/bin/ditto \"${BUILT_PRODUCTS_DIR}/${PRODUCT_NAME}.app\" \"${PROJECT_DIR}/dist/${PRODUCT_NAME}.app\"\n    echo \"Copy completed successfully\"\nfi\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
 /* Begin XCBuildConfiguration section */
 		1C70FC63A02D0BF514D3DA6C /* Release */ = {
 			isa = XCBuildConfiguration;
@@ -347,14 +366,15 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				"ASSETCATALOG_COMPILER_APPICON_NAME[sdk=macosx*]" = AppIcon;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
-				CODE_SIGN_IDENTITY = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
 				CODE_SIGN_ENTITLEMENTS = MacAmpApp/MacAmp.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Developer ID Application";
+				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
-				CONFIGURATION_BUILD_DIR = "$(PROJECT_DIR)/dist";
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = AC3LGVEJJ8;
+				DEVELOPMENT_TEAM = "";
+				"DEVELOPMENT_TEAM[sdk=macosx*]" = AC3LGVEJJ8;
 				INFOPLIST_FILE = MacAmpApp/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = MacAmp;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.music";
@@ -503,9 +523,9 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				"ASSETCATALOG_COMPILER_APPICON_NAME[sdk=macosx*]" = AppIcon;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
+				CODE_SIGN_ENTITLEMENTS = MacAmpApp/MacAmp.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CODE_SIGN_ENTITLEMENTS = MacAmpApp/MacAmp.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
