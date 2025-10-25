@@ -470,18 +470,56 @@ struct WinampPlaylistWindow: View {
     
     private func openFileDialog() {
         let openPanel = NSOpenPanel()
-        openPanel.allowedContentTypes = [.audio]
+        // Use .playlist instead of .m3uPlaylist to allow all playlist formats
+        // This is more reliable than .m3uPlaylist and allows M3U, PLS, etc.
+        openPanel.allowedContentTypes = [.audio, .playlist]
         openPanel.allowsMultipleSelection = true
         openPanel.canChooseDirectories = false
+        openPanel.title = "Add Files to Playlist"
+        openPanel.message = "Select audio files or playlists"
 
         openPanel.begin { response in
             if response == .OK {
-                for url in openPanel.urls {
-                    audioPlayer.addTrack(url: url)
+                // CRITICAL: NSOpenPanel.begin callback is NOT on MainActor
+                // Must dispatch to main thread before calling @MainActor methods
+                Task { @MainActor [audioPlayer] in
+                    for url in openPanel.urls {
+                        // Check if this is an M3U playlist
+                        let fileExtension = url.pathExtension.lowercased()
+                        if fileExtension == "m3u" || fileExtension == "m3u8" {
+                            do {
+                                let entries = try M3UParser.parse(fileURL: url)
+                                print("M3U: Loaded \(entries.count) entries from \(url.lastPathComponent)")
+
+                                for entry in entries {
+                                    if entry.isRemoteStream {
+                                        // Log remote streams for now - will be handled by P5 (Internet Radio)
+                                        print("M3U: Found stream: \(entry.title ?? entry.url.absoluteString)")
+                                        // TODO: Add to internet radio library when P5 is implemented
+                                    } else {
+                                        // Add local file to playlist
+                                        audioPlayer.addTrack(url: entry.url)
+                                    }
+                                }
+                            } catch {
+                                // Show error alert
+                                let alert = NSAlert()
+                                alert.messageText = "Failed to Load M3U Playlist"
+                                alert.informativeText = error.localizedDescription
+                                alert.alertStyle = .warning
+                                alert.addButton(withTitle: "OK")
+                                alert.runModal()
+                            }
+                        } else {
+                            // Regular audio file
+                            audioPlayer.addTrack(url: url)
+                        }
+                    }
                 }
             }
         }
     }
+
     
     private func removeSelectedTrack() {
         guard let index = selectedTrackIndex,

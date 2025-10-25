@@ -223,22 +223,27 @@ class AudioPlayer: ObservableObject {
             guard let self else { return }
             defer { self.pendingTrackURLs.remove(normalizedURL) }
 
+            print("DEBUG AudioPlayer: Loading metadata for \(normalizedURL.lastPathComponent)")
             let track = await self.loadTrackMetadata(url: normalizedURL)
+            print("DEBUG AudioPlayer: Metadata loaded - title: '\(track.title)', artist: '\(track.artist)', duration: \(track.duration)s")
 
             if let index = self.playlist.firstIndex(where: { $0.id == placeholder.id }) {
+                print("DEBUG AudioPlayer: Updating placeholder at index \(index)")
                 self.playlist[index] = track
 
                 if self.currentTrack?.id == placeholder.id {
+                    print("DEBUG AudioPlayer: Updating current track metadata")
                     self.currentTrack = track
                     self.currentTitle = "\(track.title) - \(track.artist)"
                     self.currentDuration = track.duration
                     self.currentTrackURL = track.url
                 }
             } else if !self.playlist.contains(where: { $0.url.standardizedFileURL == normalizedURL }) {
+                print("DEBUG AudioPlayer: Appending track to playlist")
                 self.playlist.append(track)
             }
 
-            print("AudioPlayer: Added '\(track.title)' to playlist (total: \(self.playlist.count) tracks)")
+            print("DEBUG AudioPlayer: Added '\(track.title)' to playlist (total: \(self.playlist.count) tracks)")
         }
     }
 
