@@ -14,33 +14,90 @@
 2. **REM** - Remove tracks from playlist
 3. **SEL** - Selection operations
 4. **MISC** - Miscellaneous options
-5. **LIST OPTS** - List operations (may be same as MISC?)
+5. **LIST OPTS** - List operations
 
-### Menu Item Sprites (PLEDIT.BMP)
+### PLEDIT.BMP File Structure
 
-Each button has 3 menu items (12 total), each with normal/selected states:
+**File Details:**
+- **Dimensions:** 280 × 186 pixels
+- **Format:** 8-bit paletted BMP
+- **Button Area:** Y-coordinates 111-186 (bottom 75 pixels)
+- **Organization:** 5 button sections in columns, separated by 3px grey dividers
 
-#### ADD Menu (Column X:0, Selected at X:23)
-- **ADD URL** (0,111 / 23,111) - Add track from URL
-- **ADD DIR** (0,130 / 23,130) - Add directory of tracks
-- **ADD FILE** (0,149 / 23,149) - Add file(s) via file picker
+**Layout Pattern:**
+```
+[ADD Section] | [REM Section] | [SEL Section] | [MISC Section] | [LIST Section]
+X: 0-45      48 X: 54-99    100 X: 104-149  150 X: 154-199  200 X: 204-249
+   |  48px divider  |  50px divider  |  4px divider   |  4px divider   |
+```
 
-#### REM Menu (Column X:54, Selected at X:77)
-- **REM ALL** (54,111 / 77,111) - Remove all tracks
-- **CROP** (54,130 / 77,130) - Keep only selected tracks
-- **REM SEL** (54,149 / 77,149) - Remove selected tracks
+**Row Structure:**
+- **Row 1 (Y:111):** First menu item for each button
+- **Row 2 (Y:130):** Second menu item (19px spacing)
+- **Row 3 (Y:149):** Third menu item (19px spacing)
+- **Row 4 (Y:168):** Fourth menu item (REM menu only)
 
-#### SEL Menu (Column X:154, Selected at X:177)
-- **SORT LIST** (154,111 / 177,111) - Sort playlist
-- **FILE INFO** (154,130 / 177,130) - Show file information
-- **MISC OPTIONS** (154,149 / 177,149) - Miscellaneous options
+**State Pattern:**
+- **Normal State:** Lighter grey sprites
+- **Selected State:** Darker grey sprites (+23px X-offset)
 
-#### MISC Menu (Column X:204, Selected at X:227)
-- **NEW LIST** (204,111 / 227,111) - Clear and start new playlist
-- **SAVE LIST** (204,130 / 227,130) - Save playlist to file
-- **LOAD LIST** (204,149 / 227,149) - Load playlist from file
+### Menu Item Sprites (Complete Coordinates)
 
-All menu items: 22×18px
+Each button has 3-4 menu items, each with normal/selected states:
+
+#### ADD Menu (Column X:0, Normal / X:23, Selected)
+
+| Menu Item | Normal | Selected | Description |
+|-----------|---------|----------|-------------|
+| **ADD URL** | (0, 111, 22, 18) | (23, 111, 22, 18) | Add track from URL |
+| **ADD DIR** | (0, 130, 22, 18) | (23, 130, 22, 18) | Add directory of tracks |
+| **ADD FILE** | (0, 149, 22, 18) | (23, 149, 22, 18) | Add file(s) via file picker |
+
+#### REM Menu (Column X:54, Normal / X:77, Selected)
+
+| Menu Item | Normal | Selected | Description |
+|-----------|---------|----------|-------------|
+| **REM MISC** | (54, 111, 22, 18) | (77, 111, 22, 18) | Remove misc (not implemented) |
+| **REM ALL** | (54, 130, 22, 18) | (77, 130, 22, 18) | Remove all tracks |
+| **CROP** | (54, 149, 22, 18) | (77, 149, 22, 18) | Keep only selected tracks |
+| **REM SEL** | (54, 168, 22, 18) | (77, 168, 22, 18) | Remove selected tracks |
+
+**Note:** REM menu has 4 items (only menu with row 4)
+
+#### SEL Menu (Column X:104, Normal / X:127, Selected)
+
+| Menu Item | Normal | Selected | Description |
+|-----------|---------|----------|-------------|
+| **INVERT SELECTION** | (104, 111, 22, 18) | (127, 111, 22, 18) | Invert track selection |
+| **SELECT ZERO** | (104, 130, 22, 18) | (127, 130, 22, 18) | Deselect all tracks |
+| **SELECT ALL** | (104, 149, 22, 18) | (127, 149, 22, 18) | Select all tracks |
+
+#### MISC Menu (Column X:154, Normal / X:177, Selected)
+
+| Menu Item | Normal | Selected | Description |
+|-----------|---------|----------|-------------|
+| **SORT LIST** | (154, 111, 22, 18) | (177, 111, 22, 18) | Sort playlist (submenu) |
+| **FILE INFO** | (154, 130, 22, 18) | (177, 130, 22, 18) | Show file information |
+| **MISC OPTIONS** | (154, 149, 22, 18) | (177, 149, 22, 18) | Misc options (submenu) |
+
+#### LIST Menu (Column X:204, Normal / X:227, Selected)
+
+| Menu Item | Normal | Selected | Description |
+|-----------|---------|----------|-------------|
+| **NEW LIST** | (204, 111, 22, 18) | (227, 111, 22, 18) | Clear and start new playlist |
+| **SAVE LIST** | (204, 130, 22, 18) | (227, 130, 22, 18) | Save playlist to file |
+| **LOAD LIST** | (204, 149, 22, 18) | (227, 149, 22, 18) | Load playlist from file |
+
+### Vertical Divider Bars
+
+| Divider | X-Position | Width | Height | Between |
+|---------|-----------|-------|--------|---------|
+| Divider 1 | 48 | 3px | 54px | ADD - REM |
+| Divider 2 | 100 | 3px | 72px | REM - SEL (taller for 4 items) |
+| Divider 3 | 150 | 3px | 54px | SEL - MISC |
+| Divider 4 | 200 | 3px | 54px | MISC - LIST |
+
+**All sprites: 22 × 18 pixels**
 
 ---
 
@@ -150,28 +207,146 @@ All menu items: 22×18px
 
 ---
 
-## ✅ Webamp Implementation Details
+## ✅ Webamp Implementation Details (COMPREHENSIVE)
+
+### File Locations
+
+**Core Components:**
+1. `/Users/hank/dev/src/MacAmp/webamp_clone/packages/webamp/js/components/PlaylistWindow/PlaylistMenu.tsx` - Base menu container
+2. `/Users/hank/dev/src/MacAmp/webamp_clone/packages/webamp/js/components/PlaylistWindow/PlaylistMenuEntry.tsx` - Menu item with hover
+3. `/Users/hank/dev/src/MacAmp/webamp_clone/packages/webamp/js/components/PlaylistWindow/AddMenu.tsx` - ADD menu
+4. `/Users/hank/dev/src/MacAmp/webamp_clone/packages/webamp/js/components/PlaylistWindow/RemoveMenu.tsx` - REM menu
+5. `/Users/hank/dev/src/MacAmp/webamp_clone/packages/webamp/js/components/PlaylistWindow/SelectionMenu.tsx` - SEL menu
+6. `/Users/hank/dev/src/MacAmp/webamp_clone/packages/webamp/js/components/PlaylistWindow/MiscMenu.tsx` - MISC menu
+7. `/Users/hank/dev/src/MacAmp/webamp_clone/packages/webamp/js/components/PlaylistWindow/ListMenu.tsx` - LIST menu
+8. `/Users/hank/dev/src/MacAmp/webamp_clone/packages/webamp/js/actionCreators/playlist.ts` - Actions
+9. `/Users/hank/dev/src/MacAmp/webamp_clone/packages/webamp/css/playlist-window.css` - Button positioning
+
+### Button Positioning (CSS-based)
+
+```css
+/* All buttons: 22px × 18px, positioned 12px from bottom */
+#playlist-add-menu { left: 14px; }      /* ADD */
+#playlist-remove-menu { left: 43px; }   /* REM - 29px spacing */
+#playlist-selection-menu { left: 72px; } /* SEL - 29px spacing */
+#playlist-misc-menu { left: 101px; }    /* MISC - 29px spacing */
+#playlist-list-menu { right: 22px; }    /* LIST OPTS - right-aligned */
+```
 
 ### Menu Display Behavior
-- **Trigger:** Click on button (not hover)
-- **Positioning:** Dropdown appears above/below button
-- **Dismiss:** Click outside menu or select item
+
+**Click to Open:**
+```tsx
+onClick={() => setSelected((selected_) => !selected_)}
+```
+
+**Click-Away to Close:**
+```tsx
+useOnClickAway(ref, selected ? callback : null);
+// setTimeout delay prevents premature close when clicking context menus
+```
+
+**Vertical Bar Indicator:**
+```tsx
+<div className="bar" />
+/* Shows when menu is open */
+/* Height: 54px (3 items) or 72px (4 items for REM) */
+```
 
 ### Hover State Implementation
-- **Method:** JavaScript adds/removes `.hover` class
-- **Comment:** `"We implement hover ourselves, because we hate ourselves..."`
-- **Sprite Swap:** `.hover` class shows SELECTED sprite variant
+
+```tsx
+// PlaylistMenuEntry.tsx
+const { ref, hover } = useIsHovered();
+<li ref={ref} className={classnames({ hover })}>
+```
+
+**Quote from code:** `"We implement hover ourselves, because we hate ourselves..."`
+- CSS :hover unreliable in this context
+- JavaScript hover tracking required
+- Applies `.hover` class for sprite swap
+
+### Sprite System
+
+**All sprites embedded as base64 PNG data URLs in CSS:**
+
+```css
+/* Normal state */
+.add-url { background-image: url(data:image/png;base64,...); }
+
+/* Hover state */
+.hover .add-url { background-image: url(data:image/png;base64,...); }
+```
+
+**Pattern:**
+- Normal sprite: Default background-image
+- Hover sprite: `.hover .class-name` selector
+- Each menu item: 22 × 18 pixels
+
+### Complete Menu Actions
+
+**ADD Menu (3 items):**
+1. **Add URL** → `addFilesFromUrl(nextIndex)` - URL input dialog
+2. **Add Directory** → `addDirAtIndex(nextIndex)` - Directory picker
+3. **Add File** → `addFilesAtIndex(nextIndex)` - File picker
+
+**REM Menu (4 items):**
+1. **Remove Misc** → `alert()` - Not implemented
+2. **Remove All** → `removeAllTracks()` - Clear playlist
+3. **Crop** → `cropPlaylist()` - Keep only selected
+4. **Remove Selected** → `removeSelectedTracks()` - Remove selected
+
+**SEL Menu (3 items):**
+1. **Invert Selection** → `invertSelection()` - Toggle selection
+2. **Select Zero** → `selectZero()` - Deselect all
+3. **Select All** → `selectAll()` - Select all
+
+**MISC Menu (3 items + submenus):**
+1. **Sort List** → Opens context menu:
+   - Sort by title
+   - Reverse list
+   - Randomize list
+2. **File Info** → `alert()` - Not implemented
+3. **Misc Options** → Opens context menu:
+   - Generate HTML playlist
+
+**LIST Menu (3 items):**
+1. **New List** → `removeAllTracks()` - Clear playlist
+2. **Save List** → `saveFilesToList()` - Export .m3u/.pls
+3. **Load List** → `addFilesFromList()` - Import playlist
 
 ### Component Architecture (React)
+
 ```
-PlaylistMenu (generic container)
-  ├─ AddMenu (3 items)
-  ├─ RemoveMenu (3-4 items)
-  ├─ SelectionMenu (3 items)
-  └─ MiscMenu (3+ items with submenus)
+PlaylistMenu (base component)
+  - useState for open/closed state
+  - useOnClickAway for dismiss behavior
+  - Renders vertical bar when open
+  - Wraps children in PlaylistMenuEntry
+
+PlaylistMenuEntry (menu item wrapper)
+  - useIsHovered hook for hover detection
+  - Applies .hover class to swap sprites
+  - Single <li> wrapper for each item
+
+Individual Menus (AddMenu, RemoveMenu, etc.)
+  - useTypedSelector for Redux state
+  - useActionCreator for Redux dispatch
+  - Click handlers call Redux actions
 ```
+
+### Context Menu Pattern
+
+For nested menus (Sort, Misc Options):
+```tsx
+<div className="sort-list" onClick={(e) => e.stopPropagation()}>
+  <SortContextMenu />
+</div>
+```
+
+**stopPropagation()** prevents parent menu from closing when context menu clicked.
 
 ---
 
-**Research Status:** ✅ COMPLETE
-**Next:** Design SwiftUI implementation plan
+**Research Status:** ✅ COMPREHENSIVE - Ready for implementation
+**Next:** Create todo.md with implementation tasks
