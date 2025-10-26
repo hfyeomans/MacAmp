@@ -217,6 +217,7 @@ private func loadM3UPlaylist(_ url: URL) {
 
 1. `MacAmpApp/Views/WinampPlaylistWindow.swift`
    - Line 503-506: Replace TODO with actual implementation
+   - ADD URL menu action (PlaylistWindowActions.addURL) - Currently shows deferral dialog
 
 ---
 

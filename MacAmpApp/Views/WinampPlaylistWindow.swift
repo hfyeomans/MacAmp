@@ -1,6 +1,58 @@
 import SwiftUI
 import AppKit
 
+/// Singleton to handle playlist menu actions
+class PlaylistWindowActions: NSObject {
+    static let shared = PlaylistWindowActions()
+
+    @objc func addURL(_ sender: NSMenuItem) {
+        // TODO: Implement URL input dialog for Internet Radio streams
+        // Deferred to tasks/internet-radio-file-types/ implementation (P5)
+        // See: tasks/internet-radio-file-types/state.md
+        let alert = NSAlert()
+        alert.messageText = "Add URL"
+        alert.informativeText = "URL/Internet Radio support coming in P5 implementation.\nSee tasks/internet-radio-file-types/"
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+    }
+
+    @objc func addDirectory(_ sender: NSMenuItem) {
+        // ADD DIR uses same file picker as ADD FILE per user request
+        // Both actions open the standard file picker dialog
+        addFile(sender)
+    }
+
+    @objc func addFile(_ sender: NSMenuItem) {
+        print("ADD FILE clicked")
+
+        let openPanel = NSOpenPanel()
+        openPanel.allowedContentTypes = [.audio, .playlist]
+        openPanel.allowsMultipleSelection = true
+        openPanel.canChooseDirectories = false
+        openPanel.title = "Add Files to Playlist"
+        openPanel.message = "Select audio files or playlists"
+
+        guard let audioPlayer = sender.representedObject as? AudioPlayer else {
+            print("ERROR: No AudioPlayer in representedObject")
+            return
+        }
+
+        print("Opening file panel...")
+        openPanel.begin { response in
+            print("File panel response: \(response)")
+            if response == .OK {
+                Task { @MainActor in
+                    for url in openPanel.urls {
+                        print("Adding track: \(url)")
+                        audioPlayer.addTrack(url: url)
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// Clean rebuild of Winamp's playlist window with pixel-perfect sprite positioning
 struct WinampPlaylistWindow: View {
     @EnvironmentObject var skinManager: SkinManager
@@ -9,6 +61,9 @@ struct WinampPlaylistWindow: View {
 
     @State private var selectedTrackIndex: Int? = nil
     @State private var isShadeMode: Bool = false
+
+    // Menu state
+    @State private var addMenuOpen: Bool = false
 
     // Window dimensions
     private let windowWidth: CGFloat = 275
@@ -250,8 +305,8 @@ struct WinampPlaylistWindow: View {
             // NOTE: The 4 menu button graphics (ADD, REM, SEL, MISC) are BAKED INTO
             // the PLAYLIST_BOTTOM_LEFT_CORNER sprite. These are just transparent click targets.
 
-            // Add File button - transparent click target over baked-in button graphic
-            Button(action: { openFileDialog() }) {
+            // ADD button - transparent click target that shows popup menu
+            Button(action: { showAddMenu() }) {
                 Color.clear
                     .frame(width: 22, height: 18)
                     .contentShape(Rectangle())
@@ -364,7 +419,7 @@ struct WinampPlaylistWindow: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .position(x: 188, y: 220)  // 125 + 63
+            .position(x: 183, y: 220)  // Fixed: was 188, then 185, now 183 (5px total adjustment left)
         }
     }
 
@@ -525,6 +580,113 @@ struct WinampPlaylistWindow: View {
         guard let index = selectedTrackIndex,
               index < audioPlayer.playlist.count else { return }
         selectedTrackIndex = nil
+    }
+
+    // MARK: - ADD Menu
+
+    private func showAddMenu() {
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+
+        // Use SpriteMenuItem for proper hover detection and sprite swapping
+        let addURLItem = SpriteMenuItem(
+            normalSprite: "PLAYLIST_ADD_URL",
+            selectedSprite: "PLAYLIST_ADD_URL_SELECTED",
+            skinManager: skinManager,
+            action: #selector(PlaylistWindowActions.addURL),
+            target: PlaylistWindowActions.shared
+        )
+        addURLItem.representedObject = audioPlayer
+        addURLItem.isEnabled = true
+        menu.addItem(addURLItem)
+
+        let addDirItem = SpriteMenuItem(
+            normalSprite: "PLAYLIST_ADD_DIR",
+            selectedSprite: "PLAYLIST_ADD_DIR_SELECTED",
+            skinManager: skinManager,
+            action: #selector(PlaylistWindowActions.addDirectory),
+            target: PlaylistWindowActions.shared
+        )
+        addDirItem.representedObject = audioPlayer
+        addDirItem.isEnabled = true
+        menu.addItem(addDirItem)
+
+        let addFileItem = SpriteMenuItem(
+            normalSprite: "PLAYLIST_ADD_FILE",
+            selectedSprite: "PLAYLIST_ADD_FILE_SELECTED",
+            skinManager: skinManager,
+            action: #selector(PlaylistWindowActions.addFile),
+            target: PlaylistWindowActions.shared
+        )
+        addFileItem.representedObject = audioPlayer
+        addFileItem.isEnabled = true  // Ensure menu item is enabled
+        menu.addItem(addFileItem)
+
+        // Position menu at the ADD button location
+        // Flipped coordinates: Y=0 at top, increasing Y moves DOWN
+        // Menu appears just above the ADD button at bottom of window
+        if let window = NSApp.keyWindow ?? NSApp.windows.first(where: { $0.isVisible }),
+           let contentView = window.contentView {
+            // Tuned values for perfect positioning over ADD button
+            let location = NSPoint(x: 10, y: 400)
+            menu.popUp(positioning: nil, at: location, in: contentView)
+        }
+    }
+
+    // MARK: - ADD Menu Actions
+
+    private func addURL() {
+        // TODO: Implement URL input dialog
+        // For now, show a simple alert
+        let alert = NSAlert()
+        alert.messageText = "Add URL"
+        alert.informativeText = "URL input dialog not yet implemented"
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+    }
+
+    private func addDirectory() {
+        let openPanel = NSOpenPanel()
+        openPanel.canChooseFiles = false
+        openPanel.canChooseDirectories = true
+        openPanel.allowsMultipleSelection = false
+        openPanel.title = "Add Directory to Playlist"
+        openPanel.message = "Select a directory containing audio files"
+
+        openPanel.begin { [audioPlayer] response in
+            if response == .OK, let dirURL = openPanel.urls.first {
+                Task { @MainActor in
+                    // Get all audio files from directory
+                    do {
+                        let fileManager = FileManager.default
+                        let contents = try fileManager.contentsOfDirectory(
+                            at: dirURL,
+                            includingPropertiesForKeys: nil,
+                            options: [.skipsHiddenFiles]
+                        )
+
+                        // Filter for audio files
+                        let audioExtensions = ["mp3", "m4a", "wav", "aiff", "flac", "ogg", "wma", "aac"]
+                        let audioFiles = contents.filter { url in
+                            audioExtensions.contains(url.pathExtension.lowercased())
+                        }
+
+                        // Add all audio files to playlist
+                        for audioFile in audioFiles {
+                            audioPlayer.addTrack(url: audioFile)
+                        }
+                    } catch {
+                        let alert = NSAlert()
+                        alert.messageText = "Failed to Read Directory"
+                        alert.informativeText = error.localizedDescription
+                        alert.alertStyle = .warning
+                        alert.addButton(withTitle: "OK")
+                        alert.runModal()
+                    }
+                }
+            }
+        }
     }
 }
 
