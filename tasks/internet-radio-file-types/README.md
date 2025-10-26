@@ -217,7 +217,11 @@ private func loadM3UPlaylist(_ url: URL) {
 
 1. `MacAmpApp/Views/WinampPlaylistWindow.swift`
    - Line 503-506: Replace TODO with actual implementation
-   - ADD URL menu action (PlaylistWindowActions.addURL) - Currently shows deferral dialog
+   - Line 8-17: Implement `PlaylistWindowActions.addURL()` with URL input dialog
+     - Currently shows placeholder: "URL/Internet Radio support coming in P5"
+     - Need NSAlert with text input field for stream URL
+     - Validate URL format
+     - Add to RadioStationLibrary and playlist
 
 ---
 
