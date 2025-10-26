@@ -5,6 +5,10 @@ import AppKit
 class PlaylistWindowActions: NSObject {
     static let shared = PlaylistWindowActions()
 
+    // Store reference to current selected index and removal closure
+    var selectedTrackIndex: Int?
+    var removeTrackClosure: ((Int) -> Void)?
+
     @objc func addURL(_ sender: NSMenuItem) {
         // TODO: Implement URL input dialog for Internet Radio streams
         // Deferred to tasks/internet-radio-file-types/ implementation (P5)
@@ -50,6 +54,71 @@ class PlaylistWindowActions: NSObject {
                 }
             }
         }
+    }
+
+    // MARK: - REM Menu Actions
+
+    @objc func removeSelected(_ sender: NSMenuItem) {
+        print("REM SEL clicked")
+        guard let audioPlayer = sender.representedObject as? AudioPlayer else {
+            print("ERROR: No AudioPlayer in representedObject")
+            return
+        }
+
+        // Use the stored selected index and closure
+        if let index = PlaylistWindowActions.shared.selectedTrackIndex {
+            Task { @MainActor in
+                if index < audioPlayer.playlist.count {
+                    audioPlayer.playlist.remove(at: index)
+                    PlaylistWindowActions.shared.selectedTrackIndex = nil
+                }
+            }
+        } else {
+            // No track selected
+            let alert = NSAlert()
+            alert.messageText = "Remove Selected"
+            alert.informativeText = "No track selected"
+            alert.alertStyle = .informational
+            alert.addButton(withTitle: "OK")
+            alert.runModal()
+        }
+    }
+
+    @objc func cropPlaylist(_ sender: NSMenuItem) {
+        print("CROP clicked")
+
+        // Not supported yet per user request
+        let alert = NSAlert()
+        alert.messageText = "Crop"
+        alert.informativeText = "Not supported yet"
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+    }
+
+    @objc func removeAll(_ sender: NSMenuItem) {
+        print("REM ALL clicked")
+        guard let audioPlayer = sender.representedObject as? AudioPlayer else {
+            print("ERROR: No AudioPlayer in representedObject")
+            return
+        }
+
+        // Clear entire playlist
+        Task { @MainActor in
+            audioPlayer.playlist = []
+        }
+    }
+
+    @objc func removeMisc(_ sender: NSMenuItem) {
+        print("REM MISC clicked")
+
+        // Not supported yet per user request
+        let alert = NSAlert()
+        alert.messageText = "Remove Misc"
+        alert.informativeText = "Not supported yet"
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
     }
 }
 
@@ -314,8 +383,8 @@ struct WinampPlaylistWindow: View {
             .buttonStyle(.plain)
             .position(x: 25, y: 206)
 
-            // Remove Selected button
-            Button(action: { removeSelectedTrack() }) {
+            // REM button - transparent click target that shows popup menu
+            Button(action: { showRemMenu() }) {
                 Color.clear
                     .frame(width: 22, height: 18)
                     .contentShape(Rectangle())
@@ -579,6 +648,7 @@ struct WinampPlaylistWindow: View {
     private func removeSelectedTrack() {
         guard let index = selectedTrackIndex,
               index < audioPlayer.playlist.count else { return }
+        audioPlayer.playlist.remove(at: index)
         selectedTrackIndex = nil
     }
 
@@ -630,6 +700,76 @@ struct WinampPlaylistWindow: View {
             // Tuned values for perfect positioning over ADD button
             let location = NSPoint(x: 10, y: 400)
             menu.popUp(positioning: nil, at: location, in: contentView)
+        }
+    }
+
+    // MARK: - REM Menu
+
+    private func showRemMenu() {
+        // Store the current selected track index for the action handler
+        PlaylistWindowActions.shared.selectedTrackIndex = selectedTrackIndex
+
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+
+        // 1st addItem: REM MISC
+        let remMiscItem = SpriteMenuItem(
+            normalSprite: "PLAYLIST_REMOVE_MISC",
+            selectedSprite: "PLAYLIST_REMOVE_MISC_SELECTED",
+            skinManager: skinManager,
+            action: #selector(PlaylistWindowActions.removeMisc),
+            target: PlaylistWindowActions.shared
+        )
+        remMiscItem.representedObject = audioPlayer
+        remMiscItem.isEnabled = true
+        menu.addItem(remMiscItem)
+
+        // 2nd addItem: REM ALL
+        let remAllItem = SpriteMenuItem(
+            normalSprite: "PLAYLIST_REMOVE_ALL",
+            selectedSprite: "PLAYLIST_REMOVE_ALL_SELECTED",
+            skinManager: skinManager,
+            action: #selector(PlaylistWindowActions.removeAll),
+            target: PlaylistWindowActions.shared
+        )
+        remAllItem.representedObject = audioPlayer
+        remAllItem.isEnabled = true
+        menu.addItem(remAllItem)
+
+        // 3rd addItem: CROP
+        let cropItem = SpriteMenuItem(
+            normalSprite: "PLAYLIST_CROP",
+            selectedSprite: "PLAYLIST_CROP_SELECTED",
+            skinManager: skinManager,
+            action: #selector(PlaylistWindowActions.cropPlaylist),
+            target: PlaylistWindowActions.shared
+        )
+        cropItem.representedObject = audioPlayer
+        cropItem.isEnabled = true
+        menu.addItem(cropItem)
+
+        // 4th addItem: REM SEL
+        let remSelItem = SpriteMenuItem(
+            normalSprite: "PLAYLIST_REMOVE_SELECTED",
+            selectedSprite: "PLAYLIST_REMOVE_SELECTED_SELECTED",
+            skinManager: skinManager,
+            action: #selector(PlaylistWindowActions.removeSelected),
+            target: PlaylistWindowActions.shared
+        )
+        remSelItem.representedObject = audioPlayer
+        remSelItem.isEnabled = true
+        menu.addItem(remSelItem)
+
+        // Show the menu at the correct position (shifted 29 pixels right from ADD menu)
+        if let window = NSApplication.shared.windows.first(where: { $0.contentView != nil }),
+           let contentView = window.contentView {
+            // Position shifted right by 29 pixels from ADD menu location
+            // Adjust y position so bottom item aligns at y: 400 (4 items * 18px = 72px total)
+            let location = NSPoint(x: 39, y: 346)  // 400 - (3 * 18) = 346
+            menu.popUp(positioning: nil, at: location, in: contentView)
+
+            // Clear the selected track reference after menu closes
+            PlaylistWindowActions.shared.selectedTrackIndex = nil
         }
     }
 
