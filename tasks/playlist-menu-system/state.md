@@ -1,13 +1,13 @@
 # Playlist Menu System - Task State
 
-**Date:** 2025-10-25
-**Status:** 🔄 IN PROGRESS - ADD Menu POC Complete
+**Date:** 2025-10-26
+**Status:** ✅ COMPLETE - All Menu Buttons Implemented
 **Branch:** `feature/playlist-menu-system`
 **Priority:** P2 (Enhancement)
 
 ---
 
-## 📊 Phase Progress: 4 of 7 Complete
+## 📊 Phase Progress: 7 of 7 Complete
 
 | Phase | Description | Status |
 |-------|-------------|--------|
@@ -16,9 +16,9 @@
 | 2 | Menu Components | ✅ COMPLETE |
 | 3 | ADD Menu POC | ✅ COMPLETE |
 | 4 | REM Menu | ✅ COMPLETE |
-| 5 | SEL Menu | ⏳ NEXT |
-| 6 | MISC Menu | ⏳ PENDING |
-| 7 | LIST Menu | ⏳ PENDING |
+| 5 | SEL Button (Alert) | ✅ COMPLETE |
+| 6 | MISC Menu | ✅ COMPLETE |
+| 7 | LIST OPTS Menu | ✅ COMPLETE |
 
 ---
 
@@ -158,24 +158,27 @@ Solution: Override mouseDown() and use NSApp.sendAction()
 
 ---
 
-## 🎯 Next Phase: SEL Menu
+## 🎯 Menu System Complete - Next: Multi-Select
 
-**Button Position:** x: 68, y: 400 (58px right of ADD, or 29px right of REM)
+**All 5 Menu Buttons Implemented:**
+- ADD: 3 items (file pickers working)
+- REM: 4 items (remove actions working)
+- SEL: Alert only (multi-select via Shift+click instead)
+- MISC: 3 items (all alerts)
+- LIST OPTS: 3 items (all alerts)
 
-**Menu Items (3 items):**
-1. INVERT SELECTION - Invert selection state
-2. SELECT ZERO - Clear all selections
-3. SELECT ALL - Select all tracks
+**Design Decision - NSHostingMenu Research:**
+- Attempted migration to modern NSHostingMenu (macOS 15+)
+- Achieved width consistency but unavoidable AppKit padding (8-12px)
+- Reverted to proven NSMenu pattern (tight width, no issues)
+- Research documented in: NSMenu_Research.md, nshostingmenu_analysis.md
 
-**Sprites Ready:**
-- PLAYLIST_INVERT_SELECTION / _SELECTED ✅
-- PLAYLIST_SELECT_ZERO / _SELECTED ✅
-- PLAYLIST_SELECT_ALL / _SELECTED ✅
-
-**Dependencies:**
-- All actions need selection state management (Set<Int>)
-
-**Estimated Time:** 30-45 min (pattern proven with ADD/REM)
+**Next Phase: Multi-Select Implementation**
+- Shift+Click: Toggle track in selection
+- Shift+Drag: Range select
+- Command+A: Select all
+- Visual highlight for selected tracks
+- Update REM SEL and CROP to work with Set<Int>
 
 ---
 
