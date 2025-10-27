@@ -11,9 +11,25 @@
 ### **Task 1: Playlist Menu System (P2) - MENUS COMPLETE ✅**
 
 **Branch:** `feature/playlist-menu-system`
+**Task Name:** Playlist Menu System
 **Task Folder:** `tasks/playlist-menu-system/`
-**Status:** All 5 menu buttons implemented - Multi-select next
-**Next Phase:** Implement multi-select (Shift+click, Cmd+A)
+**Status:** All 5 menu buttons implemented and functional
+**Completion:** 7 of 7 phases complete (menus done)
+
+**Next Steps - Multi-Select Implementation:**
+1. **Shift+Click** - Toggle individual track selection
+2. **Shift+Drag** - Range select multiple tracks
+3. **Command+A** - Select all tracks
+4. **Visual highlight** - Show selected tracks with different background
+5. **Update REM SEL/CROP** - Work with multi-selection Set<Int>
+
+**Implementation Details:**
+- Change `@State var selectedTrackIndex: Int?` to `@State var selectedIndices: Set<Int>`
+- Add event modifiers detection to track row onTapGesture
+- Update track background color for selected state
+- Update PlaylistWindowActions to work with selection set
+
+**Estimated Time:** 1-2 hours
 
 ## ✅ What's Currently Working
 
