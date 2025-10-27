@@ -120,6 +120,76 @@ class PlaylistWindowActions: NSObject {
         alert.addButton(withTitle: "OK")
         alert.runModal()
     }
+
+    // MARK: - MISC Menu Actions
+
+    @objc func sortList(_ sender: NSMenuItem) {
+        print("SORT LIST clicked")
+
+        let alert = NSAlert()
+        alert.messageText = "Sort List"
+        alert.informativeText = "Not supported yet"
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+    }
+
+    @objc func fileInfo(_ sender: NSMenuItem) {
+        print("FILE INFO clicked")
+
+        let alert = NSAlert()
+        alert.messageText = "File Info"
+        alert.informativeText = "Not supported yet"
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+    }
+
+    @objc func miscOptions(_ sender: NSMenuItem) {
+        print("MISC OPTIONS clicked")
+
+        let alert = NSAlert()
+        alert.messageText = "Misc Options"
+        alert.informativeText = "Not supported yet"
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+    }
+
+    // MARK: - LIST Menu Actions
+
+    @objc func newList(_ sender: NSMenuItem) {
+        print("NEW LIST clicked")
+
+        let alert = NSAlert()
+        alert.messageText = "New List"
+        alert.informativeText = "Not supported yet"
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+    }
+
+    @objc func saveList(_ sender: NSMenuItem) {
+        print("SAVE LIST clicked")
+
+        let alert = NSAlert()
+        alert.messageText = "Save List"
+        alert.informativeText = "Not supported yet"
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+    }
+
+    @objc func loadList(_ sender: NSMenuItem) {
+        print("LOAD LIST clicked")
+
+        let alert = NSAlert()
+        alert.messageText = "Load List"
+        alert.informativeText = "Not supported yet"
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+    }
 }
 
 /// Clean rebuild of Winamp's playlist window with pixel-perfect sprite positioning
@@ -392,8 +462,8 @@ struct WinampPlaylistWindow: View {
             .buttonStyle(.plain)
             .position(x: 54, y: 206)
 
-            // Selection/Crop button
-            Button(action: {}) {
+            // SEL button - shows "Not supported yet" (selection via Shift+click/Cmd+A instead)
+            Button(action: { showSelNotSupportedAlert() }) {
                 Color.clear
                     .frame(width: 22, height: 18)
                     .contentShape(Rectangle())
@@ -401,14 +471,23 @@ struct WinampPlaylistWindow: View {
             .buttonStyle(.plain)
             .position(x: 83, y: 206)
 
-            // Misc Options button
-            Button(action: {}) {
+            // MISC button - transparent click target that shows popup menu
+            Button(action: { showMiscMenu() }) {
                 Color.clear
                     .frame(width: 22, height: 18)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .position(x: 112, y: 206)
+
+            // LIST OPTS button - transparent click target over baked-in text
+            Button(action: { showListMenu() }) {
+                Color.clear
+                    .frame(width: 40, height: 18)  // Wider to cover "LIST OPTS" text
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .position(x: 230, y: 206)  // Near right edge where LIST OPTS text is
         }
     }
 
@@ -698,7 +777,7 @@ struct WinampPlaylistWindow: View {
         if let window = NSApp.keyWindow ?? NSApp.windows.first(where: { $0.isVisible }),
            let contentView = window.contentView {
             // Tuned values for perfect positioning over ADD button
-            let location = NSPoint(x: 10, y: 400)
+            let location = NSPoint(x: 10, y: 396)
             menu.popUp(positioning: nil, at: location, in: contentView)
         }
     }
@@ -765,11 +844,126 @@ struct WinampPlaylistWindow: View {
            let contentView = window.contentView {
             // Position shifted right by 29 pixels from ADD menu location
             // Adjust y position so bottom item aligns at y: 400 (4 items * 18px = 72px total)
-            let location = NSPoint(x: 39, y: 346)  // 400 - (3 * 18) = 346
+            let location = NSPoint(x: 39, y: 378)  // 400 - (3 * 18) = 346
             menu.popUp(positioning: nil, at: location, in: contentView)
 
             // Clear the selected track reference after menu closes
             PlaylistWindowActions.shared.selectedTrackIndex = nil
+        }
+    }
+
+    // MARK: - SEL Button Alert (Menu removed - use Shift+click for multi-select)
+
+    private func showSelNotSupportedAlert() {
+        let alert = NSAlert()
+        alert.messageText = "Selection Menu"
+        alert.informativeText = "Not supported yet. Use Shift+click for multi-select (planned feature)."
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+    }
+
+    // MARK: - MISC Menu
+
+    private func showMiscMenu() {
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+
+        // SORT LIST
+        let sortItem = SpriteMenuItem(
+            normalSprite: "PLAYLIST_SORT_LIST",
+            selectedSprite: "PLAYLIST_SORT_LIST_SELECTED",
+            skinManager: skinManager,
+            action: #selector(PlaylistWindowActions.sortList),
+            target: PlaylistWindowActions.shared
+        )
+        sortItem.representedObject = audioPlayer
+        sortItem.isEnabled = true
+        menu.addItem(sortItem)
+
+        // FILE INFO
+        let fileInfoItem = SpriteMenuItem(
+            normalSprite: "PLAYLIST_FILE_INFO",
+            selectedSprite: "PLAYLIST_FILE_INFO_SELECTED",
+            skinManager: skinManager,
+            action: #selector(PlaylistWindowActions.fileInfo),
+            target: PlaylistWindowActions.shared
+        )
+        fileInfoItem.representedObject = audioPlayer
+        fileInfoItem.isEnabled = true
+        menu.addItem(fileInfoItem)
+
+        // MISC OPTIONS
+        let miscOptionsItem = SpriteMenuItem(
+            normalSprite: "PLAYLIST_MISC_OPTIONS",
+            selectedSprite: "PLAYLIST_MISC_OPTIONS_SELECTED",
+            skinManager: skinManager,
+            action: #selector(PlaylistWindowActions.miscOptions),
+            target: PlaylistWindowActions.shared
+        )
+        miscOptionsItem.representedObject = audioPlayer
+        miscOptionsItem.isEnabled = true
+        menu.addItem(miscOptionsItem)
+
+        // Show the menu at the correct position
+        if let window = NSApplication.shared.windows.first(where: { $0.contentView != nil }),
+           let contentView = window.contentView {
+            // MISC button offset: 29px right of SEL (x: 83 + 29 = 112)
+            // Y position for 3 items to align bottom at y: 400: 400 - (2 * 18) = 364
+            let location = NSPoint(x: 100, y: 397)
+            menu.popUp(positioning: nil, at: location, in: contentView)
+        }
+    }
+
+    // MARK: - LIST OPTS Menu
+
+    private func showListMenu() {
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+
+        // NEW LIST
+        let newListItem = SpriteMenuItem(
+            normalSprite: "PLAYLIST_NEW_LIST",
+            selectedSprite: "PLAYLIST_NEW_LIST_SELECTED",
+            skinManager: skinManager,
+            action: #selector(PlaylistWindowActions.newList),
+            target: PlaylistWindowActions.shared
+        )
+        newListItem.representedObject = audioPlayer
+        newListItem.isEnabled = true
+        menu.addItem(newListItem)
+
+        // SAVE LIST
+        let saveListItem = SpriteMenuItem(
+            normalSprite: "PLAYLIST_SAVE_LIST",
+            selectedSprite: "PLAYLIST_SAVE_LIST_SELECTED",
+            skinManager: skinManager,
+            action: #selector(PlaylistWindowActions.saveList),
+            target: PlaylistWindowActions.shared
+        )
+        saveListItem.representedObject = audioPlayer
+        saveListItem.isEnabled = true
+        menu.addItem(saveListItem)
+
+        // LOAD LIST
+        let loadListItem = SpriteMenuItem(
+            normalSprite: "PLAYLIST_LOAD_LIST",
+            selectedSprite: "PLAYLIST_LOAD_LIST_SELECTED",
+            skinManager: skinManager,
+            action: #selector(PlaylistWindowActions.loadList),
+            target: PlaylistWindowActions.shared
+        )
+        loadListItem.representedObject = audioPlayer
+        loadListItem.isEnabled = true
+        menu.addItem(loadListItem)
+
+        // Show the menu at the correct position
+        if let window = NSApplication.shared.windows.first(where: { $0.contentView != nil }),
+           let contentView = window.contentView {
+            // LIST OPTS button is at far right of window
+            // Y position for 3 items to align bottom at y: 400: 400 - (2 * 18) = 364
+            let location = NSPoint(x: 228, y: 397)
+            menu.popUp(positioning: nil, at: location, in: contentView)
         }
     }
 
