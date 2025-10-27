@@ -1,19 +1,55 @@
 # Ready for Next Session - MacAmp Development
 
-**Last Updated:** 2025-10-25
+**Last Updated:** 2025-10-26
 **Current Branch:** `feature/playlist-menu-system`
-**Build Status:** ✅ Successful - ADD Menu POC Working
+**Build Status:** ✅ Successful - All 5 Menu Buttons Complete
 
 ---
 
 ## 🎯 Active Tasks
 
-### **Task 1: Playlist Menu System (P2) - IN PROGRESS**
+### **Task 1: Playlist Menu System (P2) - MENUS COMPLETE ✅**
 
 **Branch:** `feature/playlist-menu-system`
 **Task Folder:** `tasks/playlist-menu-system/`
-**Status:** ADD Menu POC Complete - 4 Menus Remaining
-**Time Remaining:** 2-4 hours
+**Status:** All 5 menu buttons implemented - Multi-select next
+**Next Phase:** Implement multi-select (Shift+click, Cmd+A)
+
+## ✅ What's Currently Working
+
+**All 5 Playlist Menu Buttons:**
+- ADD menu: File picker opens for ADD FILE and ADD DIR
+- REM menu: REM ALL clears playlist, REM SEL removes selected track
+- SEL button: Shows alert about upcoming multi-select feature
+- MISC menu: All 3 items show "Not supported yet" alerts
+- LIST OPTS menu: All 3 items show "Not supported yet" alerts
+
+**Menu Architecture:**
+- Using NSMenu with SpriteMenuItem pattern (proven, tight width)
+- Sprite-based hover states working correctly
+- Proper positioning over each button
+- No width inconsistency issues (ADD, REM, MISC, LIST all tight)
+
+---
+
+## 🎯 Next Step: Multi-Select Implementation
+
+**Goal:** Add macOS-native multi-selection to playlist tracks
+
+**Features to Implement:**
+1. **Shift+Click** - Toggle individual track selection
+2. **Shift+Drag** - Range select multiple tracks
+3. **Command+A** - Select all tracks
+4. **Visual Feedback** - Highlight selected tracks differently
+
+**State Management:**
+- Change from `@State var selectedTrackIndex: Int?` to `@State var selectedIndices: Set<Int>`
+- Update track row rendering to show multi-select state
+- Update REM SEL, CROP actions to work with selection set
+
+**Estimated Time:** 1-2 hours
+
+---
 
 ### **Task 2: Playlist Text Rendering Fix (P2) - READY**
 
