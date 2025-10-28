@@ -25,6 +25,7 @@
 		5E12F332C6929193D1EBFB8D /* SpritePositions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7324174AA2F7231F3B2508AE /* SpritePositions.swift */; };
 		70120b5751e24a3084c04a0b /* SpriteResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = b220e925d4d54168a0d0f84b /* SpriteResolver.swift */; };
 		A1B2C3D4E5F6789012345678 /* SpriteMenuItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1E2D3C4B5A6978867564534 /* SpriteMenuItem.swift */; };
+		B2C3D4E5F6A7890123456789 /* PlaylistMenuButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2F3D4C5B6A7988978675645 /* PlaylistMenuButton.swift */; };
 		77129ADBBBC75DF6BA1EC1C8 /* SnapUtils.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43358BDD8D9B537C9109DF62 /* SnapUtils.swift */; };
 		7C97F7855F700CA55821BFD1 /* WindowSnapManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FF88FFEFCC2A65D88029ADB /* WindowSnapManager.swift */; };
 		8375D760955EEB75F8311F11 /* SimpleSpriteImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77A0C7921140C73AB173A5E8 /* SimpleSpriteImage.swift */; };
@@ -89,6 +90,7 @@
 		CD234EF56789ABCD01234567 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		D5C4GF8F990H31I0H2G04370 /* SkinsCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkinsCommands.swift; sourceTree = "<group>"; };
 		DE345F678901BCDE12345678 /* PreferencesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesView.swift; sourceTree = "<group>"; };
+		E2F3D4C5B6A7988978675645 /* PlaylistMenuButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaylistMenuButton.swift; sourceTree = "<group>"; };
 		E51E7515EE6862B4F445AC81 /* SkinSprites.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkinSprites.swift; sourceTree = "<group>"; };
 		E5AF78956321BB7B21810429 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		F1E2D3C4B5A6978867564534 /* SpriteMenuItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpriteMenuItem.swift; sourceTree = "<group>"; };
@@ -113,6 +115,7 @@
 			isa = PBXGroup;
 			children = (
 				5B08C7931E5A4A0A8D4F1B27 /* PlaylistBitmapText.swift */,
+				E2F3D4C5B6A7988978675645 /* PlaylistMenuButton.swift */,
 				CABDEB04D5D23C3DAAAFEEFC /* PlaylistTimeText.swift */,
 				77A0C7921140C73AB173A5E8 /* SimpleSpriteImage.swift */,
 				F1E2D3C4B5A6978867564534 /* SpriteMenuItem.swift */,
@@ -316,6 +319,7 @@
 				CEB39A994DFFE2DCA8FDE7EF /* PresetsButton.swift in Sources */,
 				8375D760955EEB75F8311F11 /* SimpleSpriteImage.swift in Sources */,
 				A1B2C3D4E5F6789012345678 /* SpriteMenuItem.swift in Sources */,
+				B2C3D4E5F6A7890123456789 /* PlaylistMenuButton.swift in Sources */,
 				AC7BAF317F478CEB2F36F3DB /* PlaylistTimeText.swift in Sources */,
 				CFF2E4B6A5D74592AA2B78CD /* PlaylistBitmapText.swift in Sources */,
 				93E376C1200386F617D37563 /* Skin.swift in Sources */,

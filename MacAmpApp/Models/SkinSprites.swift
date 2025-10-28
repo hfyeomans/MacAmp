@@ -239,12 +239,26 @@ struct SkinSprites {
             Sprite(name: "PLAYLIST_ADD_DIR_SELECTED", x: 23, y: 130, width: 22, height: 18),
             Sprite(name: "PLAYLIST_ADD_FILE", x: 0, y: 149, width: 22, height: 18),
             Sprite(name: "PLAYLIST_ADD_FILE_SELECTED", x: 23, y: 149, width: 22, height: 18),
+
+            // REM Menu (4 items - only menu with 4th row)
+            Sprite(name: "PLAYLIST_REMOVE_MISC", x: 54, y: 168, width: 22, height: 18),
+            Sprite(name: "PLAYLIST_REMOVE_MISC_SELECTED", x: 77, y: 168, width: 22, height: 18),
             Sprite(name: "PLAYLIST_REMOVE_ALL", x: 54, y: 111, width: 22, height: 18),
             Sprite(name: "PLAYLIST_REMOVE_ALL_SELECTED", x: 77, y: 111, width: 22, height: 18),
             Sprite(name: "PLAYLIST_CROP", x: 54, y: 130, width: 22, height: 18),
             Sprite(name: "PLAYLIST_CROP_SELECTED", x: 77, y: 130, width: 22, height: 18),
             Sprite(name: "PLAYLIST_REMOVE_SELECTED", x: 54, y: 149, width: 22, height: 18),
             Sprite(name: "PLAYLIST_REMOVE_SELECTED_SELECTED", x: 77, y: 149, width: 22, height: 18),
+
+            // SEL Menu (3 items)
+            Sprite(name: "PLAYLIST_INVERT_SELECTION", x: 104, y: 111, width: 22, height: 18),
+            Sprite(name: "PLAYLIST_INVERT_SELECTION_SELECTED", x: 127, y: 111, width: 22, height: 18),
+            Sprite(name: "PLAYLIST_SELECT_ZERO", x: 104, y: 130, width: 22, height: 18),
+            Sprite(name: "PLAYLIST_SELECT_ZERO_SELECTED", x: 127, y: 130, width: 22, height: 18),
+            Sprite(name: "PLAYLIST_SELECT_ALL", x: 104, y: 149, width: 22, height: 18),
+            Sprite(name: "PLAYLIST_SELECT_ALL_SELECTED", x: 127, y: 149, width: 22, height: 18),
+
+            // MISC Menu (3 items)
             Sprite(name: "PLAYLIST_SORT_LIST", x: 154, y: 111, width: 22, height: 18),
             Sprite(name: "PLAYLIST_SORT_LIST_SELECTED", x: 177, y: 111, width: 22, height: 18),
             Sprite(name: "PLAYLIST_FILE_INFO", x: 154, y: 130, width: 22, height: 18),

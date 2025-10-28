@@ -1,35 +1,172 @@
 import SwiftUI
 import AppKit
 
-/// Clean rebuild of Winamp's playlist window with pixel-perfect sprite positioning
+@MainActor
+final class PlaylistWindowActions: NSObject {
+    static let shared = PlaylistWindowActions()
+
+    var selectedIndices: Set<Int> = []
+
+    private func showAlert(_ title: String, _ message: String) {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = message
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+    }
+
+    private func presentAddFilesPanel(audioPlayer: AudioPlayer) {
+        let openPanel = NSOpenPanel()
+        openPanel.allowedContentTypes = [.audio, .playlist]
+        openPanel.allowsMultipleSelection = true
+        openPanel.canChooseDirectories = false
+        openPanel.title = "Add Files to Playlist"
+        openPanel.message = "Select audio files or playlists"
+
+        openPanel.begin { response in
+            if response == .OK {
+                self.handleSelectedURLs(openPanel.urls, audioPlayer: audioPlayer)
+            }
+        }
+    }
+
+    private func handleSelectedURLs(_ urls: [URL], audioPlayer: AudioPlayer) {
+        for url in urls {
+            let fileExtension = url.pathExtension.lowercased()
+            if fileExtension == "m3u" || fileExtension == "m3u8" {
+                loadM3UPlaylist(url, audioPlayer: audioPlayer)
+            } else {
+                audioPlayer.addTrack(url: url)
+            }
+        }
+    }
+
+    private func loadM3UPlaylist(_ url: URL, audioPlayer: AudioPlayer) {
+        do {
+            let entries = try M3UParser.parse(fileURL: url)
+            for entry in entries {
+                if !entry.isRemoteStream {
+                    audioPlayer.addTrack(url: entry.url)
+                }
+            }
+        } catch {
+            let alert = NSAlert()
+            alert.messageText = "Failed to Load M3U Playlist"
+            alert.informativeText = error.localizedDescription
+            alert.alertStyle = .warning
+            alert.addButton(withTitle: "OK")
+            alert.runModal()
+        }
+    }
+
+    @objc func addURL(_ sender: NSMenuItem) {
+        showAlert("Add URL", "URL/Internet Radio support coming in P5 implementation.\nSee tasks/internet-radio-file-types/")
+    }
+
+    @objc func addDirectory(_ sender: NSMenuItem) {
+        addFile(sender)
+    }
+
+    @objc func addFile(_ sender: NSMenuItem) {
+        guard let audioPlayer = sender.representedObject as? AudioPlayer else {
+            return
+        }
+        presentAddFilesPanel(audioPlayer: audioPlayer)
+    }
+
+    @objc func removeSelected(_ sender: NSMenuItem) {
+        guard let audioPlayer = sender.representedObject as? AudioPlayer else {
+            return
+        }
+
+        let indices = PlaylistWindowActions.shared.selectedIndices
+        if indices.isEmpty {
+            showAlert("Remove Selected", "No tracks selected")
+        } else {
+            for index in indices.sorted().reversed() {
+                if index < audioPlayer.playlist.count {
+                    audioPlayer.playlist.remove(at: index)
+                }
+            }
+            PlaylistWindowActions.shared.selectedIndices = []
+        }
+    }
+
+    @objc func cropPlaylist(_ sender: NSMenuItem) {
+        guard let audioPlayer = sender.representedObject as? AudioPlayer else {
+            return
+        }
+
+        let indices = PlaylistWindowActions.shared.selectedIndices
+        if indices.isEmpty {
+            showAlert("Crop Playlist", "No tracks selected. Select tracks to keep, then crop.")
+        } else {
+            let validIndices = indices.sorted().filter { $0 < audioPlayer.playlist.count }
+            let selectedTracks = validIndices.map { audioPlayer.playlist[$0] }
+            audioPlayer.playlist = selectedTracks
+            PlaylistWindowActions.shared.selectedIndices = []
+        }
+    }
+
+    @objc func removeAll(_ sender: NSMenuItem) {
+        guard let audioPlayer = sender.representedObject as? AudioPlayer else {
+            return
+        }
+        audioPlayer.playlist = []
+    }
+
+    @objc func removeMisc(_ sender: NSMenuItem) {
+        showAlert("Remove Misc", "Not supported yet")
+    }
+
+    @objc func sortList(_ sender: NSMenuItem) {
+        showAlert("Sort List", "Not supported yet")
+    }
+
+    @objc func fileInfo(_ sender: NSMenuItem) {
+        showAlert("File Info", "Not supported yet")
+    }
+
+    @objc func miscOptions(_ sender: NSMenuItem) {
+        showAlert("Misc Options", "Not supported yet")
+    }
+
+    @objc func newList(_ sender: NSMenuItem) {
+        showAlert("New List", "Not supported yet")
+    }
+
+    @objc func saveList(_ sender: NSMenuItem) {
+        showAlert("Save List", "Not supported yet")
+    }
+
+    @objc func loadList(_ sender: NSMenuItem) {
+        showAlert("Load List", "Not supported yet")
+    }
+}
+
 struct WinampPlaylistWindow: View {
     @EnvironmentObject var skinManager: SkinManager
     @EnvironmentObject var audioPlayer: AudioPlayer
     @EnvironmentObject var settings: AppSettings
 
-    @State private var selectedTrackIndex: Int? = nil
+    @State private var selectedIndices: Set<Int> = []
     @State private var isShadeMode: Bool = false
 
-    // Window dimensions
     private let windowWidth: CGFloat = 275
     private let windowHeight: CGFloat = 232
 
-    // MARK: - Time Display Computed Properties
-
-    /// Total duration of all tracks in the playlist
     private var totalPlaylistDuration: Double {
         audioPlayer.playlist.reduce(0.0) { total, track in
             total + track.duration
         }
     }
 
-    /// Remaining time in current track (always positive)
     private var remainingTime: Double {
         guard audioPlayer.currentDuration > 0 else { return 0 }
         return max(0, audioPlayer.currentDuration - audioPlayer.currentTime)
     }
 
-    /// Format time as MM:SS
     private func formatTime(_ seconds: Double) -> String {
         let totalSeconds = max(0, Int(seconds))
         let minutes = totalSeconds / 60
@@ -37,11 +174,10 @@ struct WinampPlaylistWindow: View {
         return String(format: "%d:%02d", minutes, secs)
     }
 
-    /// Track time display text: "MM:SS / MM:SS" or just ":" when idle
     private var trackTimeText: String {
         guard audioPlayer.currentTrack != nil,
               audioPlayer.currentDuration > 0 else {
-            return ":"  // Show only colon when idle
+            return ":"
         }
 
         let current = formatTime(audioPlayer.currentTime)
@@ -49,12 +185,11 @@ struct WinampPlaylistWindow: View {
         return "\(current) / \(total)"
     }
 
-    /// Remaining time display text: "-MM:SS" or empty when not playing
     private var remainingTimeText: String {
         guard audioPlayer.isPlaying,
               audioPlayer.currentTrack != nil,
               audioPlayer.currentDuration > 0 else {
-            return ""  // Hidden when not playing
+            return ""
         }
 
         let remaining = formatTime(remainingTime)
@@ -79,61 +214,65 @@ struct WinampPlaylistWindow: View {
         GeometryReader { geometry in
             ZStack {
                 if !isShadeMode {
-                    // Full window mode
-                    // CRITICAL: Build complete background first as a single layer
                     buildCompleteBackground()
-
-                    // Then overlay interactive content
                     buildContentOverlay()
                 } else {
-                    // Shade mode
                     buildShadeMode()
                 }
             }
             .frame(width: windowWidth, height: isShadeMode ? 14 : windowHeight)
         }
         .frame(width: windowWidth, height: isShadeMode ? 14 : windowHeight)
-        // NO additional backgrounds - this was causing the offset issue
+        .onAppear {
+            NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+                return self.handleKeyPress(event: event)
+            }
+        }
     }
     
-    // MARK: - Complete Background Assembly
+    private func handleKeyPress(event: NSEvent) -> NSEvent? {
+        if event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers == "a" {
+            selectedIndices = Set(0..<audioPlayer.playlist.count)
+            return nil
+        }
+
+        if event.keyCode == 53 || (event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers == "d") {
+            selectedIndices = []
+            return nil
+        }
+
+        return event
+    }
+
     @ViewBuilder
     private func buildCompleteBackground() -> some View {
-        // Build the entire playlist chrome as a single background layer
-        Group {
-            // Top section (0, 0)
             SimpleSpriteImage("PLAYLIST_TOP_LEFT_CORNER", width: 25, height: 20)
-                .position(x: 12.5, y: 10) // position uses center, so width/2, height/2
+                .position(x: 12.5, y: 10)
             
-            // Top tiles - fill between corners
             ForEach(0..<10, id: \.self) { i in
                 SimpleSpriteImage("PLAYLIST_TOP_TILE", width: 25, height: 20)
                     .position(x: 25 + 12.5 + CGFloat(i) * 25, y: 10)
             }
             
-            // Title bar - Make ONLY this draggable using macOS 15's WindowDragGesture
             SimpleSpriteImage("PLAYLIST_TITLE_BAR", width: 100, height: 20)
-                .position(x: 137.5, y: 10) // centered at 137.5
+                .position(x: 137.5, y: 10)
                 .gesture(WindowDragGesture())
             
             SimpleSpriteImage("PLAYLIST_TOP_RIGHT_CORNER", width: 25, height: 20)
-                .position(x: 262.5, y: 10) // 275 - 12.5
+                .position(x: 262.5, y: 10)
             
-            // Left border tiles
-            let sideHeight = 192 // 232 - 20 (top) - 38 (bottom) = 174, but we need overlap
+            let sideHeight = 192
             let leftTileCount = Int(ceil(CGFloat(sideHeight) / 29))
             ForEach(0..<leftTileCount, id: \.self) { i in
                 SimpleSpriteImage("PLAYLIST_LEFT_TILE", width: 12, height: 29)
                     .position(x: 6, y: 20 + 14.5 + CGFloat(i) * 29)
             }
             
-            // Right border tiles  
             ForEach(0..<leftTileCount, id: \.self) { i in
                 SimpleSpriteImage("PLAYLIST_RIGHT_TILE", width: 20, height: 29)
                     .position(x: 265, y: 20 + 14.5 + CGFloat(i) * 29)
             }
             
-            // Bottom section - Two sprites meeting edge-to-edge
             HStack(spacing: 0) {
                 SimpleSpriteImage("PLAYLIST_BOTTOM_LEFT_CORNER", width: 125, height: 38)
                     .frame(width: 125, height: 38)
@@ -143,50 +282,28 @@ struct WinampPlaylistWindow: View {
             }
             .frame(width: windowWidth, height: 38)
             .position(x: windowWidth / 2, y: 213)
-            
-            // DISABLED: Bottom tile was covering the right sprite in the gap area
-            // Since we're using HStack layout, no gap should exist anyway
-            // if let skin = skinManager.currentSkin,
-            //    let bottomTile = skin.images["PLAYLIST_BOTTOM_TILE"] {
-            //     Image(nsImage: bottomTile)
-            //         .resizable()
-            //         .frame(width: 25, height: 38)
-            //         .position(x: 137.5, y: 213)
-            // }
-        }
     }
     
-    // MARK: - Content Overlay
     @ViewBuilder
     private func buildContentOverlay() -> some View {
-        Group {
-            // Track list area with black background
-            // Height reduced from 174 to 170 to avoid overlapping bottom sprites
             playlistBackgroundColor
-                .frame(width: 243, height: 170) // Reduced by 4px to clear bottom section
-                .position(x: 133.5, y: 105) // Adjusted Y to keep top aligned
+                .frame(width: 243, height: 170)
+                .position(x: 133.5, y: 105)
 
-            // Track list content
             buildTrackList()
                 .frame(width: 243, height: 174)
                 .position(x: 133.5, y: 107)
                 .clipped()
             
-            // Bottom controls and transport buttons
             buildBottomControls()
             buildPlaylistTransportButtons()
             buildTimeDisplays()
-
-            // Title bar buttons
             buildTitleBarButtons()
             
-            // Scrollbar
-            SimpleSpriteImage("PLAYLIST_SCROLL_HANDLE", width: 8, height: 18)
-                .position(x: 260, y: 30) // In the right gutter
-        }
+        SimpleSpriteImage("PLAYLIST_SCROLL_HANDLE", width: 8, height: 18)
+            .position(x: 260, y: 30)
     }
     
-    // MARK: - Track List
     @ViewBuilder
     private func buildTrackList() -> some View {
         ScrollView(.vertical, showsIndicators: false) {
@@ -196,11 +313,22 @@ struct WinampPlaylistWindow: View {
                         .frame(width: 243, height: 13)
                         .background(trackBackground(track: track, index: index))
                         .onTapGesture {
-                            // Only play if it's a different track (avoid restarting same track)
+                            let modifiers = NSEvent.modifierFlags
+
+                            if modifiers.contains(.shift) {
+                                if selectedIndices.contains(index) {
+                                    selectedIndices.remove(index)
+                                } else {
+                                    selectedIndices.insert(index)
+                                }
+                            } else {
+                                selectedIndices = [index]
+                            }
+                        }
+                        .onTapGesture(count: 2) {
                             if audioPlayer.currentTrack?.url != track.url {
                                 audioPlayer.playTrack(track: track)
                             }
-                            selectedTrackIndex = index
                         }
                 }
             }
@@ -243,60 +371,31 @@ struct WinampPlaylistWindow: View {
         .padding(.horizontal, 2)
     }
     
-    // MARK: - Bottom Button Click Targets
     @ViewBuilder
     private func buildBottomControls() -> some View {
-        Group {
-            // NOTE: The 4 menu button graphics (ADD, REM, SEL, MISC) are BAKED INTO
-            // the PLAYLIST_BOTTOM_LEFT_CORNER sprite. These are just transparent click targets.
+        Button(action: { showAddMenu() }) {
+            Color.clear.frame(width: 22, height: 18).contentShape(Rectangle())
+        }.buttonStyle(.plain).position(x: 16, y: 208)
 
-            // Add File button - transparent click target over baked-in button graphic
-            Button(action: { openFileDialog() }) {
-                Color.clear
-                    .frame(width: 22, height: 18)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .position(x: 25, y: 206)
+        Button(action: { showRemMenu() }) {
+            Color.clear.frame(width: 22, height: 18).contentShape(Rectangle())
+        }.buttonStyle(.plain).position(x: 42, y: 208)
 
-            // Remove Selected button
-            Button(action: { removeSelectedTrack() }) {
-                Color.clear
-                    .frame(width: 22, height: 18)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .position(x: 54, y: 206)
+        Button(action: { showSelNotSupportedAlert() }) {
+            Color.clear.frame(width: 22, height: 18).contentShape(Rectangle())
+        }.buttonStyle(.plain).position(x: 68, y: 208)
 
-            // Selection/Crop button
-            Button(action: {}) {
-                Color.clear
-                    .frame(width: 22, height: 18)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .position(x: 83, y: 206)
+        Button(action: { showMiscMenu() }) {
+            Color.clear.frame(width: 22, height: 18).contentShape(Rectangle())
+        }.buttonStyle(.plain).position(x: 94, y: 208)
 
-            // Misc Options button
-            Button(action: {}) {
-                Color.clear
-                    .frame(width: 22, height: 18)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .position(x: 112, y: 206)
-        }
+        Button(action: { showListMenu() }) {
+            Color.clear.frame(width: 22, height: 18).contentShape(Rectangle())
+        }.buttonStyle(.plain).position(x: 243, y: 208)
     }
 
-    // MARK: - Transport Controls (Playback Buttons)
     @ViewBuilder
     private func buildPlaylistTransportButtons() -> some View {
-        Group {
-            // NOTE: Gold button icons are BAKED INTO the PLAYLIST_BOTTOM_RIGHT_CORNER sprite!
-            // These are transparent click targets positioned over the visual icons in the background.
-
-            // Previous button - transparent click target over gold icon in background
-            // Corner at X:195 (left edge at 120), buttons at offsets 8, 19, 30, 41, 52, 63
             Button(action: {
                 audioPlayer.previousTrack()
             }) {
@@ -305,24 +404,22 @@ struct WinampPlaylistWindow: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .position(x: 133, y: 220)  // 120 + 8
+            .position(x: 133, y: 220)
 
-            // Play button
             Button(action: {
-                if audioPlayer.isPaused {
+            if audioPlayer.isPaused || !audioPlayer.isPlaying {
                     audioPlayer.play()
-                } else if !audioPlayer.isPlaying {
-                    audioPlayer.play()
-                }
-            }) {
+            } else {
+                audioPlayer.pause()
+            }
+        }) {
                 Color.clear
                     .frame(width: 10, height: 9)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .position(x: 144, y: 220)  // 125 + 19
+            .position(x: 144, y: 220)
 
-            // Pause button
             Button(action: {
                 audioPlayer.pause()
             }) {
@@ -331,9 +428,8 @@ struct WinampPlaylistWindow: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .position(x: 155, y: 220)  // 125 + 30
+            .position(x: 155, y: 220)
 
-            // Stop button
             Button(action: {
                 audioPlayer.stop()
             }) {
@@ -342,9 +438,8 @@ struct WinampPlaylistWindow: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .position(x: 166, y: 220)  // 125 + 41
+            .position(x: 166, y: 220)
 
-            // Next button
             Button(action: {
                 audioPlayer.nextTrack()
             }) {
@@ -353,9 +448,8 @@ struct WinampPlaylistWindow: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .position(x: 177, y: 220)  // 125 + 52
+            .position(x: 177, y: 220)
 
-            // Eject button
             Button(action: {
                 openFileDialog()
             }) {
@@ -364,31 +458,22 @@ struct WinampPlaylistWindow: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .position(x: 188, y: 220)  // 125 + 63
-        }
+            .position(x: 183, y: 220)
     }
 
-    // MARK: - Time Displays (Sprite-Based)
     @ViewBuilder
     private func buildTimeDisplays() -> some View {
-        Group {
-            // Track Time Display (MM:SS / MM:SS) - positioned in TOP black info bar
-            // Uses CHARACTER sprites from TEXT.BMP with PLEDIT.TXT color
             PlaylistTimeText(trackTimeText)
-                .position(x: 168, y: 206)  // Moved left 23px total (191 → 168), down 1px (205 → 206)
+                .position(x: 168, y: 206)
 
-            // Remaining Time Display (-MM:SS) - positioned in BOTTOM black info bar
-            if !remainingTimeText.isEmpty {
-                PlaylistTimeText(remainingTimeText)
-                    .position(x: 203, y: 219)  // Moved right 12px total (191 → 203), down 2px (217 → 219)
-            }
+        if !remainingTimeText.isEmpty {
+            PlaylistTimeText(remainingTimeText)
+                .position(x: 203, y: 219)
         }
     }
 
-    // MARK: - Title Bar Buttons
     @ViewBuilder
     private func buildTitleBarButtons() -> some View {
-        Group {
             Button(action: { NSApp.keyWindow?.miniaturize(nil) }) {
                 SimpleSpriteImage("MAIN_MINIMIZE_BUTTON", width: 9, height: 9)
             }
@@ -408,19 +493,14 @@ struct WinampPlaylistWindow: View {
             }
             .buttonStyle(.plain)
             .position(x: 268.5, y: 7.5)
-        }
     }
 
-    // MARK: - Shade Mode
     @ViewBuilder
     private func buildShadeMode() -> some View {
-        // Playlist shade mode shows compact title bar with current track info
         ZStack {
-            // Use the playlist title bar sprite as background
             SimpleSpriteImage("PLAYLIST_TITLE_BAR", width: 275, height: 14)
                 .position(x: 137.5, y: 7)
 
-            // Show current track name in shade mode
             if let currentTrack = audioPlayer.currentTrack {
                 Text("\(currentTrack.title) - \(currentTrack.artist)")
                     .font(.system(size: 8))
@@ -435,15 +515,12 @@ struct WinampPlaylistWindow: View {
                     .position(x: 100, y: 7)
             }
 
-            // Titlebar buttons
             buildTitleBarButtons()
         }
         .frame(width: windowWidth, height: 14)
     }
 
-    // MARK: - Helper Functions
     private func trackTextColor(track: Track) -> Color {
-        // Use URL comparison for reliable track matching (IDs are UUID and may change)
         if let currentTrack = audioPlayer.currentTrack, currentTrack.url == track.url {
             return playlistStyle.currentTextColor
         }
@@ -451,11 +528,10 @@ struct WinampPlaylistWindow: View {
     }
 
     private func trackBackground(track: Track, index: Int) -> Color {
-        // Use URL comparison for reliable track matching (IDs are UUID and may change)
         if let currentTrack = audioPlayer.currentTrack, currentTrack.url == track.url {
             return playlistStyle.selectedBackgroundColor
         }
-        if selectedTrackIndex == index {
+        if selectedIndices.contains(index) {
             return playlistStyle.selectedBackgroundColor.opacity(0.6)
         }
         return Color.clear
@@ -470,8 +546,6 @@ struct WinampPlaylistWindow: View {
     
     private func openFileDialog() {
         let openPanel = NSOpenPanel()
-        // Use .playlist instead of .m3uPlaylist to allow all playlist formats
-        // This is more reliable than .m3uPlaylist and allows M3U, PLS, etc.
         openPanel.allowedContentTypes = [.audio, .playlist]
         openPanel.allowsMultipleSelection = true
         openPanel.canChooseDirectories = false
@@ -480,29 +554,18 @@ struct WinampPlaylistWindow: View {
 
         openPanel.begin { response in
             if response == .OK {
-                // CRITICAL: NSOpenPanel.begin callback is NOT on MainActor
-                // Must dispatch to main thread before calling @MainActor methods
                 Task { @MainActor [audioPlayer] in
                     for url in openPanel.urls {
-                        // Check if this is an M3U playlist
                         let fileExtension = url.pathExtension.lowercased()
                         if fileExtension == "m3u" || fileExtension == "m3u8" {
                             do {
                                 let entries = try M3UParser.parse(fileURL: url)
-                                print("M3U: Loaded \(entries.count) entries from \(url.lastPathComponent)")
-
                                 for entry in entries {
-                                    if entry.isRemoteStream {
-                                        // Log remote streams for now - will be handled by P5 (Internet Radio)
-                                        print("M3U: Found stream: \(entry.title ?? entry.url.absoluteString)")
-                                        // TODO: Add to internet radio library when P5 is implemented
-                                    } else {
-                                        // Add local file to playlist
+                                    if !entry.isRemoteStream {
                                         audioPlayer.addTrack(url: entry.url)
                                     }
                                 }
                             } catch {
-                                // Show error alert
                                 let alert = NSAlert()
                                 alert.messageText = "Failed to Load M3U Playlist"
                                 alert.informativeText = error.localizedDescription
@@ -511,7 +574,6 @@ struct WinampPlaylistWindow: View {
                                 alert.runModal()
                             }
                         } else {
-                            // Regular audio file
                             audioPlayer.addTrack(url: url)
                         }
                     }
@@ -522,13 +584,198 @@ struct WinampPlaylistWindow: View {
 
     
     private func removeSelectedTrack() {
-        guard let index = selectedTrackIndex,
+        guard let index = selectedIndices.first,
               index < audioPlayer.playlist.count else { return }
-        selectedTrackIndex = nil
+        audioPlayer.playlist.remove(at: index)
+        selectedIndices.remove(index)
+    }
+
+    private func showAddMenu() {
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+
+        let addURLItem = SpriteMenuItem(
+            normalSprite: "PLAYLIST_ADD_URL",
+            selectedSprite: "PLAYLIST_ADD_URL_SELECTED",
+            skinManager: skinManager,
+            action: #selector(PlaylistWindowActions.addURL),
+            target: PlaylistWindowActions.shared
+        )
+        addURLItem.representedObject = audioPlayer
+        menu.addItem(addURLItem)
+
+        let addDirItem = SpriteMenuItem(
+            normalSprite: "PLAYLIST_ADD_DIR",
+            selectedSprite: "PLAYLIST_ADD_DIR_SELECTED",
+            skinManager: skinManager,
+            action: #selector(PlaylistWindowActions.addDirectory),
+            target: PlaylistWindowActions.shared
+        )
+        addDirItem.representedObject = audioPlayer
+        menu.addItem(addDirItem)
+
+        let addFileItem = SpriteMenuItem(
+            normalSprite: "PLAYLIST_ADD_FILE",
+            selectedSprite: "PLAYLIST_ADD_FILE_SELECTED",
+            skinManager: skinManager,
+            action: #selector(PlaylistWindowActions.addFile),
+            target: PlaylistWindowActions.shared
+        )
+        addFileItem.representedObject = audioPlayer
+        menu.addItem(addFileItem)
+
+        if let window = NSApp.keyWindow ?? NSApp.windows.first(where: { $0.isVisible }),
+           let contentView = window.contentView {
+            let location = NSPoint(x: 10, y: 396)
+            menu.popUp(positioning: nil, at: location, in: contentView)
+        }
+    }
+
+    private func showRemMenu() {
+        PlaylistWindowActions.shared.selectedIndices = selectedIndices
+
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+
+        let remMiscItem = SpriteMenuItem(
+            normalSprite: "PLAYLIST_REMOVE_MISC",
+            selectedSprite: "PLAYLIST_REMOVE_MISC_SELECTED",
+            skinManager: skinManager,
+            action: #selector(PlaylistWindowActions.removeMisc),
+            target: PlaylistWindowActions.shared
+        )
+        remMiscItem.representedObject = audioPlayer
+        menu.addItem(remMiscItem)
+
+        let remAllItem = SpriteMenuItem(
+            normalSprite: "PLAYLIST_REMOVE_ALL",
+            selectedSprite: "PLAYLIST_REMOVE_ALL_SELECTED",
+            skinManager: skinManager,
+            action: #selector(PlaylistWindowActions.removeAll),
+            target: PlaylistWindowActions.shared
+        )
+        remAllItem.representedObject = audioPlayer
+        menu.addItem(remAllItem)
+
+        let cropItem = SpriteMenuItem(
+            normalSprite: "PLAYLIST_CROP",
+            selectedSprite: "PLAYLIST_CROP_SELECTED",
+            skinManager: skinManager,
+            action: #selector(PlaylistWindowActions.cropPlaylist),
+            target: PlaylistWindowActions.shared
+        )
+        cropItem.representedObject = audioPlayer
+        menu.addItem(cropItem)
+
+        let remSelItem = SpriteMenuItem(
+            normalSprite: "PLAYLIST_REMOVE_SELECTED",
+            selectedSprite: "PLAYLIST_REMOVE_SELECTED_SELECTED",
+            skinManager: skinManager,
+            action: #selector(PlaylistWindowActions.removeSelected),
+            target: PlaylistWindowActions.shared
+        )
+        remSelItem.representedObject = audioPlayer
+        menu.addItem(remSelItem)
+
+        if let window = NSApplication.shared.windows.first(where: { $0.contentView != nil }),
+           let contentView = window.contentView {
+            let location = NSPoint(x: 39, y: 378)
+            menu.popUp(positioning: nil, at: location, in: contentView)
+        }
+    }
+
+    private func showSelNotSupportedAlert() {
+        let alert = NSAlert()
+        alert.messageText = "Selection Menu"
+        alert.informativeText = "Not supported yet. Use Shift+click for multi-select (planned feature)."
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+    }
+
+    private func showMiscMenu() {
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+
+        let sortItem = SpriteMenuItem(
+            normalSprite: "PLAYLIST_SORT_LIST",
+            selectedSprite: "PLAYLIST_SORT_LIST_SELECTED",
+            skinManager: skinManager,
+            action: #selector(PlaylistWindowActions.sortList),
+            target: PlaylistWindowActions.shared
+        )
+        sortItem.representedObject = audioPlayer
+        menu.addItem(sortItem)
+
+        let fileInfoItem = SpriteMenuItem(
+            normalSprite: "PLAYLIST_FILE_INFO",
+            selectedSprite: "PLAYLIST_FILE_INFO_SELECTED",
+            skinManager: skinManager,
+            action: #selector(PlaylistWindowActions.fileInfo),
+            target: PlaylistWindowActions.shared
+        )
+        fileInfoItem.representedObject = audioPlayer
+        menu.addItem(fileInfoItem)
+
+        let miscOptionsItem = SpriteMenuItem(
+            normalSprite: "PLAYLIST_MISC_OPTIONS",
+            selectedSprite: "PLAYLIST_MISC_OPTIONS_SELECTED",
+            skinManager: skinManager,
+            action: #selector(PlaylistWindowActions.miscOptions),
+            target: PlaylistWindowActions.shared
+        )
+        miscOptionsItem.representedObject = audioPlayer
+        menu.addItem(miscOptionsItem)
+
+        if let window = NSApplication.shared.windows.first(where: { $0.contentView != nil }),
+           let contentView = window.contentView {
+            let location = NSPoint(x: 100, y: 397)
+            menu.popUp(positioning: nil, at: location, in: contentView)
+        }
+    }
+
+    private func showListMenu() {
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+
+        let newListItem = SpriteMenuItem(
+            normalSprite: "PLAYLIST_NEW_LIST",
+            selectedSprite: "PLAYLIST_NEW_LIST_SELECTED",
+            skinManager: skinManager,
+            action: #selector(PlaylistWindowActions.newList),
+            target: PlaylistWindowActions.shared
+        )
+        newListItem.representedObject = audioPlayer
+        menu.addItem(newListItem)
+
+        let saveListItem = SpriteMenuItem(
+            normalSprite: "PLAYLIST_SAVE_LIST",
+            selectedSprite: "PLAYLIST_SAVE_LIST_SELECTED",
+            skinManager: skinManager,
+            action: #selector(PlaylistWindowActions.saveList),
+            target: PlaylistWindowActions.shared
+        )
+        saveListItem.representedObject = audioPlayer
+        menu.addItem(saveListItem)
+
+        let loadListItem = SpriteMenuItem(
+            normalSprite: "PLAYLIST_LOAD_LIST",
+            selectedSprite: "PLAYLIST_LOAD_LIST_SELECTED",
+            skinManager: skinManager,
+            action: #selector(PlaylistWindowActions.loadList),
+            target: PlaylistWindowActions.shared
+        )
+        loadListItem.representedObject = audioPlayer
+        menu.addItem(loadListItem)
+
+        if let window = NSApplication.shared.windows.first(where: { $0.contentView != nil }),
+           let contentView = window.contentView {
+            let location = NSPoint(x: 228, y: 397)
+            menu.popUp(positioning: nil, at: location, in: contentView)
+        }
     }
 }
 
-// Extension to use position instead of offset for sprites
 extension SimpleSpriteImage {
     func position(x: CGFloat, y: CGFloat) -> some View {
         self.position(CGPoint(x: x, y: y))
