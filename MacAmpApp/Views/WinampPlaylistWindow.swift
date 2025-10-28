@@ -5,9 +5,8 @@ import AppKit
 class PlaylistWindowActions: NSObject {
     static let shared = PlaylistWindowActions()
 
-    // Store reference to current selected index and removal closure
-    var selectedTrackIndex: Int?
-    var removeTrackClosure: ((Int) -> Void)?
+    // Store reference to current selected indices
+    var selectedIndices: Set<Int> = []
 
     @objc func addURL(_ sender: NSMenuItem) {
         // TODO: Implement URL input dialog for Internet Radio streams
@@ -65,35 +64,54 @@ class PlaylistWindowActions: NSObject {
             return
         }
 
-        // Use the stored selected index and closure
-        if let index = PlaylistWindowActions.shared.selectedTrackIndex {
-            Task { @MainActor in
-                if index < audioPlayer.playlist.count {
-                    audioPlayer.playlist.remove(at: index)
-                    PlaylistWindowActions.shared.selectedTrackIndex = nil
-                }
-            }
-        } else {
-            // No track selected
+        // Remove all selected tracks
+        let indices = PlaylistWindowActions.shared.selectedIndices
+        if indices.isEmpty {
+            // No tracks selected
             let alert = NSAlert()
             alert.messageText = "Remove Selected"
-            alert.informativeText = "No track selected"
+            alert.informativeText = "No tracks selected"
             alert.alertStyle = .informational
             alert.addButton(withTitle: "OK")
             alert.runModal()
+        } else {
+            Task { @MainActor in
+                // Remove in reverse order to maintain index validity
+                for index in indices.sorted().reversed() {
+                    if index < audioPlayer.playlist.count {
+                        audioPlayer.playlist.remove(at: index)
+                    }
+                }
+                PlaylistWindowActions.shared.selectedIndices = []
+            }
         }
     }
 
     @objc func cropPlaylist(_ sender: NSMenuItem) {
         print("CROP clicked")
+        guard let audioPlayer = sender.representedObject as? AudioPlayer else {
+            print("ERROR: No AudioPlayer in representedObject")
+            return
+        }
 
-        // Not supported yet per user request
-        let alert = NSAlert()
-        alert.messageText = "Crop"
-        alert.informativeText = "Not supported yet"
-        alert.alertStyle = .informational
-        alert.addButton(withTitle: "OK")
-        alert.runModal()
+        // Keep only selected tracks (crop = remove unselected)
+        let indices = PlaylistWindowActions.shared.selectedIndices
+        if indices.isEmpty {
+            // No tracks selected - can't crop
+            let alert = NSAlert()
+            alert.messageText = "Crop Playlist"
+            alert.informativeText = "No tracks selected. Select tracks to keep, then crop."
+            alert.alertStyle = .informational
+            alert.addButton(withTitle: "OK")
+            alert.runModal()
+        } else {
+            Task { @MainActor in
+                // Create new playlist with only selected tracks
+                let selectedTracks = indices.sorted().map { audioPlayer.playlist[$0] }
+                audioPlayer.playlist = selectedTracks
+                PlaylistWindowActions.shared.selectedIndices = []
+            }
+        }
     }
 
     @objc func removeAll(_ sender: NSMenuItem) {
@@ -198,7 +216,7 @@ struct WinampPlaylistWindow: View {
     @EnvironmentObject var audioPlayer: AudioPlayer
     @EnvironmentObject var settings: AppSettings
 
-    @State private var selectedTrackIndex: Int? = nil
+    @State private var selectedIndices: Set<Int> = []
     @State private var isShadeMode: Bool = false
 
     // Menu state
@@ -287,9 +305,33 @@ struct WinampPlaylistWindow: View {
             .frame(width: windowWidth, height: isShadeMode ? 14 : windowHeight)
         }
         .frame(width: windowWidth, height: isShadeMode ? 14 : windowHeight)
+        .onAppear {
+            // Enable keyboard shortcuts
+            NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+                return self.handleKeyPress(event: event)
+            }
+        }
         // NO additional backgrounds - this was causing the offset issue
     }
     
+    // MARK: - Keyboard Shortcuts
+
+    private func handleKeyPress(event: NSEvent) -> NSEvent? {
+        // Command+A: Select all tracks
+        if event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers == "a" {
+            selectedIndices = Set(0..<audioPlayer.playlist.count)
+            return nil  // Event handled
+        }
+
+        // Escape or Command+D: Deselect all
+        if event.keyCode == 53 || (event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers == "d") {
+            selectedIndices = []
+            return nil  // Event handled
+        }
+
+        return event  // Pass through other events
+    }
+
     // MARK: - Complete Background Assembly
     @ViewBuilder
     private func buildCompleteBackground() -> some View {
@@ -390,11 +432,26 @@ struct WinampPlaylistWindow: View {
                         .frame(width: 243, height: 13)
                         .background(trackBackground(track: track, index: index))
                         .onTapGesture {
-                            // Only play if it's a different track (avoid restarting same track)
+                            // Check for Shift key modifier
+                            let modifiers = NSEvent.modifierFlags
+
+                            if modifiers.contains(.shift) {
+                                // Shift+Click: Toggle track in/out of selection
+                                if selectedIndices.contains(index) {
+                                    selectedIndices.remove(index)
+                                } else {
+                                    selectedIndices.insert(index)
+                                }
+                            } else {
+                                // Normal single-click: Select only (don't play)
+                                selectedIndices = [index]
+                            }
+                        }
+                        .onTapGesture(count: 2) {
+                            // Double-click: Play the track
                             if audioPlayer.currentTrack?.url != track.url {
                                 audioPlayer.playTrack(track: track)
                             }
-                            selectedTrackIndex = index
                         }
                 }
             }
@@ -658,7 +715,7 @@ struct WinampPlaylistWindow: View {
         if let currentTrack = audioPlayer.currentTrack, currentTrack.url == track.url {
             return playlistStyle.selectedBackgroundColor
         }
-        if selectedTrackIndex == index {
+        if selectedIndices.contains(index) {
             return playlistStyle.selectedBackgroundColor.opacity(0.6)
         }
         return Color.clear
@@ -725,10 +782,11 @@ struct WinampPlaylistWindow: View {
 
     
     private func removeSelectedTrack() {
-        guard let index = selectedTrackIndex,
+        // Remove first selected track (for backward compatibility with single selection)
+        guard let index = selectedIndices.first,
               index < audioPlayer.playlist.count else { return }
         audioPlayer.playlist.remove(at: index)
-        selectedTrackIndex = nil
+        selectedIndices.remove(index)
     }
 
     // MARK: - ADD Menu
@@ -785,8 +843,8 @@ struct WinampPlaylistWindow: View {
     // MARK: - REM Menu
 
     private func showRemMenu() {
-        // Store the current selected track index for the action handler
-        PlaylistWindowActions.shared.selectedTrackIndex = selectedTrackIndex
+        // Store the current selected indices for the action handler
+        PlaylistWindowActions.shared.selectedIndices = selectedIndices
 
         let menu = NSMenu()
         menu.autoenablesItems = false
@@ -847,8 +905,7 @@ struct WinampPlaylistWindow: View {
             let location = NSPoint(x: 39, y: 378)  // 400 - (3 * 18) = 346
             menu.popUp(positioning: nil, at: location, in: contentView)
 
-            // Clear the selected track reference after menu closes
-            PlaylistWindowActions.shared.selectedTrackIndex = nil
+            // Selection persists after menu closes (don't clear)
         }
     }
 
