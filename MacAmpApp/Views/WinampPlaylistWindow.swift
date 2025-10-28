@@ -152,6 +152,7 @@ struct WinampPlaylistWindow: View {
 
     @State private var selectedIndices: Set<Int> = []
     @State private var isShadeMode: Bool = false
+    @State private var keyboardMonitor: Any?
 
     private let windowWidth: CGFloat = 275
     private let windowHeight: CGFloat = 232
@@ -224,8 +225,16 @@ struct WinampPlaylistWindow: View {
         }
         .frame(width: windowWidth, height: isShadeMode ? 14 : windowHeight)
         .onAppear {
-            NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-                return self.handleKeyPress(event: event)
+            // Store monitor reference to keep it alive
+            keyboardMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [self] event in
+                return handleKeyPress(event: event)
+            }
+        }
+        .onDisappear {
+            // Clean up keyboard monitor
+            if let monitor = keyboardMonitor {
+                NSEvent.removeMonitor(monitor)
+                keyboardMonitor = nil
             }
         }
     }
@@ -339,34 +348,27 @@ struct WinampPlaylistWindow: View {
     private func trackRow(track: Track, index: Int) -> some View {
         let textColor = trackTextColor(track: track)
         HStack(spacing: 2) {
-            PlaylistBitmapText(
-                "\(index + 1).",
-                color: textColor,
-                spacing: 1,
-                fallbackSize: 9,
-                fallbackDesign: Font.Design.monospaced
-            )
-            .frame(width: 18, alignment: .trailing)
+            // Track number - real text instead of bitmap font
+            Text("\(index + 1).")
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundColor(textColor)
+                .frame(width: 18, alignment: .trailing)
 
-            PlaylistBitmapText(
-                "\(track.title) - \(track.artist)",
-                color: textColor,
-                spacing: 1,
-                fallbackSize: 9
-            )
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .clipped()
-            .layoutPriority(1)
+            // Track title and artist - real text instead of bitmap font
+            Text("\(track.title) - \(track.artist)")
+                .font(.system(size: 9))
+                .foregroundColor(textColor)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .layoutPriority(1)
 
-            PlaylistBitmapText(
-                formatDuration(track.duration),
-                color: textColor,
-                spacing: 1,
-                fallbackSize: 9,
-                fallbackDesign: Font.Design.monospaced
-            )
-            .frame(width: 38, alignment: .trailing)
-            .padding(.trailing, 3)
+            // Duration - real text instead of bitmap font
+            Text(formatDuration(track.duration))
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundColor(textColor)
+                .frame(width: 38, alignment: .trailing)
+                .padding(.trailing, 3)
         }
         .padding(.horizontal, 2)
     }
@@ -528,9 +530,7 @@ struct WinampPlaylistWindow: View {
     }
 
     private func trackBackground(track: Track, index: Int) -> Color {
-        if let currentTrack = audioPlayer.currentTrack, currentTrack.url == track.url {
-            return playlistStyle.selectedBackgroundColor
-        }
+        // Only show background for selected tracks (not current track)
         if selectedIndices.contains(index) {
             return playlistStyle.selectedBackgroundColor.opacity(0.6)
         }

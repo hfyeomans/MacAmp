@@ -17,6 +17,7 @@ MacAmp is a SwiftUI-based audio player for macOS that recreates the iconic deskt
 - 📋 **M3U Playlist Support** - Load M3U/M3U8 playlist files with local audio tracks
 - 📂 **Playlist Menus** - Sprite-based popup menus for ADD, REM, MISC, and LIST OPTS with hover states
 - ✨ **Multi-Select** - Shift+Click to select multiple tracks, Command+A to select all, with CROP and remove operations
+- 📝 **Native Text Rendering** - Playlist tracks use real text with PLEDIT.txt colors and Unicode support (not bitmap fonts)
 - 🎛️ **Advanced Controls** - Volume, balance, position seeking, shuffle, and repeat
 - 🪟 **Multi-Window Interface** - Main player, equalizer, and playlist windows with shade modes
 - 🎯 **Native macOS Integration** - Borderless windows with custom title bars
