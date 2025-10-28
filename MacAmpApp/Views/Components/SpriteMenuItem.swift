@@ -9,20 +9,17 @@ import SwiftUI
 import AppKit
 
 /// Custom view that handles hover tracking and click forwarding to menu item
-class HoverTrackingView: NSView {
+final class HoverTrackingView: NSView {
     var onHoverChanged: ((Bool) -> Void)?
     weak var menuItem: NSMenuItem?
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
-
-        // Remove old tracking areas
         trackingAreas.forEach { removeTrackingArea($0) }
-
-        // Add new tracking area
+        
         let trackingArea = NSTrackingArea(
             rect: bounds,
-            options: [.mouseEnteredAndExited, .activeInKeyWindow],
+            options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
             owner: self,
             userInfo: nil
         )
@@ -38,23 +35,17 @@ class HoverTrackingView: NSView {
     }
 
     override func mouseDown(with event: NSEvent) {
-        // Forward click to the menu item's action
-        // This is the key fix - custom views block NSMenuItem clicks
         if let menuItem = menuItem,
            let action = menuItem.action,
            let target = menuItem.target {
             NSApp.sendAction(action, to: target, from: menuItem)
         }
-
-        // Close the menu after click
-        if let enclosingMenu = menuItem?.menu {
-            enclosingMenu.cancelTracking()
-        }
+        menuItem?.menu?.cancelTracking()
     }
 }
 
 /// Custom NSMenuItem that displays a sprite and swaps to selected sprite on hover
-class SpriteMenuItem: NSMenuItem {
+final class SpriteMenuItem: NSMenuItem {
     private let normalSpriteName: String
     private let selectedSpriteName: String
     private let skinManager: SkinManager
