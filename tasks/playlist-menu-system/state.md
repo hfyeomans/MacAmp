@@ -118,15 +118,25 @@
 - Next phase will implement Set<Int> for multi-selection
 - Required for CROP and REM SEL with multiple tracks
 
+**Multi-Select Implementation** ✅ COMPLETE (2025-10-26)
+- Changed to Set<Int> selection state
+- Single-click selects, double-click plays
+- Shift+Click toggles multi-selection
+- Command+A selects all, Escape deselects all
+- REM SEL removes all selected tracks
+- CROP keeps only selected tracks
+- All features tested and working
+
 **Deferred Features:**
-- M3U export/import (SAVE LIST, LOAD LIST)
-- Sort operations (SORT LIST)
-- File info dialog (FILE INFO)
+- Shift+Drag range select (polish)
+- M3U export/import (SAVE LIST, LOAD LIST - separate task)
+- Sort operations (SORT LIST - future)
+- File info dialog (FILE INFO - future)
 - URL/Internet radio support (ADD URL - separate P5 task)
 
 ---
 
-**Status:** ✅ Menu system complete and functional
-**Next:** Multi-select implementation (1.5 hours estimated)
+**Status:** ✅ TASK COMPLETE - Ready to merge to main
 **Branch:** `feature/playlist-menu-system`
-**Commits:** 5 commits on this branch
+**Commits:** 8 commits on this branch
+**Total Time:** ~8 hours (menu system + multi-select)
