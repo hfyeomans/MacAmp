@@ -44,6 +44,8 @@ struct EqGraphView: View {
     var body: some View {
         ZStack(alignment: .topLeading) {
             Image(nsImage: background)
+                .interpolation(.none)
+                .antialiased(false)
                 .resizable()
                 .frame(width: background.size.width, height: background.size.height)
 
@@ -87,6 +89,8 @@ struct EqGraphView: View {
             let h = background.size.height
             let y = yForDB(audioPlayer.preamp, height: h)
             Image(nsImage: preampLine)
+                .interpolation(.none)
+                .antialiased(false)
                 .resizable()
                 .frame(width: preampLine.size.width, height: preampLine.size.height)
                 .offset(x: 0, y: y)

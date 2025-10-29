@@ -321,7 +321,12 @@ struct WinampPlaylistWindow: View {
                     trackRow(track: track, index: index)
                         .frame(width: 243, height: 13)
                         .background(trackBackground(track: track, index: index))
+                        .onTapGesture(count: 2) {
+                            // Double-click: Play the track
+                            audioPlayer.playTrack(track: track)
+                        }
                         .onTapGesture {
+                            // Single-click: Handle selection
                             let modifiers = NSEvent.modifierFlags
 
                             if modifiers.contains(.shift) {
@@ -332,11 +337,6 @@ struct WinampPlaylistWindow: View {
                                 }
                             } else {
                                 selectedIndices = [index]
-                            }
-                        }
-                        .onTapGesture(count: 2) {
-                            if audioPlayer.currentTrack?.url != track.url {
-                                audioPlayer.playTrack(track: track)
                             }
                         }
                 }

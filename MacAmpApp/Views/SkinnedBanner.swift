@@ -16,6 +16,8 @@ struct SkinnedBanner<Content: View>: View {
         ZStack {
             if let img = fill {
                 Image(nsImage: img)
+                    .interpolation(.none)
+                    .antialiased(false)
                     .resizable(resizingMode: .tile)
                     .frame(height: height)
             } else {

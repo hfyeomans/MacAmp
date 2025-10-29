@@ -62,6 +62,8 @@ struct PresetsButton: View {
     var body: some View {
         Button(action: { showPopover.toggle() }) {
             Image(nsImage: showPopover ? eqPresetsBtnSel : eqPresetsBtn)
+                .interpolation(.none)
+                .antialiased(false)
                 .resizable()
                 .frame(width: 44, height: 12)
         }
