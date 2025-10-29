@@ -1,284 +1,538 @@
 # Ready for Next Session - MacAmp Development
 
-**Last Updated:** 2025-10-26
-**Current Branch:** `feature/playlist-menu-system`
-**Build Status:** ✅ Successful - All 5 Menu Buttons Complete
+**Last Updated:** 2025-10-28
+**Current Branch:** `swift-modernization-recommendations`
+**Build Status:** ✅ Successful - Phase 1 Complete, Phases 2-3 Pending
 
 ---
 
-## 🎯 Active Tasks
+## 🎯 Current Task: Swift Modernization (3 Phases)
 
-### **Task 1: Playlist Menu System + Multi-Select (P2) - COMPLETE ✅**
+### **Phase 1: Pixel-Perfect Sprite Rendering** ✅ COMPLETE
 
-**Branch:** `feature/playlist-menu-system`
-**Task Name:** Playlist Menu System with Multi-Select
-**Task Folder:** `tasks/playlist-menu-system/`
-**Status:** ✅ COMPLETE - All features implemented and tested
-**Completion:** All phases complete
+**Branch:** `swift-modernization-recommendations`
+**PR:** #23 (Merged to main)
+**Task Folder:** `tasks/swift-modernization-recommendations/`
+**Status:** ✅ All sprite rendering now pixel-perfect
 
-**Features Implemented:**
-- ✅ All 5 menu buttons (ADD, REM, SEL, MISC, LIST OPTS)
-- ✅ Multi-track selection with Shift+Click
-- ✅ Command+A select all, Escape/Cmd+D deselect all
-- ✅ REM SEL removes multiple selected tracks
-- ✅ CROP keeps only selected tracks
-- ✅ Visual highlight for selected tracks
+**What Was Implemented:**
+- Applied `.interpolation(.none) + .antialiased(false)` to 5 components
+- Fixed double-click gesture order (must come before single-click)
+- All sprites render crisp and sharp (authentic retro aesthetic)
 
-**Ready to Merge:** This branch is complete and can be merged to main
-
-## ✅ What's Currently Working
-
-**Playlist Menus (5 buttons):**
-- ADD menu: ADD FILE ✓, ADD DIR ✓, ADD URL (alert)
-- REM menu: REM SEL ✓, CROP ✓, REM ALL ✓, REM MISC (alert)
-- SEL button: Shows alert (multi-select via keyboard instead)
-- MISC menu: SORT LIST, FILE INFO, MISC OPTIONS (all alerts)
-- LIST OPTS menu: NEW LIST, SAVE LIST, LOAD LIST (all alerts)
-
-**Multi-Select Features:**
-- Single-Click: Select track only
-- Double-Click: Play track
-- Shift+Click: Toggle track in/out of selection ✓
-- Command+A: Select all tracks ✓
-- Escape/Cmd+D: Deselect all ✓
-- Visual highlight for selected tracks ✓
-
-**Working Actions:**
-- REM SEL: Removes all selected tracks ✓
-- CROP: Keeps only selected tracks ✓
-- Selection state: Set<Int> with proper index handling
+**Files Modified:**
+- SpriteMenuItem.swift (menu sprites)
+- SkinnedText.swift (text rendering)
+- EqGraphView.swift (EQ graph, 2 locations)
+- PresetsButton.swift (preset button)
+- SkinnedBanner.swift (tiled banners)
+- WinampPlaylistWindow.swift (gesture order)
 
 ---
 
-### **Task 2: Playlist Text Rendering Fix (P2) - READY**
+### **Phase 2: @Observable Migration** ⏳ NEXT SESSION
 
-**Branch:** TBD (`fix/playlist-text-rendering`)
-**Task Folder:** `tasks/playlist-text-rendering-fix/`
-**Status:** Research Complete - Ready to implement
-**Time:** 30-60 minutes
-**Issue:** Track listings use TEXT.BMP bitmap fonts (should use real text)
+**Status:** Research complete, implementation paused
+**Complexity:** Medium-High (requires careful @Bindable handling)
 
-### **Progress: 3 of 7 Phases Complete**
+**What Needs to Be Done:**
+- Migrate 4 classes from ObservableObject to @Observable:
+  1. AppSettings (2 properties, 3 files) - Has bindings
+  2. DockingController (1 property, 2 files)
+  3. SkinManager (4 properties, 13 files)
+  4. AudioPlayer (28 properties, 10 files)
+- Update 28 @EnvironmentObject → @Environment declarations across 13 files
+- Handle @Bindable for views with two-way bindings (Toggle, Picker, etc.)
 
-| Phase | Status |
-|-------|--------|
-| 1. Sprite Audit | ✅ COMPLETE |
-| 2. Menu Components | ✅ COMPLETE |
-| 3. ADD Menu POC | ✅ COMPLETE |
-| 4. REM Menu | ⏳ NEXT |
-| 5. SEL Menu | ⏳ PENDING |
-| 6. MISC Menu | ⏳ PENDING |
-| 7. LIST Menu | ⏳ PENDING |
+**Critical Discovery:**
+- Views with bindings (e.g., `Toggle(isOn: $settings.property)`) need **@Bindable**
+- Pattern: `@Environment(AppSettings.self) + @Bindable var settings`
+- This is more complex than just replacing @EnvironmentObject
 
-### **What's Working:**
-
-✅ **ADD Menu:**
-- Click ADD button → sprite-based popup menu
-- 3 menu items with hover states (light ↔ dark grey)
-- ADD FILE opens file picker ✅
-- ADD DIR opens file picker ✅
-- ADD URL shows deferral message (→ P5)
-
-✅ **Critical Fixes:**
-- Fixed eject button (x: 183)
-- Fixed REM sprite coordinates
-- Added SEL menu sprites (6 sprites)
-- NSMenu positioning (x: 10, y: 400)
-
-### **Key Files:**
-
-**Modified:**
-- `MacAmpApp/Models/SkinSprites.swift` - 32 menu sprites
-- `MacAmpApp/Views/Components/SpriteMenuItem.swift` - Hover + click forwarding
-- `MacAmpApp/Views/WinampPlaylistWindow.swift` - ADD menu integration
-- `BUILDING_RETRO_MACOS_APPS_SKILL.md` - NSMenu coordinates gotcha
-
-**Documentation:**
-- `tasks/playlist-menu-system/state.md` - Progress tracking
-- `tasks/playlist-menu-system/SESSION_SUMMARY.md` - Session recap
-- `tasks/playlist-menu-system/research.md` - Webamp analysis
-- `tasks/playlist-menu-system/todo.md` - Implementation plan
-
-### **Commits:**
-- `bd2ce7a` - Phase 1-2: Sprites + components
-- `03ad60b` - ADD menu working
-- `0720c04` - Documentation updates
-
-### **Next Steps:**
-
-1. Test ADD menu thoroughly
-2. Implement REM menu (4 items, x: ~53, y: 400)
-3. Implement SEL menu (3 items, x: ~82, y: 400)
-4. Implement MISC menu (3 items, x: ~111, y: 400)
-5. Implement LIST menu (3 items, x: ~460, y: 400)
-
-**Estimated Time Remaining:** 2-4 hours
+**Estimated Time:** 2-3 hours for careful implementation + testing
 
 ---
 
-## 📊 Today's Accomplishments (2025-10-25)
+### **Phase 3: NSMenuDelegate for Accessibility** ⏳ PENDING
 
-### **Session 1: Spectrum Analyzer Improvements**
-
-**PR #19: Frequency-Dependent Gain Compensation** ✅ MERGED
-- Implemented pinking filter (dB-based equalization)
-- Fixed bass dominance (bass reduced 60%, treble boosted 250%)
-- Vocals now prominent in mid-range bars
-- Sensitivity: 15.0x (tuned for visibility)
-- Architecture verified: Spectrum taps AFTER EQ (correct!)
-
-**Hotfix: Hard-coded Path** ✅ MERGED
-- Fixed `scripts/verify-dist-signature.sh`
-- Dynamic path resolution (works on all environments)
-- 3 flexible methods: CLI arg, env var, auto-detect
-
-**Development Workflow:** ✅ MERGED
-- Created `scripts/quick-install.sh` (30-40 sec builds)
-- Automated build → sign → install → launch
-- 10x faster iteration
-
-### **Session 2: Playlist Menu System (WIP)**
-
-**Phase 1-3 Complete:**
-- Fixed sprite coordinates, added SEL menu
-- Created SpriteMenuItem with hover + click forwarding
-- ADD menu fully functional with 3 actions
-
-**Technical Breakthroughs:**
-- NSMenu flipped coordinate system solved
-- Custom NSView click forwarding implemented
-- Sprite hover states working perfectly
+**Status:** Researched, ready after Phase 2
+**Benefit:** Keyboard navigation + VoiceOver support
+**Complexity:** Medium
+**Estimated Time:** 1-2 hours
 
 ---
 
-## 🏗️ Architecture Patterns Learned
+## ✅ This Session's Accomplishments (2025-10-28)
 
-### **NSMenu Coordinate System (CRITICAL)**
+### **PR #20: Playlist Menu System + Multi-Select** ✅ MERGED
+- All 5 menu buttons (ADD, REM, SEL, MISC, LIST OPTS)
+- Multi-select with Shift+Click, Command+A, Escape/Cmd+D
+- REM SEL removes multiple tracks
+- CROP keeps only selected tracks
+- 17 commits, ~8 hours work
 
+### **PR #21: Playlist Text Rendering Fix** ✅ MERGED
+- Replaced bitmap fonts with native SwiftUI Text
+- Fixed duplicate highlight bug (current track background)
+- Fixed keyboard monitor lifecycle (Cmd+A persists)
+- Unicode support enabled
+- 1 commit, 45 minutes
+
+### **PR #22: Playlist Sprite Position Fix** ✅ MERGED
+- Fixed blue edge on right side of playlist window
+- Shifted bottom HStack 2px right
+- Perfect sprite alignment
+- 1 commit, 20 minutes
+
+### **PR #23: Pixel-Perfect Sprite Rendering** ✅ MERGED
+- Applied .interpolation(.none) to all sprite rendering
+- Fixed double-click gesture order
+- All sprites now crisp and sharp
+- 1 commit, Phase 1 of modernization
+
+**Total PRs Merged:** 4 PRs in one session!
+**Lines Changed:** ~3,000+ additions/deletions
+**Build Output:** Signed app in /Applications/MacAmp.app
+
+---
+
+## 📚 Architecture Patterns Learned This Session
+
+### **1. Sprite Coordinate Extraction** (CRITICAL)
+**Issue:** AI hallucinated sprite coordinates causing visual mismatches
+**Solution:** Manual verification using Preview Inspector (⌘I)
+**Documented:** BUILDING_RETRO_MACOS_APPS_SKILL.md Section 6
+
+**Process:**
+1. Open PLEDIT.BMP in Preview
+2. Tools → Show Inspector (⌘I)
+3. Hover over sprite top-left corner
+4. Read (x, y) coordinates
+5. Never trust AI - always verify from source
+
+### **2. NSMenu Width Consistency**
+**Issue:** SEL menu showed width inconsistency
+**Investigation:** Attempted NSHostingMenu migration (macOS 15+)
+**Result:** NSHostingMenu has unavoidable AppKit padding (8-12px)
+**Decision:** Kept NSMenu pattern (tight width, proven)
+**Research:** Fully documented in tasks/playlist-menu-system/
+
+### **3. SwiftUI Gesture Order**
+**Issue:** Double-click not firing after single-click gesture added
+**Root Cause:** SwiftUI consumes first click of double-click as single-click
+**Solution:** Double-click MUST be declared BEFORE single-click
 ```swift
-// Flipped coordinates: Y=0 at top, increasing Y goes DOWN
-// Counter-intuitive but correct!
-
-// ❌ WRONG: Subtracting moves menu UP
-let location = NSPoint(x: 10, y: 206 - 54)  // Menu too high
-
-// ✅ CORRECT: Adding moves menu DOWN
-let location = NSPoint(x: 10, y: 400)  // Menu at bottom
+.onTapGesture(count: 2) { }  // First
+.onTapGesture { }            // Second
 ```
 
-**Debugging:**
-- Menu too HIGH → INCREASE Y
-- Menu too LOW → DECREASE Y
-
-### **NSMenuItem Click Forwarding**
-
+### **4. Pixel-Perfect Rendering**
+**Pattern:** All retro sprites need:
 ```swift
-// Custom NSView blocks NSMenuItem clicks
-override func mouseDown(with event: NSEvent) {
-    if let menuItem = menuItem,
-       let action = menuItem.action,
-       let target = menuItem.target {
-        NSApp.sendAction(action, to: target, from: menuItem)
+Image(nsImage: sprite)
+    .interpolation(.none)    // No GPU blending
+    .antialiased(false)      // Sharp edges
+    .resizable()
+```
+**Why:** GPU interpolation blurs pixels (ruins retro aesthetic)
+
+### **5. Keyboard Event Monitor Lifecycle**
+**Issue:** NSEvent monitor stopped working after view interactions
+**Solution:** Store monitor reference, cleanup in .onDisappear
+```swift
+@State private var keyboardMonitor: Any?
+
+.onAppear {
+    keyboardMonitor = NSEvent.addLocalMonitorForEvents(...)
+}
+.onDisappear {
+    if let m = keyboardMonitor {
+        NSEvent.removeMonitor(m)
     }
-    menuItem?.menu?.cancelTracking()  // Close menu
+}
+```
+
+### **6. Multi-Select State Management**
+**Pattern:** Use Set<Int> for multi-selection
+```swift
+@State private var selectedIndices: Set<Int> = []
+
+// Normal click: Clear and select
+selectedIndices = [index]
+
+// Shift+Click: Toggle
+if selectedIndices.contains(index) {
+    selectedIndices.remove(index)
+} else {
+    selectedIndices.insert(index)
+}
+
+// Command+A: Select all
+selectedIndices = Set(0..<playlist.count)
+```
+
+**Removal:** Always iterate in reverse order to maintain indices
+```swift
+for index in indices.sorted().reversed() {
+    playlist.remove(at: index)
 }
 ```
 
 ---
 
-## 🧪 What to Test
+## 🏗️ Current Architecture (After Session)
 
-### **ADD Menu (Current Session):**
-1. Open playlist window
-2. Click ADD button
-3. Test all 3 menu items:
-   - ADD URL (shows deferral message)
-   - ADD DIR (opens file picker)
-   - ADD FILE (opens file picker)
-4. Verify hover sprites change
-5. Add files and verify they appear in playlist
+### **State Management:**
+- **SkinManager:** ObservableObject with @Published (4 properties)
+- **AudioPlayer:** ObservableObject with @Published (28 properties)
+- **AppSettings:** ObservableObject with @Published (2 properties)
+- **DockingController:** ObservableObject with @Published (1 property)
+- **Injection:** @EnvironmentObject throughout all views
 
-### **Transport Buttons:**
-- All 6 buttons working (prev, play, pause, stop, next, eject)
-- Eject button fixed (x: 183)
+**Next:** Migrate to @Observable for better performance
 
-### **Edge Cases:**
-- Rapid clicking
-- Different skins
-- Multiple file selection
-- Menu dismiss on click-away
+### **Sprite Rendering:**
+- **SimpleSpriteImage:** Core component with proper interpolation ✅
+- **All Image(nsImage:) calls:** Now have .interpolation(.none) ✅
+- **Pixel-perfect:** Sharp, blocky retro aesthetic maintained ✅
 
----
+### **Menu System:**
+- **Pattern:** NSMenu with SpriteMenuItem custom component
+- **Hover:** HoverTrackingView with NSTrackingArea
+- **Click:** mouseDown() override forwards to NSMenuItem action
+- **Width:** Tight, consistent across all menus (no padding issues)
 
-## 🚀 Next Session Plan
-
-### **Option A: Complete Playlist Menus (2-4 hours)**
-
-Continue `feature/playlist-menu-system` branch:
-
-1. **REM Menu** (30 min)
-   - 4 items: REMOVE MISC, REMOVE ALL, CROP, REMOVE SELECTED
-   - Position: x: 53, y: 400
-   - Actions: Clear playlist, remove operations
-
-2. **SEL Menu** (30 min)
-   - 3 items: INVERT, SELECT ZERO, SELECT ALL
-   - Position: x: 82, y: 400
-   - Requires: Selection state management
-
-3. **MISC Menu** (45 min)
-   - 3 items: SORT LIST, FILE INFO, MISC OPTIONS
-   - Position: x: 111, y: 400
-   - Defer submenus if complex
-
-4. **LIST Menu** (45 min)
-   - 3 items: NEW LIST, SAVE LIST, LOAD LIST
-   - Position: x: 460, y: 400
-   - Requires: M3U export functionality
-
-**Total:** ~2.5-3.5 hours to complete all menus
-
-### **Option B: Switch to Different Task**
-
-If you want to tackle something else:
-- P1: Async audio loading (UX critical)
-- P5: Internet radio (depends on P2 for ADD URL)
+### **Selection:**
+- **State:** Set<Int> for multi-track selection
+- **Interactions:** Single-click selects, double-click plays, Shift+Click toggles
+- **Keyboard:** Command+A (select all), Escape/Cmd+D (deselect all)
+- **Actions:** REM SEL, CROP work with multi-selection
 
 ---
 
-## 📦 Recent Commits
+## 🔄 Next Session: Phase 2 & 3 Implementation
 
-**Main Branch:**
-- `dadf9d9` - Development workflow scripts
-- `780128c` - Merged PR #19 (spectrum pinking filter)
-- `e0cde08` - Fixed verify-dist-signature.sh path
+### **Phase 2: @Observable Migration**
 
-**Feature Branch (playlist-menu-system):**
-- `bd2ce7a` - Phase 1-2 foundation
-- `03ad60b` - ADD menu working
-- `0720c04` - Documentation
+**Objective:** Migrate from ObservableObject to @Observable framework
+
+**Classes to Migrate (Priority Order):**
+1. AppSettings (2 properties, 3 files) - **Needs @Bindable** for Toggle bindings
+2. DockingController (1 property, 2 files)
+3. SkinManager (4 properties, 13 files)
+4. AudioPlayer (28 properties, 10 files)
+
+**Pattern for Views with Bindings:**
+```swift
+// Old
+@EnvironmentObject var settings: AppSettings
+Toggle("Enable", isOn: $settings.property)
+
+// New
+@Environment(AppSettings.self) private var appSettings
+@Bindable private var settings = appSettings
+
+Toggle("Enable", isOn: $settings.property)
+```
+
+**Pattern for Views without Bindings:**
+```swift
+// Old
+@EnvironmentObject var skinManager: SkinManager
+
+// New
+@Environment(SkinManager.self) private var skinManager
+```
+
+**Files to Update:** 13 view files, 4 class files, 1 app entry point
+
+**Verification Needed:**
+- All features still work
+- Performance improvement measurable
+- No regressions in state updates
+
+**Estimated Time:** 2-3 hours
 
 ---
 
-## 🎯 Immediate Next Steps
+### **Phase 3: NSMenuDelegate for Accessibility**
 
-**When you resume:**
+**Objective:** Add keyboard navigation and VoiceOver support to menus
 
-1. **Test ADD menu thoroughly**
-2. **If good, continue with REM menu:**
-   ```bash
-   # Already on feature/playlist-menu-system branch
-   # Implement showRemMenu() following ADD pattern
-   ```
-3. **Or switch tasks if preferred**
+**Implementation:**
+- Create SpriteMenuDelegate conforming to NSMenuDelegate
+- Implement `menu(_:willHighlight:)` callback
+- Replace HoverTrackingView hover logic with delegate
+- Test keyboard navigation (arrow keys in menus)
 
-**Quick Reference:**
-- Current task docs: `tasks/playlist-menu-system/`
-- Session summary: `tasks/playlist-menu-system/SESSION_SUMMARY.md`
-- Implementation notes: `tasks/playlist-menu-system/implementation_notes.md`
+**Benefits:**
+- Keyboard menu navigation (Up/Down arrows)
+- VoiceOver compatibility
+- Cleaner code (removes manual hover tracking)
+
+**Estimated Time:** 1-2 hours
 
 ---
 
-**Status:** ✅ Ready for next session
-**Branch:** `feature/playlist-menu-system`
-**Next:** Implement REM/SEL/MISC/LIST menus OR switch to different priority
+## 📋 Task Documentation Structure
+
+### **tasks/swift-modernization-recommendations/**
+
+**Created This Session:**
+- `research.md` - 6 recommendations extracted from AMP_FINDINGS.md
+- `plan.md` - [TO UPDATE: Add Phase 2/3 implementation details]
+- `state.md` - [TO UPDATE: Phase 1 complete status]
+- `todo.md` - [TO UPDATE: Phase 2/3 checklists]
+
+**TODO for Next Session:**
+- [ ] Create architecture document (modern Swift patterns from Phase 1)
+- [ ] Update BUILDING_RETRO_MACOS_APPS_SKILL.md with session learnings
+- [ ] Document @Bindable requirement for @Observable migration
+- [ ] Document gesture order requirement
+- [ ] Document keyboard monitor lifecycle pattern
+
+---
+
+## 🧪 Testing Checklist (Current Build)
+
+### **All Features Working:** ✅
+
+**Playlist Menus:**
+- ADD menu (file pickers work)
+- REM menu (remove actions work)
+- SEL button (alert)
+- MISC menu (alerts)
+- LIST OPTS menu (alerts)
+
+**Multi-Select:**
+- Single-click: Select only
+- Double-click: Play track ✅
+- Shift+Click: Toggle selection ✅
+- Command+A: Select all ✅
+- Escape/Cmd+D: Deselect all ✅
+- REM SEL: Remove multiple ✅
+- CROP: Keep selected ✅
+
+**Text Rendering:**
+- Native text (not bitmap fonts) ✅
+- Unicode support ✅
+- PLEDIT.txt colors applied ✅
+- Current track: White text, no background ✅
+- Selected tracks: Colored text, blue background ✅
+
+**Sprite Rendering:**
+- All sprites pixel-perfect ✅
+- Menu sprites crisp ✅
+- EQ graph sharp ✅
+- No blurring or anti-aliasing ✅
+
+**Navigation:**
+- Next/Previous track buttons ✅
+- Auto-advance after track ends ✅
+- Double-click any track plays it ✅
+
+---
+
+## 📊 Session Statistics
+
+**Duration:** Extended session (10+ hours cumulative)
+**PRs Merged:** 4 (playlist menus, text rendering, sprite fix, interpolation)
+**Commits:** 20+ commits across all PRs
+**Files Modified:** 20+ files
+**Lines Changed:** ~3,200 additions, ~970 deletions
+**Features Added:**
+- 5 playlist menu buttons
+- Multi-select functionality
+- Native text rendering
+- Pixel-perfect sprite rendering
+
+**Code Quality Improvements:**
+- Fixed sprite coordinate issues
+- Fixed gesture ordering
+- Fixed keyboard monitor lifecycle
+- Applied pixel-perfect rendering
+- Removed 144 temporary files from repo
+
+---
+
+## 🚀 Build & Distribution
+
+**Current Signed Build:** /Applications/MacAmp.app
+- Developer ID signed ✅
+- Code signature verified ✅
+- Thread Sanitizer enabled builds ✅
+- All features tested and working ✅
+
+**Build Process:**
+```bash
+# Build Release in tmp/
+xcodebuild -project MacAmpApp.xcodeproj \
+  -scheme MacAmpApp \
+  -configuration Release \
+  -derivedDataPath tmp/release \
+  build
+
+# Output: dist/MacAmp.app (auto-copied and signed)
+# Install: cp -R dist/MacAmp.app /Applications/
+```
+
+---
+
+## 📝 Quick Start for Next Session
+
+### **Immediate Next Steps:**
+
+**1. Continue Phase 2 - @Observable Migration**
+```bash
+# Already on swift-modernization-recommendations branch
+# Start with AppSettings (smallest class)
+```
+
+**2. Follow This Order:**
+- AppSettings (implement @Bindable pattern for PreferencesView)
+- DockingController
+- SkinManager
+- AudioPlayer (largest, most complex)
+
+**3. Test Thoroughly After Each Class:**
+- Build and run after each migration
+- Verify all features still work
+- Check performance improvements
+
+**4. Create PR #24 When Phase 2 Complete**
+
+**5. Then Implement Phase 3 (NSMenuDelegate)**
+
+### **Documentation Tasks:**
+- [ ] Create `tasks/swift-modernization-recommendations/ARCHITECTURE.md`
+- [ ] Update `BUILDING_RETRO_MACOS_APPS_SKILL.md` with all session learnings
+- [ ] Document @Bindable pattern for @Observable migration
+- [ ] Document all architecture changes
+
+---
+
+## 🎓 Key Learnings This Session
+
+### **Sprite Coordinate Extraction**
+**Never trust AI coordinates** - Always verify with Preview Inspector (⌘I)
+
+### **NSMenu vs NSHostingMenu**
+**NSHostingMenu** has unavoidable AppKit padding - stick with **NSMenu** for tight layouts
+
+### **@Observable Migration Complexity**
+**Not a simple find-replace** - Views with bindings need @Bindable wrapper
+
+### **SwiftUI Gesture Priority**
+**Declare gestures in reverse order** - Double-click before single-click
+
+### **Pixel-Perfect Rendering**
+**GPU interpolation ruins pixel art** - Always use `.interpolation(.none)`
+
+### **Keyboard Monitor Lifecycle**
+**Store reference in @State** - Clean up in .onDisappear or it stops working
+
+### **Multi-Select State**
+**Use Set<Int>** - Remove in reverse order to maintain indices
+
+---
+
+## 📖 Complete Task History
+
+### **Completed Tasks:**
+1. ✅ Playlist Menu System (tasks/playlist-menu-system/)
+2. ✅ Playlist Text Rendering (tasks/playlist-text-rendering-fix/)
+3. ✅ Playlist Sprite Position (tasks/playlist-sprite-adjustments/)
+4. ⏳ Swift Modernization Phase 1 (tasks/swift-modernization-recommendations/)
+
+### **In Progress:**
+- Swift Modernization Phases 2-3
+
+### **Deferred Tasks:**
+- M3U export/import (SAVE LIST, LOAD LIST)
+- Sort operations (SORT LIST)
+- File info dialog (FILE INFO)
+- Internet radio streaming (P5)
+
+---
+
+## 🔀 Git Workflow - Sequential PR Strategy
+
+**Branch:** `swift-modernization-recommendations`
+
+**PR Strategy** (Option A - Sequential):
+1. PR #23 (Phase 1) ✅ Merged
+2. PR #24 (Phase 2) ⏳ Next - After @Observable migration
+3. PR #25 (Phase 3) ⏳ Final - After NSMenuDelegate implementation
+
+**After Each Merge:**
+```bash
+git checkout main
+git pull origin main
+git checkout swift-modernization-recommendations
+git rebase main
+# Continue with next phase
+```
+
+---
+
+## 📂 Important Files & Folders
+
+**Task Folders:**
+- `tasks/playlist-menu-system/` - Menu system documentation
+- `tasks/playlist-text-rendering-fix/` - Text rendering docs
+- `tasks/playlist-sprite-adjustments/` - Sprite position fix
+- `tasks/swift-modernization-recommendations/` - Modernization docs
+
+**Key Files:**
+- `BUILDING_RETRO_MACOS_APPS_SKILL.md` - Comprehensive skill guide
+- `AMP_FINDINGS.md` - Code review findings (source of modernization tasks)
+- `README.md` - Project overview with all features
+
+**Signed Build:**
+- `/Applications/MacAmp.app` - Latest signed release
+
+---
+
+## 🎯 Recommended Next Actions
+
+**Option A: Complete Swift Modernization** (3-5 hours)
+- Finish Phase 2 (@Observable migration)
+- Implement Phase 3 (NSMenuDelegate)
+- Create PRs #24 and #25
+- Update BUILDING_RETRO_MACOS_APPS_SKILL.md
+
+**Option B: Ship Current Build**
+- Phase 1 is valuable on its own
+- Build signed release with pixel-perfect sprites
+- Defer Phases 2-3 to future session
+
+**Option C: Different Priority**
+- Work on other P1/P2 tasks
+- Internet radio streaming
+- Async audio loading
+
+---
+
+## ⚠️ Known Issues / Notes
+
+**@Observable Migration:**
+- Requires @Bindable for views with two-way bindings
+- More complex than simple find-replace
+- Need to test each class migration carefully
+
+**Performance:**
+- Phase 1 (interpolation) improves rendering
+- Phase 2 (@Observable) will improve state updates (10-20%)
+- All features currently working well
+
+**Repository Cleanup:**
+- Added tmp/ and Screenshot* to .gitignore
+- Removed 144 temporary files from repo
+- Clean professional repository state
+
+---
+
+**Status:** ✅ Phase 1 shipped, Phases 2-3 ready for next session
+**Branch:** `swift-modernization-recommendations`
+**Next:** Implement @Observable migration with @Bindable pattern
+**Context:** All research complete, clear implementation path
