@@ -1,5 +1,6 @@
 ######## macOS ########
 .DS_Store
+Screenshot*
 
 # Leaks baseline
 baseline-leaks-test.trace/
@@ -22,6 +23,7 @@ xcuserdata/
 DerivedData/
 build/
 dist/
+tmp/
 
 ######## Media (large) ########
 *.mov
