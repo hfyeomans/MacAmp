@@ -600,18 +600,7 @@ struct WinampMainWindow: View {
     }
     
     private func openFileDialog() {
-        let openPanel = NSOpenPanel()
-        openPanel.allowedContentTypes = [.audio]
-        openPanel.allowsMultipleSelection = true  // Allow multiple files like Winamp
-        openPanel.canChooseDirectories = false
-
-        openPanel.begin { response in
-            if response == .OK {
-                for url in openPanel.urls {
-                    audioPlayer.addTrack(url: url)
-                }
-            }
-        }
+        PlaylistWindowActions.shared.presentAddFilesPanel(audioPlayer: audioPlayer)
     }
     
     // MARK: - Scrolling Animation Functions

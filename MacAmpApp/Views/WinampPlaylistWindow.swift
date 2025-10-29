@@ -16,7 +16,7 @@ final class PlaylistWindowActions: NSObject {
         alert.runModal()
     }
 
-    private func presentAddFilesPanel(audioPlayer: AudioPlayer) {
+    func presentAddFilesPanel(audioPlayer: AudioPlayer) {
         let openPanel = NSOpenPanel()
         openPanel.allowedContentTypes = [.audio, .playlist]
         openPanel.allowsMultipleSelection = true
@@ -26,7 +26,11 @@ final class PlaylistWindowActions: NSObject {
 
         openPanel.begin { response in
             if response == .OK {
-                self.handleSelectedURLs(openPanel.urls, audioPlayer: audioPlayer)
+                let urls = openPanel.urls
+                Task { @MainActor [weak self, urls, audioPlayer] in
+                    guard let self else { return }
+                    self.handleSelectedURLs(urls, audioPlayer: audioPlayer)
+                }
             }
         }
     }
@@ -545,41 +549,7 @@ struct WinampPlaylistWindow: View {
     }
     
     private func openFileDialog() {
-        let openPanel = NSOpenPanel()
-        openPanel.allowedContentTypes = [.audio, .playlist]
-        openPanel.allowsMultipleSelection = true
-        openPanel.canChooseDirectories = false
-        openPanel.title = "Add Files to Playlist"
-        openPanel.message = "Select audio files or playlists"
-
-        openPanel.begin { response in
-            if response == .OK {
-                Task { @MainActor [audioPlayer] in
-                    for url in openPanel.urls {
-                        let fileExtension = url.pathExtension.lowercased()
-                        if fileExtension == "m3u" || fileExtension == "m3u8" {
-                            do {
-                                let entries = try M3UParser.parse(fileURL: url)
-                                for entry in entries {
-                                    if !entry.isRemoteStream {
-                                        audioPlayer.addTrack(url: entry.url)
-                                    }
-                                }
-                            } catch {
-                                let alert = NSAlert()
-                                alert.messageText = "Failed to Load M3U Playlist"
-                                alert.informativeText = error.localizedDescription
-                                alert.alertStyle = .warning
-                                alert.addButton(withTitle: "OK")
-                                alert.runModal()
-                            }
-                        } else {
-                            audioPlayer.addTrack(url: url)
-                        }
-                    }
-                }
-            }
-        }
+        PlaylistWindowActions.shared.presentAddFilesPanel(audioPlayer: audioPlayer)
     }
 
     
