@@ -290,7 +290,7 @@ struct WinampPlaylistWindow: View {
                     .frame(width: 154, height: 38)
             }
             .frame(width: windowWidth, height: 38)
-            .position(x: windowWidth / 2, y: 213)
+            .position(x: (windowWidth / 2) + 2, y: 213)  // Shift entire HStack 2px right
     }
     
     @ViewBuilder
