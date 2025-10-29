@@ -22,6 +22,8 @@ struct SkinnedText: View {
             ForEach(Array(text), id: \.self) { ch in
                 if let img = imageForChar(ch) {
                     Image(nsImage: img)
+                        .interpolation(.none)
+                        .antialiased(false)
                         .resizable()
                         .frame(width: img.size.width, height: img.size.height)
                 } else {

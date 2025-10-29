@@ -123,6 +123,8 @@ struct SpriteMenuItemView: View {
     var body: some View {
         if let image = skinManager.currentSkin?.images[isHovered ? selectedSprite : normalSprite] {
             Image(nsImage: image)
+                .interpolation(.none)
+                .antialiased(false)
                 .resizable()
                 .frame(width: 22, height: 18)
         } else {
