@@ -11,6 +11,9 @@ struct UnifiedDockView: View {
     @State private var dockGlow: Double = 1.0
     @State private var materialShimmer: Bool = false
 
+    // MARK: - Window Reference
+    @State private var dockWindow: NSWindow?
+
     var body: some View {
         if skinManager.isLoading {
             // Show loading state while skin loads
@@ -60,13 +63,15 @@ struct UnifiedDockView: View {
                 startDockAnimations()
             }
             .onChange(of: settings.isAlwaysOnTop) { _, isOn in
-                // Toggle window level when always-on-top changes
-                if let window = NSApp.keyWindow {
-                    window.level = isOn ? .floating : .normal
-                }
+                // Toggle THIS window's level (not NSApp.keyWindow!)
+                dockWindow?.level = isOn ? .floating : .normal
             }
             .background(
                 WindowAccessor { window in
+                    // Store reference to THIS specific window
+                    if dockWindow == nil {
+                        dockWindow = window
+                    }
                     configureWindow(window)
                     // Set initial window level based on persisted state
                     window.level = settings.isAlwaysOnTop ? .floating : .normal
