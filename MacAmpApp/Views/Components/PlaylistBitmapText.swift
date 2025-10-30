@@ -4,7 +4,7 @@ import AppKit
 /// General-purpose bitmap text renderer for the playlist using TEXT.BMP glyphs.
 /// Applies PLEDIT-based colors and falls back to system text when glyphs are missing.
 struct PlaylistBitmapText: View {
-    @EnvironmentObject var skinManager: SkinManager
+    @Environment(SkinManager.self) var skinManager
 
     let text: String
     let color: Color

@@ -6,7 +6,7 @@ struct PresetsButton: View {
     let eqPresetsBtn: NSImage
     let eqPresetsBtnSel: NSImage
     @EnvironmentObject var audioPlayer: AudioPlayer
-    @EnvironmentObject var skinManager: SkinManager
+    @Environment(SkinManager.self) var skinManager
     @State private var showPopover = false
     @State private var folderPresets: [(String, EqfPreset)] = []
     @State private var eqfFolderURL: URL? = nil
@@ -71,38 +71,38 @@ struct PresetsButton: View {
         .popover(isPresented: $showPopover, arrowEdge: .bottom) {
             VStack(alignment: .leading, spacing: 8) {
                 SkinnedText("Presets")
-                    .environmentObject(skinManager)
+                    .environment(skinManager)
                 Divider()
                 SkinnedText("Built-in")
-                    .environmentObject(skinManager)
+                    .environment(skinManager)
                 ForEach(builtins, id: \.0) { name, preset in
                     Button(action: { audioPlayer.applyPreset(preset) }) {
                         SkinnedText(name)
-                            .environmentObject(skinManager)
+                            .environment(skinManager)
                     }
                 }
                 if !folderPresets.isEmpty {
                     Divider()
                     SkinnedText("Folder Presets")
-                        .environmentObject(skinManager)
+                        .environment(skinManager)
                     ForEach(Array(folderPresets.enumerated()), id: \.offset) { _, item in
                         Button(action: { audioPlayer.applyPreset(item.1) }) {
-                            SkinnedText(item.0).environmentObject(skinManager)
+                            SkinnedText(item.0).environment(skinManager)
                         }
                     }
                 }
                 Divider()
                 Button(action: { audioPlayer.savePresetForCurrentTrack() }) {
-                    SkinnedText("Save for This Track").environmentObject(skinManager)
+                    SkinnedText("Save for This Track").environment(skinManager)
                 }
                 Button(action: { Self.loadEqf(into: audioPlayer) }) {
-                    SkinnedText("Load EQF...").environmentObject(skinManager)
+                    SkinnedText("Load EQF...").environment(skinManager)
                 }
                 Button(action: { Self.saveEqf(from: audioPlayer) }) {
-                    SkinnedText("Save EQF...").environmentObject(skinManager)
+                    SkinnedText("Save EQF...").environment(skinManager)
                 }
                 Button(action: { chooseFolder() }) {
-                    SkinnedText("Choose Folder...").environmentObject(skinManager)
+                    SkinnedText("Choose Folder...").environment(skinManager)
                 }
             }
             .padding(12)

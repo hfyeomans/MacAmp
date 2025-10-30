@@ -3,7 +3,7 @@ import SwiftUI
 /// Winamp-style volume slider using sprite backgrounds
 struct WinampVolumeSlider: View {
     @Binding var volume: Float
-    @EnvironmentObject var skinManager: SkinManager
+    @Environment(SkinManager.self) var skinManager
     
     @State private var isDragging = false
     
@@ -132,7 +132,7 @@ struct WinampVolumeSlider: View {
 /// Uses same solution as volume slider (frame→offset→clip order)
 struct WinampBalanceSlider: View {
     @Binding var balance: Float  // -1.0 to 1.0
-    @EnvironmentObject var skinManager: SkinManager
+    @Environment(SkinManager.self) var skinManager
 
     @State private var isDragging = false
 
@@ -245,5 +245,5 @@ struct WinampBalanceSlider: View {
             .background(Color.black)
     }
     .padding()
-    .environmentObject(SkinManager())
+    .environment(SkinManager())
 }

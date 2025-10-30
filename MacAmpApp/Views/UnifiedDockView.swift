@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 
 struct UnifiedDockView: View {
-    @EnvironmentObject var skinManager: SkinManager
+    @Environment(SkinManager.self) var skinManager
     @EnvironmentObject var audioPlayer: AudioPlayer
     @Environment(DockingController.self) var docking
     @Environment(AppSettings.self) var settings
@@ -221,15 +221,15 @@ struct UnifiedDockView: View {
         switch type {
         case .main:
             WinampMainWindow()
-                .environmentObject(skinManager)
+                .environment(skinManager)
                 .environmentObject(audioPlayer)
         case .equalizer:
             WinampEqualizerWindow()
-                .environmentObject(skinManager)
+                .environment(skinManager)
                 .environmentObject(audioPlayer)
         case .playlist:
             WinampPlaylistWindow()
-                .environmentObject(skinManager)
+                .environment(skinManager)
                 .environmentObject(audioPlayer)
         }
     }
@@ -314,7 +314,7 @@ struct RowFramesKey: PreferenceKey {
 
 #Preview {
     UnifiedDockView()
-        .environmentObject(SkinManager())
+        .environment(SkinManager())
         .environmentObject(AudioPlayer())
         .environment(DockingController())
         .environment(AppSettings.instance())

@@ -3,7 +3,7 @@ import AppKit
 
 /// Pixel-perfect recreation of Winamp's main window using absolute positioning
 struct WinampMainWindow: View {
-    @EnvironmentObject var skinManager: SkinManager
+    @Environment(SkinManager.self) var skinManager
     @EnvironmentObject var audioPlayer: AudioPlayer
     @Environment(DockingController.self) var dockingController
     @Environment(\.openWindow) var openWindow
@@ -704,7 +704,7 @@ struct WinampMainWindow: View {
 
 #Preview {
     WinampMainWindow()
-        .environmentObject(SkinManager())
+        .environment(SkinManager())
         .environmentObject(AudioPlayer())
         .environment(DockingController())
 }

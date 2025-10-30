@@ -4,7 +4,7 @@ import Accelerate
 /// Winamp-style spectrum analyzer visualization
 struct VisualizerView: View {
     @EnvironmentObject var audioPlayer: AudioPlayer
-    @EnvironmentObject var skinManager: SkinManager
+    @Environment(SkinManager.self) var skinManager
     
     // Animation state
     @State private var barHeights: [CGFloat] = Array(repeating: 0, count: 19)
@@ -122,7 +122,7 @@ struct SpectrumBar: View {
     let peakPosition: CGFloat
     let maxHeight: CGFloat
 
-    @EnvironmentObject var skinManager: SkinManager
+    @Environment(SkinManager.self) var skinManager
 
     var body: some View {
         GeometryReader { geometry in
@@ -216,7 +216,7 @@ struct SpectrumBar: View {
 #Preview {
     VisualizerView()
         .environmentObject(AudioPlayer())
-        .environmentObject(SkinManager())
+        .environment(SkinManager())
         .frame(width: 76, height: 16)
         .background(Color.gray)
 }

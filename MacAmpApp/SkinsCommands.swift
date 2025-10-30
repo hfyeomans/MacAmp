@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 
 /// Commands for the Skins menu
 struct SkinsCommands: Commands {
-    @ObservedObject var skinManager: SkinManager
+    @Bindable var skinManager: SkinManager
 
     var body: some Commands {
         CommandMenu("Skins") {
