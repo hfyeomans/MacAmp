@@ -28,7 +28,7 @@ struct MacAmpApp: App {
 
         // Commands are defined once here and apply to all window groups
         .commands {
-            AppCommands(dockingController: dockingController, audioPlayer: audioPlayer)
+            AppCommands(dockingController: dockingController, audioPlayer: audioPlayer, settings: settings)
             SkinsCommands(skinManager: skinManager)
         }
     }

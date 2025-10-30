@@ -22,6 +22,8 @@ MacAmp is a SwiftUI-based audio player for macOS that recreates the iconic deskt
 - 📝 **Native Text Rendering** - Playlist tracks use real text with PLEDIT.txt colors and Unicode support (not bitmap fonts)
 - 🎛️ **Advanced Controls** - Volume, balance, position seeking, shuffle, and repeat
 - 🪟 **Multi-Window Interface** - Main player, equalizer, and playlist windows with shade modes
+- 🔍 **Double-Size Mode** - Toggle 200% scaling with D button or Ctrl+D for better visibility on high-res displays
+- 📌 **Always On Top** - Keep window floating above others with A button or Ctrl+A (Classic Winamp feature)
 - 🎯 **Native macOS Integration** - Borderless windows with custom title bars
 - ⚡ **Modern SwiftUI** - Utilizes WindowDragGesture and latest macOS APIs
 - 🔄 **Dynamic Skin Switching** - Hot-swap skins without restart
@@ -98,6 +100,31 @@ Available presets: Classical, Club, Dance, Full Bass, Full Bass & Treble, Full T
 2. **Import Skins** - Place `.wsz` files in `~/Library/Application Support/MacAmp/Skins/`
 3. **Supported Formats** - Standard ZIP-based skin files
 
+### Double-Size Mode
+
+1. **Toggle Size** - Click the "D" button in the clutter bar OR press **Ctrl+D**
+2. **Normal Mode** - Windows at 100% size (275×116 for main/EQ)
+3. **Doubled Mode** - Windows at 200% size (550×232 for main/EQ)
+4. **Behavior** - All 3 windows (main, EQ, playlist) scale together
+5. **Persistence** - Last size remembered across app restarts
+6. **Animation** - Smooth 0.2-second transition
+7. **Keyboard Shortcut** - **Ctrl+D** (also in Windows menu)
+
+### Always On Top
+
+1. **Toggle Float** - Click the "A" button in the clutter bar OR press **Ctrl+A**
+2. **Normal Mode** - Window at normal level (can be covered by other apps)
+3. **Float Mode** - Window stays above all other windows
+4. **Persistence** - Last setting remembered across app restarts
+5. **Keyboard Shortcut** - **Ctrl+A** (also in Windows menu)
+
+**Clutter Bar Buttons** (vertical strip, left side):
+- **O** - Options (coming soon)
+- **A** - Always On Top (functional) ✅
+- **I** - Info (coming soon)
+- **D** - Double Size (functional) ✅
+- **V** - Visualizer (coming soon)
+
 ## Architecture
 
 MacAmp uses a three-layer architecture inspired by modern frontend frameworks:
@@ -152,6 +179,8 @@ MacAmp/
 |----------|--------|
 | `Space` | Play/Pause |
 | `Cmd+O` | Open file |
+| `Ctrl+D` | Toggle double-size mode (100% ↔ 200%) |
+| `Ctrl+A` | Toggle always on top (float window) |
 | `Cmd+Shift+E` | Toggle equalizer window |
 | `Cmd+Shift+P` | Toggle playlist window |
 | `Cmd+Shift+1` | Switch to Classic Winamp skin |

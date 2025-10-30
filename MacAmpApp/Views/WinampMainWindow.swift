@@ -6,6 +6,7 @@ struct WinampMainWindow: View {
     @Environment(SkinManager.self) var skinManager
     @Environment(AudioPlayer.self) var audioPlayer
     @Environment(DockingController.self) var dockingController
+    @Environment(AppSettings.self) var settings
     @Environment(\.openWindow) var openWindow
 
     // CRITICAL: Prevent unnecessary body re-evaluations that cause ghost images
@@ -71,6 +72,14 @@ struct WinampMainWindow: View {
         static let minimizeButton = CGPoint(x: 244, y: 3)
         static let shadeButton = CGPoint(x: 254, y: 3)
         static let closeButton = CGPoint(x: 264, y: 3)
+
+        // Clutter bar (vertical button strip, left side)
+        static let clutterBar = CGPoint(x: 10, y: 22)
+        static let clutterButtonO = CGPoint(x: 10, y: 25)  // top: 3px relative
+        static let clutterButtonA = CGPoint(x: 10, y: 33)  // top: 11px relative
+        static let clutterButtonI = CGPoint(x: 10, y: 40)  // top: 18px relative
+        static let clutterButtonD = CGPoint(x: 10, y: 47)  // top: 25px relative
+        static let clutterButtonV = CGPoint(x: 10, y: 55)  // top: 33px relative
     }
     
     var body: some View {
@@ -95,6 +104,7 @@ struct WinampMainWindow: View {
                 // Shade mode (collapsed to titlebar only)
                 buildShadeMode()
             }
+
         }
         .frame(width: WinampSizes.main.width,
                height: isShadeMode ? WinampSizes.mainShade.height : WinampSizes.main.height)
@@ -117,7 +127,7 @@ struct WinampMainWindow: View {
             // Note: pauseBlinkTimer is now a publisher, auto-managed by SwiftUI
         }
     }
-    
+
     @ViewBuilder
     private func buildFullWindow() -> some View {
         Group {
@@ -153,7 +163,10 @@ struct WinampMainWindow: View {
             
             // EQ/Playlist buttons
             buildWindowToggleButtons()
-            
+
+            // Clutter bar buttons (O, A, I, D, V)
+            buildClutterBarButtons()
+
             // Additional Winamp elements (simplified)
             buildMonoStereoIndicator()
             
@@ -468,7 +481,7 @@ struct WinampMainWindow: View {
             }
             .buttonStyle(.plain)
             .at(Coords.eqButton)
-            
+
             // Playlist button
             Button(action: {
                 dockingController.togglePlaylist()
@@ -479,6 +492,72 @@ struct WinampMainWindow: View {
             .at(Coords.playlistButton)
         }
     }
+
+    @ViewBuilder
+    private func buildClutterBarButtons() -> some View {
+        // Use environment settings for reactive updates
+        Group {
+            // O - Options (Scaffold - not yet implemented)
+            Button(action: {}) {
+                SimpleSpriteImage("MAIN_CLUTTER_BAR_BUTTON_O", width: 8, height: 8)
+            }
+            .buttonStyle(.plain)
+            .disabled(true)
+            .accessibilityHidden(true)
+            .help("Options (not yet implemented)")
+            .at(Coords.clutterButtonO)
+
+            // A - Always On Top (FUNCTIONAL)
+            let aSpriteName = settings.isAlwaysOnTop
+                ? "MAIN_CLUTTER_BAR_BUTTON_A_SELECTED"
+                : "MAIN_CLUTTER_BAR_BUTTON_A"
+
+            Button(action: {
+                settings.isAlwaysOnTop.toggle()
+            }) {
+                SimpleSpriteImage(aSpriteName, width: 8, height: 7)
+            }
+            .buttonStyle(.plain)
+            .help("Toggle always on top (Ctrl+A)")
+            .at(Coords.clutterButtonA)
+
+            // I - Info (Scaffold - not yet implemented)
+            Button(action: {}) {
+                SimpleSpriteImage("MAIN_CLUTTER_BAR_BUTTON_I", width: 8, height: 7)
+            }
+            .buttonStyle(.plain)
+            .disabled(true)
+            .accessibilityHidden(true)
+            .help("Info (not yet implemented)")
+            .at(Coords.clutterButtonI)
+
+            // D - Double Size (FUNCTIONAL)
+            // Compute sprite name outside closure for reactivity
+            let dSpriteName = settings.isDoubleSizeMode
+                ? "MAIN_CLUTTER_BAR_BUTTON_D_SELECTED"
+                : "MAIN_CLUTTER_BAR_BUTTON_D"
+
+            Button(action: {
+                settings.isDoubleSizeMode.toggle()
+            }) {
+                SimpleSpriteImage(dSpriteName, width: 8, height: 8)
+            }
+            .buttonStyle(.plain)
+            .help("Toggle window size")
+            .at(Coords.clutterButtonD)
+
+            // V - Visualizer (Scaffold - not yet implemented)
+            Button(action: {}) {
+                SimpleSpriteImage("MAIN_CLUTTER_BAR_BUTTON_V", width: 8, height: 7)
+            }
+            .buttonStyle(.plain)
+            .disabled(true)
+            .accessibilityHidden(true)
+            .help("Visualizer (not yet implemented)")
+            .at(Coords.clutterButtonV)
+        }
+    }
+
     
     @ViewBuilder
     private func buildTrackInfoDisplay() -> some View {

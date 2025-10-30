@@ -3,8 +3,9 @@ import AppKit
 import UniformTypeIdentifiers
 
 struct AppCommands: Commands {
-    let dockingController: DockingController
-    let audioPlayer: AudioPlayer
+    @Bindable var dockingController: DockingController
+    @Bindable var audioPlayer: AudioPlayer
+    @Bindable var settings: AppSettings
     @Environment(\.openWindow) private var openWindow
 
     var body: some Commands {
@@ -24,6 +25,19 @@ struct AppCommands: Commands {
                 .keyboardShortcut("2", modifiers: [.command, .option])
             Button("Shade/Unshade Equalizer") { dockingController.toggleShade(.equalizer) }
                 .keyboardShortcut("3", modifiers: [.command, .option])
+
+            Divider()
+
+            // Clutter bar functions
+            Button(settings.isDoubleSizeMode ? "Normal Size" : "Double Size") {
+                settings.isDoubleSizeMode.toggle()
+            }
+            .keyboardShortcut("d", modifiers: [.control])
+
+            Button(settings.isAlwaysOnTop ? "Disable Always On Top" : "Enable Always On Top") {
+                settings.isAlwaysOnTop.toggle()
+            }
+            .keyboardShortcut("a", modifiers: [.control])
 
             // Vertical stacking - no horizontal movement needed
             // Windows now stack vertically in fixed order: Main -> EQ -> Playlist

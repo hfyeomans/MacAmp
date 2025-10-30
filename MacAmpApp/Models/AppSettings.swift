@@ -46,6 +46,10 @@ final class AppSettings {
     private init() {
         self.materialIntegration = Self.loadMaterialIntegration()
         self.enableLiquidGlass = Self.loadLiquidGlassSetting()
+
+        // Load persisted clutter bar states (default to false)
+        self.isDoubleSizeMode = UserDefaults.standard.bool(forKey: "isDoubleSizeMode")
+        self.isAlwaysOnTop = UserDefaults.standard.bool(forKey: "isAlwaysOnTop")
     }
     
     static func instance() -> AppSettings {
@@ -130,4 +134,37 @@ final class AppSettings {
         let caches = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first!
         return caches.appendingPathComponent("MacAmp/FallbackSkins", isDirectory: true)
     }
+
+    // MARK: - Double Size Mode
+
+    /// Persists across app restarts - defaults to false (100% size)
+    /// Note: Using didSet pattern instead of @AppStorage property wrapper
+    /// to maintain @Observable reactivity
+    var isDoubleSizeMode: Bool = false {
+        didSet {
+            UserDefaults.standard.set(isDoubleSizeMode, forKey: "isDoubleSizeMode")
+        }
+    }
+
+    // MARK: - Always On Top Mode
+
+    /// Persists across app restarts - defaults to false (normal window level)
+    /// Note: Using didSet pattern to maintain @Observable reactivity
+    var isAlwaysOnTop: Bool = false {
+        didSet {
+            UserDefaults.standard.set(isAlwaysOnTop, forKey: "isAlwaysOnTop")
+        }
+    }
+
+    // MARK: - Clutter Bar States (Scaffolded for Future Implementation)
+
+    /// O - Options Menu (not yet implemented)
+    var showOptionsMenu: Bool = false
+
+    /// I - Info Dialog (not yet implemented)
+    var showInfoDialog: Bool = false
+
+    /// V - Visualizer Mode (0 = off, 1+ = different visualizer modes)
+    var visualizerMode: Int = 0
+
 }
