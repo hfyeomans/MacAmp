@@ -104,22 +104,10 @@ struct WinampMainWindow: View {
                 buildShadeMode()
             }
 
-            // Hidden window accessor for capturing NSWindow reference
-            WindowAccessor { window in
-                let settings = AppSettings.instance()
-                if settings.mainWindow == nil {
-                    settings.mainWindow = window
-                }
-            }
-            .frame(width: 0, height: 0)
-            .hidden()
         }
         .frame(width: WinampSizes.main.width,
                height: isShadeMode ? WinampSizes.mainShade.height : WinampSizes.main.height)
         .background(Color.black) // Fallback
-        .task(id: AppSettings.instance().isDoubleSizeMode) {
-            animateWindowResize()
-        }
         .onAppear {
             isViewVisible = true
         }
@@ -139,19 +127,6 @@ struct WinampMainWindow: View {
         }
     }
 
-    @MainActor
-    private func animateWindowResize() {
-        let settings = AppSettings.instance()
-        guard let window = settings.mainWindow else { return }
-        guard let targetFrame = settings.targetWindowFrame else { return }
-
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.2
-            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-            window.animator().setFrame(targetFrame, display: true)
-        }
-    }
-    
     @ViewBuilder
     private func buildFullWindow() -> some View {
         Group {

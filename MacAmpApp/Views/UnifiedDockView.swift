@@ -29,9 +29,13 @@ struct UnifiedDockView: View {
             VStack(alignment: .leading, spacing: 0) {
                 // Windows in proper vertical order
                 ForEach(docking.sortedVisiblePanes) { pane in
+                    let scale: CGFloat = settings.isDoubleSizeMode ? 2.0 : 1.0
+                    let baseSize = baseNaturalSize(for: pane.type)
+
                     windowContent(for: pane.type)
-                        .frame(width: naturalSize(for: pane.type).width,
-                               height: pane.isShaded ? 14 : naturalSize(for: pane.type).height,
+                        .scaleEffect(scale, anchor: .topLeading)
+                        .frame(width: baseSize.width * scale,
+                               height: pane.isShaded ? 14 * scale : baseSize.height * scale,
                                alignment: .topLeading)
                         .transition(.asymmetric(
                             insertion: .move(edge: .top).combined(with: .opacity),
@@ -43,6 +47,7 @@ struct UnifiedDockView: View {
                    height: calculateTotalHeight(),
                    alignment: .topLeading)
             .fixedSize() // This tells SwiftUI to use the exact frame size
+            .animation(.easeInOut(duration: 0.2), value: settings.isDoubleSizeMode)
             .background(backgroundView)
             .scaleEffect(dockGlow)
             .onAppear {
@@ -235,33 +240,45 @@ struct UnifiedDockView: View {
     }
 
     // MARK: - Sizes
-    private func naturalSize(for type: DockPaneType) -> CGSize {
+
+    /// Returns base size without scaling (for internal use)
+    private func baseNaturalSize(for type: DockPaneType) -> CGSize {
         switch type {
-        case .main: 
+        case .main:
             return WinampSizes.main
-        case .equalizer: 
+        case .equalizer:
             return WinampSizes.equalizer
-        case .playlist: 
-            return CGSize(width: WinampSizes.playlistBase.width, 
+        case .playlist:
+            return CGSize(width: WinampSizes.playlistBase.width,
                           height: WinampSizes.playlistBase.height)
         }
+    }
+
+    /// Returns size with double-size scaling applied if enabled
+    private func naturalSize(for type: DockPaneType) -> CGSize {
+        let baseSize = baseNaturalSize(for: type)
+        let scale: CGFloat = settings.isDoubleSizeMode ? 2.0 : 1.0
+        return CGSize(width: baseSize.width * scale, height: baseSize.height * scale)
     }
     
     // Calculate total width - should be the width of the widest visible window
     private func calculateTotalWidth() -> CGFloat {
         guard !docking.sortedVisiblePanes.isEmpty else { return 275 }
-        
+
+        let scale: CGFloat = settings.isDoubleSizeMode ? 2.0 : 1.0
         return docking.sortedVisiblePanes.map { pane in
-            naturalSize(for: pane.type).width
-        }.max() ?? 275
+            baseNaturalSize(for: pane.type).width * scale
+        }.max() ?? (275 * scale)
     }
     
     // Calculate total height - sum of all visible window heights
     private func calculateTotalHeight() -> CGFloat {
         guard !docking.sortedVisiblePanes.isEmpty else { return WinampSizes.main.height }
-        
+
+        let scale: CGFloat = settings.isDoubleSizeMode ? 2.0 : 1.0
         return docking.sortedVisiblePanes.reduce(0) { total, pane in
-            total + (pane.isShaded ? 14 : naturalSize(for: pane.type).height)
+            let height = pane.isShaded ? 14 : baseNaturalSize(for: pane.type).height
+            return total + (height * scale)
         }
     }
 }
