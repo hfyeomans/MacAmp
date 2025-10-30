@@ -145,4 +145,18 @@ final class AppSettings {
         }
     }
 
+    // MARK: - Clutter Bar States (Scaffolded for Future Implementation)
+
+    /// O - Options Menu (not yet implemented)
+    var showOptionsMenu: Bool = false
+
+    /// A - Always On Top (not yet implemented)
+    var isAlwaysOnTop: Bool = false
+
+    /// I - Info Dialog (not yet implemented)
+    var showInfoDialog: Bool = false
+
+    /// V - Visualizer Mode (0 = off, 1+ = different visualizer modes)
+    var visualizerMode: Int = 0
+
 }
