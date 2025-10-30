@@ -91,6 +91,218 @@ Transform MacAmp from single-window to multi-window architecture matching classi
 
 ---
 
+## 🎯 Double-Size Mode Implementation (Completed 2025-10-30)
+
+**Task:** `tasks/double-size-button/`
+**Branch:** `double-sized-button`
+**Commits:** bcc4582, dc48d29, 6e7cf10, a4d2d2d
+**Status:** ✅ Implemented with unified window architecture
+
+### Architecture Decision
+
+**Implemented double-size mode WITHOUT separating windows first.**
+
+**Rationale:**
+- Magnetic window docking is complex (10-16 hours, P3 priority)
+- Double-size mode needed sooner
+- Can work with current unified window architecture
+- When windows separate, scaling logic will move to individual NSWindows
+
+### Implementation Details (Reference for Future Magnetic Docking)
+
+**Files Modified:**
+1. `AppSettings.swift` - Added `isDoubleSizeMode: Bool` with @AppStorage
+2. `UnifiedDockView.swift` - Scaling logic (THIS NEEDS TO MOVE when windows separate)
+3. `WinampMainWindow.swift` - D button + O, A, I, V scaffolded buttons
+4. `SkinSprites.swift` - Clutter bar button sprites
+
+**Scaling Architecture (Unified Window):**
+
+```swift
+// UnifiedDockView.swift - Lines 238-261
+
+/// Returns base size without scaling
+private func baseNaturalSize(for type: DockPaneType) -> CGSize {
+    switch type {
+    case .main: return WinampSizes.main        // 275×116
+    case .equalizer: return WinampSizes.equalizer  // 275×116
+    case .playlist: return WinampSizes.playlistBase  // 275×232
+    }
+}
+
+/// Returns size with double-size scaling applied
+private func naturalSize(for type: DockPaneType) -> CGSize {
+    let baseSize = baseNaturalSize(for: type)
+    let scale: CGFloat = settings.isDoubleSizeMode ? 2.0 : 1.0
+    return CGSize(width: baseSize.width * scale, height: baseSize.height * scale)
+}
+
+// Applied to each window:
+windowContent(for: pane.type)
+    .scaleEffect(scale, anchor: .topLeading)  // Scale content
+    .frame(width: baseSize.width * scale,      // Scale frame
+           height: baseSize.height * scale)
+```
+
+### 🚨 CRITICAL: What Needs to Change for Magnetic Docking
+
+When implementing separate NSWindows, **each window must handle its own double-size scaling.**
+
+**Current (Unified):**
+- UnifiedDockView handles scaling for all 3 windows
+- Single `.scaleEffect()` and frame calculation per window
+- Unified macOS window resizes automatically
+
+**Future (Magnetic Docking):**
+Each independent NSWindow will need:
+
+1. **Individual Window Size Calculation:**
+```swift
+// Per-window WindowGroup
+WindowGroup("Main", id: "main") {
+    WinampMainWindow()
+}
+.defaultSize(
+    width: settings.isDoubleSizeMode ? 550 : 275,
+    height: settings.isDoubleSizeMode ? 232 : 116
+)
+
+// OR use programmatic NSWindow sizing:
+func updateWindowSize(for window: NSWindow) {
+    let scale: CGFloat = AppSettings.instance().isDoubleSizeMode ? 2.0 : 1.0
+    let baseSize = windowBaseSize(for: window.identifier)
+    window.setFrame(
+        NSRect(
+            origin: window.frame.origin,
+            size: NSSize(
+                width: baseSize.width * scale,
+                height: baseSize.height * scale
+            )
+        ),
+        display: true,
+        animate: true
+    )
+}
+```
+
+2. **Content Scaling:**
+```swift
+// Each window view needs .scaleEffect()
+struct WinampMainWindow: View {
+    @Environment(AppSettings.self) var settings
+
+    var body: some View {
+        ZStack {
+            // Window content at 1x coordinates...
+        }
+        .scaleEffect(
+            settings.isDoubleSizeMode ? 2.0 : 1.0,
+            anchor: .topLeading
+        )
+        .frame(
+            width: settings.isDoubleSizeMode ? 550 : 275,
+            height: settings.isDoubleSizeMode ? 232 : 116
+        )
+    }
+}
+```
+
+3. **Synchronized Scaling:**
+All 3 windows must scale together when D is clicked:
+```swift
+// When isDoubleSizeMode changes:
+func handleDoubleSizeModeChange() {
+    // Update all 3 windows simultaneously
+    for window in [mainWindow, eqWindow, playlistWindow] {
+        updateWindowSize(for: window)
+    }
+
+    // Maintain relative positions (magnetic docking)
+    maintainDockedPositions()
+}
+```
+
+4. **Magnetic Snapping at 2x:**
+Snap detection must work at both scales:
+```swift
+func checkSnap(draggedWindow: NSWindow) -> SnapPosition? {
+    let scale: CGFloat = settings.isDoubleSizeMode ? 2.0 : 1.0
+    let threshold: CGFloat = 15 * scale  // Scale threshold too!
+
+    // Check edges at scaled dimensions...
+}
+```
+
+5. **Docking State Preservation:**
+When doubling size, docked windows must:
+- Scale together
+- Maintain alignment
+- Preserve docking relationships
+- Update snap positions
+
+### Code to Migrate from UnifiedDockView
+
+**When implementing magnetic docking, take this scaling logic:**
+
+```swift
+// From: tasks/double-size-button/state.md
+// Lines: See UnifiedDockView.swift implementation
+
+// 1. Base size constants (keep in WinampSizes)
+static let main = CGSize(width: 275, height: 116)
+static let mainDouble = CGSize(width: 550, height: 232)
+
+// 2. Scale factor calculation
+let scale: CGFloat = settings.isDoubleSizeMode ? 2.0 : 1.0
+
+// 3. .scaleEffect() for content scaling
+.scaleEffect(scale, anchor: .topLeading)
+
+// 4. Frame calculation for window size
+.frame(width: baseSize.width * scale, height: baseSize.height * scale)
+
+// 5. Animation for smooth transitions
+.animation(.easeInOut(duration: 0.2), value: settings.isDoubleSizeMode)
+```
+
+### Button Implementation (Already Done)
+
+The clutter bar buttons are implemented in `WinampMainWindow.swift`:
+- O, A, I, D, V buttons (Lines 494-577)
+- D button is functional
+- Sprites from TITLEBAR.BMP (coordinates: see SkinSprites.swift)
+
+**No changes needed** to button code when separating windows.
+
+### State Management (Already Done)
+
+`AppSettings.isDoubleSizeMode` is ready:
+- @AppStorage for persistence
+- @MainActor for concurrency
+- Accessible from all views
+
+**No changes needed** to state management when separating windows.
+
+### Testing Notes for Future Implementation
+
+When magnetic docking is implemented, test:
+- [ ] All 3 windows scale together when docked
+- [ ] Separated windows scale independently
+- [ ] Docking works at both 1x and 2x scales
+- [ ] Snap threshold scales with window size
+- [ ] Group movement works at 2x
+- [ ] Position persistence works with scaling
+- [ ] Animation is smooth for all windows
+
+### Reference Implementation
+
+**See:** `tasks/double-size-button/` for complete implementation details
+- research.md - Oracle feedback and architecture decisions
+- plan.md - Phase-by-phase implementation guide
+- state.md - Final implementation status and code locations
+
+---
+
 ## 🔍 Webamp Implementation (Pending Gemini Analysis)
 
 **Gemini Research Query Running...**
