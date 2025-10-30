@@ -5,28 +5,30 @@ import Accelerate
 struct VisualizerView: View {
     @Environment(AudioPlayer.self) var audioPlayer
     @Environment(SkinManager.self) var skinManager
-    
+
     // Animation state
     @State private var barHeights: [CGFloat] = Array(repeating: 0, count: 19)
     @State private var peakPositions: [CGFloat] = Array(repeating: 0, count: 19)
     @State private var peakTimers: [Date] = Array(repeating: Date.distantPast, count: 19)
-    @State private var updateTimer: Timer?
-    
+
     // Winamp spectrum analyzer constants
     private let barCount = 19
     private let barWidth: CGFloat = 3
     private let barSpacing: CGFloat = 1
     private let maxHeight: CGFloat = 16
-    
+
     // Animation timing
     private let updateInterval: TimeInterval = 1.0/30.0  // 30 FPS for classic feel
     private let decayRate: CGFloat = 0.92  // Slower decay for more visible bars
     private let peakHoldTime: TimeInterval = 0.5
     private let peakDecayRate: CGFloat = 0.95
-    
+
     // Sensitivity adjustment
     private let amplificationFactor: CGFloat = 1.5  // Boost signal for better visibility
     private let minBarHeight: CGFloat = 1.0  // Minimum visible height when playing
+
+    // Timer publisher for SwiftUI-native updates (Swift 6 pattern)
+    let updateTimer = Timer.publish(every: 1.0/30.0, on: .main, in: .common).autoconnect()
     
     var body: some View {
         HStack(spacing: barSpacing) {
@@ -40,42 +42,20 @@ struct VisualizerView: View {
             }
         }
         .background(Color.black)
-        .onAppear {
-            startVisualization()
-        }
-        .onDisappear {
-            stopVisualization()
-        }
-        .onChange(of: audioPlayer.isPlaying) { _, isPlaying in
-            if isPlaying {
-                startVisualization()
-            } else {
-                // Stop animation and drop bars to zero when stopped
-                stopVisualization()
+        .onReceive(updateTimer) { _ in
+            // Only update when playing (Swift 6 safe pattern)
+            if audioPlayer.isPlaying {
+                updateBars()
             }
         }
-    }
-    
-    private func startVisualization() {
-        guard audioPlayer.isPlaying else { return }
-        
-        updateTimer?.invalidate()
-        updateTimer = Timer.scheduledTimer(withTimeInterval: updateInterval, repeats: true) { _ in
-            updateBars()
-        }
-        if let timer = updateTimer {
-            RunLoop.main.add(timer, forMode: .common)
-        }
-    }
-    
-    private func stopVisualization() {
-        updateTimer?.invalidate()
-        updateTimer = nil
-        
-        // Animate bars to zero
-        withAnimation(.easeOut(duration: 0.3)) {
-            barHeights = Array(repeating: 0, count: barCount)
-            peakPositions = Array(repeating: 0, count: barCount)
+        .onChange(of: audioPlayer.isPlaying) { _, isPlaying in
+            if !isPlaying {
+                // Animate bars to zero when stopped
+                withAnimation(.easeOut(duration: 0.3)) {
+                    barHeights = Array(repeating: 0, count: barCount)
+                    peakPositions = Array(repeating: 0, count: barCount)
+                }
+            }
         }
     }
     
