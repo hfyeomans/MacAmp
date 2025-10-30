@@ -507,14 +507,18 @@ struct WinampMainWindow: View {
             .help("Options (not yet implemented)")
             .at(Coords.clutterButtonO)
 
-            // A - Always On Top (Scaffold - not yet implemented)
-            Button(action: {}) {
-                SimpleSpriteImage("MAIN_CLUTTER_BAR_BUTTON_A", width: 8, height: 7)
+            // A - Always On Top (FUNCTIONAL)
+            let aSpriteName = settings.isAlwaysOnTop
+                ? "MAIN_CLUTTER_BAR_BUTTON_A_SELECTED"
+                : "MAIN_CLUTTER_BAR_BUTTON_A"
+
+            Button(action: {
+                settings.isAlwaysOnTop.toggle()
+            }) {
+                SimpleSpriteImage(aSpriteName, width: 8, height: 7)
             }
             .buttonStyle(.plain)
-            .disabled(true)
-            .accessibilityHidden(true)
-            .help("Always on top (not yet implemented)")
+            .help("Toggle always on top (Ctrl+A)")
             .at(Coords.clutterButtonA)
 
             // I - Info (Scaffold - not yet implemented)

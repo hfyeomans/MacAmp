@@ -59,9 +59,17 @@ struct UnifiedDockView: View {
             .onChange(of: settings.enableLiquidGlass) { _, _ in
                 startDockAnimations()
             }
+            .onChange(of: settings.isAlwaysOnTop) { _, isOn in
+                // Toggle window level when always-on-top changes
+                if let window = NSApp.keyWindow {
+                    window.level = isOn ? .floating : .normal
+                }
+            }
             .background(
                 WindowAccessor { window in
                     configureWindow(window)
+                    // Set initial window level based on persisted state
+                    window.level = settings.isAlwaysOnTop ? .floating : .normal
                 }
             )
         } else {

@@ -47,8 +47,9 @@ final class AppSettings {
         self.materialIntegration = Self.loadMaterialIntegration()
         self.enableLiquidGlass = Self.loadLiquidGlassSetting()
 
-        // Load persisted double-size mode (defaults to false for 100% size)
+        // Load persisted clutter bar states (default to false)
         self.isDoubleSizeMode = UserDefaults.standard.bool(forKey: "isDoubleSizeMode")
+        self.isAlwaysOnTop = UserDefaults.standard.bool(forKey: "isAlwaysOnTop")
     }
     
     static func instance() -> AppSettings {
@@ -145,13 +146,20 @@ final class AppSettings {
         }
     }
 
+    // MARK: - Always On Top Mode
+
+    /// Persists across app restarts - defaults to false (normal window level)
+    /// Note: Using didSet pattern to maintain @Observable reactivity
+    var isAlwaysOnTop: Bool = false {
+        didSet {
+            UserDefaults.standard.set(isAlwaysOnTop, forKey: "isAlwaysOnTop")
+        }
+    }
+
     // MARK: - Clutter Bar States (Scaffolded for Future Implementation)
 
     /// O - Options Menu (not yet implemented)
     var showOptionsMenu: Bool = false
-
-    /// A - Always On Top (not yet implemented)
-    var isAlwaysOnTop: Bool = false
 
     /// I - Info Dialog (not yet implemented)
     var showInfoDialog: Bool = false
