@@ -5,7 +5,7 @@ import AppKit
 struct WinampMainWindow: View {
     @EnvironmentObject var skinManager: SkinManager
     @EnvironmentObject var audioPlayer: AudioPlayer
-    @EnvironmentObject var dockingController: DockingController
+    @Environment(DockingController.self) var dockingController
     @Environment(\.openWindow) var openWindow
 
     // CRITICAL: Prevent unnecessary body re-evaluations that cause ghost images
@@ -706,5 +706,5 @@ struct WinampMainWindow: View {
     WinampMainWindow()
         .environmentObject(SkinManager())
         .environmentObject(AudioPlayer())
-        .environmentObject(DockingController())
+        .environment(DockingController())
 }

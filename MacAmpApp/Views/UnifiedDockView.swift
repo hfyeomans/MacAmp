@@ -4,7 +4,7 @@ import AppKit
 struct UnifiedDockView: View {
     @EnvironmentObject var skinManager: SkinManager
     @EnvironmentObject var audioPlayer: AudioPlayer
-    @EnvironmentObject var docking: DockingController
+    @Environment(DockingController.self) var docking
     @Environment(AppSettings.self) var settings
 
     // MARK: - Whimsy & Animation States
@@ -316,6 +316,6 @@ struct RowFramesKey: PreferenceKey {
     UnifiedDockView()
         .environmentObject(SkinManager())
         .environmentObject(AudioPlayer())
-        .environmentObject(DockingController())
+        .environment(DockingController())
         .environment(AppSettings.instance())
 }

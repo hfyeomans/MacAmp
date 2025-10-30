@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import Combine
+import Observation
 
 /// A pane in the unified docking container
 enum DockPaneType: String, Codable, CaseIterable, Identifiable {
@@ -27,15 +28,26 @@ struct DockPaneState: Identifiable, Codable, Equatable {
 }
 
 /// Central controller for unified-window docking state and persistence.
-final class DockingController: ObservableObject {
-    @Published var panes: [DockPaneState]
+@Observable
+@MainActor
+final class DockingController {
+    var panes: [DockPaneState] {
+        didSet {
+            // Debounce persistence via Task
+            persistTask?.cancel()
+            persistTask = Task { @MainActor [weak self, panes] in
+                try? await Task.sleep(nanoseconds: 150_000_000)  // 150ms debounce
+                self?.persist(panes: panes)
+            }
+        }
+    }
 
     /// Docking parameters
     let snapDistance: CGFloat = 15
 
     private let persistKey = "DockLayoutV1"
     private let defaults: UserDefaults
-    private var cancellables = Set<AnyCancellable>()
+    @ObservationIgnored private var persistTask: Task<Void, Never>?
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -52,14 +64,7 @@ final class DockingController: ObservableObject {
                 DockPaneState(type: .playlist, visible: false, isShaded: false)
             ]
         }
-
-        $panes
-            .dropFirst()
-            .debounce(for: .milliseconds(150), scheduler: RunLoop.main)
-            .sink { [weak self] panes in
-                self?.persist(panes: panes)
-            }
-            .store(in: &cancellables)
+        // Note: Debounce now handled in panes.didSet via Task sleep
     }
 
     // MARK: - Convenience flags used by menu commands

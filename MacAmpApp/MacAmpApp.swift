@@ -4,7 +4,7 @@ import SwiftUI
 struct MacAmpApp: App {
     @StateObject private var skinManager = SkinManager()
     @StateObject private var audioPlayer = AudioPlayer()
-    @StateObject private var dockingController = DockingController()
+    @State private var dockingController = DockingController()
     @State private var settings = AppSettings.instance()
 
     var body: some Scene {
@@ -12,7 +12,7 @@ struct MacAmpApp: App {
             UnifiedDockView()
                 .environmentObject(skinManager)
                 .environmentObject(audioPlayer)
-                .environmentObject(dockingController)
+                .environment(dockingController)
                 .environment(settings)
         }
         .windowStyle(.hiddenTitleBar)
