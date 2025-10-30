@@ -3,9 +3,9 @@ import AppKit
 import UniformTypeIdentifiers
 
 struct AppCommands: Commands {
-    let dockingController: DockingController
-    let audioPlayer: AudioPlayer
-    let settings: AppSettings
+    @Bindable var dockingController: DockingController
+    @Bindable var audioPlayer: AudioPlayer
+    @Bindable var settings: AppSettings
     @Environment(\.openWindow) private var openWindow
 
     var body: some Commands {
