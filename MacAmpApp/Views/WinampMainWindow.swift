@@ -25,8 +25,10 @@ struct WinampMainWindow: View {
 
     // Pause blinking state
     @State private var pauseBlinkVisible: Bool = true
-    @State private var pauseBlinkTimer: Timer?
     @State private var isViewVisible: Bool = false
+
+    // Timer publisher for pause blink animation (Swift 6 pattern)
+    let pauseBlinkTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
 
     // Winamp coordinate constants (from original Winamp and webamp)
     private struct Coords {
@@ -100,30 +102,19 @@ struct WinampMainWindow: View {
         .onAppear {
             isViewVisible = true
         }
-        .onChange(of: audioPlayer.isPaused) { _, isPaused in
-            if isPaused {
-                // Start blinking timer
-                pauseBlinkTimer?.invalidate()
-                pauseBlinkVisible = true
-                pauseBlinkTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
-                    pauseBlinkVisible.toggle()
-                }
-                if let timer = pauseBlinkTimer {
-                    RunLoop.main.add(timer, forMode: .common)
-                }
+        .onReceive(pauseBlinkTimer) { _ in
+            // Only blink when paused (Swift 6 safe pattern)
+            if audioPlayer.isPaused {
+                pauseBlinkVisible.toggle()
             } else {
-                // Stop blinking timer
-                pauseBlinkTimer?.invalidate()
-                pauseBlinkTimer = nil
-                pauseBlinkVisible = true
+                pauseBlinkVisible = true  // Always visible when not paused
             }
         }
         .onDisappear {
             isViewVisible = false
             scrollTimer?.invalidate()
             scrollTimer = nil
-            pauseBlinkTimer?.invalidate()
-            pauseBlinkTimer = nil
+            // Note: pauseBlinkTimer is now a publisher, auto-managed by SwiftUI
         }
     }
     
