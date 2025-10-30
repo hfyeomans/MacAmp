@@ -1,14 +1,17 @@
 import SwiftUI
 
 struct PreferencesView: View {
-    @EnvironmentObject var settings: AppSettings
+    @Environment(AppSettings.self) private var appSettings
     @Environment(\.dismiss) var dismiss
-    
+
     // MARK: - Whimsy & Animation States
     @State private var settingChangeGlow: String? = nil
     @State private var materialPreview: Bool = false
-    
+
     var body: some View {
+        // Body-scoped @Bindable for Toggle/Picker bindings
+        @Bindable var settings = appSettings
+
         VStack(alignment: .leading, spacing: 20) {
             Text("MacAmp Preferences")
                 .font(.title2)
@@ -143,6 +146,6 @@ private extension View {
 #if DEBUG
 #Preview {
     PreferencesView()
-        .environmentObject(AppSettings.instance())
+        .environment(AppSettings.instance())
 }
 #endif

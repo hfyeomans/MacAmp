@@ -152,7 +152,7 @@ final class PlaylistWindowActions: NSObject {
 struct WinampPlaylistWindow: View {
     @EnvironmentObject var skinManager: SkinManager
     @EnvironmentObject var audioPlayer: AudioPlayer
-    @EnvironmentObject var settings: AppSettings
+    @Environment(AppSettings.self) var settings
 
     @State private var selectedIndices: Set<Int> = []
     @State private var isShadeMode: Bool = false
@@ -470,7 +470,7 @@ struct WinampPlaylistWindow: View {
     @ViewBuilder
     private func buildTimeDisplays() -> some View {
             PlaylistTimeText(trackTimeText)
-                .position(x: 168, y: 206)
+                .position(x: 176, y: 206)
 
         if !remainingTimeText.isEmpty {
             PlaylistTimeText(remainingTimeText)
@@ -756,5 +756,5 @@ extension SimpleSpriteImage {
     WinampPlaylistWindow()
         .environmentObject(SkinManager())
         .environmentObject(AudioPlayer())
-        .environmentObject(AppSettings.instance())
+        .environment(AppSettings.instance())
 }

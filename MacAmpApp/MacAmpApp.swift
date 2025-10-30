@@ -5,7 +5,7 @@ struct MacAmpApp: App {
     @StateObject private var skinManager = SkinManager()
     @StateObject private var audioPlayer = AudioPlayer()
     @StateObject private var dockingController = DockingController()
-    @StateObject private var settings = AppSettings.instance()
+    @State private var settings = AppSettings.instance()
 
     var body: some Scene {
         WindowGroup {
@@ -13,14 +13,14 @@ struct MacAmpApp: App {
                 .environmentObject(skinManager)
                 .environmentObject(audioPlayer)
                 .environmentObject(dockingController)
-                .environmentObject(settings)
+                .environment(settings)
         }
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)
 
         WindowGroup("Preferences", id: "preferences") {
             PreferencesView()
-                .environmentObject(settings)
+                .environment(settings)
         }
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)
