@@ -71,6 +71,14 @@ struct WinampMainWindow: View {
         static let minimizeButton = CGPoint(x: 244, y: 3)
         static let shadeButton = CGPoint(x: 254, y: 3)
         static let closeButton = CGPoint(x: 264, y: 3)
+
+        // Clutter bar (vertical button strip, left side)
+        static let clutterBar = CGPoint(x: 10, y: 22)
+        static let clutterButtonO = CGPoint(x: 10, y: 25)  // top: 3px relative
+        static let clutterButtonA = CGPoint(x: 10, y: 33)  // top: 11px relative
+        static let clutterButtonI = CGPoint(x: 10, y: 40)  // top: 18px relative
+        static let clutterButtonD = CGPoint(x: 10, y: 47)  // top: 25px relative
+        static let clutterButtonV = CGPoint(x: 10, y: 55)  // top: 33px relative
     }
     
     var body: some View {
@@ -95,10 +103,24 @@ struct WinampMainWindow: View {
                 // Shade mode (collapsed to titlebar only)
                 buildShadeMode()
             }
+
+            // Hidden window accessor for capturing NSWindow reference
+            WindowAccessor { window in
+                let settings = AppSettings.instance()
+                if settings.mainWindow == nil {
+                    settings.mainWindow = window
+                    settings.setupWindowObserver()
+                }
+            }
+            .frame(width: 0, height: 0)
+            .hidden()
         }
         .frame(width: WinampSizes.main.width,
                height: isShadeMode ? WinampSizes.mainShade.height : WinampSizes.main.height)
         .background(Color.black) // Fallback
+        .task(id: AppSettings.instance().isDoubleSizeMode) {
+            await animateWindowResize()
+        }
         .onAppear {
             isViewVisible = true
         }
@@ -115,6 +137,19 @@ struct WinampMainWindow: View {
             scrollTimer?.invalidate()
             scrollTimer = nil
             // Note: pauseBlinkTimer is now a publisher, auto-managed by SwiftUI
+        }
+    }
+
+    @MainActor
+    private func animateWindowResize() async {
+        let settings = AppSettings.instance()
+        guard let window = settings.mainWindow else { return }
+        guard let targetFrame = settings.targetWindowFrame else { return }
+
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.2
+            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            window.animator().setFrame(targetFrame, display: true)
         }
     }
     
@@ -153,7 +188,10 @@ struct WinampMainWindow: View {
             
             // EQ/Playlist buttons
             buildWindowToggleButtons()
-            
+
+            // Clutter bar buttons (O, A, I, D, V)
+            buildClutterBarButtons()
+
             // Additional Winamp elements (simplified)
             buildMonoStereoIndicator()
             
@@ -468,7 +506,7 @@ struct WinampMainWindow: View {
             }
             .buttonStyle(.plain)
             .at(Coords.eqButton)
-            
+
             // Playlist button
             Button(action: {
                 dockingController.togglePlaylist()
@@ -478,6 +516,90 @@ struct WinampMainWindow: View {
             .buttonStyle(.plain)
             .at(Coords.playlistButton)
         }
+    }
+
+    @ViewBuilder
+    private func buildClutterBarButtons() -> some View {
+        let settings = AppSettings.instance()
+
+        Group {
+            // O - Options (Scaffold - not yet implemented)
+            Button(action: {}) {
+                SimpleSpriteImage("MAIN_CLUTTER_BAR_BUTTON_O", width: 8, height: 8)
+            }
+            .buttonStyle(.plain)
+            .disabled(true)
+            .accessibilityHidden(true)
+            .help("Options (not yet implemented)")
+            .at(Coords.clutterButtonO)
+
+            // A - Always On Top (Scaffold - not yet implemented)
+            Button(action: {}) {
+                SimpleSpriteImage("MAIN_CLUTTER_BAR_BUTTON_A", width: 8, height: 7)
+            }
+            .buttonStyle(.plain)
+            .disabled(true)
+            .accessibilityHidden(true)
+            .help("Always on top (not yet implemented)")
+            .at(Coords.clutterButtonA)
+
+            // I - Info (Scaffold - not yet implemented)
+            Button(action: {}) {
+                SimpleSpriteImage("MAIN_CLUTTER_BAR_BUTTON_I", width: 8, height: 7)
+            }
+            .buttonStyle(.plain)
+            .disabled(true)
+            .accessibilityHidden(true)
+            .help("Info (not yet implemented)")
+            .at(Coords.clutterButtonI)
+
+            // D - Double Size (FUNCTIONAL)
+            Toggle(isOn: Binding(
+                get: { settings.isDoubleSizeMode },
+                set: { settings.isDoubleSizeMode = $0 }
+            )) {
+                EmptyView()
+            }
+            .toggleStyle(SkinToggleStyle(
+                normalImage: spriteImage(for: "MAIN_CLUTTER_BAR_BUTTON_D"),
+                activeImage: spriteImage(for: "MAIN_CLUTTER_BAR_BUTTON_D_SELECTED")
+            ))
+            .help("Toggle window size (Ctrl+D)")
+            .at(Coords.clutterButtonD)
+
+            // V - Visualizer (Scaffold - not yet implemented)
+            Button(action: {}) {
+                SimpleSpriteImage("MAIN_CLUTTER_BAR_BUTTON_V", width: 8, height: 7)
+            }
+            .buttonStyle(.plain)
+            .disabled(true)
+            .accessibilityHidden(true)
+            .help("Visualizer (not yet implemented)")
+            .at(Coords.clutterButtonV)
+        }
+    }
+
+    /// Helper to get NSImage from sprite name for toggle style
+    private func spriteImage(for spriteName: String) -> NSImage {
+        guard let sprite = skinManager.currentSkin?.sprites.sprite(named: spriteName) else {
+            return NSImage()
+        }
+        guard let image = skinManager.spriteSheet(for: "TITLEBAR") else {
+            return NSImage()
+        }
+
+        let spriteRect = sprite.rect
+        let croppedImage = NSImage(size: spriteRect.size)
+        croppedImage.lockFocus()
+        image.draw(
+            in: CGRect(origin: .zero, size: spriteRect.size),
+            from: spriteRect,
+            operation: .copy,
+            fraction: 1.0
+        )
+        croppedImage.unlockFocus()
+
+        return croppedImage
     }
     
     @ViewBuilder
