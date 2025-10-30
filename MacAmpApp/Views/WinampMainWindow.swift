@@ -6,6 +6,7 @@ struct WinampMainWindow: View {
     @Environment(SkinManager.self) var skinManager
     @Environment(AudioPlayer.self) var audioPlayer
     @Environment(DockingController.self) var dockingController
+    @Environment(AppSettings.self) var settings
     @Environment(\.openWindow) var openWindow
 
     // CRITICAL: Prevent unnecessary body re-evaluations that cause ghost images
@@ -494,8 +495,7 @@ struct WinampMainWindow: View {
 
     @ViewBuilder
     private func buildClutterBarButtons() -> some View {
-        let settings = AppSettings.instance()
-
+        // Use environment settings for reactive updates
         Group {
             // O - Options (Scaffold - not yet implemented)
             Button(action: {}) {
@@ -528,13 +528,17 @@ struct WinampMainWindow: View {
             .at(Coords.clutterButtonI)
 
             // D - Double Size (FUNCTIONAL)
+            // Compute sprite name outside closure for reactivity
+            let dSpriteName = settings.isDoubleSizeMode
+                ? "MAIN_CLUTTER_BAR_BUTTON_D_SELECTED"
+                : "MAIN_CLUTTER_BAR_BUTTON_D"
+
             Button(action: {
+                print("🔘 D button clicked! Current state: \(settings.isDoubleSizeMode)")
                 settings.isDoubleSizeMode.toggle()
+                print("🔘 After toggle: \(settings.isDoubleSizeMode)")
             }) {
-                let spriteName = settings.isDoubleSizeMode
-                    ? "MAIN_CLUTTER_BAR_BUTTON_D_SELECTED"
-                    : "MAIN_CLUTTER_BAR_BUTTON_D"
-                SimpleSpriteImage(spriteName, width: 8, height: 8)
+                SimpleSpriteImage(dSpriteName, width: 8, height: 8)
             }
             .buttonStyle(.plain)
             .help("Toggle window size")

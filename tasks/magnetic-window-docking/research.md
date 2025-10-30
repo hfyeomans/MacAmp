@@ -283,6 +283,29 @@ The clutter bar buttons are implemented in `WinampMainWindow.swift`:
 
 **No changes needed** to state management when separating windows.
 
+### Known Issues to Fix When Implementing Magnetic Docking
+
+**Playlist Menu Buttons Don't Scale (2025-10-30):**
+
+When double-size mode is active, playlist menu buttons (ADD, REM, SEL, MISC, LIST OPTS) don't expand with the window. This is expected with current unified window architecture.
+
+**Root Cause:**
+- Playlist window has independent variable height (resizable)
+- Menu buttons use absolute positioning
+- In classic Winamp, playlist is independently resizable (not just double-size)
+- Main and EQ windows only support double-size (fixed dimensions)
+
+**Fix Required for Magnetic Docking:**
+When playlist becomes a separate NSWindow:
+1. Playlist window needs its own scale factor OR dynamic button positioning
+2. Menu buttons should scale with window OR reposition based on window height
+3. Main/EQ windows only scale with double-size mode (fixed dimensions)
+4. Playlist window supports both double-size AND independent resize
+
+**Testing Deferred:**
+- ⏸️ Playlist menu button scaling (will fix with magnetic docking)
+- ⏸️ Playlist independent resize + double-size interaction
+
 ### Testing Notes for Future Implementation
 
 When magnetic docking is implemented, test:
@@ -293,6 +316,8 @@ When magnetic docking is implemented, test:
 - [ ] Group movement works at 2x
 - [ ] Position persistence works with scaling
 - [ ] Animation is smooth for all windows
+- [ ] **Playlist menu buttons scale/reposition correctly at 2x**
+- [ ] **Playlist independent resize works at both 1x and 2x**
 
 ### Reference Implementation
 

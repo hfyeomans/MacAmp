@@ -258,7 +258,9 @@ struct UnifiedDockView: View {
     private func naturalSize(for type: DockPaneType) -> CGSize {
         let baseSize = baseNaturalSize(for: type)
         let scale: CGFloat = settings.isDoubleSizeMode ? 2.0 : 1.0
-        return CGSize(width: baseSize.width * scale, height: baseSize.height * scale)
+        let result = CGSize(width: baseSize.width * scale, height: baseSize.height * scale)
+        print("📏 naturalSize(\(type)): doubleMode=\(settings.isDoubleSizeMode), scale=\(scale), result=\(result)")
+        return result
     }
     
     // Calculate total width - should be the width of the widest visible window

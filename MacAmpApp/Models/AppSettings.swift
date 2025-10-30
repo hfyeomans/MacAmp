@@ -47,6 +47,10 @@ final class AppSettings {
     private init() {
         self.materialIntegration = Self.loadMaterialIntegration()
         self.enableLiquidGlass = Self.loadLiquidGlassSetting()
+
+        // Load persisted double-size mode (defaults to false for 100% size)
+        self.isDoubleSizeMode = UserDefaults.standard.bool(forKey: "isDoubleSizeMode")
+        print("🚀 AppSettings initialized - isDoubleSizeMode: \(self.isDoubleSizeMode)")
     }
     
     static func instance() -> AppSettings {
@@ -145,9 +149,15 @@ final class AppSettings {
 
     // MARK: - Double Size Mode
 
-    /// Persists across app restarts
-    @ObservationIgnored
-    @AppStorage("isDoubleSizeMode") var isDoubleSizeMode: Bool = false
+    /// Persists across app restarts - defaults to false (100% size)
+    /// Note: Using didSet pattern instead of @AppStorage property wrapper
+    /// to maintain @Observable reactivity
+    var isDoubleSizeMode: Bool = false {
+        didSet {
+            print("📐 isDoubleSizeMode changed: \(oldValue) → \(isDoubleSizeMode)")
+            UserDefaults.standard.set(isDoubleSizeMode, forKey: "isDoubleSizeMode")
+        }
+    }
 
     // MARK: - Clutter Bar States (Scaffolded)
 
