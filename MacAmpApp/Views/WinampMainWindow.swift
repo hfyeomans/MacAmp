@@ -534,9 +534,7 @@ struct WinampMainWindow: View {
                 : "MAIN_CLUTTER_BAR_BUTTON_D"
 
             Button(action: {
-                print("🔘 D button clicked! Current state: \(settings.isDoubleSizeMode)")
                 settings.isDoubleSizeMode.toggle()
-                print("🔘 After toggle: \(settings.isDoubleSizeMode)")
             }) {
                 SimpleSpriteImage(dSpriteName, width: 8, height: 8)
             }

@@ -1,7 +1,6 @@
 import Foundation
 import SwiftUI
 import Observation
-import AppKit
 
 /// Material integration levels for Liquid Glass UI support
 enum MaterialIntegrationLevel: String, CaseIterable, Codable {
@@ -50,7 +49,6 @@ final class AppSettings {
 
         // Load persisted double-size mode (defaults to false for 100% size)
         self.isDoubleSizeMode = UserDefaults.standard.bool(forKey: "isDoubleSizeMode")
-        print("🚀 AppSettings initialized - isDoubleSizeMode: \(self.isDoubleSizeMode)")
     }
     
     static func instance() -> AppSettings {
@@ -136,17 +134,6 @@ final class AppSettings {
         return caches.appendingPathComponent("MacAmp/FallbackSkins", isDirectory: true)
     }
 
-    // MARK: - Window Management (Double-Size Mode)
-
-    /// Weak reference to prevent retain cycles
-    weak var mainWindow: NSWindow?
-
-    /// Base window size for scale calculations (not position)
-    var baseWindowSize: NSSize = NSSize(width: 275, height: 116)
-
-    // Note: Window observer removed to avoid Swift 6 concurrency issues
-    // The dynamic targetWindowFrame calculation handles position preservation
-
     // MARK: - Double Size Mode
 
     /// Persists across app restarts - defaults to false (100% size)
@@ -154,49 +141,8 @@ final class AppSettings {
     /// to maintain @Observable reactivity
     var isDoubleSizeMode: Bool = false {
         didSet {
-            print("📐 isDoubleSizeMode changed: \(oldValue) → \(isDoubleSizeMode)")
             UserDefaults.standard.set(isDoubleSizeMode, forKey: "isDoubleSizeMode")
         }
-    }
-
-    // MARK: - Clutter Bar States (Scaffolded)
-
-    /// O - Options Menu (not yet implemented)
-    var showOptionsMenu: Bool = false
-
-    /// A - Always On Top (not yet implemented)
-    var isAlwaysOnTop: Bool = false
-
-    /// I - Info Dialog (not yet implemented)
-    var showInfoDialog: Bool = false
-
-    /// V - Visualizer Mode (not yet implemented)
-    var visualizerMode: Int = 0
-
-    // MARK: - Dynamic Frame Calculation
-
-    /// Computes target frame based on current window position (no snap-back!)
-    var targetWindowFrame: NSRect? {
-        guard let window = mainWindow else { return nil }
-
-        // Capture current top-left corner (anchor point)
-        let currentTopLeft = NSPoint(
-            x: window.frame.origin.x,
-            y: window.frame.maxY  // macOS uses bottom-left origin
-        )
-
-        // Calculate target size based on mode
-        let targetSize = isDoubleSizeMode
-            ? NSSize(width: baseWindowSize.width * 2, height: baseWindowSize.height * 2)
-            : baseWindowSize
-
-        // Build frame from top-left anchor
-        return NSRect(
-            x: currentTopLeft.x,
-            y: currentTopLeft.y - targetSize.height,  // Subtract height to position from top
-            width: targetSize.width,
-            height: targetSize.height
-        )
     }
 
 }
