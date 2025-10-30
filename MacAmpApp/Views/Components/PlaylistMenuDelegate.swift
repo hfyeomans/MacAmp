@@ -24,4 +24,18 @@ final class PlaylistMenuDelegate: NSObject, NSMenuDelegate {
             }
         }
     }
+
+    /// Handle Enter key to activate highlighted menu item
+    func menuHasKeyEquivalent(_ menu: NSMenu, for event: NSEvent, target: AutoreleasingUnsafeMutablePointer<AnyObject?>, action: UnsafeMutablePointer<Selector?>) -> Bool {
+        // Check for Enter or Return key
+        if let key = event.charactersIgnoringModifiers,
+           key == "\r" || key == "\n" {
+            if let highlightedItem = menu.highlightedItem {
+                // Trigger the highlighted item's action
+                menu.performActionForItem(at: menu.index(of: highlightedItem))
+                return true  // We handled the key event
+            }
+        }
+        return false
+    }
 }
