@@ -109,7 +109,6 @@ struct WinampMainWindow: View {
                 let settings = AppSettings.instance()
                 if settings.mainWindow == nil {
                     settings.mainWindow = window
-                    settings.setupWindowObserver()
                 }
             }
             .frame(width: 0, height: 0)
@@ -119,7 +118,7 @@ struct WinampMainWindow: View {
                height: isShadeMode ? WinampSizes.mainShade.height : WinampSizes.main.height)
         .background(Color.black) // Fallback
         .task(id: AppSettings.instance().isDoubleSizeMode) {
-            await animateWindowResize()
+            animateWindowResize()
         }
         .onAppear {
             isViewVisible = true
@@ -141,7 +140,7 @@ struct WinampMainWindow: View {
     }
 
     @MainActor
-    private func animateWindowResize() async {
+    private func animateWindowResize() {
         let settings = AppSettings.instance()
         guard let window = settings.mainWindow else { return }
         guard let targetFrame = settings.targetWindowFrame else { return }
@@ -554,17 +553,16 @@ struct WinampMainWindow: View {
             .at(Coords.clutterButtonI)
 
             // D - Double Size (FUNCTIONAL)
-            Toggle(isOn: Binding(
-                get: { settings.isDoubleSizeMode },
-                set: { settings.isDoubleSizeMode = $0 }
-            )) {
-                EmptyView()
+            Button(action: {
+                settings.isDoubleSizeMode.toggle()
+            }) {
+                let spriteName = settings.isDoubleSizeMode
+                    ? "MAIN_CLUTTER_BAR_BUTTON_D_SELECTED"
+                    : "MAIN_CLUTTER_BAR_BUTTON_D"
+                SimpleSpriteImage(spriteName, width: 8, height: 8)
             }
-            .toggleStyle(SkinToggleStyle(
-                normalImage: spriteImage(for: "MAIN_CLUTTER_BAR_BUTTON_D"),
-                activeImage: spriteImage(for: "MAIN_CLUTTER_BAR_BUTTON_D_SELECTED")
-            ))
-            .help("Toggle window size (Ctrl+D)")
+            .buttonStyle(.plain)
+            .help("Toggle window size")
             .at(Coords.clutterButtonD)
 
             // V - Visualizer (Scaffold - not yet implemented)
@@ -579,28 +577,6 @@ struct WinampMainWindow: View {
         }
     }
 
-    /// Helper to get NSImage from sprite name for toggle style
-    private func spriteImage(for spriteName: String) -> NSImage {
-        guard let sprite = skinManager.currentSkin?.sprites.sprite(named: spriteName) else {
-            return NSImage()
-        }
-        guard let image = skinManager.spriteSheet(for: "TITLEBAR") else {
-            return NSImage()
-        }
-
-        let spriteRect = sprite.rect
-        let croppedImage = NSImage(size: spriteRect.size)
-        croppedImage.lockFocus()
-        image.draw(
-            in: CGRect(origin: .zero, size: spriteRect.size),
-            from: spriteRect,
-            operation: .copy,
-            fraction: 1.0
-        )
-        croppedImage.unlockFocus()
-
-        return croppedImage
-    }
     
     @ViewBuilder
     private func buildTrackInfoDisplay() -> some View {

@@ -140,9 +140,8 @@ final class AppSettings {
     /// Base window size for scale calculations (not position)
     var baseWindowSize: NSSize = NSSize(width: 275, height: 116)
 
-    /// Window move/resize observer
-    @ObservationIgnored
-    private var windowObserver: NSObjectProtocol?
+    // Note: Window observer removed to avoid Swift 6 concurrency issues
+    // The dynamic targetWindowFrame calculation handles position preservation
 
     // MARK: - Double Size Mode
 
@@ -190,30 +189,4 @@ final class AppSettings {
         )
     }
 
-    // MARK: - Window Observer Setup
-
-    func setupWindowObserver() {
-        guard let window = mainWindow else { return }
-
-        // Clean up existing observer
-        if let observer = windowObserver {
-            NotificationCenter.default.removeObserver(observer)
-        }
-
-        // Observe window movements to update position tracking
-        windowObserver = NotificationCenter.default.addObserver(
-            forName: NSWindow.didMoveNotification,
-            object: window,
-            queue: .main
-        ) { [weak self] _ in
-            // Window moved - position will be preserved on next toggle
-            // No action needed; targetWindowFrame uses live window.frame
-        }
-    }
-
-    deinit {
-        if let observer = windowObserver {
-            NotificationCenter.default.removeObserver(observer)
-        }
-    }
 }
