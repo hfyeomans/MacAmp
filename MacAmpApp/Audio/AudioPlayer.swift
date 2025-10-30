@@ -854,7 +854,7 @@ final class AudioPlayer {
     }
 
     /// Build the tap handler in a nonisolated context so AVAudioEngine can call it on its realtime queue.
-    private nonisolated(unsafe) static func makeVisualizerTapHandler(
+    private nonisolated static func makeVisualizerTapHandler(
         context: VisualizerTapContext,
         scratch: VisualizerScratchBuffers
     ) -> @Sendable (AVAudioPCMBuffer, AVAudioTime?) -> Void {

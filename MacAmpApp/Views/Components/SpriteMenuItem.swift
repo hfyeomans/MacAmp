@@ -3,38 +3,19 @@
 //  MacAmp
 //
 //  Created for playlist menu system - sprite-based menu items with hover states
+//  Phase 3: Refactored to use NSMenuDelegate pattern for keyboard navigation
 //
 
 import SwiftUI
 import AppKit
 
-/// Custom view that handles hover tracking and click forwarding to menu item
-final class HoverTrackingView: NSView {
-    var onHoverChanged: ((Bool) -> Void)?
+/// Minimal view that forwards clicks to the menu item
+/// No hover tracking - delegate handles highlighting
+final class ClickForwardingView: NSView {
     weak var menuItem: NSMenuItem?
 
-    override func updateTrackingAreas() {
-        super.updateTrackingAreas()
-        trackingAreas.forEach { removeTrackingArea($0) }
-        
-        let trackingArea = NSTrackingArea(
-            rect: bounds,
-            options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
-            owner: self,
-            userInfo: nil
-        )
-        addTrackingArea(trackingArea)
-    }
-
-    override func mouseEntered(with event: NSEvent) {
-        onHoverChanged?(true)
-    }
-
-    override func mouseExited(with event: NSEvent) {
-        onHoverChanged?(false)
-    }
-
     override func mouseDown(with event: NSEvent) {
+        // Forward click to menu item action
         if let menuItem = menuItem,
            let action = menuItem.action,
            let target = menuItem.target {
@@ -44,14 +25,19 @@ final class HoverTrackingView: NSView {
     }
 }
 
-/// Custom NSMenuItem that displays a sprite and swaps to selected sprite on hover
+/// Custom NSMenuItem that displays a sprite and swaps to selected sprite on highlight
+/// Highlighting is managed by PlaylistMenuDelegate for both mouse and keyboard navigation
+@MainActor
 final class SpriteMenuItem: NSMenuItem {
     private let normalSpriteName: String
     private let selectedSpriteName: String
     private let skinManager: SkinManager
     private var hostingView: NSHostingView<SpriteMenuItemView>?
-    private var hoverTrackingView: HoverTrackingView?
-    private var isHovered: Bool = false {
+
+    /// Custom highlighted state set by PlaylistMenuDelegate
+    /// Handles both mouse hover and keyboard navigation
+    /// Note: Different from NSMenuItem's built-in isHighlighted
+    var spriteHighlighted: Bool = false {
         didSet {
             updateView()
         }
@@ -73,18 +59,15 @@ final class SpriteMenuItem: NSMenuItem {
     }
 
     private func setupView() {
-        // Create container view for hover tracking and click forwarding
-        let container = HoverTrackingView(frame: NSRect(x: 0, y: 0, width: 22, height: 18))
-        container.onHoverChanged = { [weak self] hovered in
-            self?.isHovered = hovered
-        }
-        container.menuItem = self  // Connect view to menu item for click forwarding
+        // Create click forwarding container (NO hover tracking - delegate handles highlighting)
+        let container = ClickForwardingView(frame: NSRect(x: 0, y: 0, width: 22, height: 18))
+        container.menuItem = self
 
-        // Create SwiftUI sprite view with skinManager injected
+        // Create SwiftUI sprite view
         let spriteView = SpriteMenuItemView(
             normalSprite: normalSpriteName,
             selectedSprite: selectedSpriteName,
-            isHovered: isHovered,
+            isHighlighted: spriteHighlighted,
             skinManager: skinManager
         )
 
@@ -96,7 +79,6 @@ final class SpriteMenuItem: NSMenuItem {
 
         self.view = container
         self.hostingView = hosting
-        self.hoverTrackingView = container
     }
 
     private func updateView() {
@@ -105,7 +87,7 @@ final class SpriteMenuItem: NSMenuItem {
         let updatedView = SpriteMenuItemView(
             normalSprite: normalSpriteName,
             selectedSprite: selectedSpriteName,
-            isHovered: isHovered,
+            isHighlighted: spriteHighlighted,
             skinManager: skinManager
         )
 
@@ -117,11 +99,11 @@ final class SpriteMenuItem: NSMenuItem {
 struct SpriteMenuItemView: View {
     let normalSprite: String
     let selectedSprite: String
-    let isHovered: Bool
+    let isHighlighted: Bool
     let skinManager: SkinManager
 
     var body: some View {
-        if let image = skinManager.currentSkin?.images[isHovered ? selectedSprite : normalSprite] {
+        if let image = skinManager.currentSkin?.images[isHighlighted ? selectedSprite : normalSprite] {
             Image(nsImage: image)
                 .interpolation(.none)
                 .antialiased(false)

@@ -157,6 +157,7 @@ struct WinampPlaylistWindow: View {
     @State private var selectedIndices: Set<Int> = []
     @State private var isShadeMode: Bool = false
     @State private var keyboardMonitor: Any?
+    @State private var menuDelegate = PlaylistMenuDelegate()  // Phase 3: NSMenuDelegate for keyboard nav
 
     private let windowWidth: CGFloat = 275
     private let windowHeight: CGFloat = 232
@@ -388,12 +389,12 @@ struct WinampPlaylistWindow: View {
         }.buttonStyle(.plain).position(x: 42, y: 208)
 
         Button(action: { showSelNotSupportedAlert() }) {
-            Color.clear.frame(width: 22, height: 18).contentShape(Rectangle())
-        }.buttonStyle(.plain).position(x: 68, y: 208)
+            Color.clear.frame(width: 18, height: 18).contentShape(Rectangle())
+        }.buttonStyle(.plain).position(x: 78, y: 208)
 
         Button(action: { showMiscMenu() }) {
-            Color.clear.frame(width: 22, height: 18).contentShape(Rectangle())
-        }.buttonStyle(.plain).position(x: 94, y: 208)
+            Color.clear.frame(width: 18, height: 18).contentShape(Rectangle())
+        }.buttonStyle(.plain).position(x: 105, y: 208)
 
         Button(action: { showListMenu() }) {
             Color.clear.frame(width: 22, height: 18).contentShape(Rectangle())
@@ -563,6 +564,7 @@ struct WinampPlaylistWindow: View {
     private func showAddMenu() {
         let menu = NSMenu()
         menu.autoenablesItems = false
+        menu.delegate = menuDelegate  // Phase 3: Enable keyboard navigation
 
         let addURLItem = SpriteMenuItem(
             normalSprite: "PLAYLIST_ADD_URL",
@@ -606,6 +608,7 @@ struct WinampPlaylistWindow: View {
 
         let menu = NSMenu()
         menu.autoenablesItems = false
+        menu.delegate = menuDelegate  // Phase 3: Enable keyboard navigation
 
         let remMiscItem = SpriteMenuItem(
             normalSprite: "PLAYLIST_REMOVE_MISC",
@@ -666,6 +669,7 @@ struct WinampPlaylistWindow: View {
     private func showMiscMenu() {
         let menu = NSMenu()
         menu.autoenablesItems = false
+        menu.delegate = menuDelegate  // Phase 3: Enable keyboard navigation
 
         let sortItem = SpriteMenuItem(
             normalSprite: "PLAYLIST_SORT_LIST",
@@ -707,6 +711,7 @@ struct WinampPlaylistWindow: View {
     private func showListMenu() {
         let menu = NSMenu()
         menu.autoenablesItems = false
+        menu.delegate = menuDelegate  // Phase 3: Enable keyboard navigation
 
         let newListItem = SpriteMenuItem(
             normalSprite: "PLAYLIST_NEW_LIST",
