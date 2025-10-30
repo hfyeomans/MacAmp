@@ -1,17 +1,20 @@
 import SwiftUI
 
 struct VisualizerOptions: View {
-    @EnvironmentObject var audioPlayer: AudioPlayer
+    @Environment(AudioPlayer.self) var audioPlayer
     @State private var show = false
 
     var body: some View {
+        // Body-scoped @Bindable for Toggle binding
+        @Bindable var player = audioPlayer
+
         VStack(spacing: 4) {
             Button(show ? "Hide Options" : "Options") { show.toggle() }
                 .font(.system(size: 10))
             if show {
                 VStack(spacing: 6) {
                     HStack(spacing: 8) {
-                        Toggle("Spec", isOn: $audioPlayer.useSpectrumVisualizer)
+                        Toggle("Spec", isOn: $player.useSpectrumVisualizer)
                             .toggleStyle(.switch)
                             .labelsHidden()
                         HStack(spacing: 4) {

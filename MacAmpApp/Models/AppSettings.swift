@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import Observation
 
 /// Material integration levels for Liquid Glass UI support
 enum MaterialIntegrationLevel: String, CaseIterable, Codable {
@@ -25,21 +26,22 @@ enum MaterialIntegrationLevel: String, CaseIterable, Codable {
 }
 
 /// Global app settings for MacAmp
+@Observable
 @MainActor
-final class AppSettings: ObservableObject {
-    @Published var materialIntegration: MaterialIntegrationLevel {
+final class AppSettings {
+    var materialIntegration: MaterialIntegrationLevel {
         didSet {
             UserDefaults.standard.set(materialIntegration.rawValue, forKey: "MaterialIntegration")
         }
     }
 
-    @Published var enableLiquidGlass: Bool {
+    var enableLiquidGlass: Bool {
         didSet {
             UserDefaults.standard.set(enableLiquidGlass, forKey: "EnableLiquidGlass")
         }
     }
 
-    private static let shared = AppSettings()
+    @ObservationIgnored private static let shared = AppSettings()
 
     private init() {
         self.materialIntegration = Self.loadMaterialIntegration()

@@ -29,7 +29,7 @@ struct SimpleSpriteImage: View {
     let width: CGFloat?
     let height: CGFloat?
 
-    @EnvironmentObject var skinManager: SkinManager
+    @Environment(SkinManager.self) var skinManager
 
     /// Initialize with semantic sprite (new architecture)
     init(_ semantic: SemanticSprite, width: CGFloat? = nil, height: CGFloat? = nil) {
@@ -115,5 +115,5 @@ struct WinampSizes {
         }
     }
     .frame(width: 200, height: 200)
-    .environmentObject(SkinManager())
+    .environment(SkinManager())
 }

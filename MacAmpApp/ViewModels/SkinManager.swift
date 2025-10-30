@@ -5,6 +5,7 @@ import AppKit
 import CoreGraphics // For CGRect
 import SwiftUI
 import UserNotifications
+import Observation
 
 private struct SkinArchivePayload {
     let sheets: [String: Data]
@@ -98,19 +99,20 @@ private enum SkinImportError: LocalizedError {
 // This class is responsible for loading and parsing Winamp skins.
 // It will be an ObservableObject so that our SwiftUI views can
 // react when a new skin is loaded.
+@Observable
 @MainActor
-class SkinManager: ObservableObject {
+final class SkinManager {
 
-    @Published var currentSkin: Skin?
-    @Published var isLoading: Bool = false
-    @Published var availableSkins: [SkinMetadata] = []
-    @Published var loadingError: String? = nil
+    var currentSkin: Skin?
+    var isLoading: Bool = false
+    var availableSkins: [SkinMetadata] = []
+    var loadingError: String? = nil
 
-    nonisolated init() {
+    init() {
         // Scan will happen on first access since we're @MainActor
     }
 
-    private var loadGeneration = UUID()
+    @ObservationIgnored private var loadGeneration = UUID()
     private static let allowedSkinExtensions: Set<String> = ["wsz", "zip"]
     private static let maxImportSizeBytes = 50 * 1024 * 1024
 

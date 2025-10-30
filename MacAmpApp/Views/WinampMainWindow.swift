@@ -3,9 +3,9 @@ import AppKit
 
 /// Pixel-perfect recreation of Winamp's main window using absolute positioning
 struct WinampMainWindow: View {
-    @EnvironmentObject var skinManager: SkinManager
-    @EnvironmentObject var audioPlayer: AudioPlayer
-    @EnvironmentObject var dockingController: DockingController
+    @Environment(SkinManager.self) var skinManager
+    @Environment(AudioPlayer.self) var audioPlayer
+    @Environment(DockingController.self) var dockingController
     @Environment(\.openWindow) var openWindow
 
     // CRITICAL: Prevent unnecessary body re-evaluations that cause ghost images
@@ -452,13 +452,17 @@ struct WinampMainWindow: View {
     
     @ViewBuilder
     private func buildVolumeSlider() -> some View {
-        WinampVolumeSlider(volume: $audioPlayer.volume)
+        // Create @Bindable for slider binding
+        @Bindable var player = audioPlayer
+        WinampVolumeSlider(volume: $player.volume)
             .at(Coords.volumeSlider)
     }
-    
+
     @ViewBuilder
     private func buildBalanceSlider() -> some View {
-        WinampBalanceSlider(balance: $audioPlayer.balance)
+        // Create @Bindable for slider binding
+        @Bindable var player = audioPlayer
+        WinampBalanceSlider(balance: $player.balance)
             .at(Coords.balanceSlider)
     }
     
@@ -600,18 +604,7 @@ struct WinampMainWindow: View {
     }
     
     private func openFileDialog() {
-        let openPanel = NSOpenPanel()
-        openPanel.allowedContentTypes = [.audio]
-        openPanel.allowsMultipleSelection = true  // Allow multiple files like Winamp
-        openPanel.canChooseDirectories = false
-
-        openPanel.begin { response in
-            if response == .OK {
-                for url in openPanel.urls {
-                    audioPlayer.addTrack(url: url)
-                }
-            }
-        }
+        PlaylistWindowActions.shared.presentAddFilesPanel(audioPlayer: audioPlayer)
     }
     
     // MARK: - Scrolling Animation Functions
@@ -715,7 +708,7 @@ struct WinampMainWindow: View {
 
 #Preview {
     WinampMainWindow()
-        .environmentObject(SkinManager())
-        .environmentObject(AudioPlayer())
-        .environmentObject(DockingController())
+        .environment(SkinManager())
+        .environment(AudioPlayer())
+        .environment(DockingController())
 }

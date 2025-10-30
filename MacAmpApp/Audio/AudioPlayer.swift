@@ -3,8 +3,10 @@ import Foundation
 import Combine
 import AVFoundation
 import Accelerate
+import Observation
 
-private final class VisualizerScratchBuffers {
+// Scratch buffers are confined to the audio tap queue, so @unchecked Sendable is safe.
+private final class VisualizerScratchBuffers: @unchecked Sendable {
     private(set) var mono: [Float] = []
     private(set) var rms: [Float] = []
     private(set) var spectrum: [Float] = []
@@ -53,6 +55,10 @@ private final class VisualizerScratchBuffers {
     }
 }
 
+private struct VisualizerTapContext: @unchecked Sendable {
+    let playerPointer: UnsafeMutableRawPointer
+}
+
 private extension Float {
     func clamped(to range: ClosedRange<Float>) -> Float {
         return min(max(self, range.lowerBound), range.upperBound)
@@ -85,64 +91,65 @@ enum PlaybackState: Equatable {
     case stopped(PlaybackStopReason)
 }
 
+@Observable
 @MainActor
-class AudioPlayer: ObservableObject {
-    // AVAudioEngine-based playback
-    private let audioEngine = AVAudioEngine()
-    private let playerNode = AVAudioPlayerNode()
-    private let eqNode = AVAudioUnitEQ(numberOfBands: 10)
-    private var audioFile: AVAudioFile?
-    private var progressTimer: Timer?
-    private var playheadOffset: Double = 0 // seconds offset for current scheduled segment
-    private var visualizerTapInstalled = false
-    private var visualizerPeaks: [Float] = Array(repeating: 0.0, count: 20)
-    private var lastUpdateTime: CFAbsoluteTime = CFAbsoluteTimeGetCurrent()
-    @Published var useSpectrumVisualizer: Bool = true
-    @Published var visualizerSmoothing: Float = 0.6 // 0..1 (higher = smoother)
-    @Published var visualizerPeakFalloff: Float = 1.2 // units per second
+final class AudioPlayer {
+    // AVAudioEngine-based playback - NOT observable (engine implementation details)
+    @ObservationIgnored private let audioEngine = AVAudioEngine()
+    @ObservationIgnored private let playerNode = AVAudioPlayerNode()
+    @ObservationIgnored private let eqNode = AVAudioUnitEQ(numberOfBands: 10)
+    @ObservationIgnored private var audioFile: AVAudioFile?
+    @ObservationIgnored private var progressTimer: Timer?
+    @ObservationIgnored private var playheadOffset: Double = 0 // seconds offset for current scheduled segment
+    @ObservationIgnored private var visualizerTapInstalled = false
+    @ObservationIgnored private var visualizerPeaks: [Float] = Array(repeating: 0.0, count: 20)
+    @ObservationIgnored private var lastUpdateTime: CFAbsoluteTime = CFAbsoluteTimeGetCurrent()
+    var useSpectrumVisualizer: Bool = true
+    var visualizerSmoothing: Float = 0.6 // 0..1 (higher = smoother)
+    var visualizerPeakFalloff: Float = 1.2 // units per second
 
-    @Published private(set) var playbackState: PlaybackState = .idle
-    @Published private(set) var isPlaying: Bool = false
-    @Published private(set) var isPaused: Bool = false
-    private var currentSeekID: UUID = UUID() // Identifies which seek operation scheduled the current audio
-    private var isHandlingCompletion = false // Prevents re-entrant onPlaybackEnded calls
-    private var trackHasEnded = false // Tracks when playlist has finished
-    private var seekGuardActive = false
-    private var autoEQTask: Task<Void, Never>?
-    private var pendingTrackURLs = Set<URL>()
-    @Published var currentTrackURL: URL? // Placeholder for the currently playing track
-    @Published var currentTitle: String = "No Track Loaded"
-    @Published var currentDuration: Double = 0.0
-    @Published var currentTime: Double = 0.0
-    @Published var playbackProgress: Double = 0.0 // New: 0.0 to 1.0
+    private(set) var playbackState: PlaybackState = .idle
+    private(set) var isPlaying: Bool = false
+    private(set) var isPaused: Bool = false
+    @ObservationIgnored private var currentSeekID: UUID = UUID() // Identifies which seek operation scheduled the current audio
+    @ObservationIgnored private var isHandlingCompletion = false // Prevents re-entrant onPlaybackEnded calls
+    @ObservationIgnored private var trackHasEnded = false // Tracks when playlist has finished
+    @ObservationIgnored private var seekGuardActive = false
+    @ObservationIgnored private var autoEQTask: Task<Void, Never>?
+    @ObservationIgnored private var pendingTrackURLs = Set<URL>()
+    var currentTrackURL: URL? // Placeholder for the currently playing track
+    var currentTitle: String = "No Track Loaded"
+    var currentDuration: Double = 0.0
+    var currentTime: Double = 0.0
+    var playbackProgress: Double = 0.0 // New: 0.0 to 1.0
 
-    @Published var volume: Float = 1.0 { // 0.0 to 1.0
+    var volume: Float = 1.0 { // 0.0 to 1.0
         didSet { playerNode.volume = volume }
     }
-    @Published var balance: Float = 0.0 { // -1.0 (left) to 1.0 (right)
+    var balance: Float = 0.0 { // -1.0 (left) to 1.0 (right)
         didSet { playerNode.pan = balance }
     }
 
-    @Published var playlist: [Track] = [] // New: List of tracks
-    @Published var currentTrack: Track? // New: Currently playing track
-    @Published var shuffleEnabled: Bool = false
-    @Published var repeatEnabled: Bool = false
+    var playlist: [Track] = [] // New: List of tracks
+    var currentTrack: Track? // New: Currently playing track
+    var shuffleEnabled: Bool = false
+    var repeatEnabled: Bool = false
 
     // Equalizer properties
-    @Published var preamp: Float = 0.0 // -12.0 to 12.0 dB (typical range)
-    @Published var eqBands: [Float] = Array(repeating: 0.0, count: 10) // 10 bands, -12.0 to 12.0 dB
-    @Published var isEqOn: Bool = false // New: EQ On/Off state
-    @Published var eqAutoEnabled: Bool = false
-    @Published var useLogScaleBands: Bool = true
-    var perTrackPresets: [String: EqfPreset] = [:]
-    private let presetsFileName = "perTrackPresets.json"
-    @Published private(set) var userPresets: [EQPreset] = []
-    private let userPresetDefaultsKey = "MacAmp.UserEQPresets.v1"
-    @Published var visualizerLevels: [Float] = Array(repeating: 0.0, count: 20)
-    @Published var appliedAutoPresetTrack: String? = nil
-    @Published var channelCount: Int = 2 // 1 = mono, 2 = stereo
-    @Published var bitrate: Int = 0 // in kbps
-    @Published var sampleRate: Int = 0 // in Hz (will display as kHz)
+    var preamp: Float = 0.0 // -12.0 to 12.0 dB (typical range)
+    var eqBands: [Float] = Array(repeating: 0.0, count: 10) // 10 bands, -12.0 to 12.0 dB
+    var isEqOn: Bool = false // New: EQ On/Off state
+    var eqAutoEnabled: Bool = false
+    var useLogScaleBands: Bool = true
+    @ObservationIgnored var perTrackPresets: [String: EqfPreset] = [:]
+    @ObservationIgnored private let presetsFileName = "perTrackPresets.json"
+    private(set) var userPresets: [EQPreset] = []
+    @ObservationIgnored private let userPresetDefaultsKey = "MacAmp.UserEQPresets.v1"
+    var visualizerLevels: [Float] = Array(repeating: 0.0, count: 20)
+    var appliedAutoPresetTrack: String? = nil
+    var channelCount: Int = 2 // 1 = mono, 2 = stereo
+    var bitrate: Int = 0 // in kbps
+    var sampleRate: Int = 0 // in Hz (will display as kHz)
 
     init() {
         setupEngine()
@@ -532,7 +539,8 @@ class AudioPlayer: ObservableObject {
         if let preset = perTrackPresets[track.url.absoluteString] {
             applyPreset(preset)
             appliedAutoPresetTrack = track.title
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
                 guard let self = self else { return }
                 if self.appliedAutoPresetTrack == track.title {
                     self.appliedAutoPresetTrack = nil
@@ -736,7 +744,7 @@ class AudioPlayer: ObservableObject {
                 frameCount: AVAudioFrameCount(framesRemaining),
                 at: nil,
                 completionHandler: { [weak self] in
-                    DispatchQueue.main.async {
+                    Task { @MainActor [weak self] in
                         self?.onPlaybackEnded(fromSeekID: completionID)
                     }
                 }
@@ -744,7 +752,9 @@ class AudioPlayer: ObservableObject {
 
             // Ensure we have currentDuration for UI (non-critical for seeking)
             if fileDuration.isFinite && fileDuration > 0 {
-                DispatchQueue.main.async { self.currentDuration = fileDuration }
+                Task { @MainActor in
+                    self.currentDuration = fileDuration
+                }
             }
 
             return true  // Audio was scheduled successfully
@@ -823,23 +833,32 @@ class AudioPlayer: ObservableObject {
         print("==================================================\n")
     }
 
-    private static var didPrintFrequencyDistribution = false
+    /// MainActor method for updating visualizer levels from audio thread data
+    @MainActor
+    private func updateVisualizerLevels(rms: [Float], spectrum: [Float]) {
+        // Now we're safely on MainActor - can access isolated properties
+        let used = self.useSpectrumVisualizer ? spectrum : rms
+        let now = CFAbsoluteTimeGetCurrent()
+        let dt = max(0, Float(now - self.lastUpdateTime))
+        self.lastUpdateTime = now
+        let alpha = max(0, min(1, self.visualizerSmoothing))
+        var smoothed = [Float](repeating: 0, count: used.count)
+        for b in 0..<used.count {
+            let prev = (b < self.visualizerLevels.count) ? self.visualizerLevels[b] : 0
+            smoothed[b] = alpha * prev + (1 - alpha) * used[b]
+            let fall = self.visualizerPeakFalloff * dt
+            let dropped = max(0, self.visualizerPeaks[b] - fall)
+            self.visualizerPeaks[b] = max(dropped, smoothed[b])
+        }
+        self.visualizerLevels = smoothed
+    }
 
-    private func installVisualizerTapIfNeeded() {
-        guard !visualizerTapInstalled else { return }
-        let mixer = audioEngine.mainMixerNode
-        mixer.removeTap(onBus: 0)
-        visualizerTapInstalled = false
-        let scratch = VisualizerScratchBuffers()
-
-        // Pass nil format to adopt the node's format; safer during graph changes.
-        mixer.installTap(onBus: 0, bufferSize: 1024, format: nil) { [weak self] buffer, _ in
-
-            if !Self.didPrintFrequencyDistribution {
-                self?.printSpectrumFrequencyDistribution(sampleRate: Float(buffer.format.sampleRate), bars: 20)
-                Self.didPrintFrequencyDistribution = true
-            }
-            // Compute raw levels off-main; avoid touching self here.
+    /// Build the tap handler in a nonisolated context so AVAudioEngine can call it on its realtime queue.
+    private nonisolated(unsafe) static func makeVisualizerTapHandler(
+        context: VisualizerTapContext,
+        scratch: VisualizerScratchBuffers
+    ) -> @Sendable (AVAudioPCMBuffer, AVAudioTime?) -> Void {
+        { buffer, _ in
             let channelCount = Int(buffer.format.channelCount)
             guard channelCount > 0, let ptr = buffer.floatChannelData else { return }
             let frameCount = Int(buffer.frameLength)
@@ -893,13 +912,10 @@ class AudioPlayer: ObservableObject {
 
                         for b in 0..<bars {
                             let normalized = Float(b) / Float(max(1, bars - 1))
-
-                            // Hybrid frequency mapping: 91% log + 9% linear (Webamp-style)
                             let logScale = minimumFrequency * pow(maximumFrequency / minimumFrequency, normalized)
                             let linScale = minimumFrequency + normalized * (maximumFrequency - minimumFrequency)
                             let centerFrequency = 0.91 * logScale + 0.09 * linScale
 
-                            // Goertzel algorithm for this frequency band
                             let omega = 2 * Float.pi * centerFrequency / sampleRate
                             let coefficient = 2 * cos(omega)
                             var s0: Float = 0
@@ -916,19 +932,12 @@ class AudioPlayer: ObservableObject {
                             let power = s1 * s1 + s2 * s2 - coefficient * s1 * s2
                             var value = sqrt(max(0, power)) / Float(sampleCount)
 
-                            // Apply frequency-dependent gain compensation (pinking filter)
-                            // Compensates for natural 10-20 dB bass dominance in music
-                            // Uses dB-based adjustment: -8 dB (bass) to +8 dB (treble)
                             let normalizedFreq = (centerFrequency - minimumFrequency) / (maximumFrequency - minimumFrequency)
-                            let dbAdjustment = -8.0 + 16.0 * normalizedFreq  // -8 dB to +8 dB range
-                            let equalizationGain = pow(10.0, dbAdjustment / 20.0)  // Convert dB to linear gain
+                            let dbAdjustment = -8.0 + 16.0 * normalizedFreq
+                            let equalizationGain = pow(10.0, dbAdjustment / 20.0)
 
-                            // Apply equalization and overall sensitivity boost
-                            // - Bass (50 Hz): -8 dB = 0.40x (reduce 60%)
-                            // - Mid (1 kHz): 0 dB = 1.0x (no change)
-                            // - Treble (16 kHz): +8 dB = 2.5x (boost 250%)
                             value *= equalizationGain
-                            value = min(1.0, value * 15.0)  // Overall gain tuned for good visibility at normal volume
+                            value = min(1.0, value * 15.0)
                             spectrum[b] = value
                         }
                     } else {
@@ -941,25 +950,30 @@ class AudioPlayer: ObservableObject {
 
             let rmsSnapshot = scratch.snapshotRms()
             let spectrumSnapshot = scratch.snapshotSpectrum()
-            // Hop to main actor for smoothing and state updates using latest settings
-            DispatchQueue.main.async { [weak self] in
-                guard let self = self else { return }
-                let used = self.useSpectrumVisualizer ? spectrumSnapshot : rmsSnapshot
-                let now = CFAbsoluteTimeGetCurrent()
-                let dt = max(0, Float(now - self.lastUpdateTime))
-                self.lastUpdateTime = now
-                let alpha = max(0, min(1, self.visualizerSmoothing))
-                var smoothed = [Float](repeating: 0, count: used.count)
-                for b in 0..<used.count {
-                    let prev = (b < self.visualizerLevels.count) ? self.visualizerLevels[b] : 0
-                    smoothed[b] = alpha * prev + (1 - alpha) * used[b]
-                    let fall = self.visualizerPeakFalloff * dt
-                    let dropped = max(0, self.visualizerPeaks[b] - fall)
-                    self.visualizerPeaks[b] = max(dropped, smoothed[b])
-                }
-                self.visualizerLevels = smoothed
+
+            Task { @MainActor [context, rmsSnapshot, spectrumSnapshot] in
+                let player = Unmanaged<AudioPlayer>.fromOpaque(context.playerPointer).takeUnretainedValue()
+                player.updateVisualizerLevels(rms: rmsSnapshot, spectrum: spectrumSnapshot)
             }
         }
+    }
+
+    private func installVisualizerTapIfNeeded() {
+        guard !visualizerTapInstalled else { return }
+        let mixer = audioEngine.mainMixerNode
+        mixer.removeTap(onBus: 0)
+        visualizerTapInstalled = false
+        let scratch = VisualizerScratchBuffers()
+
+        let context = VisualizerTapContext(
+            playerPointer: Unmanaged.passUnretained(self).toOpaque()
+        )
+        let handler = AudioPlayer.makeVisualizerTapHandler(
+            context: context,
+            scratch: scratch
+        )
+
+        mixer.installTap(onBus: 0, bufferSize: 1024, format: nil, block: handler)
         visualizerTapInstalled = true
     }
 
@@ -1037,7 +1051,8 @@ class AudioPlayer: ObservableObject {
             // Timer already invalidated above
 
             // Trigger track completion logic after the seek guard is cleared
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: 150_000_000)
                 // Now safe to call onPlaybackEnded once seek guard is relaxed
                 self?.onPlaybackEnded()
             }
@@ -1047,7 +1062,8 @@ class AudioPlayer: ObservableObject {
         }
 
         // Clear seek guard after a brief delay to allow old completion handler to fire and be ignored
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 100_000_000)
             self?.seekGuardActive = false
         }
     }
@@ -1096,7 +1112,7 @@ class AudioPlayer: ObservableObject {
     }
 
     private func onPlaybackEnded(fromSeekID: UUID? = nil) {
-        DispatchQueue.main.async { [weak self] in
+        Task { @MainActor [weak self] in
             guard let self = self else { return }
 
             // CRITICAL: Prevent re-entrant calls (infinite loop protection)
@@ -1123,7 +1139,8 @@ class AudioPlayer: ObservableObject {
             self.seekGuardActive = false
 
             // Clear re-entrancy guard after nextTrack completes
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 200_000_000)
                 self.isHandlingCompletion = false
             }
         }

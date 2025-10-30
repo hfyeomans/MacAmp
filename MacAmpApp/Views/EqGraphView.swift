@@ -5,7 +5,7 @@ struct EqGraphView: View {
     let background: NSImage
     let preampLine: NSImage
     let lineColors: [Color]?
-    @EnvironmentObject var audioPlayer: AudioPlayer
+    @Environment(AudioPlayer.self) var audioPlayer
 
     init(background: NSImage, preampLine: NSImage, lineColorsImage: NSImage? = nil) {
         self.background = background

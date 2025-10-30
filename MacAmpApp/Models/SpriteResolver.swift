@@ -94,7 +94,7 @@ enum SemanticSprite {
 /// let spriteName = resolver.resolve(.digit(0))
 /// // Returns "DIGIT_0_EX" if skin has it, otherwise "DIGIT_0", otherwise nil
 /// ```
-struct SpriteResolver {
+struct SpriteResolver: Sendable {
     private let skin: Skin
 
     init(skin: Skin) {

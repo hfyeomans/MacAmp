@@ -6,7 +6,8 @@ import Foundation
 // MARK: - Fully Parsed Skin
 
 // Represents a fully parsed Winamp skin.
-struct Skin {
+/// SAFETY: Skin instances are immutable (all let properties) and accessed only via @MainActor SkinManager
+struct Skin: @unchecked Sendable {
     // The 24 colors used by the visualizer.
     let visualizerColors: [Color]
 
@@ -23,7 +24,7 @@ struct Skin {
     // Additional skin elements (region maps, letter widths, etc.) can be added as parsing expands.
 }
 
-struct PlaylistStyle {
+struct PlaylistStyle: Sendable {
     let normalTextColor: Color
     let currentTextColor: Color
     let backgroundColor: Color

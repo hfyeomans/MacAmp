@@ -2,11 +2,11 @@ import SwiftUI
 import AppKit
 
 struct UnifiedDockView: View {
-    @EnvironmentObject var skinManager: SkinManager
-    @EnvironmentObject var audioPlayer: AudioPlayer
-    @EnvironmentObject var docking: DockingController
-    @EnvironmentObject var settings: AppSettings
-    
+    @Environment(SkinManager.self) var skinManager
+    @Environment(AudioPlayer.self) var audioPlayer
+    @Environment(DockingController.self) var docking
+    @Environment(AppSettings.self) var settings
+
     // MARK: - Whimsy & Animation States
     @State private var dockGlow: Double = 1.0
     @State private var materialShimmer: Bool = false
@@ -221,16 +221,16 @@ struct UnifiedDockView: View {
         switch type {
         case .main:
             WinampMainWindow()
-                .environmentObject(skinManager)
-                .environmentObject(audioPlayer)
+                .environment(skinManager)
+                .environment(audioPlayer)
         case .equalizer:
             WinampEqualizerWindow()
-                .environmentObject(skinManager)
-                .environmentObject(audioPlayer)
+                .environment(skinManager)
+                .environment(audioPlayer)
         case .playlist:
             WinampPlaylistWindow()
-                .environmentObject(skinManager)
-                .environmentObject(audioPlayer)
+                .environment(skinManager)
+                .environment(audioPlayer)
         }
     }
 
@@ -306,7 +306,7 @@ struct RowFrameReader: View {
 }
 
 struct RowFramesKey: PreferenceKey {
-    static var defaultValue: [String: CGRect] = [:]
+    static let defaultValue: [String: CGRect] = [:]
     static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) {
         value.merge(nextValue()) { $1 }
     }
@@ -314,8 +314,8 @@ struct RowFramesKey: PreferenceKey {
 
 #Preview {
     UnifiedDockView()
-        .environmentObject(SkinManager())
-        .environmentObject(AudioPlayer())
-        .environmentObject(DockingController())
-        .environmentObject(AppSettings.instance())
+        .environment(SkinManager())
+        .environment(AudioPlayer())
+        .environment(DockingController())
+        .environment(AppSettings.instance())
 }

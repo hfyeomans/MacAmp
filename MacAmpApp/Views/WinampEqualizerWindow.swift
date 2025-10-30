@@ -4,8 +4,8 @@ import UniformTypeIdentifiers
 
 /// Pixel-perfect recreation of Winamp's equalizer window using absolute positioning
 struct WinampEqualizerWindow: View {
-    @EnvironmentObject var skinManager: SkinManager
-    @EnvironmentObject var audioPlayer: AudioPlayer
+    @Environment(SkinManager.self) var skinManager
+    @Environment(AudioPlayer.self) var audioPlayer
 
     @State private var isShadeMode: Bool = false
     @State private var showPresetPicker: Bool = false
@@ -319,7 +319,7 @@ struct WinampEqualizerWindow: View {
 
 /// Vertical slider component for EQ bands
 struct WinampVerticalSlider: View {
-    @EnvironmentObject var skinManager: SkinManager
+    @Environment(SkinManager.self) var skinManager
     @Binding var value: Float
     let range: ClosedRange<Float>
     let width: CGFloat
@@ -590,6 +590,6 @@ struct PresetPickerView: View {
 
 #Preview {
     WinampEqualizerWindow()
-        .environmentObject(SkinManager())
-        .environmentObject(AudioPlayer())
+        .environment(SkinManager())
+        .environment(AudioPlayer())
 }

@@ -9,7 +9,7 @@ import AppKit
 /// 2. Uses monospaced layout for time display (5px char width + 1px spacing)
 /// 3. Optimized for playlist info bar rendering
 struct PlaylistTimeText: View {
-    @EnvironmentObject var skinManager: SkinManager
+    @Environment(SkinManager.self) var skinManager
 
     let text: String
     let spacing: CGFloat
@@ -45,5 +45,5 @@ struct PlaylistTimeText: View {
         }
     }
     .frame(width: 200, height: 100)
-    .environmentObject(SkinManager())
+    .environment(SkinManager())
 }

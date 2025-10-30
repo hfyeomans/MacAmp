@@ -2,25 +2,25 @@ import SwiftUI
 
 @main
 struct MacAmpApp: App {
-    @StateObject private var skinManager = SkinManager()
-    @StateObject private var audioPlayer = AudioPlayer()
-    @StateObject private var dockingController = DockingController()
-    @StateObject private var settings = AppSettings.instance()
+    @State private var skinManager = SkinManager()
+    @State private var audioPlayer = AudioPlayer()
+    @State private var dockingController = DockingController()
+    @State private var settings = AppSettings.instance()
 
     var body: some Scene {
         WindowGroup {
             UnifiedDockView()
-                .environmentObject(skinManager)
-                .environmentObject(audioPlayer)
-                .environmentObject(dockingController)
-                .environmentObject(settings)
+                .environment(skinManager)
+                .environment(audioPlayer)
+                .environment(dockingController)
+                .environment(settings)
         }
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)
 
         WindowGroup("Preferences", id: "preferences") {
             PreferencesView()
-                .environmentObject(settings)
+                .environment(settings)
         }
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)

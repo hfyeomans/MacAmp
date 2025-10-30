@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 
 struct SkinnedText: View {
-    @EnvironmentObject var skinManager: SkinManager
+    @Environment(SkinManager.self) var skinManager
     let text: String
     let spacing: CGFloat
 
