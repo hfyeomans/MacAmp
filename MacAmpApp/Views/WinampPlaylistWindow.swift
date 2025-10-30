@@ -151,7 +151,7 @@ final class PlaylistWindowActions: NSObject {
 
 struct WinampPlaylistWindow: View {
     @Environment(SkinManager.self) var skinManager
-    @EnvironmentObject var audioPlayer: AudioPlayer
+    @Environment(AudioPlayer.self) var audioPlayer
     @Environment(AppSettings.self) var settings
 
     @State private var selectedIndices: Set<Int> = []
@@ -755,6 +755,6 @@ extension SimpleSpriteImage {
 #Preview {
     WinampPlaylistWindow()
         .environment(SkinManager())
-        .environmentObject(AudioPlayer())
+        .environment(AudioPlayer())
         .environment(AppSettings.instance())
 }

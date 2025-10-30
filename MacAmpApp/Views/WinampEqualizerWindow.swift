@@ -5,7 +5,7 @@ import UniformTypeIdentifiers
 /// Pixel-perfect recreation of Winamp's equalizer window using absolute positioning
 struct WinampEqualizerWindow: View {
     @Environment(SkinManager.self) var skinManager
-    @EnvironmentObject var audioPlayer: AudioPlayer
+    @Environment(AudioPlayer.self) var audioPlayer
 
     @State private var isShadeMode: Bool = false
     @State private var showPresetPicker: Bool = false
@@ -591,5 +591,5 @@ struct PresetPickerView: View {
 #Preview {
     WinampEqualizerWindow()
         .environment(SkinManager())
-        .environmentObject(AudioPlayer())
+        .environment(AudioPlayer())
 }

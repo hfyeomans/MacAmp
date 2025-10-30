@@ -5,7 +5,7 @@ import UniformTypeIdentifiers
 struct PresetsButton: View {
     let eqPresetsBtn: NSImage
     let eqPresetsBtnSel: NSImage
-    @EnvironmentObject var audioPlayer: AudioPlayer
+    @Environment(AudioPlayer.self) var audioPlayer
     @Environment(SkinManager.self) var skinManager
     @State private var showPopover = false
     @State private var folderPresets: [(String, EqfPreset)] = []

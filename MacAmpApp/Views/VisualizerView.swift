@@ -3,7 +3,7 @@ import Accelerate
 
 /// Winamp-style spectrum analyzer visualization
 struct VisualizerView: View {
-    @EnvironmentObject var audioPlayer: AudioPlayer
+    @Environment(AudioPlayer.self) var audioPlayer
     @Environment(SkinManager.self) var skinManager
     
     // Animation state
@@ -215,7 +215,7 @@ struct SpectrumBar: View {
 
 #Preview {
     VisualizerView()
-        .environmentObject(AudioPlayer())
+        .environment(AudioPlayer())
         .environment(SkinManager())
         .frame(width: 76, height: 16)
         .background(Color.gray)

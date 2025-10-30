@@ -4,7 +4,7 @@ import AppKit
 /// Pixel-perfect recreation of Winamp's main window using absolute positioning
 struct WinampMainWindow: View {
     @Environment(SkinManager.self) var skinManager
-    @EnvironmentObject var audioPlayer: AudioPlayer
+    @Environment(AudioPlayer.self) var audioPlayer
     @Environment(DockingController.self) var dockingController
     @Environment(\.openWindow) var openWindow
 
@@ -452,13 +452,17 @@ struct WinampMainWindow: View {
     
     @ViewBuilder
     private func buildVolumeSlider() -> some View {
-        WinampVolumeSlider(volume: $audioPlayer.volume)
+        // Create @Bindable for slider binding
+        @Bindable var player = audioPlayer
+        WinampVolumeSlider(volume: $player.volume)
             .at(Coords.volumeSlider)
     }
-    
+
     @ViewBuilder
     private func buildBalanceSlider() -> some View {
-        WinampBalanceSlider(balance: $audioPlayer.balance)
+        // Create @Bindable for slider binding
+        @Bindable var player = audioPlayer
+        WinampBalanceSlider(balance: $player.balance)
             .at(Coords.balanceSlider)
     }
     
@@ -705,6 +709,6 @@ struct WinampMainWindow: View {
 #Preview {
     WinampMainWindow()
         .environment(SkinManager())
-        .environmentObject(AudioPlayer())
+        .environment(AudioPlayer())
         .environment(DockingController())
 }

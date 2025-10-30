@@ -3,7 +3,7 @@ import AppKit
 
 struct UnifiedDockView: View {
     @Environment(SkinManager.self) var skinManager
-    @EnvironmentObject var audioPlayer: AudioPlayer
+    @Environment(AudioPlayer.self) var audioPlayer
     @Environment(DockingController.self) var docking
     @Environment(AppSettings.self) var settings
 
@@ -222,15 +222,15 @@ struct UnifiedDockView: View {
         case .main:
             WinampMainWindow()
                 .environment(skinManager)
-                .environmentObject(audioPlayer)
+                .environment(audioPlayer)
         case .equalizer:
             WinampEqualizerWindow()
                 .environment(skinManager)
-                .environmentObject(audioPlayer)
+                .environment(audioPlayer)
         case .playlist:
             WinampPlaylistWindow()
                 .environment(skinManager)
-                .environmentObject(audioPlayer)
+                .environment(audioPlayer)
         }
     }
 
@@ -315,7 +315,7 @@ struct RowFramesKey: PreferenceKey {
 #Preview {
     UnifiedDockView()
         .environment(SkinManager())
-        .environmentObject(AudioPlayer())
+        .environment(AudioPlayer())
         .environment(DockingController())
         .environment(AppSettings.instance())
 }

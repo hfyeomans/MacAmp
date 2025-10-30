@@ -3,6 +3,7 @@ import Foundation
 import Combine
 import AVFoundation
 import Accelerate
+import Observation
 
 // Scratch buffers are confined to the audio tap queue, so @unchecked Sendable is safe.
 private final class VisualizerScratchBuffers: @unchecked Sendable {
@@ -90,64 +91,65 @@ enum PlaybackState: Equatable {
     case stopped(PlaybackStopReason)
 }
 
+@Observable
 @MainActor
-class AudioPlayer: ObservableObject {
-    // AVAudioEngine-based playback
-    private let audioEngine = AVAudioEngine()
-    private let playerNode = AVAudioPlayerNode()
-    private let eqNode = AVAudioUnitEQ(numberOfBands: 10)
-    private var audioFile: AVAudioFile?
-    private var progressTimer: Timer?
-    private var playheadOffset: Double = 0 // seconds offset for current scheduled segment
-    private var visualizerTapInstalled = false
-    private var visualizerPeaks: [Float] = Array(repeating: 0.0, count: 20)
-    private var lastUpdateTime: CFAbsoluteTime = CFAbsoluteTimeGetCurrent()
-    @Published var useSpectrumVisualizer: Bool = true
-    @Published var visualizerSmoothing: Float = 0.6 // 0..1 (higher = smoother)
-    @Published var visualizerPeakFalloff: Float = 1.2 // units per second
+final class AudioPlayer {
+    // AVAudioEngine-based playback - NOT observable (engine implementation details)
+    @ObservationIgnored private let audioEngine = AVAudioEngine()
+    @ObservationIgnored private let playerNode = AVAudioPlayerNode()
+    @ObservationIgnored private let eqNode = AVAudioUnitEQ(numberOfBands: 10)
+    @ObservationIgnored private var audioFile: AVAudioFile?
+    @ObservationIgnored private var progressTimer: Timer?
+    @ObservationIgnored private var playheadOffset: Double = 0 // seconds offset for current scheduled segment
+    @ObservationIgnored private var visualizerTapInstalled = false
+    @ObservationIgnored private var visualizerPeaks: [Float] = Array(repeating: 0.0, count: 20)
+    @ObservationIgnored private var lastUpdateTime: CFAbsoluteTime = CFAbsoluteTimeGetCurrent()
+    var useSpectrumVisualizer: Bool = true
+    var visualizerSmoothing: Float = 0.6 // 0..1 (higher = smoother)
+    var visualizerPeakFalloff: Float = 1.2 // units per second
 
-    @Published private(set) var playbackState: PlaybackState = .idle
-    @Published private(set) var isPlaying: Bool = false
-    @Published private(set) var isPaused: Bool = false
-    private var currentSeekID: UUID = UUID() // Identifies which seek operation scheduled the current audio
-    private var isHandlingCompletion = false // Prevents re-entrant onPlaybackEnded calls
-    private var trackHasEnded = false // Tracks when playlist has finished
-    private var seekGuardActive = false
-    private var autoEQTask: Task<Void, Never>?
-    private var pendingTrackURLs = Set<URL>()
-    @Published var currentTrackURL: URL? // Placeholder for the currently playing track
-    @Published var currentTitle: String = "No Track Loaded"
-    @Published var currentDuration: Double = 0.0
-    @Published var currentTime: Double = 0.0
-    @Published var playbackProgress: Double = 0.0 // New: 0.0 to 1.0
+    private(set) var playbackState: PlaybackState = .idle
+    private(set) var isPlaying: Bool = false
+    private(set) var isPaused: Bool = false
+    @ObservationIgnored private var currentSeekID: UUID = UUID() // Identifies which seek operation scheduled the current audio
+    @ObservationIgnored private var isHandlingCompletion = false // Prevents re-entrant onPlaybackEnded calls
+    @ObservationIgnored private var trackHasEnded = false // Tracks when playlist has finished
+    @ObservationIgnored private var seekGuardActive = false
+    @ObservationIgnored private var autoEQTask: Task<Void, Never>?
+    @ObservationIgnored private var pendingTrackURLs = Set<URL>()
+    var currentTrackURL: URL? // Placeholder for the currently playing track
+    var currentTitle: String = "No Track Loaded"
+    var currentDuration: Double = 0.0
+    var currentTime: Double = 0.0
+    var playbackProgress: Double = 0.0 // New: 0.0 to 1.0
 
-    @Published var volume: Float = 1.0 { // 0.0 to 1.0
+    var volume: Float = 1.0 { // 0.0 to 1.0
         didSet { playerNode.volume = volume }
     }
-    @Published var balance: Float = 0.0 { // -1.0 (left) to 1.0 (right)
+    var balance: Float = 0.0 { // -1.0 (left) to 1.0 (right)
         didSet { playerNode.pan = balance }
     }
 
-    @Published var playlist: [Track] = [] // New: List of tracks
-    @Published var currentTrack: Track? // New: Currently playing track
-    @Published var shuffleEnabled: Bool = false
-    @Published var repeatEnabled: Bool = false
+    var playlist: [Track] = [] // New: List of tracks
+    var currentTrack: Track? // New: Currently playing track
+    var shuffleEnabled: Bool = false
+    var repeatEnabled: Bool = false
 
     // Equalizer properties
-    @Published var preamp: Float = 0.0 // -12.0 to 12.0 dB (typical range)
-    @Published var eqBands: [Float] = Array(repeating: 0.0, count: 10) // 10 bands, -12.0 to 12.0 dB
-    @Published var isEqOn: Bool = false // New: EQ On/Off state
-    @Published var eqAutoEnabled: Bool = false
-    @Published var useLogScaleBands: Bool = true
-    var perTrackPresets: [String: EqfPreset] = [:]
-    private let presetsFileName = "perTrackPresets.json"
-    @Published private(set) var userPresets: [EQPreset] = []
-    private let userPresetDefaultsKey = "MacAmp.UserEQPresets.v1"
-    @Published var visualizerLevels: [Float] = Array(repeating: 0.0, count: 20)
-    @Published var appliedAutoPresetTrack: String? = nil
-    @Published var channelCount: Int = 2 // 1 = mono, 2 = stereo
-    @Published var bitrate: Int = 0 // in kbps
-    @Published var sampleRate: Int = 0 // in Hz (will display as kHz)
+    var preamp: Float = 0.0 // -12.0 to 12.0 dB (typical range)
+    var eqBands: [Float] = Array(repeating: 0.0, count: 10) // 10 bands, -12.0 to 12.0 dB
+    var isEqOn: Bool = false // New: EQ On/Off state
+    var eqAutoEnabled: Bool = false
+    var useLogScaleBands: Bool = true
+    @ObservationIgnored var perTrackPresets: [String: EqfPreset] = [:]
+    @ObservationIgnored private let presetsFileName = "perTrackPresets.json"
+    private(set) var userPresets: [EQPreset] = []
+    @ObservationIgnored private let userPresetDefaultsKey = "MacAmp.UserEQPresets.v1"
+    var visualizerLevels: [Float] = Array(repeating: 0.0, count: 20)
+    var appliedAutoPresetTrack: String? = nil
+    var channelCount: Int = 2 // 1 = mono, 2 = stereo
+    var bitrate: Int = 0 // in kbps
+    var sampleRate: Int = 0 // in Hz (will display as kHz)
 
     init() {
         setupEngine()

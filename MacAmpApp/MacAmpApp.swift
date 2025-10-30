@@ -3,7 +3,7 @@ import SwiftUI
 @main
 struct MacAmpApp: App {
     @State private var skinManager = SkinManager()
-    @StateObject private var audioPlayer = AudioPlayer()
+    @State private var audioPlayer = AudioPlayer()
     @State private var dockingController = DockingController()
     @State private var settings = AppSettings.instance()
 
@@ -11,7 +11,7 @@ struct MacAmpApp: App {
         WindowGroup {
             UnifiedDockView()
                 .environment(skinManager)
-                .environmentObject(audioPlayer)
+                .environment(audioPlayer)
                 .environment(dockingController)
                 .environment(settings)
         }
