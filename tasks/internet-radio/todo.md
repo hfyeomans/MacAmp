@@ -1,3 +1,111 @@
+
+---
+
+## 📋 RECOMMENDED COMMIT STRATEGY (12-15 Hour Task)
+
+**Strategy:** Commit per significant component (~7-8 commits total)
+
+**Why:** Balance between granularity (easy revert) and clean history (not too noisy)
+
+### Suggested Commit Points:
+
+**Phase 1: Core Streaming (6-8 hours)**
+1. ✅ **Commit 1:** Create models (RadioStation + RadioStationLibrary)
+   - ~1 hour work
+   - 2 new files
+   - Reason: Models are foundation, test independently
+
+2. ✅ **Commit 2:** Create StreamPlayer basic structure
+   - ~2 hours work
+   - AVPlayer setup, basic play/pause/stop
+   - Reason: Core functionality, can test streaming
+
+3. ✅ **Commit 3:** Add StreamPlayer observers and metadata
+   - ~1-2 hours work
+   - KVO observations, metadata extraction
+   - Reason: Complex code, isolate from basic playback
+
+4. ✅ **Commit 4:** Create PlaybackCoordinator
+   - ~2-3 hours work
+   - Manage both players, prevent conflicts
+   - Reason: Critical component, needs Oracle review
+
+**Phase 2: M3U Integration (3 hours)**
+5. ✅ **Commit 5:** Update M3U loading and library integration
+   - ~3 hours work
+   - WinampPlaylistWindow changes, injection
+   - Reason: Complete M3U feature, test with real files
+
+**Phase 3: UI (3 hours)**
+6. ✅ **Commit 6:** Add Stream URL dialog
+   - ~1-2 hours work
+   - NSAlert UI, validation
+   - Reason: User-facing feature, test separately
+
+7. ✅ **Commit 7:** Add UI polish (metadata display, buffering, errors)
+   - ~1-2 hours work
+   - UI refinements
+   - Reason: Final polish before merge
+
+**Oracle Review:**
+8. ✅ **Commit 8:** Apply Oracle cleanup
+   - ~30 min
+   - Remove bloat, fix issues found
+   - Reason: Production-ready before PR
+
+**Total: 7-8 commits** (not 3, not 20)
+
+### Commit Message Pattern:
+
+**For components:**
+```
+feat: Add RadioStation and RadioStationLibrary models
+
+- Create RadioStation struct (Identifiable, Codable)
+- Create RadioStationLibrary with persistence
+- UserDefaults storage with JSON encoding
+- Tested: Add/remove/load stations
+
+Phase 1 (1/7)
+```
+
+**For integrations:**
+```
+feat: Integrate radio stations from M3U playlists
+
+- Update WinampPlaylistWindow Line 503-506
+- Add remote streams to RadioStationLibrary
+- Test with DarkAmbientRadio.m3u
+- Stations persist across restarts
+
+Phase 2 (5/7)
+```
+
+**Benefits:**
+- Clear progress tracking
+- Easy to review per commit
+- Can revert individual components
+- Not overwhelming (~1 commit per 2 hours)
+
+### Oracle Review Checkpoints:
+
+**Mid-implementation review (After Phase 1):**
+- Request Oracle review of PlaybackCoordinator
+- Before continuing to Phase 2
+- Catch issues early
+
+**Pre-merge review (After Phase 3):**
+- Final Oracle code review
+- Fix any issues found
+- Production readiness check
+
+**Pattern:**
+1. Implement Phase 1 → Oracle review → Fix
+2. Implement Phase 2 & 3 → Oracle review → Fix
+3. Create PR
+
+This catches issues when they're fresh and prevents accumulating tech debt.
+
 # Internet Radio Streaming - Implementation Checklist
 
 **Date:** 2025-10-31

@@ -1,7 +1,62 @@
 # Internet Radio Streaming - Current State
 
 **Date:** 2025-10-31
-**Status:** 📋 Planning Complete - Ready for Implementation
+**Status:** 📋 Oracle-Reviewed Planning Complete - Ready for Implementation
+
+---
+
+## ⚠️ Oracle Review Summary
+
+**Architecture:** ✅ VALIDATED - Dual backend is correct approach
+**Complexity:** HIGH - 12-15 hours (not 9-11)
+**Priority:** MEDIUM - Complex but valuable feature
+
+### Critical Oracle Requirements:
+
+1. **MUST ADD PlaybackCoordinator** (HIGH)
+   - Manages AudioPlayer + StreamPlayer
+   - Prevents both playing simultaneously
+   - Unified API for UI
+   - +2-3 hours to estimates
+
+2. **Fix StreamPlayer Observers** (MEDIUM)
+   - Cancel old observers before new
+   - Add status observer for errors
+   - Use RunLoop.main not DispatchQueue.main
+
+3. **Fix Metadata Extraction** (MEDIUM)
+   - Use item.commonKey and item.stringValue
+   - Not value(forKey:) KVC approach
+
+4. **RadioStationLibrary Injection** (HIGH)
+   - Pass to PlaylistWindowActions
+   - Or inject via environment
+
+5. **Consider Playlist Integration** (MEDIUM)
+   - Streams should appear in playlist order
+   - Not just in separate library
+
+6. **Info.plist Already Ready** ✅
+   - NSAllowsArbitraryLoadsInMedia exists
+   - No changes needed!
+
+### Recommended Commit Strategy:
+
+**7-8 commits over 12-15 hours:**
+1. Models (1 hour)
+2. StreamPlayer basic (2 hours)
+3. StreamPlayer observers (2 hours)
+4. PlaybackCoordinator (2-3 hours)
+5. M3U integration (3 hours)
+6. UI additions (2 hours)
+7. Oracle cleanup (30 min)
+
+**Oracle Review Checkpoints:**
+- After Phase 1: Review PlaybackCoordinator
+- After Phase 3: Final review before merge
+
+---
+
 
 ---
 
