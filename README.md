@@ -16,7 +16,8 @@ MacAmp is a SwiftUI-based audio player for macOS that recreates the iconic deskt
 - 📊 **Spectrum Analyzer & Oscilloscope** - Click visualizer to cycle through 3 modes: Spectrum (frequency bars), Oscilloscope (waveform), or None
 - ⌨️ **Keyboard Navigation** - Navigate playlist menus with arrow keys (↑↓) and Escape
 - ♿ **VoiceOver Ready** - Accessible menu navigation for screen reader users
-- 📋 **M3U Playlist Support** - Load M3U/M3U8 playlist files with local audio tracks
+- 📋 **M3U/M3U8 Playlists** - Load playlists with local files and internet radio streams
+- 📻 **Internet Radio** - Stream HTTP/HTTPS radio with live metadata
 - 📂 **Playlist Menus** - Sprite-based popup menus for ADD, REM, MISC, and LIST OPTS with hover states
 - ✨ **Multi-Select** - Shift+Click to select multiple tracks, Command+A to select all, with CROP and remove operations
 - 📝 **Native Text Rendering** - Playlist tracks use real text with PLEDIT.txt colors and Unicode support (not bitmap fonts)
@@ -84,11 +85,13 @@ Available presets: Classical, Club, Dance, Full Bass, Full Bass & Treble, Full T
 ### Playlist
 
 1. **Open Playlist** - Press `Cmd+Shift+P` or click the PL button
-2. **Add Files** - Click the + button to add audio files or M3U playlists
-3. **Load M3U Playlists** - Select .m3u or .m3u8 files to load multiple tracks
-4. **Remove** - Select tracks and click the - button
-5. **Shuffle** - Click the shuffle button to randomize playback order
-6. **Repeat** - Click the repeat button to loop playlist
+2. **Add Files** - Click ADD button for local files or M3U/M3U8 playlists
+3. **Add Radio Stream** - Click ADD → ADD URL, paste URL (e.g., `http://ice1.somafm.com/groovesalad-256-mp3`)
+4. **Play** - Double-click any item (file or stream)
+5. **Navigate** - Next/Previous work across local files and streams
+6. **Shuffle/Repeat** - Work with mixed playlists
+
+**Note:** Streams show "Connecting..." during buffering, then live metadata. No EQ/visualizer for streams (AVPlayer limitation).
 
 ### Skins
 
@@ -227,11 +230,9 @@ MacAmp/
 - WAV/AIFF
 - Apple Lossless (ALAC)
 
-### Playlists
-- M3U (standard playlists)
-- M3U8 (extended format with metadata)
-- Local file paths (absolute and relative)
-- Remote stream URLs (internet radio - P5 planned)
+### Playlists & Streams
+- M3U/M3U8 (local files + radio URLs)
+- HTTP/HTTPS streams (SHOUTcast, Icecast, HLS)
 
 ### Skins
 - WSZ (ZIP-based Winamp skins)
