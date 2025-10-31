@@ -250,7 +250,8 @@ final class PlaybackCoordinator {
 
     /// Update coordinator state when metadata loads (Oracle fix: don't replay)
     func updateTrackMetadata(_ track: Track) {
-        guard let current = currentTrack, current.id == track.id else { return }
+        // Check URL match (not ID - metadata loading creates new Track with different ID)
+        guard let current = currentTrack, current.url == track.url else { return }
 
         // Update with real metadata
         currentTrack = track
