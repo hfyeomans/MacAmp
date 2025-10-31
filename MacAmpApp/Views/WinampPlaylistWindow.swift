@@ -56,34 +56,46 @@ final class PlaylistWindowActions: NSObject {
     private func loadM3UPlaylist(_ url: URL, audioPlayer: AudioPlayer, radioLibrary: RadioStationLibrary) {
         do {
             let entries = try M3UParser.parse(fileURL: url)
-            var addedStations = 0
+            var addedStreams = 0
+            var addedFiles = 0
 
             for entry in entries {
                 if entry.isRemoteStream {
-                    // Add to internet radio library
-                    let station = RadioStation(
-                        name: entry.title ?? "Unknown Station",
-                        streamURL: entry.url,
-                        genre: nil,
-                        source: .m3uPlaylist(url.lastPathComponent)
+                    // Add to playlist as Track (Winamp behavior)
+                    // RadioStationLibrary is ONLY for favorites menu (Phase 5+)
+                    let streamTrack = Track(
+                        url: entry.url,
+                        title: entry.title ?? "Unknown Station",
+                        artist: "Internet Radio",
+                        duration: 0.0  // Streams have no duration
                     )
-                    radioLibrary.addStation(station)
-                    addedStations += 1
+                    audioPlayer.playlist.append(streamTrack)
+                    addedStreams += 1
                 } else {
                     // Add local file to playlist
                     audioPlayer.addTrack(url: entry.url)
+                    addedFiles += 1
                 }
             }
 
-            // Show feedback if stations were added
-            if addedStations > 0 {
-                let alert = NSAlert()
-                alert.messageText = "Radio Stations Added"
-                alert.informativeText = "Added \(addedStations) internet radio station(s) to your library."
-                alert.alertStyle = .informational
-                alert.addButton(withTitle: "OK")
-                alert.runModal()
+            // Show feedback
+            let alert = NSAlert()
+            alert.messageText = "M3U Playlist Loaded"
+
+            var message = ""
+            if addedFiles > 0 {
+                message += "Added \(addedFiles) local file(s)"
             }
+            if addedStreams > 0 {
+                if !message.isEmpty { message += "\n" }
+                message += "Added \(addedStreams) internet radio stream(s)"
+            }
+            message += "\n\nAll items visible in playlist."
+
+            alert.informativeText = message
+            alert.alertStyle = .informational
+            alert.addButton(withTitle: "OK")
+            alert.runModal()
         } catch {
             let alert = NSAlert()
             alert.messageText = "Failed to Load M3U Playlist"
@@ -95,8 +107,8 @@ final class PlaylistWindowActions: NSObject {
     }
 
     @objc func addURL(_ sender: NSMenuItem) {
-        guard let radioLibrary else {
-            showAlert("Error", "Radio library not available")
+        guard let audioPlayer = sender.representedObject as? AudioPlayer else {
+            showAlert("Error", "Audio player not available")
             return
         }
 
@@ -127,18 +139,19 @@ final class PlaylistWindowActions: NSObject {
                 return
             }
 
-            // Create station with URL as name (user can edit later if needed)
-            let stationName = url.host ?? urlString
-            let station = RadioStation(
-                name: stationName,
-                streamURL: url,
-                genre: nil,
-                source: .manual
+            // Add to playlist as Track (Winamp behavior)
+            // RadioStationLibrary is ONLY for favorites menu (Phase 5+)
+            let stationName = url.host ?? url.lastPathComponent
+            let streamTrack = Track(
+                url: url,
+                title: stationName,
+                artist: "Internet Radio",
+                duration: 0.0
             )
 
-            radioLibrary.addStation(station)
+            audioPlayer.playlist.append(streamTrack)
 
-            showAlert("Station Added", "Added '\(stationName)' to your radio library.\n\nYou can play it from the radio stations menu.")
+            showAlert("Stream Added", "Added '\(stationName)' to playlist.\n\nClick to play!")
         }
     }
 
