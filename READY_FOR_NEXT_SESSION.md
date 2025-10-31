@@ -54,25 +54,36 @@
 
 ---
 
-### **NEW: Oscilloscope/RMS Mode Toggle (TO BE PLANNED)**
+### **NEW: Oscilloscope/RMS Mode Toggle (PLANNED - Oracle-Reviewed)**
 
-**Status:** Backend exists, UI needed
-**Location:** Colors 18-22 in VISCOLOR.TXT (5 white shades)
-**Reference:** `tasks/done/viscolor-spectrum/research.md` Lines 58-60
+**Status:** ✅ Complete task ready in `tasks/oscilloscope-toggle/`
+**Effort:** 1-12 hours (3 phases, Oracle-corrected estimates)
+**Priority:** MEDIUM (Oracle recommends after AirPlay + clutter bar)
 
-**What Exists:**
-- ✅ VISCOLOR.TXT parser (VisColorParser.swift)
-- ✅ Oscilloscope colors loaded (indices 18-22)
-- ✅ Backend visualization modes
-- ❌ No UI toggle to switch modes
+**What Exists (Backend):**
+- ✅ AudioPlayer.useSpectrumVisualizer: Bool (toggle property)
+- ✅ RMS calculation in audio tap (Lines 882-903)
+- ✅ Spectrum calculation in audio tap (Lines 904-948)
+- ✅ VisualizerOptions.swift component (hidden UI)
+- ✅ VISCOLOR colors 18-22 loaded
+- ✅ AppSettings.visualizerMode scaffolded
 
-**What's Needed:**
-- Toggle between Spectrum Analyzer and Oscilloscope modes
-- Use visualizerMode state (already scaffolded in AppSettings)
-- Apply colors 18-22 for oscilloscope rendering
-- Possibly wire to V button in clutter bar
+**What's Missing (UI):**
+- ❌ VisualizerOptions not surfaced in main window
+- ❌ Visualizer not clickable (webamp has click-to-cycle)
+- ❌ V button not wired
+- ❌ Oscilloscope waveform mode (webamp has this)
 
-**Next Session:** Create task for Oscilloscope UI toggle
+**Oracle Findings:**
+- ⚠️ Phase 1: Layout issues with VisualizerOptions (200px wide when expanded)
+- ⚠️ Phase 2: State wiring complex (need to sync enum to AudioPlayer.useSpectrumVisualizer)
+- ⚠️ Data exposure: Need to store both RMS and spectrum (currently discards one)
+- ⚠️ @Environment required (AppSettings.instance() won't trigger re-renders)
+- ⚠️ Phase 3: Oscilloscope more complex (threading, buffering) - 6-8 hours not 4
+
+**Oracle Priority:** Do AFTER AirPlay and clutter bar buttons (I, O)
+
+**See:** `tasks/oscilloscope-toggle/ORACLE_REVIEW.md` for all issues
 
 ---
 
