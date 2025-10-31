@@ -224,7 +224,8 @@ struct SpectrumBar: View {
     VisualizerView()
         .environment(AudioPlayer())
         .environment(SkinManager())
-        .frame(width: 76, height: 16)
+        .environment(AppSettings.instance())
+        .frame(width: VisualizerLayout.width, height: VisualizerLayout.height)
         .background(Color.gray)
 }
 

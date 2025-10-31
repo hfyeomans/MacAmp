@@ -969,11 +969,12 @@ final class AudioPlayer {
             let spectrumSnapshot = scratch.snapshotSpectrum()
 
             // Capture waveform samples for oscilloscope
+            let oscilloscopeSamples = 76  // Match VisualizerLayout.oscilloscopeSampleCount
             var waveformSnapshot: [Float] = []
             scratch.withMonoReadOnly { mono in
-                let step = max(1, mono.count / 76)
+                let step = max(1, mono.count / oscilloscopeSamples)
                 waveformSnapshot = stride(from: 0, to: mono.count, by: step)
-                    .prefix(76)
+                    .prefix(oscilloscopeSamples)
                     .map { mono[$0] }
             }
 
