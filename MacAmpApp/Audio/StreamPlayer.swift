@@ -53,6 +53,7 @@ final class StreamPlayer {
 
     // MARK: - Playback Control
 
+    /// Play a radio station (for favorites menu - Phase 5+)
     func play(station: RadioStation) async {
         currentStation = station
         error = nil
@@ -67,6 +68,25 @@ final class StreamPlayer {
 
         player.play()
         isPlaying = true
+    }
+
+    /// Play a stream from URL (for playlist tracks)
+    /// Preserves Track metadata (title/artist) until ICY metadata loads
+    func play(url: URL, title: String? = nil, artist: String? = nil) async {
+        // Create internal RadioStation for playback
+        let station = RadioStation(
+            name: title ?? url.host ?? "Internet Radio",
+            streamURL: url
+        )
+
+        // Set initial metadata from Track
+        streamTitle = title
+        streamArtist = artist
+
+        // Play the stream
+        await play(station: station)
+
+        // ICY metadata will override streamTitle/streamArtist when available
     }
 
     func pause() {
