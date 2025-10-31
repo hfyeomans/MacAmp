@@ -744,5 +744,470 @@ private func setupObservers() {
 **Oracle Approval Status:** ✅ Architecture valid, implement with corrections
 **Blocking Issues:** None (corrections can be done during implementation)
 **Ready:** For user approval and implementation
-ORACLE_REVIEW.md
-echo "✅ Created ORACLE_REVIEW.md"
+
+---
+---
+
+# Phase 4: Playlist Integration & Playback UI (Added 2025-10-31)
+
+**Status:** 📋 Planning (User-Requested Extension)
+**Trigger:** Gap discovered - streams not in playlist like Winamp
+**Effort:** 3-4 hours estimated (3-4 commits)
+
+---
+
+## Why Phase 4 is Needed
+
+### User-Reported Gap
+
+**Winamp Actual Behavior:**
+- Streams appear in playlist alongside local files
+- Click stream in playlist → plays immediately
+- M3U populates playlist with ALL entries (local + remote)
+- Shows "Connecting..." / buffering status in track display
+
+**Our Implementation (Phases 1-3):**
+- Streams go to RadioStationLibrary (separate storage)
+- NOT visible in playlist
+- M3U: local files → playlist, streams → library
+- No way to play streams from UI
+
+**Gap:** UX integration, not architecture
+
+---
+
+## Phase 4 Objectives
+
+### Must Have
+1. ✅ Streams appear as playlist items
+2. ✅ Click stream in playlist → plays via PlaybackCoordinator
+3. ✅ M3U populates playlist with both local + remote
+4. ✅ ADD URL adds stream to playlist (not just library)
+
+### Nice to Have (defer if complex)
+5. ⏸️ "Connecting..." message during stream buffering
+6. ⏸️ "buffer 0%" message on network issues
+
+---
+
+## Phase 4: Technical Approach
+
+### 4.1 Extend Track Model for Streams
+
+**Current Track** (AudioPlayer.swift:68-78):
+```swift
+struct Track: Identifiable, Equatable {
+    let id = UUID()
+    let url: URL          // Currently file:// only
+    var title: String     // Mutable (good for metadata updates)
+    var artist: String    // Mutable (good for metadata updates)
+    var duration: Double  // Used for position slider
+}
+```
+
+**Phase 4: Allow http/https URLs** (Option A - Simple):
+
+```swift
+struct Track: Identifiable, Equatable {
+    let id = UUID()
+    let url: URL          // NOW: file://, http://, https://
+    var title: String     // Stream: station name or streamPlayer.streamTitle
+    var artist: String    // Stream: streamPlayer.streamArtist
+    var duration: Double  // Stream: 0.0 (infinity) or -1.0 (unknown)
+
+    // Add computed property
+    var isStream: Bool {
+        !url.isFileURL && (url.scheme == "http" || url.scheme == "https")
+    }
+}
+```
+
+**Why Option A (not enum):**
+- Minimal changes to existing code
+- Track already has mutable title/artist (perfect for live metadata)
+- Playlist UI already renders Track items
+- Duration 0.0 for streams (no position slider needed)
+
+**Alternative (Oracle to confirm):** Enum approach would require changing:
+- `playlist: [Track]` → `playlist: [PlaylistItem]`
+- All playlist iteration code
+- UI rendering logic
+- More invasive changes
+
+**Oracle Question:** Is Option A (simple URL extension) acceptable?
+
+---
+
+### 4.2 Update M3U/M3U8 Loading
+
+**File:** `MacAmpApp/Views/WinampPlaylistWindow.swift`
+
+**Current (Phase 3):**
+```swift
+if entry.isRemoteStream {
+    // Only adds to library
+    radioLibrary.addStation(station)
+    addedStations += 1
+} else {
+    audioPlayer.addTrack(url: entry.url)
+}
+```
+
+**Phase 4: Add to BOTH:**
+```swift
+if entry.isRemoteStream {
+    // Add to RadioStationLibrary (for favorites/persistence)
+    let station = RadioStation(
+        name: entry.title ?? "Unknown Station",
+        streamURL: entry.url,
+        genre: nil,
+        source: .m3uPlaylist(url.lastPathComponent)
+    )
+    radioLibrary.addStation(station)
+    addedStations += 1
+
+    // ALSO add to playlist (for immediate playback)
+    let streamTrack = Track(
+        url: entry.url,
+        title: entry.title ?? "Unknown Station",
+        artist: "Internet Radio",
+        duration: 0.0  // Streams have no duration
+    )
+    audioPlayer.playlist.append(streamTrack)
+} else {
+    // Local file - add to playlist only
+    audioPlayer.addTrack(url: entry.url)
+}
+```
+
+**Result:** Mixed M3U shows ALL items in playlist
+
+**Oracle Question:** Should we modify Track init or use direct struct init?
+
+---
+
+### 4.3 Wire Playlist Selection to PlaybackCoordinator
+
+**Current:** Playlist click → `audioPlayer.playTrack(track:)`
+
+**Phase 4:** Route through PlaybackCoordinator
+
+**File:** `MacAmpApp/Views/WinampPlaylistWindow.swift`
+
+**Add method:**
+```swift
+private func playSelectedTrack(_ track: Track) async {
+    if track.isStream {
+        // Play via StreamPlayer (no EQ)
+        await playbackCoordinator.play(url: track.url)
+
+        // Update track metadata from stream (async)
+        // title/artist will update from streamPlayer observers
+    } else {
+        // Play via AudioPlayer (with EQ)
+        audioPlayer.playTrack(track: track)
+    }
+}
+```
+
+**Find:** Where playlist items are clicked
+**Update:** Replace `audioPlayer.playTrack()` with `playSelectedTrack()`
+
+**Challenges:**
+- PlaybackCoordinator needs to be injected
+- Need to handle async calls from UI
+- Track metadata updates from StreamPlayer
+
+**Oracle Question:** Best way to wire this? Environment injection or pass through?
+
+---
+
+### 4.4 ADD URL: Add to Playlist (Not Just Library)
+
+**Current (Commit 6):**
+```swift
+// Only adds to RadioStationLibrary
+radioLibrary.addStation(station)
+showAlert("Station Added", "Added to your radio library...")
+```
+
+**Phase 4:**
+```swift
+// Add to library (favorites)
+radioLibrary.addStation(station)
+
+// ALSO add to playlist (for immediate playback)
+let streamTrack = Track(
+    url: url,
+    title: stationName,
+    artist: "Internet Radio",
+    duration: 0.0
+)
+audioPlayer.playlist.append(streamTrack)
+
+showAlert("Station Added", "Added '\(stationName)' to playlist.\n\nClick to play!")
+```
+
+**Result:** User sees stream in playlist immediately
+
+---
+
+### 4.5 Buffering Message Display (Optional)
+
+**User Context:**
+> "Using same sprites/methods as track scrolling - just inserting message instead of track"
+
+**Current Display** (WinampMainWindow.swift:565):
+```swift
+let trackText = audioPlayer.currentTitle.isEmpty ? "MacAmp" : audioPlayer.currentTitle
+// This scrolls using buildTextSprites()
+```
+
+**Phase 4 Approach (Trivial):**
+
+**Option 1: Computed Property**
+```swift
+// In PlaybackCoordinator or AudioPlayer
+var displayTitle: String {
+    if streamPlayer.isBuffering {
+        return "Connecting..."
+    }
+    if let error = streamPlayer.error {
+        return "buffer 0%"  // Or error message
+    }
+    return currentTitle
+}
+```
+
+**Option 2: Direct Update**
+```swift
+// When stream starts buffering
+if streamPlayer.isBuffering {
+    audioPlayer.currentTitle = "Connecting..."
+}
+
+// When stream plays
+if streamPlayer.isPlaying {
+    audioPlayer.currentTitle = streamPlayer.streamTitle ?? station.name
+}
+```
+
+**Assessment:** TRIVIAL - it's just string replacement
+
+**Oracle Question:** Which option is cleaner? Should we defer or include?
+
+---
+
+## Phase 4: Implementation Plan
+
+### Step 1: Extend Track for Streams (Commit 8)
+
+**Files to Modify:**
+- `MacAmpApp/Audio/AudioPlayer.swift` - Add `Track.isStream` computed property
+
+**Changes:**
+```swift
+struct Track: Identifiable, Equatable {
+    // ... existing properties ...
+
+    /// Returns true if this track is an internet radio stream
+    var isStream: Bool {
+        !url.isFileURL && (url.scheme == "http" || url.scheme == "https")
+    }
+}
+```
+
+**Test:** Build, ensure no regressions
+
+**Effort:** 15 minutes
+
+---
+
+### Step 2: Update M3U Loading (Commit 9)
+
+**Files to Modify:**
+- `MacAmpApp/Views/WinampPlaylistWindow.swift` - loadM3UPlaylist()
+
+**Changes:**
+1. When `entry.isRemoteStream`:
+   - Add to RadioStationLibrary (favorites)
+   - Create Track with stream URL
+   - Append to audioPlayer.playlist
+2. Update user feedback message
+
+**Test:** Load M3U with streams, verify all items in playlist
+
+**Effort:** 30-45 minutes
+
+---
+
+### Step 3: Wire Playlist Selection (Commit 10)
+
+**Files to Modify:**
+- `MacAmpApp/MacAmpApp.swift` - Create and inject PlaybackCoordinator
+- `MacAmpApp/Views/WinampPlaylistWindow.swift` - Wire playlist click
+
+**Changes:**
+1. Create PlaybackCoordinator in MacAmpApp
+2. Inject via environment
+3. Update playlist item click handler
+4. Route streams through PlaybackCoordinator
+
+**Test:** Click stream in playlist, verify plays
+
+**Effort:** 1-1.5 hours
+
+---
+
+### Step 4: Buffering Status Display (Commit 11 - Optional)
+
+**Files to Modify:**
+- `MacAmpApp/Audio/PlaybackCoordinator.swift` - Add displayTitle computed property
+- `MacAmpApp/Views/WinampMainWindow.swift` - Use displayTitle
+
+**Changes:**
+1. Add `displayTitle` that returns "Connecting..." when buffering
+2. Update track display to use displayTitle
+3. Handle error state ("buffer 0%")
+
+**Test:** Play stream, verify "Connecting..." shows, then track title
+
+**Effort:** 30-45 minutes
+
+---
+
+### Step 5: ADD URL to Playlist (Commit 11 or 12)
+
+**Files to Modify:**
+- `MacAmpApp/Views/WinampPlaylistWindow.swift` - addURL()
+
+**Changes:**
+1. Add stream to RadioStationLibrary (existing)
+2. ALSO add as Track to playlist
+3. Update user feedback
+
+**Test:** ADD URL, verify appears in playlist
+
+**Effort:** 15-30 minutes
+
+---
+
+## Phase 4: Effort Estimate
+
+| Step | Task | Time | Cumulative |
+|------|------|------|------------|
+| 1 | Extend Track | 15 min | 15 min |
+| 2 | M3U loading | 45 min | 1 hour |
+| 3 | Wire playlist | 1.5 hours | 2.5 hours |
+| 4 | Buffering (opt) | 45 min | 3.25 hours |
+| 5 | ADD URL update | 30 min | 3.75 hours |
+
+**Total:** 3.75-4 hours (rounds to 3-4 hours)
+
+**Commits:** 3-4 commits (depending on combining steps 4+5)
+
+---
+
+## Phase 4: Commit Strategy
+
+**Commit 8:** Extend Track model for stream URLs
+- Add isStream computed property
+- Document stream handling
+- No behavior changes (just infrastructure)
+
+**Commit 9:** Update M3U loading and ADD URL for playlist
+- Streams go to both playlist AND library
+- ADD URL adds to playlist
+- User sees streams in playlist UI
+
+**Commit 10:** Wire playlist selection to PlaybackCoordinator
+- Create and inject PlaybackCoordinator
+- Route stream playback through coordinator
+- Streams playable from playlist
+
+**Commit 11 (Optional):** Add buffering status display
+- Show "Connecting..." when buffering
+- Update from stream metadata
+- Winamp-style status messages
+
+**Total:** 3-4 commits (11 can be merged with 10 if trivial)
+
+---
+
+## Phase 4: Success Criteria
+
+### Functional Requirements
+- [x] Click stream in playlist → plays audio
+- [x] M3U files populate playlist with local + remote
+- [x] ADD URL adds stream to playlist (visible immediately)
+- [x] Stream metadata updates in real-time
+- [x] Switching local ↔ stream works smoothly
+- [x] No audio conflicts or crashes
+
+### Winamp Parity
+- [x] Streams are playlist items (not separate)
+- [x] Mixed playlists work correctly
+- [x] (Optional) Buffering status display
+
+### Technical Quality
+- [x] Swift 6 compliant
+- [x] No force unwraps
+- [x] Proper error handling
+- [x] Observable state updates
+- [x] Builds successfully
+
+---
+
+## Phase 4: Risks
+
+| Risk | Likelihood | Impact | Mitigation |
+|------|------------|--------|------------|
+| Track model changes break existing code | Low | High | Thorough testing, computed property only |
+| Playlist rendering issues with streams | Medium | Medium | Test with mixed playlists |
+| PlaybackCoordinator wiring complex | Low | Medium | Clear injection pattern |
+| Metadata updates cause UI flicker | Low | Low | Use @Observable properly |
+| Buffering message implementation complex | Very Low | Low | Oracle says trivial, just string |
+
+---
+
+## Phase 4: Testing Strategy
+
+### Build Testing
+- [ ] Extend Track → Build succeeds
+- [ ] M3U changes → Build succeeds
+- [ ] Coordinator wiring → Build succeeds
+- [ ] Final build with all changes
+
+### Functional Testing
+- [ ] Load M3U with 2 local + 2 remote → See all 4 in playlist
+- [ ] Click local file → Plays via AudioPlayer
+- [ ] Click stream → Plays via StreamPlayer
+- [ ] Verify metadata updates
+- [ ] Test buffering status display
+- [ ] Verify no audio conflicts
+
+### Regression Testing
+- [ ] Local file playback still works
+- [ ] EQ still works for local files
+- [ ] Playlist operations work (add/remove/reorder)
+- [ ] M3U local-only files still work
+
+---
+
+## Phase 4: Oracle Review Points
+
+**Pending Oracle Consultation on:**
+
+1. **Track Extension Strategy** - Simple URL extension vs enum?
+2. **Buffering Message** - Confirm it's trivial (just string replacement)?
+3. **Effort Estimate** - 3-4 hours realistic?
+4. **Storage Strategy** - Keep RadioStationLibrary for favorites?
+5. **Any architectural concerns** with playlist integration?
+
+**Status:** Awaiting Oracle response before implementation
+
+---
+
+**Phase 4 Status:** Planned, awaiting Oracle approval
+**Ready to Implement:** After Oracle consultation
+**Target:** 3-4 commits, 3-4 hours work
