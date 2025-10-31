@@ -8,10 +8,15 @@
 ## ✅ Implementation Summary
 
 **Branch:** `internet-radio`
-**Commits:** 11 commits (10 implementation + 1 planning)
+**Commits:** 13 (10 implementation + 3 planning)
 **Time Spent:** ~6-8 hours (Phases 1-3), estimating +3-4 hours (Phase 4)
 **Build Status:** ✅ All files compile, build succeeds
 **Tests:** Manual testing pending Phase 4 completion
+
+**ARCHITECTURE CORRECTION:**
+- RadioStationLibrary = Favorites menu ONLY (Phase 5+)
+- Streams go to **playlist** (not library)
+- Matches Winamp: streams are playlist items
 
 ### ✅ Oracle Requirements - ALL IMPLEMENTED
 
@@ -94,11 +99,14 @@
 - ⏸️ Manual testing pending (after Phase 4)
 - ⏸️ User acceptance testing pending
 
-### Phase 4 Planning 📋 (Current)
+### Phase 4 Planning ✅ (Complete)
 - ✅ Gap analysis complete (user reported Winamp behavior mismatch)
-- ✅ Phase 4 plan added to plan.md
-- ⏸️ Oracle review of Phase 4 approach
-- ⏸️ Implementation (3-4 commits, 3-4 hours)
+- ✅ Architecture corrected (streams → playlist, not library)
+- ✅ Phase 4 plan added to plan.md (detailed steps)
+- ✅ todo.md updated with Phase 4 checklist (commits 13-16)
+- ✅ state.md updated with corrections
+- ⏸️ Oracle review of Phase 4 approach (pending)
+- ⏸️ Implementation (4 commits, 3.75 hours)
 
 ### Oracle Review Phase ⏸️
 - ⏸️ Oracle review of Phase 4 plan (pending)
@@ -165,21 +173,26 @@
 - [x] Architecture diagrams
 - [x] Future work roadmap
 
-## 📋 Phase 4 Scope (In Progress)
+## 📋 Phase 4 Scope (Planning Complete, Ready for Oracle)
 
 ### Playlist Integration (User-Requested)
-- [ ] Extend Track model to support stream URLs
-- [ ] M3U loading: add streams to BOTH playlist AND library
+- [ ] Extend Track model to support stream URLs (add `isStream`)
+- [ ] M3U loading: add streams to **playlist ONLY** (remove library usage)
 - [ ] Wire playlist selection to PlaybackCoordinator
-- [ ] Stream metadata updates in playlist
-- [ ] ADD URL adds to playlist (not just library)
-- [ ] (Optional) Buffering status display
+- [ ] Stream metadata updates from StreamPlayer
+- [ ] ADD URL adds to playlist (remove library usage)
+- [ ] Buffering status display ("Connecting...", "buffer 0%")
 
 ### Why Phase 4 is Needed
-**User reported gap:** "M3U loading via main window shows error"
-**Root cause:** Streams not in playlist (separate library only)
-**Winamp behavior:** Streams ARE playlist items (mixed with local files)
-**Fix:** Add playlist integration (originally deferred, now required)
+**User reported gap:** Streams not behaving like Winamp
+**Root cause:** Used RadioStationLibrary (wrong mental model)
+**Winamp behavior:** Streams ARE playlist items (ephemeral, not saved)
+**Fix:** Streams → playlist directly, library ONLY for favorites menu (Phase 5+)
+
+### Architecture Correction
+**Before:** M3U → streams to RadioStationLibrary (separate storage)
+**After:** M3U → streams to playlist (like Winamp)
+**RadioStationLibrary:** Reserved for favorites menu (Phase 5+)
 
 ## ⏸️ Future Work (After Phase 4)
 
@@ -358,19 +371,26 @@ http://stream.radioparadise.com/mp3-192     # Radio Paradise
 
 ## Files Created (6)
 
-1. ✅ `MacAmpApp/Models/RadioStation.swift` - 24 lines
-2. ✅ `MacAmpApp/Models/RadioStationLibrary.swift` - 58 lines
-3. ✅ `MacAmpApp/Audio/StreamPlayer.swift` - 141 lines
-4. ✅ `MacAmpApp/Audio/PlaybackCoordinator.swift` - 145 lines
-5. ✅ `MacAmpApp/Audio/README_INTERNET_RADIO.md` - 273 lines
+1. ✅ `MacAmpApp/Models/RadioStation.swift` - 24 lines (for favorites Phase 5+)
+2. ✅ `MacAmpApp/Models/RadioStationLibrary.swift` - 58 lines (for favorites Phase 5+)
+3. ✅ `MacAmpApp/Audio/StreamPlayer.swift` - 141 lines (AVPlayer backend)
+4. ✅ `MacAmpApp/Audio/PlaybackCoordinator.swift` - 145 lines (orchestration)
+5. ✅ `tasks/internet-radio/README_INTERNET_RADIO.md` - 273 lines (docs)
 6. ✅ `MacAmpApp.xcodeproj/project.pbxproj` - Modified to include files
 
-## Files Modified (3)
+## Files Modified (4)
 
-1. ✅ `MacAmpApp/MacAmpApp.swift` - Added radioLibrary injection
-2. ✅ `MacAmpApp/Views/WinampPlaylistWindow.swift` - M3U integration + ADD URL
-3. ✅ `tasks/internet-radio/plan.md` - M3U8 clarifications
-4. ✅ `tasks/internet-radio/todo.md` - M3U8 updates + completion status
+1. ✅ `MacAmpApp/MacAmpApp.swift` - radioLibrary injection (will be corrected in Phase 4)
+2. ✅ `MacAmpApp/Views/WinampPlaylistWindow.swift` - M3U integration (will be corrected in Phase 4)
+3. ✅ `tasks/internet-radio/plan.md` - Phase 4 added
+4. ✅ `tasks/internet-radio/todo.md` - Phase 4 checklist added
+
+## Files to Modify in Phase 4 (4)
+
+1. ⏸️ `MacAmpApp/Audio/AudioPlayer.swift` - Add Track.isStream
+2. ⏸️ `MacAmpApp/Views/WinampPlaylistWindow.swift` - Fix M3U + ADD URL (playlist only)
+3. ⏸️ `MacAmpApp/MacAmpApp.swift` - Create and inject PlaybackCoordinator
+4. ⏸️ `MacAmpApp/Views/WinampMainWindow.swift` - Buffering status display
 
 ---
 
