@@ -667,15 +667,12 @@ struct WinampMainWindow: View {
     
     @ViewBuilder
     private func buildSpectrumAnalyzer() -> some View {
+        // Clickable visualizer - cycles through modes on tap
+        // Webamp pattern: Click analyzer itself to cycle Spectrum → Oscilloscope → None
         VisualizerView()
             .frame(width: 76, height: 16)
             .background(Color.black.opacity(0.5))
             .at(Coords.spectrumAnalyzer)
-
-        // Visualizer mode toggle (Spectrum vs RMS)
-        // Oracle: Don't constrain frame initially - test natural size
-        VisualizerOptions()
-            .at(CGPoint(x: 24, y: 60))  // Below visualizer
     }
     
     private func openFileDialog() {

@@ -50,6 +50,12 @@ final class AppSettings {
         // Load persisted clutter bar states (default to false)
         self.isDoubleSizeMode = UserDefaults.standard.bool(forKey: "isDoubleSizeMode")
         self.isAlwaysOnTop = UserDefaults.standard.bool(forKey: "isAlwaysOnTop")
+
+        // Load persisted visualizer mode (default to 1 = spectrum)
+        self.visualizerMode = UserDefaults.standard.integer(forKey: "visualizerMode")
+        if self.visualizerMode == 0 && UserDefaults.standard.object(forKey: "visualizerMode") == nil {
+            self.visualizerMode = 1  // First run: default to spectrum
+        }
     }
     
     static func instance() -> AppSettings {
@@ -164,7 +170,14 @@ final class AppSettings {
     /// I - Info Dialog (not yet implemented)
     var showInfoDialog: Bool = false
 
-    /// V - Visualizer Mode (0 = off, 1+ = different visualizer modes)
-    var visualizerMode: Int = 0
+    // MARK: - Visualizer Mode
+
+    /// Visualizer display mode: 0 = none, 1 = spectrum, 2 = oscilloscope
+    /// Click visualizer to cycle through modes (webamp pattern)
+    var visualizerMode: Int = 1 {
+        didSet {
+            UserDefaults.standard.set(visualizerMode, forKey: "visualizerMode")
+        }
+    }
 
 }

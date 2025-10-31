@@ -2,9 +2,11 @@ import SwiftUI
 import Accelerate
 
 /// Winamp-style spectrum analyzer visualization
+/// Click to cycle: Spectrum → Oscilloscope → None (webamp pattern)
 struct VisualizerView: View {
     @Environment(AudioPlayer.self) var audioPlayer
     @Environment(SkinManager.self) var skinManager
+    @Environment(AppSettings.self) var settings
 
     // Animation state
     @State private var barHeights: [CGFloat] = Array(repeating: 0, count: 19)
@@ -31,20 +33,42 @@ struct VisualizerView: View {
     let updateTimer = Timer.publish(every: 1.0/30.0, on: .main, in: .common).autoconnect()
     
     var body: some View {
-        HStack(spacing: barSpacing) {
-            ForEach(0..<barCount, id: \.self) { index in
-                SpectrumBar(
-                    height: barHeights[index],
-                    peakPosition: peakPositions[index],
-                    maxHeight: maxHeight
-                )
-                .frame(width: barWidth, height: maxHeight)
+        // Cycle modes: 1=Spectrum, 2=Oscilloscope, 0=None (webamp: BAR → OSCILLOSCOPE → NONE)
+        let mode = settings.visualizerMode
+
+        Group {
+            if mode == 0 {
+                // None - blank/off
+                Rectangle().fill(Color.black)
+            } else if mode == 2 {
+                // Oscilloscope - waveform (like screenshot)
+                OscilloscopeView()
+            } else {
+                // Spectrum - frequency bars (default, mode == 1)
+                HStack(spacing: barSpacing) {
+                    ForEach(0..<barCount, id: \.self) { index in
+                        SpectrumBar(
+                            height: barHeights[index],
+                            peakPosition: peakPositions[index],
+                            maxHeight: maxHeight
+                        )
+                        .frame(width: barWidth, height: maxHeight)
+                    }
+                }
             }
         }
+        .frame(width: 76, height: 16)
         .background(Color.black)
+        .onTapGesture {
+            // Click to cycle modes (webamp pattern)
+            settings.visualizerMode = (settings.visualizerMode + 1) % 3
+            // 1 → 2 (spectrum → oscilloscope)
+            // 2 → 0 (oscilloscope → none)
+            // 0 → 1 (none → spectrum)
+        }
         .onReceive(updateTimer) { _ in
             // Only update when playing (Swift 6 safe pattern)
-            if audioPlayer.isPlaying {
+            if audioPlayer.isPlaying && mode == 1 {
                 updateBars()
             }
         }
@@ -199,4 +223,58 @@ struct SpectrumBar: View {
         .environment(SkinManager())
         .frame(width: 76, height: 16)
         .background(Color.gray)
+}
+
+/// Oscilloscope waveform visualization (webamp pattern)
+/// Shows audio waveform as connected line (like screenshot)
+struct OscilloscopeView: View {
+    @Environment(AudioPlayer.self) var audioPlayer
+    @Environment(SkinManager.self) var skinManager
+
+    let updateTimer = Timer.publish(every: 1.0/30.0, on: .main, in: .common).autoconnect()
+    @State private var waveformData: [Float] = []
+
+    var body: some View {
+        Canvas { context, size in
+            guard !waveformData.isEmpty else { return }
+
+            // Draw waveform as connected line (webamp oscilloscope pattern)
+            var path = Path()
+            let centerY = size.height / 2
+
+            for (index, sample) in waveformData.enumerated() {
+                let x = CGFloat(index) / CGFloat(waveformData.count) * size.width
+                let y = centerY - (CGFloat(sample) * centerY)
+
+                if index == 0 {
+                    path.move(to: CGPoint(x: x, y: y))
+                } else {
+                    path.addLine(to: CGPoint(x: x, y: y))
+                }
+            }
+
+            // Use VISCOLOR oscilloscope colors (18-22) or white fallback
+            let color = oscilloscopeColor()
+            context.stroke(path, with: .color(color), lineWidth: 1)
+        }
+        .frame(width: 76, height: 16)
+        .onReceive(updateTimer) { _ in
+            if audioPlayer.isPlaying {
+                // Get waveform samples from RMS data (approximation for now)
+                // RMS provides amplitude levels which create wave-like pattern
+                waveformData = audioPlayer.getRMSData(bands: 76)
+            } else {
+                waveformData = []
+            }
+        }
+    }
+
+    private func oscilloscopeColor() -> Color {
+        // Use VISCOLOR color 18 (brightest white) or fallback
+        if let colors = skinManager.currentSkin?.visualizerColors,
+           colors.count >= 19 {
+            return colors[18]  // Brightest oscilloscope shade
+        }
+        return Color.white
+    }
 }
