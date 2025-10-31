@@ -68,7 +68,11 @@ final class PlaybackCoordinator {
             audioPlayer.addTrack(url: url)
             audioPlayer.play()
             currentSource = .localTrack(url)
-            currentTitle = url.deletingPathExtension().lastPathComponent
+            currentTitle = formattedLocalDisplayTitle(
+                trackTitle: url.deletingPathExtension().lastPathComponent,
+                trackArtist: "",
+                url: url
+            )
             isPlaying = audioPlayer.isPlaying
         } else {
             // Stop local file if playing
@@ -105,7 +109,11 @@ final class PlaybackCoordinator {
             // Play local file via AudioPlayer
             audioPlayer.playTrack(track: track)
             currentSource = .localTrack(track.url)
-            currentTitle = "\(track.title) - \(track.artist)"
+            currentTitle = formattedLocalDisplayTitle(
+                trackTitle: track.title,
+                trackArtist: track.artist,
+                url: track.url
+            )
             isPlaying = audioPlayer.isPlaying
         }
 
@@ -198,6 +206,27 @@ final class PlaybackCoordinator {
         isPaused = false
     }
 
+    // MARK: - Helpers
+
+    private func formattedLocalDisplayTitle(trackTitle: String, trackArtist: String, url: URL) -> String {
+        let trimmedTitle = trackTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedArtist = trackArtist.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if !trimmedTitle.isEmpty && !trimmedArtist.isEmpty {
+            return "\(trimmedTitle) - \(trimmedArtist)"
+        }
+
+        if !trimmedTitle.isEmpty {
+            return trimmedTitle
+        }
+
+        if !trimmedArtist.isEmpty {
+            return trimmedArtist
+        }
+
+        return url.deletingPathExtension().lastPathComponent
+    }
+
     // MARK: - Unified State for UI
 
     /// Display title for main window (includes buffering status)
@@ -219,8 +248,18 @@ final class PlaybackCoordinator {
             // Fallback to Track or station name
             return currentTrack?.title ?? currentTitle ?? "Internet Radio"
 
-        case .localTrack:
-            return currentTrack?.title ?? currentTitle ?? "Unknown"
+        case .localTrack(let url):
+            if let title = currentTitle?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty {
+                return title
+            }
+
+            let fallbackTitle = formattedLocalDisplayTitle(
+                trackTitle: currentTrack?.title ?? "",
+                trackArtist: currentTrack?.artist ?? "",
+                url: url
+            )
+
+            return fallbackTitle.isEmpty ? "Unknown" : fallbackTitle
 
         case .none:
             return "MacAmp"
