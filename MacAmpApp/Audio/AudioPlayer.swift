@@ -72,6 +72,13 @@ struct Track: Identifiable, Equatable {
     var artist: String
     var duration: Double
 
+    /// Returns true if this track is an internet radio stream (HTTP/HTTPS URL)
+    /// Streams cannot be played via AudioPlayer (which uses AVAudioFile for local files only)
+    /// and must be routed through PlaybackCoordinator → StreamPlayer instead.
+    var isStream: Bool {
+        !url.isFileURL && (url.scheme == "http" || url.scheme == "https")
+    }
+
     static func == (lhs: Track, rhs: Track) -> Bool {
         lhs.id == rhs.id
     }
@@ -270,6 +277,14 @@ final class AudioPlayer {
     /// Play an EXISTING track from the playlist
     /// Does NOT modify the playlist - only plays the specified track
     func playTrack(track: Track) {
+        // Guard against stream URLs - AudioPlayer can only play local files
+        guard !track.isStream else {
+            print("ERROR: AudioPlayer cannot play internet radio streams.")
+            print("       Stream URL: \(track.url)")
+            print("       Use PlaybackCoordinator to route streams to StreamPlayer.")
+            return
+        }
+
         // CRITICAL: Don't call stop() here - it triggers completion handlers mid-transition.
         // Instead, directly stop the player node and reset state
         playerNode.stop()
