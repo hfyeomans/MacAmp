@@ -40,9 +40,13 @@ final class PlaylistWindowActions: NSObject {
         for url in urls {
             let fileExtension = url.pathExtension.lowercased()
             if fileExtension == "m3u" || fileExtension == "m3u8" {
-                // Note: We can't access radioLibrary from PlaylistWindowActions
-                // This will be handled when we refactor to use PlaybackCoordinator
-                showAlert("M3U/M3U8 Loading", "Please use the main window to load M3U/M3U8 files with internet radio support.")
+                // Load M3U/M3U8 files using radioLibrary
+                if let radioLibrary {
+                    loadM3UPlaylist(url, audioPlayer: audioPlayer, radioLibrary: radioLibrary)
+                } else {
+                    // Fallback if radioLibrary not available (shouldn't happen)
+                    showAlert("Error", "Radio library not initialized. Please restart the app.")
+                }
             } else {
                 audioPlayer.addTrack(url: url)
             }
