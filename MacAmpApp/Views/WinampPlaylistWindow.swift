@@ -6,6 +6,7 @@ final class PlaylistWindowActions: NSObject {
     static let shared = PlaylistWindowActions()
 
     var selectedIndices: Set<Int> = []
+    weak var radioLibrary: RadioStationLibrary?
 
     private func showAlert(_ title: String, _ message: String) {
         let alert = NSAlert()
@@ -90,7 +91,51 @@ final class PlaylistWindowActions: NSObject {
     }
 
     @objc func addURL(_ sender: NSMenuItem) {
-        showAlert("Add URL", "URL/Internet Radio support coming in P5 implementation.\nSee tasks/internet-radio-file-types/")
+        guard let radioLibrary else {
+            showAlert("Error", "Radio library not available")
+            return
+        }
+
+        let alert = NSAlert()
+        alert.messageText = "Add Internet Radio Station"
+        alert.informativeText = "Enter the stream URL (HTTP or HTTPS):"
+
+        let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
+        input.placeholderString = "http://stream.example.com/radio.mp3"
+        alert.accessoryView = input
+
+        alert.addButton(withTitle: "Add")
+        alert.addButton(withTitle: "Cancel")
+
+        let response = alert.runModal()
+
+        if response == .alertFirstButtonReturn {
+            let urlString = input.stringValue.trimmingCharacters(in: .whitespaces)
+
+            guard !urlString.isEmpty else {
+                showAlert("Invalid URL", "Please enter a valid URL")
+                return
+            }
+
+            guard let url = URL(string: urlString),
+                  url.scheme == "http" || url.scheme == "https" else {
+                showAlert("Invalid URL", "URL must start with http:// or https://")
+                return
+            }
+
+            // Create station with URL as name (user can edit later if needed)
+            let stationName = url.host ?? urlString
+            let station = RadioStation(
+                name: stationName,
+                streamURL: url,
+                genre: nil,
+                source: .manual
+            )
+
+            radioLibrary.addStation(station)
+
+            showAlert("Station Added", "Added '\(stationName)' to your radio library.\n\nYou can play it from the radio stations menu.")
+        }
     }
 
     @objc func addDirectory(_ sender: NSMenuItem) {
@@ -260,6 +305,9 @@ struct WinampPlaylistWindow: View {
             keyboardMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [self] event in
                 return handleKeyPress(event: event)
             }
+
+            // Inject radioLibrary into shared actions for ADD URL functionality
+            PlaylistWindowActions.shared.radioLibrary = radioLibrary
         }
         .onDisappear {
             // Clean up keyboard monitor
