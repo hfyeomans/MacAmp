@@ -671,6 +671,11 @@ struct WinampMainWindow: View {
             .frame(width: 76, height: 16)
             .background(Color.black.opacity(0.5))
             .at(Coords.spectrumAnalyzer)
+
+        // Visualizer mode toggle (Spectrum vs RMS)
+        // Oracle: Don't constrain frame initially - test natural size
+        VisualizerOptions()
+            .at(CGPoint(x: 24, y: 60))  // Below visualizer
     }
     
     private func openFileDialog() {

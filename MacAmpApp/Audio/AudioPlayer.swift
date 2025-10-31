@@ -108,6 +108,10 @@ final class AudioPlayer {
     var visualizerSmoothing: Float = 0.6 // 0..1 (higher = smoother)
     var visualizerPeakFalloff: Float = 1.2 // units per second
 
+    // Store both RMS and spectrum data (Oracle: don't discard either!)
+    @ObservationIgnored private var latestRMS: [Float] = []
+    @ObservationIgnored private var latestSpectrum: [Float] = []
+
     private(set) var playbackState: PlaybackState = .idle
     private(set) var isPlaying: Bool = false
     private(set) var isPaused: Bool = false
@@ -836,7 +840,11 @@ final class AudioPlayer {
     /// MainActor method for updating visualizer levels from audio thread data
     @MainActor
     private func updateVisualizerLevels(rms: [Float], spectrum: [Float]) {
-        // Now we're safely on MainActor - can access isolated properties
+        // Store BOTH datasets (Oracle: don't discard either!)
+        self.latestRMS = rms
+        self.latestSpectrum = spectrum
+
+        // Apply smoothing to the currently active mode
         let used = self.useSpectrumVisualizer ? spectrum : rms
         let now = CFAbsoluteTimeGetCurrent()
         let dt = max(0, Float(now - self.lastUpdateTime))
@@ -1108,6 +1116,28 @@ final class AudioPlayer {
             }
         }
         
+        return result
+    }
+
+    func getRMSData(bands: Int) -> [Float] {
+        // Return RMS (amplitude) data for visualizer
+        // Oracle: Expose both datasets, not just the selected one
+        guard bands > 0 else { return [] }
+
+        // Return raw RMS data (already has correct band count)
+        if latestRMS.count == bands {
+            return latestRMS
+        }
+
+        // Or map if different band count requested
+        var result = [Float](repeating: 0, count: bands)
+        if !latestRMS.isEmpty {
+            for i in 0..<bands {
+                let sourceIndex = (i * latestRMS.count) / bands
+                result[i] = latestRMS[min(sourceIndex, latestRMS.count - 1)]
+            }
+        }
+
         return result
     }
 
