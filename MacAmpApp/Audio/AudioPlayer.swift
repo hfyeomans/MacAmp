@@ -266,6 +266,9 @@ final class AudioPlayer {
                     self.currentTitle = "\(track.title) - \(track.artist)"
                     self.currentDuration = track.duration
                     self.currentTrackURL = track.url
+
+                    // Notify coordinator that metadata updated
+                    self.externalPlaybackHandler?(track)
                 }
             } else if !self.playlist.contains(where: { $0.url.standardizedFileURL == normalizedURL }) {
                 print("DEBUG AudioPlayer: Appending track to playlist")

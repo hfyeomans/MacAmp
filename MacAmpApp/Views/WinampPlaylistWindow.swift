@@ -34,6 +34,15 @@ final class PlaylistWindowActions: NSObject {
                     // Remember if playlist was empty (for autoplay detection)
                     let wasEmpty = audioPlayer.playlist.isEmpty
 
+                    // Set up metadata update handler if coordinator available
+                    if let coordinator = playbackCoordinator {
+                        audioPlayer.externalPlaybackHandler = { track in
+                            Task { @MainActor in
+                                await coordinator.play(track: track)
+                            }
+                        }
+                    }
+
                     self.handleSelectedURLs(urls, audioPlayer: audioPlayer)
 
                     // If playlist was empty and AudioPlayer autoplayed, sync coordinator state
