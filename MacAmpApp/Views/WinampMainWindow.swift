@@ -7,6 +7,7 @@ struct WinampMainWindow: View {
     @Environment(AudioPlayer.self) var audioPlayer
     @Environment(DockingController.self) var dockingController
     @Environment(AppSettings.self) var settings
+    @Environment(PlaybackCoordinator.self) var playbackCoordinator
     @Environment(\.openWindow) var openWindow
 
     // CRITICAL: Prevent unnecessary body re-evaluations that cause ghost images
@@ -187,35 +188,35 @@ struct WinampMainWindow: View {
             // Transport controls (compact layout)
             HStack(spacing: 2) {
                 // Previous
-                Button(action: { audioPlayer.previousTrack() }) {
+                Button(action: { Task { await playbackCoordinator.previous() } }) {
                     SimpleSpriteImage("MAIN_PREVIOUS_BUTTON", width: 23, height: 18)
                         .scaleEffect(0.6) // Scale down for shade mode
                 }
                 .buttonStyle(.plain)
 
                 // Play
-                Button(action: { audioPlayer.play() }) {
+                Button(action: { playbackCoordinator.togglePlayPause() }) {
                     SimpleSpriteImage("MAIN_PLAY_BUTTON", width: 23, height: 18)
                         .scaleEffect(0.6)
                 }
                 .buttonStyle(.plain)
 
                 // Pause
-                Button(action: { audioPlayer.pause() }) {
+                Button(action: { playbackCoordinator.pause() }) {
                     SimpleSpriteImage("MAIN_PAUSE_BUTTON", width: 23, height: 18)
                         .scaleEffect(0.6)
                 }
                 .buttonStyle(.plain)
 
                 // Stop
-                Button(action: { audioPlayer.stop() }) {
+                Button(action: { playbackCoordinator.stop() }) {
                     SimpleSpriteImage("MAIN_STOP_BUTTON", width: 23, height: 18)
                         .scaleEffect(0.6)
                 }
                 .buttonStyle(.plain)
 
                 // Next
-                Button(action: { audioPlayer.nextTrack() }) {
+                Button(action: { Task { await playbackCoordinator.next() } }) {
                     SimpleSpriteImage("MAIN_NEXT_BUTTON", width: 22, height: 18)
                         .scaleEffect(0.6)
                 }
@@ -348,35 +349,35 @@ struct WinampMainWindow: View {
     private func buildTransportButtons() -> some View {
         Group {
             // Previous
-            Button(action: { audioPlayer.previousTrack() }) {
+            Button(action: { Task { await playbackCoordinator.previous() } }) {
                 SimpleSpriteImage("MAIN_PREVIOUS_BUTTON", width: 23, height: 18)
             }
             .buttonStyle(.plain)
             .at(Coords.prevButton)
-            
+
             // Play
-            Button(action: { audioPlayer.play() }) {
+            Button(action: { playbackCoordinator.togglePlayPause() }) {
                 SimpleSpriteImage("MAIN_PLAY_BUTTON", width: 23, height: 18)
             }
             .buttonStyle(.plain)
             .at(Coords.playButton)
-            
+
             // Pause
-            Button(action: { audioPlayer.pause() }) {
+            Button(action: { playbackCoordinator.pause() }) {
                 SimpleSpriteImage("MAIN_PAUSE_BUTTON", width: 23, height: 18)
             }
             .buttonStyle(.plain)
             .at(Coords.pauseButton)
-            
+
             // Stop
-            Button(action: { audioPlayer.stop() }) {
+            Button(action: { playbackCoordinator.stop() }) {
                 SimpleSpriteImage("MAIN_STOP_BUTTON", width: 23, height: 18)
             }
             .buttonStyle(.plain)
             .at(Coords.stopButton)
-            
+
             // Next
-            Button(action: { audioPlayer.nextTrack() }) {
+            Button(action: { Task { await playbackCoordinator.next() } }) {
                 SimpleSpriteImage("MAIN_NEXT_BUTTON", width: 23, height: 18)
             }
             .buttonStyle(.plain)

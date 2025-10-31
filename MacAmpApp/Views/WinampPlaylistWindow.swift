@@ -241,6 +241,7 @@ struct WinampPlaylistWindow: View {
     @Environment(AudioPlayer.self) var audioPlayer
     @Environment(AppSettings.self) var settings
     @Environment(RadioStationLibrary.self) var radioLibrary
+    @Environment(PlaybackCoordinator.self) var playbackCoordinator
 
     @State private var selectedIndices: Set<Int> = []
     @State private var isShadeMode: Bool = false
@@ -418,8 +419,10 @@ struct WinampPlaylistWindow: View {
                         .frame(width: 243, height: 13)
                         .background(trackBackground(track: track, index: index))
                         .onTapGesture(count: 2) {
-                            // Double-click: Play the track
-                            audioPlayer.playTrack(track: track)
+                            // Double-click: Play via PlaybackCoordinator (handles both local + streams)
+                            Task {
+                                await playbackCoordinator.play(track: track)
+                            }
                         }
                         .onTapGesture {
                             // Single-click: Handle selection
