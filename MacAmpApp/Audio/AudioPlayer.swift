@@ -396,13 +396,7 @@ final class AudioPlayer {
         }
     }
 
-    /// Legacy method: Load track and add to playlist
-    /// DEPRECATED: Use addTrack(url:) for new tracks or playTrack(track:) for existing tracks
-    @available(*, deprecated, message: "Use addTrack(url:) for new tracks or playTrack(track:) for existing tracks")
-    func loadTrack(url: URL) {
-        print("AudioPlayer: WARNING - loadTrack() is deprecated, use addTrack() instead")
-        addTrack(url: url)
-    }
+    // Removed: deprecated loadTrack() - no callers exist, use addTrack() instead (Oracle cleanup)
 
     func play() {
         // If playlist has ended, restart from the beginning
@@ -834,46 +828,7 @@ final class AudioPlayer {
         RunLoop.main.add(progressTimer!, forMode: .common)
     }
 
-    // Debug: Print spectrum analyzer frequency distribution
-    private func printSpectrumFrequencyDistribution(sampleRate: Float, bars: Int) {
-        let minimumFrequency: Float = 50
-        let maximumFrequency: Float = min(16000, sampleRate * 0.45)
-
-        print("\n==== Spectrum Analyzer Frequency Distribution ====")
-        print("Sample Rate: \(sampleRate) Hz")
-        print("Bars: \(bars)")
-        print("Range: \(minimumFrequency) Hz - \(maximumFrequency) Hz")
-        print("\nBar | Center Freq | Equalization | Typical Content")
-        print("----+-------------+--------------+------------------------------------------")
-
-        for b in 0..<bars {
-            let normalized = Float(b) / Float(max(1, bars - 1))
-            let logScale = minimumFrequency * pow(maximumFrequency / minimumFrequency, normalized)
-            let linScale = minimumFrequency + normalized * (maximumFrequency - minimumFrequency)
-            let centerFrequency = 0.91 * logScale + 0.09 * linScale
-
-            let normalizedFreq = (centerFrequency - minimumFrequency) / (maximumFrequency - minimumFrequency)
-            let dbAdjustment = -8.0 + 16.0 * normalizedFreq
-            let equalizationGain = pow(10.0, dbAdjustment / 20.0)
-
-            let content: String
-            switch centerFrequency {
-            case ..<100: content = "Sub-bass, kick drum"
-            case 100..<200: content = "Bass, low vocals"
-            case 200..<400: content = "Vocal fundamentals, warmth"
-            case 400..<800: content = "Vocal body, instrument clarity"
-            case 800..<2000: content = "Vocal presence, definition"
-            case 2000..<4000: content = "Vocal consonants, attack"
-            case 4000..<8000: content = "Brightness, sibilance"
-            case 8000...: content = "Air, shimmer, harmonics"
-            default: content = "Unknown"
-            }
-
-            print(String(format: "%3d | %7.0f Hz  | %+.1f dB (×%.2f) | %@",
-                         b, centerFrequency, dbAdjustment, equalizationGain, content))
-        }
-        print("==================================================\n")
-    }
+    // Removed: printSpectrumFrequencyDistribution - unused debug code (Oracle cleanup)
 
     @MainActor
     private func updateVisualizerLevels(rms: [Float], spectrum: [Float], waveform: [Float]) {
