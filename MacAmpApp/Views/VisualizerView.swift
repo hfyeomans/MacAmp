@@ -1,6 +1,13 @@
 import SwiftUI
 import Accelerate
 
+/// Winamp visualizer constants
+enum VisualizerLayout {
+    static let width: CGFloat = 76
+    static let height: CGFloat = 16
+    static let oscilloscopeSampleCount = 76
+}
+
 /// Winamp-style spectrum analyzer - click to cycle modes
 struct VisualizerView: View {
     @Environment(AudioPlayer.self) var audioPlayer
@@ -12,7 +19,7 @@ struct VisualizerView: View {
     @State private var peakPositions: [CGFloat] = Array(repeating: 0, count: 19)
     @State private var peakTimers: [Date] = Array(repeating: Date.distantPast, count: 19)
 
-    // Winamp spectrum analyzer constants
+    // Spectrum analyzer constants
     private let barCount = 19
     private let barWidth: CGFloat = 3
     private let barSpacing: CGFloat = 1
@@ -53,7 +60,7 @@ struct VisualizerView: View {
                 }
             }
         }
-        .frame(width: 76, height: 16)
+        .frame(width: VisualizerLayout.width, height: VisualizerLayout.height)
         .background(Color.black)
         .onTapGesture {
             // Cycle through modes: spectrum → oscilloscope → none
@@ -250,10 +257,10 @@ struct OscilloscopeView: View {
             let color = oscilloscopeColor()
             context.stroke(path, with: .color(color), lineWidth: 1)
         }
-        .frame(width: 76, height: 16)
+        .frame(width: VisualizerLayout.width, height: VisualizerLayout.height)
         .onReceive(updateTimer) { _ in
             if audioPlayer.isPlaying {
-                waveformData = audioPlayer.getWaveformSamples(count: 76)
+                waveformData = audioPlayer.getWaveformSamples(count: VisualizerLayout.oscilloscopeSampleCount)
             } else {
                 waveformData = []
             }

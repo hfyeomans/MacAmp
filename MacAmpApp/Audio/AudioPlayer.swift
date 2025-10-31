@@ -104,7 +104,15 @@ final class AudioPlayer {
     @ObservationIgnored private var visualizerTapInstalled = false
     @ObservationIgnored private var visualizerPeaks: [Float] = Array(repeating: 0.0, count: 20)
     @ObservationIgnored private var lastUpdateTime: CFAbsoluteTime = CFAbsoluteTimeGetCurrent()
-    var useSpectrumVisualizer: Bool = true
+
+    /// Legacy toggle - derives from AppSettings.visualizerMode
+    var useSpectrumVisualizer: Bool {
+        get { AppSettings.instance().visualizerMode == .spectrum }
+        set {
+            AppSettings.instance().visualizerMode = newValue ? .spectrum : .none
+        }
+    }
+
     var visualizerSmoothing: Float = 0.6 // 0..1 (higher = smoother)
     var visualizerPeakFalloff: Float = 1.2 // units per second
 
@@ -960,13 +968,12 @@ final class AudioPlayer {
             let rmsSnapshot = scratch.snapshotRms()
             let spectrumSnapshot = scratch.snapshotSpectrum()
 
-            // Capture waveform samples for oscilloscope (downsample mono to ~76 points)
+            // Capture waveform samples for oscilloscope
             var waveformSnapshot: [Float] = []
             scratch.withMonoReadOnly { mono in
-                let targetCount = 76
-                let step = max(1, mono.count / targetCount)
+                let step = max(1, mono.count / 76)
                 waveformSnapshot = stride(from: 0, to: mono.count, by: step)
-                    .prefix(targetCount)
+                    .prefix(76)
                     .map { mono[$0] }
             }
 
