@@ -30,11 +30,12 @@
    - Manage both players, prevent conflicts
    - Reason: Critical component, needs Oracle review
 
-**Phase 2: M3U Integration (3 hours)**
-5. ✅ **Commit 5:** Update M3U loading and library integration
+**Phase 2: M3U/M3U8 Integration (3 hours)**
+5. ✅ **Commit 5:** Update M3U/M3U8 loading and library integration
    - ~3 hours work
    - WinampPlaylistWindow changes, injection
-   - Reason: Complete M3U feature, test with real files
+   - Support .m3u, .m3u8 playlist files, and .m3u8 HLS stream URLs
+   - Reason: Complete M3U/M3U8 feature, test with real files
 
 **Phase 3: UI (3 hours)**
 6. ✅ **Commit 6:** Add Stream URL dialog
@@ -71,11 +72,12 @@ Phase 1 (1/7)
 
 **For integrations:**
 ```
-feat: Integrate radio stations from M3U playlists
+feat: Integrate radio stations from M3U/M3U8 playlists
 
 - Update WinampPlaylistWindow Line 503-506
 - Add remote streams to RadioStationLibrary
-- Test with DarkAmbientRadio.m3u
+- Support .m3u, .m3u8 playlists, and .m3u8 HLS URLs
+- Test with DarkAmbientRadio.m3u and .m3u8 files
 - Stations persist across restarts
 
 Phase 2 (5/7)
@@ -294,7 +296,9 @@ This catches issues when they're fresh and prevents accumulating tech debt.
 
 ---
 
-## Phase 2: M3U Integration (2 hours)
+## Phase 2: M3U/M3U8 Integration (3 hours)
+
+**Note:** M3UParser already supports .m3u and .m3u8 playlist files. AVPlayer natively handles .m3u8 HLS stream URLs.
 
 ### Step 1: Inject RadioStationLibrary
 
@@ -305,11 +309,12 @@ This catches issues when they're fresh and prevents accumulating tech debt.
 - [ ] **Update WinampPlaylistWindow.swift**
   - [ ] Add @Environment(RadioStationLibrary.self) var radioLibrary
 
-### Step 2: Update M3U Loading
+### Step 2: Update M3U/M3U8 Loading
 
-- [ ] **Find M3U remote stream handling**
+- [ ] **Find M3U/M3U8 remote stream handling**
   - [ ] File: WinampPlaylistWindow.swift
   - [ ] Lines: 503-506 (TODO comment)
+  - [ ] Already supports .m3u and .m3u8 playlists via M3UParser
 
 - [ ] **Replace with integration code**
   ```swift
@@ -330,17 +335,27 @@ This catches issues when they're fresh and prevents accumulating tech debt.
   - [ ] Show alert or toast
   - [ ] "Added X radio stations"
 
-### Step 3: Test M3U Loading
+### Step 3: Test M3U/M3U8 Loading
 
 - [ ] **Test with DarkAmbientRadio.m3u**
-  - [ ] Load M3U file
+  - [ ] Load .m3u file
   - [ ] Verify station added to library
   - [ ] Check library.stations array
   - [ ] Verify persistence (quit/relaunch)
 
-- [ ] **Test with mixed M3U**
+- [ ] **Test with .m3u8 playlist file**
+  - [ ] Load .m3u8 playlist file (UTF-8 encoded)
+  - [ ] Verify stations added to library
+  - [ ] Verify persistence
+
+- [ ] **Test with .m3u8 HLS stream URL**
+  - [ ] Test direct .m3u8 HLS stream URL
+  - [ ] Verify AVPlayer handles adaptive streaming
+  - [ ] Check metadata extraction
+
+- [ ] **Test with mixed M3U/M3U8**
   - [ ] Create M3U with local files + remote streams
-  - [ ] Load M3U
+  - [ ] Load M3U/M3U8
   - [ ] Verify local files in playlist
   - [ ] Verify streams in radio library
   - [ ] Both should work independently
@@ -418,11 +433,13 @@ This catches issues when they're fresh and prevents accumulating tech debt.
 - [ ] Switch between local file and stream
 - [ ] Switch between different streams
 
-### M3U Integration
-- [ ] Load M3U with remote streams
+### M3U/M3U8 Integration
+- [ ] Load .m3u with remote streams
+- [ ] Load .m3u8 playlist files
+- [ ] Test .m3u8 HLS stream URLs
 - [ ] Stations added to library
 - [ ] Stations persist across restarts
-- [ ] Mixed M3U (local + remote) works
+- [ ] Mixed M3U/M3U8 (local + remote) works
 - [ ] Duplicate detection works
 
 ### UI/UX
@@ -453,9 +470,12 @@ This catches issues when they're fresh and prevents accumulating tech debt.
 - [x] No crashes or audio conflicts
 
 ### Phase 2 Complete When:
-- [x] M3U remote streams add to library
+- [x] M3U/M3U8 remote streams add to library
+- [x] .m3u playlist files work
+- [x] .m3u8 playlist files work (UTF-8)
+- [x] .m3u8 HLS stream URLs work
 - [x] Stations persist across restarts
-- [x] Mixed M3U files handled correctly
+- [x] Mixed M3U/M3U8 files handled correctly
 - [x] User feedback when stations added
 
 ### Phase 3 Complete When:
@@ -477,9 +497,11 @@ This catches issues when they're fresh and prevents accumulating tech debt.
 
 ## Files to Modify (3)
 
-1. `MacAmpApp/Views/WinampPlaylistWindow.swift` - Line 503-506
+1. `MacAmpApp/Views/WinampPlaylistWindow.swift` - M3U/M3U8 integration (Line 503-506)
 2. `MacAmpApp/MacAmpApp.swift` - Inject RadioStationLibrary
-3. `MacAmpApp/Info.plist` - Verify ATS configuration
+3. `MacAmpApp/Info.plist` - Verify ATS configuration (already done)
+
+**Note:** M3UParser already supports .m3u and .m3u8 playlist files.
 
 ---
 

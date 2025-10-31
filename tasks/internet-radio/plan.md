@@ -15,7 +15,7 @@
 - ✅ No crashes or audio conflicts
 
 ### Full Feature (Phase 2)
-- ✅ M3U remote streams load into station library
+- ✅ M3U/M3U8 remote streams load into station library
 - ✅ Save/load favorite stations
 - ✅ Display stream metadata (title, artist)
 - ✅ Handle network errors gracefully
@@ -24,7 +24,7 @@
 - ✅ Buffering indicators
 - ✅ Stream quality selection
 - ✅ Station categories/genres
-- ✅ Export station library as M3U
+- ✅ Export station library as M3U/M3U8
 
 ---
 
@@ -296,9 +296,11 @@ private func sourceType(for url: URL) -> PlaybackSource {
 
 ---
 
-## Phase 2: M3U Integration (2 hours)
+## Phase 2: M3U/M3U8 Integration (3 hours)
 
-### 2.1 Update M3U Loading
+### 2.1 Update M3U/M3U8 Loading
+
+**Note:** M3UParser already supports both .m3u and .m3u8 playlist files, plus .m3u8 HLS stream URLs (handled by AVPlayer).
 
 **File:** `MacAmpApp/Views/WinampPlaylistWindow.swift`
 
@@ -411,9 +413,11 @@ private func presentAddStreamDialog() {
 4. `MacAmpApp/Views/RadioStationView.swift` - Optional UI (~100 lines)
 
 ### Files to Modify (3)
-1. `MacAmpApp/Views/WinampPlaylistWindow.swift` - M3U integration (Line 503-506)
+1. `MacAmpApp/Views/WinampPlaylistWindow.swift` - M3U/M3U8 integration (Line 503-506)
 2. `MacAmpApp/MacAmpApp.swift` - Inject RadioStationLibrary
 3. `MacAmpApp/Audio/AudioPlayer.swift` - Optional: Playback mode detection
+
+**Note:** M3UParser (MacAmpApp/Models/M3UParser.swift) already supports both .m3u and .m3u8 playlist files.
 
 ---
 
@@ -439,8 +443,10 @@ private func presentAddStreamDialog() {
 - [ ] Check for audio conflicts
 
 ### Phase 2 Testing
-- [ ] Load DarkAmbientRadio.m3u
-- [ ] Verify station added to library
+- [ ] Load DarkAmbientRadio.m3u (playlist file)
+- [ ] Load .m3u8 playlist file (UTF-8 encoded)
+- [ ] Test .m3u8 HLS stream URL (e.g., SomaFM)
+- [ ] Verify stations added to library
 - [ ] Play station from library
 - [ ] Test mixed M3U (local + remote)
 - [ ] Verify persistence (quit/relaunch)
@@ -463,10 +469,11 @@ private func presentAddStreamDialog() {
 - Basic play/pause functionality
 - Test with SomaFM streams
 
-### Day 2: M3U Integration (2 hours)
-- Update WinampPlaylistWindow M3U loading
+### Day 2: M3U/M3U8 Integration (3 hours)
+- Update WinampPlaylistWindow M3U/M3U8 loading
 - Inject RadioStationLibrary
-- Test loading stations from M3U
+- Test loading stations from M3U/M3U8 playlists
+- Test M3U8 HLS stream URLs
 - Verify persistence
 
 ### Day 3: UI Polish (3 hours)
