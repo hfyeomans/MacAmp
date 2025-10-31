@@ -207,16 +207,34 @@
 **After:** M3U → streams to playlist (like Winamp)
 **RadioStationLibrary:** Reserved for favorites menu (Phase 5+)
 
-## ⏸️ Future Work (After Phase 4)
+## ⏸️ Future Work (Phase 5+)
 
-### Advanced Features (Phase 5+)
-- [ ] Export station library as M3U/M3U8
-- [ ] Station categories/genres
+### Favorites Menu (High Priority)
+- [ ] Add "Radio Stations" top menu (like "Skins", "Windows" menus)
+- [ ] Show saved favorite stations from RadioStationLibrary
+- [ ] Add/edit/delete favorites UI
+- [ ] Load favorite into playlist
+- [ ] Station organization (categories/genres)
+- [ ] Quick access to frequently used streams
+
+### Stream Visualizers (Complex - 10-20+ hours)
+- [ ] **MTAudioProcessingTap Implementation**
+  - Tap AVPlayer audio output for stream visualization
+  - Process raw PCM data from HTTP streams
+  - Feed to existing spectrum analyzer
+  - Feed to existing oscilloscope
+  - Enable visualizers for internet radio (currently unavailable)
+  - Complexity: High - requires Core Audio expertise
+  - Effort: 10-20+ hours development + testing
+  - Benefit: Full Winamp parity for stream playback
+  - Reference: tasks/internet-radio/research.md (Oracle noted this)
+
+### Other Enhancements
+- [ ] Export playlist as M3U/M3U8 (save current playlist)
+- [ ] Recently played streams history
+- [ ] Stream quality selection (for multi-bitrate streams)
 - [ ] Search/browse radio directory
-- [ ] Stream quality selection
-- [ ] Recently played stations history
-- [ ] Favorite/rating system
-- [ ] Station management UI (edit/delete/organize)
+- [ ] Station rating system
 
 ---
 
