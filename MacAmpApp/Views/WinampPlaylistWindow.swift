@@ -498,7 +498,7 @@ struct WinampPlaylistWindow: View {
     @ViewBuilder
     private func buildPlaylistTransportButtons() -> some View {
             Button(action: {
-                audioPlayer.previousTrack()
+                Task { await playbackCoordinator.previous() }
             }) {
                 Color.clear
                     .frame(width: 10, height: 9)
@@ -508,11 +508,7 @@ struct WinampPlaylistWindow: View {
             .position(x: 133, y: 220)
 
             Button(action: {
-            if audioPlayer.isPaused || !audioPlayer.isPlaying {
-                    audioPlayer.play()
-            } else {
-                audioPlayer.pause()
-            }
+                playbackCoordinator.togglePlayPause()
         }) {
                 Color.clear
                     .frame(width: 10, height: 9)
@@ -522,7 +518,7 @@ struct WinampPlaylistWindow: View {
             .position(x: 144, y: 220)
 
             Button(action: {
-                audioPlayer.pause()
+                playbackCoordinator.pause()
             }) {
                 Color.clear
                     .frame(width: 10, height: 9)
@@ -532,7 +528,7 @@ struct WinampPlaylistWindow: View {
             .position(x: 155, y: 220)
 
             Button(action: {
-                audioPlayer.stop()
+                playbackCoordinator.stop()
             }) {
                 Color.clear
                     .frame(width: 10, height: 9)
@@ -542,7 +538,7 @@ struct WinampPlaylistWindow: View {
             .position(x: 166, y: 220)
 
             Button(action: {
-                audioPlayer.nextTrack()
+                Task { await playbackCoordinator.next() }
             }) {
                 Color.clear
                     .frame(width: 10, height: 9)
