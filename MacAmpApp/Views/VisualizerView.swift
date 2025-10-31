@@ -1,8 +1,7 @@
 import SwiftUI
 import Accelerate
 
-/// Winamp-style spectrum analyzer visualization
-/// Click to cycle: Spectrum → Oscilloscope → None (webamp pattern)
+/// Winamp-style spectrum analyzer - click to cycle modes
 struct VisualizerView: View {
     @Environment(AudioPlayer.self) var audioPlayer
     @Environment(SkinManager.self) var skinManager
@@ -33,18 +32,15 @@ struct VisualizerView: View {
     let updateTimer = Timer.publish(every: 1.0/30.0, on: .main, in: .common).autoconnect()
     
     var body: some View {
-        // Cycle modes: 1=Spectrum, 2=Oscilloscope, 0=None (webamp: BAR → OSCILLOSCOPE → NONE)
         let mode = settings.visualizerMode
 
         Group {
-            if mode == 0 {
-                // None - blank/off
+            switch mode {
+            case .none:
                 Rectangle().fill(Color.black)
-            } else if mode == 2 {
-                // Oscilloscope - waveform (like screenshot)
+            case .oscilloscope:
                 OscilloscopeView()
-            } else {
-                // Spectrum - frequency bars (default, mode == 1)
+            case .spectrum:
                 HStack(spacing: barSpacing) {
                     ForEach(0..<barCount, id: \.self) { index in
                         SpectrumBar(
@@ -60,15 +56,15 @@ struct VisualizerView: View {
         .frame(width: 76, height: 16)
         .background(Color.black)
         .onTapGesture {
-            // Click to cycle modes (webamp pattern)
-            settings.visualizerMode = (settings.visualizerMode + 1) % 3
-            // 1 → 2 (spectrum → oscilloscope)
-            // 2 → 0 (oscilloscope → none)
-            // 0 → 1 (none → spectrum)
+            // Cycle through modes: spectrum → oscilloscope → none
+            let allModes = AppSettings.VisualizerMode.allCases
+            if let currentIndex = allModes.firstIndex(of: settings.visualizerMode) {
+                let nextIndex = (currentIndex + 1) % allModes.count
+                settings.visualizerMode = allModes[nextIndex]
+            }
         }
         .onReceive(updateTimer) { _ in
-            // Only update when playing (Swift 6 safe pattern)
-            if audioPlayer.isPlaying && mode == 1 {
+            if audioPlayer.isPlaying && mode == .spectrum {
                 updateBars()
             }
         }
@@ -225,8 +221,7 @@ struct SpectrumBar: View {
         .background(Color.gray)
 }
 
-/// Oscilloscope waveform visualization (webamp pattern)
-/// Shows audio waveform as connected line (like screenshot)
+/// Oscilloscope waveform visualization
 struct OscilloscopeView: View {
     @Environment(AudioPlayer.self) var audioPlayer
     @Environment(SkinManager.self) var skinManager
@@ -238,7 +233,6 @@ struct OscilloscopeView: View {
         Canvas { context, size in
             guard !waveformData.isEmpty else { return }
 
-            // Draw waveform as connected line (webamp oscilloscope pattern)
             var path = Path()
             let centerY = size.height / 2
 
@@ -253,15 +247,12 @@ struct OscilloscopeView: View {
                 }
             }
 
-            // Use VISCOLOR oscilloscope colors (18-22) or white fallback
             let color = oscilloscopeColor()
             context.stroke(path, with: .color(color), lineWidth: 1)
         }
         .frame(width: 76, height: 16)
         .onReceive(updateTimer) { _ in
             if audioPlayer.isPlaying {
-                // Get ACTUAL time-domain waveform samples (not RMS!)
-                // These are raw audio samples showing true wave shape
                 waveformData = audioPlayer.getWaveformSamples(count: 76)
             } else {
                 waveformData = []
@@ -270,10 +261,9 @@ struct OscilloscopeView: View {
     }
 
     private func oscilloscopeColor() -> Color {
-        // Use VISCOLOR color 18 (brightest white) or fallback
         if let colors = skinManager.currentSkin?.visualizerColors,
            colors.count >= 19 {
-            return colors[18]  // Brightest oscilloscope shade
+            return colors[18]
         }
         return Color.white
     }

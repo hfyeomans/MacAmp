@@ -51,11 +51,9 @@ final class AppSettings {
         self.isDoubleSizeMode = UserDefaults.standard.bool(forKey: "isDoubleSizeMode")
         self.isAlwaysOnTop = UserDefaults.standard.bool(forKey: "isAlwaysOnTop")
 
-        // Load persisted visualizer mode (default to 1 = spectrum)
-        self.visualizerMode = UserDefaults.standard.integer(forKey: "visualizerMode")
-        if self.visualizerMode == 0 && UserDefaults.standard.object(forKey: "visualizerMode") == nil {
-            self.visualizerMode = 1  // First run: default to spectrum
-        }
+        // Load persisted visualizer mode (default to spectrum)
+        let rawMode = UserDefaults.standard.integer(forKey: "visualizerMode")
+        self.visualizerMode = VisualizerMode(rawValue: rawMode) ?? .spectrum
     }
     
     static func instance() -> AppSettings {
@@ -172,11 +170,17 @@ final class AppSettings {
 
     // MARK: - Visualizer Mode
 
-    /// Visualizer display mode: 0 = none, 1 = spectrum, 2 = oscilloscope
-    /// Click visualizer to cycle through modes (webamp pattern)
-    var visualizerMode: Int = 1 {
+    /// Visualizer display modes
+    enum VisualizerMode: Int, Codable, CaseIterable {
+        case none = 0
+        case spectrum = 1
+        case oscilloscope = 2
+    }
+
+    /// Current visualizer mode - click analyzer to cycle
+    var visualizerMode: VisualizerMode = .spectrum {
         didSet {
-            UserDefaults.standard.set(visualizerMode, forKey: "visualizerMode")
+            UserDefaults.standard.set(visualizerMode.rawValue, forKey: "visualizerMode")
         }
     }
 

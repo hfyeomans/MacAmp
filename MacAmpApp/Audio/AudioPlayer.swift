@@ -108,10 +108,10 @@ final class AudioPlayer {
     var visualizerSmoothing: Float = 0.6 // 0..1 (higher = smoother)
     var visualizerPeakFalloff: Float = 1.2 // units per second
 
-    // Store both RMS and spectrum data (Oracle: don't discard either!)
+    // Visualizer data storage
     @ObservationIgnored private var latestRMS: [Float] = []
     @ObservationIgnored private var latestSpectrum: [Float] = []
-    @ObservationIgnored private var latestWaveform: [Float] = []  // Time-domain samples for oscilloscope
+    @ObservationIgnored private var latestWaveform: [Float] = []
 
     private(set) var playbackState: PlaybackState = .idle
     private(set) var isPlaying: Bool = false
@@ -838,15 +838,14 @@ final class AudioPlayer {
         print("==================================================\n")
     }
 
-    /// MainActor method for updating visualizer levels from audio thread data
     @MainActor
     private func updateVisualizerLevels(rms: [Float], spectrum: [Float], waveform: [Float]) {
-        // Store ALL datasets (Oracle: don't discard any!)
+        // Store all visualizer datasets
         self.latestRMS = rms
         self.latestSpectrum = spectrum
-        self.latestWaveform = waveform  // Time-domain samples for oscilloscope
+        self.latestWaveform = waveform
 
-        // Apply smoothing to the currently active mode (spectrum/RMS only)
+        // Apply smoothing to active mode
         let used = self.useSpectrumVisualizer ? spectrum : rms
         let now = CFAbsoluteTimeGetCurrent()
         let dt = max(0, Float(now - self.lastUpdateTime))
@@ -1132,8 +1131,6 @@ final class AudioPlayer {
     }
 
     func getRMSData(bands: Int) -> [Float] {
-        // Return RMS (amplitude) data for visualizer
-        // Oracle: Expose both datasets, not just the selected one
         guard bands > 0 else { return [] }
 
         // Return raw RMS data (already has correct band count)
@@ -1154,8 +1151,6 @@ final class AudioPlayer {
     }
 
     func getWaveformSamples(count: Int) -> [Float] {
-        // Return actual time-domain samples for oscilloscope waveform
-        // These are RAW audio samples, not averaged (RMS) or transformed (FFT)
         guard count > 0 else { return [] }
 
         // Return waveform samples captured from mono buffer
