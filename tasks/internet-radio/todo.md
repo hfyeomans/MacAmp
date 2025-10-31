@@ -1,0 +1,379 @@
+# Internet Radio Streaming - Implementation Checklist
+
+**Date:** 2025-10-31
+**Status:** Planning Complete - Ready for Oracle Review
+
+---
+
+## Progress Summary
+
+**Research:** ✅ Complete
+**Planning:** ✅ Complete
+**Oracle Review:** ⏸️ Pending
+**Implementation:** ⏸️ Not started
+
+**Estimated Time:** 9-11 hours total
+- Phase 1 (Core streaming): 4-6 hours
+- Phase 2 (M3U integration): 2 hours
+- Phase 3 (UI polish): 3 hours
+
+---
+
+## Prerequisites
+
+### ✅ Verification Tasks
+- [x] M3U parser exists and works
+- [x] Remote stream detection functional
+- [x] Network client entitlement configured
+- [ ] ⏸️ Verify NSAllowsArbitraryLoadsInMedia in Info.plist
+  - File: MacAmpApp/Info.plist
+  - Key: NSAppTransportSecurity → NSAllowsArbitraryLoadsInMedia
+  - Value: true
+  - Action: Check if exists, add if missing
+
+---
+
+## Phase 1: Core Streaming Implementation (4-6 hours)
+
+### Step 1: Create RadioStation Model
+
+- [ ] **Create new file**
+  - [ ] File: `MacAmpApp/Models/RadioStation.swift`
+  - [ ] Import Foundation
+  - [ ] Define struct RadioStation: Identifiable, Codable
+
+- [ ] **Add properties**
+  - [ ] id: UUID
+  - [ ] name: String
+  - [ ] streamURL: URL
+  - [ ] genre: String?
+  - [ ] source: Source enum
+
+- [ ] **Define Source enum**
+  - [ ] case m3uPlaylist(String)
+  - [ ] case manual
+  - [ ] case directory
+
+- [ ] **Add init method**
+  - [ ] Default id = UUID()
+  - [ ] Required: name, streamURL
+  - [ ] Optional: genre, source
+
+### Step 2: Create RadioStationLibrary
+
+- [ ] **Create new file**
+  - [ ] File: `MacAmpApp/Models/RadioStationLibrary.swift`
+  - [ ] Import Foundation, Observation
+  - [ ] Mark class @MainActor @Observable
+
+- [ ] **Add state properties**
+  - [ ] private(set) var stations: [RadioStation] = []
+  - [ ] private let userDefaultsKey = "MacAmp.RadioStations"
+
+- [ ] **Implement init()**
+  - [ ] Call loadStations()
+
+- [ ] **Implement addStation()**
+  - [ ] Check for duplicates (same streamURL)
+  - [ ] Append to stations array
+  - [ ] Call saveStations()
+
+- [ ] **Implement removeStation(id:)**
+  - [ ] Remove by UUID
+  - [ ] Call saveStations()
+
+- [ ] **Implement saveStations()**
+  - [ ] JSONEncoder
+  - [ ] Encode stations array
+  - [ ] Save to UserDefaults
+  - [ ] Handle errors
+
+- [ ] **Implement loadStations()**
+  - [ ] Get data from UserDefaults
+  - [ ] JSONDecoder
+  - [ ] Decode [RadioStation]
+  - [ ] Handle errors (empty array fallback)
+
+### Step 3: Create StreamPlayer Class
+
+- [ ] **Create new file**
+  - [ ] File: `MacAmpApp/Audio/StreamPlayer.swift`
+  - [ ] Import AVFoundation, Observation, Combine
+  - [ ] Mark class @MainActor @Observable
+
+- [ ] **Add state properties**
+  - [ ] private(set) var isPlaying: Bool = false
+  - [ ] private(set) var isBuffering: Bool = false
+  - [ ] private(set) var currentStation: RadioStation?
+  - [ ] private(set) var streamTitle: String?
+  - [ ] private(set) var streamArtist: String?
+
+- [ ] **Add AVPlayer**
+  - [ ] private let player = AVPlayer()
+  - [ ] private var statusObserver: AnyCancellable?
+  - [ ] private var timeObserver: Any?
+  - [ ] private var metadataObserver: AnyCancellable?
+
+- [ ] **Implement init()**
+  - [ ] Call setupObservers()
+
+- [ ] **Implement play(station:) async**
+  - [ ] Set currentStation
+  - [ ] Create AVPlayerItem(url: station.streamURL)
+  - [ ] Replace player item
+  - [ ] Setup metadata observer
+  - [ ] Call player.play()
+  - [ ] Set isPlaying = true
+
+- [ ] **Implement pause()**
+  - [ ] Call player.pause()
+  - [ ] Set isPlaying = false
+
+- [ ] **Implement stop()**
+  - [ ] Call player.pause()
+  - [ ] Replace current item with nil
+  - [ ] Reset all state
+  - [ ] Clear metadata
+
+- [ ] **Implement setupObservers()**
+  - [ ] Observe player.timeControlStatus
+  - [ ] Use Combine publisher
+  - [ ] Receive on main queue
+  - [ ] Sink to handleStatusChange()
+
+- [ ] **Implement handleStatusChange()**
+  - [ ] Switch on AVPlayer.TimeControlStatus
+  - [ ] .playing: isPlaying = true, isBuffering = false
+  - [ ] .paused: isPlaying = false
+  - [ ] .waitingToPlayAtSpecifiedRate: isBuffering = true
+
+- [ ] **Implement setupMetadataObserver()**
+  - [ ] Observe playerItem.timedMetadata
+  - [ ] Extract ICY metadata
+  - [ ] Update streamTitle and streamArtist
+
+- [ ] **Implement deinit**
+  - [ ] Cancel observers
+  - [ ] Remove time observer
+  - [ ] Pause player
+
+### Step 4: Test Core Streaming
+
+- [ ] **Build project**
+  - [ ] Fix any compilation errors
+  - [ ] Ensure Swift 6 compliant
+
+- [ ] **Create test code**
+  - [ ] Add temporary test button or code
+  - [ ] Create RadioStation instance
+  - [ ] Call streamPlayer.play(station:)
+
+- [ ] **Test basic playback**
+  - [ ] URL: http://ice1.somafm.com/groovesalad-256-mp3
+  - [ ] Verify audio plays
+  - [ ] Verify isPlaying updates
+  - [ ] Verify pause works
+  - [ ] Verify stop works
+
+- [ ] **Test buffering**
+  - [ ] Observe isBuffering state
+  - [ ] Verify updates during network delays
+
+- [ ] **Test metadata**
+  - [ ] Check streamTitle updates
+  - [ ] Check streamArtist updates
+  - [ ] Verify real-time changes
+
+---
+
+## Phase 2: M3U Integration (2 hours)
+
+### Step 1: Inject RadioStationLibrary
+
+- [ ] **Update MacAmpApp.swift**
+  - [ ] Add @State private var radioLibrary = RadioStationLibrary()
+  - [ ] Add .environment(radioLibrary) to UnifiedDockView
+
+- [ ] **Update WinampPlaylistWindow.swift**
+  - [ ] Add @Environment(RadioStationLibrary.self) var radioLibrary
+
+### Step 2: Update M3U Loading
+
+- [ ] **Find M3U remote stream handling**
+  - [ ] File: WinampPlaylistWindow.swift
+  - [ ] Lines: 503-506 (TODO comment)
+
+- [ ] **Replace with integration code**
+  ```swift
+  if entry.isRemoteStream {
+      let station = RadioStation(
+          name: entry.title ?? "Unknown Station",
+          streamURL: entry.url,
+          genre: nil,
+          source: .m3uPlaylist(url.lastPathComponent)
+      )
+      radioLibrary.addStation(station)
+      print("M3U: Added station: \(station.name)")
+  }
+  ```
+
+- [ ] **Add user feedback**
+  - [ ] Count stations added
+  - [ ] Show alert or toast
+  - [ ] "Added X radio stations"
+
+### Step 3: Test M3U Loading
+
+- [ ] **Test with DarkAmbientRadio.m3u**
+  - [ ] Load M3U file
+  - [ ] Verify station added to library
+  - [ ] Check library.stations array
+  - [ ] Verify persistence (quit/relaunch)
+
+- [ ] **Test with mixed M3U**
+  - [ ] Create M3U with local files + remote streams
+  - [ ] Load M3U
+  - [ ] Verify local files in playlist
+  - [ ] Verify streams in radio library
+  - [ ] Both should work independently
+
+---
+
+## Phase 3: UI Integration (3 hours)
+
+### Step 1: Add Stream URL Dialog
+
+- [ ] **Create presentAddStreamDialog() method**
+  - [ ] NSAlert with message
+  - [ ] NSTextField for URL input
+  - [ ] Validate URL (http/https scheme)
+  - [ ] Create RadioStation
+  - [ ] Add to radioLibrary
+
+- [ ] **Integrate into ADD menu**
+  - [ ] Add "Add Stream URL..." option
+  - [ ] Call presentAddStreamDialog()
+  - [ ] Test URL entry and validation
+
+### Step 2: Station Selection UI
+
+- [ ] **Option A: Update ADD menu**
+  - [ ] Show radio stations in menu
+  - [ ] Click to play stream
+  - [ ] Simplest integration
+
+- [ ] **Option B: Separate Radio View**
+  - [ ] Create RadioStationView.swift
+  - [ ] List of stations
+  - [ ] Play buttons
+  - [ ] More UI work
+
+- [ ] **Decision:** Start with Option A
+
+### Step 3: Connect StreamPlayer to UI
+
+- [ ] **Inject StreamPlayer**
+  - [ ] Create in MacAmpApp.swift
+  - [ ] Inject via environment
+
+- [ ] **Add play method**
+  - [ ] When station selected
+  - [ ] Call streamPlayer.play(station:)
+  - [ ] Update UI state
+
+- [ ] **Show stream info**
+  - [ ] Display station name
+  - [ ] Display stream metadata (title/artist)
+  - [ ] Update in real-time
+
+### Step 4: Add Buffering Indicator
+
+- [ ] **Observe StreamPlayer.isBuffering**
+  - [ ] Show loading indicator
+  - [ ] In visualizer area or status
+
+- [ ] **Handle errors**
+  - [ ] Network unavailable
+  - [ ] Invalid stream URL
+  - [ ] Stream went offline
+  - [ ] Show user-friendly messages
+
+---
+
+## Testing Checklist
+
+### Core Functionality
+- [ ] Play single stream URL
+- [ ] Pause stream
+- [ ] Stop stream
+- [ ] Resume stream
+- [ ] Switch between local file and stream
+- [ ] Switch between different streams
+
+### M3U Integration
+- [ ] Load M3U with remote streams
+- [ ] Stations added to library
+- [ ] Stations persist across restarts
+- [ ] Mixed M3U (local + remote) works
+- [ ] Duplicate detection works
+
+### UI/UX
+- [ ] Add stream via URL dialog
+- [ ] Invalid URL rejected
+- [ ] Station selection works
+- [ ] Metadata displays and updates
+- [ ] Buffering indicator shows
+- [ ] Error messages clear
+
+### Edge Cases
+- [ ] Network interruption during playback
+- [ ] Invalid stream URL
+- [ ] Stream goes offline
+- [ ] Rapid mode switching (local ↔ stream)
+- [ ] Multiple streams in quick succession
+
+---
+
+## Completion Criteria
+
+### Phase 1 Complete When:
+- [x] StreamPlayer class created and functional
+- [x] RadioStation model defined
+- [x] RadioStationLibrary with persistence
+- [x] Can play at least one radio stream
+- [x] Basic controls work (play/pause/stop)
+- [x] No crashes or audio conflicts
+
+### Phase 2 Complete When:
+- [x] M3U remote streams add to library
+- [x] Stations persist across restarts
+- [x] Mixed M3U files handled correctly
+- [x] User feedback when stations added
+
+### Phase 3 Complete When:
+- [x] Add Stream URL dialog functional
+- [x] Station selection UI works
+- [x] Metadata displays
+- [x] Buffering indicators show
+- [x] Error handling comprehensive
+- [x] All tests passed
+
+---
+
+## Files to Create (4)
+
+1. `MacAmpApp/Audio/StreamPlayer.swift` - AVPlayer wrapper
+2. `MacAmpApp/Models/RadioStation.swift` - Data model
+3. `MacAmpApp/Models/RadioStationLibrary.swift` - Persistence
+4. `MacAmpApp/Views/RadioStationView.swift` - Optional UI
+
+## Files to Modify (3)
+
+1. `MacAmpApp/Views/WinampPlaylistWindow.swift` - Line 503-506
+2. `MacAmpApp/MacAmpApp.swift` - Inject RadioStationLibrary
+3. `MacAmpApp/Info.plist` - Verify ATS configuration
+
+---
+
+**Status:** Ready for Oracle comprehensive review
+**Focus:** Architecture validation, Swift 6 compliance, integration strategy
