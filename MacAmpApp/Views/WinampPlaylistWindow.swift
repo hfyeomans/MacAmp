@@ -17,7 +17,7 @@ final class PlaylistWindowActions: NSObject {
         alert.runModal()
     }
 
-    func presentAddFilesPanel(audioPlayer: AudioPlayer) {
+    func presentAddFilesPanel(audioPlayer: AudioPlayer, playbackCoordinator: PlaybackCoordinator? = nil) {
         let openPanel = NSOpenPanel()
         openPanel.allowedContentTypes = [.audio, .playlist]
         openPanel.allowsMultipleSelection = true
@@ -28,9 +28,18 @@ final class PlaylistWindowActions: NSObject {
         openPanel.begin { response in
             if response == .OK {
                 let urls = openPanel.urls
-                Task { @MainActor [weak self, urls, audioPlayer] in
+                Task { @MainActor [weak self, urls, audioPlayer, playbackCoordinator] in
                     guard let self else { return }
+
+                    // Remember if playlist was empty (for autoplay detection)
+                    let wasEmpty = audioPlayer.playlist.isEmpty
+
                     self.handleSelectedURLs(urls, audioPlayer: audioPlayer)
+
+                    // If playlist was empty and AudioPlayer autoplayed, sync coordinator state
+                    if wasEmpty, let firstTrack = audioPlayer.currentTrack, let coordinator = playbackCoordinator {
+                        await coordinator.play(track: firstTrack)
+                    }
                 }
             }
         }
@@ -641,7 +650,7 @@ struct WinampPlaylistWindow: View {
     }
     
     private func openFileDialog() {
-        PlaylistWindowActions.shared.presentAddFilesPanel(audioPlayer: audioPlayer)
+        PlaylistWindowActions.shared.presentAddFilesPanel(audioPlayer: audioPlayer, playbackCoordinator: playbackCoordinator)
     }
 
     

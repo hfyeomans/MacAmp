@@ -677,7 +677,7 @@ struct WinampMainWindow: View {
     }
     
     private func openFileDialog() {
-        PlaylistWindowActions.shared.presentAddFilesPanel(audioPlayer: audioPlayer)
+        PlaylistWindowActions.shared.presentAddFilesPanel(audioPlayer: audioPlayer, playbackCoordinator: playbackCoordinator)
     }
     
     // MARK: - Scrolling Animation Functions
