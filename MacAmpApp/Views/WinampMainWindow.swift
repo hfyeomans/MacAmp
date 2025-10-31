@@ -562,11 +562,12 @@ struct WinampMainWindow: View {
     
     @ViewBuilder
     private func buildTrackInfoDisplay() -> some View {
-        // Track info scrolling text display
-        let trackText = audioPlayer.currentTitle.isEmpty ? "MacAmp" : audioPlayer.currentTitle
+        // Track info scrolling text display - now uses PlaybackCoordinator
+        // This shows: local tracks, stream metadata, or buffering status ("Connecting...")
+        let trackText = playbackCoordinator.displayTitle.isEmpty ? "MacAmp" : playbackCoordinator.displayTitle
         let textWidth = trackText.count * 5 // Approximate character width in Winamp font
         let displayWidth = Int(Coords.trackInfo.width)
-        
+
         if textWidth > displayWidth {
             // Need to scroll for long text
             HStack(spacing: 0) {
@@ -575,7 +576,7 @@ struct WinampMainWindow: View {
                     .onAppear {
                         startScrolling()
                     }
-                    .onChange(of: audioPlayer.currentTitle) { _, _ in
+                    .onChange(of: playbackCoordinator.displayTitle) { _, _ in
                         resetScrolling()
                     }
             }
@@ -685,13 +686,11 @@ struct WinampMainWindow: View {
         guard scrollTimer == nil else { return }
         guard isViewVisible else { return }
 
-        scrollTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { [weak audioPlayer] _ in
+        scrollTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { [playbackCoordinator] _ in
             // Access main actor properties synchronously to prevent race conditions
             // The timer already fires on the main thread, so we can use assumeIsolated
-            guard let audioPlayer = audioPlayer else { return }
-
             MainActor.assumeIsolated {
-                let trackText = audioPlayer.currentTitle.isEmpty ? "MacAmp" : audioPlayer.currentTitle
+                let trackText = playbackCoordinator.displayTitle.isEmpty ? "MacAmp" : playbackCoordinator.displayTitle
                 let textWidth = CGFloat(trackText.count * 5)
                 let displayWidth = Coords.trackInfo.width
 

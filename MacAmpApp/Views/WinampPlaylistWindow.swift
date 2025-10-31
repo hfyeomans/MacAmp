@@ -602,7 +602,7 @@ struct WinampPlaylistWindow: View {
             SimpleSpriteImage("PLAYLIST_TITLE_BAR", width: 275, height: 14)
                 .position(x: 137.5, y: 7)
 
-            if let currentTrack = audioPlayer.currentTrack {
+            if let currentTrack = playbackCoordinator.currentTrack {
                 Text("\(currentTrack.title) - \(currentTrack.artist)")
                     .font(.system(size: 8))
                     .foregroundColor(.white)
@@ -622,7 +622,8 @@ struct WinampPlaylistWindow: View {
     }
 
     private func trackTextColor(track: Track) -> Color {
-        if let currentTrack = audioPlayer.currentTrack, currentTrack.url == track.url {
+        // Use coordinator's current track for highlighting
+        if let currentTrack = playbackCoordinator.currentTrack, currentTrack.url == track.url {
             return playlistStyle.currentTextColor
         }
         return playlistStyle.normalTextColor
