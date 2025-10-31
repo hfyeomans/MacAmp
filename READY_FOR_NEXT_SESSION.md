@@ -30,7 +30,43 @@
 
 ## 🎯 **Immediate Next Tasks (Ready to Implement)**
 
-### **NEW: AirPlay Integration (PLANNED - Oracle-Reviewed)**
+### **NEW: Internet Radio Streaming (PLANNED - Oracle-Reviewed)**
+
+**Status:** ✅ Complete task ready in `tasks/internet-radio/`
+**Effort:** 12-15 hours (Oracle-corrected, 3 phases)
+**Priority:** HIGH - Complex but highly requested feature
+
+**What's Ready:**
+- ✅ Complete planning (research, plan, state, todo - 57KB total)
+- ✅ Oracle review complete (6 critical issues documented)
+- ✅ Architecture validated (dual backend approved)
+- ✅ Commit strategy defined (7-8 commits over 12-15 hours)
+- ✅ M3U parser exists and detects remote streams
+- ✅ Info.plist configured (NSAllowsArbitraryLoadsInMedia verified)
+
+**Key Findings:**
+- ✅ Dual backend required: AVAudioEngine (local + EQ) + AVPlayer (streams, no EQ)
+- ✅ **CRITICAL:** Must add PlaybackCoordinator to manage both players
+- ✅ Trade-off: No EQ for streams (AVPlayer limitation - documented)
+- ✅ M3U parser ready (detects HTTP/HTTPS URLs)
+- ✅ All entitlements ready
+
+**Oracle Critical Requirement:**
+- PlaybackCoordinator class (+2-3 hours)
+- Prevents AudioPlayer + StreamPlayer playing simultaneously
+- Unified API for UI
+- Single source of truth for playback state
+
+**Recommended Commit Strategy:**
+1. Models (1h) → 2. StreamPlayer core (2h) → 3. Observers (2h) →
+4. **PlaybackCoordinator (2-3h) ⭐ Oracle review checkpoint** →
+5. M3U integration (3h) → 6. UI (2h) → 7. Oracle cleanup (30m)
+
+**See:** `tasks/internet-radio/research.md` (Oracle review at bottom)
+
+---
+
+### **AirPlay Integration (PLANNED - Oracle-Reviewed)**
 
 **Status:** ✅ Complete task ready in `tasks/airplay/`
 **Effort:** 2-6 hours (3 phases)
@@ -454,3 +490,95 @@ xcodebuild -project MacAmpApp.xcodeproj \
 **Branch:** `main` (clean, all work merged)
 
 🚀 **Ready to continue!**
+
+---
+
+## ✅ **Latest Session Accomplishments (2025-10-30 to 2025-10-31)**
+
+### **PR #26: Clutter Bar (D & A Buttons)** ✅ MERGED
+- D button: Double-size mode (Ctrl+D)
+- A button: Always on top (Ctrl+A)  
+- 12 commits, 2 Oracle reviews
+
+### **PR #27: Oscilloscope/Spectrum Modes** ✅ MERGED
+- Click visualizer to cycle 3 modes
+- Spectrum (frequency) / Oscilloscope (waveform) / None (off)
+- User discovered RMS issue, fixed to use time-domain samples
+- 7 commits, 2 Oracle reviews
+
+### **Bundled Skins** ✅ SHIPPED
+- Added 5 new bundled skins (now 7 total)
+- KenWood KDC-7000, Mac OS X, Sony MP3, Tron, Winamp3
+- Duplicate prevention (skip user copies of bundled skins)
+- All with keyboard shortcuts Cmd+Shift+1-7
+
+### **Distribution** ✅ VERIFIED
+- Signed Release builds created (3 total)
+- Tested on another macOS machine successfully! ✅
+- Cross-machine compatibility confirmed
+- Ready to share with users
+
+### **Tasks Planned** ✅ READY
+- AirPlay integration (2-6 hours, Oracle-reviewed)
+- Internet radio streaming (12-15 hours, Oracle-reviewed)
+- Both with complete planning and Oracle validation
+
+**Total Work:** 2 PRs merged, 4 features shipped, 3 tasks planned
+**Oracle Reviews:** 6 total (all issues fixed)
+**Time:** ~12 hours active work
+
+---
+
+## 💡 **Fresh Context - Important Learnings**
+
+### **Distribution Success:**
+- Signed app works on other Macs with right-click → Open
+- All bundled resources (skins) included correctly
+- No notarization needed for beta testing
+- Cross-machine testing validates build process
+
+### **Bundled Skins Architecture:**
+- Files in MacAmpApp/Skins/ folder
+- Must add to Xcode target membership (Build Phases)
+- Scan prevents user directory duplicates
+- Clean "Bundled" vs "My Skins" separation
+
+### **Oscilloscope Data Source:**
+**Critical Learning:** RMS vs Time-Domain Samples
+- RMS = Root Mean Square (averaged amplitude) → Smooth
+- Time-domain = Raw audio samples → Wiggly waveform
+- Oscilloscope needs raw samples for activity
+- User caught this issue through testing! ✅
+
+### **Commit Strategy for Large Tasks:**
+**12-15 hour tasks:** 7-8 commits per component
+- Not per phase (too large)
+- Not per tiny step (too noisy)
+- Per significant component (~2 hours work)
+- Oracle review checkpoints mid-way and pre-merge
+
+---
+
+## 🚀 **Ready for Next Session**
+
+**On Main Branch:**
+- All work merged
+- Signed release in /Applications
+- Clean working tree
+
+**Tasks Ready:**
+1. **Internet Radio** (12-15h, highest complexity, Oracle-reviewed)
+2. **AirPlay** (2-6h, user-requested, Oracle-reviewed)
+3. **I Button** (1-2h, quick win)
+4. **O Button** (2-3h, options menu)
+
+**Recommended Start:**
+- Internet radio (comprehensive planning done)
+- Or I button (quick win to maintain momentum)
+
+**Context Status:** 572K / 1M (57.2%) used this session
+**New Session:** Fresh 1M context for implementation
+
+---
+
+**Everything documented, Oracle-reviewed, and ready for implementation!**
