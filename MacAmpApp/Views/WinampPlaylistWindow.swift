@@ -39,20 +39,45 @@ final class PlaylistWindowActions: NSObject {
         for url in urls {
             let fileExtension = url.pathExtension.lowercased()
             if fileExtension == "m3u" || fileExtension == "m3u8" {
-                loadM3UPlaylist(url, audioPlayer: audioPlayer)
+                // Note: We can't access radioLibrary from PlaylistWindowActions
+                // This will be handled when we refactor to use PlaybackCoordinator
+                showAlert("M3U/M3U8 Loading", "Please use the main window to load M3U/M3U8 files with internet radio support.")
             } else {
                 audioPlayer.addTrack(url: url)
             }
         }
     }
 
-    private func loadM3UPlaylist(_ url: URL, audioPlayer: AudioPlayer) {
+    private func loadM3UPlaylist(_ url: URL, audioPlayer: AudioPlayer, radioLibrary: RadioStationLibrary) {
         do {
             let entries = try M3UParser.parse(fileURL: url)
+            var addedStations = 0
+
             for entry in entries {
-                if !entry.isRemoteStream {
+                if entry.isRemoteStream {
+                    // Add to internet radio library
+                    let station = RadioStation(
+                        name: entry.title ?? "Unknown Station",
+                        streamURL: entry.url,
+                        genre: nil,
+                        source: .m3uPlaylist(url.lastPathComponent)
+                    )
+                    radioLibrary.addStation(station)
+                    addedStations += 1
+                } else {
+                    // Add local file to playlist
                     audioPlayer.addTrack(url: entry.url)
                 }
+            }
+
+            // Show feedback if stations were added
+            if addedStations > 0 {
+                let alert = NSAlert()
+                alert.messageText = "Radio Stations Added"
+                alert.informativeText = "Added \(addedStations) internet radio station(s) to your library."
+                alert.alertStyle = .informational
+                alert.addButton(withTitle: "OK")
+                alert.runModal()
             }
         } catch {
             let alert = NSAlert()
@@ -153,6 +178,7 @@ struct WinampPlaylistWindow: View {
     @Environment(SkinManager.self) var skinManager
     @Environment(AudioPlayer.self) var audioPlayer
     @Environment(AppSettings.self) var settings
+    @Environment(RadioStationLibrary.self) var radioLibrary
 
     @State private var selectedIndices: Set<Int> = []
     @State private var isShadeMode: Bool = false

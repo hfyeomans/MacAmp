@@ -137,13 +137,5 @@ final class StreamPlayer {
         }
     }
 
-    deinit {
-        player.pause()
-        statusObserver?.cancel()
-        itemStatusObserver?.cancel()
-        metadataObserver?.cancel()
-        if let observer = timeObserver {
-            player.removeTimeObserver(observer)
-        }
-    }
+    // deinit is not needed - Combine cancellables clean up automatically
 }

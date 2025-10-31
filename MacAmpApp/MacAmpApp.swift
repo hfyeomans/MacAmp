@@ -6,6 +6,7 @@ struct MacAmpApp: App {
     @State private var audioPlayer = AudioPlayer()
     @State private var dockingController = DockingController()
     @State private var settings = AppSettings.instance()
+    @State private var radioLibrary = RadioStationLibrary()
 
     var body: some Scene {
         WindowGroup {
@@ -14,6 +15,7 @@ struct MacAmpApp: App {
                 .environment(audioPlayer)
                 .environment(dockingController)
                 .environment(settings)
+                .environment(radioLibrary)
         }
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)

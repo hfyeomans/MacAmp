@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		5F1472E33F7A417E8C9E4107 /* RadioStation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36C6A4148DF5415F9142A777 /* RadioStation.swift */; };
+		342759E1558D4553A66C3AD9 /* RadioStationLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC98BCD0ED814A6F90A8021D /* RadioStationLibrary.swift */; };
+		93C52B55431F4E9C9E54ED8F /* StreamPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DABC15D1E724A7EB6490977 /* StreamPlayer.swift */; };
+		4B6ACCF9E12C4031AAA5DE1D /* PlaybackCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC5E2339EECD4415B1146559 /* PlaybackCoordinator.swift */; };
 		00818CBB70425D395EE2B862 /* SkinnedText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DCDB09162242F5E73FF35F6 /* SkinnedText.swift */; };
 		09ABEB45DA77F1178E0F5317 /* SkinManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97F3E1419E231E886A674A64 /* SkinManager.swift */; };
 		0E00109AB5375E26C755CA89 /* M3UEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31F32D02E5A363D621708145 /* M3UEntry.swift */; };
@@ -58,6 +62,10 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		36C6A4148DF5415F9142A777 /* RadioStation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadioStation.swift; sourceTree = "<group>"; };
+		BC98BCD0ED814A6F90A8021D /* RadioStationLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadioStationLibrary.swift; sourceTree = "<group>"; };
+		7DABC15D1E724A7EB6490977 /* StreamPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamPlayer.swift; sourceTree = "<group>"; };
+		FC5E2339EECD4415B1146559 /* PlaybackCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackCoordinator.swift; sourceTree = "<group>"; };
 		032A0DEAD316CCA0CDA2645D /* EqGraphView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EqGraphView.swift; sourceTree = "<group>"; };
 		0C3495B177A8BA24181B484E /* WinampMainWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WinampMainWindow.swift; sourceTree = "<group>"; };
 		12C0A7D97E8D3B2E715D4EA0 /* SkinnedBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkinnedBanner.swift; sourceTree = "<group>"; };
@@ -167,6 +175,8 @@
 		9ACBD0A5767E26C387F3D2E0 /* Audio */ = {
 			isa = PBXGroup;
 			children = (
+				FC5E2339EECD4415B1146559 /* PlaybackCoordinator.swift */,
+				7DABC15D1E724A7EB6490977 /* StreamPlayer.swift */,
 				BC875DDD2BE621229D463CB9 /* AudioPlayer.swift */,
 			);
 			path = Audio;
@@ -175,6 +185,8 @@
 		BD7D477F80E8626CFB2297F5 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				BC98BCD0ED814A6F90A8021D /* RadioStationLibrary.swift */,
+				36C6A4148DF5415F9142A777 /* RadioStation.swift */,
 				CD234EF56789ABCD01234567 /* AppSettings.swift */,
 				FDF85EA8990A038079FC0CC3 /* EQF.swift */,
 				2878CED72AA74CF1B0417AC5 /* EQPreset.swift */,
@@ -324,6 +336,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5F1472E33F7A417E8C9E4107 /* RadioStation.swift in Sources */,
+				342759E1558D4553A66C3AD9 /* RadioStationLibrary.swift in Sources */,
+				93C52B55431F4E9C9E54ED8F /* StreamPlayer.swift in Sources */,
+				4B6ACCF9E12C4031AAA5DE1D /* PlaybackCoordinator.swift in Sources */,
 				AB123DEF4E567890ABCDEF12 /* AppSettings.swift in Sources */,
 				B3A2FD6D778A60B9F0D92258 /* AppCommands.swift in Sources */,
 				2A33850C38AA921D5659ECA7 /* AudioPlayer.swift in Sources */,

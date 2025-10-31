@@ -36,7 +36,8 @@ final class PlaybackCoordinator {
             streamPlayer.stop()
 
             // Play local file with EQ
-            audioPlayer.play(url: url)
+            audioPlayer.addTrack(url: url)
+            audioPlayer.play()
             currentSource = .localTrack(url)
             currentTitle = url.deletingPathExtension().lastPathComponent
             isPlaying = audioPlayer.isPlaying
@@ -101,8 +102,8 @@ final class PlaybackCoordinator {
 
     private func resume() {
         switch currentSource {
-        case .localTrack(let url):
-            audioPlayer.play(url: url)
+        case .localTrack:
+            audioPlayer.play()
             isPlaying = audioPlayer.isPlaying
         case .radioStation(let station):
             Task {
