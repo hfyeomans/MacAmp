@@ -1,6 +1,34 @@
 import Foundation
 import Observation
 
+/// Coordinates playback between local files (AudioPlayer) and internet radio streams (StreamPlayer).
+///
+/// This coordinator prevents both backends from playing simultaneously, which would cause audio chaos.
+/// It provides a unified API for the UI to play content regardless of source type.
+///
+/// **Architecture:**
+/// - Local files (.mp3, .flac, etc.) → AudioPlayer with 10-band EQ
+/// - Internet radio (http://, https://) → StreamPlayer (AVPlayer, no EQ)
+///
+/// **Usage:**
+/// ```swift
+/// // Play a file URL
+/// await coordinator.play(url: fileURL)
+///
+/// // Play a radio station
+/// await coordinator.play(station: myStation)
+///
+/// // Unified controls
+/// coordinator.pause()
+/// coordinator.stop()
+/// coordinator.togglePlayPause()
+/// ```
+///
+/// **State Queries:**
+/// - `streamTitle` - Current track/stream title
+/// - `streamArtist` - Stream artist (radio only)
+/// - `isBuffering` - Buffering state (radio only)
+/// - `error` - Error message if playback failed
 @MainActor
 @Observable
 final class PlaybackCoordinator {

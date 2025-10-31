@@ -2,6 +2,29 @@ import AVFoundation
 import Observation
 import Combine
 
+/// Plays internet radio streams using AVPlayer.
+///
+/// **Features:**
+/// - HTTP/HTTPS stream playback
+/// - HLS (.m3u8) adaptive streaming support
+/// - ICY metadata extraction (SHOUTcast/Icecast)
+/// - Buffering state detection
+/// - Error handling for network issues
+///
+/// **Limitations:**
+/// - No EQ support (AVPlayer cannot use AVAudioUnitEQ)
+/// - For local files with EQ, use AudioPlayer instead
+///
+/// **Observable State:**
+/// - `isPlaying` - Playback state
+/// - `isBuffering` - Network buffering state
+/// - `currentStation` - Currently playing station
+/// - `streamTitle` - Live metadata (song title)
+/// - `streamArtist` - Live metadata (artist name)
+/// - `error` - Error message if stream fails
+///
+/// **Usage:**
+/// Should be used via PlaybackCoordinator for proper coordination with AudioPlayer.
 @MainActor
 @Observable
 final class StreamPlayer {
