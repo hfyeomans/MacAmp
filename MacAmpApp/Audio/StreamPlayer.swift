@@ -1,4 +1,4 @@
-import AVFoundation
+@preconcurrency import AVFoundation
 import Observation
 import Combine
 
@@ -27,7 +27,7 @@ import Combine
 /// Should be used via PlaybackCoordinator for proper coordination with AudioPlayer.
 @MainActor
 @Observable
-final class StreamPlayer {
+final class StreamPlayer: NSObject, @preconcurrency AVPlayerItemMetadataOutputPushDelegate {
     // MARK: - State
 
     private(set) var isPlaying: Bool = false
@@ -42,12 +42,12 @@ final class StreamPlayer {
     let player = AVPlayer()  // Internal for PlaybackCoordinator resume access
     private var statusObserver: AnyCancellable?
     private var itemStatusObserver: AnyCancellable?
-    private var metadataObserver: AnyCancellable?
-    // Note: timeObserver not needed - Combine publishers handle all observation
+    private var currentMetadataOutput: AVPlayerItemMetadataOutput?
 
     // MARK: - Initialization
 
-    init() {
+    override init() {
+        super.init()
         setupObservers()
     }
 
@@ -145,31 +145,46 @@ final class StreamPlayer {
     }
 
     private func setupMetadataObserver(for item: AVPlayerItem) {
-        // Oracle: Cancel old observer before new one
-        metadataObserver?.cancel()
-
-        // Observe timed metadata (ICY info from SHOUTcast)
-        metadataObserver = item.publisher(for: \.timedMetadata)
-            .receive(on: RunLoop.main)
-            .sink { [weak self] metadata in
-                self?.extractStreamMetadata(metadata)
-            }
+        // Modern API: AVPlayerItemMetadataOutput with delegate (macOS 15+)
+        let output = AVPlayerItemMetadataOutput(identifiers: nil)
+        output.setDelegate(self, queue: DispatchQueue.main)
+        item.add(output)
+        currentMetadataOutput = output
     }
 
-    private func extractStreamMetadata(_ metadata: [AVMetadataItem]?) {
-        guard let items = metadata else { return }
+    // MARK: - AVPlayerItemMetadataOutputPushDelegate
 
-        // Oracle: Use commonKey and stringValue, not KVC
-        for item in items {
-            if item.commonKey == .commonKeyTitle,
-               let title = item.stringValue {
-                streamTitle = title
-            }
-            if item.commonKey == .commonKeyArtist,
-               let artist = item.stringValue {
-                streamArtist = artist
+    func metadataOutput(
+        _ output: AVPlayerItemMetadataOutput,
+        didOutputTimedMetadataGroups groups: [AVTimedMetadataGroup],
+        from track: AVPlayerItemTrack?
+    ) {
+        // Since delegate queue is DispatchQueue.main and class is @MainActor, this is safe
+        // Process metadata groups
+        for group in groups {
+            for item in group.items {
+                // Modern API: load(.stringValue) - async, non-deprecated
+                if item.commonKey == .commonKeyTitle {
+                    Task { @MainActor in
+                        if let title = try? await item.load(.stringValue) {
+                            streamTitle = title
+                        }
+                    }
+                } else if item.commonKey == .commonKeyArtist {
+                    Task { @MainActor in
+                        if let artist = try? await item.load(.stringValue) {
+                            streamArtist = artist
+                        }
+                    }
+                }
             }
         }
+    }
+
+    func metadataOutputSequenceWasFlushed(_ output: AVPlayerItemMetadataOutput) {
+        // Clear stale metadata when the sequence resets
+        streamTitle = nil
+        streamArtist = nil
     }
 
     private func handlePlaybackError(_ playbackError: Error?) {
