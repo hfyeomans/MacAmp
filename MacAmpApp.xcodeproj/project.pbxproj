@@ -15,6 +15,11 @@
 		2BEEA991452D4A86CD1AC9F7 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = EA5D7D010AE0DE961C9470AC /* ZIPFoundation */; };
 		34EEE95E7D965A0D94D12C30 /* WinampMainWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C3495B177A8BA24181B484E /* WinampMainWindow.swift */; };
 		36B64EDC2EB3023D004274F8 /* PlaylistMenuDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36B64EDB2EB3023D004274F8 /* PlaylistMenuDelegate.swift */; };
+		36C0FFE22EB512A300916917 /* Mac_OS-X_skin.wsz in Resources */ = {isa = PBXBuildFile; fileRef = 36C0FFDE2EB512A300916917 /* Mac_OS-X_skin.wsz */; };
+		36C0FFE32EB512A300916917 /* Tron-Vaporwave-by-LuigiHann.wsz in Resources */ = {isa = PBXBuildFile; fileRef = 36C0FFE02EB512A300916917 /* Tron-Vaporwave-by-LuigiHann.wsz */; };
+		36C0FFE42EB512A300916917 /* Winamp3_Classified_v5.5.wsz in Resources */ = {isa = PBXBuildFile; fileRef = 36C0FFE12EB512A300916917 /* Winamp3_Classified_v5.5.wsz */; };
+		36C0FFE52EB512A300916917 /* Sony_MP3_Player_.wsz in Resources */ = {isa = PBXBuildFile; fileRef = 36C0FFDF2EB512A300916917 /* Sony_MP3_Player_.wsz */; };
+		36C0FFE62EB512A300916917 /* KenWood_KDC_7000_Elite.wsz in Resources */ = {isa = PBXBuildFile; fileRef = 36C0FFDD2EB512A300916917 /* KenWood_KDC_7000_Elite.wsz */; };
 		397CD3DA0D75924BD0B90FBE /* EQF.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDF85EA8990A038079FC0CC3 /* EQF.swift */; };
 		3D5787FD4B060D13BE690E2A /* WinampEqualizerWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A489CA15E452302405E6FAE /* WinampEqualizerWindow.swift */; };
 		4007DF219A7FEAB6FFC1AE73 /* ImageSlicing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D4BAA0F198BED23AAFABFEC /* ImageSlicing.swift */; };
@@ -62,6 +67,11 @@
 		2D4BAA0F198BED23AAFABFEC /* ImageSlicing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageSlicing.swift; sourceTree = "<group>"; };
 		31F32D02E5A363D621708145 /* M3UEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = M3UEntry.swift; sourceTree = "<group>"; };
 		36B64EDB2EB3023D004274F8 /* PlaylistMenuDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaylistMenuDelegate.swift; sourceTree = "<group>"; };
+		36C0FFDD2EB512A300916917 /* KenWood_KDC_7000_Elite.wsz */ = {isa = PBXFileReference; lastKnownFileType = file; path = KenWood_KDC_7000_Elite.wsz; sourceTree = "<group>"; };
+		36C0FFDE2EB512A300916917 /* Mac_OS-X_skin.wsz */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Mac_OS-X_skin.wsz"; sourceTree = "<group>"; };
+		36C0FFDF2EB512A300916917 /* Sony_MP3_Player_.wsz */ = {isa = PBXFileReference; lastKnownFileType = file; path = Sony_MP3_Player_.wsz; sourceTree = "<group>"; };
+		36C0FFE02EB512A300916917 /* Tron-Vaporwave-by-LuigiHann.wsz */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Tron-Vaporwave-by-LuigiHann.wsz"; sourceTree = "<group>"; };
+		36C0FFE12EB512A300916917 /* Winamp3_Classified_v5.5.wsz */ = {isa = PBXFileReference; lastKnownFileType = file; path = Winamp3_Classified_v5.5.wsz; sourceTree = "<group>"; };
 		3D258350F99A800B8CBF8AEA /* PresetsButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresetsButton.swift; sourceTree = "<group>"; };
 		3DCDB09162242F5E73FF35F6 /* SkinnedText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkinnedText.swift; sourceTree = "<group>"; };
 		43358BDD8D9B537C9109DF62 /* SnapUtils.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapUtils.swift; sourceTree = "<group>"; };
@@ -145,6 +155,11 @@
 			children = (
 				B6G987CE11B9DCEF82D39E62 /* Internet-Archive.wsz */,
 				A5F876BD10A8CBDE81C28D51 /* Winamp.wsz */,
+				36C0FFDD2EB512A300916917 /* KenWood_KDC_7000_Elite.wsz */,
+				36C0FFDE2EB512A300916917 /* Mac_OS-X_skin.wsz */,
+				36C0FFDF2EB512A300916917 /* Sony_MP3_Player_.wsz */,
+				36C0FFE02EB512A300916917 /* Tron-Vaporwave-by-LuigiHann.wsz */,
+				36C0FFE12EB512A300916917 /* Winamp3_Classified_v5.5.wsz */,
 			);
 			path = Skins;
 			sourceTree = "<group>";
@@ -293,6 +308,11 @@
 			files = (
 				FF66EE55DD44CC33BB22AA11 /* Assets.xcassets in Resources */,
 				BB499C96994EF9FC3DE4DDB4 /* Internet-Archive.wsz in Resources */,
+				36C0FFE22EB512A300916917 /* Mac_OS-X_skin.wsz in Resources */,
+				36C0FFE32EB512A300916917 /* Tron-Vaporwave-by-LuigiHann.wsz in Resources */,
+				36C0FFE42EB512A300916917 /* Winamp3_Classified_v5.5.wsz in Resources */,
+				36C0FFE52EB512A300916917 /* Sony_MP3_Player_.wsz in Resources */,
+				36C0FFE62EB512A300916917 /* KenWood_KDC_7000_Elite.wsz in Resources */,
 				AA399B95993DF8EB2CD3CCA3 /* Winamp.wsz in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
