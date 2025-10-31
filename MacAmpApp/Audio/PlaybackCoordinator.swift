@@ -157,6 +157,7 @@ final class PlaybackCoordinator {
         isPaused = false
         currentSource = nil
         currentTitle = nil
+        currentTrack = nil  // Oracle: Clear so playlist highlighting resets
     }
 
     func togglePlayPause() {
@@ -184,11 +185,10 @@ final class PlaybackCoordinator {
         case .localTrack:
             audioPlayer.play()
             isPlaying = audioPlayer.isPlaying
-        case .radioStation(let station):
-            Task {
-                await streamPlayer.play(station: station)
-                isPlaying = streamPlayer.isPlaying
-            }
+        case .radioStation:
+            // Oracle fix: Just resume, don't rebuild stream
+            streamPlayer.player.play()
+            isPlaying = true
         case .none:
             break
         }
@@ -246,6 +246,22 @@ final class PlaybackCoordinator {
         case .requestCoordinatorPlayback(let track):
             await play(track: track)
         }
+    }
+
+    /// Update coordinator state when metadata loads (Oracle fix: don't replay)
+    func updateTrackMetadata(_ track: Track) {
+        guard let current = currentTrack, current.id == track.id else { return }
+
+        // Update with real metadata
+        currentTrack = track
+        currentTitle = formattedLocalDisplayTitle(
+            trackTitle: track.title,
+            trackArtist: track.artist,
+            url: track.url
+        )
+
+        // Note: Don't call play(track:) - that would replay the file
+        // Just update metadata for display
     }
 
     private func handleExternalPlaylistAdvance(track: Track) async {

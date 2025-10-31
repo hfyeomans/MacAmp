@@ -449,16 +449,23 @@ final class AudioPlayer {
         playerNode.stop()
         currentSeekID = UUID()
         let _ = scheduleFrom(time: 0, seekID: currentSeekID)  // Ignore return - reset to beginning
+
+        // Oracle fix: Clear currentTrack so UI doesn't show stale info during stream playback
+        currentTrack = nil
+        currentTitle = "No Track Loaded"
+        currentTrackURL = nil
+        currentDuration = 0.0
+
         currentTime = 0
         playbackProgress = 0
         progressTimer?.invalidate()
         removeVisualizerTapIfNeeded()
-        // Reset audio properties when stopping
-        if currentTrack == nil {
-            bitrate = 0
-            sampleRate = 0
-            channelCount = 2
-        }
+
+        // Reset audio properties
+        bitrate = 0
+        sampleRate = 0
+        channelCount = 2
+
         seekGuardActive = false
         print("AudioPlayer: Stop")
     }

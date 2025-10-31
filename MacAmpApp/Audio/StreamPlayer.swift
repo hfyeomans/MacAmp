@@ -39,11 +39,11 @@ final class StreamPlayer {
 
     // MARK: - AVPlayer
 
-    private let player = AVPlayer()
+    let player = AVPlayer()  // Internal for PlaybackCoordinator resume access
     private var statusObserver: AnyCancellable?
     private var itemStatusObserver: AnyCancellable?
     private var metadataObserver: AnyCancellable?
-    private var timeObserver: Any?
+    // Note: timeObserver not needed - Combine publishers handle all observation
 
     // MARK: - Initialization
 

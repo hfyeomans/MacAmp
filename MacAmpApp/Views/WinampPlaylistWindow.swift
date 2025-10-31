@@ -35,11 +35,11 @@ final class PlaylistWindowActions: NSObject {
                     let wasEmpty = audioPlayer.playlist.isEmpty
 
                     // Set up metadata update handler if coordinator available
+                    // Oracle: Don't replay - just update coordinator state
                     if let coordinator = playbackCoordinator {
                         audioPlayer.externalPlaybackHandler = { track in
-                            Task { @MainActor in
-                                await coordinator.play(track: track)
-                            }
+                            // Update coordinator state without replaying
+                            coordinator.updateTrackMetadata(track)
                         }
                     }
 
