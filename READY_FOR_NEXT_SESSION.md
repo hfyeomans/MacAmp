@@ -30,6 +30,52 @@
 
 ## 🎯 **Immediate Next Tasks (Ready to Implement)**
 
+### **NEW: AirPlay Integration (PLANNED - Oracle-Reviewed)**
+
+**Status:** ✅ Complete task ready in `tasks/airplay/`
+**Effort:** 2-6 hours (3 phases)
+**Priority:** HIGH - User-requested feature
+
+**What's Ready:**
+- ✅ Gemini research complete (with Oracle corrections)
+- ✅ Oracle review complete (5 critical issues fixed)
+- ✅ Entitlements verified (no changes needed)
+- ✅ Implementation plan with Winamp logo overlay approach
+- ✅ All task files created (research, plan, state, todo)
+
+**Key Findings:**
+- ✅ AVRoutePickerView (import AVKit, not AVFoundation)
+- ✅ **CRITICAL:** Must add engine configuration observer or audio goes silent
+- ❌ Custom UI impossible (APIs don't exist)
+- ✅ Logo overlay approach validated (user's creative idea!)
+- ❌ No Info.plist changes needed (NSLocalNetworkUsageDescription is iOS-only)
+
+**See:** `tasks/airplay/IMPLEMENTATION_SUMMARY.md` for overview
+
+---
+
+### **NEW: Oscilloscope/RMS Mode Toggle (TO BE PLANNED)**
+
+**Status:** Backend exists, UI needed
+**Location:** Colors 18-22 in VISCOLOR.TXT (5 white shades)
+**Reference:** `tasks/done/viscolor-spectrum/research.md` Lines 58-60
+
+**What Exists:**
+- ✅ VISCOLOR.TXT parser (VisColorParser.swift)
+- ✅ Oscilloscope colors loaded (indices 18-22)
+- ✅ Backend visualization modes
+- ❌ No UI toggle to switch modes
+
+**What's Needed:**
+- Toggle between Spectrum Analyzer and Oscilloscope modes
+- Use visualizerMode state (already scaffolded in AppSettings)
+- Apply colors 18-22 for oscilloscope rendering
+- Possibly wire to V button in clutter bar
+
+**Next Session:** Create task for Oscilloscope UI toggle
+
+---
+
 ### **Clutter Bar Completion (3 buttons remaining)**
 
 **Current Status:**
@@ -37,7 +83,7 @@
 - A: FUNCTIONAL ✅ (always on top + Ctrl+A)
 - I: Scaffolded (info dialog) - Ready to implement
 - D: FUNCTIONAL ✅ (double-size + Ctrl+D)
-- V: Scaffolded (visualizer) - Ready to implement
+- V: Scaffolded (visualizer) - **Could be Oscilloscope/RMS toggle!**
 
 ### **Recommended: I Button (Track Info Dialog) - 1-2 hours**
 
@@ -79,7 +125,7 @@
 
 ---
 
-## 💡 **Important Context from This Session**
+## 💡 **Important Context from Recent Sessions**
 
 ### **Critical Pattern: @Observable Reactivity**
 
@@ -99,6 +145,39 @@ var value: Bool = false {
 ```
 
 This caused the double-size button to not trigger window resize initially.
+
+### **AirPlay Critical Finding: AVAudioEngine Configuration**
+
+**Oracle Discovery:** Engine STOPS when switching to AirPlay (sample rate changes)
+
+**MUST implement engine restart observer or AirPlay audio goes silent:**
+
+```swift
+NotificationCenter.default.addObserver(
+    forName: .AVAudioEngineConfigurationChange,
+    object: audioEngine,
+    queue: .main
+) { [weak self] _ in
+    // Save state, restart engine, resume playback
+    self?.handleEngineConfigurationChange()
+}
+```
+
+**Without this:** User switches to AirPlay → audio stops → appears broken
+**With this:** Seamless routing with automatic resume
+
+### **Oracle vs Gemini: API Accuracy**
+
+**Lesson Learned:**
+- Gemini: Good for conceptual research, 60% technically accurate
+- Oracle: Catches implementation details, API existence, edge cases
+- **Always have Oracle review Gemini's findings!**
+
+**AirPlay Example:**
+- Gemini said: "Use AVFoundation" → ❌ Wrong (it's AVKit)
+- Gemini said: "Use outputNode.setDeviceID()" → ❌ Doesn't exist
+- Gemini said: "Add NSLocalNetworkUsageDescription" → ❌ iOS-only
+- Oracle caught all 5 critical errors before implementation ✅
 
 ### **Clutter Bar Button Pattern (Use for O, I, V)**
 
