@@ -853,36 +853,28 @@ if entry.isRemoteStream {
 }
 ```
 
-**Phase 4: Add to BOTH:**
+**Phase 4: Add to Playlist ONLY:**
 ```swift
 if entry.isRemoteStream {
-    // Add to RadioStationLibrary (for favorites/persistence)
-    let station = RadioStation(
-        name: entry.title ?? "Unknown Station",
-        streamURL: entry.url,
-        genre: nil,
-        source: .m3uPlaylist(url.lastPathComponent)
-    )
-    radioLibrary.addStation(station)
-    addedStations += 1
-
-    // ALSO add to playlist (for immediate playback)
+    // Add to playlist as Track (Winamp behavior)
+    // RadioStationLibrary is ONLY for favorites menu (future feature)
     let streamTrack = Track(
         url: entry.url,
         title: entry.title ?? "Unknown Station",
         artist: "Internet Radio",
-        duration: 0.0  // Streams have no duration
+        duration: 0.0  // Infinite stream
     )
     audioPlayer.playlist.append(streamTrack)
+    addedStreams += 1
 } else {
-    // Local file - add to playlist only
+    // Local file - add to playlist via AudioPlayer
     audioPlayer.addTrack(url: entry.url)
 }
 ```
 
-**Result:** Mixed M3U shows ALL items in playlist
+**Result:** Mixed M3U shows ALL items in playlist (like Winamp)
 
-**Oracle Question:** Should we modify Track init or use direct struct init?
+**Architecture Note:** RadioStationLibrary reserved for favorites menu (Phase 5+)
 
 ---
 
@@ -922,21 +914,19 @@ private func playSelectedTrack(_ track: Track) async {
 
 ---
 
-### 4.4 ADD URL: Add to Playlist (Not Just Library)
+### 4.4 ADD URL: Add to Playlist ONLY
 
 **Current (Commit 6):**
 ```swift
-// Only adds to RadioStationLibrary
+// Only adds to RadioStationLibrary (WRONG for Winamp behavior)
 radioLibrary.addStation(station)
 showAlert("Station Added", "Added to your radio library...")
 ```
 
-**Phase 4:**
+**Phase 4 (Corrected):**
 ```swift
-// Add to library (favorites)
-radioLibrary.addStation(station)
-
-// ALSO add to playlist (for immediate playback)
+// Add to playlist as Track (Winamp behavior)
+// RadioStationLibrary is ONLY for favorites menu (future)
 let streamTrack = Track(
     url: url,
     title: stationName,
@@ -945,10 +935,12 @@ let streamTrack = Track(
 )
 audioPlayer.playlist.append(streamTrack)
 
-showAlert("Station Added", "Added '\(stationName)' to playlist.\n\nClick to play!")
+showAlert("Stream Added", "Added to playlist. Click to play!")
 ```
 
-**Result:** User sees stream in playlist immediately
+**Result:** User sees stream in playlist immediately (like Winamp)
+
+**Note:** "Add to Favorites" would be separate menu option (Phase 5+)
 
 ---
 
@@ -1208,6 +1200,171 @@ struct Track: Identifiable, Equatable {
 
 ---
 
-**Phase 4 Status:** Planned, awaiting Oracle approval
-**Ready to Implement:** After Oracle consultation
-**Target:** 3-4 commits, 3-4 hours work
+---
+
+## Phase 4: Implementation Steps (Detailed)
+
+### Commit 8: Extend Track Model for Stream URLs
+
+**Files to Modify:**
+- `MacAmpApp/Audio/AudioPlayer.swift` - Track struct
+
+**Changes:**
+```swift
+struct Track: Identifiable, Equatable {
+    // ... existing properties ...
+
+    /// Returns true if this track is an internet radio stream
+    var isStream: Bool {
+        !url.isFileURL && (url.scheme == "http" || url.scheme == "https")
+    }
+}
+```
+
+**Testing:**
+- [ ] Build succeeds
+- [ ] No regressions
+- [ ] isStream returns correct value
+
+**Effort:** 15 minutes
+
+---
+
+### Commit 9: M3U Loading & ADD URL to Playlist
+
+**CRITICAL CORRECTION:** Streams go to **playlist ONLY**, NOT RadioStationLibrary
+
+**Files to Modify:**
+- `MacAmpApp/Views/WinampPlaylistWindow.swift`
+
+**loadM3UPlaylist() Changes:**
+```swift
+if entry.isRemoteStream {
+    // Add to playlist as Track (Winamp behavior)
+    let streamTrack = Track(
+        url: entry.url,
+        title: entry.title ?? "Unknown Station",
+        artist: "Internet Radio",
+        duration: 0.0  // Infinite stream
+    )
+    audioPlayer.playlist.append(streamTrack)
+    addedStreams += 1
+} else {
+    // Local file to playlist
+    audioPlayer.addTrack(url: entry.url)
+}
+```
+
+**addURL() Changes:**
+```swift
+// Add to playlist as Track (NOT RadioStationLibrary)
+let streamTrack = Track(
+    url: url,
+    title: stationName,
+    artist: "Internet Radio",
+    duration: 0.0
+)
+audioPlayer.playlist.append(streamTrack)
+
+showAlert("Stream Added", "Added to playlist. Click to play!")
+```
+
+**Note:** RadioStationLibrary is for **favorites menu only** (future feature)
+
+**Testing:**
+- [ ] Load M3U → All items in playlist
+- [ ] ADD URL → Stream in playlist
+- [ ] Streams visible in UI
+
+**Effort:** 30-45 minutes
+
+---
+
+### Commit 10: Wire Playlist Selection to PlaybackCoordinator
+
+**Files to Modify:**
+- `MacAmpApp/MacAmpApp.swift`
+- `MacAmpApp/Views/WinampPlaylistWindow.swift`
+
+**MacAmpApp.swift:**
+```swift
+@State private var streamPlayer = StreamPlayer()
+
+var playbackCoordinator: PlaybackCoordinator {
+    PlaybackCoordinator(audioPlayer: audioPlayer, streamPlayer: streamPlayer)
+}
+
+// In body:
+.environment(playbackCoordinator)
+```
+
+**WinampPlaylistWindow.swift:**
+```swift
+@Environment(PlaybackCoordinator.self) var playbackCoordinator
+
+// Find playlist click handler, replace with:
+private func playTrack(_ track: Track) async {
+    if track.isStream {
+        await playbackCoordinator.play(url: track.url)
+    } else {
+        audioPlayer.playTrack(track: track)
+    }
+}
+```
+
+**Testing:**
+- [ ] Click stream → Plays audio
+- [ ] Click local → Plays with EQ
+- [ ] No audio conflicts
+- [ ] Switch local ↔ stream works
+
+**Effort:** 1-1.5 hours
+
+---
+
+### Commit 11: Buffering Status Display
+
+**Files to Modify:**
+- `MacAmpApp/Audio/PlaybackCoordinator.swift`
+- `MacAmpApp/Views/WinampMainWindow.swift`
+
+**PlaybackCoordinator:**
+```swift
+var displayTitle: String {
+    switch currentSource {
+    case .radioStation:
+        if streamPlayer.isBuffering {
+            return "Connecting..."
+        }
+        if streamPlayer.error != nil {
+            return "buffer 0%"
+        }
+        return streamPlayer.streamTitle ?? currentTitle ?? "Internet Radio"
+    case .localTrack:
+        return currentTitle ?? "Unknown"
+    case .none:
+        return "MacAmp"
+    }
+}
+```
+
+**WinampMainWindow.swift:**
+```swift
+// Replace audioPlayer.currentTitle with playbackCoordinator.displayTitle
+let trackText = playbackCoordinator.displayTitle
+```
+
+**Testing:**
+- [ ] Stream shows "Connecting..."
+- [ ] Then shows metadata
+- [ ] Buffer issues show "buffer 0%"
+
+**Effort:** 30-45 minutes
+
+---
+
+**Phase 4 Total:** 3.75 hours, 4 commits
+
+**Phase 4 Status:** Planned with architecture correction
+**Ready to Implement:** After Oracle approval
+**Architecture Fix:** RadioStationLibrary for favorites menu only (not M3U loading)

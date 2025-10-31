@@ -1,60 +1,77 @@
 
 ---
 
-## 📋 RECOMMENDED COMMIT STRATEGY (12-15 Hour Task)
+## 📋 COMMIT STRATEGY (Extended to Phase 4)
 
-**Strategy:** Commit per significant component (~7-8 commits total)
+**Original:** 7-8 commits (Phases 1-3)
+**Extended:** 11-12 commits (Phases 1-4)
+**Actual So Far:** 12 commits
 
-**Why:** Balance between granularity (easy revert) and clean history (not too noisy)
+**Strategy:** Commit per significant component
 
-### Suggested Commit Points:
+---
 
-**Phase 1: Core Streaming (6-8 hours)**
-1. ✅ **Commit 1:** Create models (RadioStation + RadioStationLibrary)
-   - ~1 hour work
-   - 2 new files
-   - Reason: Models are foundation, test independently
+### ✅ COMPLETED COMMITS (Phases 1-3)
 
-2. ✅ **Commit 2:** Create StreamPlayer basic structure
-   - ~2 hours work
-   - AVPlayer setup, basic play/pause/stop
-   - Reason: Core functionality, can test streaming
+**Phase 1: Core Streaming**
+1. ✅ RadioStation + RadioStationLibrary models
+2. ✅ StreamPlayer basic structure
+3. ✅ StreamPlayer observers (Oracle fixes)
+4. ✅ PlaybackCoordinator (critical orchestration)
 
-3. ✅ **Commit 3:** Add StreamPlayer observers and metadata
-   - ~1-2 hours work
-   - KVO observations, metadata extraction
-   - Reason: Complex code, isolate from basic playback
+**Phase 2: M3U/M3U8 Integration**
+5. ✅ M3U loading + Xcode project setup
 
-4. ✅ **Commit 4:** Create PlaybackCoordinator
-   - ~2-3 hours work
-   - Manage both players, prevent conflicts
-   - Reason: Critical component, needs Oracle review
+**Phase 3: UI & Documentation**
+6. ✅ ADD URL dialog
+7. ✅ Comprehensive documentation
+8. ✅ Final review docs
+9. ✅ Bug fix (M3U loading)
+10. ✅ Gap analysis → research.md
+11. ✅ Phase 4 plan → plan.md
+12. ✅ Phase 4 corrections → plan.md
 
-**Phase 2: M3U/M3U8 Integration (3 hours)**
-5. ✅ **Commit 5:** Update M3U/M3U8 loading and library integration
-   - ~3 hours work
-   - WinampPlaylistWindow changes, injection
-   - Support .m3u, .m3u8 playlist files, and .m3u8 HLS stream URLs
-   - Reason: Complete M3U/M3U8 feature, test with real files
+---
 
-**Phase 3: UI (3 hours)**
-6. ✅ **Commit 6:** Add Stream URL dialog
-   - ~1-2 hours work
-   - NSAlert UI, validation
-   - Reason: User-facing feature, test separately
+### ⏸️ PLANNED COMMITS (Phase 4)
 
-7. ✅ **Commit 7:** Add UI polish (metadata display, buffering, errors)
-   - ~1-2 hours work
-   - UI refinements
-   - Reason: Final polish before merge
+**Phase 4: Playlist Integration**
+13. ⏸️ **Commit 13:** Extend Track model for stream URLs
+    - Add `Track.isStream` computed property
+    - No RadioStationLibrary usage (streams → playlist)
+    - ~15 min
+    - Reason: Foundation for playlist integration
 
-**Oracle Review:**
-8. ✅ **Commit 8:** Apply Oracle cleanup
-   - ~30 min
-   - Remove bloat, fix issues found
-   - Reason: Production-ready before PR
+14. ⏸️ **Commit 14:** M3U + ADD URL to playlist ONLY
+    - Remove RadioStationLibrary from M3U loading
+    - Streams append to audioPlayer.playlist
+    - ADD URL appends to playlist
+    - ~30-45 min
+    - Reason: Winamp parity - streams are playlist items
 
-**Total: 7-8 commits** (not 3, not 20)
+15. ⏸️ **Commit 15:** Wire PlaybackCoordinator to playlist
+    - Create StreamPlayer, PlaybackCoordinator in MacAmpApp
+    - Environment injection
+    - Playlist click → route through coordinator
+    - ~1-1.5 hours
+    - Reason: Enable stream playback from UI
+
+16. ⏸️ **Commit 16:** Buffering status display
+    - PlaybackCoordinator.displayTitle computed property
+    - WinampMainWindow uses displayTitle
+    - Shows "Connecting..." / "buffer 0%"
+    - ~30-45 min
+    - Reason: Winamp parity - buffering feedback
+
+**Phase 4 Total:** 3.75 hours, 4 commits
+
+---
+
+### 📊 Total Project Stats
+
+**Commits:** 12 done + 4 planned = 16 total
+**Time:** 6-8 hours done + 3-4 hours planned = 10-12 hours total
+**Within Oracle estimate:** 12-15 hours ✓
 
 ### Commit Message Pattern:
 
@@ -143,283 +160,144 @@ This catches issues when they're fresh and prevents accumulating tech debt.
 
 ---
 
-## Phase 1: Core Streaming Implementation (4-6 hours)
+## ✅ Phases 1-3: Implementation Complete
 
-### Step 1: Create RadioStation Model
-
-- [ ] **Create new file**
-  - [ ] File: `MacAmpApp/Models/RadioStation.swift`
-  - [ ] Import Foundation
-  - [ ] Define struct RadioStation: Identifiable, Codable
-
-- [ ] **Add properties**
-  - [ ] id: UUID
-  - [ ] name: String
-  - [ ] streamURL: URL
-  - [ ] genre: String?
-  - [ ] source: Source enum
-
-- [ ] **Define Source enum**
-  - [ ] case m3uPlaylist(String)
-  - [ ] case manual
-  - [ ] case directory
-
-- [ ] **Add init method**
-  - [ ] Default id = UUID()
-  - [ ] Required: name, streamURL
-  - [ ] Optional: genre, source
-
-### Step 2: Create RadioStationLibrary
-
-- [ ] **Create new file**
-  - [ ] File: `MacAmpApp/Models/RadioStationLibrary.swift`
-  - [ ] Import Foundation, Observation
-  - [ ] Mark class @MainActor @Observable
-
-- [ ] **Add state properties**
-  - [ ] private(set) var stations: [RadioStation] = []
-  - [ ] private let userDefaultsKey = "MacAmp.RadioStations"
-
-- [ ] **Implement init()**
-  - [ ] Call loadStations()
-
-- [ ] **Implement addStation()**
-  - [ ] Check for duplicates (same streamURL)
-  - [ ] Append to stations array
-  - [ ] Call saveStations()
-
-- [ ] **Implement removeStation(id:)**
-  - [ ] Remove by UUID
-  - [ ] Call saveStations()
-
-- [ ] **Implement saveStations()**
-  - [ ] JSONEncoder
-  - [ ] Encode stations array
-  - [ ] Save to UserDefaults
-  - [ ] Handle errors
-
-- [ ] **Implement loadStations()**
-  - [ ] Get data from UserDefaults
-  - [ ] JSONDecoder
-  - [ ] Decode [RadioStation]
-  - [ ] Handle errors (empty array fallback)
-
-### Step 3: Create StreamPlayer Class
-
-- [ ] **Create new file**
-  - [ ] File: `MacAmpApp/Audio/StreamPlayer.swift`
-  - [ ] Import AVFoundation, Observation, Combine
-  - [ ] Mark class @MainActor @Observable
-
-- [ ] **Add state properties**
-  - [ ] private(set) var isPlaying: Bool = false
-  - [ ] private(set) var isBuffering: Bool = false
-  - [ ] private(set) var currentStation: RadioStation?
-  - [ ] private(set) var streamTitle: String?
-  - [ ] private(set) var streamArtist: String?
-
-- [ ] **Add AVPlayer**
-  - [ ] private let player = AVPlayer()
-  - [ ] private var statusObserver: AnyCancellable?
-  - [ ] private var timeObserver: Any?
-  - [ ] private var metadataObserver: AnyCancellable?
-
-- [ ] **Implement init()**
-  - [ ] Call setupObservers()
-
-- [ ] **Implement play(station:) async**
-  - [ ] Set currentStation
-  - [ ] Create AVPlayerItem(url: station.streamURL)
-  - [ ] Replace player item
-  - [ ] Setup metadata observer
-  - [ ] Call player.play()
-  - [ ] Set isPlaying = true
-
-- [ ] **Implement pause()**
-  - [ ] Call player.pause()
-  - [ ] Set isPlaying = false
-
-- [ ] **Implement stop()**
-  - [ ] Call player.pause()
-  - [ ] Replace current item with nil
-  - [ ] Reset all state
-  - [ ] Clear metadata
-
-- [ ] **Implement setupObservers()**
-  - [ ] Observe player.timeControlStatus
-  - [ ] Use Combine publisher
-  - [ ] Receive on main queue
-  - [ ] Sink to handleStatusChange()
-
-- [ ] **Implement handleStatusChange()**
-  - [ ] Switch on AVPlayer.TimeControlStatus
-  - [ ] .playing: isPlaying = true, isBuffering = false
-  - [ ] .paused: isPlaying = false
-  - [ ] .waitingToPlayAtSpecifiedRate: isBuffering = true
-
-- [ ] **Implement setupMetadataObserver()**
-  - [ ] Observe playerItem.timedMetadata
-  - [ ] Extract ICY metadata
-  - [ ] Update streamTitle and streamArtist
-
-- [ ] **Implement deinit**
-  - [ ] Cancel observers
-  - [ ] Remove time observer
-  - [ ] Pause player
-
-### Step 4: Test Core Streaming
-
-- [ ] **Build project**
-  - [ ] Fix any compilation errors
-  - [ ] Ensure Swift 6 compliant
-
-- [ ] **Create test code**
-  - [ ] Add temporary test button or code
-  - [ ] Create RadioStation instance
-  - [ ] Call streamPlayer.play(station:)
-
-- [ ] **Test basic playback**
-  - [ ] URL: http://ice1.somafm.com/groovesalad-256-mp3
-  - [ ] Verify audio plays
-  - [ ] Verify isPlaying updates
-  - [ ] Verify pause works
-  - [ ] Verify stop works
-
-- [ ] **Test buffering**
-  - [ ] Observe isBuffering state
-  - [ ] Verify updates during network delays
-
-- [ ] **Test metadata**
-  - [ ] Check streamTitle updates
-  - [ ] Check streamArtist updates
-  - [ ] Verify real-time changes
+All detailed checklists completed. See commit history for details.
 
 ---
 
-## Phase 2: M3U/M3U8 Integration (3 hours)
+## ⏸️ Phase 4: Playlist Integration (3-4 hours, 4 commits)
 
-**Note:** M3UParser already supports .m3u and .m3u8 playlist files. AVPlayer natively handles .m3u8 HLS stream URLs.
+**Status:** Planned, awaiting Oracle review
+**Architecture Correction:** RadioStationLibrary is for favorites menu ONLY (Phase 5+)
 
-### Step 1: Inject RadioStationLibrary
+### Commit 13: Extend Track Model for Stream URLs
 
-- [ ] **Update MacAmpApp.swift**
-  - [ ] Add @State private var radioLibrary = RadioStationLibrary()
-  - [ ] Add .environment(radioLibrary) to UnifiedDockView
+**Files to Modify:**
+- [ ] `MacAmpApp/Audio/AudioPlayer.swift`
 
-- [ ] **Update WinampPlaylistWindow.swift**
-  - [ ] Add @Environment(RadioStationLibrary.self) var radioLibrary
-
-### Step 2: Update M3U/M3U8 Loading
-
-- [ ] **Find M3U/M3U8 remote stream handling**
-  - [ ] File: WinampPlaylistWindow.swift
-  - [ ] Lines: 503-506 (TODO comment)
-  - [ ] Already supports .m3u and .m3u8 playlists via M3UParser
-
-- [ ] **Replace with integration code**
+**Changes:**
+- [ ] Add to Track struct:
   ```swift
-  if entry.isRemoteStream {
-      let station = RadioStation(
-          name: entry.title ?? "Unknown Station",
-          streamURL: entry.url,
-          genre: nil,
-          source: .m3uPlaylist(url.lastPathComponent)
-      )
-      radioLibrary.addStation(station)
-      print("M3U: Added station: \(station.name)")
+  var isStream: Bool {
+      !url.isFileURL && (url.scheme == "http" || url.scheme == "https")
   }
   ```
+- [ ] Add documentation: streams supported
 
-- [ ] **Add user feedback**
-  - [ ] Count stations added
-  - [ ] Show alert or toast
-  - [ ] "Added X radio stations"
+**Testing:**
+- [ ] Build succeeds
+- [ ] No regressions
 
-### Step 3: Test M3U/M3U8 Loading
-
-- [ ] **Test with DarkAmbientRadio.m3u**
-  - [ ] Load .m3u file
-  - [ ] Verify station added to library
-  - [ ] Check library.stations array
-  - [ ] Verify persistence (quit/relaunch)
-
-- [ ] **Test with .m3u8 playlist file**
-  - [ ] Load .m3u8 playlist file (UTF-8 encoded)
-  - [ ] Verify stations added to library
-  - [ ] Verify persistence
-
-- [ ] **Test with .m3u8 HLS stream URL**
-  - [ ] Test direct .m3u8 HLS stream URL
-  - [ ] Verify AVPlayer handles adaptive streaming
-  - [ ] Check metadata extraction
-
-- [ ] **Test with mixed M3U/M3U8**
-  - [ ] Create M3U with local files + remote streams
-  - [ ] Load M3U/M3U8
-  - [ ] Verify local files in playlist
-  - [ ] Verify streams in radio library
-  - [ ] Both should work independently
+**Effort:** 15 minutes
 
 ---
 
-## Phase 3: UI Integration (3 hours)
+### Commit 14: Fix M3U + ADD URL (Playlist ONLY)
 
-### Step 1: Add Stream URL Dialog
+**CRITICAL:** Remove RadioStationLibrary usage - streams go to playlist
 
-- [ ] **Create presentAddStreamDialog() method**
-  - [ ] NSAlert with message
-  - [ ] NSTextField for URL input
-  - [ ] Validate URL (http/https scheme)
-  - [ ] Create RadioStation
-  - [ ] Add to radioLibrary
+**Files to Modify:**
+- [ ] `MacAmpApp/Views/WinampPlaylistWindow.swift`
 
-- [ ] **Integrate into ADD menu**
-  - [ ] Add "Add Stream URL..." option
-  - [ ] Call presentAddStreamDialog()
-  - [ ] Test URL entry and validation
+**loadM3UPlaylist() Fix:**
+- [ ] Remove `radioLibrary.addStation(station)` call
+- [ ] Create Track for streams:
+  ```swift
+  let streamTrack = Track(
+      url: entry.url,
+      title: entry.title ?? "Unknown Station",
+      artist: "Internet Radio",
+      duration: 0.0
+  )
+  audioPlayer.playlist.append(streamTrack)
+  ```
+- [ ] Update user feedback
 
-### Step 2: Station Selection UI
+**addURL() Fix:**
+- [ ] Remove `radioLibrary.addStation(station)` call
+- [ ] Create Track and append to playlist
+- [ ] Update alert message
 
-- [ ] **Option A: Update ADD menu**
-  - [ ] Show radio stations in menu
-  - [ ] Click to play stream
-  - [ ] Simplest integration
+**Testing:**
+- [ ] Load M3U → All items visible in playlist
+- [ ] ADD URL → Stream visible in playlist
+- [ ] Streams show with duration "∞" or blank
 
-- [ ] **Option B: Separate Radio View**
-  - [ ] Create RadioStationView.swift
-  - [ ] List of stations
-  - [ ] Play buttons
-  - [ ] More UI work
+**Effort:** 30-45 minutes
 
-- [ ] **Decision:** Start with Option A
+---
 
-### Step 3: Connect StreamPlayer to UI
+### Commit 15: Wire PlaybackCoordinator to Playlist
 
-- [ ] **Inject StreamPlayer**
-  - [ ] Create in MacAmpApp.swift
-  - [ ] Inject via environment
+**Files to Modify:**
+- [ ] `MacAmpApp/MacAmpApp.swift`
+- [ ] `MacAmpApp/Views/WinampPlaylistWindow.swift`
 
-- [ ] **Add play method**
-  - [ ] When station selected
-  - [ ] Call streamPlayer.play(station:)
-  - [ ] Update UI state
+**MacAmpApp.swift:**
+- [ ] Create: `@State private var streamPlayer = StreamPlayer()`
+- [ ] Create: computed `var playbackCoordinator`
+- [ ] Inject: `.environment(playbackCoordinator)`
 
-- [ ] **Show stream info**
-  - [ ] Display station name
-  - [ ] Display stream metadata (title/artist)
-  - [ ] Update in real-time
+**WinampPlaylistWindow.swift:**
+- [ ] Add: `@Environment(PlaybackCoordinator.self) var playbackCoordinator`
+- [ ] Find playlist click handler
+- [ ] Create playTrack(_ track:) method with routing
+- [ ] Replace direct audioPlayer.playTrack() calls
 
-### Step 4: Add Buffering Indicator
+**Testing:**
+- [ ] Click stream → Plays via StreamPlayer
+- [ ] Click local → Plays via AudioPlayer
+- [ ] No audio conflicts
+- [ ] Switch local ↔ stream works
 
-- [ ] **Observe StreamPlayer.isBuffering**
-  - [ ] Show loading indicator
-  - [ ] In visualizer area or status
+**Effort:** 1-1.5 hours
 
-- [ ] **Handle errors**
-  - [ ] Network unavailable
-  - [ ] Invalid stream URL
-  - [ ] Stream went offline
-  - [ ] Show user-friendly messages
+---
+
+### Commit 16: Buffering Status Display
+
+**Files to Modify:**
+- [ ] `MacAmpApp/Audio/PlaybackCoordinator.swift`
+- [ ] `MacAmpApp/Views/WinampMainWindow.swift`
+
+**PlaybackCoordinator:**
+- [ ] Add `displayTitle` computed property
+- [ ] Return "Connecting..." when buffering
+- [ ] Return "buffer 0%" on error
+- [ ] Return stream metadata when playing
+
+**WinampMainWindow.swift:**
+- [ ] Replace `audioPlayer.currentTitle` with `playbackCoordinator.displayTitle`
+- [ ] Verify scrolling still works
+
+**Testing:**
+- [ ] Stream shows "Connecting..." initially
+- [ ] Then shows stream metadata
+- [ ] Network issues show "buffer 0%"
+- [ ] Local files show track title (unchanged)
+
+**Effort:** 30-45 minutes
+
+---
+
+---
+
+## ⏸️ Phase 5+ Future Work (Out of Scope)
+
+### Favorites Menu (RadioStationLibrary)
+- [ ] Add "Radio Stations" top menu (like "Skins", "Windows")
+- [ ] Show saved favorite stations
+- [ ] Add/edit/delete favorites
+- [ ] Load favorite into playlist
+- [ ] Requires: top menu bar implementation
+
+### Advanced Features
+- [ ] Export playlist as M3U/M3U8
+- [ ] Station categories/genres
+- [ ] Search/browse radio directory
+- [ ] Recently played history
+- [ ] Rating system
 
 ---
 
@@ -485,13 +363,18 @@ This catches issues when they're fresh and prevents accumulating tech debt.
 - [x] Oracle corrections applied
 - [x] All code compiles and builds
 
-### Phase 3 Deferred ⏸️ (UI Integration - Future Work)
-- [ ] Station selection UI/menu
-- [ ] Actual stream playback from UI (PlaybackCoordinator not wired)
-- [ ] Metadata display in main window
-- [ ] Buffering indicators in visualizer
-- [ ] Station management UI (edit/delete)
-- [ ] Error display in UI
+### Phase 4 Pending ⏸️ (Next to Implement)
+- [ ] Extend Track for stream URLs
+- [ ] M3U + ADD URL to playlist (remove library usage)
+- [ ] Wire PlaybackCoordinator to playlist
+- [ ] Buffering status display
+- [ ] Stream playback from playlist
+
+### Phase 5+ Deferred ⏸️ (Favorites Menu)
+- [ ] Favorites menu in top menu bar
+- [ ] RadioStationLibrary UI (add/edit/delete favorites)
+- [ ] Load favorite into playlist
+- [ ] Export/import favorites
 
 ---
 
@@ -514,11 +397,13 @@ This catches issues when they're fresh and prevents accumulating tech debt.
 
 ---
 
-## ✅ IMPLEMENTATION COMPLETE
+## 📋 IMPLEMENTATION STATUS
 
-**Date Completed:** 2025-10-31
-**Total Commits:** 7 commits on `internet-radio` branch
-**Implementation Time:** ~6-8 hours (within Oracle estimate of 12-15 hours for full project)
+**Date Started:** 2025-10-31
+**Branch:** `internet-radio`
+**Current Commits:** 12 (10 implementation + 2 planning)
+**Time Spent:** ~6-8 hours (Phases 1-3)
+**Remaining:** ~3-4 hours (Phase 4)
 
 ### What Was Built
 
@@ -528,30 +413,44 @@ This catches issues when they're fresh and prevents accumulating tech debt.
 3. ✅ StreamPlayer observers with Oracle fixes
 4. ✅ PlaybackCoordinator (critical orchestration)
 
-**Phase 2: M3U/M3U8 Integration (1 commit)**
-5. ✅ M3U/M3U8 loading with library integration
-6. ✅ RadioStationLibrary environment injection
-7. ✅ Persistence via UserDefaults
+**Phase 2: M3U/M3U8 Integration**
+5. ✅ M3U loading infrastructure (NEEDS CORRECTION in Phase 4)
 
-**Phase 3: UI & Documentation (2 commits)**
-6. ✅ ADD URL dialog implementation
+**Phase 3: UI & Documentation**
+6. ✅ ADD URL dialog (NEEDS CORRECTION in Phase 4)
 7. ✅ Comprehensive documentation
+8. ✅ Final review docs
+9. ✅ Bug fix (M3U loading)
+10. ✅ Gap analysis → research.md
+11. ✅ Phase 4 plan → plan.md
+12. ✅ Phase 4 state + corrections
 
-### Architecture Delivered
+**Phase 4: Playlist Integration (4 commits planned) ⏸️**
+13. ⏸️ Extend Track for streams
+14. ⏸️ Fix M3U + ADD URL (playlist ONLY, not library)
+15. ⏸️ Wire PlaybackCoordinator
+16. ⏸️ Buffering status display
+
+### Architecture Delivered (Phases 1-3)
 
 ```
-PlaybackCoordinator (not yet wired to UI)
+PlaybackCoordinator
 ├── AudioPlayer (local files with EQ)
 └── StreamPlayer (internet radio, no EQ)
     ├── Observable state (metadata, buffering, errors)
     ├── KVO observers (Oracle-corrected)
     └── ICY metadata extraction
 
-RadioStationLibrary
+RadioStationLibrary (for favorites only - Phase 5+)
 ├── UserDefaults persistence
 ├── Duplicate detection
-└── M3U/M3U8 loading integration
+└── Needs top menu implementation
 ```
+
+**Architecture Correction (Phase 4):**
+- Streams go to **playlist** (not RadioStationLibrary)
+- RadioStationLibrary reserved for **favorites menu** (Phase 5+)
+- Matches Winamp: streams are playlist items
 
 ### Testing Status
 
