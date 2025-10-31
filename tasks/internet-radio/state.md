@@ -60,17 +60,14 @@
    - NSAllowsArbitraryLoadsInMedia confirmed
    - No changes needed
 
-### Actual Commit Breakdown (7 commits):
+### Actual Commit Summary (39 commits):
 
-1. ✅ Commit 1: Models (RadioStation + RadioStationLibrary)
-2. ✅ Commit 2: StreamPlayer basic structure
-3. ✅ Commit 3: StreamPlayer observers (Oracle fixes)
-4. ✅ Commit 4: PlaybackCoordinator (Oracle critical)
-5. ✅ Commit 5: M3U/M3U8 integration + Xcode project
-6. ✅ Commit 6: ADD URL dialog
-7. ✅ Commit 7: Documentation + polish
+**Phases 1-3:** Infrastructure (12 commits)
+**Phase 4:** Coordinator migration (7 commits)
+**Bug Fixes:** Oracle issues (15 commits)
+**Cleanup:** Code quality (5 commits)
 
-**All commits clean, all builds successful.**
+**All commits:** Clean, build successfully, Oracle reviewed
 
 ---
 
@@ -104,9 +101,9 @@
 - ✅ README_INTERNET_RADIO.md created
 - ✅ Future work clearly identified
 
-### Testing Phase ⏸️
-- ⏸️ Manual testing pending (after Phase 4)
-- ⏸️ User acceptance testing pending
+### Testing Phase ✅ (Complete)
+- ✅ Manual testing complete (user verified all features)
+- ✅ User acceptance testing passed
 
 ### Phase 4 Implementation ✅ (Complete)
 - ✅ Commit 13: Track extension + AudioPlayer guards
@@ -151,11 +148,11 @@
 - **Line 32:** `com.apple.security.network.client` = true
 - **Status:** ✅ All streaming protocols supported
 
-### Info.plist (Needs Verification) ⚠️
+### Info.plist ✅ VERIFIED
 - **Key:** `NSAllowsArbitraryLoadsInMedia`
-- **Purpose:** Allow HTTP streams (90% of radio uses HTTP not HTTPS)
-- **Status:** ⏸️ Need to verify exists
-- **Location:** Should be in `MacAmpApp/Info.plist`
+- **Purpose:** Allow HTTP streams
+- **Status:** ✅ Oracle verified - exists in MacAmpApp/Info.plist
+- **No changes needed**
 
 ---
 
@@ -246,9 +243,9 @@
 
 ---
 
-## Architecture Decisions
+## Architecture Decisions (Implemented & Verified)
 
-### Dual Backend Approach (Planned)
+### Dual Backend Approach ✅
 
 **Local Files:**
 - Backend: AVAudioEngine
@@ -266,7 +263,7 @@
 - AVPlayer can't use custom audio units
 - Must use both for complete feature set
 
-**Oracle Review Needed:** Validate this architecture decision
+**Oracle Review:** ✅ Validated - dual backend is correct approach
 
 ---
 
@@ -278,40 +275,26 @@
 - [x] Swift 6 @Observable architecture
 - [x] Existing local file playback
 
-### ⏸️ Need to Verify
-- [ ] NSAllowsArbitraryLoadsInMedia in Info.plist
-  - Check MacAmpApp/Info.plist
-  - Add if missing
-  - Required for HTTP streams
-
-### ⏸️ Need to Create
-- [ ] StreamPlayer class
-- [ ] RadioStation model
-- [ ] RadioStationLibrary
-- [ ] UI for streams
+### ✅ All Created
+- [x] StreamPlayer class
+- [x] RadioStation model
+- [x] RadioStationLibrary
+- [x] PlaybackCoordinator
+- [x] All UI integration
 
 ---
 
-## Implementation Scope
+## Implementation Scope ✅ COMPLETE
 
-### Phase 1: Core Streaming (4-6 hours)
-- StreamPlayer with AVPlayer
-- RadioStation and RadioStationLibrary
-- Basic play/pause/stop
-- Mode detection and switching
+### Phase 1-4: All Implemented
+- ✅ StreamPlayer with modern APIs
+- ✅ PlaybackCoordinator orchestration
+- ✅ M3U/M3U8 integration (playlist)
+- ✅ ADD URL dialog
+- ✅ All transport wiring
+- ✅ All UI bindings
 
-### Phase 2: M3U Integration (2 hours)
-- Update M3U loading code
-- Add stations to library
-- Test with real M3U files
-
-### Phase 3: UI Polish (3 hours)
-- Add Stream URL dialog
-- Station list view
-- Metadata display
-- Error handling
-
-**Total: 9-11 hours**
+**Actual: ~15-16 hours** (Oracle was correct)
 
 ---
 
@@ -405,10 +388,13 @@ http://stream.radioparadise.com/mp3-192     # Radio Paradise
 8. ✅ ~~Oracle review of Phase 4 plan~~ (COMPLETE - 5 critical issues identified)
 9. ✅ ~~Update all docs with Oracle corrections~~ (plan, todo, state, research)
 10. ✅ ~~Implement Phase 4~~ (7 commits, ~6 hours actual)
-11. ✅ ~~Comprehensive verification~~ (All wiring confirmed complete)
-12. ⏸️ **Manual testing** with real radio streams
-13. ⏸️ **PR creation** (no direct merge to main)
-14. ⏸️ **User acceptance and merge**
+11. ✅ ~~Bug fixes~~ (All Oracle issues resolved - 15 commits)
+12. ✅ ~~Code cleanup~~ (Removed unused/deprecated code)
+13. ✅ ~~Manual testing~~ (User tested - all features working)
+14. ✅ ~~Skills documentation~~ (BUILDING_RETRO_MACOS_APP_SKILLS.md)
+15. ✅ ~~Final verification~~ (39 commits, zero warnings)
+16. ⏸️ **PR creation** (no direct merge to main)
+17. ⏸️ **User acceptance and merge**
 
 ## Files Created (6)
 
@@ -426,65 +412,26 @@ http://stream.radioparadise.com/mp3-192     # Radio Paradise
 3. ✅ `tasks/internet-radio/plan.md` - Phase 4 added
 4. ✅ `tasks/internet-radio/todo.md` - Phase 4 checklist added
 
-## Files to Modify in Phase 4 (4)
+## Files Modified in Phase 4 ✅
 
-1. ⏸️ `MacAmpApp/Audio/AudioPlayer.swift` - Add Track.isStream
-2. ⏸️ `MacAmpApp/Views/WinampPlaylistWindow.swift` - Fix M3U + ADD URL (playlist only)
-3. ⏸️ `MacAmpApp/MacAmpApp.swift` - Create and inject PlaybackCoordinator
-4. ⏸️ `MacAmpApp/Views/WinampMainWindow.swift` - Buffering status display
-
----
-
-**Status:** ✅ Research and planning complete
-**Oracle Review:** ⏸️ Pending - architecture validation needed
-**Ready:** For implementation after Oracle approval
+1. ✅ `MacAmpApp/Audio/AudioPlayer.swift` - Track.isStream, guards, PlaylistAdvanceAction
+2. ✅ `MacAmpApp/Views/WinampPlaylistWindow.swift` - M3U + ADD URL (playlist), controls
+3. ✅ `MacAmpApp/MacAmpApp.swift` - PlaybackCoordinator creation and injection
+4. ✅ `MacAmpApp/Views/WinampMainWindow.swift` - All bindings, buffering display
+5. ✅ `MacAmpApp/Audio/PlaybackCoordinator.swift` - Full transport, state management
+6. ✅ `MacAmpApp/Audio/StreamPlayer.swift` - Modern APIs, dual play methods
 
 ---
 
-## Oracle Review Findings
-
-**Date:** 2025-10-31
-**Status:** ✅ Architecture validated with required corrections
-
-### Critical Additions Required
-
-1. **PlaybackCoordinator** (HIGH)
-   - Manages both AudioPlayer and StreamPlayer
-   - Prevents simultaneous playback
-   - Unified API for UI
-   - Effort: +2-3 hours
-
-2. **Observer Cleanup** (MEDIUM)
-   - Cancel old observers before new ones
-   - Remove timeObserver when replacing items
-   - Add status observer for errors
-
-3. **Metadata Extraction Fix** (MEDIUM)
-   - Use item.commonKey and item.stringValue
-   - Not value(forKey:) with KVC
-
-### Info.plist Verification
-
-**Oracle Found:**
-> "NSAllowsArbitraryLoadsInMedia is already present (MacAmpApp/Info.plist:22-26)"
-
-**Update:**
-- [x] ✅ NSAppTransportSecurity configured
-- [x] ✅ NSAllowsArbitraryLoadsInMedia = true
-- [x] ✅ **No Info.plist changes needed!**
-
-### Corrected Time Estimates
-
-**Original:** 9-11 hours
-**Oracle-Corrected:** 12-15 hours
-
-### Recommendations
-
-1. Add PlaybackCoordinator design to plan
-2. Fix code examples per Oracle
-3. Update estimates throughout
-4. Implement in Oracle-suggested phase order
+**Status:** ✅ IMPLEMENTATION COMPLETE - ALL ORACLE REVIEWS PASSED
 
 ---
 
-**Next Steps:** User review and approval for implementation
+## Final Summary
+
+**Implementation:** ✅ Complete (39 commits)
+**Testing:** ✅ Complete (user verified)
+**Documentation:** ✅ Complete (README + skills doc)
+**Code Quality:** ✅ Oracle Grade A- (production ready)
+**Build:** ✅ Zero deprecations, zero warnings
+**Ready:** ✅ PR CREATION
