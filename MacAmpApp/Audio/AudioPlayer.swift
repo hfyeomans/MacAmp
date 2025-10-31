@@ -152,6 +152,8 @@ final class AudioPlayer {
 
     var playlist: [Track] = [] // New: List of tracks
     var currentTrack: Track? // New: Currently playing track
+    @ObservationIgnored private var currentPlaylistIndex: Int?
+    var externalPlaybackHandler: ((Track) -> Void)?
     var shuffleEnabled: Bool = false
     var repeatEnabled: Bool = false
 
@@ -284,6 +286,8 @@ final class AudioPlayer {
             print("       Use PlaybackCoordinator to route streams to StreamPlayer.")
             return
         }
+
+        updatePlaylistPosition(with: track)
 
         // CRITICAL: Don't call stop() here - it triggers completion handlers mid-transition.
         // Instead, directly stop the player node and reset state
@@ -1214,7 +1218,13 @@ final class AudioPlayer {
             self.progressTimer?.invalidate()
             self.playbackProgress = 1
             self.currentTime = self.currentDuration
-            self.nextTrack()
+            let action = self.nextTrack()
+            switch action {
+            case .requestCoordinatorPlayback(let track), .playLocally(let track):
+                self.externalPlaybackHandler?(track)
+            default:
+                break
+            }
             if !self.isPlaying {
                 self.removeVisualizerTapIfNeeded()
             }
@@ -1229,42 +1239,133 @@ final class AudioPlayer {
     }
 
     // MARK: - Playlist navigation
-    func nextTrack() {
-        guard !playlist.isEmpty else { return }
+    enum PlaylistAdvanceAction {
+        case none
+        case restartCurrent
+        case playLocally(Track)
+        case requestCoordinatorPlayback(Track)
+    }
 
-        if shuffleEnabled {
-            // Shuffle: pick random track
-            if let randomTrack = playlist.randomElement() {
-                playTrack(track: randomTrack)
-            }
-        } else if let current = currentTrack, let idx = playlist.firstIndex(of: current) {
-            // Sequential playback
-            let nextIdx = playlist.index(after: idx)
-            if nextIdx < playlist.count {
-                let next = playlist[nextIdx]
-                playTrack(track: next)
-            } else if repeatEnabled {
-                // Repeat: loop back to first track
-                playTrack(track: playlist[0])
-            } else {
-                // End of playlist reached, no repeat
-                trackHasEnded = true
-            }
-        } else if !playlist.isEmpty {
-            // No current track, start from beginning
-            playTrack(track: playlist[0])
+    func updatePlaylistPosition(with track: Track?) {
+        guard let track else {
+            currentPlaylistIndex = nil
+            return
+        }
+
+        if let index = playlist.firstIndex(of: track) {
+            currentPlaylistIndex = index
+            trackHasEnded = false
+        } else {
+            currentPlaylistIndex = nil
         }
     }
 
-    func previousTrack() {
-        guard let current = currentTrack, let idx = playlist.firstIndex(of: current) else {
-            return
+    @discardableResult
+    func nextTrack() -> PlaylistAdvanceAction {
+        guard !playlist.isEmpty else { return .none }
+
+        trackHasEnded = false
+
+        if shuffleEnabled {
+            guard let randomTrack = playlist.randomElement(),
+                  let randomIndex = playlist.firstIndex(of: randomTrack) else {
+                return .none
+            }
+
+            currentPlaylistIndex = randomIndex
+            trackHasEnded = false
+            if randomTrack.isStream {
+                return .requestCoordinatorPlayback(randomTrack)
+            }
+
+            playTrack(track: randomTrack)
+            return .playLocally(randomTrack)
         }
-        if idx > 0 {
-            let prev = playlist[playlist.index(before: idx)]
-            playTrack(track: prev)
+
+        let activeIndex: Int
+        if let index = currentPlaylistIndex {
+            activeIndex = index
+        } else if let current = currentTrack, let index = playlist.firstIndex(of: current) {
+            activeIndex = index
+            currentPlaylistIndex = index
         } else {
-            seek(to: 0, resume: isPlaying)
+            activeIndex = -1
         }
+
+        let nextIndex = activeIndex + 1
+        if nextIndex < playlist.count {
+            let track = playlist[nextIndex]
+            currentPlaylistIndex = nextIndex
+            trackHasEnded = false
+            if track.isStream {
+                return .requestCoordinatorPlayback(track)
+            }
+
+            playTrack(track: track)
+            return .playLocally(track)
+        }
+
+        if repeatEnabled {
+            let track = playlist[0]
+            currentPlaylistIndex = 0
+            trackHasEnded = false
+            if track.isStream {
+                return .requestCoordinatorPlayback(track)
+            }
+
+            playTrack(track: track)
+            return .playLocally(track)
+        }
+
+        trackHasEnded = true
+        currentPlaylistIndex = nil
+        return .none
+    }
+
+    @discardableResult
+    func previousTrack() -> PlaylistAdvanceAction {
+        guard !playlist.isEmpty else { return .none }
+
+        if shuffleEnabled {
+            guard let track = playlist.randomElement(),
+                  let index = playlist.firstIndex(of: track) else {
+                return .none
+            }
+
+            currentPlaylistIndex = index
+            trackHasEnded = false
+            if track.isStream {
+                return .requestCoordinatorPlayback(track)
+            }
+
+            playTrack(track: track)
+            return .playLocally(track)
+        }
+
+        let activeIndex: Int
+        if let index = currentPlaylistIndex {
+            activeIndex = index
+        } else if let current = currentTrack, let index = playlist.firstIndex(of: current) {
+            activeIndex = index
+            currentPlaylistIndex = index
+        } else {
+            return .none
+        }
+
+        if activeIndex > 0 {
+            let previousIndex = playlist.index(before: activeIndex)
+            let track = playlist[previousIndex]
+            currentPlaylistIndex = previousIndex
+            trackHasEnded = false
+            if track.isStream {
+                return .requestCoordinatorPlayback(track)
+            }
+
+            playTrack(track: track)
+            return .playLocally(track)
+        }
+
+        seek(to: 0, resume: isPlaying)
+        return .restartCurrent
     }
 }

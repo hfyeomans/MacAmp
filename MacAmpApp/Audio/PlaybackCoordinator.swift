@@ -55,6 +55,13 @@ final class PlaybackCoordinator {
     init(audioPlayer: AudioPlayer, streamPlayer: StreamPlayer) {
         self.audioPlayer = audioPlayer
         self.streamPlayer = streamPlayer
+
+        self.audioPlayer.externalPlaybackHandler = { [weak self] track in
+            guard let self else { return }
+            Task { @MainActor in
+                await self.handleExternalPlaylistAdvance(track: track)
+            }
+        }
     }
 
     // MARK: - Unified Playback Control
@@ -91,6 +98,7 @@ final class PlaybackCoordinator {
 
     /// Play a track from the playlist (supports both local files and streams)
     func play(track: Track) async {
+        audioPlayer.updatePlaylistPosition(with: track)
         currentTrack = track
 
         if track.isStream {
@@ -102,22 +110,15 @@ final class PlaybackCoordinator {
             currentSource = .radioStation(RadioStation(name: track.title, streamURL: track.url))
             currentTitle = track.title
             isPlaying = streamPlayer.isPlaying
+            isPaused = false
         } else {
             // Stop stream if playing
             streamPlayer.stop()
 
             // Play local file via AudioPlayer
             audioPlayer.playTrack(track: track)
-            currentSource = .localTrack(track.url)
-            currentTitle = formattedLocalDisplayTitle(
-                trackTitle: track.title,
-                trackArtist: track.artist,
-                url: track.url
-            )
-            isPlaying = audioPlayer.isPlaying
+            updateLocalPlaybackState(for: track)
         }
-
-        isPaused = false
     }
 
     /// Play a radio station from favorites menu (Phase 5+)
@@ -168,25 +169,14 @@ final class PlaybackCoordinator {
 
     /// Navigate to next track in playlist
     func next() async {
-        // Delegate to AudioPlayer for playlist navigation
-        // AudioPlayer handles shuffle/repeat logic
-        audioPlayer.nextTrack()
-
-        // Update coordinator state
-        if let currentAudioTrack = audioPlayer.currentTrack {
-            await play(track: currentAudioTrack)
-        }
+        let action = audioPlayer.nextTrack()
+        await handlePlaylistAdvance(action: action)
     }
 
     /// Navigate to previous track in playlist
     func previous() async {
-        // Delegate to AudioPlayer for playlist navigation
-        audioPlayer.previousTrack()
-
-        // Update coordinator state
-        if let currentAudioTrack = audioPlayer.currentTrack {
-            await play(track: currentAudioTrack)
-        }
+        let action = audioPlayer.previousTrack()
+        await handlePlaylistAdvance(action: action)
     }
 
     private func resume() {
@@ -225,6 +215,45 @@ final class PlaybackCoordinator {
         }
 
         return url.deletingPathExtension().lastPathComponent
+    }
+
+    private func updateLocalPlaybackState(for track: Track) {
+        currentTrack = track
+        currentSource = .localTrack(track.url)
+        currentTitle = formattedLocalDisplayTitle(
+            trackTitle: track.title,
+            trackArtist: track.artist,
+            url: track.url
+        )
+        isPlaying = audioPlayer.isPlaying
+        isPaused = audioPlayer.isPaused
+    }
+
+    private func handlePlaylistAdvance(action: AudioPlayer.PlaylistAdvanceAction) async {
+        switch action {
+        case .none:
+            return
+        case .restartCurrent:
+            guard let track = currentTrack else { return }
+            if track.isStream {
+                await play(track: track)
+            } else {
+                updateLocalPlaybackState(for: track)
+            }
+        case .playLocally(let track):
+            streamPlayer.stop()
+            updateLocalPlaybackState(for: track)
+        case .requestCoordinatorPlayback(let track):
+            await play(track: track)
+        }
+    }
+
+    private func handleExternalPlaylistAdvance(track: Track) async {
+        if track.isStream {
+            await play(track: track)
+        } else {
+            updateLocalPlaybackState(for: track)
+        }
     }
 
     // MARK: - Unified State for UI
