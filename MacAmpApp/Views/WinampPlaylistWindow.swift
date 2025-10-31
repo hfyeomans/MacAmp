@@ -34,21 +34,15 @@ final class PlaylistWindowActions: NSObject {
                     // Remember if playlist was empty (for autoplay detection)
                     let wasEmpty = audioPlayer.playlist.isEmpty
 
-                    // Set up metadata update handler if coordinator available
-                    // Oracle: Don't replay - just update coordinator state
-                    if let coordinator = playbackCoordinator {
-                        audioPlayer.externalPlaybackHandler = { track in
-                            // Update coordinator state without replaying
-                            coordinator.updateTrackMetadata(track)
-                        }
-                    }
-
                     self.handleSelectedURLs(urls, audioPlayer: audioPlayer)
 
                     // If playlist was empty and AudioPlayer autoplayed, sync coordinator state
                     if wasEmpty, let firstTrack = audioPlayer.currentTrack, let coordinator = playbackCoordinator {
                         await coordinator.play(track: firstTrack)
                     }
+
+                    // Note: externalPlaybackHandler should be set once in MacAmpApp initialization
+                    // Not here - setting it here clobbers coordinator's handler for playlist advance
                 }
             }
         }
