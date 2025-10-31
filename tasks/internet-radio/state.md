@@ -1,17 +1,17 @@
 # Internet Radio Streaming - Current State
 
 **Date:** 2025-10-31
-**Status:** ✅ IMPLEMENTATION COMPLETE - Ready for Oracle Final Review & Testing
+**Status:** 📋 Phase 4 Planning - Extending for Winamp Playlist Parity
 
 ---
 
 ## ✅ Implementation Summary
 
 **Branch:** `internet-radio`
-**Commits:** 7 commits (all successful)
-**Time Spent:** ~6-8 hours actual (Oracle estimated 12-15 hours for full project)
+**Commits:** 11 commits (10 implementation + 1 planning)
+**Time Spent:** ~6-8 hours (Phases 1-3), estimating +3-4 hours (Phase 4)
 **Build Status:** ✅ All files compile, build succeeds
-**Tests:** Manual testing pending
+**Tests:** Manual testing pending Phase 4 completion
 
 ### ✅ Oracle Requirements - ALL IMPLEMENTED
 
@@ -91,11 +91,18 @@
 - ✅ Future work clearly identified
 
 ### Testing Phase ⏸️
-- ⏸️ Manual testing pending
+- ⏸️ Manual testing pending (after Phase 4)
 - ⏸️ User acceptance testing pending
 
+### Phase 4 Planning 📋 (Current)
+- ✅ Gap analysis complete (user reported Winamp behavior mismatch)
+- ✅ Phase 4 plan added to plan.md
+- ⏸️ Oracle review of Phase 4 approach
+- ⏸️ Implementation (3-4 commits, 3-4 hours)
+
 ### Oracle Review Phase ⏸️
-- ⏸️ Final Oracle review for anti-patterns
+- ⏸️ Oracle review of Phase 4 plan (pending)
+- ⏸️ Final Oracle review after Phase 4 implementation
 - ⏸️ Swift 6 / SwiftUI best practices check
 
 ---
@@ -158,23 +165,32 @@
 - [x] Architecture diagrams
 - [x] Future work roadmap
 
-## ⏸️ Future Work (Out of Scope - Not Implemented)
+## 📋 Phase 4 Scope (In Progress)
 
-### UI Integration (Deferred)
-- [ ] Wire PlaybackCoordinator into main UI
-- [ ] Station selection menu/picker
-- [ ] Stream metadata display in main window
-- [ ] Buffering indicators in visualizer
-- [ ] Station management UI (edit/delete)
-- [ ] Error display in UI
+### Playlist Integration (User-Requested)
+- [ ] Extend Track model to support stream URLs
+- [ ] M3U loading: add streams to BOTH playlist AND library
+- [ ] Wire playlist selection to PlaybackCoordinator
+- [ ] Stream metadata updates in playlist
+- [ ] ADD URL adds to playlist (not just library)
+- [ ] (Optional) Buffering status display
 
-### Advanced Features (Future)
+### Why Phase 4 is Needed
+**User reported gap:** "M3U loading via main window shows error"
+**Root cause:** Streams not in playlist (separate library only)
+**Winamp behavior:** Streams ARE playlist items (mixed with local files)
+**Fix:** Add playlist integration (originally deferred, now required)
+
+## ⏸️ Future Work (After Phase 4)
+
+### Advanced Features (Phase 5+)
 - [ ] Export station library as M3U/M3U8
 - [ ] Station categories/genres
 - [ ] Search/browse radio directory
 - [ ] Stream quality selection
-- [ ] Recently played stations
+- [ ] Recently played stations history
 - [ ] Favorite/rating system
+- [ ] Station management UI (edit/delete/organize)
 
 ---
 
@@ -327,15 +343,18 @@ http://stream.radioparadise.com/mp3-192     # Radio Paradise
 
 ## Next Steps
 
-1. ✅ ~~Verify NSAllowsArbitraryLoadsInMedia in Info.plist~~ (Confirmed exists)
-2. ✅ ~~Oracle review of architecture and plan~~ (Approved, corrections applied)
-3. ✅ ~~Implement Phase 1 (core streaming)~~ (Complete)
-4. ✅ ~~Implement Phase 2 (M3U integration)~~ (Complete)
-5. ✅ ~~Implement Phase 3 (UI polish)~~ (Infrastructure complete)
-6. ⏸️ **Oracle final review** (architecture, anti-patterns, Swift 6 compliance)
-7. ⏸️ **Manual testing** with real radio streams
-8. ⏸️ **User acceptance testing**
-9. ⏸️ **Merge to main** (after Oracle approval)
+1. ✅ ~~Verify NSAllowsArbitraryLoadsInMedia~~ (Confirmed exists)
+2. ✅ ~~Oracle review of architecture~~ (Approved, corrections applied)
+3. ✅ ~~Implement Phase 1~~ (Core streaming complete)
+4. ✅ ~~Implement Phase 2~~ (M3U integration complete)
+5. ✅ ~~Implement Phase 3~~ (Infrastructure complete)
+6. ✅ ~~Gap analysis~~ (User reported Winamp behavior mismatch)
+7. ✅ ~~Plan Phase 4~~ (Playlist integration planned)
+8. ⏸️ **Oracle review of Phase 4 plan** (pending)
+9. ⏸️ **Implement Phase 4** (3-4 commits, 3-4 hours)
+10. ⏸️ **Manual testing** with real radio streams
+11. ⏸️ **PR creation** (no direct merge to main)
+12. ⏸️ **User acceptance and merge**
 
 ## Files Created (6)
 
