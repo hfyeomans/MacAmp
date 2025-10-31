@@ -54,36 +54,31 @@
 
 ---
 
-### **NEW: Oscilloscope/RMS Mode Toggle (PLANNED - Oracle-Reviewed)**
+### **SHIPPED: Oscilloscope/Spectrum Analyzer Modes (PR #27 - MERGED)**
 
-**Status:** ✅ Complete task ready in `tasks/oscilloscope-toggle/`
-**Effort:** 1-12 hours (3 phases, Oracle-corrected estimates)
-**Priority:** MEDIUM (Oracle recommends after AirPlay + clutter bar)
+**Status:** ✅ Complete and merged to main
+**Date:** 2025-10-30
+**Time Spent:** ~3 hours
 
-**What Exists (Backend):**
-- ✅ AudioPlayer.useSpectrumVisualizer: Bool (toggle property)
-- ✅ RMS calculation in audio tap (Lines 882-903)
-- ✅ Spectrum calculation in audio tap (Lines 904-948)
-- ✅ VisualizerOptions.swift component (hidden UI)
-- ✅ VISCOLOR colors 18-22 loaded
-- ✅ AppSettings.visualizerMode scaffolded
+**What Was Delivered:**
+- ✅ Click spectrum analyzer to cycle modes
+- ✅ 3 modes: Spectrum, Oscilloscope, None
+- ✅ Spectrum: FFT frequency bars (19 bars)
+- ✅ Oscilloscope: Time-domain waveform (connected line)
+- ✅ None: Off/blank
+- ✅ State persistence
+- ✅ Type-safe VisualizerMode enum
+- ✅ Centralized constants (VisualizerLayout)
 
-**What's Missing (UI):**
-- ❌ VisualizerOptions not surfaced in main window
-- ❌ Visualizer not clickable (webamp has click-to-cycle)
-- ❌ V button not wired
-- ❌ Oscilloscope waveform mode (webamp has this)
+**User Feedback:** "Amazing! It works!"
 
-**Oracle Findings:**
-- ⚠️ Phase 1: Layout issues with VisualizerOptions (200px wide when expanded)
-- ⚠️ Phase 2: State wiring complex (need to sync enum to AudioPlayer.useSpectrumVisualizer)
-- ⚠️ Data exposure: Need to store both RMS and spectrum (currently discards one)
-- ⚠️ @Environment required (AppSettings.instance() won't trigger re-renders)
-- ⚠️ Phase 3: Oscilloscope more complex (threading, buffering) - 6-8 hours not 4
+**Key Learning:**
+- User discovered oscilloscope wasn't active enough
+- Root cause: Using RMS (averaged) instead of raw waveform samples
+- Fixed: Expose actual time-domain mono buffer samples
+- Result: Very dynamic oscilloscope! ✅
 
-**Oracle Priority:** Do AFTER AirPlay and clutter bar buttons (I, O)
-
-**See:** `tasks/oscilloscope-toggle/ORACLE_REVIEW.md` for all issues
+**Oracle Reviews:** 2 rounds, 7 issues fixed, production-ready
 
 ---
 
