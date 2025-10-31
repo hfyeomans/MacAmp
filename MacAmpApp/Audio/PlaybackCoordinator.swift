@@ -43,6 +43,7 @@ final class PlaybackCoordinator {
     private(set) var isPaused: Bool = false
     private(set) var currentSource: PlaybackSource?
     private(set) var currentTitle: String?
+    private(set) var currentTrack: Track?  // For playlist position tracking
 
     enum PlaybackSource {
         case localTrack(URL)
@@ -84,6 +85,34 @@ final class PlaybackCoordinator {
         isPaused = false
     }
 
+    /// Play a track from the playlist (supports both local files and streams)
+    func play(track: Track) async {
+        currentTrack = track
+
+        if track.isStream {
+            // Stop local file if playing
+            audioPlayer.stop()
+
+            // Play stream via StreamPlayer
+            await streamPlayer.play(url: track.url, title: track.title, artist: track.artist)
+            currentSource = .radioStation(RadioStation(name: track.title, streamURL: track.url))
+            currentTitle = track.title
+            isPlaying = streamPlayer.isPlaying
+        } else {
+            // Stop stream if playing
+            streamPlayer.stop()
+
+            // Play local file via AudioPlayer
+            audioPlayer.playTrack(track: track)
+            currentSource = .localTrack(track.url)
+            currentTitle = "\(track.title) - \(track.artist)"
+            isPlaying = audioPlayer.isPlaying
+        }
+
+        isPaused = false
+    }
+
+    /// Play a radio station from favorites menu (Phase 5+)
     func play(station: RadioStation) async {
         // Stop local file if playing
         audioPlayer.stop()
@@ -92,6 +121,7 @@ final class PlaybackCoordinator {
         await streamPlayer.play(station: station)
         currentSource = .radioStation(station)
         currentTitle = streamPlayer.streamTitle ?? station.name
+        currentTrack = nil  // Not from playlist
         isPlaying = streamPlayer.isPlaying
         isPaused = false
     }
@@ -128,6 +158,29 @@ final class PlaybackCoordinator {
         }
     }
 
+    /// Navigate to next track in playlist
+    func next() async {
+        // Delegate to AudioPlayer for playlist navigation
+        // AudioPlayer handles shuffle/repeat logic
+        audioPlayer.nextTrack()
+
+        // Update coordinator state
+        if let currentAudioTrack = audioPlayer.currentTrack {
+            await play(track: currentAudioTrack)
+        }
+    }
+
+    /// Navigate to previous track in playlist
+    func previous() async {
+        // Delegate to AudioPlayer for playlist navigation
+        audioPlayer.previousTrack()
+
+        // Update coordinator state
+        if let currentAudioTrack = audioPlayer.currentTrack {
+            await play(track: currentAudioTrack)
+        }
+    }
+
     private func resume() {
         switch currentSource {
         case .localTrack:
@@ -145,7 +198,49 @@ final class PlaybackCoordinator {
         isPaused = false
     }
 
-    // MARK: - State Queries
+    // MARK: - Unified State for UI
+
+    /// Display title for main window (includes buffering status)
+    var displayTitle: String {
+        switch currentSource {
+        case .radioStation:
+            // Buffering takes priority
+            if streamPlayer.isBuffering {
+                return "Connecting..."
+            }
+            // Error state
+            if streamPlayer.error != nil {
+                return "buffer 0%"
+            }
+            // Live ICY metadata (overrides Track title)
+            if let icy = streamPlayer.streamTitle {
+                return icy
+            }
+            // Fallback to Track or station name
+            return currentTrack?.title ?? currentTitle ?? "Internet Radio"
+
+        case .localTrack:
+            return currentTrack?.title ?? currentTitle ?? "Unknown"
+
+        case .none:
+            return "MacAmp"
+        }
+    }
+
+    /// Display artist for main window
+    var displayArtist: String {
+        switch currentSource {
+        case .radioStation:
+            // ICY metadata (overrides Track artist)
+            return streamPlayer.streamArtist ?? currentTrack?.artist ?? ""
+        case .localTrack:
+            return currentTrack?.artist ?? ""
+        case .none:
+            return ""
+        }
+    }
+
+    // MARK: - Legacy State Queries (for compatibility)
 
     var streamTitle: String? {
         switch currentSource {
