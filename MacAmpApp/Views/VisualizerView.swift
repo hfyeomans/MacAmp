@@ -1,17 +1,25 @@
 import SwiftUI
 import Accelerate
 
-/// Winamp-style spectrum analyzer visualization
+/// Winamp visualizer constants
+enum VisualizerLayout {
+    static let width: CGFloat = 76
+    static let height: CGFloat = 16
+    static let oscilloscopeSampleCount = 76
+}
+
+/// Winamp-style spectrum analyzer - click to cycle modes
 struct VisualizerView: View {
     @Environment(AudioPlayer.self) var audioPlayer
     @Environment(SkinManager.self) var skinManager
+    @Environment(AppSettings.self) var settings
 
     // Animation state
     @State private var barHeights: [CGFloat] = Array(repeating: 0, count: 19)
     @State private var peakPositions: [CGFloat] = Array(repeating: 0, count: 19)
     @State private var peakTimers: [Date] = Array(repeating: Date.distantPast, count: 19)
 
-    // Winamp spectrum analyzer constants
+    // Spectrum analyzer constants
     private let barCount = 19
     private let barWidth: CGFloat = 3
     private let barSpacing: CGFloat = 1
@@ -31,20 +39,39 @@ struct VisualizerView: View {
     let updateTimer = Timer.publish(every: 1.0/30.0, on: .main, in: .common).autoconnect()
     
     var body: some View {
-        HStack(spacing: barSpacing) {
-            ForEach(0..<barCount, id: \.self) { index in
-                SpectrumBar(
-                    height: barHeights[index],
-                    peakPosition: peakPositions[index],
-                    maxHeight: maxHeight
-                )
-                .frame(width: barWidth, height: maxHeight)
+        let mode = settings.visualizerMode
+
+        Group {
+            switch mode {
+            case .none:
+                Rectangle().fill(Color.black)
+            case .oscilloscope:
+                OscilloscopeView()
+            case .spectrum:
+                HStack(spacing: barSpacing) {
+                    ForEach(0..<barCount, id: \.self) { index in
+                        SpectrumBar(
+                            height: barHeights[index],
+                            peakPosition: peakPositions[index],
+                            maxHeight: maxHeight
+                        )
+                        .frame(width: barWidth, height: maxHeight)
+                    }
+                }
             }
         }
+        .frame(width: VisualizerLayout.width, height: VisualizerLayout.height)
         .background(Color.black)
+        .onTapGesture {
+            // Cycle through modes: spectrum → oscilloscope → none
+            let allModes = AppSettings.VisualizerMode.allCases
+            if let currentIndex = allModes.firstIndex(of: settings.visualizerMode) {
+                let nextIndex = (currentIndex + 1) % allModes.count
+                settings.visualizerMode = allModes[nextIndex]
+            }
+        }
         .onReceive(updateTimer) { _ in
-            // Only update when playing (Swift 6 safe pattern)
-            if audioPlayer.isPlaying {
+            if audioPlayer.isPlaying && mode == .spectrum {
                 updateBars()
             }
         }
@@ -197,6 +224,55 @@ struct SpectrumBar: View {
     VisualizerView()
         .environment(AudioPlayer())
         .environment(SkinManager())
-        .frame(width: 76, height: 16)
+        .environment(AppSettings.instance())
+        .frame(width: VisualizerLayout.width, height: VisualizerLayout.height)
         .background(Color.gray)
+}
+
+/// Oscilloscope waveform visualization
+struct OscilloscopeView: View {
+    @Environment(AudioPlayer.self) var audioPlayer
+    @Environment(SkinManager.self) var skinManager
+
+    let updateTimer = Timer.publish(every: 1.0/30.0, on: .main, in: .common).autoconnect()
+    @State private var waveformData: [Float] = []
+
+    var body: some View {
+        Canvas { context, size in
+            guard !waveformData.isEmpty else { return }
+
+            var path = Path()
+            let centerY = size.height / 2
+
+            for (index, sample) in waveformData.enumerated() {
+                let x = CGFloat(index) / CGFloat(waveformData.count) * size.width
+                let y = centerY - (CGFloat(sample) * centerY)
+
+                if index == 0 {
+                    path.move(to: CGPoint(x: x, y: y))
+                } else {
+                    path.addLine(to: CGPoint(x: x, y: y))
+                }
+            }
+
+            let color = oscilloscopeColor()
+            context.stroke(path, with: .color(color), lineWidth: 1)
+        }
+        .frame(width: VisualizerLayout.width, height: VisualizerLayout.height)
+        .onReceive(updateTimer) { _ in
+            if audioPlayer.isPlaying {
+                waveformData = audioPlayer.getWaveformSamples(count: VisualizerLayout.oscilloscopeSampleCount)
+            } else {
+                waveformData = []
+            }
+        }
+    }
+
+    private func oscilloscopeColor() -> Color {
+        if let colors = skinManager.currentSkin?.visualizerColors,
+           colors.count >= 19 {
+            return colors[18]
+        }
+        return Color.white
+    }
 }

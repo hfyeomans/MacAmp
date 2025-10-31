@@ -13,7 +13,7 @@ MacAmp is a SwiftUI-based audio player for macOS that recreates the iconic deskt
 - 🎨 **Full Skin Support** - Load and switch between classic `.wsz` skins with VISCOLOR.TXT gradients
 - 🎵 **Native Audio Engine** - Built on AVFoundation for optimal macOS performance
 - 🎚️ **10-Band Equalizer** - Professional audio control with 17 built-in presets
-- 📊 **Improved Spectrum Analyzer** - Webamp-style balanced frequency distribution with skin-specific colors
+- 📊 **Spectrum Analyzer & Oscilloscope** - Click visualizer to cycle through 3 modes: Spectrum (frequency bars), Oscilloscope (waveform), or None
 - ⌨️ **Keyboard Navigation** - Navigate playlist menus with arrow keys (↑↓) and Escape
 - ♿ **VoiceOver Ready** - Accessible menu navigation for screen reader users
 - 📋 **M3U Playlist Support** - Load M3U/M3U8 playlist files with local audio tracks
@@ -117,6 +117,24 @@ Available presets: Classical, Club, Dance, Full Bass, Full Bass & Treble, Full T
 3. **Float Mode** - Window stays above all other windows
 4. **Persistence** - Last setting remembered across app restarts
 5. **Keyboard Shortcut** - **Ctrl+A** (also in Windows menu)
+
+### Visualizer Modes
+
+1. **Click to Cycle** - Click the spectrum analyzer window to cycle through visualization modes
+2. **3 Modes Available:**
+   - **Spectrum Analyzer** - Frequency bars showing bass to treble (default)
+   - **Oscilloscope** - Waveform display showing actual audio wave shape
+   - **None** - Visualizer off (blank)
+3. **Persistence** - Last mode remembered across app restarts
+4. **How to Use:**
+   - Play music
+   - Click the black analyzer window (shows bars or waveform)
+   - Cycles: Spectrum → Oscilloscope → None → Spectrum...
+
+**Visualization Modes:**
+- **Spectrum:** 19 vertical bars dancing to different frequencies - bass on left, treble on right
+- **Oscilloscope:** Connected waveform line showing the actual audio wave (very active and dynamic!)
+- **None:** Blank display (visualizer off)
 
 **Clutter Bar Buttons** (vertical strip, left side):
 - **O** - Options (coming soon)

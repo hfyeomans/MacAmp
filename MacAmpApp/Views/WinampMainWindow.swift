@@ -667,8 +667,9 @@ struct WinampMainWindow: View {
     
     @ViewBuilder
     private func buildSpectrumAnalyzer() -> some View {
+        // Click analyzer to cycle modes: spectrum → oscilloscope → none
         VisualizerView()
-            .frame(width: 76, height: 16)
+            .frame(width: VisualizerLayout.width, height: VisualizerLayout.height)
             .background(Color.black.opacity(0.5))
             .at(Coords.spectrumAnalyzer)
     }

@@ -104,9 +104,22 @@ final class AudioPlayer {
     @ObservationIgnored private var visualizerTapInstalled = false
     @ObservationIgnored private var visualizerPeaks: [Float] = Array(repeating: 0.0, count: 20)
     @ObservationIgnored private var lastUpdateTime: CFAbsoluteTime = CFAbsoluteTimeGetCurrent()
-    var useSpectrumVisualizer: Bool = true
+
+    /// Legacy toggle - derives from AppSettings.visualizerMode
+    var useSpectrumVisualizer: Bool {
+        get { AppSettings.instance().visualizerMode == .spectrum }
+        set {
+            AppSettings.instance().visualizerMode = newValue ? .spectrum : .none
+        }
+    }
+
     var visualizerSmoothing: Float = 0.6 // 0..1 (higher = smoother)
     var visualizerPeakFalloff: Float = 1.2 // units per second
+
+    // Visualizer data storage
+    @ObservationIgnored private var latestRMS: [Float] = []
+    @ObservationIgnored private var latestSpectrum: [Float] = []
+    @ObservationIgnored private var latestWaveform: [Float] = []
 
     private(set) var playbackState: PlaybackState = .idle
     private(set) var isPlaying: Bool = false
@@ -833,10 +846,14 @@ final class AudioPlayer {
         print("==================================================\n")
     }
 
-    /// MainActor method for updating visualizer levels from audio thread data
     @MainActor
-    private func updateVisualizerLevels(rms: [Float], spectrum: [Float]) {
-        // Now we're safely on MainActor - can access isolated properties
+    private func updateVisualizerLevels(rms: [Float], spectrum: [Float], waveform: [Float]) {
+        // Store all visualizer datasets
+        self.latestRMS = rms
+        self.latestSpectrum = spectrum
+        self.latestWaveform = waveform
+
+        // Apply smoothing to active mode
         let used = self.useSpectrumVisualizer ? spectrum : rms
         let now = CFAbsoluteTimeGetCurrent()
         let dt = max(0, Float(now - self.lastUpdateTime))
@@ -951,9 +968,19 @@ final class AudioPlayer {
             let rmsSnapshot = scratch.snapshotRms()
             let spectrumSnapshot = scratch.snapshotSpectrum()
 
-            Task { @MainActor [context, rmsSnapshot, spectrumSnapshot] in
+            // Capture waveform samples for oscilloscope
+            let oscilloscopeSamples = 76  // Match VisualizerLayout.oscilloscopeSampleCount
+            var waveformSnapshot: [Float] = []
+            scratch.withMonoReadOnly { mono in
+                let step = max(1, mono.count / oscilloscopeSamples)
+                waveformSnapshot = stride(from: 0, to: mono.count, by: step)
+                    .prefix(oscilloscopeSamples)
+                    .map { mono[$0] }
+            }
+
+            Task { @MainActor [context, rmsSnapshot, spectrumSnapshot, waveformSnapshot] in
                 let player = Unmanaged<AudioPlayer>.fromOpaque(context.playerPointer).takeUnretainedValue()
-                player.updateVisualizerLevels(rms: rmsSnapshot, spectrum: spectrumSnapshot)
+                player.updateVisualizerLevels(rms: rmsSnapshot, spectrum: spectrumSnapshot, waveform: waveformSnapshot)
             }
         }
     }
@@ -1108,6 +1135,46 @@ final class AudioPlayer {
             }
         }
         
+        return result
+    }
+
+    func getRMSData(bands: Int) -> [Float] {
+        guard bands > 0 else { return [] }
+
+        // Return raw RMS data (already has correct band count)
+        if latestRMS.count == bands {
+            return latestRMS
+        }
+
+        // Or map if different band count requested
+        var result = [Float](repeating: 0, count: bands)
+        if !latestRMS.isEmpty {
+            for i in 0..<bands {
+                let sourceIndex = (i * latestRMS.count) / bands
+                result[i] = latestRMS[min(sourceIndex, latestRMS.count - 1)]
+            }
+        }
+
+        return result
+    }
+
+    func getWaveformSamples(count: Int) -> [Float] {
+        guard count > 0 else { return [] }
+
+        // Return waveform samples captured from mono buffer
+        if latestWaveform.count == count {
+            return latestWaveform
+        }
+
+        // Resample if different count requested
+        var result = [Float](repeating: 0, count: count)
+        if !latestWaveform.isEmpty {
+            for i in 0..<count {
+                let sourceIndex = (i * latestWaveform.count) / count
+                result[i] = latestWaveform[min(sourceIndex, latestWaveform.count - 1)]
+            }
+        }
+
         return result
     }
 
