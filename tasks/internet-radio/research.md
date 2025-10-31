@@ -510,3 +510,156 @@ A: No. NSAllowsArbitraryLoadsInMedia is all you need (already have it).
 ---
 
 **Status:** Architecture validated, corrections needed before implementation
+
+---
+
+# Post-Implementation Gap Analysis (2025-10-31)
+
+## User-Reported Issue: Architecture vs Winamp Behavior
+
+**Date:** 2025-10-31
+**Reporter:** User (after implementation complete)
+**Issue:** Implementation doesn't match actual Winamp UX behavior
+
+### The Gap Discovered
+
+**What We Built:**
+- M3U loading: Local files → playlist, Remote streams → RadioStationLibrary (separate)
+- Streams NOT visible in playlist
+- No UI to play streams yet
+
+**Actual Winamp Behavior (from user):**
+- M3U loading: ALL entries → playlist (local + remote both visible)
+- Streams appear as playlist items
+- Click stream → plays immediately
+- Shows "Connecting..." then buffering status
+
+### Winamp Details Provided by User
+
+**1. Adding Stream URLs:**
+- Ctrl+L opens "Open/Play location" dialog
+- Paste URL → adds to playlist AS A PLAYLIST ITEM
+- Streams are playlist items, not separate storage
+- Can save, move, select like any track
+
+**2. M3U File Loading:**
+- Populates Playlist Editor with ALL entries
+- Both local files AND remote streams
+- Default: replaces playlist (or appends based on prefs)
+
+**3. Buffering Display:**
+- Initial: "Connecting..." in song title area
+- Pre-buffer: Silent delay (no percentage)
+- Underrun: Blinking "buffer 0%" message
+- Not a progress bar - a status alert
+
+### Architecture Impact Analysis
+
+**Current Infrastructure (Correct):**
+- ✅ StreamPlayer (AVPlayer backend) - solid
+- ✅ PlaybackCoordinator - prevents conflicts
+- ✅ RadioStation model - good
+- ✅ M3U parser - works perfectly
+- ✅ Metadata extraction - correct
+
+**Gap (UX Integration):**
+- ⚠️ Playlist doesn't support stream URLs
+- ⚠️ PlaybackCoordinator not wired to playlist
+- ⚠️ No metadata/buffering display
+
+**Is Architecture Wrong?**
+- **NO** - Infrastructure is sound
+- **YES** - Integration strategy needs adjustment
+- **VERDICT:** Incomplete, not incorrect
+
+### Three Path Options
+
+**Option A: DEFER (Original Plan)**
+- Merge infrastructure as-is
+- Phase 4: Add playlist integration later
+- Effort: 0 now, +4-6 hours later
+
+**Option B: EXTEND CURRENT TASK** ⭐ (User Selected)
+- Add Phase 4 planning now
+- Implement playlist integration
+- Follow same commit strategy
+- Effort: +3-4 hours (8-12 hours total)
+
+**Option C: FULL PARITY**
+- Everything including buffering UI
+- Effort: +8-12 hours
+- Not recommended (scope creep)
+
+### User Decision: OPTION B (Extend with Phase 4)
+
+**Requirements:**
+1. Add Phase 4 to plan.md (proper planning)
+2. Update state.md (current status)
+3. Update todo.md (new commits, following strategy)
+4. Oracle review of Phase 4 plan
+5. Implement with same commit discipline
+6. Can defer buffering messages (check with Oracle if easy)
+
+### Phase 4 Core Requirements (User-Driven)
+
+**Must Have:**
+1. Streams appear in playlist as items
+2. Click stream in playlist → plays
+3. M3U populates playlist with local + remote
+4. PlaybackCoordinator wired to playlist selection
+
+**Nice to Have (Oracle to advise):**
+5. "Connecting..." / buffering status display
+   - Uses same sprites/methods as track scrolling
+   - Just inserting message instead of track info
+   - Oracle: Is this trivial or complex?
+
+### Technical Approach (To Be Planned)
+
+**Extend Track Model:**
+```swift
+// Option 1: Track supports any URL
+struct Track {
+    let url: URL  // file://, http://, https://
+    var isStream: Bool { !url.isFileURL }
+}
+
+// Option 2: Playlist item enum
+enum PlaylistItem {
+    case track(Track)
+    case stream(RadioStation)
+}
+```
+
+**M3U Integration:**
+```swift
+// Add streams to BOTH playlist AND library
+if entry.isRemoteStream {
+    audioPlayer.addTrack(url: entry.url)  // Playlist
+    radioLibrary.addStation(station)      // Library (favorites)
+}
+```
+
+**Playlist Selection:**
+```swift
+// Wire to PlaybackCoordinator
+if track.isStream {
+    await playbackCoordinator.play(url: track.url)
+} else {
+    audioPlayer.playTrack(track: track)
+}
+```
+
+### Oracle Consultation Needed
+
+**Questions for Oracle:**
+1. Best way to extend Track model for streams?
+2. Should RadioStationLibrary still exist (for favorites)?
+3. Buffering message - trivial or complex to add?
+4. Estimated effort for Phase 4 accurate (4-6 hours)?
+5. Any architectural concerns with playlist integration?
+
+---
+
+**Status:** Gap identified, Option B selected, planning Phase 4
+**Next:** Commit bug fix, plan Phase 4, Oracle review, implement
