@@ -260,9 +260,9 @@ struct OscilloscopeView: View {
         .frame(width: 76, height: 16)
         .onReceive(updateTimer) { _ in
             if audioPlayer.isPlaying {
-                // Get waveform samples from RMS data (approximation for now)
-                // RMS provides amplitude levels which create wave-like pattern
-                waveformData = audioPlayer.getRMSData(bands: 76)
+                // Get ACTUAL time-domain waveform samples (not RMS!)
+                // These are raw audio samples showing true wave shape
+                waveformData = audioPlayer.getWaveformSamples(count: 76)
             } else {
                 waveformData = []
             }

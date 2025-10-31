@@ -111,6 +111,7 @@ final class AudioPlayer {
     // Store both RMS and spectrum data (Oracle: don't discard either!)
     @ObservationIgnored private var latestRMS: [Float] = []
     @ObservationIgnored private var latestSpectrum: [Float] = []
+    @ObservationIgnored private var latestWaveform: [Float] = []  // Time-domain samples for oscilloscope
 
     private(set) var playbackState: PlaybackState = .idle
     private(set) var isPlaying: Bool = false
@@ -839,12 +840,13 @@ final class AudioPlayer {
 
     /// MainActor method for updating visualizer levels from audio thread data
     @MainActor
-    private func updateVisualizerLevels(rms: [Float], spectrum: [Float]) {
-        // Store BOTH datasets (Oracle: don't discard either!)
+    private func updateVisualizerLevels(rms: [Float], spectrum: [Float], waveform: [Float]) {
+        // Store ALL datasets (Oracle: don't discard any!)
         self.latestRMS = rms
         self.latestSpectrum = spectrum
+        self.latestWaveform = waveform  // Time-domain samples for oscilloscope
 
-        // Apply smoothing to the currently active mode
+        // Apply smoothing to the currently active mode (spectrum/RMS only)
         let used = self.useSpectrumVisualizer ? spectrum : rms
         let now = CFAbsoluteTimeGetCurrent()
         let dt = max(0, Float(now - self.lastUpdateTime))
@@ -959,9 +961,19 @@ final class AudioPlayer {
             let rmsSnapshot = scratch.snapshotRms()
             let spectrumSnapshot = scratch.snapshotSpectrum()
 
-            Task { @MainActor [context, rmsSnapshot, spectrumSnapshot] in
+            // Capture waveform samples for oscilloscope (downsample mono to ~76 points)
+            var waveformSnapshot: [Float] = []
+            scratch.withMonoReadOnly { mono in
+                let targetCount = 76
+                let step = max(1, mono.count / targetCount)
+                waveformSnapshot = stride(from: 0, to: mono.count, by: step)
+                    .prefix(targetCount)
+                    .map { mono[$0] }
+            }
+
+            Task { @MainActor [context, rmsSnapshot, spectrumSnapshot, waveformSnapshot] in
                 let player = Unmanaged<AudioPlayer>.fromOpaque(context.playerPointer).takeUnretainedValue()
-                player.updateVisualizerLevels(rms: rmsSnapshot, spectrum: spectrumSnapshot)
+                player.updateVisualizerLevels(rms: rmsSnapshot, spectrum: spectrumSnapshot, waveform: waveformSnapshot)
             }
         }
     }
@@ -1135,6 +1147,28 @@ final class AudioPlayer {
             for i in 0..<bands {
                 let sourceIndex = (i * latestRMS.count) / bands
                 result[i] = latestRMS[min(sourceIndex, latestRMS.count - 1)]
+            }
+        }
+
+        return result
+    }
+
+    func getWaveformSamples(count: Int) -> [Float] {
+        // Return actual time-domain samples for oscilloscope waveform
+        // These are RAW audio samples, not averaged (RMS) or transformed (FFT)
+        guard count > 0 else { return [] }
+
+        // Return waveform samples captured from mono buffer
+        if latestWaveform.count == count {
+            return latestWaveform
+        }
+
+        // Resample if different count requested
+        var result = [Float](repeating: 0, count: count)
+        if !latestWaveform.isEmpty {
+            for i in 0..<count {
+                let sourceIndex = (i * latestWaveform.count) / count
+                result[i] = latestWaveform[min(sourceIndex, latestWaveform.count - 1)]
             }
         }
 
