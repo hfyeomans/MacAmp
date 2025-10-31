@@ -7,6 +7,7 @@ struct WinampMainWindow: View {
     @Environment(AudioPlayer.self) var audioPlayer
     @Environment(DockingController.self) var dockingController
     @Environment(AppSettings.self) var settings
+    @Environment(PlaybackCoordinator.self) var playbackCoordinator
     @Environment(\.openWindow) var openWindow
 
     // CRITICAL: Prevent unnecessary body re-evaluations that cause ghost images
@@ -187,35 +188,35 @@ struct WinampMainWindow: View {
             // Transport controls (compact layout)
             HStack(spacing: 2) {
                 // Previous
-                Button(action: { audioPlayer.previousTrack() }) {
+                Button(action: { Task { await playbackCoordinator.previous() } }) {
                     SimpleSpriteImage("MAIN_PREVIOUS_BUTTON", width: 23, height: 18)
                         .scaleEffect(0.6) // Scale down for shade mode
                 }
                 .buttonStyle(.plain)
 
                 // Play
-                Button(action: { audioPlayer.play() }) {
+                Button(action: { playbackCoordinator.togglePlayPause() }) {
                     SimpleSpriteImage("MAIN_PLAY_BUTTON", width: 23, height: 18)
                         .scaleEffect(0.6)
                 }
                 .buttonStyle(.plain)
 
                 // Pause
-                Button(action: { audioPlayer.pause() }) {
+                Button(action: { playbackCoordinator.pause() }) {
                     SimpleSpriteImage("MAIN_PAUSE_BUTTON", width: 23, height: 18)
                         .scaleEffect(0.6)
                 }
                 .buttonStyle(.plain)
 
                 // Stop
-                Button(action: { audioPlayer.stop() }) {
+                Button(action: { playbackCoordinator.stop() }) {
                     SimpleSpriteImage("MAIN_STOP_BUTTON", width: 23, height: 18)
                         .scaleEffect(0.6)
                 }
                 .buttonStyle(.plain)
 
                 // Next
-                Button(action: { audioPlayer.nextTrack() }) {
+                Button(action: { Task { await playbackCoordinator.next() } }) {
                     SimpleSpriteImage("MAIN_NEXT_BUTTON", width: 22, height: 18)
                         .scaleEffect(0.6)
                 }
@@ -348,35 +349,35 @@ struct WinampMainWindow: View {
     private func buildTransportButtons() -> some View {
         Group {
             // Previous
-            Button(action: { audioPlayer.previousTrack() }) {
+            Button(action: { Task { await playbackCoordinator.previous() } }) {
                 SimpleSpriteImage("MAIN_PREVIOUS_BUTTON", width: 23, height: 18)
             }
             .buttonStyle(.plain)
             .at(Coords.prevButton)
-            
+
             // Play
-            Button(action: { audioPlayer.play() }) {
+            Button(action: { playbackCoordinator.togglePlayPause() }) {
                 SimpleSpriteImage("MAIN_PLAY_BUTTON", width: 23, height: 18)
             }
             .buttonStyle(.plain)
             .at(Coords.playButton)
-            
+
             // Pause
-            Button(action: { audioPlayer.pause() }) {
+            Button(action: { playbackCoordinator.pause() }) {
                 SimpleSpriteImage("MAIN_PAUSE_BUTTON", width: 23, height: 18)
             }
             .buttonStyle(.plain)
             .at(Coords.pauseButton)
-            
+
             // Stop
-            Button(action: { audioPlayer.stop() }) {
+            Button(action: { playbackCoordinator.stop() }) {
                 SimpleSpriteImage("MAIN_STOP_BUTTON", width: 23, height: 18)
             }
             .buttonStyle(.plain)
             .at(Coords.stopButton)
-            
+
             // Next
-            Button(action: { audioPlayer.nextTrack() }) {
+            Button(action: { Task { await playbackCoordinator.next() } }) {
                 SimpleSpriteImage("MAIN_NEXT_BUTTON", width: 23, height: 18)
             }
             .buttonStyle(.plain)
@@ -561,11 +562,12 @@ struct WinampMainWindow: View {
     
     @ViewBuilder
     private func buildTrackInfoDisplay() -> some View {
-        // Track info scrolling text display
-        let trackText = audioPlayer.currentTitle.isEmpty ? "MacAmp" : audioPlayer.currentTitle
+        // Track info scrolling text display - now uses PlaybackCoordinator
+        // This shows: local tracks, stream metadata, or buffering status ("Connecting...")
+        let trackText = playbackCoordinator.displayTitle.isEmpty ? "MacAmp" : playbackCoordinator.displayTitle
         let textWidth = trackText.count * 5 // Approximate character width in Winamp font
         let displayWidth = Int(Coords.trackInfo.width)
-        
+
         if textWidth > displayWidth {
             // Need to scroll for long text
             HStack(spacing: 0) {
@@ -574,7 +576,7 @@ struct WinampMainWindow: View {
                     .onAppear {
                         startScrolling()
                     }
-                    .onChange(of: audioPlayer.currentTitle) { _, _ in
+                    .onChange(of: playbackCoordinator.displayTitle) { _, _ in
                         resetScrolling()
                     }
             }
@@ -675,7 +677,7 @@ struct WinampMainWindow: View {
     }
     
     private func openFileDialog() {
-        PlaylistWindowActions.shared.presentAddFilesPanel(audioPlayer: audioPlayer)
+        PlaylistWindowActions.shared.presentAddFilesPanel(audioPlayer: audioPlayer, playbackCoordinator: playbackCoordinator)
     }
     
     // MARK: - Scrolling Animation Functions
@@ -684,13 +686,11 @@ struct WinampMainWindow: View {
         guard scrollTimer == nil else { return }
         guard isViewVisible else { return }
 
-        scrollTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { [weak audioPlayer] _ in
+        scrollTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { [playbackCoordinator] _ in
             // Access main actor properties synchronously to prevent race conditions
             // The timer already fires on the main thread, so we can use assumeIsolated
-            guard let audioPlayer = audioPlayer else { return }
-
             MainActor.assumeIsolated {
-                let trackText = audioPlayer.currentTitle.isEmpty ? "MacAmp" : audioPlayer.currentTitle
+                let trackText = playbackCoordinator.displayTitle.isEmpty ? "MacAmp" : playbackCoordinator.displayTitle
                 let textWidth = CGFloat(trackText.count * 5)
                 let displayWidth = Coords.trackInfo.width
 

@@ -72,6 +72,13 @@ struct Track: Identifiable, Equatable {
     var artist: String
     var duration: Double
 
+    /// Returns true if this track is an internet radio stream (HTTP/HTTPS URL)
+    /// Streams cannot be played via AudioPlayer (which uses AVAudioFile for local files only)
+    /// and must be routed through PlaybackCoordinator → StreamPlayer instead.
+    var isStream: Bool {
+        !url.isFileURL && (url.scheme == "http" || url.scheme == "https")
+    }
+
     static func == (lhs: Track, rhs: Track) -> Bool {
         lhs.id == rhs.id
     }
@@ -145,6 +152,8 @@ final class AudioPlayer {
 
     var playlist: [Track] = [] // New: List of tracks
     var currentTrack: Track? // New: Currently playing track
+    @ObservationIgnored private var currentPlaylistIndex: Int?
+    var externalPlaybackHandler: ((Track) -> Void)?
     var shuffleEnabled: Bool = false
     var repeatEnabled: Bool = false
 
@@ -257,6 +266,9 @@ final class AudioPlayer {
                     self.currentTitle = "\(track.title) - \(track.artist)"
                     self.currentDuration = track.duration
                     self.currentTrackURL = track.url
+
+                    // Notify coordinator that metadata updated
+                    self.externalPlaybackHandler?(track)
                 }
             } else if !self.playlist.contains(where: { $0.url.standardizedFileURL == normalizedURL }) {
                 print("DEBUG AudioPlayer: Appending track to playlist")
@@ -270,6 +282,16 @@ final class AudioPlayer {
     /// Play an EXISTING track from the playlist
     /// Does NOT modify the playlist - only plays the specified track
     func playTrack(track: Track) {
+        // Guard against stream URLs - AudioPlayer can only play local files
+        guard !track.isStream else {
+            print("ERROR: AudioPlayer cannot play internet radio streams.")
+            print("       Stream URL: \(track.url)")
+            print("       Use PlaybackCoordinator to route streams to StreamPlayer.")
+            return
+        }
+
+        updatePlaylistPosition(with: track)
+
         // CRITICAL: Don't call stop() here - it triggers completion handlers mid-transition.
         // Instead, directly stop the player node and reset state
         playerNode.stop()
@@ -374,13 +396,7 @@ final class AudioPlayer {
         }
     }
 
-    /// Legacy method: Load track and add to playlist
-    /// DEPRECATED: Use addTrack(url:) for new tracks or playTrack(track:) for existing tracks
-    @available(*, deprecated, message: "Use addTrack(url:) for new tracks or playTrack(track:) for existing tracks")
-    func loadTrack(url: URL) {
-        print("AudioPlayer: WARNING - loadTrack() is deprecated, use addTrack() instead")
-        addTrack(url: url)
-    }
+    // Removed: deprecated loadTrack() - no callers exist, use addTrack() instead (Oracle cleanup)
 
     func play() {
         // If playlist has ended, restart from the beginning
@@ -427,16 +443,23 @@ final class AudioPlayer {
         playerNode.stop()
         currentSeekID = UUID()
         let _ = scheduleFrom(time: 0, seekID: currentSeekID)  // Ignore return - reset to beginning
+
+        // Oracle fix: Clear currentTrack so UI doesn't show stale info during stream playback
+        currentTrack = nil
+        currentTitle = "No Track Loaded"
+        currentTrackURL = nil
+        currentDuration = 0.0
+
         currentTime = 0
         playbackProgress = 0
         progressTimer?.invalidate()
         removeVisualizerTapIfNeeded()
-        // Reset audio properties when stopping
-        if currentTrack == nil {
-            bitrate = 0
-            sampleRate = 0
-            channelCount = 2
-        }
+
+        // Reset audio properties
+        bitrate = 0
+        sampleRate = 0
+        channelCount = 2
+
         seekGuardActive = false
         print("AudioPlayer: Stop")
     }
@@ -805,46 +828,7 @@ final class AudioPlayer {
         RunLoop.main.add(progressTimer!, forMode: .common)
     }
 
-    // Debug: Print spectrum analyzer frequency distribution
-    private func printSpectrumFrequencyDistribution(sampleRate: Float, bars: Int) {
-        let minimumFrequency: Float = 50
-        let maximumFrequency: Float = min(16000, sampleRate * 0.45)
-
-        print("\n==== Spectrum Analyzer Frequency Distribution ====")
-        print("Sample Rate: \(sampleRate) Hz")
-        print("Bars: \(bars)")
-        print("Range: \(minimumFrequency) Hz - \(maximumFrequency) Hz")
-        print("\nBar | Center Freq | Equalization | Typical Content")
-        print("----+-------------+--------------+------------------------------------------")
-
-        for b in 0..<bars {
-            let normalized = Float(b) / Float(max(1, bars - 1))
-            let logScale = minimumFrequency * pow(maximumFrequency / minimumFrequency, normalized)
-            let linScale = minimumFrequency + normalized * (maximumFrequency - minimumFrequency)
-            let centerFrequency = 0.91 * logScale + 0.09 * linScale
-
-            let normalizedFreq = (centerFrequency - minimumFrequency) / (maximumFrequency - minimumFrequency)
-            let dbAdjustment = -8.0 + 16.0 * normalizedFreq
-            let equalizationGain = pow(10.0, dbAdjustment / 20.0)
-
-            let content: String
-            switch centerFrequency {
-            case ..<100: content = "Sub-bass, kick drum"
-            case 100..<200: content = "Bass, low vocals"
-            case 200..<400: content = "Vocal fundamentals, warmth"
-            case 400..<800: content = "Vocal body, instrument clarity"
-            case 800..<2000: content = "Vocal presence, definition"
-            case 2000..<4000: content = "Vocal consonants, attack"
-            case 4000..<8000: content = "Brightness, sibilance"
-            case 8000...: content = "Air, shimmer, harmonics"
-            default: content = "Unknown"
-            }
-
-            print(String(format: "%3d | %7.0f Hz  | %+.1f dB (×%.2f) | %@",
-                         b, centerFrequency, dbAdjustment, equalizationGain, content))
-        }
-        print("==================================================\n")
-    }
+    // Removed: printSpectrumFrequencyDistribution - unused debug code (Oracle cleanup)
 
     @MainActor
     private func updateVisualizerLevels(rms: [Float], spectrum: [Float], waveform: [Float]) {
@@ -1199,7 +1183,13 @@ final class AudioPlayer {
             self.progressTimer?.invalidate()
             self.playbackProgress = 1
             self.currentTime = self.currentDuration
-            self.nextTrack()
+            let action = self.nextTrack()
+            switch action {
+            case .requestCoordinatorPlayback(let track), .playLocally(let track):
+                self.externalPlaybackHandler?(track)
+            default:
+                break
+            }
             if !self.isPlaying {
                 self.removeVisualizerTapIfNeeded()
             }
@@ -1214,42 +1204,133 @@ final class AudioPlayer {
     }
 
     // MARK: - Playlist navigation
-    func nextTrack() {
-        guard !playlist.isEmpty else { return }
+    enum PlaylistAdvanceAction {
+        case none
+        case restartCurrent
+        case playLocally(Track)
+        case requestCoordinatorPlayback(Track)
+    }
 
-        if shuffleEnabled {
-            // Shuffle: pick random track
-            if let randomTrack = playlist.randomElement() {
-                playTrack(track: randomTrack)
-            }
-        } else if let current = currentTrack, let idx = playlist.firstIndex(of: current) {
-            // Sequential playback
-            let nextIdx = playlist.index(after: idx)
-            if nextIdx < playlist.count {
-                let next = playlist[nextIdx]
-                playTrack(track: next)
-            } else if repeatEnabled {
-                // Repeat: loop back to first track
-                playTrack(track: playlist[0])
-            } else {
-                // End of playlist reached, no repeat
-                trackHasEnded = true
-            }
-        } else if !playlist.isEmpty {
-            // No current track, start from beginning
-            playTrack(track: playlist[0])
+    func updatePlaylistPosition(with track: Track?) {
+        guard let track else {
+            currentPlaylistIndex = nil
+            return
+        }
+
+        if let index = playlist.firstIndex(of: track) {
+            currentPlaylistIndex = index
+            trackHasEnded = false
+        } else {
+            currentPlaylistIndex = nil
         }
     }
 
-    func previousTrack() {
-        guard let current = currentTrack, let idx = playlist.firstIndex(of: current) else {
-            return
+    @discardableResult
+    func nextTrack() -> PlaylistAdvanceAction {
+        guard !playlist.isEmpty else { return .none }
+
+        trackHasEnded = false
+
+        if shuffleEnabled {
+            guard let randomTrack = playlist.randomElement(),
+                  let randomIndex = playlist.firstIndex(of: randomTrack) else {
+                return .none
+            }
+
+            currentPlaylistIndex = randomIndex
+            trackHasEnded = false
+            if randomTrack.isStream {
+                return .requestCoordinatorPlayback(randomTrack)
+            }
+
+            playTrack(track: randomTrack)
+            return .playLocally(randomTrack)
         }
-        if idx > 0 {
-            let prev = playlist[playlist.index(before: idx)]
-            playTrack(track: prev)
+
+        let activeIndex: Int
+        if let index = currentPlaylistIndex {
+            activeIndex = index
+        } else if let current = currentTrack, let index = playlist.firstIndex(of: current) {
+            activeIndex = index
+            currentPlaylistIndex = index
         } else {
-            seek(to: 0, resume: isPlaying)
+            activeIndex = -1
         }
+
+        let nextIndex = activeIndex + 1
+        if nextIndex < playlist.count {
+            let track = playlist[nextIndex]
+            currentPlaylistIndex = nextIndex
+            trackHasEnded = false
+            if track.isStream {
+                return .requestCoordinatorPlayback(track)
+            }
+
+            playTrack(track: track)
+            return .playLocally(track)
+        }
+
+        if repeatEnabled {
+            let track = playlist[0]
+            currentPlaylistIndex = 0
+            trackHasEnded = false
+            if track.isStream {
+                return .requestCoordinatorPlayback(track)
+            }
+
+            playTrack(track: track)
+            return .playLocally(track)
+        }
+
+        trackHasEnded = true
+        currentPlaylistIndex = nil
+        return .none
+    }
+
+    @discardableResult
+    func previousTrack() -> PlaylistAdvanceAction {
+        guard !playlist.isEmpty else { return .none }
+
+        if shuffleEnabled {
+            guard let track = playlist.randomElement(),
+                  let index = playlist.firstIndex(of: track) else {
+                return .none
+            }
+
+            currentPlaylistIndex = index
+            trackHasEnded = false
+            if track.isStream {
+                return .requestCoordinatorPlayback(track)
+            }
+
+            playTrack(track: track)
+            return .playLocally(track)
+        }
+
+        let activeIndex: Int
+        if let index = currentPlaylistIndex {
+            activeIndex = index
+        } else if let current = currentTrack, let index = playlist.firstIndex(of: current) {
+            activeIndex = index
+            currentPlaylistIndex = index
+        } else {
+            return .none
+        }
+
+        if activeIndex > 0 {
+            let previousIndex = playlist.index(before: activeIndex)
+            let track = playlist[previousIndex]
+            currentPlaylistIndex = previousIndex
+            trackHasEnded = false
+            if track.isStream {
+                return .requestCoordinatorPlayback(track)
+            }
+
+            playTrack(track: track)
+            return .playLocally(track)
+        }
+
+        seek(to: 0, resume: isPlaying)
+        return .restartCurrent
     }
 }

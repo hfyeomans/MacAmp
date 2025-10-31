@@ -123,7 +123,11 @@ final class SkinManager {
         var skins: [SkinMetadata] = []
 
         // Add bundled skins
-        skins.append(contentsOf: SkinMetadata.bundledSkins)
+        let bundled = SkinMetadata.bundledSkins
+        skins.append(contentsOf: bundled)
+
+        // Create set of bundled filenames to avoid duplicates
+        let bundledFilenames = Set(bundled.map { $0.url.deletingPathExtension().lastPathComponent })
 
         // Scan user skins directory
         do {
@@ -134,11 +138,18 @@ final class SkinManager {
                 options: [.skipsHiddenFiles]
             )
             for fileURL in userSkinFiles where fileURL.pathExtension.lowercased() == "wsz" {
-                let skinName = fileURL.deletingPathExtension().lastPathComponent
-                let skinID = "user:\(skinName)"
+                let skinFilename = fileURL.deletingPathExtension().lastPathComponent
+
+                // Skip if this skin is already bundled (avoid duplicates)
+                if bundledFilenames.contains(skinFilename) {
+                    NSLog("⏭️  Skipping duplicate: \(skinFilename) (already bundled)")
+                    continue
+                }
+
+                let skinID = "user:\(skinFilename)"
                 skins.append(SkinMetadata(
                     id: skinID,
-                    name: skinName,
+                    name: skinFilename,
                     url: fileURL,
                     source: .user
                 ))

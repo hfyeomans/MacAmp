@@ -6,6 +6,7 @@ final class PlaylistWindowActions: NSObject {
     static let shared = PlaylistWindowActions()
 
     var selectedIndices: Set<Int> = []
+    weak var radioLibrary: RadioStationLibrary?
 
     private func showAlert(_ title: String, _ message: String) {
         let alert = NSAlert()
@@ -16,7 +17,7 @@ final class PlaylistWindowActions: NSObject {
         alert.runModal()
     }
 
-    func presentAddFilesPanel(audioPlayer: AudioPlayer) {
+    func presentAddFilesPanel(audioPlayer: AudioPlayer, playbackCoordinator: PlaybackCoordinator? = nil) {
         let openPanel = NSOpenPanel()
         openPanel.allowedContentTypes = [.audio, .playlist]
         openPanel.allowsMultipleSelection = true
@@ -27,9 +28,21 @@ final class PlaylistWindowActions: NSObject {
         openPanel.begin { response in
             if response == .OK {
                 let urls = openPanel.urls
-                Task { @MainActor [weak self, urls, audioPlayer] in
+                Task { @MainActor [weak self, urls, audioPlayer, playbackCoordinator] in
                     guard let self else { return }
+
+                    // Remember if playlist was empty (for autoplay detection)
+                    let wasEmpty = audioPlayer.playlist.isEmpty
+
                     self.handleSelectedURLs(urls, audioPlayer: audioPlayer)
+
+                    // If playlist was empty and AudioPlayer autoplayed, sync coordinator state
+                    if wasEmpty, let firstTrack = audioPlayer.currentTrack, let coordinator = playbackCoordinator {
+                        await coordinator.play(track: firstTrack)
+                    }
+
+                    // Note: externalPlaybackHandler should be set once in MacAmpApp initialization
+                    // Not here - setting it here clobbers coordinator's handler for playlist advance
                 }
             }
         }
@@ -39,21 +52,62 @@ final class PlaylistWindowActions: NSObject {
         for url in urls {
             let fileExtension = url.pathExtension.lowercased()
             if fileExtension == "m3u" || fileExtension == "m3u8" {
-                loadM3UPlaylist(url, audioPlayer: audioPlayer)
+                // Load M3U/M3U8 files using radioLibrary
+                if let radioLibrary {
+                    loadM3UPlaylist(url, audioPlayer: audioPlayer, radioLibrary: radioLibrary)
+                } else {
+                    // Fallback if radioLibrary not available (shouldn't happen)
+                    showAlert("Error", "Radio library not initialized. Please restart the app.")
+                }
             } else {
                 audioPlayer.addTrack(url: url)
             }
         }
     }
 
-    private func loadM3UPlaylist(_ url: URL, audioPlayer: AudioPlayer) {
+    private func loadM3UPlaylist(_ url: URL, audioPlayer: AudioPlayer, radioLibrary: RadioStationLibrary) {
         do {
             let entries = try M3UParser.parse(fileURL: url)
+            var addedStreams = 0
+            var addedFiles = 0
+
             for entry in entries {
-                if !entry.isRemoteStream {
+                if entry.isRemoteStream {
+                    // Add to playlist as Track (Winamp behavior)
+                    // RadioStationLibrary is ONLY for favorites menu (Phase 5+)
+                    let streamTrack = Track(
+                        url: entry.url,
+                        title: entry.title ?? "Unknown Station",
+                        artist: "Internet Radio",
+                        duration: 0.0  // Streams have no duration
+                    )
+                    audioPlayer.playlist.append(streamTrack)
+                    addedStreams += 1
+                } else {
+                    // Add local file to playlist
                     audioPlayer.addTrack(url: entry.url)
+                    addedFiles += 1
                 }
             }
+
+            // Show feedback
+            let alert = NSAlert()
+            alert.messageText = "M3U Playlist Loaded"
+
+            var message = ""
+            if addedFiles > 0 {
+                message += "Added \(addedFiles) local file(s)"
+            }
+            if addedStreams > 0 {
+                if !message.isEmpty { message += "\n" }
+                message += "Added \(addedStreams) internet radio stream(s)"
+            }
+            message += "\n\nAll items visible in playlist."
+
+            alert.informativeText = message
+            alert.alertStyle = .informational
+            alert.addButton(withTitle: "OK")
+            alert.runModal()
         } catch {
             let alert = NSAlert()
             alert.messageText = "Failed to Load M3U Playlist"
@@ -65,7 +119,52 @@ final class PlaylistWindowActions: NSObject {
     }
 
     @objc func addURL(_ sender: NSMenuItem) {
-        showAlert("Add URL", "URL/Internet Radio support coming in P5 implementation.\nSee tasks/internet-radio-file-types/")
+        guard let audioPlayer = sender.representedObject as? AudioPlayer else {
+            showAlert("Error", "Audio player not available")
+            return
+        }
+
+        let alert = NSAlert()
+        alert.messageText = "Add Internet Radio Station"
+        alert.informativeText = "Enter the stream URL (HTTP or HTTPS):"
+
+        let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
+        input.placeholderString = "http://stream.example.com/radio.mp3"
+        alert.accessoryView = input
+
+        alert.addButton(withTitle: "Add")
+        alert.addButton(withTitle: "Cancel")
+
+        let response = alert.runModal()
+
+        if response == .alertFirstButtonReturn {
+            let urlString = input.stringValue.trimmingCharacters(in: .whitespaces)
+
+            guard !urlString.isEmpty else {
+                showAlert("Invalid URL", "Please enter a valid URL")
+                return
+            }
+
+            guard let url = URL(string: urlString),
+                  url.scheme == "http" || url.scheme == "https" else {
+                showAlert("Invalid URL", "URL must start with http:// or https://")
+                return
+            }
+
+            // Add to playlist as Track (Winamp behavior)
+            // RadioStationLibrary is ONLY for favorites menu (Phase 5+)
+            let stationName = url.host ?? url.lastPathComponent
+            let streamTrack = Track(
+                url: url,
+                title: stationName,
+                artist: "Internet Radio",
+                duration: 0.0
+            )
+
+            audioPlayer.playlist.append(streamTrack)
+
+            showAlert("Stream Added", "Added '\(stationName)' to playlist.\n\nClick to play!")
+        }
     }
 
     @objc func addDirectory(_ sender: NSMenuItem) {
@@ -153,6 +252,8 @@ struct WinampPlaylistWindow: View {
     @Environment(SkinManager.self) var skinManager
     @Environment(AudioPlayer.self) var audioPlayer
     @Environment(AppSettings.self) var settings
+    @Environment(RadioStationLibrary.self) var radioLibrary
+    @Environment(PlaybackCoordinator.self) var playbackCoordinator
 
     @State private var selectedIndices: Set<Int> = []
     @State private var isShadeMode: Bool = false
@@ -234,6 +335,9 @@ struct WinampPlaylistWindow: View {
             keyboardMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [self] event in
                 return handleKeyPress(event: event)
             }
+
+            // Inject radioLibrary into shared actions for ADD URL functionality
+            PlaylistWindowActions.shared.radioLibrary = radioLibrary
         }
         .onDisappear {
             // Clean up keyboard monitor
@@ -327,8 +431,10 @@ struct WinampPlaylistWindow: View {
                         .frame(width: 243, height: 13)
                         .background(trackBackground(track: track, index: index))
                         .onTapGesture(count: 2) {
-                            // Double-click: Play the track
-                            audioPlayer.playTrack(track: track)
+                            // Double-click: Play via PlaybackCoordinator (handles both local + streams)
+                            Task {
+                                await playbackCoordinator.play(track: track)
+                            }
                         }
                         .onTapGesture {
                             // Single-click: Handle selection
@@ -404,7 +510,7 @@ struct WinampPlaylistWindow: View {
     @ViewBuilder
     private func buildPlaylistTransportButtons() -> some View {
             Button(action: {
-                audioPlayer.previousTrack()
+                Task { await playbackCoordinator.previous() }
             }) {
                 Color.clear
                     .frame(width: 10, height: 9)
@@ -414,11 +520,7 @@ struct WinampPlaylistWindow: View {
             .position(x: 133, y: 220)
 
             Button(action: {
-            if audioPlayer.isPaused || !audioPlayer.isPlaying {
-                    audioPlayer.play()
-            } else {
-                audioPlayer.pause()
-            }
+                playbackCoordinator.togglePlayPause()
         }) {
                 Color.clear
                     .frame(width: 10, height: 9)
@@ -428,7 +530,7 @@ struct WinampPlaylistWindow: View {
             .position(x: 144, y: 220)
 
             Button(action: {
-                audioPlayer.pause()
+                playbackCoordinator.pause()
             }) {
                 Color.clear
                     .frame(width: 10, height: 9)
@@ -438,7 +540,7 @@ struct WinampPlaylistWindow: View {
             .position(x: 155, y: 220)
 
             Button(action: {
-                audioPlayer.stop()
+                playbackCoordinator.stop()
             }) {
                 Color.clear
                     .frame(width: 10, height: 9)
@@ -448,7 +550,7 @@ struct WinampPlaylistWindow: View {
             .position(x: 166, y: 220)
 
             Button(action: {
-                audioPlayer.nextTrack()
+                Task { await playbackCoordinator.next() }
             }) {
                 Color.clear
                     .frame(width: 10, height: 9)
@@ -508,7 +610,7 @@ struct WinampPlaylistWindow: View {
             SimpleSpriteImage("PLAYLIST_TITLE_BAR", width: 275, height: 14)
                 .position(x: 137.5, y: 7)
 
-            if let currentTrack = audioPlayer.currentTrack {
+            if let currentTrack = playbackCoordinator.currentTrack {
                 Text("\(currentTrack.title) - \(currentTrack.artist)")
                     .font(.system(size: 8))
                     .foregroundColor(.white)
@@ -528,7 +630,8 @@ struct WinampPlaylistWindow: View {
     }
 
     private func trackTextColor(track: Track) -> Color {
-        if let currentTrack = audioPlayer.currentTrack, currentTrack.url == track.url {
+        // Use coordinator's current track for highlighting
+        if let currentTrack = playbackCoordinator.currentTrack, currentTrack.url == track.url {
             return playlistStyle.currentTextColor
         }
         return playlistStyle.normalTextColor
@@ -550,7 +653,7 @@ struct WinampPlaylistWindow: View {
     }
     
     private func openFileDialog() {
-        PlaylistWindowActions.shared.presentAddFilesPanel(audioPlayer: audioPlayer)
+        PlaylistWindowActions.shared.presentAddFilesPanel(audioPlayer: audioPlayer, playbackCoordinator: playbackCoordinator)
     }
 
     

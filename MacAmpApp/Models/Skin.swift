@@ -163,6 +163,36 @@ extension SkinMetadata {
             ))
         }
 
+        // KenWood KDC 7000 Elite skin
+        if let url = findSkin(named: "KenWood_KDC_7000_Elite") {
+            skins.append(SkinMetadata(
+                id: "bundled:KenWood-KDC-7000",
+                name: "KenWood KDC-7000 Elite",
+                url: url,
+                source: .bundled
+            ))
+        }
+
+        // Mac OS X skin
+        if let url = findSkin(named: "Mac_OS-X_skin") {
+            skins.append(SkinMetadata(
+                id: "bundled:Mac-OS-X",
+                name: "Mac OS X",
+                url: url,
+                source: .bundled
+            ))
+        }
+
+        // Sony MP3 Player skin
+        if let url = findSkin(named: "Sony_MP3_Player_") {
+            skins.append(SkinMetadata(
+                id: "bundled:Sony-MP3",
+                name: "Sony MP3 Player",
+                url: url,
+                source: .bundled
+            ))
+        }
+
         NSLog("🎁 Total bundled skins found: \(skins.count)")
         for skin in skins {
             NSLog("  📦 \(skin.name) [\(skin.id)] -> \(skin.url.path)")
