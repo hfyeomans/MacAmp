@@ -1084,45 +1084,71 @@ struct Track: Identifiable, Equatable {
 
 ---
 
-## Phase 4: Effort Estimate
+## Phase 4: Oracle-Corrected Effort Estimate
 
-| Step | Task | Time | Cumulative |
-|------|------|------|------------|
-| 1 | Extend Track | 15 min | 15 min |
-| 2 | M3U loading | 45 min | 1 hour |
-| 3 | Wire playlist | 1.5 hours | 2.5 hours |
-| 4 | Buffering (opt) | 45 min | 3.25 hours |
-| 5 | ADD URL update | 30 min | 3.75 hours |
+**Oracle Review:** ⚠️ Phase 4 is FULL coordinator migration, not just playlist integration
 
-**Total:** 3.75-4 hours (rounds to 3-4 hours)
+| Step | Task | My Estimate | Oracle | Why |
+|------|------|-------------|--------|-----|
+| 1 | Track + guards | 15 min | 30 min | Guards in AudioPlayer |
+| 2 | M3U/ADD URL fix | 45 min | 1 hour | Remove library, thorough test |
+| 3 | StreamPlayer URL method | - | 30 min | New overload needed |
+| 4 | Coordinator methods | 1.5 hours | 1 hour | next/previous/play(track) |
+| 5 | Wire ALL controls | - | 2-3 hours | Playlist + transport + shortcuts |
+| 6 | Update ALL UI bindings | 45 min | 1.5 hours | Every view using audioPlayer |
+| 7 | Buffering + testing | 45 min | 1-2 hours | Display + regression |
 
-**Commits:** 3-4 commits (depending on combining steps 4+5)
+**Total:** ~~3.75 hours~~ → **6-8 hours** (Oracle corrected)
+
+**Commits:** ~~4~~ → **7 commits** (more extensive)
 
 ---
 
-## Phase 4: Commit Strategy
+## Phase 4: Oracle-Corrected Commit Strategy
 
-**Commit 8:** Extend Track model for stream URLs
-- Add isStream computed property
-- Document stream handling
-- No behavior changes (just infrastructure)
+**Oracle:** This is a full coordinator migration - 7 commits, 6-8 hours
 
-**Commit 9:** Update M3U loading and ADD URL for playlist
-- Streams go to both playlist AND library
-- ADD URL adds to playlist
-- User sees streams in playlist UI
+**Commit 13:** Extend Track + add AudioPlayer guards (30 min)
+- Add `Track.isStream` computed property
+- Add guard in `AudioPlayer.playTrack()` to prevent crashes
+- Fail gracefully if stream URL attempted
 
-**Commit 10:** Wire playlist selection to PlaybackCoordinator
-- Create and inject PlaybackCoordinator
-- Route stream playback through coordinator
-- Streams playable from playlist
+**Commit 14:** Fix M3U + ADD URL (playlist ONLY) (1 hour)
+- **REMOVE** all `radioLibrary.addStation()` calls
+- Streams append to `audioPlayer.playlist` as Tracks
+- Update user feedback messages
+- Test with mixed M3U
 
-**Commit 11 (Optional):** Add buffering status display
-- Show "Connecting..." when buffering
-- Update from stream metadata
-- Winamp-style status messages
+**Commit 15:** Add StreamPlayer.play(url:) overload (30 min)
+- Add URL-based play method (not just RadioStation)
+- Support playlist-driven playback
+- Preserve metadata from Track
 
-**Total:** 3-4 commits (11 can be merged with 10 if trivial)
+**Commit 16:** Extend PlaybackCoordinator transport (1 hour)
+- Add `play(track: Track)` overload
+- Add `next()`, `previous()` methods
+- Add `displayTitle`, `displayArtist` properties
+- Add `currentTrack` property
+
+**Commit 17:** Wire ALL playback controls (2-3 hours)
+- Playlist double-click → coordinator
+- Next/Previous buttons → coordinator
+- Play/Pause/Stop buttons → coordinator
+- Keyboard shortcuts → coordinator
+- AppCommands → coordinator
+
+**Commit 18:** Update ALL UI bindings (1.5 hours)
+- WinampMainWindow: Use `coordinator.displayTitle`
+- WinampMainWindow: Use coordinator state
+- WinampPlaylistWindow shade mode: Use coordinator
+- Test all UI updates
+
+**Commit 19:** Buffering display + final testing (1 hour)
+- Add "Connecting..." / "buffer 0%" logic
+- Comprehensive regression testing
+- Verify Winamp parity
+
+**Total:** 6-8 hours, 7 commits (Oracle approved)
 
 ---
 
@@ -1202,37 +1228,45 @@ struct Track: Identifiable, Equatable {
 
 ---
 
-## Phase 4: Implementation Steps (Detailed)
+## Phase 4: Oracle-Corrected Implementation Steps
 
-### Commit 8: Extend Track Model for Stream URLs
+### Commit 13: Extend Track Model + Add Guards (30 min)
 
 **Files to Modify:**
-- `MacAmpApp/Audio/AudioPlayer.swift` - Track struct
+- `MacAmpApp/Audio/AudioPlayer.swift`
 
 **Changes:**
+1. Add to Track struct:
 ```swift
-struct Track: Identifiable, Equatable {
-    // ... existing properties ...
+/// Returns true if this track is an internet radio stream
+var isStream: Bool {
+    !url.isFileURL && (url.scheme == "http" || url.scheme == "https")
+}
+```
 
-    /// Returns true if this track is an internet radio stream
-    var isStream: Bool {
-        !url.isFileURL && (url.scheme == "http" || url.scheme == "https")
+2. Add guard in playTrack():
+```swift
+func playTrack(track: Track) {
+    guard !track.isStream else {
+        print("ERROR: Cannot play stream via AudioPlayer - use PlaybackCoordinator")
+        return
     }
+    // ... existing code
 }
 ```
 
 **Testing:**
 - [ ] Build succeeds
-- [ ] No regressions
 - [ ] isStream returns correct value
+- [ ] Attempting to play stream via AudioPlayer fails gracefully
 
-**Effort:** 15 minutes
+**Effort:** 30 minutes (Oracle)
 
 ---
 
-### Commit 9: M3U Loading & ADD URL to Playlist
+### Commit 14: Fix M3U + ADD URL (Playlist ONLY) (1 hour)
 
-**CRITICAL CORRECTION:** Streams go to **playlist ONLY**, NOT RadioStationLibrary
+**CRITICAL:** Streams go to **playlist ONLY**, NOT RadioStationLibrary
 
 **Files to Modify:**
 - `MacAmpApp/Views/WinampPlaylistWindow.swift`
@@ -1276,15 +1310,112 @@ showAlert("Stream Added", "Added to playlist. Click to play!")
 - [ ] ADD URL → Stream in playlist
 - [ ] Streams visible in UI
 
-**Effort:** 30-45 minutes
+**Effort:** 1 hour (Oracle)
 
 ---
 
-### Commit 10: Wire Playlist Selection to PlaybackCoordinator
+### Commit 15: Add StreamPlayer.play(url:) Overload (30 min)
+
+**Files to Modify:**
+- `MacAmpApp/Audio/StreamPlayer.swift`
+
+**Changes:**
+```swift
+// Add URL-based play method for playlist tracks
+func play(url: URL, title: String? = nil, artist: String? = nil) async {
+    // Create internal RadioStation
+    let station = RadioStation(
+        name: title ?? url.host ?? "Internet Radio",
+        streamURL: url
+    )
+    await play(station: station)
+}
+```
+
+**Testing:**
+- [ ] Can play stream from URL
+- [ ] Metadata preserved if provided
+- [ ] Falls back to URL host for title
+
+**Effort:** 30 minutes (Oracle)
+
+---
+
+### Commit 16: Extend PlaybackCoordinator Transport (1 hour)
+
+**Files to Modify:**
+- `MacAmpApp/Audio/PlaybackCoordinator.swift`
+
+**Changes:**
+1. Add `play(track: Track)` overload:
+```swift
+func play(track: Track) async {
+    if track.isStream {
+        streamPlayer.stop()
+        await streamPlayer.play(url: track.url, title: track.title, artist: track.artist)
+        currentSource = .radioStation(/* temp */)
+        currentTrack = track
+    } else {
+        audioPlayer.stop()
+        audioPlayer.playTrack(track: track)
+        currentSource = .localTrack(track.url)
+        currentTrack = track
+    }
+}
+```
+
+2. Add transport methods:
+```swift
+func next() async {
+    // Delegate to audioPlayer for playlist navigation
+    audioPlayer.nextTrack()
+}
+
+func previous() async {
+    audioPlayer.previousTrack()
+}
+```
+
+3. Add unified state:
+```swift
+var displayTitle: String {
+    switch currentSource {
+    case .radioStation:
+        if streamPlayer.isBuffering { return "Connecting..." }
+        if streamPlayer.error != nil { return "buffer 0%" }
+        return streamPlayer.streamTitle ?? currentTrack?.title ?? "Internet Radio"
+    case .localTrack:
+        return currentTrack?.title ?? currentTitle ?? "Unknown"
+    case .none:
+        return "MacAmp"
+    }
+}
+
+var displayArtist: String {
+    streamPlayer.streamArtist ?? currentTrack?.artist ?? ""
+}
+
+var currentTrack: Track?
+```
+
+**Testing:**
+- [ ] play(track:) works for both types
+- [ ] next/previous delegate correctly
+- [ ] displayTitle shows correct state
+
+**Effort:** 1 hour (Oracle)
+
+---
+
+### Commit 17: Wire ALL Playback Controls (2-3 hours)
+
+**ORACLE CRITICAL:** Not just playlist - ALL controls must route through coordinator
 
 **Files to Modify:**
 - `MacAmpApp/MacAmpApp.swift`
+- `MacAmpApp/Views/WinampMainWindow.swift`
 - `MacAmpApp/Views/WinampPlaylistWindow.swift`
+- `MacAmpApp/AppCommands.swift` (if exists)
 
 **MacAmpApp.swift:**
 ```swift
@@ -1294,7 +1425,6 @@ var playbackCoordinator: PlaybackCoordinator {
     PlaybackCoordinator(audioPlayer: audioPlayer, streamPlayer: streamPlayer)
 }
 
-// In body:
 .environment(playbackCoordinator)
 ```
 
@@ -1302,69 +1432,118 @@ var playbackCoordinator: PlaybackCoordinator {
 ```swift
 @Environment(PlaybackCoordinator.self) var playbackCoordinator
 
-// Find playlist click handler, replace with:
-private func playTrack(_ track: Track) async {
-    if track.isStream {
-        await playbackCoordinator.play(url: track.url)
-    } else {
-        audioPlayer.playTrack(track: track)
-    }
+// Playlist double-click (find existing handler):
+Task {
+    await playbackCoordinator.play(track: track)
 }
 ```
 
-**Testing:**
-- [ ] Click stream → Plays audio
-- [ ] Click local → Plays with EQ
-- [ ] No audio conflicts
-- [ ] Switch local ↔ stream works
+**WinampMainWindow.swift - Transport Buttons:**
+```swift
+// Next button:
+Button { Task { await playbackCoordinator.next() } }
 
-**Effort:** 1-1.5 hours
+// Previous button:
+Button { Task { await playbackCoordinator.previous() } }
+
+// Play/Pause button:
+Button { playbackCoordinator.togglePlayPause() }
+
+// Stop button:
+Button { playbackCoordinator.stop() }
+```
+
+**Keyboard Shortcuts** (find existing):
+- Space → `playbackCoordinator.togglePlayPause()`
+- Z → `await playbackCoordinator.previous()`
+- B → `await playbackCoordinator.next()`
+- V → `playbackCoordinator.stop()`
+
+**Testing:**
+- [ ] Playlist click works for both types
+- [ ] Next/Previous buttons work
+- [ ] Play/Pause works
+- [ ] Keyboard shortcuts work
+- [ ] No audio conflicts during transitions
+
+**Effort:** 2-3 hours (Oracle) - Many control points to wire
 
 ---
 
-### Commit 11: Buffering Status Display
+### Commit 18: Update ALL UI Bindings (1.5 hours)
+
+**ORACLE:** Every view reading audioPlayer state must switch to coordinator
 
 **Files to Modify:**
-- `MacAmpApp/Audio/PlaybackCoordinator.swift`
 - `MacAmpApp/Views/WinampMainWindow.swift`
+- `MacAmpApp/Views/WinampPlaylistWindow.swift`
 
-**PlaybackCoordinator:**
+**WinampMainWindow.swift Changes:**
+
+1. Add environment:
 ```swift
-var displayTitle: String {
-    switch currentSource {
-    case .radioStation:
-        if streamPlayer.isBuffering {
-            return "Connecting..."
-        }
-        if streamPlayer.error != nil {
-            return "buffer 0%"
-        }
-        return streamPlayer.streamTitle ?? currentTitle ?? "Internet Radio"
-    case .localTrack:
-        return currentTitle ?? "Unknown"
-    case .none:
-        return "MacAmp"
-    }
+@Environment(PlaybackCoordinator.self) var playbackCoordinator
+```
+
+2. Update title display (line ~565):
+```swift
+// OLD: let trackText = audioPlayer.currentTitle
+// NEW: let trackText = playbackCoordinator.displayTitle
+```
+
+3. Update onChange observer (line ~577):
+```swift
+// OLD: .onChange(of: audioPlayer.currentTitle)
+// NEW: .onChange(of: playbackCoordinator.displayTitle)
+```
+
+4. Update any other audioPlayer.currentTrack references
+
+**WinampPlaylistWindow.swift Changes:**
+
+1. Shade mode display:
+```swift
+// Use coordinator state for current track info
+if let currentTrack = playbackCoordinator.currentTrack {
+    Text("\(currentTrack.title) - \(currentTrack.artist)")
 }
 ```
 
-**WinampMainWindow.swift:**
-```swift
-// Replace audioPlayer.currentTitle with playbackCoordinator.displayTitle
-let trackText = playbackCoordinator.displayTitle
-```
-
 **Testing:**
-- [ ] Stream shows "Connecting..."
-- [ ] Then shows metadata
-- [ ] Buffer issues show "buffer 0%"
+- [ ] Title scrolls correctly for local files
+- [ ] Title shows stream metadata
+- [ ] "Connecting..." shows during buffering
+- [ ] Shade mode displays correctly
+- [ ] No UI glitches or flickers
 
-**Effort:** 30-45 minutes
+**Effort:** 1.5 hours (Oracle) - Multiple UI surfaces
 
 ---
 
-**Phase 4 Total:** 3.75 hours, 4 commits
+### Commit 19: Buffering Display + Final Testing (1 hour)
 
-**Phase 4 Status:** Planned with architecture correction
-**Ready to Implement:** After Oracle approval
-**Architecture Fix:** RadioStationLibrary for favorites menu only (not M3U loading)
+**Files to Modify:**
+- Final polish and regression testing
+
+**Changes:**
+- Verify "Connecting..." displays correctly
+- Verify "buffer 0%" on network issues
+- Comprehensive regression testing:
+  - [ ] Local files still work
+  - [ ] Streams work from playlist
+  - [ ] Next/Previous works for mixed playlists
+  - [ ] Transport controls all functional
+  - [ ] No audio conflicts
+  - [ ] Metadata updates live
+  - [ ] UI responds correctly
+
+**Effort:** 1 hour (Oracle)
+
+---
+
+**Phase 4 Total:** 6-8 hours, 7 commits (Oracle corrected)
+
+**Oracle Verdict:** ✅ Approved with corrections
+**Scope:** Full coordinator migration (not just playlist integration)
+**Complexity:** High - extensive refactoring of control flow and UI bindings
+**Ready to Implement:** Yes, with Oracle-corrected scope and timeline

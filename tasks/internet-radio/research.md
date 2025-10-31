@@ -663,3 +663,251 @@ if track.isStream {
 
 **Status:** Gap identified, Option B selected, planning Phase 4
 **Next:** Commit bug fix, plan Phase 4, Oracle review, implement
+
+---
+
+# Oracle Phase 4 Review (2025-10-31)
+
+**Reviewer:** Oracle (Codex)
+**Scope:** Phase 4 architecture and implementation plan review
+**Status:** ⚠️ SIGNIFICANT CORRECTIONS NEEDED
+
+## Oracle Findings: Phase 4 More Complex Than Estimated
+
+### 🛑 Critical Issues Found (5)
+
+#### 1. Playlist Click Will Crash for Streams
+**Location:** `WinampPlaylistWindow.swift:409`
+**Problem:**
+```swift
+// Double-click → audioPlayer.playTrack(track:)
+//   → Opens AVAudioFile (AudioPlayer.swift:272)
+//   → CRASHES on HTTP URLs (can't open as file)
+```
+
+**Fix Required:**
+- Playlist click MUST route through PlaybackCoordinator
+- NOT just for new functionality - prevents crashes
+
+#### 2. Transport Controls Bypass Coordinator
+**Locations:**
+- Next/Previous: `AudioPlayer.swift:1208, 1244`
+- Buttons: `WinampMainWindow.swift:351, 379, 485`
+- All call `AudioPlayer` methods directly
+
+**Problem:**
+- Next/Previous will fail on stream tracks
+- Shuffle/Repeat will break
+- Keyboard shortcuts bypass coordinator
+
+**Fix Required:**
+- PlaybackCoordinator needs `next()`, `previous()` methods
+- ALL transport controls route through coordinator
+- More extensive than just playlist click
+
+#### 3. UI Bindings Wrong
+**Locations:**
+- Title display: `WinampMainWindow.swift:565, 577`
+- Reads `audioPlayer.currentTitle` directly
+
+**Problem:**
+- Won't show stream metadata
+- Won't show "Connecting..." buffering
+- Wrong state source
+
+**Fix Required:**
+- ALL UI must read from PlaybackCoordinator
+- Not just buffering display - fundamental binding change
+
+#### 4. StreamPlayer Only Accepts RadioStation
+**Location:** `StreamPlayer.swift:46`
+```swift
+func play(station: RadioStation) async
+```
+
+**Problem:**
+- Playlist tracks are just URLs
+- Don't have RadioStation objects
+- Creates synthetic stations loses metadata
+
+**Fix Required:**
+- Add `play(url: URL)` overload to StreamPlayer
+- Extract metadata from URL, not RadioStation
+
+#### 5. PlaybackCoordinator Loses Metadata
+**Location:** `PlaybackCoordinator.swift:67`
+```swift
+// Creates synthetic RadioStation from URL
+let station = RadioStation(name: url.lastPathComponent, streamURL: url)
+```
+
+**Problem:**
+- Throws away playlist Track metadata (title/artist)
+- Recreates from URL (loses info)
+
+**Fix Required:**
+- Add `play(track: Track)` overload
+- Preserve Track metadata for streams
+
+---
+
+## Oracle Revised Estimates
+
+| Component | My Estimate | Oracle Estimate | Why |
+|-----------|-------------|-----------------|-----|
+| Track extension | 15 min | 30 min | Need guards in AudioPlayer |
+| M3U/ADD URL fix | 45 min | 1 hour | Remove library, test thoroughly |
+| Coordinator wiring | 1.5 hours | 2-3 hours | ALL transport controls |
+| UI bindings | 45 min | 1.5 hours | ALL views, not just one |
+| Buffering display | 45 min | 1 hour | Coordinate with state |
+| Testing/regression | - | 1-2 hours | Extensive testing needed |
+| **TOTAL** | **3.75 hours** | **6-8 hours** | Much more extensive |
+
+---
+
+## Oracle Recommended Approach
+
+### Phase 4 Revised Commit Strategy (6-7 commits)
+
+**Commit 13:** Extend Track + add guards (30 min)
+- Add `Track.isStream` computed property
+- Add guards in `AudioPlayer.playTrack()` to prevent stream URLs
+- Fail gracefully if stream attempted
+
+**Commit 14:** Fix M3U + ADD URL (1 hour)
+- Remove all `radioLibrary.addStation()` calls
+- Streams append to `audioPlayer.playlist` as Tracks
+- Test with mixed M3U
+
+**Commit 15:** Add StreamPlayer.play(url:) (30 min)
+- Overload for URL (not just RadioStation)
+- Extract metadata from URL or use defaults
+- Support playlist-driven playback
+
+**Commit 16:** Extend PlaybackCoordinator (1 hour)
+- Add `play(track: Track)` overload
+- Add `next()`, `previous()` methods
+- Add unified state properties (displayTitle, etc.)
+
+**Commit 17:** Wire playlist + transport controls (2-3 hours)
+- Update playlist click handler
+- Update Next/Previous buttons
+- Update Play/Pause/Stop buttons
+- Update keyboard shortcuts
+- Wire through coordinator
+
+**Commit 18:** Update UI bindings (1.5 hours)
+- WinampMainWindow: Use coordinator.displayTitle
+- WinampMainWindow: Use coordinator state
+- Update all state observers
+- Test metadata display
+
+**Commit 19:** Buffering display + polish (1 hour)
+- Add "Connecting..." logic
+- Add "buffer 0%" error display
+- Final testing and regression checks
+
+**Total:** 6-8 hours, 7 commits
+
+---
+
+## Oracle Architectural Concerns
+
+### Swift 6 / Concurrency
+**Concern:** Playlist taps launch Task blocks
+**Requirement:** PlaybackCoordinator methods MUST be @MainActor safe
+**Status:** ✅ Already @MainActor
+
+### State Management
+**Concern:** Multiple views read playback state
+**Requirement:** Coordinator must expose ALL state (not partial)
+**Status:** ⚠️ Need to add next/previous, playlist position, etc.
+
+### Metadata Updates
+**Concern:** ICY metadata updates while UI is rendering
+**Requirement:** Cancel metadata observers on track change
+**Status:** ✅ Already implemented in StreamPlayer
+
+---
+
+## Oracle Specific Corrections to Plan
+
+### 1. PlaybackCoordinator Must Be Primary
+**Original Plan:** Just add play(url:) and play(station:)
+**Oracle Plan:** Become THE transport interface
+
+```swift
+@MainActor
+@Observable
+final class PlaybackCoordinator {
+    // Unified transport controls
+    func play(track: Track) async
+    func play(url: URL) async
+    func play(station: RadioStation) async  // For favorites menu
+    func next() async
+    func previous() async
+    func pause()
+    func stop()
+    func togglePlayPause()
+
+    // Unified state
+    var displayTitle: String
+    var displayArtist: String
+    var isPlaying: Bool
+    var isPaused: Bool
+    var isBuffering: Bool
+    var currentTrack: Track?  // For playlist position
+}
+```
+
+### 2. StreamPlayer Needs URL Method
+```swift
+// Add this overload
+func play(url: URL, title: String? = nil, artist: String? = nil) async {
+    let station = RadioStation(
+        name: title ?? url.host ?? "Stream",
+        streamURL: url
+    )
+    await play(station: station)
+}
+```
+
+### 3. AudioPlayer Needs Guards
+```swift
+func playTrack(track: Track) {
+    guard !track.isStream else {
+        print("ERROR: Cannot play stream via AudioPlayer - use PlaybackCoordinator")
+        return
+    }
+    // ... existing code
+}
+```
+
+### 4. All UI Must Switch to Coordinator
+**Files to Update:**
+- WinampMainWindow.swift (title display, buttons)
+- WinampPlaylistWindow.swift (playlist, shade mode)
+- AppCommands.swift (keyboard shortcuts)
+- Any other view reading audioPlayer state
+
+---
+
+## Oracle Recommendation Summary
+
+✅ **Track URL Extension:** Correct approach, just add guards
+✅ **Keep RadioStationLibrary:** For favorites menu (Phase 5+)
+⚠️ **Buffering Display:** Not trivial - requires full UI binding update
+🛑 **Effort Estimate:** 6-8 hours (not 3.75) - full coordinator integration
+🛑 **Scope:** Much larger than initially planned
+
+**Oracle Verdict:** Phase 4 is a **full coordinator migration**, not just playlist integration.
+
+**Proceed:** Yes, but with corrected scope and timeline
+**Commits:** 7 commits (not 4)
+**Effort:** 6-8 hours (full day, not half)
+
+---
+
+**Status:** Oracle review complete, plan needs major revision
+**Next:** Update plan.md, todo.md, state.md with Oracle corrections
+

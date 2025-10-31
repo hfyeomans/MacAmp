@@ -8,15 +8,17 @@
 ## ✅ Implementation Summary
 
 **Branch:** `internet-radio`
-**Commits:** 13 (10 implementation + 3 planning)
-**Time Spent:** ~6-8 hours (Phases 1-3), estimating +3-4 hours (Phase 4)
+**Commits:** 14 (10 implementation + 4 planning)
+**Time Spent:** ~6-8 hours (Phases 1-3)
+**Remaining:** ~6-8 hours (Phase 4 - Oracle corrected)
 **Build Status:** ✅ All files compile, build succeeds
 **Tests:** Manual testing pending Phase 4 completion
 
-**ARCHITECTURE CORRECTION:**
+**ARCHITECTURE CORRECTION (Oracle Verified):**
 - RadioStationLibrary = Favorites menu ONLY (Phase 5+)
-- Streams go to **playlist** (not library)
-- Matches Winamp: streams are playlist items
+- Streams → **playlist** (ephemeral, like Winamp)
+- Phase 4 = Full coordinator migration (not just playlist)
+- ALL playback controls route through coordinator
 
 ### ✅ Oracle Requirements - ALL IMPLEMENTED
 
@@ -103,15 +105,19 @@
 - ✅ Gap analysis complete (user reported Winamp behavior mismatch)
 - ✅ Architecture corrected (streams → playlist, not library)
 - ✅ Phase 4 plan added to plan.md (detailed steps)
-- ✅ todo.md updated with Phase 4 checklist (commits 13-16)
-- ✅ state.md updated with corrections
-- ⏸️ Oracle review of Phase 4 approach (pending)
-- ⏸️ Implementation (4 commits, 3.75 hours)
+- ✅ Oracle review COMPLETE (critical corrections received)
+- ✅ todo.md updated with Oracle-corrected checklist (commits 13-19, 7 commits)
+- ✅ state.md updated with Oracle findings
+- ⏸️ Implementation (7 commits, 6-8 hours - Oracle corrected)
 
-### Oracle Review Phase ⏸️
-- ⏸️ Oracle review of Phase 4 plan (pending)
-- ⏸️ Final Oracle review after Phase 4 implementation
-- ⏸️ Swift 6 / SwiftUI best practices check
+### Oracle Phase 4 Review ✅ (Complete)
+- ✅ Oracle identified 5 critical issues
+- ✅ Effort corrected: 3.75 hours → 6-8 hours
+- ✅ Commits corrected: 4 → 7
+- ✅ Scope expanded: Full coordinator migration required
+- ✅ All findings documented in research.md
+- ✅ Plan.md updated with Oracle corrections
+- ⏸️ Ready to implement with Oracle guidance
 
 ---
 
@@ -173,15 +179,22 @@
 - [x] Architecture diagrams
 - [x] Future work roadmap
 
-## 📋 Phase 4 Scope (Planning Complete, Ready for Oracle)
+## 📋 Phase 4 Scope (Oracle Reviewed - Ready to Implement)
 
-### Playlist Integration (User-Requested)
-- [ ] Extend Track model to support stream URLs (add `isStream`)
-- [ ] M3U loading: add streams to **playlist ONLY** (remove library usage)
-- [ ] Wire playlist selection to PlaybackCoordinator
-- [ ] Stream metadata updates from StreamPlayer
-- [ ] ADD URL adds to playlist (remove library usage)
-- [ ] Buffering status display ("Connecting...", "buffer 0%")
+### Full Coordinator Migration (Oracle-Required)
+- [ ] Extend Track + add AudioPlayer guards (prevent crashes)
+- [ ] M3U + ADD URL: Streams to **playlist ONLY** (remove all library usage)
+- [ ] Add StreamPlayer.play(url:) overload
+- [ ] Extend PlaybackCoordinator: play(track:), next(), previous()
+- [ ] Wire ALL playback controls (playlist + transport + shortcuts)
+- [ ] Update ALL UI bindings (every audioPlayer reference)
+- [ ] Buffering status display + final testing
+
+**Oracle Corrections Applied:**
+- Scope: Not just playlist - ALL transport controls
+- UI: ALL bindings must use coordinator state
+- Effort: 6-8 hours (not 3.75)
+- Commits: 7 (not 4)
 
 ### Why Phase 4 is Needed
 **User reported gap:** Streams not behaving like Winamp
@@ -363,11 +376,12 @@ http://stream.radioparadise.com/mp3-192     # Radio Paradise
 5. ✅ ~~Implement Phase 3~~ (Infrastructure complete)
 6. ✅ ~~Gap analysis~~ (User reported Winamp behavior mismatch)
 7. ✅ ~~Plan Phase 4~~ (Playlist integration planned)
-8. ⏸️ **Oracle review of Phase 4 plan** (pending)
-9. ⏸️ **Implement Phase 4** (3-4 commits, 3-4 hours)
-10. ⏸️ **Manual testing** with real radio streams
-11. ⏸️ **PR creation** (no direct merge to main)
-12. ⏸️ **User acceptance and merge**
+8. ✅ ~~Oracle review of Phase 4 plan~~ (COMPLETE - major corrections)
+9. ✅ ~~Update all docs with Oracle corrections~~ (plan, todo, state, research)
+10. ⏸️ **Implement Phase 4** (7 commits, 6-8 hours - Oracle corrected)
+11. ⏸️ **Manual testing** with real radio streams
+12. ⏸️ **PR creation** (no direct merge to main)
+13. ⏸️ **User acceptance and merge**
 
 ## Files Created (6)
 
