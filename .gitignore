@@ -26,15 +26,22 @@ build/
 dist/
 tmp/
 
+######## Build artifacts and logs ########
+*.log
+project.yml
+
 ######## Media (large) ########
 *.mov
 *.mp4
+*.png
+*.wav
 
 ######## Documentation ########
 # Ignore all markdown except README
 archives/
 docs/archive/
 READY_FOR_NEXT_SESSION.md
+AMP_FINDINGS.md
 #!README.md
 
 # Personal config files (not shared)
@@ -44,6 +51,9 @@ GEMINI.md
 
 # Ignore all text files
 *.txt
+
+# Python scripts
+*.py
 
 ######## Nested repositories ########
 webamp_clone/
