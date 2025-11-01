@@ -33,8 +33,13 @@ project.yml
 ######## Media (large) ########
 *.mov
 *.mp4
-*.png
 *.wav
+
+# PNG files (except app icons)
+frames/
+tasks/**/*.png
+*.png
+!MacAmpApp/Assets.xcassets/**/*.png
 
 ######## Documentation ########
 # Ignore all markdown except README
