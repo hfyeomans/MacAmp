@@ -1,68 +1,75 @@
 # Ready for Next Session - MacAmp Development
 
-**Last Updated:** 2025-10-30
+**Last Updated:** 2025-10-31
 **Current Branch:** `main`
-**Build Status:** ✅ Swift 6.0 + Clutter Bar (2 of 5 buttons functional)
+**Build Status:** ✅ Swift 6.0 + Internet Radio Streaming + Clutter Bar (2 of 5 buttons functional)
 
 ---
 
-## 🎉 **Latest: Clutter Bar D & A Buttons Complete!**
+## 🎉 **Latest: Internet Radio Streaming Complete!**
 
-### **PR #26 - MERGED (2025-10-30)**
+### **PR #28 - MERGED (2025-10-31)**
 
-**Features Delivered:**
-- ✅ D Button - Double-size mode (100% ↔ 200%)
-- ✅ A Button - Always on top (window float)
-- ✅ Keyboard shortcuts (Ctrl+D, Ctrl+A)
-- ✅ Clutter bar with 5 buttons (2 functional, 3 scaffolded)
-- ✅ State persistence for both features
-- ✅ Windows menu integration with dynamic labels
+**Major Feature Delivered:**
+- ✅ HTTP/HTTPS stream playback with live ICY metadata
+- ✅ M3U/M3U8 mixed playlists (local files + streams together)
+- ✅ ADD URL dialog for manual stream entry
+- ✅ Buffering status display ("Connecting...", "buffer 0%")
+- ✅ Next/Previous navigation across both types
+- ✅ Shuffle/Repeat with mixed playlists
+- ✅ Complete Winamp parity
+
+**Architecture:**
+- Dual-backend system (AVAudioEngine + AVPlayer)
+- PlaybackCoordinator (single source of truth)
+- Modern Swift 6 / macOS 15+ APIs (@preconcurrency)
+- Zero deprecated APIs
 
 **Implementation:**
-- 12 commits, 6 files modified
-- Oracle-reviewed (2 rounds, all issues fixed)
-- Manual testing passed
-- Production ready
+- 40 commits (~15-16 hours)
+- 5 Oracle reviews (comprehensive architectural validation)
+- 7 critical bugs fixed during testing
+- Oracle Grade: A- (production ready)
+- User tested - all features confirmed working
 
 **Status:** ✅ **SHIPPED TO MAIN**
+
+**Documentation Created:**
+- BUILDING_RETRO_MACOS_APP_SKILLS.md (766 lines)
+- Complete institutional knowledge from implementation
+- Reference for future similar projects
 
 ---
 
 ## 🎯 **Immediate Next Tasks (Ready to Implement)**
 
-### **NEW: Internet Radio Streaming (PLANNED - Oracle-Reviewed)**
+### **Clutter Bar Completion (3 buttons remaining)**
 
-**Status:** ✅ Complete task ready in `tasks/internet-radio/`
-**Effort:** 12-15 hours (Oracle-corrected, 3 phases)
-**Priority:** HIGH - Complex but highly requested feature
+**Current Status:**
+- O: Scaffolded (options menu) - Ready
+- A: FUNCTIONAL ✅ (always on top)
+- I: Scaffolded (info dialog) - Ready
+- D: FUNCTIONAL ✅ (double-size)
+- V: Scaffolded (visualizer toggle) - Ready
 
-**What's Ready:**
-- ✅ Complete planning (research, plan, state, todo - 57KB total)
-- ✅ Oracle review complete (6 critical issues documented)
-- ✅ Architecture validated (dual backend approved)
-- ✅ Commit strategy defined (7-8 commits over 12-15 hours)
-- ✅ M3U parser exists and detects remote streams
-- ✅ Info.plist configured (NSAllowsArbitraryLoadsInMedia verified)
+**Quickest Wins:**
 
-**Key Findings:**
-- ✅ Dual backend required: AVAudioEngine (local + EQ) + AVPlayer (streams, no EQ)
-- ✅ **CRITICAL:** Must add PlaybackCoordinator to manage both players
-- ✅ Trade-off: No EQ for streams (AVPlayer limitation - documented)
-- ✅ M3U parser ready (detects HTTP/HTTPS URLs)
-- ✅ All entitlements ready
+#### **I Button (Track Info Dialog) - 1-2 hours**
+- Display current track metadata
+- Simple sheet/dialog UI
+- Add Ctrl+I shortcut
+- Follow D/A button pattern
 
-**Oracle Critical Requirement:**
-- PlaybackCoordinator class (+2-3 hours)
-- Prevents AudioPlayer + StreamPlayer playing simultaneously
-- Unified API for UI
-- Single source of truth for playback state
+#### **V Button (Visualizer Toggle) - 1 hour**
+- Toggle visualizer mode
+- Already have mode cycling (click)
+- Add keyboard shortcut Ctrl+V
+- Simpler than I button
 
-**Recommended Commit Strategy:**
-1. Models (1h) → 2. StreamPlayer core (2h) → 3. Observers (2h) →
-4. **PlaybackCoordinator (2-3h) ⭐ Oracle review checkpoint** →
-5. M3U integration (3h) → 6. UI (2h) → 7. Oracle cleanup (30m)
-
-**See:** `tasks/internet-radio/research.md` (Oracle review at bottom)
+#### **O Button (Options Menu) - 2-3 hours**
+- Context menu with settings
+- Skin selection, preferences access
+- More complex than I/V
 
 ---
 
@@ -357,6 +364,8 @@ Pick the next button to implement:
 **Recent PRs:**
 - PR #23-25: Swift modernization (3 PRs)
 - PR #26: Clutter bar D & A buttons
+- PR #27: Oscilloscope/Spectrum modes
+- PR #28: Internet radio streaming (40 commits!)
 
 **Current State:**
 - Main branch is production-ready
@@ -523,9 +532,9 @@ xcodebuild -project MacAmpApp.xcodeproj \
 - Internet radio streaming (12-15 hours, Oracle-reviewed)
 - Both with complete planning and Oracle validation
 
-**Total Work:** 2 PRs merged, 4 features shipped, 3 tasks planned
-**Oracle Reviews:** 6 total (all issues fixed)
-**Time:** ~12 hours active work
+**Total Work:** 4 PRs merged, 6 features shipped
+**Oracle Reviews:** 11 total (all issues fixed)
+**Time:** ~27 hours active work across sessions
 
 ---
 
@@ -573,8 +582,9 @@ xcodebuild -project MacAmpApp.xcodeproj \
 4. **O Button** (2-3h, options menu)
 
 **Recommended Start:**
-- Internet radio (comprehensive planning done)
-- Or I button (quick win to maintain momentum)
+- I button (track info dialog - 1-2 hours, quick win)
+- V button (visualizer toggle - 1 hour, even quicker)
+- AirPlay integration (2-6 hours, Oracle-reviewed planning ready)
 
 **Context Status:** 572K / 1M (57.2%) used this session
 **New Session:** Fresh 1M context for implementation
