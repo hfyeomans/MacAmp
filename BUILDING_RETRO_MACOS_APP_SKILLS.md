@@ -761,6 +761,322 @@ AVPlayer: No tap capability → no PCM access → no visualizer data
 
 ---
 
+## Notarization & Distribution
+
+### Notarization Requirements (macOS 15+)
+
+**Problem:** First notarization attempt failed with "Invalid" status
+
+**Apple Rejection Reasons:**
+
+```json
+"issues": [
+  {
+    "message": "The signature does not include a secure timestamp.",
+    "path": "MacAmp.zip/MacAmp.app/Contents/MacOS/MacAmp"
+  },
+  {
+    "message": "The executable does not have the hardened runtime enabled.",
+    "path": "MacAmp.zip/MacAmp.app/Contents/MacOS/MacAmp"
+  },
+  {
+    "message": "The executable requests the com.apple.security.get-task-allow entitlement.",
+    "path": "MacAmp.zip/MacAmp.app/Contents/MacOS/MacAmp"
+  }
+]
+```
+
+### What We Had to Fix
+
+#### 1. Enable Hardened Runtime
+
+**Problem:** Default Release builds don't enable hardened runtime
+
+**Solution:**
+```bash
+xcodebuild -project MacAmpApp.xcodeproj \
+  -scheme MacAmpApp \
+  -configuration Release \
+  build \
+  ENABLE_HARDENED_RUNTIME=YES
+```
+
+**Verification:**
+```bash
+codesign -dvvv dist/MacAmp.app | grep runtime
+# Should show: flags=0x10000(runtime)
+```
+
+#### 2. Add Secure Timestamp
+
+**Problem:** Code signature didn't include timestamp from Apple's servers
+
+**Solution:**
+```bash
+xcodebuild ... \
+  OTHER_CODE_SIGN_FLAGS="--timestamp --options=runtime"
+```
+
+Or when manually re-signing:
+```bash
+codesign --force \
+  --sign "Developer ID Application: Your Name (TEAMID)" \
+  --timestamp \
+  --options=runtime \
+  --deep \
+  dist/MacAmp.app
+```
+
+**Why It Matters:** Timestamp proves signature was made when certificate was valid, even if certificate expires later.
+
+#### 3. Remove Debug Entitlements
+
+**Problem:** `com.apple.security.get-task-allow` is DEBUG-only
+
+**What This Entitlement Does:**
+- Allows debugger to attach
+- Allows process inspection
+- Required for Xcode debugging
+- **NOT allowed in production apps**
+
+**Where It Comes From:**
+- Xcode automatically adds it to Debug builds
+- NOT in your .entitlements file
+- Gets added during build process
+
+**Solution:** Build Release configuration, then manually re-sign:
+```bash
+# Release build (but may still have debug entitlements)
+xcodebuild -configuration Release build
+
+# Re-sign with ONLY your entitlements file (removes debug)
+codesign --force \
+  --sign "Developer ID Application: Your Name (TEAMID)" \
+  --entitlements MacAmpApp/MacAmp.entitlements \
+  --timestamp \
+  --options=runtime \
+  --deep \
+  dist/MacAmp.app
+```
+
+**Verify Removal:**
+```bash
+codesign -d --entitlements - dist/MacAmp.app | grep get-task-allow
+# Should return nothing (entitlement removed)
+```
+
+---
+
+### Complete Notarization Workflow
+
+#### Prerequisites
+1. Apple Developer account
+2. App-specific password from appleid.apple.com
+3. Developer ID Application certificate
+
+#### Step-by-Step Process
+
+**1. Store Credentials (One-Time):**
+```bash
+xcrun notarytool store-credentials "notarytool-password" \
+  --apple-id "your@email.com" \
+  --team-id "YOUR_TEAM_ID"
+# Paste app-specific password when prompted
+```
+
+**2. Build Release with Hardened Runtime:**
+```bash
+xcodebuild -project MacAmpApp.xcodeproj \
+  -scheme MacAmpApp \
+  -configuration Release \
+  build \
+  ENABLE_HARDENED_RUNTIME=YES \
+  OTHER_CODE_SIGN_FLAGS="--timestamp --options=runtime"
+```
+
+**3. Re-Sign to Remove Debug Entitlements:**
+```bash
+codesign --force \
+  --sign "Developer ID Application: Your Name (TEAMID)" \
+  --entitlements MacAmpApp/MacAmp.entitlements \
+  --timestamp \
+  --options=runtime \
+  --deep \
+  dist/MacAmp.app
+```
+
+**4. Verify Requirements Met:**
+```bash
+# Check hardened runtime
+codesign -dvvv dist/MacAmp.app | grep runtime
+# Should show: flags=0x10000(runtime)
+
+# Check no debug entitlements
+codesign -d --entitlements - dist/MacAmp.app | grep get-task-allow
+# Should return nothing
+
+# Check signature valid
+codesign -vvv --deep --strict dist/MacAmp.app
+# Should show: valid on disk
+```
+
+**5. Create ZIP for Submission:**
+```bash
+cd dist
+ditto -c -k --keepParent MacAmp.app MacAmp.zip
+```
+
+**6. Submit and Wait:**
+```bash
+xcrun notarytool submit dist/MacAmp.zip \
+  --keychain-profile "notarytool-password" \
+  --wait
+```
+
+Result will be:
+- "Accepted" ✅ (success!)
+- "Invalid" ❌ (check logs: `xcrun notarytool log SUBMISSION_ID`)
+
+**7. Staple Notarization Ticket:**
+```bash
+xcrun stapler staple dist/MacAmp.app
+```
+
+**8. Verify Gatekeeper Accepts It:**
+```bash
+spctl -a -vv dist/MacAmp.app
+# Should show: accepted, source=Notarized Developer ID
+```
+
+**9. Create Professional DMG:**
+```bash
+# Create staging folder
+mkdir /tmp/macamp_dmg
+cp -R dist/MacAmp.app /tmp/macamp_dmg/
+cp README.md /tmp/macamp_dmg/
+ln -s /Applications /tmp/macamp_dmg/Applications
+
+# Create DMG
+hdiutil create \
+  -volname "MacAmp v0.7.5" \
+  -srcfolder /tmp/macamp_dmg \
+  -ov \
+  -format UDZO \
+  dist/MacAmp-v0.7.5-Notarized.dmg
+
+# Cleanup
+rm -rf /tmp/macamp_dmg
+```
+
+**10. Verify Final DMG:**
+```bash
+# Check DMG integrity
+hdiutil verify dist/MacAmp-v0.7.5-Notarized.dmg
+
+# Mount and verify app
+hdiutil attach dist/MacAmp-v0.7.5-Notarized.dmg -readonly
+spctl -a -vv /Volumes/MacAmp\ v0.7.5/MacAmp.app
+# Should show: accepted
+
+# Unmount
+hdiutil detach /Volumes/MacAmp\ v0.7.5
+```
+
+---
+
+### Common Notarization Errors
+
+**Error: "The signature does not include a secure timestamp"**
+- Missing: `--timestamp` flag
+- Fix: Add `OTHER_CODE_SIGN_FLAGS="--timestamp"` to xcodebuild
+- Or: Add `--timestamp` when manually signing with codesign
+
+**Error: "The executable does not have the hardened runtime enabled"**
+- Missing: Hardened runtime
+- Fix: Add `ENABLE_HARDENED_RUNTIME=YES` to xcodebuild
+- Or: Add `--options=runtime` when manually signing
+- Verify: `codesign -dvvv app | grep runtime` should show `flags=0x10000(runtime)`
+
+**Error: "The executable requests the com.apple.security.get-task-allow entitlement"**
+- Problem: Debug entitlement in production build
+- Fix: Re-sign with your .entitlements file (which shouldn't have get-task-allow)
+- Xcode adds this for Debug builds automatically
+- Must explicitly remove for Release/Distribution
+
+**Error: "No Keychain password item found"**
+- Missing: Stored credentials
+- Fix: Run `xcrun notarytool store-credentials` first
+- Need app-specific password from appleid.apple.com
+
+**Error: "Invalid" with different issues**
+- Check logs: `xcrun notarytool log SUBMISSION_ID --keychain-profile "notarytool-password"`
+- Read JSON output for specific issues
+- Fix each issue individually
+- Resubmit
+
+---
+
+### Notarization Best Practices
+
+**1. Use Release Configuration**
+- Debug builds have debug entitlements
+- Always use `-configuration Release` for distribution
+
+**2. Verify Before Submitting**
+```bash
+# Check all requirements
+codesign -dvvv dist/MacAmp.app | grep -E "runtime|timestamp"
+codesign -d --entitlements - dist/MacAmp.app | grep get-task-allow
+codesign -vvv --deep --strict dist/MacAmp.app
+```
+
+**3. Keep Logs**
+- Save submission IDs
+- `xcrun notarytool history` shows past submissions
+- Useful for debugging repeat issues
+
+**4. Professional DMG Layout**
+```
+DMG Contents:
+├── MacAmp.app (notarized)
+├── README.md (user documentation)
+└── Applications → /Applications (symlink for drag-and-drop)
+```
+
+Users appreciate the README and easy installation!
+
+**5. Test on Clean Mac**
+- Download DMG as if you're a user
+- Double-click to install
+- Verify no security warnings
+- Test all features work
+
+---
+
+### Troubleshooting Disk I/O Errors
+
+**Problem:** Build fails with "disk I/O error" or "cannot open file"
+
+**Cause:** Corrupted DerivedData
+
+**Solution:**
+```bash
+# Clean DerivedData
+rm -rf ~/Library/Developer/Xcode/DerivedData/MacAmpApp-*
+
+# Clean and rebuild
+xcodebuild clean
+xcodebuild build
+```
+
+**When This Happens:**
+- After many builds
+- After build setting changes
+- After Xcode crashes
+- Intermittent build failures
+
+---
+
 **Last Updated:** October 31, 2025
 **Project:** MacAmp (Winamp Clone for macOS)
-**Implementation:** Internet Radio Streaming Feature
+**Implementation:** Internet Radio Streaming Feature + Notarization
