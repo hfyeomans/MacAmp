@@ -1,6 +1,7 @@
 ######## macOS ########
 .DS_Store
 Screenshot*
+.gitignore
 
 # Leaks baseline
 baseline-leaks-test.trace/
@@ -31,8 +32,15 @@ tmp/
 
 ######## Documentation ########
 # Ignore all markdown except README
-*.md
-!README.md
+archives/
+docs/archive/
+READY_FOR_NEXT_SESSION.md
+#!README.md
+
+# Personal config files (not shared)
+CLAUDE.md
+AGENTS.md
+GEMINI.md
 
 # Ignore all text files
 *.txt

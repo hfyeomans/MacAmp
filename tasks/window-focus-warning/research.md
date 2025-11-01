@@ -1,0 +1,7 @@
+# Research Notes
+
+- The runtime warning (`-[NSWindow makeKeyWindow] ... returned NO from -[NSWindow canBecomeKeyWindow]`) arises whenever AppKit tries to focus the SwiftUI-hosted window. It indicates the window refuses key status, so clicking the app’s dock icon or window chrome fails to bring it forward.
+- In `UnifiedDockView.configureWindow(_:)` we force the SwiftUI window to be borderless by inserting `.borderless` and removing `.titled` (`MacAmpApp/Views/UnifiedDockView.swift:74`). Borderless `NSWindow`s return `false` from `canBecomeKey` unless subclassed to override that property (per Apple’s AppKit release notes and `NSWindow` documentation).
+- Because SwiftUI creates an internal `SwiftUI.AppKitWindow`, we currently can’t override `canBecomeKeyWindow`—the only hook is configuring the existing window via `WindowAccessor`. Keeping the `.titled` style mask while hiding the title bar (`titleVisibility = .hidden`, `titlebarAppearsTransparent = true`) is the standard SwiftUI pattern that preserves key-window behavior without showing a title bar.
+- No other part of the codebase references `canBecomeKey` or custom `NSWindow` subclasses; all window manipulation goes through `WindowAccessor` and `WindowSnapManager`.
+- Future multi-window plans (magnetic docking task) rely on windows being able to become key independently, so ensuring key status now will align with that architecture.

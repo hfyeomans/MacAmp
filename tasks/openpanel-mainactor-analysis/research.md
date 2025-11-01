@@ -1,0 +1,8 @@
+# Research Notes
+
+- `PlaylistWindowActions.presentAddFilesPanel` shows the ADD menu file picker via `NSOpenPanel.begin { … }` but no longer wraps the completion block in a `Task { @MainActor … }`, so `handleSelectedURLs` executes directly inside the AppKit callback (`MacAmpApp/Views/WinampPlaylistWindow.swift:25`).
+- `PlaylistWindowActions` itself is annotated with `@MainActor`, therefore every synchronous method assumes main thread isolation; calling them from AppKit’s non-main callback triggers Swift concurrency precondition failures and UI work off the main thread.
+- The `openFileDialog()` helper retained the previous pattern of hopping back to `MainActor` before touching `audioPlayer` or presenting alerts (`MacAmpApp/Views/WinampPlaylistWindow.swift:547`), confirming the regression is limited to the menu-based flow.
+- `AudioPlayer` is also `@MainActor`; methods like `addTrack(url:)` mutate playlist state immediately and can trigger autoplay by calling `playTrack(track:)`, which synchronously invokes `loadAudioFile(url:)` and `AVAudioFile(forReading:)` (`MacAmpApp/Audio/AudioPlayer.swift:194`, `MacAmpApp/Audio/AudioPlayer.swift:266`).
+- When the menu flow skips the main-actor hop, `AudioPlayer` mutations and `NSAlert.runModal()` happen off the main thread, conflicting with the modernization architecture’s emphasis on main-actor UI isolation (see `ARCHITECTURE.md`, sections on state management and “Avoid Main Thread Blocking”).
+- The intermittent `ExtAudioFileOpenURL` failure (`OSStatus 0x7768743f ≈ 2003334207`) occurs while `AVAudioFile` tries to open long MP3 tracks, which happens during the autoplay path invoked from `addTrack`; concurrent access or incomplete initialization stemming from the thread hop regression is a plausible trigger.

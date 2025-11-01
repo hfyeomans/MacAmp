@@ -169,28 +169,101 @@ For detailed architecture documentation, see [`docs/ARCHITECTURE_REVELATION.md`]
 
 ## Project Structure
 
+MacAmp follows a three-layer architecture inspired by modern frontend frameworks:
+
 ```
-MacAmp/
-├── MacAmpApp/
-│   ├── Audio/              # Audio engine and playback
-│   │   └── AudioPlayer.swift
-│   ├── Models/             # Data models
-│   │   ├── SpriteResolver.swift
-│   │   ├── Skin.swift
-│   │   └── Track.swift
-│   ├── ViewModels/         # State management
-│   │   ├── SkinManager.swift
-│   │   └── DockingController.swift
-│   ├── Views/              # SwiftUI interface
-│   │   ├── WinampMainWindow.swift
-│   │   ├── WinampEqualizerWindow.swift
-│   │   └── WinampPlaylistWindow.swift
-│   ├── Utilities/          # Helper functions
-│   └── Skins/              # Bundled skins
-├── docs/                   # Technical documentation
-├── tasks/                  # Development planning
-└── Package.swift           # Swift Package Manager config
+MacAmpApp/
+├── Audio/                              # 🔧 MECHANISM LAYER - Audio Engine & Playback
+│   ├── AudioPlayer.swift                   # AVAudioEngine-based local file playback with 10-band EQ
+│   ├── PlaybackCoordinator.swift           # ⭐ NEW: Orchestrates dual backend (local + streaming)
+│   └── StreamPlayer.swift                  # ⭐ NEW: AVPlayer-based HTTP/HTTPS radio streaming
+│
+├── Models/                             # 🔧 MECHANISM LAYER - Data Models & Parsers
+│   ├── AppSettings.swift                   # @Observable app settings and preferences
+│   ├── EQF.swift                           # EQ preset file format codec
+│   ├── EQPreset.swift                      # Equalizer preset data model
+│   ├── ImageSlicing.swift                  # Sprite sheet extraction utilities
+│   ├── M3UEntry.swift                      # M3U playlist entry structure
+│   ├── M3UParser.swift                     # M3U/M3U8 playlist parser (local + remote)
+│   ├── PLEditParser.swift                  # PLEDIT.txt color parser
+│   ├── RadioStation.swift                  # ⭐ NEW: Radio station model
+│   ├── RadioStationLibrary.swift           # ⭐ NEW: Favorite stations persistence
+│   ├── Skin.swift                          # Skin package data model
+│   ├── SkinSprites.swift                   # Sprite name definitions and mappings
+│   ├── SnapUtils.swift                     # Window snapping utilities
+│   ├── SpritePositions.swift               # Sprite coordinate definitions
+│   ├── SpriteResolver.swift                # Semantic sprite resolution (cross-skin compat)
+│   ├── VisColorParser.swift                # VISCOLOR.TXT gradient parser
+│   └── WindowSpec.swift                    # Window dimension specifications
+│
+├── ViewModels/                         # 🌉 BRIDGE LAYER - State Management & Controllers
+│   ├── DockingController.swift             # Multi-window coordination and positioning
+│   └── SkinManager.swift                   # Dynamic skin loading, hot-swapping, sprite caching
+│
+├── Views/                              # 🎨 PRESENTATION LAYER - SwiftUI Windows & Views
+│   ├── Components/                         # Reusable UI Components
+│   │   ├── PlaylistBitmapText.swift            # Bitmap font rendering for playlist
+│   │   ├── PlaylistMenuDelegate.swift          # ⭐ NEW: NSMenuDelegate for keyboard navigation
+│   │   ├── PlaylistTimeText.swift              # Time display component
+│   │   ├── SimpleSpriteImage.swift             # Pixel-perfect sprite rendering (.interpolation(.none))
+│   │   ├── SpriteMenuItem.swift                # Sprite-based popup menu items
+│   │   └── WinampVolumeSlider.swift            # Frame-based volume/balance sliders
+│   ├── EqGraphView.swift                   # Equalizer frequency response graph
+│   ├── PreferencesView.swift               # Settings and preferences window
+│   ├── PresetsButton.swift                 # EQ preset selector button
+│   ├── SkinnedBanner.swift                 # Scrolling banner text component
+│   ├── SkinnedText.swift                   # Skinned text rendering
+│   ├── UnifiedDockView.swift               # Multi-window container with double-size scaling
+│   ├── VisualizerOptions.swift             # Visualizer mode switching UI
+│   ├── VisualizerView.swift                # Spectrum analyzer & oscilloscope rendering
+│   ├── WinampEqualizerWindow.swift         # 10-band equalizer window
+│   ├── WinampMainWindow.swift              # Main player window with transport controls
+│   └── WinampPlaylistWindow.swift          # Playlist window with sprite-based menus
+│
+├── Utilities/                          # 🔧 Helper Functions & Extensions
+│   ├── WindowAccessor.swift                # NSWindow access from SwiftUI
+│   └── WindowSnapManager.swift             # Magnetic window snapping
+│
+├── AppCommands.swift                   # Global keyboard shortcuts and menu commands
+├── MacAmpApp.swift                     # App entry point & dependency injection
+├── SkinsCommands.swift                 # Skin switching command handlers
+└── Skins/                              # Bundled .wsz skin packages
+
+Tests/
+└── MacAmpTests/
+    ├── AppSettingsTests.swift              # Settings persistence tests
+    ├── AudioPlayerStateTests.swift         # Audio engine state tests
+    ├── DockingControllerTests.swift        # Window coordination tests
+    ├── EQCodecTests.swift                  # EQF file format tests
+    ├── PlaylistNavigationTests.swift       # Playlist operation tests
+    ├── SkinManagerTests.swift              # Skin loading tests
+    └── SpriteResolverTests.swift           # Sprite resolution tests
+
+docs/                                   # Technical Documentation
+tasks/                                  # Development Planning & Context
+Package.swift                           # Swift Package Manager Configuration
 ```
+
+### Recent Architectural Changes (2025)
+
+**Internet Radio Support** (October 2025):
+- Added **PlaybackCoordinator** to orchestrate dual audio backends
+- Added **StreamPlayer** for AVPlayer-based HTTP/HTTPS streaming
+- Added **RadioStation** and **RadioStationLibrary** for station management
+- Streams integrated into playlist alongside local files (Winamp parity)
+
+**Swift 6 Modernization** (October 2025):
+- Migrated to **@Observable** framework (replaced ObservableObject)
+- Added **PlaylistMenuDelegate** for keyboard navigation in sprite menus
+- Applied pixel-perfect rendering (`.interpolation(.none)`) throughout
+- Full Swift 6 strict concurrency compliance
+
+**UI Enhancements** (October 2025):
+- **Double-Size Mode**: Toggle 200% scaling with D button or Ctrl+D
+- **Visualizer Modes**: Clickable visualizer cycles through Spectrum → Oscilloscope → None
+- **Keyboard Navigation**: Arrow keys and VoiceOver support in all menus
+
+For detailed architecture documentation, see [`docs/ARCHITECTURE_REVELATION.md`](docs/ARCHITECTURE_REVELATION.md).
 
 ## Keyboard Shortcuts
 

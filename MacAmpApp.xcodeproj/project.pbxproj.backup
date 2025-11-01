@@ -14,6 +14,12 @@
 		2A33850C38AA921D5659ECA7 /* AudioPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC875DDD2BE621229D463CB9 /* AudioPlayer.swift */; };
 		2BEEA991452D4A86CD1AC9F7 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = EA5D7D010AE0DE961C9470AC /* ZIPFoundation */; };
 		34EEE95E7D965A0D94D12C30 /* WinampMainWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C3495B177A8BA24181B484E /* WinampMainWindow.swift */; };
+		36B64EDC2EB3023D004274F8 /* PlaylistMenuDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36B64EDB2EB3023D004274F8 /* PlaylistMenuDelegate.swift */; };
+		36C0FFE22EB512A300916917 /* Mac_OS-X_skin.wsz in Resources */ = {isa = PBXBuildFile; fileRef = 36C0FFDE2EB512A300916917 /* Mac_OS-X_skin.wsz */; };
+		36C0FFE32EB512A300916917 /* Tron-Vaporwave-by-LuigiHann.wsz in Resources */ = {isa = PBXBuildFile; fileRef = 36C0FFE02EB512A300916917 /* Tron-Vaporwave-by-LuigiHann.wsz */; };
+		36C0FFE42EB512A300916917 /* Winamp3_Classified_v5.5.wsz in Resources */ = {isa = PBXBuildFile; fileRef = 36C0FFE12EB512A300916917 /* Winamp3_Classified_v5.5.wsz */; };
+		36C0FFE52EB512A300916917 /* Sony_MP3_Player_.wsz in Resources */ = {isa = PBXBuildFile; fileRef = 36C0FFDF2EB512A300916917 /* Sony_MP3_Player_.wsz */; };
+		36C0FFE62EB512A300916917 /* KenWood_KDC_7000_Elite.wsz in Resources */ = {isa = PBXBuildFile; fileRef = 36C0FFDD2EB512A300916917 /* KenWood_KDC_7000_Elite.wsz */; };
 		397CD3DA0D75924BD0B90FBE /* EQF.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDF85EA8990A038079FC0CC3 /* EQF.swift */; };
 		3D5787FD4B060D13BE690E2A /* WinampEqualizerWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A489CA15E452302405E6FAE /* WinampEqualizerWindow.swift */; };
 		4007DF219A7FEAB6FFC1AE73 /* ImageSlicing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D4BAA0F198BED23AAFABFEC /* ImageSlicing.swift */; };
@@ -24,8 +30,6 @@
 		592F5C98FC8B29F71341CBD8 /* WinampVolumeSlider.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAA63D879B46D5FFF6BA8BE9 /* WinampVolumeSlider.swift */; };
 		5E12F332C6929193D1EBFB8D /* SpritePositions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7324174AA2F7231F3B2508AE /* SpritePositions.swift */; };
 		70120b5751e24a3084c04a0b /* SpriteResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = b220e925d4d54168a0d0f84b /* SpriteResolver.swift */; };
-		A1B2C3D4E5F6789012345678 /* SpriteMenuItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1E2D3C4B5A6978867564534 /* SpriteMenuItem.swift */; };
-		B2C3D4E5F6A7890123456789 /* PlaylistMenuButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2F3D4C5B6A7988978675645 /* PlaylistMenuButton.swift */; };
 		77129ADBBBC75DF6BA1EC1C8 /* SnapUtils.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43358BDD8D9B537C9109DF62 /* SnapUtils.swift */; };
 		7C97F7855F700CA55821BFD1 /* WindowSnapManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FF88FFEFCC2A65D88029ADB /* WindowSnapManager.swift */; };
 		8375D760955EEB75F8311F11 /* SimpleSpriteImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77A0C7921140C73AB173A5E8 /* SimpleSpriteImage.swift */; };
@@ -35,6 +39,7 @@
 		93EBD6FADA9285C58A329F5C /* VisColorParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6D5886DD239C58D98785419 /* VisColorParser.swift */; };
 		9C74995B7081637EB964D3AA /* SkinnedBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12C0A7D97E8D3B2E715D4EA0 /* SkinnedBanner.swift */; };
 		9C8F5A2DD13F19EDAABA8130 /* UnifiedDockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 590BF37A22DF8EAB2B27DE50 /* UnifiedDockView.swift */; };
+		A1B2C3D4E5F6789012345678 /* SpriteMenuItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1E2D3C4B5A6978867564534 /* SpriteMenuItem.swift */; };
 		AA399B95993DF8EB2CD3CCA3 /* Winamp.wsz in Resources */ = {isa = PBXBuildFile; fileRef = A5F876BD10A8CBDE81C28D51 /* Winamp.wsz */; };
 		AB123DEF4E567890ABCDEF12 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD234EF56789ABCD01234567 /* AppSettings.swift */; };
 		AC7BAF317F478CEB2F36F3DB /* PlaylistTimeText.swift in Sources */ = {isa = PBXBuildFile; fileRef = CABDEB04D5D23C3DAAAFEEFC /* PlaylistTimeText.swift */; };
@@ -61,6 +66,12 @@
 		2878CED72AA74CF1B0417AC5 /* EQPreset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EQPreset.swift; sourceTree = "<group>"; };
 		2D4BAA0F198BED23AAFABFEC /* ImageSlicing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageSlicing.swift; sourceTree = "<group>"; };
 		31F32D02E5A363D621708145 /* M3UEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = M3UEntry.swift; sourceTree = "<group>"; };
+		36B64EDB2EB3023D004274F8 /* PlaylistMenuDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaylistMenuDelegate.swift; sourceTree = "<group>"; };
+		36C0FFDD2EB512A300916917 /* KenWood_KDC_7000_Elite.wsz */ = {isa = PBXFileReference; lastKnownFileType = file; path = KenWood_KDC_7000_Elite.wsz; sourceTree = "<group>"; };
+		36C0FFDE2EB512A300916917 /* Mac_OS-X_skin.wsz */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Mac_OS-X_skin.wsz"; sourceTree = "<group>"; };
+		36C0FFDF2EB512A300916917 /* Sony_MP3_Player_.wsz */ = {isa = PBXFileReference; lastKnownFileType = file; path = Sony_MP3_Player_.wsz; sourceTree = "<group>"; };
+		36C0FFE02EB512A300916917 /* Tron-Vaporwave-by-LuigiHann.wsz */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Tron-Vaporwave-by-LuigiHann.wsz"; sourceTree = "<group>"; };
+		36C0FFE12EB512A300916917 /* Winamp3_Classified_v5.5.wsz */ = {isa = PBXFileReference; lastKnownFileType = file; path = Winamp3_Classified_v5.5.wsz; sourceTree = "<group>"; };
 		3D258350F99A800B8CBF8AEA /* PresetsButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresetsButton.swift; sourceTree = "<group>"; };
 		3DCDB09162242F5E73FF35F6 /* SkinnedText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkinnedText.swift; sourceTree = "<group>"; };
 		43358BDD8D9B537C9109DF62 /* SnapUtils.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapUtils.swift; sourceTree = "<group>"; };
@@ -90,7 +101,6 @@
 		CD234EF56789ABCD01234567 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		D5C4GF8F990H31I0H2G04370 /* SkinsCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkinsCommands.swift; sourceTree = "<group>"; };
 		DE345F678901BCDE12345678 /* PreferencesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesView.swift; sourceTree = "<group>"; };
-		E2F3D4C5B6A7988978675645 /* PlaylistMenuButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaylistMenuButton.swift; sourceTree = "<group>"; };
 		E51E7515EE6862B4F445AC81 /* SkinSprites.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkinSprites.swift; sourceTree = "<group>"; };
 		E5AF78956321BB7B21810429 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		F1E2D3C4B5A6978867564534 /* SpriteMenuItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpriteMenuItem.swift; sourceTree = "<group>"; };
@@ -114,8 +124,8 @@
 		0542534C840178895387FEE4 /* Components */ = {
 			isa = PBXGroup;
 			children = (
+				36B64EDB2EB3023D004274F8 /* PlaylistMenuDelegate.swift */,
 				5B08C7931E5A4A0A8D4F1B27 /* PlaylistBitmapText.swift */,
-				E2F3D4C5B6A7988978675645 /* PlaylistMenuButton.swift */,
 				CABDEB04D5D23C3DAAAFEEFC /* PlaylistTimeText.swift */,
 				77A0C7921140C73AB173A5E8 /* SimpleSpriteImage.swift */,
 				F1E2D3C4B5A6978867564534 /* SpriteMenuItem.swift */,
@@ -145,6 +155,11 @@
 			children = (
 				B6G987CE11B9DCEF82D39E62 /* Internet-Archive.wsz */,
 				A5F876BD10A8CBDE81C28D51 /* Winamp.wsz */,
+				36C0FFDD2EB512A300916917 /* KenWood_KDC_7000_Elite.wsz */,
+				36C0FFDE2EB512A300916917 /* Mac_OS-X_skin.wsz */,
+				36C0FFDF2EB512A300916917 /* Sony_MP3_Player_.wsz */,
+				36C0FFE02EB512A300916917 /* Tron-Vaporwave-by-LuigiHann.wsz */,
+				36C0FFE12EB512A300916917 /* Winamp3_Classified_v5.5.wsz */,
 			);
 			path = Skins;
 			sourceTree = "<group>";
@@ -293,6 +308,11 @@
 			files = (
 				FF66EE55DD44CC33BB22AA11 /* Assets.xcassets in Resources */,
 				BB499C96994EF9FC3DE4DDB4 /* Internet-Archive.wsz in Resources */,
+				36C0FFE22EB512A300916917 /* Mac_OS-X_skin.wsz in Resources */,
+				36C0FFE32EB512A300916917 /* Tron-Vaporwave-by-LuigiHann.wsz in Resources */,
+				36C0FFE42EB512A300916917 /* Winamp3_Classified_v5.5.wsz in Resources */,
+				36C0FFE52EB512A300916917 /* Sony_MP3_Player_.wsz in Resources */,
+				36C0FFE62EB512A300916917 /* KenWood_KDC_7000_Elite.wsz in Resources */,
 				AA399B95993DF8EB2CD3CCA3 /* Winamp.wsz in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -315,11 +335,11 @@
 				8806F9498EDA22C217C91D30 /* M3UParser.swift in Sources */,
 				B9F51DB9B3BAF8611108D699 /* MacAmpApp.swift in Sources */,
 				41559151451B3CDCDAF46147 /* PLEditParser.swift in Sources */,
+				36B64EDC2EB3023D004274F8 /* PlaylistMenuDelegate.swift in Sources */,
 				BC234EF567890ABCD1234567 /* PreferencesView.swift in Sources */,
 				CEB39A994DFFE2DCA8FDE7EF /* PresetsButton.swift in Sources */,
 				8375D760955EEB75F8311F11 /* SimpleSpriteImage.swift in Sources */,
 				A1B2C3D4E5F6789012345678 /* SpriteMenuItem.swift in Sources */,
-				B2C3D4E5F6A7890123456789 /* PlaylistMenuButton.swift in Sources */,
 				AC7BAF317F478CEB2F36F3DB /* PlaylistTimeText.swift in Sources */,
 				CFF2E4B6A5D74592AA2B78CD /* PlaylistBitmapText.swift in Sources */,
 				93E376C1200386F617D37563 /* Skin.swift in Sources */,
@@ -376,6 +396,8 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.hankyeomans.MacAmp;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = macosx;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
 			};
 			name = Release;
 		};
@@ -442,7 +464,7 @@
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 			};
 			name = Debug;
 		};
@@ -502,7 +524,7 @@
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 			};
 			name = Release;
 		};
@@ -531,6 +553,8 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.hankyeomans.MacAmp;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = macosx;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
 			};
 			name = Debug;
 		};
