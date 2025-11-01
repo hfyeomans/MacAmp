@@ -581,13 +581,58 @@ xcodebuild -project MacAmpApp.xcodeproj \
 3. **I Button** (1-2h, quick win)
 4. **O Button** (2-3h, options menu)
 
-**Recommended Start:**
-- I button (track info dialog - 1-2 hours, quick win)
-- V button (visualizer toggle - 1 hour, even quicker)
-- AirPlay integration (2-6 hours, Oracle-reviewed planning ready)
+**Recommended Start (Based on Momentum):**
 
-**Context Status:** 572K / 1M (57.2%) used this session
-**New Session:** Fresh 1M context for implementation
+**Quick Wins (Maintain Momentum):**
+1. **V Button** (1 hour) - Visualizer toggle, simplest
+2. **I Button** (1-2 hours) - Track info dialog
+3. Finish remaining clutter bar (O button)
+
+**Next Major Feature:**
+4. **Favorites Menu for Radio Stations** (Phase 5)
+   - RadioStationLibrary infrastructure ready
+   - Top menu implementation (like "Skins", "Windows")
+   - Add/edit/delete favorites UI
+   - Estimated: 4-6 hours
+
+5. **AirPlay Integration** (2-6 hours)
+   - Complete Oracle-reviewed planning in tasks/airplay/
+   - Engine configuration observer critical
+   - Logo overlay approach
+
+6. **MTAudioProcessingTap** (10-20+ hours)
+   - Enable visualizers for internet radio streams
+   - Complex Core Audio work
+   - High value for completeness
+
+**Context Status:** 516K / 1M (51.6%) used this session
+**New Session:** Fresh context recommended for next major feature
+
+---
+
+## 📋 **Suggested Next Session Priority**
+
+Based on project momentum and learning curve:
+
+**Session 1 (Quick Wins):** V + I buttons (2-3 hours total)
+  - Completes 80% of clutter bar
+  - Low risk, high visibility
+  - Maintains development momentum
+
+**Session 2 (Polish):** O button (2-3 hours)
+  - 100% clutter bar complete
+  - All 5 buttons functional
+  - Major UI milestone
+
+**Session 3 (Feature):** Favorites Menu (4-6 hours)
+  - RadioStationLibrary UI
+  - Natural extension of internet radio
+  - User-requested feature
+
+**Session 4 (Advanced):** MTAudioProcessingTap (10-20 hours)
+  - Stream visualizers
+  - Technical deep-dive
+  - Full Winamp parity
 
 ---
 
