@@ -525,7 +525,7 @@ struct WinampMainWindow: View {
                 SimpleSpriteImage("MAIN_CLUTTER_BAR_BUTTON_O", width: 8, height: 8)
             }
             .buttonStyle(.plain)
-            .help("Options menu (Ctrl+T for time)")
+            .help("Options menu (Ctrl+O, Ctrl+T for time)")
             .at(Coords.clutterButtonO)
 
             // A - Always On Top (FUNCTIONAL)
@@ -889,8 +889,16 @@ struct WinampMainWindow: View {
         ))
 
         // Position menu below button
-        // Get the window to position the menu correctly
-        if let window = NSApp.keyWindow {
+        // Find the main window reliably (not just keyWindow, which might be playlist/EQ)
+        // Look for the window that contains the main Winamp view
+        let mainWindow = NSApp.windows.first { window in
+            // Main window has specific size characteristics (275 or 550 wide in double-size)
+            return window.isVisible && !window.isMiniaturized &&
+                   (window.frame.width == WinampSizes.main.width ||
+                    window.frame.width == WinampSizes.main.width * 2)
+        } ?? NSApp.keyWindow
+
+        if let window = mainWindow {
             // Convert button position to screen coordinates
             // O button is at Coords.clutterButtonO (x: 10, y: 25)
             // Account for double-size mode scaling
