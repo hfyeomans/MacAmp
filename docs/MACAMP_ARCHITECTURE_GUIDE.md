@@ -78,13 +78,19 @@ Deployment:               Developer ID signed, notarization-ready
 └────────────────────────────────────────────────────────┘
 ```
 
-### Recent Architectural Changes (October 2025)
+### Recent Architectural Changes (October-November 2025)
 
 1. **Internet Radio Support**: Added StreamPlayer with PlaybackCoordinator orchestration
 2. **Swift 6 Migration**: Converted from ObservableObject to @Observable macro
 3. **Semantic Sprites**: Replaced hard-coded sprite names with semantic identifiers
 4. **Thread Safety**: Added @MainActor isolation and strict Sendable conformance
 5. **Hot Skin Swapping**: Enabled runtime skin changes without app restart
+6. **Clutter Bar Controls (v0.7.8)**: Implemented 4 of 5 clutter bar buttons
+   - O Button: Options menu with time display toggle, double-size, repeat, shuffle (Ctrl+O, Ctrl+T)
+   - A Button: Always On Top window level control (Ctrl+A)
+   - I Button: Track Information dialog with metadata display (Ctrl+I)
+   - D Button: Double Size UI scaling 100%/200% (Ctrl+D)
+   - V Button: Visualizer control (scaffolded, pending implementation)
 
 ---
 
@@ -2401,6 +2407,113 @@ Spectrum  Points
         ▼
   Visualizer View
    (60 FPS render)
+```
+
+---
+
+## UI Controls & Features
+
+### Clutter Bar Buttons
+
+The clutter bar is a vertical strip of 5 control buttons on the left side of the main window, providing quick access to player settings and information. As of v0.7.8, 4 of 5 buttons are functional.
+
+**Button Locations** (WinampMainWindow.swift Coords):
+```swift
+static let clutterButtonO = CGPoint(x: 10, y: 25)  // top: 3px relative
+static let clutterButtonA = CGPoint(x: 10, y: 33)  // top: 11px relative
+static let clutterButtonI = CGPoint(x: 10, y: 40)  // top: 18px relative
+static let clutterButtonD = CGPoint(x: 10, y: 47)  // top: 25px relative
+static let clutterButtonV = CGPoint(x: 10, y: 55)  // top: 33px relative
+```
+
+**O Button - Options Menu** (v0.7.8):
+- **Purpose**: Context menu with player settings
+- **Functionality**:
+  - Time display toggle (elapsed ⇄ remaining)
+  - Double-size mode toggle
+  - Repeat mode toggle
+  - Shuffle mode toggle
+- **Implementation**: NSMenu via MenuItemTarget bridge
+- **Keyboard Shortcuts**: Ctrl+O (menu), Ctrl+T (time toggle)
+- **State**: AppSettings.timeDisplayMode with UserDefaults persistence
+- **Sprites**: MAIN_CLUTTER_BAR_BUTTON_O / BUTTON_O_SELECTED
+
+**A Button - Always On Top** (v0.7.6):
+- **Purpose**: Toggle window floating level
+- **Functionality**: Keeps MacAmp windows above other apps
+- **Implementation**: NSWindow.level = .floating
+- **Keyboard Shortcut**: Ctrl+A
+- **State**: AppSettings.isAlwaysOnTop with persistence
+- **Sprites**: MAIN_CLUTTER_BAR_BUTTON_A / BUTTON_A_SELECTED
+
+**I Button - Track Information** (v0.7.8):
+- **Purpose**: Display track/stream metadata
+- **Functionality**:
+  - Shows title, artist, duration
+  - Technical details: bitrate, sample rate, channels
+  - Stream-aware with graceful fallbacks
+- **Implementation**: SwiftUI sheet with TrackInfoView
+- **Keyboard Shortcut**: Ctrl+I
+- **State**: AppSettings.showTrackInfoDialog (transient, not persisted)
+- **Sprites**: MAIN_CLUTTER_BAR_BUTTON_I / BUTTON_I_SELECTED
+
+**D Button - Double Size** (v0.7.5):
+- **Purpose**: Scale UI between 100% and 200%
+- **Functionality**: Applies to all windows (main, EQ, playlist)
+- **Implementation**: UnifiedDockView.scaleEffect(scale, anchor: .topLeading)
+- **Keyboard Shortcut**: Ctrl+D
+- **State**: AppSettings.isDoubleSizeMode with persistence
+- **Sprites**: MAIN_CLUTTER_BAR_BUTTON_D / BUTTON_D_SELECTED
+
+**V Button - Visualizer** (scaffolded):
+- **Purpose**: Toggle visualizer modes (spectrum/oscilloscope/none)
+- **Status**: Scaffolded, pending implementation
+- **Implementation**: To be implemented
+- **Sprites**: MAIN_CLUTTER_BAR_BUTTON_V defined
+
+**Architecture Pattern**:
+```swift
+// Clutter bar button pattern (proven in D/A/O/I implementations)
+// Real example from AppSettings.swift:
+@Observable
+@MainActor
+final class AppSettings {
+    var isDoubleSizeMode: Bool = false {
+        didSet {
+            UserDefaults.standard.set(isDoubleSizeMode, forKey: "isDoubleSizeMode")
+        }
+    }
+}
+
+// In WinampMainWindow.swift:
+let dSpriteName = settings.isDoubleSizeMode
+    ? "MAIN_CLUTTER_BAR_BUTTON_D_SELECTED"
+    : "MAIN_CLUTTER_BAR_BUTTON_D"
+
+Button(action: {
+    settings.isDoubleSizeMode.toggle()
+}) {
+    SimpleSpriteImage(dSpriteName, width: 8, height: 8)
+}
+.buttonStyle(.plain)
+.help("Toggle window size")
+```
+
+### Time Display System
+
+**Implementation** (v0.7.8):
+- **State**: AppSettings.timeDisplayMode (elapsed/remaining)
+- **Persistence**: UserDefaults with didSet pattern
+- **Visual**: Minus sign centered at y:6 in 9x13 container for remaining mode
+- **Interaction**: Click time display or Ctrl+T to toggle
+- **Integration**: Synchronized with O button menu checkmarks
+
+**Technical Details**:
+```swift
+enum TimeDisplayMode: String, Codable {
+    case elapsed = "elapsed"      // 00:00 → track duration
+    case remaining = "remaining"  // -duration → -00:00
+}
 ```
 
 ---

@@ -197,7 +197,7 @@ enum SemanticSprite {
     case mainTitleBarShaded
     case mainTitleBarShadedActive
     case clutterBar
-    case clutterBarButton(Character)  // 'O', 'A', 'I', 'D', 'V'
+    case clutterBarButton(Character)  // O=Options, A=AlwaysOnTop, I=TrackInfo, D=DoubleSize, V=Visualizer
 
     // MARK: - Visualization
     case spectrumBar

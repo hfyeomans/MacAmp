@@ -407,14 +407,17 @@ Includes:
 | **@Observable pattern** | IMPLEMENTATION_PATTERNS.md | §2 State Management |
 | **@MainActor usage** | IMPLEMENTATION_PATTERNS.md | §2, MACAMP_ARCH §10 |
 | **19-bar spectrum analyzer** | MACAMP_ARCHITECTURE_GUIDE.md | §8.4 Audio Processing |
+| **Always On Top (A button)** | MACAMP_ARCHITECTURE_GUIDE.md | §UI Controls & Features |
 | **App notarization** | RELEASE_BUILD_GUIDE.md | §Notarization |
 | **Audio backend switching** | MACAMP_ARCHITECTURE_GUIDE.md | §4 Dual Audio Backend |
 | **AVAudioEngine setup** | MACAMP_ARCHITECTURE_GUIDE.md | §8 Audio Processing |
 | **AVPlayer streaming** | MACAMP_ARCHITECTURE_GUIDE.md | §9 Internet Radio |
 | **Build configurations** | RELEASE_BUILD_COMPARISON.md | Full document |
+| **Clutter bar buttons** | MACAMP_ARCHITECTURE_GUIDE.md | §UI Controls & Features |
 | **Code signing errors** | CODE_SIGNING_FIX.md | §Common Issues |
 | **Component integration** | MACAMP_ARCHITECTURE_GUIDE.md | §11 Integration Maps |
 | **Custom menus** | MACAMP_ARCHITECTURE_GUIDE.md | §SpriteMenuItem |
+| **Double Size (D button)** | MACAMP_ARCHITECTURE_GUIDE.md | §UI Controls & Features |
 | **Developer ID setup** | RELEASE_BUILD_GUIDE.md | §Prerequisites |
 | **Dual audio backend** | MACAMP_ARCHITECTURE_GUIDE.md | §4 Complete section |
 | **EQ implementation** | MACAMP_ARCHITECTURE_GUIDE.md | §8.3 EQ Processing |
@@ -424,11 +427,13 @@ Includes:
 | **Hardened runtime** | CODE_SIGNING_FIX.md | §Hardened Runtime |
 | **Internet radio** | MACAMP_ARCHITECTURE_GUIDE.md | §9 Complete section |
 | **Keyboard navigation** | MACAMP_ARCHITECTURE_GUIDE.md | §PlaylistMenuDelegate |
+| **Keyboard shortcuts** | MACAMP_ARCHITECTURE_GUIDE.md | §UI Controls & Features |
 | **M3UParser** | MACAMP_ARCHITECTURE_GUIDE.md | §M3U Parsing |
 | **Magnetic snapping** | MACAMP_ARCHITECTURE_GUIDE.md | §WindowSnapManager |
 | **Migration guides** | IMPLEMENTATION_PATTERNS.md | §8 Migration |
 | **NUMBERS.bmp format** | WINAMP_SKIN_VARIATIONS.md | §Two Number Systems |
 | **NUMS_EX.bmp format** | WINAMP_SKIN_VARIATIONS.md | §Two Number Systems |
+| **Options menu (O button)** | MACAMP_ARCHITECTURE_GUIDE.md | §UI Controls & Features |
 | **PlaybackCoordinator** | MACAMP_ARCHITECTURE_GUIDE.md | §4.3 Orchestration |
 | **Semantic sprites** | SPRITE_SYSTEM_COMPLETE.md | §3 Semantic Enum |
 | **Signing workflow** | CODE_SIGNING_FIX_DIAGRAM.md | Full diagram |
@@ -442,6 +447,8 @@ Includes:
 | **Testing patterns** | IMPLEMENTATION_PATTERNS.md | §7 Testing |
 | **Three-layer architecture** | MACAMP_ARCHITECTURE_GUIDE.md | §3 Three-Layer |
 | **Thread safety** | IMPLEMENTATION_PATTERNS.md | §5 Async/Await |
+| **Time display system** | MACAMP_ARCHITECTURE_GUIDE.md | §UI Controls & Features |
+| **Track information (I button)** | MACAMP_ARCHITECTURE_GUIDE.md | §UI Controls & Features |
 | **Visualization** | MACAMP_ARCHITECTURE_GUIDE.md | §8.4 Visualization |
 | **Window management** | MACAMP_ARCHITECTURE_GUIDE.md | §WindowSnapManager |
 | **WindowAccessor** | MACAMP_ARCHITECTURE_GUIDE.md | §NSWindow Bridge |
@@ -463,6 +470,9 @@ Includes:
 | "What Swift 6 features are used?" | MACAMP_ARCHITECTURE_GUIDE.md §10 |
 | "How does window snapping work?" | MACAMP_ARCHITECTURE_GUIDE.md §WindowSnapManager |
 | "What's the spectrum analyzer algorithm?" | MACAMP_ARCHITECTURE_GUIDE.md §8.4 (19-bar Goertzel) |
+| "What are the clutter bar buttons?" | MACAMP_ARCHITECTURE_GUIDE.md §UI Controls & Features |
+| "How do I add clutter bar features?" | MACAMP_ARCHITECTURE_GUIDE.md §UI Controls & Features |
+| "What keyboard shortcuts are available?" | MACAMP_ARCHITECTURE_GUIDE.md §UI Controls & Features |
 
 ---
 
