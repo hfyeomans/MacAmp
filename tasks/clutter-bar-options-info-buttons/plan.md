@@ -42,16 +42,17 @@
 
 ### I Button (Track Info Dialog) - 3 Hours
 
-**Functionality:** Shows current track metadata in modal dialog
-- Track title, artist, album
-- Duration, file format
-- Technical details (bitrate, sample rate)
+**Functionality:** Shows current track telemetry in modal dialog
+- Track title and artist (if non-empty)
+- Duration (MM:SS)
+- Technical details (bitrate, sample rate, channel count when available)
+- Graceful fallback for streams lacking metadata
 - Read-only display (edit deferred to P3)
 
 **Components:**
-- State: `AppSettings.showTrackInfoDialog` (new Bool)
+- State: `AppSettings.showTrackInfoDialog` (new Bool, transient)
 - UI: TrackInfoView.swift (new SwiftUI view)
-- Data: PlaybackCoordinator.currentTrack
+- Data: `AudioPlayer.currentTrack` + player telemetry
 - Integration: Sheet presentation
 
 ---
@@ -157,7 +158,7 @@ private func showOptionsMenu(from sourceView: NSView) {
         action: #selector(toggleDoubleSize),
         keyEquivalent: "d"
     )
-    doubleSizeItem.keyEquivalentModifierMask = [.command]
+    doubleSizeItem.keyEquivalentModifierMask = [.control]
     doubleSizeItem.state = settings.isDoubleSizeMode ? .on : .off
     doubleSizeItem.target = self
     menu.addItem(doubleSizeItem)
@@ -170,6 +171,7 @@ private func showOptionsMenu(from sourceView: NSView) {
         action: #selector(toggleRepeat),
         keyEquivalent: "r"
     )
+    repeatItem.keyEquivalentModifierMask = [.control]
     repeatItem.state = audioPlayer.repeatEnabled ? .on : .off
     repeatItem.target = self
     menu.addItem(repeatItem)
@@ -180,6 +182,7 @@ private func showOptionsMenu(from sourceView: NSView) {
         action: #selector(toggleShuffle),
         keyEquivalent: "s"
     )
+    shuffleItem.keyEquivalentModifierMask = [.control]
     shuffleItem.state = audioPlayer.shuffleEnabled ? .on : .off
     shuffleItem.target = self
     menu.addItem(shuffleItem)
@@ -294,41 +297,48 @@ import SwiftUI
 
 @MainActor
 struct TrackInfoView: View {
-    @EnvironmentObject var audioPlayer: AudioPlayer
-    @Environment(\.dismiss) var dismiss
+    @Environment(AudioPlayer.self) private var audioPlayer
+    @Environment(PlaybackCoordinator.self) private var playbackCoordinator
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         VStack(spacing: 20) {
-            // Header
             Text("Track Information")
                 .font(.headline)
                 .padding(.top)
 
             if let track = audioPlayer.currentTrack {
-                // Track Details
                 VStack(alignment: .leading, spacing: 12) {
                     InfoRow(label: "Title", value: track.title)
 
-                    if let artist = track.artist {
-                        InfoRow(label: "Artist", value: artist)
+                    if !track.artist.isEmpty {
+                        InfoRow(label: "Artist", value: track.artist)
                     }
 
                     InfoRow(label: "Duration", value: formatDuration(track.duration))
 
-                    // Technical Details (from AudioPlayer properties)
                     Divider()
 
-                    if let bitrate = audioPlayer.bitrate {
-                        InfoRow(label: "Bitrate", value: "\(bitrate) kbps")
+                    if audioPlayer.bitrate > 0 {
+                        InfoRow(label: "Bitrate", value: "\(audioPlayer.bitrate) kbps")
                     }
 
-                    if let sampleRate = audioPlayer.sampleRate {
-                        InfoRow(label: "Sample Rate", value: "\(sampleRate) Hz")
+                    if audioPlayer.sampleRate > 0 {
+                        InfoRow(label: "Sample Rate", value: "\(audioPlayer.sampleRate) Hz")
                     }
 
-                    if let channels = audioPlayer.channelCount {
-                        InfoRow(label: "Channels", value: channels == 2 ? "Stereo" : "Mono")
-                    }
+                    InfoRow(
+                        label: "Channels",
+                        value: audioPlayer.channelCount == 1 ? "Mono" : "Stereo"
+                    )
+                }
+                .padding()
+            } else if let streamTitle = playbackCoordinator.currentTitle {
+                VStack(alignment: .leading, spacing: 12) {
+                    InfoRow(label: "Stream", value: streamTitle)
+                    Text("Detailed metadata unavailable for this source")
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
                 }
                 .padding()
             } else {
@@ -337,7 +347,6 @@ struct TrackInfoView: View {
                     .padding()
             }
 
-            // Close Button
             Button("Close") {
                 dismiss()
             }
@@ -355,25 +364,20 @@ struct TrackInfoView: View {
     }
 }
 
-struct InfoRow: View {
+private struct InfoRow: View {
     let label: String
     let value: String
 
     var body: some View {
         HStack {
-            Text(label + ":")
+            Text("\(label):")
                 .foregroundColor(.secondary)
-                .frame(width: 100, alignment: .trailing)
+                .frame(width: 110, alignment: .trailing)
 
             Text(value)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
-}
-
-#Preview {
-    TrackInfoView()
-        .environmentObject(AudioPlayer())
 }
 ```
 
@@ -420,7 +424,6 @@ Button {
     set: { settings.showTrackInfoDialog = $0 }
 )) {
     TrackInfoView()
-        .environmentObject(playbackCoordinator)
 }
 ```
 
@@ -453,14 +456,11 @@ Button("Track Information") {
 - [ ] Dialog shows "No track" message (if nothing playing)
 - [ ] All metadata fields display correctly:
   - Title
-  - Artist (if available)
-  - Album (if available)
+  - Artist (if non-empty)
   - Duration (MM:SS format)
-  - File format (MP3, FLAC, etc.)
-- [ ] Technical details show (if available):
-  - Bitrate
-  - Sample Rate
-  - Channels
+  - Bitrate (when AudioPlayer reports > 0)
+  - Sample Rate (when AudioPlayer reports > 0)
+  - Channels (Mono/Stereo)
 - [ ] Close button works
 - [ ] Esc key closes dialog
 - [ ] Click outside dialog to dismiss

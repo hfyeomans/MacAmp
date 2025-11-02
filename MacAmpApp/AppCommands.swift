@@ -39,6 +39,16 @@ struct AppCommands: Commands {
             }
             .keyboardShortcut("a", modifiers: [.control])
 
+            Button("Time: \(settings.timeDisplayMode == .elapsed ? "Show Remaining" : "Show Elapsed")") {
+                settings.toggleTimeDisplayMode()
+            }
+            .keyboardShortcut("t", modifiers: [.control])
+
+            Button("Track Information") {
+                settings.showTrackInfoDialog = true
+            }
+            .keyboardShortcut("i", modifiers: [.control])
+
             // Vertical stacking - no horizontal movement needed
             // Windows now stack vertically in fixed order: Main -> EQ -> Playlist
         }

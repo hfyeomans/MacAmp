@@ -93,19 +93,19 @@
 ### I Button (Track Info Dialog) - 3 Hours
 
 **Functionality:**
-- Modal dialog showing track metadata
+- Modal dialog showing current track telemetry
 - Fields:
-  - Title, artist, album
+  - Title and artist (if provided)
   - Duration (MM:SS)
-  - File format
-  - Bitrate, sample rate, channels (if available)
+  - Bitrate, sample rate, channels (when reported)
+- Fallback copy for stream-only playback
 - Keyboard shortcut: Ctrl+I
 
 **Components:**
-- `AppSettings.showTrackInfoDialog` (new Bool property)
+- `AppSettings.showTrackInfoDialog` (new Bool property, transient)
 - `TrackInfoView.swift` (new SwiftUI view file)
 - Sheet presentation from WinampMainWindow
-- Metadata binding from PlaybackCoordinator
+- Metadata binding from `AudioPlayer` with stream fallback via `PlaybackCoordinator`
 - Keyboard shortcut in AppCommands.swift
 
 ---
@@ -138,7 +138,8 @@
 4. **MacAmpApp/Views/Components/TrackInfoView.swift** (NEW, ~100 lines)
    - TrackInfoView main component
    - InfoRow helper component
-   - Duration formatting
+   - Duration formatting helper
+   - Reads `AudioPlayer` telemetry + optional stream title
 
 ### Unchanged (Reference Only)
 
@@ -226,8 +227,9 @@
 
 - [ ] Dialog opens on click
 - [ ] Shows current track metadata
-- [ ] Displays: title, artist, album, duration, format
-- [ ] Shows technical details if available
+- [ ] Displays: title, artist (if set), duration
+- [ ] Shows bitrate/sample rate/channels when AudioPlayer reports them
+- [ ] Provides fallback copy for streams without telemetry
 - [ ] "No track" message when nothing playing
 - [ ] Close button works
 - [ ] Esc key dismisses
@@ -254,9 +256,9 @@
    - Mitigation: Phase 1 starts with investigation
 
 2. **Metadata Availability**
-   - I button assumes AudioMetadata populated
-   - Some fields may be missing for certain formats
-   - Mitigation: Display only available fields, show "N/A" for missing
+   - I button relies on `AudioPlayer` telemetry (bitrate/sampleRate/channelCount)
+   - Values may be zero for some sources (especially streams)
+   - Mitigation: Guard on > 0 and show fallback messaging
 
 ### Deferred to P3 (Post-1.0)
 

@@ -161,7 +161,7 @@ private func showOptionsMenu(from sourceView: NSView) {
         action: #selector(toggleDoubleSize),
         keyEquivalent: "d"
     )
-    doubleSizeItem.keyEquivalentModifierMask = [.command]
+    doubleSizeItem.keyEquivalentModifierMask = [.control]
     doubleSizeItem.state = settings.isDoubleSizeMode ? .on : .off
     doubleSizeItem.target = self
     menu.addItem(doubleSizeItem)
@@ -174,6 +174,7 @@ private func showOptionsMenu(from sourceView: NSView) {
         action: #selector(toggleRepeat),
         keyEquivalent: "r"
     )
+    repeatItem.keyEquivalentModifierMask = [.control]
     repeatItem.state = audioPlayer.repeatEnabled ? .on : .off
     repeatItem.target = self
     menu.addItem(repeatItem)
@@ -184,6 +185,7 @@ private func showOptionsMenu(from sourceView: NSView) {
         action: #selector(toggleShuffle),
         keyEquivalent: "s"
     )
+    shuffleItem.keyEquivalentModifierMask = [.control]
     shuffleItem.state = audioPlayer.shuffleEnabled ? .on : .off
     shuffleItem.target = self
     menu.addItem(shuffleItem)
@@ -366,6 +368,8 @@ Button("Time: \(settings.timeDisplayMode == .elapsed ? "Elapsed" : "Remaining")"
 var showTrackInfoDialog: Bool = false
 ```
 
+- [ ] Do **not** add a didSet/UserDefaults persistence (dialog is transient UI state)
+
 - [ ] Save file
 - [ ] Build project → verify no errors
 
@@ -386,41 +390,45 @@ import SwiftUI
 
 @MainActor
 struct TrackInfoView: View {
-    @EnvironmentObject var audioPlayer: AudioPlayer
-    @Environment(\.dismiss) var dismiss
+    @Environment(AudioPlayer.self) private var audioPlayer
+    @Environment(PlaybackCoordinator.self) private var playbackCoordinator
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         VStack(spacing: 20) {
-            // Header
             Text("Track Information")
                 .font(.headline)
                 .padding(.top)
 
             if let track = audioPlayer.currentTrack {
-                // Track Details
                 VStack(alignment: .leading, spacing: 12) {
                     InfoRow(label: "Title", value: track.title)
 
-                    if let artist = track.artist {
-                        InfoRow(label: "Artist", value: artist)
+                    if !track.artist.isEmpty {
+                        InfoRow(label: "Artist", value: track.artist)
                     }
 
                     InfoRow(label: "Duration", value: formatDuration(track.duration))
 
-                    // Technical Details (from AudioPlayer properties)
                     Divider()
 
-                    if let bitrate = audioPlayer.bitrate {
-                        InfoRow(label: "Bitrate", value: "\(bitrate) kbps")
+                    if audioPlayer.bitrate > 0 {
+                        InfoRow(label: "Bitrate", value: "\(audioPlayer.bitrate) kbps")
                     }
 
-                    if let sampleRate = audioPlayer.sampleRate {
-                        InfoRow(label: "Sample Rate", value: "\(sampleRate) Hz")
+                    if audioPlayer.sampleRate > 0 {
+                        InfoRow(label: "Sample Rate", value: "\(audioPlayer.sampleRate) Hz")
                     }
 
-                    if let channels = audioPlayer.channelCount {
-                        InfoRow(label: "Channels", value: channels == 2 ? "Stereo" : "Mono")
-                    }
+                    InfoRow(label: "Channels", value: audioPlayer.channelCount == 1 ? "Mono" : "Stereo")
+                }
+                .padding()
+            } else if let streamTitle = playbackCoordinator.currentTitle {
+                VStack(alignment: .leading, spacing: 12) {
+                    InfoRow(label: "Stream", value: streamTitle)
+                    Text("Detailed metadata unavailable for this source")
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
                 }
                 .padding()
             } else {
@@ -429,7 +437,6 @@ struct TrackInfoView: View {
                     .padding()
             }
 
-            // Close Button
             Button("Close") {
                 dismiss()
             }
@@ -447,25 +454,20 @@ struct TrackInfoView: View {
     }
 }
 
-struct InfoRow: View {
+private struct InfoRow: View {
     let label: String
     let value: String
 
     var body: some View {
         HStack {
-            Text(label + ":")
+            Text("\(label):")
                 .foregroundColor(.secondary)
-                .frame(width: 100, alignment: .trailing)
+                .frame(width: 110, alignment: .trailing)
 
             Text(value)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
-}
-
-#Preview {
-    TrackInfoView()
-        .environmentObject(AudioPlayer())
 }
 ```
 
@@ -535,7 +537,6 @@ Button {
     set: { settings.showTrackInfoDialog = $0 }
 )) {
     TrackInfoView()
-        .environmentObject(playbackCoordinator)
 }
 ```
 
@@ -598,15 +599,13 @@ Button("Track Information") {
   - [ ] Play an MP3 track
   - [ ] Open dialog
   - [ ] Verify displays:
-    - [ ] Title (correct)
-    - [ ] Artist (if available)
-    - [ ] Album (if available)
-    - [ ] Duration (MM:SS format)
-    - [ ] Format (e.g., "MP3")
-  - [ ] Verify technical details (if available):
-    - [ ] Bitrate (e.g., "320 kbps")
-    - [ ] Sample Rate (e.g., "44100 Hz")
-    - [ ] Channels ("Stereo" or "Mono")
+    - [ ] Title matches the playing track
+    - [ ] Artist row omitted when empty
+    - [ ] Duration formatted as MM:SS
+  - [ ] Verify technical details (when available):
+    - [ ] Bitrate shows only when AudioPlayer reports > 0
+    - [ ] Sample Rate shows only when > 0
+    - [ ] Channels reads "Stereo" for 2 / "Mono" for 1
 
 - [ ] **Track Info Display (No Track Playing)**
   - [ ] Stop playback
@@ -624,16 +623,15 @@ Button("Track Information") {
   - [ ] I button shows selected sprite while dialog open
   - [ ] Button returns to normal sprite when dialog closes
 
-- [ ] **Different File Formats**
+- [ ] **Different Sources**
   - [ ] Test with MP3 file
-  - [ ] Test with FLAC file (if available)
-  - [ ] Test with WAV file (if available)
-  - [ ] Verify format detection correct
+  - [ ] Test with FLAC/WAV (if available) to ensure UI still renders
+  - [ ] Test with an internet stream → expect fallback message (no technical details)
 
 - [ ] **Edge Cases**
-  - [ ] Dialog with very long title (truncates properly)
-  - [ ] Dialog with missing artist/album (fields omitted)
-  - [ ] Dialog with no metadata (basic info only)
+  - [ ] Dialog with very long title (wraps or truncates appropriately)
+  - [ ] Dialog with missing artist (row hidden cleanly)
+  - [ ] Dialog with no telemetry (fallback copy shown)
 
 - [ ] **Integration with Other Features**
   - [ ] Open dialog in double-size mode → works
@@ -917,9 +915,9 @@ settings.timeDisplayMode == .remaining
   - Keyboard shortcut: Ctrl+T
 
   I Button (Track Information):
-  - Shows current track metadata in modal dialog
-  - Displays title, artist, album, duration, format
-  - Shows technical details (bitrate, sample rate, channels)
+  - Shows current track telemetry in modal dialog
+  - Displays title, artist (if set), duration
+  - Shows technical details (bitrate, sample rate, channels when available)
   - Keyboard shortcut: Ctrl+I
 
   Pattern: Follows double-size-button implementation

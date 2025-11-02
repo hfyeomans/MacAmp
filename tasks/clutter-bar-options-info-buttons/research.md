@@ -204,23 +204,20 @@ Button {} label: {
 
 ### I Button (Track Info) Requirements
 
-**Must Have (P0):**
-- Dialog shows current track metadata
-- Display fields:
-  - Title
-  - Artist
-  - Album
-  - Duration (MM:SS)
-  - File format (MP3, FLAC, etc.)
+- **Must Have (P0):**
+  - Dialog shows current track metadata
+  - Display fields:
+    - Title
+    - Artist
+    - Duration (MM:SS)
+    - Bitrate (if available)
+    - Sample rate (if available)
+    - Channel layout (Mono/Stereo)
 - Close button works
 - Dialog dismisses on background click
 
 **Should Have (P1):**
 - Visual feedback on button press (selected sprite)
-- Technical details:
-  - Bitrate (kbps)
-  - Sample rate (Hz)
-  - Channels (Stereo/Mono)
 - File path display
 - Keyboard shortcut (Ctrl+I)
 
@@ -240,7 +237,7 @@ Button {} label: {
 | **State** | Transient (menu open/closed) | Transient (dialog visible/hidden) |
 | **Persistence** | None (menu actions persist their own state) | None (dialog just displays data) |
 | **Complexity** | Low (menu structure) | Medium (data binding + UI) |
-| **Dependencies** | AppSettings (existing toggles) | PlaybackCoordinator (track metadata) |
+| **Dependencies** | AppSettings (existing toggles) + AudioPlayer flags | AudioPlayer (current track + telemetry) |
 | **Time Estimate** | 1-2 hours | 2-3 hours |
 
 ---
@@ -251,13 +248,13 @@ Button {} label: {
 
 **Existing Components:**
 - `AppSettings.isDoubleSizeMode` ✅
-- `AudioPlayer.repeatEnabled` ✅ (via AudioPlayer)
-- `AudioPlayer.shuffleEnabled` ✅ (via AudioPlayer)
+- `AudioPlayer.repeatEnabled` ✅
+- `AudioPlayer.shuffleEnabled` ✅
 
 **New Components Needed:**
 - `AppSettings.timeDisplayMode` (enum: elapsed/remaining)
-- SwiftUI Menu or custom context menu component
-- Keyboard shortcut for Ctrl+T (time toggle)
+- NSMenu helper bridged from SwiftUI button
+- Keyboard shortcut for Ctrl+T (Control modifier to match clutter bar pattern)
 
 **Integration Point:** WinampMainWindow.swift
 
@@ -266,15 +263,16 @@ Button {} label: {
 ### I Button Dependencies
 
 **Existing Components:**
-- `PlaybackCoordinator.currentTrack` ✅
-- `AudioMetadata` struct ✅ (from StreamPlayer)
+- `AudioPlayer.currentTrack` ✅ (struct `Track` with `title`, `artist`, `duration`)
+- `AudioPlayer.bitrate`, `sampleRate`, `channelCount` ✅
+- `PlaybackCoordinator.currentTitle` (fallback for live stream metadata)
 
 **New Components Needed:**
-- `AppSettings.showTrackInfoDialog: Bool`
+- `AppSettings.showTrackInfoDialog: Bool` (transient UI flag, no persistence)
 - TrackInfoView.swift (new SwiftUI view)
 - Sheet presentation logic
 
-**Integration Point:** WinampMainWindow.swift + MacAmpApp.swift
+**Integration Point:** WinampMainWindow.swift
 
 ---
 
@@ -308,53 +306,27 @@ Button {} label: {
 
 ### Challenge 2: Metadata Access (I Button)
 
-**Problem:** Need current track metadata from PlaybackCoordinator
+**Problem:** Need current track details without relying on non-existent album/file-format fields
 
-**Solution:** PlaybackCoordinator already exposes `currentTrack`:
+**Solution:** Use `AudioPlayer` as the source of truth:
+- `audioPlayer.currentTrack?.title`
+- `audioPlayer.currentTrack?.artist`
+- `audioPlayer.currentTrack?.duration`
+- `audioPlayer.bitrate` (Int, 0 when unknown)
+- `audioPlayer.sampleRate` (Int in Hz, 0 when unknown)
+- `audioPlayer.channelCount` (1 mono / 2 stereo)
 
-```swift
-// PlaybackCoordinator.swift (existing)
-@Published var currentTrack: AudioTrack?
-```
-
-AudioTrack contains:
-- `title: String`
-- `artist: String?`
-- `album: String?`
-- `duration: TimeInterval`
-- `metadata: AudioMetadata?`
-
-**Access Pattern:**
-```swift
-@EnvironmentObject var playback: PlaybackCoordinator
-
-var trackInfo: AudioTrack? {
-    playback.currentTrack
-}
-```
+For streams, fall back to `playbackCoordinator.currentTitle` for display only; no additional metadata is available today.
 
 ---
 
 ### Challenge 3: Reactivity Pattern
 
-**Problem:** @AppStorage blocks @Observable reactivity (learned from D button)
+**Problem:** Persisted clutter bar settings require manual didSet persistence, but modal visibility should stay transient to avoid reopening sheets on launch.
 
-**Solution:** Use didSet pattern (already proven):
-
-```swift
-// AppSettings.swift
-var showTrackInfoDialog: Bool = false {
-    didSet {
-        UserDefaults.standard.set(showTrackInfoDialog, forKey: "showTrackInfoDialog")
-    }
-}
-
-var timeDisplayMode: TimeDisplayMode = .elapsed {
-    didSet {
-        UserDefaults.standard.set(timeDisplayMode.rawValue, forKey: "timeDisplayMode")
-    }
-}
-```
+**Solution:**
+- Continue using didSet + UserDefaults for `timeDisplayMode`.
+- Keep `showTrackInfoDialog` as a plain `Bool` without persistence so the dialog behaves like a normal modal.
 
 ---
 
