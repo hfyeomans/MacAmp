@@ -13,14 +13,12 @@ struct WinampMainWindow: View {
     // CRITICAL: Prevent unnecessary body re-evaluations that cause ghost images
     // SwiftUI re-evaluates body when ANY @EnvironmentObject publishes changes
     // This was causing 7+ evaluations before old views cleanup, creating visual doubles
-    @State private var displayedTime: Int = 0  // Cache rounded time to reduce updates
-    
+
     @State private var isShadeMode: Bool = false
-    @State private var showRemainingTime: Bool = false
     @State private var isScrubbing: Bool = false
     @State private var wasPlayingPreScrub: Bool = false
     @State private var scrubbingProgress: Double = 0.0
-    
+
     // Track info scrolling state
     @State private var scrollOffset: CGFloat = 0
     @State private var scrollTimer: Timer?
@@ -28,6 +26,9 @@ struct WinampMainWindow: View {
     // Pause blinking state
     @State private var pauseBlinkVisible: Bool = true
     @State private var isViewVisible: Bool = false
+
+    // Menu state - keep strong reference to prevent premature deallocation
+    @State private var activeOptionsMenu: NSMenu?
 
     // Timer publisher for pause blink animation (Swift 6 pattern)
     let pauseBlinkTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
@@ -110,6 +111,20 @@ struct WinampMainWindow: View {
         .frame(width: WinampSizes.main.width,
                height: isShadeMode ? WinampSizes.mainShade.height : WinampSizes.main.height)
         .background(Color.black) // Fallback
+        .sheet(isPresented: Binding(
+            get: { settings.showTrackInfoDialog },
+            set: { settings.showTrackInfoDialog = $0 }
+        )) {
+            TrackInfoView()
+        }
+        .onChange(of: settings.showOptionsMenuTrigger) { _, newValue in
+            if newValue {
+                // Show options menu when triggered by keyboard shortcut
+                showOptionsMenu(from: Coords.clutterButtonO)
+                // Reset trigger
+                settings.showOptionsMenuTrigger = false
+            }
+        }
         .onAppear {
             isViewVisible = true
         }
@@ -300,13 +315,18 @@ struct WinampMainWindow: View {
                 .offset(x: 34, y: 0)
 
             // Show minus sign for remaining time (position 1)
-            if showRemainingTime {
-                SimpleSpriteImage(.minusSign, width: 5, height: 1)
-                    .offset(x: 1, y: 6)
+            if settings.timeDisplayMode == .remaining {
+                // Create a 9x13 container to match digit frames, then center the 5x1 minus sprite
+                ZStack(alignment: .topLeading) {
+                    SimpleSpriteImage(.minusSign, width: 5, height: 1)
+                        .offset(x: 0, y: 6) // Center vertically: (13-1)/2 = 6
+                }
+                .frame(width: 9, height: 13, alignment: .topLeading)
+                .offset(x: 1, y: 0) // Position the container at x:1
             }
 
             // Time digits (MM:SS format) with absolute positioning
-            let timeToShow = showRemainingTime ?
+            let timeToShow = settings.timeDisplayMode == .remaining ?
                 max(0.0, audioPlayer.currentDuration - audioPlayer.currentTime) :
                 audioPlayer.currentTime
 
@@ -341,7 +361,7 @@ struct WinampMainWindow: View {
         .at(Coords.timeDisplay)
         .contentShape(Rectangle())
         .onTapGesture {
-            showRemainingTime.toggle()
+            settings.toggleTimeDisplayMode()
         }
     }
     
@@ -498,14 +518,14 @@ struct WinampMainWindow: View {
     private func buildClutterBarButtons() -> some View {
         // Use environment settings for reactive updates
         Group {
-            // O - Options (Scaffold - not yet implemented)
-            Button(action: {}) {
+            // O - Options (FUNCTIONAL)
+            Button(action: {
+                showOptionsMenu(from: Coords.clutterButtonO)
+            }) {
                 SimpleSpriteImage("MAIN_CLUTTER_BAR_BUTTON_O", width: 8, height: 8)
             }
             .buttonStyle(.plain)
-            .disabled(true)
-            .accessibilityHidden(true)
-            .help("Options (not yet implemented)")
+            .help("Options menu (Ctrl+O, Ctrl+T for time)")
             .at(Coords.clutterButtonO)
 
             // A - Always On Top (FUNCTIONAL)
@@ -522,14 +542,18 @@ struct WinampMainWindow: View {
             .help("Toggle always on top (Ctrl+A)")
             .at(Coords.clutterButtonA)
 
-            // I - Info (Scaffold - not yet implemented)
-            Button(action: {}) {
-                SimpleSpriteImage("MAIN_CLUTTER_BAR_BUTTON_I", width: 8, height: 7)
+            // I - Track Info (FUNCTIONAL)
+            let iSpriteName = settings.showTrackInfoDialog
+                ? "MAIN_CLUTTER_BAR_BUTTON_I_SELECTED"
+                : "MAIN_CLUTTER_BAR_BUTTON_I"
+
+            Button(action: {
+                settings.showTrackInfoDialog = true
+            }) {
+                SimpleSpriteImage(iSpriteName, width: 8, height: 7)
             }
             .buttonStyle(.plain)
-            .disabled(true)
-            .accessibilityHidden(true)
-            .help("Info (not yet implemented)")
+            .help("Track information (Ctrl+I)")
             .at(Coords.clutterButtonI)
 
             // D - Double Size (FUNCTIONAL)
@@ -774,6 +798,131 @@ struct WinampMainWindow: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
             isScrubbing = false
         }
+    }
+
+    // MARK: - Options Menu (O Button)
+
+    /// Show options menu below the O button
+    private func showOptionsMenu(from buttonPosition: CGPoint) {
+        // Create new menu and store strong reference to prevent premature deallocation
+        // NSMenu.popUp() is asynchronous - menu must stay alive until user dismisses it
+        let menu = NSMenu()
+
+        // Store strong reference BEFORE populating to prevent premature deallocation
+        activeOptionsMenu = menu
+
+        // Helper to create menu items with actions
+        @MainActor func createMenuItem(
+            title: String,
+            isChecked: Bool,
+            keyEquivalent: String = "",
+            modifiers: NSEvent.ModifierFlags = [],
+            action: @escaping () -> Void
+        ) -> NSMenuItem {
+            let item = NSMenuItem(title: title, action: nil, keyEquivalent: keyEquivalent)
+            item.state = isChecked ? .on : .off
+            item.keyEquivalentModifierMask = modifiers
+
+            // Use a custom class to hold the closure
+            let actionTarget = MenuItemTarget(action: action)
+            item.target = actionTarget
+            item.action = #selector(MenuItemTarget.execute)
+            item.representedObject = actionTarget // Keep it alive
+
+            return item
+        }
+
+        // Time display mode items
+        menu.addItem(createMenuItem(
+            title: "Time: Elapsed",
+            isChecked: settings.timeDisplayMode == .elapsed,
+            action: { [weak settings] in
+                if settings?.timeDisplayMode != .elapsed {
+                    settings?.toggleTimeDisplayMode()
+                }
+            }
+        ))
+
+        menu.addItem(createMenuItem(
+            title: "Time: Remaining",
+            isChecked: settings.timeDisplayMode == .remaining,
+            action: { [weak settings] in
+                if settings?.timeDisplayMode != .remaining {
+                    settings?.toggleTimeDisplayMode()
+                }
+            }
+        ))
+
+        menu.addItem(.separator())
+
+        // Double-size toggle
+        menu.addItem(createMenuItem(
+            title: "Double Size",
+            isChecked: settings.isDoubleSizeMode,
+            keyEquivalent: "d",
+            modifiers: .control,
+            action: { [weak settings] in
+                settings?.isDoubleSizeMode.toggle()
+            }
+        ))
+
+        // Repeat toggle
+        menu.addItem(createMenuItem(
+            title: "Repeat",
+            isChecked: audioPlayer.repeatEnabled,
+            keyEquivalent: "r",
+            modifiers: .control,
+            action: { [weak audioPlayer] in
+                audioPlayer?.repeatEnabled.toggle()
+            }
+        ))
+
+        // Shuffle toggle
+        menu.addItem(createMenuItem(
+            title: "Shuffle",
+            isChecked: audioPlayer.shuffleEnabled,
+            keyEquivalent: "s",
+            modifiers: .control,
+            action: { [weak audioPlayer] in
+                audioPlayer?.shuffleEnabled.toggle()
+            }
+        ))
+
+        // Position menu below button
+        // Find the main window reliably (not just keyWindow, which might be playlist/EQ)
+        // Look for the window that contains the main Winamp view
+        let mainWindow = NSApp.windows.first { window in
+            // Main window has specific size characteristics (275 or 550 wide in double-size)
+            return window.isVisible && !window.isMiniaturized &&
+                   (window.frame.width == WinampSizes.main.width ||
+                    window.frame.width == WinampSizes.main.width * 2)
+        } ?? NSApp.keyWindow
+
+        if let window = mainWindow {
+            // Convert button position to screen coordinates
+            // O button is at Coords.clutterButtonO (x: 10, y: 25)
+            // Account for double-size mode scaling
+            let scale: CGFloat = settings.isDoubleSizeMode ? 2.0 : 1.0
+            let screenPoint = NSPoint(
+                x: window.frame.minX + (buttonPosition.x * scale),
+                y: window.frame.maxY - ((buttonPosition.y + 8) * scale) // 8 = button height
+            )
+            menu.popUp(positioning: nil, at: screenPoint, in: nil)
+        }
+    }
+}
+
+/// Helper class to bridge closures to NSMenuItem actions
+@MainActor
+private class MenuItemTarget: NSObject {
+    let action: () -> Void
+
+    init(action: @escaping () -> Void) {
+        self.action = action
+    }
+
+    @objc func execute() {
+        action()
     }
 }
 

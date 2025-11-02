@@ -37,6 +37,7 @@
 		77129ADBBBC75DF6BA1EC1C8 /* SnapUtils.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43358BDD8D9B537C9109DF62 /* SnapUtils.swift */; };
 		7C97F7855F700CA55821BFD1 /* WindowSnapManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FF88FFEFCC2A65D88029ADB /* WindowSnapManager.swift */; };
 		8375D760955EEB75F8311F11 /* SimpleSpriteImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77A0C7921140C73AB173A5E8 /* SimpleSpriteImage.swift */; };
+		B95D3BA95DB24E4CBDF9E30B /* TrackInfoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6317A3F050254D92940A7202 /* TrackInfoView.swift */; };
 		878F770AF1608311F0C9BA09 /* WindowAccessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8A2F2CBA9954B0B144DA072 /* WindowAccessor.swift */; };
 		8806F9498EDA22C217C91D30 /* M3UParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57E5034E9E8C3E0CDB64AC2D /* M3UParser.swift */; };
 		93E376C1200386F617D37563 /* Skin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93E9913A6D48005436618474 /* Skin.swift */; };
@@ -92,6 +93,7 @@
 		74EDF33D12E79F86166AF268 /* DockingController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DockingController.swift; sourceTree = "<group>"; };
 		75C52A558EFD4C84BBA21F92 /* WinampPlaylistWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WinampPlaylistWindow.swift; sourceTree = "<group>"; };
 		77A0C7921140C73AB173A5E8 /* SimpleSpriteImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleSpriteImage.swift; sourceTree = "<group>"; };
+		6317A3F050254D92940A7202 /* TrackInfoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackInfoView.swift; sourceTree = "<group>"; };
 		7FF88FFEFCC2A65D88029ADB /* WindowSnapManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowSnapManager.swift; sourceTree = "<group>"; };
 		93E9913A6D48005436618474 /* Skin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Skin.swift; sourceTree = "<group>"; };
 		97F3E1419E231E886A674A64 /* SkinManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkinManager.swift; sourceTree = "<group>"; };
@@ -137,6 +139,7 @@
 				CABDEB04D5D23C3DAAAFEEFC /* PlaylistTimeText.swift */,
 				77A0C7921140C73AB173A5E8 /* SimpleSpriteImage.swift */,
 				F1E2D3C4B5A6978867564534 /* SpriteMenuItem.swift */,
+				6317A3F050254D92940A7202 /* TrackInfoView.swift */,
 				BAA63D879B46D5FFF6BA8BE9 /* WinampVolumeSlider.swift */,
 			);
 			path = Components;
@@ -355,6 +358,7 @@
 				BC234EF567890ABCD1234567 /* PreferencesView.swift in Sources */,
 				CEB39A994DFFE2DCA8FDE7EF /* PresetsButton.swift in Sources */,
 				8375D760955EEB75F8311F11 /* SimpleSpriteImage.swift in Sources */,
+				B95D3BA95DB24E4CBDF9E30B /* TrackInfoView.swift in Sources */,
 				A1B2C3D4E5F6789012345678 /* SpriteMenuItem.swift in Sources */,
 				AC7BAF317F478CEB2F36F3DB /* PlaylistTimeText.swift in Sources */,
 				CFF2E4B6A5D74592AA2B78CD /* PlaylistBitmapText.swift in Sources */,

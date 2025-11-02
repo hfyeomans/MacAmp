@@ -51,6 +51,14 @@ final class AppSettings {
         self.isDoubleSizeMode = UserDefaults.standard.bool(forKey: "isDoubleSizeMode")
         self.isAlwaysOnTop = UserDefaults.standard.bool(forKey: "isAlwaysOnTop")
 
+        // Load persisted time display mode (default to elapsed)
+        if let rawTimeMode = UserDefaults.standard.string(forKey: "timeDisplayMode"),
+           let mode = TimeDisplayMode(rawValue: rawTimeMode) {
+            self.timeDisplayMode = mode
+        } else {
+            self.timeDisplayMode = .elapsed
+        }
+
         // Load persisted visualizer mode (default to spectrum)
         let rawMode = UserDefaults.standard.integer(forKey: "visualizerMode")
         self.visualizerMode = VisualizerMode(rawValue: rawMode) ?? .spectrum
@@ -160,13 +168,34 @@ final class AppSettings {
         }
     }
 
-    // MARK: - Clutter Bar States (Scaffolded for Future Implementation)
+    // MARK: - Time Display Mode
 
-    /// O - Options Menu (not yet implemented)
-    var showOptionsMenu: Bool = false
+    /// Time display mode for elapsed vs remaining time
+    enum TimeDisplayMode: String, Codable, CaseIterable {
+        case elapsed = "elapsed"
+        case remaining = "remaining"
+    }
 
-    /// I - Info Dialog (not yet implemented)
-    var showInfoDialog: Bool = false
+    /// Current time display mode - persists across app restarts
+    /// Note: Using didSet pattern to maintain @Observable reactivity
+    var timeDisplayMode: TimeDisplayMode = .elapsed {
+        didSet {
+            UserDefaults.standard.set(timeDisplayMode.rawValue, forKey: "timeDisplayMode")
+        }
+    }
+
+    /// Toggle between elapsed and remaining time display
+    func toggleTimeDisplayMode() {
+        timeDisplayMode = (timeDisplayMode == .elapsed) ? .remaining : .elapsed
+    }
+
+    // MARK: - Clutter Bar States
+
+    /// O - Trigger Options Menu via keyboard (transient, not persisted)
+    var showOptionsMenuTrigger: Bool = false
+
+    /// I - Track Info Dialog (transient, not persisted)
+    var showTrackInfoDialog: Bool = false
 
     // MARK: - Visualizer Mode
 
