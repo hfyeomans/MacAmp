@@ -170,7 +170,7 @@ private func showOptionsMenu(from sourceView: NSView) {
         action: #selector(toggleRepeat),
         keyEquivalent: "r"
     )
-    repeatItem.state = playback.repeatMode != .off ? .on : .off
+    repeatItem.state = audioPlayer.repeatEnabled ? .on : .off
     repeatItem.target = self
     menu.addItem(repeatItem)
 
@@ -180,7 +180,7 @@ private func showOptionsMenu(from sourceView: NSView) {
         action: #selector(toggleShuffle),
         keyEquivalent: "s"
     )
-    shuffleItem.state = playback.shuffleEnabled ? .on : .off
+    shuffleItem.state = audioPlayer.shuffleEnabled ? .on : .off
     shuffleItem.target = self
     menu.addItem(shuffleItem)
 
@@ -198,11 +198,11 @@ private func showOptionsMenu(from sourceView: NSView) {
 }
 
 @objc private func toggleRepeat() {
-    playback.cycleRepeatMode()
+    audioPlayer.repeatEnabled.toggle()
 }
 
 @objc private func toggleShuffle() {
-    playback.shuffleEnabled.toggle()
+    audioPlayer.shuffleEnabled.toggle()
 }
 ```
 
@@ -223,11 +223,7 @@ Button {
         showOptionsMenu(from: contentView)
     }
 } label: {
-    spriteImage(
-        isActive: false, // Menu doesn't have persistent state
-        normal: .MAIN_CLUTTER_BAR_BUTTON_O,
-        selected: .MAIN_CLUTTER_BAR_BUTTON_O_SELECTED
-    )
+    SimpleSpriteImage("MAIN_CLUTTER_BAR_BUTTON_O", width: 8, height: 8)
 }
 .buttonStyle(PlainButtonStyle())
 .accessibilityLabel("Options menu")
@@ -251,7 +247,7 @@ Button {
 Button("Time: \(settings.timeDisplayMode == .elapsed ? "Elapsed" : "Remaining")") {
     settings.toggleTimeDisplayMode()
 }
-.keyboardShortcut("t", modifiers: [.command])
+.keyboardShortcut("t", modifiers: [.control])
 ```
 
 ---
@@ -284,11 +280,7 @@ Button("Time: \(settings.timeDisplayMode == .elapsed ? "Elapsed" : "Remaining")"
 **Add after timeDisplayMode:**
 
 ```swift
-var showTrackInfoDialog: Bool = false {
-    didSet {
-        UserDefaults.standard.set(showTrackInfoDialog, forKey: "showTrackInfoDialog")
-    }
-}
+var showTrackInfoDialog: Bool = false
 ```
 
 ---
@@ -302,7 +294,7 @@ import SwiftUI
 
 @MainActor
 struct TrackInfoView: View {
-    @EnvironmentObject var playback: PlaybackCoordinator
+    @EnvironmentObject var audioPlayer: AudioPlayer
     @Environment(\.dismiss) var dismiss
 
     var body: some View {
@@ -312,7 +304,7 @@ struct TrackInfoView: View {
                 .font(.headline)
                 .padding(.top)
 
-            if let track = playback.currentTrack {
+            if let track = audioPlayer.currentTrack {
                 // Track Details
                 VStack(alignment: .leading, spacing: 12) {
                     InfoRow(label: "Title", value: track.title)
@@ -321,31 +313,21 @@ struct TrackInfoView: View {
                         InfoRow(label: "Artist", value: artist)
                     }
 
-                    if let album = track.album {
-                        InfoRow(label: "Album", value: album)
-                    }
-
                     InfoRow(label: "Duration", value: formatDuration(track.duration))
 
-                    if let format = track.fileFormat {
-                        InfoRow(label: "Format", value: format.uppercased())
+                    // Technical Details (from AudioPlayer properties)
+                    Divider()
+
+                    if let bitrate = audioPlayer.bitrate {
+                        InfoRow(label: "Bitrate", value: "\(bitrate) kbps")
                     }
 
-                    // Technical Details (if available)
-                    if let metadata = track.metadata {
-                        Divider()
+                    if let sampleRate = audioPlayer.sampleRate {
+                        InfoRow(label: "Sample Rate", value: "\(sampleRate) Hz")
+                    }
 
-                        if let bitrate = metadata.bitrate {
-                            InfoRow(label: "Bitrate", value: "\(bitrate) kbps")
-                        }
-
-                        if let sampleRate = metadata.sampleRate {
-                            InfoRow(label: "Sample Rate", value: "\(sampleRate) Hz")
-                        }
-
-                        if let channels = metadata.channels {
-                            InfoRow(label: "Channels", value: channels == 2 ? "Stereo" : "Mono")
-                        }
+                    if let channels = audioPlayer.channelCount {
+                        InfoRow(label: "Channels", value: channels == 2 ? "Stereo" : "Mono")
                     }
                 }
                 .padding()
@@ -391,7 +373,7 @@ struct InfoRow: View {
 
 #Preview {
     TrackInfoView()
-        .environmentObject(PlaybackCoordinator())
+        .environmentObject(AudioPlayer())
 }
 ```
 
@@ -412,10 +394,10 @@ struct InfoRow: View {
 Button {
     settings.showTrackInfoDialog = true
 } label: {
-    spriteImage(
-        isActive: settings.showTrackInfoDialog,
-        normal: .MAIN_CLUTTER_BAR_BUTTON_I,
-        selected: .MAIN_CLUTTER_BAR_BUTTON_I_SELECTED
+    SimpleSpriteImage(
+        settings.showTrackInfoDialog ? "MAIN_CLUTTER_BAR_BUTTON_I_SELECTED" : "MAIN_CLUTTER_BAR_BUTTON_I",
+        width: 8,
+        height: 7
     )
 }
 .buttonStyle(PlainButtonStyle())
@@ -433,9 +415,12 @@ Button {
 **Add sheet modifier to main VStack (around line 170):**
 
 ```swift
-.sheet(isPresented: $settings.showTrackInfoDialog) {
+.sheet(isPresented: Binding(
+    get: { settings.showTrackInfoDialog },
+    set: { settings.showTrackInfoDialog = $0 }
+)) {
     TrackInfoView()
-        .environmentObject(playback)
+        .environmentObject(playbackCoordinator)
 }
 ```
 
@@ -455,7 +440,7 @@ Button {
 Button("Track Information") {
     settings.showTrackInfoDialog = true
 }
-.keyboardShortcut("i", modifiers: [.command])
+.keyboardShortcut("i", modifiers: [.control])
 ```
 
 ---
@@ -487,7 +472,64 @@ Button("Track Information") {
 
 ---
 
-### PHASE 9: Integration Testing (30 minutes)
+### PHASE 9: Time Display Migration (60 minutes)
+
+**Objective:** Migrate showRemainingTime from local state to AppSettings.timeDisplayMode
+
+#### 9.1 Remove Local State
+
+**File:** `MacAmpApp/Views/WinampMainWindow.swift`
+
+**Find and remove (around line 19):**
+
+```swift
+@State private var showRemainingTime = false
+```
+
+#### 9.2 Update Time Display Gesture
+
+**File:** `MacAmpApp/Views/WinampMainWindow.swift`
+
+**Find the time display onTapGesture (around line 344):**
+
+```swift
+.onTapGesture {
+    showRemainingTime.toggle()
+}
+```
+
+**Replace with:**
+
+```swift
+.onTapGesture {
+    settings.timeDisplayMode = (settings.timeDisplayMode == .elapsed) ? .remaining : .elapsed
+}
+```
+
+#### 9.3 Update Time Calculation Logic
+
+**File:** `MacAmpApp/Views/WinampMainWindow.swift`
+
+**Find references to `showRemainingTime` in time display logic and replace with:**
+
+```swift
+settings.timeDisplayMode == .remaining
+```
+
+#### 9.4 Test Migration
+
+- [ ] Build project → verify no errors
+- [ ] Run app
+- [ ] Click on time display → should toggle mode
+- [ ] Verify time changes between elapsed and remaining
+- [ ] Verify persistence across app restarts
+- [ ] Verify O button menu reflects correct state
+
+**Phase 9 Milestone:** ✅ Time display migration complete
+
+---
+
+### PHASE 10: Integration Testing (30 minutes)
 
 **Combined Functionality:**
 - [ ] O and I buttons work independently
@@ -517,15 +559,17 @@ Button("Track Information") {
 1. **MacAmpApp/Models/AppSettings.swift** (+60 lines)
    - Add TimeDisplayMode enum
    - Add timeDisplayMode property with didSet
-   - Add showTrackInfoDialog property with didSet
+   - Add showTrackInfoDialog property (transient, no didSet)
    - Add toggleTimeDisplayMode() method
 
-2. **MacAmpApp/Views/WinampMainWindow.swift** (+120 lines)
+2. **MacAmpApp/Views/WinampMainWindow.swift** (+120 lines, -2 lines)
    - Add showOptionsMenu(from:) method
    - Add @objc action methods (4 total)
-   - Update O button (remove disabled, add action)
-   - Update I button (remove disabled, add action)
+   - Update O button (remove disabled, add action, use SimpleSpriteImage)
+   - Update I button (remove disabled, add action, use SimpleSpriteImage)
    - Add .sheet() modifier for track info dialog
+   - **MIGRATION:** Remove @State private var showRemainingTime
+   - **MIGRATION:** Update onTapGesture to use settings.timeDisplayMode
 
 3. **MacAmpApp/AppCommands.swift** (+14 lines)
    - Add Ctrl+T command for time toggle
@@ -535,6 +579,9 @@ Button("Track Information") {
 
 4. **MacAmpApp/Views/Components/TrackInfoView.swift** (NEW, ~100 lines)
    - TrackInfoView main component
+   - Uses AudioPlayer (not PlaybackCoordinator)
+   - Track model: url, title, artist, duration (no album/fileFormat/metadata)
+   - Metadata from AudioPlayer properties: bitrate, sampleRate, channelCount
    - InfoRow helper component
    - Duration formatting helper
    - Preview provider
@@ -714,10 +761,11 @@ Button("Track Information") {
 | 6 | I Button Integration | 45 min | | Dialog presentation |
 | 7 | I Button Shortcut | 15 min | | Ctrl+I command |
 | 8 | I Button Testing | 30 min | | Manual verification |
-| 9 | Integration Testing | 30 min | | Combined testing |
-| **TOTAL** | | **4.5 hours** | | |
-| **+20% Contingency** | | **5.4 hours** | | |
-| **Rounded** | | **6 hours** | | |
+| 9 | Time Display Migration | 60 min | | showRemainingTime → timeDisplayMode |
+| 10 | Integration Testing | 30 min | | Combined testing |
+| **TOTAL** | | **5.5 hours** | | |
+| **+20% Contingency** | | **6.6 hours** | | |
+| **Rounded** | | **7 hours** | | |
 
 ---
 

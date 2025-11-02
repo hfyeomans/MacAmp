@@ -174,7 +174,7 @@ private func showOptionsMenu(from sourceView: NSView) {
         action: #selector(toggleRepeat),
         keyEquivalent: "r"
     )
-    repeatItem.state = playback.repeatMode != .off ? .on : .off
+    repeatItem.state = audioPlayer.repeatEnabled ? .on : .off
     repeatItem.target = self
     menu.addItem(repeatItem)
 
@@ -184,7 +184,7 @@ private func showOptionsMenu(from sourceView: NSView) {
         action: #selector(toggleShuffle),
         keyEquivalent: "s"
     )
-    shuffleItem.state = playback.shuffleEnabled ? .on : .off
+    shuffleItem.state = audioPlayer.shuffleEnabled ? .on : .off
     shuffleItem.target = self
     menu.addItem(shuffleItem)
 
@@ -215,11 +215,11 @@ private func showOptionsMenu(from sourceView: NSView) {
 }
 
 @objc private func toggleRepeat() {
-    playback.cycleRepeatMode()
+    audioPlayer.repeatEnabled.toggle()
 }
 
 @objc private func toggleShuffle() {
-    playback.shuffleEnabled.toggle()
+    audioPlayer.shuffleEnabled.toggle()
 }
 ```
 
@@ -259,11 +259,7 @@ Button {
         showOptionsMenu(from: contentView)
     }
 } label: {
-    spriteImage(
-        isActive: false, // Menu doesn't have persistent state
-        normal: .MAIN_CLUTTER_BAR_BUTTON_O,
-        selected: .MAIN_CLUTTER_BAR_BUTTON_O_SELECTED
-    )
+    SimpleSpriteImage("MAIN_CLUTTER_BAR_BUTTON_O", width: 8, height: 8)
 }
 .buttonStyle(PlainButtonStyle())
 .accessibilityLabel("Options menu")
@@ -290,7 +286,7 @@ Button {
 Button("Time: \(settings.timeDisplayMode == .elapsed ? "Elapsed" : "Remaining")") {
     settings.toggleTimeDisplayMode()
 }
-.keyboardShortcut("t", modifiers: [.command])
+.keyboardShortcut("t", modifiers: [.control])
 ```
 
 - [ ] Save file
@@ -367,11 +363,7 @@ Button("Time: \(settings.timeDisplayMode == .elapsed ? "Elapsed" : "Remaining")"
 - [ ] Add AFTER timeDisplayMode:
 
 ```swift
-var showTrackInfoDialog: Bool = false {
-    didSet {
-        UserDefaults.standard.set(showTrackInfoDialog, forKey: "showTrackInfoDialog")
-    }
-}
+var showTrackInfoDialog: Bool = false
 ```
 
 - [ ] Save file
@@ -394,7 +386,7 @@ import SwiftUI
 
 @MainActor
 struct TrackInfoView: View {
-    @EnvironmentObject var playback: PlaybackCoordinator
+    @EnvironmentObject var audioPlayer: AudioPlayer
     @Environment(\.dismiss) var dismiss
 
     var body: some View {
@@ -404,7 +396,7 @@ struct TrackInfoView: View {
                 .font(.headline)
                 .padding(.top)
 
-            if let track = playback.currentTrack {
+            if let track = audioPlayer.currentTrack {
                 // Track Details
                 VStack(alignment: .leading, spacing: 12) {
                     InfoRow(label: "Title", value: track.title)
@@ -413,31 +405,21 @@ struct TrackInfoView: View {
                         InfoRow(label: "Artist", value: artist)
                     }
 
-                    if let album = track.album {
-                        InfoRow(label: "Album", value: album)
-                    }
-
                     InfoRow(label: "Duration", value: formatDuration(track.duration))
 
-                    if let format = track.fileFormat {
-                        InfoRow(label: "Format", value: format.uppercased())
+                    // Technical Details (from AudioPlayer properties)
+                    Divider()
+
+                    if let bitrate = audioPlayer.bitrate {
+                        InfoRow(label: "Bitrate", value: "\(bitrate) kbps")
                     }
 
-                    // Technical Details (if available)
-                    if let metadata = track.metadata {
-                        Divider()
+                    if let sampleRate = audioPlayer.sampleRate {
+                        InfoRow(label: "Sample Rate", value: "\(sampleRate) Hz")
+                    }
 
-                        if let bitrate = metadata.bitrate {
-                            InfoRow(label: "Bitrate", value: "\(bitrate) kbps")
-                        }
-
-                        if let sampleRate = metadata.sampleRate {
-                            InfoRow(label: "Sample Rate", value: "\(sampleRate) Hz")
-                        }
-
-                        if let channels = metadata.channels {
-                            InfoRow(label: "Channels", value: channels == 2 ? "Stereo" : "Mono")
-                        }
+                    if let channels = audioPlayer.channelCount {
+                        InfoRow(label: "Channels", value: channels == 2 ? "Stereo" : "Mono")
                     }
                 }
                 .padding()
@@ -483,7 +465,7 @@ struct InfoRow: View {
 
 #Preview {
     TrackInfoView()
-        .environmentObject(PlaybackCoordinator())
+        .environmentObject(AudioPlayer())
 }
 ```
 
@@ -524,10 +506,10 @@ Button {} label: {
 Button {
     settings.showTrackInfoDialog = true
 } label: {
-    spriteImage(
-        isActive: settings.showTrackInfoDialog,
-        normal: .MAIN_CLUTTER_BAR_BUTTON_I,
-        selected: .MAIN_CLUTTER_BAR_BUTTON_I_SELECTED
+    SimpleSpriteImage(
+        settings.showTrackInfoDialog ? "MAIN_CLUTTER_BAR_BUTTON_I_SELECTED" : "MAIN_CLUTTER_BAR_BUTTON_I",
+        width: 8,
+        height: 7
     )
 }
 .buttonStyle(PlainButtonStyle())
@@ -548,9 +530,12 @@ Button {
 - [ ] Add sheet modifier AFTER existing modifiers:
 
 ```swift
-.sheet(isPresented: $settings.showTrackInfoDialog) {
+.sheet(isPresented: Binding(
+    get: { settings.showTrackInfoDialog },
+    set: { settings.showTrackInfoDialog = $0 }
+)) {
     TrackInfoView()
-        .environmentObject(playback)
+        .environmentObject(playbackCoordinator)
 }
 ```
 
@@ -587,7 +572,7 @@ Button {
 Button("Track Information") {
     settings.showTrackInfoDialog = true
 }
-.keyboardShortcut("i", modifiers: [.command])
+.keyboardShortcut("i", modifiers: [.control])
 ```
 
 - [ ] Save file
@@ -660,9 +645,83 @@ Button("Track Information") {
 
 ---
 
-## 🎯 PHASE 9: Integration Testing (30 minutes)
+## 🎯 PHASE 9: Time Display Migration (60 minutes)
 
-### 9.1 Combined Functionality Testing
+### 9.1 Remove Local State
+
+**File:** `MacAmpApp/Views/WinampMainWindow.swift`
+
+- [ ] Open WinampMainWindow.swift
+- [ ] Locate @State private var showRemainingTime (around line 19)
+- [ ] Delete the entire line:
+
+```swift
+@State private var showRemainingTime = false
+```
+
+- [ ] Save file
+- [ ] Build project → verify compile errors for showRemainingTime references
+
+---
+
+### 9.2 Update Time Display Gesture
+
+**File:** `MacAmpApp/Views/WinampMainWindow.swift`
+
+- [ ] Find the time display onTapGesture (around line 344)
+- [ ] Locate this code:
+
+```swift
+.onTapGesture {
+    showRemainingTime.toggle()
+}
+```
+
+- [ ] Replace with:
+
+```swift
+.onTapGesture {
+    settings.timeDisplayMode = (settings.timeDisplayMode == .elapsed) ? .remaining : .elapsed
+}
+```
+
+- [ ] Save file
+
+---
+
+### 9.3 Update Time Calculation Logic
+
+**File:** `MacAmpApp/Views/WinampMainWindow.swift`
+
+- [ ] Search for all remaining references to `showRemainingTime`
+- [ ] Replace each with:
+
+```swift
+settings.timeDisplayMode == .remaining
+```
+
+- [ ] Save file
+- [ ] Build project → verify no errors
+
+---
+
+### 9.4 Test Migration
+
+- [ ] Run app
+- [ ] Click on time display → should toggle mode
+- [ ] Verify time changes between elapsed and remaining
+- [ ] Open O button menu → verify time mode checkmark correct
+- [ ] Quit app and relaunch
+- [ ] Verify time display mode persists
+- [ ] Press Ctrl+T → verify toggles time mode
+
+**Phase 9 Milestone:** ✅ Time display migration complete
+
+---
+
+## 🎯 PHASE 10: Integration Testing (30 minutes)
+
+### 10.1 Combined Functionality Testing
 
 - [ ] **O and I Button Independence**
   - [ ] Click O button → menu appears
@@ -700,7 +759,7 @@ Button("Track Information") {
 
 ---
 
-### 9.2 Visual/Layout Testing
+### 10.2 Visual/Layout Testing
 
 - [ ] **Clutter Bar Alignment**
   - [ ] All 5 buttons (O, A, I, D, V) aligned horizontally
@@ -717,7 +776,7 @@ Button("Track Information") {
 
 ---
 
-### 9.3 Sprite Rendering (Multiple Skins)
+### 10.3 Sprite Rendering (Multiple Skins)
 
 - [ ] **Base Skin (Default)**
   - [ ] O button normal sprite renders
@@ -740,7 +799,7 @@ Button("Track Information") {
 
 ---
 
-### 9.4 Accessibility Testing
+### 10.4 Accessibility Testing
 
 - [ ] **Keyboard Navigation**
   - [ ] Tab through UI → reaches clutter bar
@@ -757,7 +816,7 @@ Button("Track Information") {
 
 ---
 
-### 9.5 Performance Testing
+### 10.5 Performance Testing
 
 - [ ] **Menu Performance**
   - [ ] Open/close menu 10 times rapidly
@@ -776,7 +835,7 @@ Button("Track Information") {
   - [ ] No warnings reported
   - [ ] No data races detected
 
-**Phase 9 Milestone:** ✅ All integration tests passing
+**Phase 10 Milestone:** ✅ All integration tests passing
 
 ---
 
@@ -914,9 +973,11 @@ Button("Track Information") {
 | Phase 6 | 45 min | | I Button Integration |
 | Phase 7 | 15 min | | I Button Shortcut |
 | Phase 8 | 30 min | | I Button Testing |
-| Phase 9 | 30 min | | Integration Testing |
-| **Total** | **5 hours** | | |
-| **+20%** | **6 hours** | | |
+| Phase 9 | 60 min | | Time Display Migration |
+| Phase 10 | 30 min | | Integration Testing |
+| **Total** | **5.5 hours** | | |
+| **+20%** | **6.6 hours** | | |
+| **Rounded** | **7 hours** | | |
 
 **Actual Total:** _________ hours
 

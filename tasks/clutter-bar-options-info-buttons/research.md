@@ -125,12 +125,12 @@ From `tasks/done/double-size-button/COMPLETION_SUMMARY.md`, the successful patte
 
 ```swift
 // O Button (Options) - 8×8 pixels
-MAIN_CLUTTER_BAR_BUTTON_O: (x: 304, y: 25, width: 8, height: 8)
+MAIN_CLUTTER_BAR_BUTTON_O: (x: 304, y: 3, width: 8, height: 8)
 MAIN_CLUTTER_BAR_BUTTON_O_SELECTED: (x: 304, y: 47, width: 8, height: 8)
 
 // I Button (Info) - 8×7 pixels
-MAIN_CLUTTER_BAR_BUTTON_I: (x: 320, y: 40, width: 8, height: 7)
-MAIN_CLUTTER_BAR_BUTTON_I_SELECTED: (x: 320, y: 62, width: 8, height: 7)
+MAIN_CLUTTER_BAR_BUTTON_I: (x: 304, y: 18, width: 8, height: 7)
+MAIN_CLUTTER_BAR_BUTTON_I_SELECTED: (x: 304, y: 62, width: 8, height: 7)
 ```
 
 **Critical Discovery:** Sprites already correctly defined with DIFFERENT coordinates for normal vs selected states (learned from D/A button bug fix)
@@ -251,8 +251,8 @@ Button {} label: {
 
 **Existing Components:**
 - `AppSettings.isDoubleSizeMode` ✅
-- `AppSettings.repeatMode` ✅ (via PlaybackCoordinator)
-- `AppSettings.shuffleEnabled` ✅ (via PlaybackCoordinator)
+- `AudioPlayer.repeatEnabled` ✅ (via AudioPlayer)
+- `AudioPlayer.shuffleEnabled` ✅ (via AudioPlayer)
 
 **New Components Needed:**
 - `AppSettings.timeDisplayMode` (enum: elapsed/remaining)
@@ -552,6 +552,7 @@ Based on double-size-button actual time (4 hours) and complexity analysis:
 1. **Time Display Toggle:**
    - Q: Where is elapsed/remaining time currently displayed?
    - A: Main window time display (needs investigation)
+   - **MIGRATION REQUIRED:** WinampMainWindow.swift currently uses @State private var showRemainingTime. Must migrate to AppSettings.timeDisplayMode and update onTapGesture at line 344
 
 2. **Track Info Dialog Style:**
    - Q: Sheet or Popover presentation?
@@ -559,7 +560,7 @@ Based on double-size-button actual time (4 hours) and complexity analysis:
 
 3. **Keyboard Shortcuts:**
    - Q: Do Ctrl+T and Ctrl+I conflict with existing shortcuts?
-   - A: Need to verify shortcut map
+   - A: Need to verify shortcut map - Note: AppCommands.swift uses .control modifier for clutter bar, not .command
 
 ---
 

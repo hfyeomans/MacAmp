@@ -46,21 +46,22 @@
 
 ### Overall Scores
 
-**Implementation Complexity: 3/10** (LOW)
+**Implementation Complexity: 4/10** (LOW-MEDIUM)
 - Simple menu and dialog UI
 - Proven pattern from D/A buttons
 - All infrastructure exists
-- Low technical risk
+- **NEW:** showRemainingTime migration adds complexity
 
-**Risk of Breaking Features: 2/10** (VERY LOW)
+**Risk of Breaking Features: 3/10** (LOW)
 - Only extends existing scaffolding
 - No changes to core playback logic
 - No changes to sprite system
-- Isolated button functionality
+- **NEW:** Time display migration could affect existing behavior
 
-**Time Estimate: 6 hours** ✅ REALISTIC
+**Time Estimate: 7 hours** ✅ REALISTIC
 - O Button: 2 hours (menu implementation)
 - I Button: 3 hours (dialog + metadata binding)
+- Time Display Migration: 1 hour
 - Integration Testing: 1 hour
 - Based on D/A pattern actual (4 hours for similar work)
 
@@ -116,7 +117,7 @@
 1. **MacAmpApp/Models/AppSettings.swift** (+60 lines)
    - Add TimeDisplayMode enum
    - Add timeDisplayMode property with didSet
-   - Add showTrackInfoDialog property with didSet
+   - Add showTrackInfoDialog property (transient, no didSet persistence)
    - Add toggleTimeDisplayMode() method
 
 2. **MacAmpApp/Views/WinampMainWindow.swift** (+120 lines)
@@ -125,6 +126,8 @@
    - Update O button (remove .disabled, add action)
    - Update I button (remove .disabled, add action)
    - Add .sheet() modifier
+   - **MIGRATION:** Replace @State private var showRemainingTime with AppSettings.timeDisplayMode
+   - Update onTapGesture at line 344 from showRemainingTime.toggle() to settings.timeDisplayMode.toggle()
 
 3. **MacAmpApp/AppCommands.swift** (+14 lines)
    - Add Ctrl+T keyboard shortcut
@@ -159,9 +162,10 @@
 | 6 | I Button Integration (dialog presentation) | 45 min | ⏳ PENDING |
 | 7 | I Button Keyboard Shortcut (Ctrl+I) | 15 min | ⏳ PENDING |
 | 8 | I Button Testing | 30 min | ⏳ PENDING |
-| 9 | Integration Testing (combined) | 30 min | ⏳ PENDING |
-| **TOTAL** | | **5 hours** | |
-| **+20% Contingency** | | **6 hours** | |
+| 9 | Time Display Migration (showRemainingTime) | 60 min | ⏳ PENDING |
+| 10 | Integration Testing (combined) | 30 min | ⏳ PENDING |
+| **TOTAL** | | **6 hours** | |
+| **+20% Contingency** | | **7 hours** | |
 
 ---
 
