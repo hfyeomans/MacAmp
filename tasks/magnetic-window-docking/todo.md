@@ -1,10 +1,109 @@
-# Magnetic Window Docking - Implementation Checklist
+# Magnetic Window Docking - Implementation Checklist (REVISED)
 
 **Branch:** `feature/magnetic-window-docking`
 **Base Commit:** `1235fc06af6daa6fca89d47ab1142514ce3bf5a0`
-**Estimated Total Time:** 10-16 hours
+**Estimated Total Time:** 18-24 hours (worst case with contingency)
 **Priority:** P3 (Post-1.0 enhancement)
-**Status:** Ready for implementation
+**Status:** CONDITIONAL GO - High Risk (8/10)
+
+**CRITICAL UPDATES from ULTRATHINK Synthesis (2025-11-02):**
+- Architecture changed: NSWindowController (NOT WindowGroup)
+- Phase 1B added: Drag regions (CRITICAL - must come before Phase 2)
+- Phase 3 added: Delegate multiplexer (required)
+- Phases 5-7 added: Playlist resize, Z-order, snap threshold scaling
+- Time increased: 18-24 hours (from 10-16)
+- Risk increased: 8/10 High (from 7/10 Medium-High)
+
+---
+
+## 📋 REVISED PHASE SUMMARY
+
+| Phase | Description | Time | Priority | Status |
+|-------|-------------|------|----------|--------|
+| 1A | Separate Windows (NSWindowController) | 2-3h | CRITICAL | Ready |
+| 1B | **Drag Regions** | 2-3h | **BLOCKER** | Ready |
+| 2 | WindowSnapManager Integration | 3-4h | CRITICAL | Ready |
+| 3 | **Delegate Multiplexer** | 1-2h | HIGH | Ready |
+| 4 | Double-Size Coordination | 2-3h | HIGH | Ready |
+| 5 | **Playlist Resize Handler** | 1-2h | MEDIUM | Ready |
+| 6 | **Z-Order Management** | 1h | MEDIUM | Ready |
+| 7 | **Snap Threshold Scaling** | 0.5h | LOW | Ready |
+| 8 | State Persistence | 1-2h | LOW | Ready |
+| 9 | Testing & Polish | 1-2h | CRITICAL | Ready |
+| **TOTAL** | | **14-20h** | | |
+| **Contingency** | +20% buffer | **+3-4h** | | |
+| **WORST CASE** | | **18-24h** | | |
+
+**NEW PHASES:**
+- **Phase 1B:** Drag regions (MUST complete before Phase 2 - windows unmovable otherwise)
+- **Phase 3:** Delegate multiplexer (Oracle identified delegate conflicts)
+- **Phase 5:** Playlist resize (Gemini identified feature gap)
+- **Phase 6:** Z-order management (Gemini identified feature gap)
+- **Phase 7:** Snap threshold scaling for double-size mode (Gemini identified)
+
+**ARCHITECTURAL CHANGE:**
+- ❌ DEPRECATED: WindowGroup + WindowAccessor approach
+- ✅ NEW: NSWindowController + WindowCoordinator singleton
+- **Rationale:** WindowGroup doesn't guarantee singleton windows, causes lifecycle issues
+
+---
+
+## ⚠️ CRITICAL CHANGES FROM ORIGINAL PLAN
+
+### 1. Architecture: NSWindowController (NOT WindowGroup)
+
+**Original Plan:** Use SwiftUI WindowGroup with WindowAccessor
+**NEW Plan:** Use NSWindowController subclasses with WindowCoordinator singleton
+
+**Why Changed (Oracle/Codex):**
+> "Raw WindowGroups risk duplicate instances and flaky close/restore behaviour. Prefer dedicated NSWindowControllers to keep the three window singletons in sync with menus."
+
+**Impact on Tasks:**
+- Phase 1A completely changed (create NSWindowControllers, not WindowGroups)
+- Delete tasks related to WindowGroup configuration
+- Add tasks for NSWindowController subclasses
+- Add WindowCoordinator singleton
+
+### 2. Phase 1B: Drag Regions (NEW - CRITICAL)
+
+**Original Plan:** Phase 4 (Custom Drag Handling)
+**NEW Plan:** Phase 1B (immediately after window separation)
+
+**Why Changed (Oracle/Codex):**
+> "Perform drag-region work immediately after splitting windows; otherwise users lose the ability to move borderless windows."
+
+**Impact:**
+- +2-3 hours to timeline
+- BLOCKER for Phase 2 (snap detection untestable without movable windows)
+- Must implement before any snap testing
+
+### 3. Phase 3: Delegate Multiplexer (NEW)
+
+**Original Plan:** Not addressed
+**NEW Plan:** Phase 3 (after WindowSnapManager integration)
+
+**Why Added (Oracle/Codex):**
+> "WindowSnapManager installs itself as the window delegate; if additional delegate callbacks required, add a delegate multiplexer."
+
+**Impact:**
+- +1-2 hours to timeline
+- Required for windowDidResize, windowDidBecomeMain, windowWillClose
+- Prevents delegate conflicts
+
+### 4. Phases 5-7: Feature Gaps (NEW)
+
+**Original Plan:** Basic snapping only
+**NEW Plan:** Add playlist resize, Z-order, snap threshold scaling
+
+**Why Added (Gemini):**
+- Playlist is resizable (others aren't) - needs special handling
+- Docked windows should act as unit (Z-order management)
+- Snap threshold must scale with double-size mode (15px → 30px at 2x)
+
+**Impact:**
+- +2.5 hours to timeline
+- Improves feature completeness
+- Polish features, not blockers
 
 ---
 

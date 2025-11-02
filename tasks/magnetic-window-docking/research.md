@@ -1201,6 +1201,481 @@ No changes needed.
 
 ---
 
+## 🔍 ULTRATHINK SYNTHESIS - Critical Analysis (2025-11-02)
+
+### Which Review is Most Accurate?
+
+**VERDICT: Oracle (Codex) is Most Accurate ✅**
+
+**Oracle's Strengths:**
+- Caught concrete bug: 15px vs 10px documentation error (SnapUtils.swift:27)
+- Identified architectural showstoppers (lifecycle, delegates, drag regions)
+- Specific technical warnings (NSWindowController vs WindowGroup)
+- Conservative risk assessment backed by concrete concerns
+- Prioritized drag regions correctly (immediate need)
+
+**Evidence of Accuracy:**
+```swift
+// SnapUtils.swift:27 - Oracle was RIGHT
+static let SNAP_DISTANCE: CGFloat = 15  // NOT 10px!
+```
+
+**Technical Depth:**
+- Understood delegate conflict (WindowSnapManager IS a NSWindowDelegate)
+- Recognized WindowGroup lifecycle issues (duplicate instances, flaky restore)
+- Anticipated double-size alignment bugs (coordinate math complexity)
+- Identified persistence edge case (off-screen after monitor changes)
+
+**Gemini - Optimistic but Valuable ⚠️**
+
+**Strengths:**
+- Identified feature gaps (playlist resize, Z-order)
+- Comprehensive test case expansion
+- Validated 5-phase approach
+- Confidence-building assessment (9/10 feasibility)
+
+**Weaknesses:**
+- Underestimated architectural complexity
+- Didn't catch 15px snap distance error
+- Risk score too low (6/10 vs Oracle's 8/10)
+- Feature-focused over architecture-focused
+- Approved WindowGroup without questioning lifecycle
+
+**Valuable Contributions:**
+- Playlist resize is a real gap (needs Phase 2.5)
+- Z-order management is correct requirement (needs Phase 3.5)
+- Snap threshold scaling for double-size (20px at 2x)
+- Default drag fallback strategy (de-risk Phase 4)
+
+**Claude (Original Plan) - Solid Foundation 📋**
+
+**Strengths:**
+- Discovered WindowSnapManager.swift exists
+- Comprehensive research (Webamp analysis, frame analysis)
+- Clear 5-phase breakdown
+- Detailed testing plan (40+ scenarios)
+- 1400 lines of documentation
+
+**Weaknesses:**
+- Missed 15px snap distance (used 10px in research)
+- Didn't identify playlist resize requirement
+- Didn't identify Z-order requirement
+- Used WindowGroup without questioning lifecycle
+- No drag region priority awareness
+
+---
+
+### Risk Assessment Reconciliation
+
+**Oracle: 8/10 High ✅ CORRECT**
+**Gemini: 6/10 Medium ❌ UNDERESTIMATED**
+
+**Winner: Oracle's 8/10 High Risk is accurate.**
+
+**Why Oracle is Right:**
+
+#### 1. Window Lifecycle Complexity (HIGH RISK)
+
+**Oracle's Concern:**
+> "Raw WindowGroups risk duplicate instances and flaky close/restore behaviour."
+
+**Evidence:**
+- WindowGroup creates windows on-demand (not singletons)
+- Menu commands like "Show Main Window" could create duplicates
+- Close behavior is automatic, not controllable
+- Restoration from saved state is opaque
+
+**Reality Check:**
+MacAmp needs exactly 3 windows (singletons) that:
+- Always exist (even when hidden)
+- Are controlled by menu commands
+- Have predictable lifecycle
+- Can be shown/hidden, not created/destroyed
+
+WindowGroup doesn't guarantee this. NSWindowController does.
+
+#### 2. Delegate Conflicts (MEDIUM RISK)
+
+**Oracle's Concern:**
+> "WindowSnapManager installs itself as the window delegate; if additional delegate callbacks required, add a delegate multiplexer."
+
+**Code Evidence:**
+```swift
+// WindowSnapManager.swift:29
+window.delegate = self  // Takes over delegate!
+```
+
+**Problem:**
+- WindowSnapManager IS the delegate for snap detection
+- If windows need custom close behavior: conflict
+- If windows need custom resize behavior: conflict
+- If windows need custom focus behavior: conflict
+
+**Solution Required:**
+Delegate multiplexer pattern:
+```swift
+class DelegateMultiplexer: NSObject, NSWindowDelegate {
+    var delegates: [NSWindowDelegate] = []
+
+    func windowDidMove(_ notification: Notification) {
+        delegates.forEach { $0.windowDidMove?(notification) }
+    }
+    // ... forward all delegate methods
+}
+```
+
+#### 3. Drag Regions (CRITICAL FEATURE)
+
+**Oracle's Concern:**
+> "Perform drag-region work immediately after splitting windows; otherwise users lose the ability to move borderless windows."
+
+**Reality:**
+WindowSnapManager expects windows to have standard titlebars for dragging. But MacAmp uses borderless windows! Without custom drag regions:
+- Windows can't be moved
+- Snap detection never triggers
+- Feature is unusable
+
+**Timeline Impact:**
+Drag regions MUST be implemented in Phase 1B (before snap detection), adding 2-3 hours.
+
+#### 4. Double-Size Alignment (HIGH RISK)
+
+**Oracle's Concern:**
+> "Each decoupled window must drive its NSWindow frame on toggle; otherwise AppKit crops the scaled content."
+
+**Coordinate Math Complexity:**
+```swift
+// Current (unified): Simple
+UnifiedDockView.scaleEffect(2.0)
+
+// Magnetic docking: Complex - 3 windows must:
+// 1. Scale content simultaneously
+// 2. Adjust window frames
+// 3. Maintain relative positions
+// 4. Recalculate snap positions
+// 5. Handle origin shifts
+```
+
+**Risk:** Misaligned windows, cropped content, incorrect snap positions at 2x scale.
+
+**Why Gemini Underestimated Risk:**
+
+Gemini focused on **feature completeness** (resize, Z-order) rather than **architectural soundness** (lifecycle, delegates, drag).
+
+Feature gaps are easier to fix than architectural problems. You can add Z-order later; you can't easily fix WindowGroup lifecycle issues after the fact.
+
+---
+
+### Architecture Decision: NSWindowController vs WindowGroup
+
+**Gemini's Position:**
+> "Architecture (WindowGroup + WindowAccessor): Modern, sound approach" ✅
+
+**Oracle's Position:**
+> "Prefer dedicated NSWindowControllers (or scene activation management) to keep the three window singletons in sync with menus" ⚠️
+
+**Winner: Oracle's NSWindowController Approach ✅**
+
+**Detailed Analysis:**
+
+#### WindowGroup Approach (Gemini/Claude):
+
+**Pros:**
+- Modern SwiftUI API
+- Automatic window management
+- Native SwiftUI integration
+- Less boilerplate
+
+**Cons:**
+- Creates windows on-demand (not singletons)
+- Multiple instances possible
+- Close behavior automatic (can't customize)
+- Restoration opaque
+- Menu synchronization complex
+- No fine-grained lifecycle control
+
+**Example Problem:**
+```swift
+// User closes main window with Cmd+W
+// Menu: "Window > Show Main Window"
+// What happens?
+// - WindowGroup might create NEW instance
+// - Snap state lost
+// - Position forgotten
+// - Other windows orphaned
+```
+
+#### NSWindowController Approach (Oracle):
+
+**Pros:**
+- Explicit singleton control
+- Predictable lifecycle
+- Full delegate control
+- Menu synchronization trivial
+- Traditional but proven
+- Fine-grained window management
+
+**Cons:**
+- More boilerplate
+- Less "SwiftUI native"
+- Manual window creation
+- More code to maintain
+
+**Example Solution:**
+```swift
+class WindowCoordinator {
+    let mainController: NSWindowController
+    let eqController: NSWindowController
+    let playlistController: NSWindowController
+
+    func showMain() {
+        mainController.window?.makeKeyAndOrderFront(nil)
+    }
+
+    func hideMain() {
+        mainController.window?.orderOut(nil)
+    }
+}
+
+// Menu command:
+@IBAction func showMainWindow(_ sender: Any) {
+    WindowCoordinator.shared.showMain()
+}
+```
+
+**Architectural Decision: ✅ Use NSWindowController**
+
+**Rationale:**
+1. Guarantees singleton windows
+2. Menu synchronization is trivial
+3. Full lifecycle control
+4. Delegate multiplexer easier to implement
+5. Proven pattern for multi-window apps
+6. Risk reduction trumps "modern API"
+
+---
+
+### Comprehensive Issues List
+
+Consolidating ALL issues from all three reviews, ranked by severity:
+
+#### CRITICAL Issues (Showstoppers):
+
+**1. Documentation Bug: 15px Snap Distance ⚠️ ORACLE**
+
+**Location:** Multiple files incorrectly state 10px
+**Reality:** SnapUtils.swift:27 = `static let SNAP_DISTANCE: CGFloat = 15`
+**Impact:** Confuses implementation, tests might use wrong values
+**Fix:** Update all documentation to 15px
+
+**Files to Update:**
+- tasks/magnetic-window-docking/research.md (says 10px - line 142)
+- tasks/magnetic-window-docking/FEASIBILITY_SUMMARY.md (says 10px - line 129)
+- tasks/magnetic-window-docking/plan.md (says 15px ✅ correct! - line 75)
+
+**2. Drag Regions Missing from Plan ⚠️ ORACLE**
+
+**Problem:** Borderless windows can't be dragged without custom regions
+**Impact:** Windows are immovable, feature unusable
+**Fix:** Add Phase 1B for drag region implementation
+**Time:** +2-3 hours
+
+**3. Window Lifecycle Architecture ⚠️ ORACLE**
+
+**Problem:** WindowGroup doesn't guarantee singletons
+**Impact:** Duplicate windows, lost state, menu sync issues
+**Fix:** Use NSWindowController instead
+**Time:** No additional time (architectural choice)
+
+#### HIGH Issues (Major Risks):
+
+**4. Delegate Conflicts ⚠️ ORACLE**
+
+**Problem:** WindowSnapManager takes over window.delegate
+**Code:** `window.delegate = self` (WindowSnapManager.swift:29)
+**Impact:** Can't add custom close/resize/focus handlers
+**Fix:** Implement delegate multiplexer pattern
+**Time:** +1-2 hours
+
+**5. Double-Size Alignment Bugs ⚠️ ORACLE + CLAUDE**
+
+**Problem:** 3 separate windows must scale simultaneously
+**Complexity:**
+- Scale content (scaleEffect)
+- Resize window frames (setFrame)
+- Maintain relative positions
+- Recalculate snap positions (15px → 30px at 2x?)
+- Handle origin shifts
+
+**Risk:** Misaligned windows, cropped content
+**Fix:** Synchronized scaling routine + testing
+**Time:** +2-3 hours
+
+**6. Coordinate System Complexity ⚠️ ALL REVIEWS**
+
+**Problem:** NSWindow uses bottom-left origin, SwiftUI uses top-left
+**Evidence:** WindowSnapManager does this conversion (lines 50-69)
+**Risk:** Off-by-one errors, multi-monitor bugs
+**Fix:** Careful testing, bounds checking
+**Time:** Accounted for in phases
+
+#### MEDIUM Issues (Feature Gaps):
+
+**7. Playlist Resize Handling ⚠️ GEMINI**
+
+**Problem:** Playlist is resizable, others aren't
+**Current State:** WindowSnapManager only handles movement
+**Required:** windowDidResize handler
+**Implementation:**
+```swift
+func windowDidResize(_ notification: Notification) {
+    // Find cluster
+    // Recalculate positions to maintain docking
+    // Shift windows below resized window
+}
+```
+**Time:** +1-2 hours
+
+**8. Z-Order Management ⚠️ GEMINI**
+
+**Problem:** Clicking one docked window should bring all to front
+**Current State:** Not handled
+**Required:** windowDidBecomeMain handler
+**Implementation:**
+```swift
+func windowDidBecomeMain(_ notification: Notification) {
+    let cluster = connectedCluster(...)
+    for windowID in cluster {
+        window.orderFront(nil)
+    }
+}
+```
+**Time:** +1 hour
+
+**9. Snap Threshold Scaling ⚠️ GEMINI**
+
+**Problem:** 15px threshold at 1x should be 30px at 2x scale
+**Current:** Hardcoded 15px
+**Fix:** Scale threshold with isDoubleSizeMode
+**Implementation:**
+```swift
+static func snapThreshold(scale: CGFloat = 1.0) -> CGFloat {
+    return 15 * scale
+}
+```
+**Time:** +0.5 hours
+
+#### LOW Issues (Polish):
+
+**10. Persistence Off-Screen ⚠️ ORACLE**
+
+**Problem:** Saved positions may be off-screen after monitor changes
+**Fix:** Bounds normalization on restore
+**Time:** +0.5 hours
+
+**11. Mission Control Behavior ⚠️ GEMINI**
+
+**Problem:** How do docked windows behave in Mission Control?
+**Testing:** Required but not blocking
+**Time:** Testing only
+
+**12. Accessibility (VoiceOver) ⚠️ GEMINI**
+
+**Problem:** VoiceOver needs proper window roles
+**Fix:** Set accessibility attributes
+**Time:** +0.5 hours
+
+---
+
+### Priority Conflicts: Implementation Sequence
+
+**Gemini's Sequence:**
+1. Phase 1: Separate windows
+2. Phase 2: Snap detection
+3. **Phase 2.5: Resize handling** (NEW)
+4. Phase 3: Group movement
+5. **Phase 3.5: Z-order** (NEW)
+6. Phase 4: Custom drag
+7. Phase 5: Persistence
+
+**Oracle's Sequence:**
+1. Phase 1: Separate windows
+2. **Drag regions immediately** (CRITICAL)
+3. **Merge snap detection + group movement** (WindowSnapManager integration)
+4. Double-size coordination
+5. State persistence
+
+**Winner: Oracle's Sequence is Better ✅**
+
+**Why:**
+
+#### 1. Drag Regions Must Come First
+
+**Oracle's Insight:**
+> "Otherwise users lose the ability to move borderless windows."
+
+**Reality Check:**
+- Borderless windows have no default drag mechanism
+- Without drag regions, windows are stuck
+- Early testing discovers this immediately
+- Users file bugs, development stalls
+
+**Correct Sequence:**
+```
+Phase 1A: Separate windows (no dragging)
+Phase 1B: Drag regions (CRITICAL - windows become movable)
+Phase 2: Snap detection (now drag triggers snaps)
+```
+
+#### 2. Merge Snap Detection + Group Movement
+
+**Oracle's Insight:**
+> "Merge 'snap detection' and 'group movement' into a single integration phase using the existing manager"
+
+**Why This Makes Sense:**
+WindowSnapManager already does both:
+```swift
+// WindowSnapManager.swift:33-136
+func windowDidMove(_ notification: Notification) {
+    // 1. Find connected cluster (group detection)
+    let clusterIDs = connectedCluster(start: movedID, boxes: idToBox)
+
+    // 2. Move cluster together (group movement)
+    for id in clusterIDs where id != movedID {
+        w.setFrameOrigin(NSPoint(x: origin.x + userDelta.x, ...))
+    }
+
+    // 3. Snap cluster to other windows (snap detection)
+    let diffToOthers = SnapUtils.snapToMany(groupBox, otherBoxes)
+}
+```
+
+Separating these is artificial. They're one operation in WindowSnapManager.
+
+#### 3. Resize/Z-Order Can Wait
+
+**Gemini's Features (Phase 2.5, 3.5):**
+- Playlist resize handling
+- Z-order management
+
+**Why These Can Wait:**
+- Not blockers for basic functionality
+- Users can still dock/undock windows
+- Polish features, not core mechanics
+- Can be added after core snapping works
+
+**Prioritization:**
+1. **CRITICAL:** Drag regions (can't move windows without this)
+2. **CRITICAL:** Snap detection (core feature)
+3. **CRITICAL:** Group movement (core feature)
+4. **HIGH:** Double-size coordination (existing feature must still work)
+5. **MEDIUM:** Playlist resize (polish)
+6. **MEDIUM:** Z-order (polish)
+7. **LOW:** State persistence (nice-to-have)
+
+---
+
 **Reviews Complete:** 2025-11-02
 **Reviewers:** Claude (research), Gemini (feasibility), Oracle/Codex (architecture)
+**Synthesis:** ULTRATHINK Analysis (10x Engineer)
 **Consensus:** Proceed with NSWindowController architecture, 18-24 hour implementation, High risk (8/10)
