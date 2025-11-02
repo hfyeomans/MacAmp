@@ -14,7 +14,7 @@
 **TIME ESTIMATE: 12-18 hours** (Adjusted from 10-16 hours)
 **CONFIDENCE: 8/10** (High confidence in successful implementation)
 
-**Key Discovery:** WindowSnapManager.swift already exists with complete snap algorithm - this single discovery makes the task highly feasible!
+**Key Discovery:** WindowSnapManager.swift already exists with complete snap algorithm (15px threshold) - this single discovery makes the task highly feasible!
 
 ---
 
@@ -125,14 +125,14 @@ Add implementation of `windowDidBecomeMain`:
 
 ### 3. **Modify WindowSnapManager for Scaled Snap Threshold**
 
-Current snap threshold is hardcoded 10px. Must scale with double-size mode:
+Current snap threshold is hardcoded 15px. Must scale with double-size mode:
 ```swift
-// Current (wrong for double-size):
-let threshold: CGFloat = 10
+// Current (hardcoded in SnapUtils.swift:27):
+let threshold: CGFloat = 15
 
 // Needed:
 let scale = settings.isDoubleSizeMode ? 2.0 : 1.0
-let threshold: CGFloat = 10 * scale  // 20px at 2x
+let threshold: CGFloat = 15 * scale  // 30px at 2x
 ```
 
 **Action:** Modify `SnapUtils.near` or calling functions to accept scale factor
@@ -143,7 +143,7 @@ Add to todo.md:
 - [ ] Playlist resize while docked (all positions)
 - [ ] Z-order when clicking docked vs separate windows
 - [ ] Toggle Double-Size during active drag
-- [ ] Snap threshold at 1x vs 2x scale
+- [ ] Snap threshold at 1x (15px) vs 2x (30px) scale
 - [ ] Accessibility (VoiceOver) for window clusters
 - [ ] Mission Control behavior for docked groups
 
@@ -238,7 +238,7 @@ No changes needed.
 | Z-order doesn't feel right | Medium | Medium | Add to Phase 3 | +1 hour |
 | Custom drag feels laggy | Medium | Low | Use default drag fallback | 0 hours |
 | Coordinate bugs on multi-monitor | Medium | Medium | Extensive testing | Covered |
-| Double-Size + snap threshold | Low | High | Scale threshold with mode | +0.5 hours |
+| Double-Size + snap threshold (15px→30px) | Low | High | Scale threshold with mode | +0.5 hours |
 
 **Overall Risk Level: Medium** (down from Medium-High)
 

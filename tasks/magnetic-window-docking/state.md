@@ -24,7 +24,7 @@
 
 **Key Discovery:** 🎉
 MacAmp already has a complete WindowSnapManager implementation (MacAmpApp/Utilities/WindowSnapManager.swift) with:
-- 10px snap threshold
+- 15px snap threshold (SnapUtils.swift:27)
 - Cluster detection via depth-first search
 - Screen edge snapping
 - Multi-monitor support
@@ -112,7 +112,7 @@ The manager exists but isn't integrated because MacAmp uses a single UnifiedDock
 
 ### Phase 2: Window Snap Detection (3-4 hours)
 - Register all 3 windows with WindowSnapManager
-- Test existing snap detection (10px threshold)
+- Test existing snap detection (15px threshold)
 - Verify cluster detection algorithm
 - Debug coordinate system issues
 - Test multi-monitor snapping
@@ -220,7 +220,7 @@ The manager exists but isn't integrated because MacAmp uses a single UnifiedDock
 ### Must Have (P0)
 - [ ] 3 separate NSWindows launch on app start
 - [ ] Windows can be dragged independently
-- [ ] Magnetic snapping works (10px threshold)
+- [ ] Magnetic snapping works (15px threshold)
 - [ ] Cluster movement works (drag main moves all docked)
 - [ ] Windows can be detached individually
 - [ ] Windows can re-attach to groups
@@ -246,7 +246,7 @@ The manager exists but isn't integrated because MacAmp uses a single UnifiedDock
 ## 🎓 Lessons Learned from Research
 
 ### From Webamp Analysis:
-1. 15px snap threshold is industry standard (we're using 10px)
+1. 15px snap threshold is industry standard (MacAmp uses 15px)
 2. Don't persist connections - compute from positions
 3. Use BFS/DFS for cluster detection (WindowSnapManager does this!)
 4. Bounding box approach for group movement
@@ -289,6 +289,7 @@ The manager exists but isn't integrated because MacAmp uses a single UnifiedDock
 ## 📝 Notes
 
 - WindowSnapManager.swift is a hidden gem - already implements everything we need!
+- Actual snap threshold: 15px (SnapUtils.swift:27)
 - Main challenge is architectural refactor, not snap algorithm
 - Double-size mode implementation provides useful reference for window scaling
 - Coordinate system transformation is well-documented in WindowSnapManager

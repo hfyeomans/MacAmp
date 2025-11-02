@@ -127,14 +127,14 @@
 
 ### 2.2 Test Existing Snap Detection
 - [ ] Manually drag main window near equalizer
-- [ ] Verify snap occurs at 10px threshold
+- [ ] Verify snap occurs at 15px threshold
 - [ ] Test snap on all 4 edges (left, right, top, bottom)
 - [ ] Test alignment variants (left-left, right-right, etc.)
 - [ ] Test screen edge snapping
 - [ ] Test multi-monitor snapping
 
 **Acceptance Criteria:**
-- Windows snap together at 10px threshold
+- Windows snap together at 15px threshold
 - All 8 snap variants work (4 edges + 4 alignments)
 - Screen edges also snap
 - Multi-monitor snapping works correctly
@@ -198,14 +198,14 @@
 
 ### 3.3 Test Re-attachment
 - [ ] Drag detached window near docked group
-- [ ] Verify snap occurs at 10px threshold
+- [ ] Verify snap occurs at 15px threshold
 - [ ] Verify window joins the cluster
 - [ ] Test re-attaching to different edges
 - [ ] Test rebuilding full 3-window stack
 
 **Acceptance Criteria:**
 - Detached windows can re-attach
-- Snap threshold consistent (10px)
+- Snap threshold consistent (15px)
 - Cluster immediately includes re-attached window
 - Can rebuild original vertical stack
 
@@ -267,13 +267,13 @@
 
 ### 4.4 Test Double-Size During Drag
 - [ ] Drag windows while in 2x mode
-- [ ] Verify snap threshold scales (20px at 2x)
+- [ ] Verify snap threshold scales (30px at 2x)
 - [ ] Verify cluster movement at 2x
 - [ ] Test toggling D during drag (edge case)
 
 **Acceptance Criteria:**
 - Dragging works correctly at 2x scale
-- Snap threshold appropriate for scale
+- Snap threshold appropriate for scale (30px at 2x)
 - No visual glitches
 - Toggling scale during drag handled gracefully
 
@@ -339,7 +339,7 @@
 ### Functional Testing
 - [ ] All 3 windows launch separately ✅
 - [ ] Windows can be dragged independently ✅
-- [ ] Magnetic snapping works (10px threshold) ✅
+- [ ] Magnetic snapping works (15px threshold) ✅
 - [ ] Cluster movement works (drag main moves all) ✅
 - [ ] Individual detachment works ✅
 - [ ] Re-attachment works ✅
@@ -408,6 +408,7 @@
 
 **Notes:**
 - WindowSnapManager.swift already exists and is feature-complete! ✨
+- Actual snap threshold: 15px (SnapUtils.swift:27)
 - Main work is architectural refactor (UnifiedDockView → 3 NSWindows)
 - Double-size mode logic must be migrated carefully
 - Coordinate system (bottom-left vs top-left) requires careful attention
