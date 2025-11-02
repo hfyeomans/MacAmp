@@ -69,8 +69,11 @@ struct UnifiedDockView: View {
             .background(
                 WindowAccessor { window in
                     // Store reference to THIS specific window
+                    // Use DispatchQueue.main.async to avoid "Modifying state during view update" error
                     if dockWindow == nil {
-                        dockWindow = window
+                        DispatchQueue.main.async {
+                            dockWindow = window
+                        }
                     }
                     configureWindow(window)
                     // Set initial window level based on persisted state
