@@ -39,6 +39,11 @@ struct AppCommands: Commands {
             }
             .keyboardShortcut("a", modifiers: [.control])
 
+            Button("Options Menu") {
+                settings.showOptionsMenuTrigger = true
+            }
+            .keyboardShortcut("o", modifiers: [.control])
+
             Button("Time: \(settings.timeDisplayMode == .elapsed ? "Show Remaining" : "Show Elapsed")") {
                 settings.toggleTimeDisplayMode()
             }

@@ -18,7 +18,7 @@ struct WinampMainWindow: View {
     @State private var isScrubbing: Bool = false
     @State private var wasPlayingPreScrub: Bool = false
     @State private var scrubbingProgress: Double = 0.0
-    
+
     // Track info scrolling state
     @State private var scrollOffset: CGFloat = 0
     @State private var scrollTimer: Timer?
@@ -26,6 +26,9 @@ struct WinampMainWindow: View {
     // Pause blinking state
     @State private var pauseBlinkVisible: Bool = true
     @State private var isViewVisible: Bool = false
+
+    // Menu state - keep strong reference to prevent premature deallocation
+    @State private var activeOptionsMenu: NSMenu?
 
     // Timer publisher for pause blink animation (Swift 6 pattern)
     let pauseBlinkTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
@@ -113,6 +116,14 @@ struct WinampMainWindow: View {
             set: { settings.showTrackInfoDialog = $0 }
         )) {
             TrackInfoView()
+        }
+        .onChange(of: settings.showOptionsMenuTrigger) { _, newValue in
+            if newValue {
+                // Show options menu when triggered by keyboard shortcut
+                showOptionsMenu(from: Coords.clutterButtonO)
+                // Reset trigger
+                settings.showOptionsMenuTrigger = false
+            }
         }
         .onAppear {
             isViewVisible = true
@@ -305,8 +316,13 @@ struct WinampMainWindow: View {
 
             // Show minus sign for remaining time (position 1)
             if settings.timeDisplayMode == .remaining {
-                SimpleSpriteImage(.minusSign, width: 5, height: 1)
-                    .offset(x: 1, y: 6)
+                // Create a 9x13 container to match digit frames, then center the 5x1 minus sprite
+                ZStack(alignment: .topLeading) {
+                    SimpleSpriteImage(.minusSign, width: 5, height: 1)
+                        .offset(x: 0, y: 6) // Center vertically: (13-1)/2 = 6
+                }
+                .frame(width: 9, height: 13, alignment: .topLeading)
+                .offset(x: 1, y: 0) // Position the container at x:1
             }
 
             // Time digits (MM:SS format) with absolute positioning
@@ -788,7 +804,12 @@ struct WinampMainWindow: View {
 
     /// Show options menu below the O button
     private func showOptionsMenu(from buttonPosition: CGPoint) {
+        // Create new menu and store strong reference to prevent premature deallocation
+        // NSMenu.popUp() is asynchronous - menu must stay alive until user dismisses it
         let menu = NSMenu()
+
+        // Store strong reference BEFORE populating to prevent premature deallocation
+        activeOptionsMenu = menu
 
         // Helper to create menu items with actions
         @MainActor func createMenuItem(

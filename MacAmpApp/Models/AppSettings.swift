@@ -191,6 +191,9 @@ final class AppSettings {
 
     // MARK: - Clutter Bar States
 
+    /// O - Trigger Options Menu via keyboard (transient, not persisted)
+    var showOptionsMenuTrigger: Bool = false
+
     /// I - Track Info Dialog (transient, not persisted)
     var showTrackInfoDialog: Bool = false
 
