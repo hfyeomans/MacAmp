@@ -25,6 +25,8 @@ MacAmp is a SwiftUI-based audio player for macOS that recreates the iconic deskt
 - 🪟 **Multi-Window Interface** - Main player, equalizer, and playlist windows with shade modes
 - 🔍 **Double-Size Mode** - Toggle 200% scaling with D button or Ctrl+D for better visibility on high-res displays
 - 📌 **Always On Top** - Keep window floating above others with A button or Ctrl+A (Classic Winamp feature)
+- ⚙️ **Options Menu** - Quick access to player settings via O button or Ctrl+O with time display toggle (Ctrl+T)
+- ℹ️ **Track Information** - View detailed track/stream metadata with I button or Ctrl+I
 - 🎯 **Native macOS Integration** - Borderless windows with custom title bars
 - ⚡ **Modern SwiftUI** - Utilizes WindowDragGesture and latest macOS APIs
 - 🔄 **Dynamic Skin Switching** - Hot-swap skins without restart
@@ -103,23 +105,47 @@ Available presets: Classical, Club, Dance, Full Bass, Full Bass & Treble, Full T
 2. **Import Skins** - Place `.wsz` files in `~/Library/Application Support/MacAmp/Skins/`
 3. **Supported Formats** - Standard ZIP-based skin files
 
+### Options Menu (O Button)
+
+1. **Open Menu** - Click the "O" button in the clutter bar OR press **Ctrl+O**
+2. **Menu Contents:**
+   - **Time Display** - Toggle between elapsed and remaining time (also **Ctrl+T**)
+   - **Double Size** - Toggle 200% scaling (also **Ctrl+D** or D button)
+   - **Repeat** - Enable/disable repeat mode (also **Ctrl+R**)
+   - **Shuffle** - Enable/disable shuffle mode (also **Ctrl+S**)
+3. **Visual Feedback** - Active settings show checkmarks (✓)
+4. **Keyboard Shortcut** - **Ctrl+O** (open menu), **Ctrl+T** (toggle time)
+
 ### Double-Size Mode
 
-1. **Toggle Size** - Click the "D" button in the clutter bar OR press **Ctrl+D**
+1. **Toggle Size** - Click the "D" button in the clutter bar, use the "O" button menu, OR press **Ctrl+D**
 2. **Normal Mode** - Windows at 100% size (275×116 for main/EQ)
 3. **Doubled Mode** - Windows at 200% size (550×232 for main/EQ)
 4. **Behavior** - All 3 windows (main, EQ, playlist) scale together
 5. **Persistence** - Last size remembered across app restarts
 6. **Animation** - Smooth 0.2-second transition
-7. **Keyboard Shortcut** - **Ctrl+D** (also in Windows menu)
+7. **Keyboard Shortcut** - **Ctrl+D** (also in Windows menu and O button menu)
 
 ### Always On Top
 
-1. **Toggle Float** - Click the "A" button in the clutter bar OR press **Ctrl+A**
+1. **Toggle Float** - Click the "A" button in the clutter bar, use the "O" button menu, OR press **Ctrl+A**
 2. **Normal Mode** - Window at normal level (can be covered by other apps)
 3. **Float Mode** - Window stays above all other windows
 4. **Persistence** - Last setting remembered across app restarts
-5. **Keyboard Shortcut** - **Ctrl+A** (also in Windows menu)
+5. **Keyboard Shortcut** - **Ctrl+A** (also in Windows menu and O button menu)
+
+### Track Information (I Button)
+
+1. **Open Dialog** - Click the "I" button in the clutter bar OR press **Ctrl+I**
+2. **Displays:**
+   - Track title and artist (for local files)
+   - Duration in MM:SS format
+   - Technical details: bitrate, sample rate, channels
+   - Stream name (for radio streams)
+   - Graceful fallbacks for limited metadata
+3. **Visual Feedback** - I button highlighted while dialog is open
+4. **Dismissal** - Click "Close" button, press Esc, or click outside
+5. **Keyboard Shortcut** - **Ctrl+I**
 
 ### Visualizer Modes
 
@@ -140,11 +166,11 @@ Available presets: Classical, Club, Dance, Full Bass, Full Bass & Treble, Full T
 - **None:** Blank display (visualizer off)
 
 **Clutter Bar Buttons** (vertical strip, left side):
-- **O** - Options (coming soon)
-- **A** - Always On Top (functional) ✅
-- **I** - Info (coming soon)
-- **D** - Double Size (functional) ✅
-- **V** - Visualizer (coming soon)
+- **O** - Options menu with time display, double-size, repeat, shuffle toggles (functional) ✅
+- **A** - Always On Top window floating (functional) ✅
+- **I** - Track Information metadata dialog (functional) ✅
+- **D** - Double Size 100%/200% scaling (functional) ✅
+- **V** - Visualizer mode cycling (scaffolded, pending)
 
 ## Architecture
 
@@ -258,8 +284,12 @@ Package.swift                           # Swift Package Manager Configuration
 - Applied pixel-perfect rendering (`.interpolation(.none)`) throughout
 - Full Swift 6 strict concurrency compliance
 
-**UI Enhancements** (October 2025):
-- **Double-Size Mode**: Toggle 200% scaling with D button or Ctrl+D
+**UI Enhancements** (October-November 2025):
+- **Clutter Bar Controls** (v0.7.8): 4 of 5 buttons functional
+  - **O Button**: Options menu with time display toggle, settings access (Ctrl+O, Ctrl+T)
+  - **A Button**: Always On Top window floating (Ctrl+A)
+  - **I Button**: Track Information metadata dialog (Ctrl+I)
+  - **D Button**: Double-Size 100%/200% scaling (Ctrl+D)
 - **Visualizer Modes**: Clickable visualizer cycles through Spectrum → Oscilloscope → None
 - **Keyboard Navigation**: Arrow keys and VoiceOver support in all menus
 
@@ -273,6 +303,9 @@ For detailed architecture documentation, see [`docs/ARCHITECTURE_REVELATION.md`]
 |----------|--------|
 | `Space` | Play/Pause |
 | `Cmd+O` | Open file |
+| `Ctrl+O` | Open options menu (time, double-size, repeat, shuffle) |
+| `Ctrl+T` | Toggle time display (elapsed ⇄ remaining) |
+| `Ctrl+I` | Show track information dialog |
 | `Ctrl+D` | Toggle double-size mode (100% ↔ 200%) |
 | `Ctrl+A` | Toggle always on top (float window) |
 | `Cmd+Shift+E` | Toggle equalizer window |
@@ -284,13 +317,16 @@ For detailed architecture documentation, see [`docs/ARCHITECTURE_REVELATION.md`]
 | `←` / `→` | Previous/Next track |
 | `↑` / `↓` | Volume up/down |
 
-### Menu Navigation (New!)
+### Menu Navigation & Accelerators
 
 | Key | Action |
 |-----|--------|
 | `↑` / `↓` | Navigate menu items (when menu is open) |
 | `Escape` | Close menu |
 | `Click` | Activate highlighted item |
+| `Ctrl+D` | Double-size (when Options menu is open) |
+| `Ctrl+R` | Repeat (when Options menu is open) |
+| `Ctrl+S` | Shuffle (when Options menu is open) |
 
 **Accessible Menus:** ADD, REM, MISC, and LIST buttons now support full keyboard navigation with VoiceOver announcements.
 
@@ -342,6 +378,28 @@ See [`docs/SpriteResolver-Architecture.md`](docs/SpriteResolver-Architecture.md)
 - **Conditional Logging** - `#if DEBUG` wraps all debug output
 
 ## Recent Updates
+
+### v0.7.8 (November 2025) - Clutter Bar O & I Buttons 🎉
+
+**New Features:**
+- ✅ **O Button (Options Menu)** - Context menu with player settings
+  - Time display toggle (elapsed ⇄ remaining)
+  - Quick access to double-size, repeat, and shuffle modes
+  - Keyboard shortcuts: Ctrl+O (menu), Ctrl+T (time toggle)
+- ✅ **I Button (Track Information)** - Metadata dialog
+  - Shows track title, artist, duration
+  - Technical details: bitrate, sample rate, channels
+  - Stream-aware with graceful fallbacks
+  - Keyboard shortcut: Ctrl+I
+- ✅ **Time Display Enhancement** - Click time display to toggle, persists across restarts
+
+**Bug Fixes:**
+- Fixed NSMenu lifecycle issue preventing repeated menu usage
+- Fixed minus sign vertical centering in time display
+- Fixed keyboard shortcuts working with any window focused
+- Fixed SwiftUI state mutation warning
+
+**Clutter Bar Status:** 4 of 5 buttons functional (O, A, I, D)
 
 ### v0.2.0 (October 2025) - Swift 6 Modernization 🎉
 
