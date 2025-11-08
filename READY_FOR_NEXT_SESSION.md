@@ -1,688 +1,276 @@
-# Ready for Next Session - MacAmp Development
+# MacAmp - Ready for Next Session
 
-**Last Updated:** 2025-11-07
-**Current Branch:** `main`
-**Build Status:** ✅ Swift 6.0 + Internet Radio Streaming + Three-State Repeat Mode + Clutter Bar (4 of 5 buttons functional)
-
----
-
-## 🎉 **Latest: Three-State Repeat Mode Complete!**
-
-### **PR #30 - MERGED (2025-11-07) - v0.7.9**
-
-**Major Feature Delivered:**
-- ✅ Three-state repeat mode (Off/All/One) matching Winamp 5 Modern skins
-- ✅ White "1" badge indicator (appears only in repeat-one mode)
-- ✅ Manual skip preserved in repeat-one (Next always advances)
-- ✅ Options menu with 3 explicit choices + checkmarks
-- ✅ Ctrl+R keyboard shortcut to cycle modes
-- ✅ Cross-skin compatibility (tested on all 7 bundled skins)
-- ✅ Persistence across app restarts
-- ✅ Migration from old boolean (true → .all, false → .off)
-
-**Architecture:**
-- RepeatMode enum in AppSettings (CaseIterable pattern)
-- Computed property in AudioPlayer (single source of truth)
-- isManualSkip parameter (distinguishes user vs auto actions)
-- ZStack overlay technique (Winamp 5 plugin compatibility)
-
-**Implementation:**
-- 7 commits (~5.5 hours)
-- 2 Oracle reviews (Grade B- → C → A final)
-- User tested - all features confirmed working
-- Oracle Grade: A (production ready)
-
-**Status:** ✅ **SHIPPED TO MAIN** (Release v0.7.9)
-
-**Exceeds Webamp:** Webamp only has boolean repeat
-**Matches Winamp 5:** Modern skins (Modern, Bento, cPro) with "1" badge
-**Menu Renamed:** "Windows" → "Options" (better reflects mixed functionality)
-
-**Documentation Created:**
-- tasks/done/repeat-mode-3way-toggle/ (complete task history)
-- Updated: docs/MACAMP_ARCHITECTURE_GUIDE.md (repeat mode patterns)
-- Updated: docs/IMPLEMENTATION_PATTERNS.md (enum migration pattern)
+**Last Updated**: 2025-11-08  
+**Current Branch**: main (about to create foundation branch)  
+**Current Task**: magnetic-docking-foundation (Task 1 of 2)  
+**Phase**: Implementation ready (Oracle approved B+)
 
 ---
 
-## 🎉 **PR #28 - Internet Radio Streaming (2025-10-31)**
+## 🎯 Task Execution Order
 
-**Major Feature Delivered:**
-- ✅ HTTP/HTTPS stream playback with live ICY metadata
-- ✅ M3U/M3U8 mixed playlists (local files + streams together)
-- ✅ ADD URL dialog for manual stream entry
-- ✅ Buffering status display ("Connecting...", "buffer 0%")
-- ✅ Next/Previous navigation across both types
-- ✅ Shuffle/Repeat with mixed playlists
-- ✅ Complete Winamp parity
+### TASK 1: magnetic-docking-foundation (CURRENT)
+**Timeline**: 10-15 days  
+**Status**: Oracle approved (B+ grade), ready to begin  
+**Branch**: Will create `feature/magnetic-docking-foundation`
 
-**Architecture:**
-- Dual-backend system (AVAudioEngine + AVPlayer)
-- PlaybackCoordinator (single source of truth)
-- Modern Swift 6 / macOS 15+ APIs (@preconcurrency)
-- Zero deprecated APIs
+**Goal**: Build NSWindowController infrastructure for Main/EQ/Playlist
+- 3 independent NSWindows with magnetic snapping
+- Custom drag regions (borderless windows)
+- Foundation for Video/Milkdrop to follow
 
-**Implementation:**
-- 40 commits (~15-16 hours)
-- 5 Oracle reviews (comprehensive architectural validation)
-- 7 critical bugs fixed during testing
-- Oracle Grade: A- (production ready)
-- User tested - all features confirmed working
+### TASK 2: milk-drop-video-support (BLOCKED - Resume After Task 1)
+**Timeline**: 8-10 days (AFTER Task 1 complete)  
+**Status**: Research complete, waiting for foundation  
+**Branch**: Will create after Task 1 merges
 
-**Status:** ✅ **SHIPPED TO MAIN**
-
-**Documentation Created:**
-- BUILDING_RETRO_MACOS_APP_SKILLS.md (766 lines)
-- Complete institutional knowledge from implementation
-- Reference for future similar projects
+**Goal**: Add Video + Milkdrop windows using foundation
 
 ---
 
-## 🎯 **Immediate Next Tasks (Ready to Implement)**
+## 📋 What Just Happened (Session Summary)
 
-### **Clutter Bar Completion (3 buttons remaining)**
+### Research Marathon (~13 hours total)
 
-**Current Status:**
-- O: FUNCTIONAL ✅ (options menu with time/repeat/shuffle/double-size)
-- A: FUNCTIONAL ✅ (always on top)
-- I: FUNCTIONAL ✅ (track info dialog)
-- D: FUNCTIONAL ✅ (double-size)
-- V: Scaffolded (visualizer toggle) - Ready to implement (1 hour)
+**Started With**: User request to research V button (video/milkdrop)
 
-**Quickest Wins:**
+**Discovered**:
+1. ✅ Webamp uses Butterchurn (not Milkdrop v2/v3)
+2. ✅ VIDEO.bmp reveals TWO separate windows (Video + Milkdrop)
+3. ✅ Oracle flagged B- grade: NO NSWindow infrastructure
+4. ✅ Strategic decision: Build foundation FIRST
 
-#### **I Button (Track Info Dialog) - 1-2 hours**
-- Display current track metadata
-- Simple sheet/dialog UI
-- Add Ctrl+I shortcut
-- Follow D/A button pattern
+**Created 2 Tasks**:
+1. `magnetic-docking-foundation` - NSWindow infrastructure
+2. `milk-drop-video-support` - Video/Milkdrop windows
 
-#### **V Button (Visualizer Toggle) - 1 hour**
-- Toggle visualizer mode
-- Already have mode cycling (click)
-- Add keyboard shortcut Ctrl+V
-- Simpler than I button
+### Oracle Consultations (4 sessions, gpt-5-codex, high reasoning)
 
-#### **O Button (Options Menu) - 2-3 hours**
-- Context menu with settings
-- Skin selection, preferences access
-- More complex than I/V
+1. **Consultation #1**: Hybrid strategy for Video/Milkdrop (AVPlayerView + Butterchurn)
+2. **Consultation #2**: Single-window vs independent window decision
+3. **Consultation #3**: Two-window architecture confirmed (Video + Milkdrop separate)
+4. **Consultation #4**: Magnetic docking foundation FIRST, then Video/Milkdrop
+5. **Consultation #5**: Foundation plan validation (B+ grade, GO)
 
----
+### Artifacts Created
 
-### **AirPlay Integration (PLANNED - Oracle-Reviewed)**
+**Task 1: magnetic-docking-foundation/**
+- research.md (14 parts, synthesized from 3 sources)
+- plan.md (5-phase foundation plan, Oracle B+)
+- todo.md (100+ tasks for foundation)
+- state.md (task tracking, sequencing)
+- COMMIT_STRATEGY.md (15-20 atomic commits)
 
-**Status:** ✅ Complete task ready in `tasks/airplay/`
-**Effort:** 2-6 hours (3 phases)
-**Priority:** HIGH - User-requested feature
+**Task 2: milk-drop-video-support/**
+- research.md (14 parts, VIDEO.bmp discovery)
+- plan.md (10-day two-window plan - ON HOLD)
+- todo.md (150+ tasks - ON HOLD)
+- state.md (BLOCKED status)
 
-**What's Ready:**
-- ✅ Gemini research complete (with Oracle corrections)
-- ✅ Oracle review complete (5 critical issues fixed)
-- ✅ Entitlements verified (no changes needed)
-- ✅ Implementation plan with Winamp logo overlay approach
-- ✅ All task files created (research, plan, state, todo)
-
-**Key Findings:**
-- ✅ AVRoutePickerView (import AVKit, not AVFoundation)
-- ✅ **CRITICAL:** Must add engine configuration observer or audio goes silent
-- ❌ Custom UI impossible (APIs don't exist)
-- ✅ Logo overlay approach validated (user's creative idea!)
-- ❌ No Info.plist changes needed (NSLocalNetworkUsageDescription is iOS-only)
-
-**See:** `tasks/airplay/IMPLEMENTATION_SUMMARY.md` for overview
+**Root Documentation**:
+- READY_FOR_NEXT_SESSION.md (this file)
+- Updated from previous session
 
 ---
 
-### **SHIPPED: Oscilloscope/Spectrum Analyzer Modes (PR #27 - MERGED)**
+## 🚀 Next Steps (When You Start Next Session)
 
-**Status:** ✅ Complete and merged to main
-**Date:** 2025-10-30
-**Time Spent:** ~3 hours
-
-**What Was Delivered:**
-- ✅ Click spectrum analyzer to cycle modes
-- ✅ 3 modes: Spectrum, Oscilloscope, None
-- ✅ Spectrum: FFT frequency bars (19 bars)
-- ✅ Oscilloscope: Time-domain waveform (connected line)
-- ✅ None: Off/blank
-- ✅ State persistence
-- ✅ Type-safe VisualizerMode enum
-- ✅ Centralized constants (VisualizerLayout)
-
-**User Feedback:** "Amazing! It works!"
-
-**Key Learning:**
-- User discovered oscilloscope wasn't active enough
-- Root cause: Using RMS (averaged) instead of raw waveform samples
-- Fixed: Expose actual time-domain mono buffer samples
-- Result: Very dynamic oscilloscope! ✅
-
-**Oracle Reviews:** 2 rounds, 7 issues fixed, production-ready
-
----
-
-### **Clutter Bar Completion (3 buttons remaining)**
-
-**Current Status:**
-- O: Scaffolded (options menu) - Ready to implement
-- A: FUNCTIONAL ✅ (always on top + Ctrl+A)
-- I: Scaffolded (info dialog) - Ready to implement
-- D: FUNCTIONAL ✅ (double-size + Ctrl+D)
-- V: Scaffolded (visualizer) - **Could be Oscilloscope/RMS toggle!**
-
-### **Recommended: I Button (Track Info Dialog) - 1-2 hours**
-
-**Why start here:**
-- Simple feature (just display metadata)
-- Follow established D/A button pattern
-- Quick win
-- Uses existing AudioPlayer data
-
-**Implementation steps:**
-1. Create task directory: `tasks/info-button/`
-2. Review pattern: `tasks/double-size-button/state.md`
-3. Remove `.disabled(true)` from I button
-4. Create `TrackInfoView.swift` sheet
-5. Display: currentTitle, duration, bitrate, format
-6. Add Ctrl+I keyboard shortcut to AppCommands
-7. Test and commit
-
-**Files to modify:**
-- `WinampMainWindow.swift` - Enable I button (Lines 524-528)
-- Create `TrackInfoView.swift` - Info dialog
-- `AppCommands.swift` - Add Ctrl+I shortcut
-
-### **Alternative: V Button (Visualizer Modes) - 1 hour**
-
-**Even quicker:**
-- Visualizer already exists in codebase
-- Just add mode cycling (0=off, 1=spectrum, 2=oscilloscope)
-- Follow D/A button pattern
-- Add Ctrl+V shortcut
-
-### **Alternative: O Button (Options Menu) - 2-3 hours**
-
-**More complex:**
-- Context menu with settings
-- Skin selection
-- Preferences access
-- Reference webamp implementation
-
----
-
-## 💡 **Important Context from Recent Sessions**
-
-### **Critical Pattern: @Observable Reactivity**
-
-**DO NOT use @ObservationIgnored with properties you want to observe!**
-
-```swift
-// ❌ WRONG - Blocks reactivity:
-@ObservationIgnored
-@AppStorage("key") var value: Bool = false
-
-// ✅ CORRECT - Maintains @Observable:
-var value: Bool = false {
-    didSet {
-        UserDefaults.standard.set(value, forKey: "key")
-    }
-}
-```
-
-This caused the double-size button to not trigger window resize initially.
-
-### **AirPlay Critical Finding: AVAudioEngine Configuration**
-
-**Oracle Discovery:** Engine STOPS when switching to AirPlay (sample rate changes)
-
-**MUST implement engine restart observer or AirPlay audio goes silent:**
-
-```swift
-NotificationCenter.default.addObserver(
-    forName: .AVAudioEngineConfigurationChange,
-    object: audioEngine,
-    queue: .main
-) { [weak self] _ in
-    // Save state, restart engine, resume playback
-    self?.handleEngineConfigurationChange()
-}
-```
-
-**Without this:** User switches to AirPlay → audio stops → appears broken
-**With this:** Seamless routing with automatic resume
-
-### **Oracle vs Gemini: API Accuracy**
-
-**Lesson Learned:**
-- Gemini: Good for conceptual research, 60% technically accurate
-- Oracle: Catches implementation details, API existence, edge cases
-- **Always have Oracle review Gemini's findings!**
-
-**AirPlay Example:**
-- Gemini said: "Use AVFoundation" → ❌ Wrong (it's AVKit)
-- Gemini said: "Use outputNode.setDeviceID()" → ❌ Doesn't exist
-- Gemini said: "Add NSLocalNetworkUsageDescription" → ❌ iOS-only
-- Oracle caught all 5 critical errors before implementation ✅
-
-### **Clutter Bar Button Pattern (Use for O, I, V)**
-
-Complete working example from D and A buttons:
-
-```swift
-// 1. Add state to AppSettings (already done for O, I, V)
-var showInfoDialog: Bool = false {
-    didSet {
-        UserDefaults.standard.set(showInfoDialog, forKey: "showInfoDialog")
-    }
-}
-
-// Load in init():
-self.showInfoDialog = UserDefaults.standard.bool(forKey: "showInfoDialog")
-
-// 2. In buildClutterBarButtons() in WinampMainWindow.swift:
-let iSpriteName = settings.showInfoDialog
-    ? "MAIN_CLUTTER_BAR_BUTTON_I_SELECTED"
-    : "MAIN_CLUTTER_BAR_BUTTON_I"
-
-Button(action: {
-    settings.showInfoDialog.toggle()
-}) {
-    SimpleSpriteImage(iSpriteName, width: 8, height: 7)
-}
-.buttonStyle(.plain)
-.help("Show track info (Ctrl+I)")
-.at(Coords.clutterButtonI)
-
-// 3. Add keyboard shortcut to AppCommands.swift:
-Button(settings.showInfoDialog ? "Hide Info" : "Show Info") {
-    settings.showInfoDialog.toggle()
-}
-.keyboardShortcut("i", modifiers: [.control])
-
-// 4. Implement the feature:
-// - Create TrackInfoView.swift
-// - Show as sheet or window
-// - Display audioPlayer.currentTitle, duration, etc.
-```
-
-### **Unified Window Architecture**
-
-**Important:** All 3 windows (main, EQ, playlist) are in ONE macOS window.
-
-- Managed by `UnifiedDockView.swift`
-- Uses `.scaleEffect()` for double-size mode
-- Window level (.normal/.floating) applies to all 3 together
-- Future: Will be separated with magnetic docking (see `tasks/magnetic-window-docking/`)
-
-### **Oracle Usage**
-
-When you need code review, architecture advice, or research:
-
+### 1. Create Foundation Branch
 ```bash
-codex-mcp "@file1.swift @file2.swift Your question or review request"
+git checkout -b feature/magnetic-docking-foundation
 ```
 
-Oracle found and helped fix:
-- 8 code quality issues (dead code, bugs, sprite coordinates)
-- NSApp.keyWindow bug (wrong window targeted)
-- @Bindable reactivity issue (menu labels stuck)
+### 2. Begin Phase 1A (Day 1)
+**First Task**: Create WindowCoordinator.swift
+
+**Location**: `tasks/magnetic-docking-foundation/todo.md` (Lines 11-46)
+
+**Deliverable**: WindowCoordinator singleton managing 3 NSWindowControllers
+
+### 3. Follow Todo Checklist
+**Path**: `tasks/magnetic-docking-foundation/todo.md`
+- 100+ granular checkboxes
+- Day-by-day breakdown
+- Self-contained work units
+
+### 4. Commit Atomically
+**Pattern**: Small, logical commits at each checkpoint
+- See `tasks/magnetic-docking-foundation/COMMIT_STRATEGY.md`
+- ~15-20 commits across 10-15 days
+- 3 milestone tags
+
+### 5. After Foundation Complete
+- Merge to main
+- Delete foundation branch
+- Archive task to `tasks/done/magnetic-docking-foundation/`
+- Create `feature/video-milkdrop-windows` branch
+- Resume Task 2
 
 ---
 
-## 📚 **Key Documentation**
+## 📚 Key Decisions Made
 
-**This Session (Double-Size Button):**
-- `tasks/double-size-button/` - Complete implementation docs
-  - state.md - All 12 commits, Oracle reviews, final status
-  - FEATURE_DOCUMENTATION.md - User guide
-  - COMPLETION_SUMMARY.md - Stats and learnings
-
-**For Next Button:**
-- Copy the pattern from `tasks/double-size-button/`
-- All sprites already defined in `SkinSprites.swift`
-- All state properties already scaffolded in `AppSettings.swift`
-- Just wire button, add feature logic, add shortcut
-
-**For Future Magnetic Docking:**
-- `tasks/magnetic-window-docking/research.md` - Complete migration guide
-  - How double-size mode will work with separate windows
-  - Playlist menu scaling notes
-
-**Swift Modernization (Previous Sessions):**
-- `tasks/swift-modernization-recommendations/` - All phases complete
-- @Observable migration patterns
-- Swift 6 strict concurrency patterns
+| Decision | Choice | Approved By | Date |
+|----------|--------|-------------|------|
+| **Task Sequencing** | Foundation first, then Video/Milkdrop | Oracle + User | 2025-11-08 |
+| **Architecture** | NSWindowController (not WindowGroup) | Oracle | 2025-11-08 |
+| **Foundation Scope** | Basic infra only (defer polish) | Oracle | 2025-11-08 |
+| **Timeline** | 10-15 days foundation | Oracle | 2025-11-08 |
+| **Branch Strategy** | One branch per task | User | 2025-11-08 |
+| **Task Execution** | Sequential, NOT blended | User | 2025-11-08 |
 
 ---
 
-## 🚀 **Where to Start Next Session**
+## 📁 File Locations
 
-### **Option A: Continue Clutter Bar (Recommended)**
+### Foundation Task (Task 1)
+**Directory**: `tasks/magnetic-docking-foundation/`
+- research.md (comprehensive)
+- plan.md (5-phase, Oracle B+)
+- todo.md (100+ tasks)
+- state.md (tracking)
+- COMMIT_STRATEGY.md (atomic commits)
 
-Pick the next button to implement:
+### Video/Milkdrop Task (Task 2 - ON HOLD)
+**Directory**: `tasks/milk-drop-video-support/`
+- research.md (VIDEO.bmp discovery)
+- plan.md (two-window plan)
+- todo.md (150+ tasks)
+- state.md (BLOCKED status)
 
-**I Button (Info) - Easiest (1-2 hours):**
-1. Create `tasks/info-button/`
-2. Follow D/A button pattern
-3. Create simple sheet with track metadata
-4. Add Ctrl+I shortcut
-
-**V Button (Visualizer) - Quick (1 hour):**
-1. Create `tasks/visualizer-button/`
-2. Add mode cycling logic
-3. Visualizer component already exists
-4. Add Ctrl+V shortcut
-
-**O Button (Options) - Complex (2-3 hours):**
-1. Create `tasks/options-button/`
-2. Context menu with settings
-3. Reference webamp implementation
-4. Add Ctrl+O shortcut (or right-click menu)
-
-### **Option B: Different Priority**
-
-**Playlist Features:**
-- Add scrolling (currently fixed height)
-- Fix menu button scaling in double-size mode (needs magnetic docking)
-
-**Audio Features:**
-- Persist volume/balance settings
-
-**Window Features:**
-- Magnetic window docking (major task, 10-16 hours)
-- Screen bounds validation
+### Reference Materials
+- `tasks/magnetic-window-docking/` (original research)
+- `docs/MULTI_WINDOW_ARCHITECTURE.md` (patterns)
+- `tmp/Internet-Archive/VIDEO.bmp` (sprite reference)
 
 ---
 
-## 📊 **Project Metrics**
+## ⚠️ Critical Context
 
-**Recent PRs:**
-- PR #23-25: Swift modernization (3 PRs)
-- PR #26: Clutter bar D & A buttons
-- PR #27: Oscilloscope/Spectrum modes
-- PR #28: Internet radio streaming (40 commits!)
+### WindowSnapManager Already Exists!
+**Location**: `MacAmpApp/Utilities/WindowSnapManager.swift`
 
-**Current State:**
-- Main branch is production-ready
-- Zero build warnings
-- All features tested
-- Oracle-reviewed code
-- Complete documentation
+**Already Implemented**:
+- 15px snap threshold (SnapUtils.SNAP_DISTANCE)
+- Cluster detection (connectedCluster method)
+- Screen edge snapping
+- Multi-monitor support
+- Group movement
 
-**Clutter Bar Progress:** 80% (4 of 5 buttons functional)
+**What's Missing**: Registration! Just need to:
+```swift
+WindowSnapManager.shared.register(window: mainWindow, kind: .main)
+// Repeat for EQ and Playlist
+```
 
----
+### VIDEO.bmp Discovery
+**File**: `tmp/Internet-Archive/VIDEO.bmp` (233x119 pixels)
 
-## ⚠️ **Known Issues**
+**Revealed**: Original Winamp has SEPARATE windows for Video and Milkdrop
+- Video window uses VIDEO.bmp sprites
+- Milkdrop window is separate
+- Both can coexist simultaneously
 
-**Playlist Menu Scaling:**
-- Menu buttons (ADD, REM, SEL, MISC, LIST OPTS) don't scale in double-size mode
-- Expected: Will fix when implementing magnetic-window-docking
-- Documented in `tasks/magnetic-window-docking/research.md`
-- Not blocking for current features
+### Oracle's B- Grade (Initial Video/Milkdrop Plan)
+**Issues Found**:
+1. No NSWindow infrastructure (views still in WinampMainWindow)
+2. VIDEO.bmp parsing too rigid
+3. AppSettings loading logic missing
 
-**No Other Known Issues** ✅
+**Resolution**: Create foundation task FIRST to fix infrastructure
 
----
-
-## 🎓 **Key Learnings from This Session**
-
-### **1. @Observable + @AppStorage Reactivity**
-- Don't use `@ObservationIgnored` with `@AppStorage`
-- Use `didSet` with `UserDefaults.standard.set()` instead
-- Maintains @Observable reactivity
-
-### **2. Window Reference Targeting**
-- Don't use `NSApp.keyWindow` for feature toggles
-- Capture specific window reference via `WindowAccessor`
-- Store in `@State private var dockWindow: NSWindow?`
-
-### **3. Commands Reactivity**
-- Use `@Bindable var` not `let` for Commands struct parameters
-- Ensures menu labels update in real-time
-- Mirrors existing `SkinsCommands` pattern
-
-### **4. Clutter Bar Implementation Pattern**
-- State in AppSettings with `didSet` persistence
-- Sprite name computed outside button closure for reactivity
-- Simple Button (not Toggle) for cleaner code
-- Add `@Environment(AppSettings.self)` to view
-- Keyboard shortcut in AppCommands with `@Bindable`
-
-### **5. Oracle Code Review Process**
-- Review early and often (caught 8 issues before merge)
-- Round 1: Dead code, sprite bugs, debug prints
-- Round 2: NSApp.keyWindow bug, @Bindable reactivity
-- Final: Production-ready code
+### Oracle's B+ Grade (Foundation Plan)
+**Issues**: None (showstopper-free!)  
+**Recommendations**: 3 minor improvements (documented in plan.md)  
+**Verdict**: ✅ GO FOR IMPLEMENTATION
 
 ---
 
-## 📂 **Task Organization**
+## 🧠 Oracle Guidance (gpt-5-codex)
 
-**Use this workflow for next buttons:**
+**Key Recommendations**:
+1. NSWindowController architecture (not WindowGroup) - for singleton control
+2. Drag regions IMMEDIATELY after window creation - critical for borderless windows
+3. Delegate multiplexer - for extensibility
+4. Foundation scope focused - defer polish features
+5. Sequential task execution - no blending
 
-1. **Research Phase:**
-   - Create `tasks/[button-name]/`
-   - Create research.md (gather requirements, check webamp)
-
-2. **Planning Phase:**
-   - Create plan.md (implementation steps)
-   - Create state.md (track current status)
-   - Create todo.md (checklist)
-
-3. **Implementation:**
-   - Follow the clutter bar button pattern above
-   - Update todo.md as you go
-   - Commit frequently with good messages
-
-4. **Oracle Review:**
-   - Request code review from Oracle
-   - Fix any issues found
-   - Request final approval
-
-5. **Documentation:**
-   - Update README.md with new feature
-   - Complete task docs
-   - Create PR
-
-**Reference:** See `tasks/double-size-button/` for complete example
+**Timeline**: 12-15 days realistic (conservative)
 
 ---
 
-## 🔧 **Build & Run**
+## 📊 Timeline Overview
 
+### Complete Journey
+
+| Task | Timeline | Status |
+|------|----------|--------|
+| **Research** | ~13 hours | ✅ Complete |
+| **Task 1: Foundation** | 10-15 days | ⏳ Ready to start |
+| **Task 2: Video/Milkdrop** | 8-10 days | 🚧 Blocked (waiting) |
+| **Total** | **~23-28 days** | **~45% research done** |
+
+### What's Done
+- ✅ Comprehensive research (webamp, MilkDrop3, VIDEO.bmp)
+- ✅ Oracle consultations (5 sessions)
+- ✅ Task 1 planning complete (foundation)
+- ✅ Task 2 planning complete (Video/Milkdrop)
+- ✅ Task sequencing decided
+- ✅ Branch strategy defined
+
+### What's Next
+- ⏳ Create foundation branch
+- ⏳ Begin Day 1: WindowCoordinator
+- ⏳ Complete foundation (10-15 days)
+- ⏳ Archive Task 1
+- ⏳ Resume Task 2
+
+---
+
+## 🎯 Quick Start (Next Session)
+
+### Commands to Run
 ```bash
-# Build with Thread Sanitizer
-xcodebuild -project MacAmpApp.xcodeproj \
-  -scheme MacAmpApp \
-  -enableThreadSanitizer YES \
-  build
+# Create foundation branch
+git checkout -b feature/magnetic-docking-foundation
 
-# Or use Xcode MCP:
-# build_macos({
-#   projectPath: "/Users/hank/dev/src/MacAmp/MacAmpApp.xcodeproj",
-#   scheme: "MacAmpApp",
-#   extraArgs: ["-enableThreadSanitizer", "YES"]
-# })
+# See first task
+cat tasks/magnetic-docking-foundation/todo.md | head -50
+
+# Begin Day 1
+# Open: MacAmpApp/ViewModels/WindowCoordinator.swift (create file)
 ```
 
----
-
-## 📝 **Summary**
-
-**MacAmp is now:**
-- Modern (Swift 6, @Observable)
-- Functional (2/5 clutter buttons working)
-- Production-ready (Oracle-reviewed, tested)
-- Well-documented (complete task histories)
-
-**Next session:**
-- Pick next clutter button (I or V recommended)
-- Follow established pattern
-- Should take 1-2 hours
-- Consult Oracle if needed
-
-**All context preserved in:**
-- `tasks/double-size-button/` for implementation patterns
-- `tasks/magnetic-window-docking/` for future work
-- This file for quick start
+### First File to Create
+**Path**: `MacAmpApp/ViewModels/WindowCoordinator.swift`  
+**Pattern**: See `tasks/magnetic-docking-foundation/plan.md` lines 61-133  
+**Checklist**: See `tasks/magnetic-docking-foundation/todo.md` lines 11-46
 
 ---
 
-**Status:** ✅ Ready for next development session
-**Recommended:** Implement I button (track info dialog)
-**Branch:** `main` (clean, all work merged)
+## 💡 Important Notes
 
-🚀 **Ready to continue!**
+### Task Isolation
+- **DO NOT** blend Task 1 and Task 2
+- Complete foundation FULLY before Video/Milkdrop
+- Each task has own branch, own commits, own lifecycle
 
----
+### Oracle Sessions (Remember!)
+- **Model**: gpt-5-codex
+- **Reasoning**: high
+- **SessionID**: Use if multi-turn needed
 
-## ✅ **Latest Session Accomplishments (2025-10-30 to 2025-10-31)**
+### Commit Strategy
+- Atomic commits at logical checkpoints
+- ~15-20 commits for foundation
+- See `tasks/magnetic-docking-foundation/COMMIT_STRATEGY.md`
 
-### **PR #26: Clutter Bar (D & A Buttons)** ✅ MERGED
-- D button: Double-size mode (Ctrl+D)
-- A button: Always on top (Ctrl+A)  
-- 12 commits, 2 Oracle reviews
-
-### **PR #27: Oscilloscope/Spectrum Modes** ✅ MERGED
-- Click visualizer to cycle 3 modes
-- Spectrum (frequency) / Oscilloscope (waveform) / None (off)
-- User discovered RMS issue, fixed to use time-domain samples
-- 7 commits, 2 Oracle reviews
-
-### **PR #29: O & I Buttons** ✅ MERGED (2025-11-07) - v0.7.8
-- O button: Options menu (time display, double-size, repeat, shuffle)
-- I button: Track info dialog (metadata display)
-- Ctrl+O and Ctrl+I shortcuts
-- 5 commits, 3 Oracle reviews
-
-### **PR #30: Three-State Repeat Mode** ✅ MERGED (2025-11-07) - v0.7.9
-- Winamp 5 Modern fidelity (Off/All/One with "1" badge)
-- Manual skip vs auto-advance distinction
-- Options menu: 3 explicit choices with checkmarks
-- Menu renamed: "Windows" → "Options"
-- 7 commits, 2 Oracle reviews (Grade A final)
-
-### **Bundled Skins** ✅ SHIPPED
-- Added 5 new bundled skins (now 7 total)
-- KenWood KDC-7000, Mac OS X, Sony MP3, Tron, Winamp3
-- Duplicate prevention (skip user copies of bundled skins)
-- All with keyboard shortcuts Cmd+Shift+1-7
-
-### **Distribution** ✅ VERIFIED
-- Signed Release builds created (3 total)
-- Tested on another macOS machine successfully! ✅
-- Cross-machine compatibility confirmed
-- Ready to share with users
-
-### **Tasks Planned** ✅ READY
-- AirPlay integration (2-6 hours, Oracle-reviewed)
-- Internet radio streaming (12-15 hours, Oracle-reviewed)
-- Both with complete planning and Oracle validation
-
-**Total Work:** 4 PRs merged, 6 features shipped
-**Oracle Reviews:** 11 total (all issues fixed)
-**Time:** ~27 hours active work across sessions
+### Thread Sanitizer
+Remember to build with: `-enableThreadSanitizer YES`
 
 ---
 
-## 💡 **Fresh Context - Important Learnings**
-
-### **Distribution Success:**
-- Signed app works on other Macs with right-click → Open
-- All bundled resources (skins) included correctly
-- No notarization needed for beta testing
-- Cross-machine testing validates build process
-
-### **Bundled Skins Architecture:**
-- Files in MacAmpApp/Skins/ folder
-- Must add to Xcode target membership (Build Phases)
-- Scan prevents user directory duplicates
-- Clean "Bundled" vs "My Skins" separation
-
-### **Oscilloscope Data Source:**
-**Critical Learning:** RMS vs Time-Domain Samples
-- RMS = Root Mean Square (averaged amplitude) → Smooth
-- Time-domain = Raw audio samples → Wiggly waveform
-- Oscilloscope needs raw samples for activity
-- User caught this issue through testing! ✅
-
-### **Commit Strategy for Large Tasks:**
-**12-15 hour tasks:** 7-8 commits per component
-- Not per phase (too large)
-- Not per tiny step (too noisy)
-- Per significant component (~2 hours work)
-- Oracle review checkpoints mid-way and pre-merge
-
----
-
-## 🚀 **Ready for Next Session**
-
-**On Main Branch:**
-- All work merged
-- Signed release in /Applications
-- Clean working tree
-
-**Tasks Ready:**
-1. **Internet Radio** (12-15h, highest complexity, Oracle-reviewed)
-2. **AirPlay** (2-6h, user-requested, Oracle-reviewed)
-3. **I Button** (1-2h, quick win)
-4. **O Button** (2-3h, options menu)
-
-**Recommended Start (Based on Momentum):**
-
-**Quick Wins (Maintain Momentum):**
-1. **V Button** (1 hour) - Visualizer toggle, simplest
-2. **I Button** (1-2 hours) - Track info dialog
-3. Finish remaining clutter bar (O button)
-
-**Next Major Feature:**
-4. **Favorites Menu for Radio Stations** (Phase 5)
-   - RadioStationLibrary infrastructure ready
-   - Top menu implementation (like "Skins", "Windows")
-   - Add/edit/delete favorites UI
-   - Estimated: 4-6 hours
-
-5. **AirPlay Integration** (2-6 hours)
-   - Complete Oracle-reviewed planning in tasks/airplay/
-   - Engine configuration observer critical
-   - Logo overlay approach
-
-6. **MTAudioProcessingTap** (10-20+ hours)
-   - Enable visualizers for internet radio streams
-   - Complex Core Audio work
-   - High value for completeness
-
-**Context Status:** 516K / 1M (51.6%) used this session
-**New Session:** Fresh context recommended for next major feature
-
----
-
-## 📋 **Suggested Next Session Priority**
-
-Based on project momentum and learning curve:
-
-**Session 1 (Quick Wins):** V + I buttons (2-3 hours total)
-  - Completes 80% of clutter bar
-  - Low risk, high visibility
-  - Maintains development momentum
-
-**Session 2 (Polish):** O button (2-3 hours)
-  - 100% clutter bar complete
-  - All 5 buttons functional
-  - Major UI milestone
-
-**Session 3 (Feature):** Favorites Menu (4-6 hours)
-  - RadioStationLibrary UI
-  - Natural extension of internet radio
-  - User-requested feature
-
-**Session 4 (Advanced):** MTAudioProcessingTap (10-20 hours)
-  - Stream visualizers
-  - Technical deep-dive
-  - Full Winamp parity
-
----
-
-**Everything documented, Oracle-reviewed, and ready for implementation!**
+**Status**: ✅ READY TO BEGIN TASK 1 (Foundation)  
+**Confidence**: High (Oracle B+ approved)  
+**Next Session**: Create branch, start Day 1  
+**Estimated Completion**: 10-15 days for foundation
