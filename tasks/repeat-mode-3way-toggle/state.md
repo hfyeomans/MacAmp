@@ -1,238 +1,336 @@
 # State - Three-State Repeat Mode Implementation
 
 **Task:** repeat-mode-3way-toggle
-**Status:** Planning Complete, Ready for Implementation
-**Branch:** `repeat-mode-toggle` (to be created)
+**Status:** Planning Complete, Oracle-Validated, Ready for Implementation
+**Branch:** `repeat-mode-toggle` ✅
 **Last Updated:** 2025-11-07
 
 ---
 
-## Current Status: Pre-Implementation
+## Current Status: Pre-Implementation (Planning Complete)
 
 ### Completed ✅
 
-1. **Research Phase** (2025-11-07)
+1. **Research Phase** (2 hours)
    - Analyzed Webamp implementation (boolean only)
-   - Researched Winamp 5 history (3-state with "1" badge)
-   - Evaluated visual indicator options (A, B1, B2, B3, B4)
+   - Researched Winamp 5 history (2.x → 5.x evolution)
+   - Confirmed Winamp 5 Modern skins used "1" badge
    - Cross-skin compatibility analysis (7 bundled skins)
-   - Selected Option B1: White "1" + shadow overlay
+   - Selected visual approach: White "1" + shadow (Winamp 5 pattern)
 
-2. **Documentation**
-   - Created comprehensive research.md
-   - Created winamp-repeat-mode-history.md
-   - Created repeat-mode-overlay-analysis.md
-   - Created implementation plan.md
-   - Task folder structure organized
+2. **Oracle Validation** (15 minutes) - Grade: B- → A- after corrections
+   - ✅ Enum design approved
+   - ✅ Visual approach matches Winamp 5 Modern
+   - ✅ Badge + shadow strategy works cross-skin
+   - ⚠️ Critical fixes identified:
+     1. Single source of truth (AudioPlayer, not AppSettings)
+     2. Reuse existing nextTrack() (don't create new function)
+     3. Repeat-one must restart playback (seek or reload)
+     4. Migration should preserve user preference (true → .all)
+     5. Add CaseIterable to enum (future-proof)
 
-3. **Validation**
-   - Pending: Oracle (Codex) review of approach
+3. **Documentation Complete**
+   - research.md: Webamp analysis + Winamp 5 history
+   - winamp-repeat-mode-history.md: How Winamp actually worked
+   - repeat-mode-overlay-analysis.md: Cross-skin legibility validation
+   - plan.md: Complete implementation strategy (Oracle corrections applied)
+   - state.md: This file
+   - todo.md: Ready for final update
+
+4. **Branch Setup**
+   - Created `repeat-mode-toggle` branch
+   - Documentation committed to main (commit a32ed91)
 
 ### In Progress 🔄
 
-- None (pre-implementation)
+- Consolidating Oracle findings into planning docs
 
 ### Pending ⏳
 
-1. **Oracle Validation**
-   - Review RepeatMode enum design
-   - Validate badge overlay approach
-   - Confirm playlist navigation logic
-   - Verify cross-skin compatibility strategy
-
-2. **Implementation**
+1. **Implementation** (2.5 hours)
    - Phase 1: Data model (RepeatMode enum)
-   - Phase 2: Playlist navigation logic
-   - Phase 3: UI button + badge
+   - Phase 2: Navigation logic (modify nextTrack)
+   - Phase 3: UI + badge
    - Phase 4: Keyboard shortcut
-   - Phase 5: Options menu integration
+   - Phase 5: Options menu
 
-3. **Testing**
-   - Visual testing (7 skins)
-   - Behavior testing (playlist boundaries)
-   - Edge case testing
-   - Persistence testing
+2. **Testing** (30 minutes)
+   - Visual: Badge on all 7 skins
+   - Behavior: Playlist navigation
+   - Edge cases: Empty, single track
+   - Persistence: Migration + round-trip
 
-4. **Documentation**
+3. **Documentation** (15 minutes)
    - Update README.md
-   - Update CHANGELOG
-   - Add usage guide
+   - Add release notes
 
 ---
 
-## Technical Decisions Made
+## Technical Decisions (Oracle-Validated)
 
-### 1. State Model: RepeatMode Enum ✅
-**Decision:** Use 3-state enum instead of dual boolean flags
-**Rationale:**
-- Simpler mental model than Winamp's Repeat + MPA
+### 1. State Architecture: AudioPlayer is Authoritative ✅
+
+**Decision:** `repeatMode` property lives in `AudioPlayer`, backed by `AppSettings` for persistence
+
+**Pattern:**
+```swift
+// AudioPlayer.swift - Authoritative state
+@Published var repeatMode: RepeatMode {
+    get { appSettings.repeatMode }
+    set { appSettings.repeatMode = newValue }
+}
+
+// AppSettings.swift - Persistence only
+var repeatMode: RepeatMode = .off {
+    didSet {
+        UserDefaults.standard.set(repeatMode.rawValue, forKey: "repeatMode")
+    }
+}
+```
+
+**Why:** Avoids dual sources of truth, all playback logic reads from AudioPlayer
+
+**Oracle Quote:**
+> "Keep repeat logic inside AudioPlayer so it sits next to shuffle, trackHasEnded, and coordinator hooks."
+
+---
+
+### 2. RepeatMode Enum Design ✅
+
+**Decision:** Three-state enum with `CaseIterable` for future-proof cycling
+
+```swift
+enum RepeatMode: String, Codable, CaseIterable {
+    case off, all, one
+
+    func next() -> RepeatMode {
+        let cases = Self.allCases
+        let index = cases.firstIndex(of: self) ?? 0
+        return cases[(index + 1) % cases.count]
+    }
+
+    var isActive: Bool { self != .off }
+}
+```
+
+**Benefits:**
 - Type-safe state transitions
-- Clear intent (off/all/one)
-- Easier to extend (repeat-count, A-B repeat)
+- Extensible (add `.count` mode later, `next()` still works)
+- Clean intent (off/all/one vs confusing dual flags)
 
-**Alternative Rejected:** Dual flags (repeat: Bool, manualAdvance: Bool)
-- Too confusing (4 combinations, only 3 meaningful)
-- Winamp legacy baggage
+**Oracle Approval:**
+> "Enum itself is fine; consider adding CaseIterable... stays correct if another mode ever appears."
 
-### 2. Visual Indicator: White "1" Badge + Shadow ✅
-**Decision:** Option B1 from analysis
-**Rationale:**
-- Matches Winamp 5 Modern skins (user familiarity)
-- Shadow ensures legibility on any background
-- Simple implementation (1 line: `.shadow()`)
-- Works on all 7 bundled skins (research validated)
+---
 
-**Alternatives Rejected:**
-- Option A (tooltip only): No visual distinction
-- Option B2 (badge circle): Too modern/prominent
-- Option B3 (outlined text): Overcomplicated
-- Option B4 (per-skin colors): Maintenance burden
+### 3. Navigation: Modify Existing nextTrack() ✅
 
-### 3. Button Interaction: Cycle Through States ✅
-**Decision:** Single button cycles Off → All → One → Off
-**Rationale:**
-- Consistent with Winamp 5 Modern skins
-- Minimal UI changes
-- Keyboard shortcut (Ctrl+R) also cycles
-- Options menu provides direct access
+**Decision:** Insert `RepeatMode` switch at top of existing `nextTrack()`, preserve all current logic
 
-**Alternative Rejected:** Separate buttons for each mode
-- Takes more screen space
-- Breaks classic layout
+**Why NOT create new function:**
+- Existing nextTrack() handles:
+  - Stream vs local file routing (PlaybackCoordinator)
+  - Shuffle integration
+  - `currentPlaylistIndex` tracking
+  - Edge cases (empty playlist, boundaries)
+- Creating new function would duplicate 50+ lines
+- Risk breaking internet radio streams
 
-### 4. Keyboard Shortcut: Ctrl+R Cycles ✅
-**Decision:** Single shortcut cycles modes
-**Rationale:**
-- Existing Ctrl+R pattern (if present)
-- Quick cycling for power users
-- Simple to remember
+**Oracle Quote:**
+> "Reuse the existing nextTrack()/previousTrack() scaffolding instead of inventing PlaylistManager."
 
-**Alternative Rejected:** Separate shortcuts (Ctrl+R, Ctrl+Shift+R, etc.)
-- Too many shortcuts to remember
+---
+
+### 4. Visual Indicator: White "1" Badge + Shadow ✅
+
+**Decision:** ZStack overlay with SwiftUI Text + shadow (Winamp 5 Modern pattern)
+
+```swift
+if audioPlayer.repeatMode == .one {
+    Text("1")
+        .font(.system(size: 8, weight: .bold))
+        .foregroundColor(.white)
+        .shadow(color: .black.opacity(0.8), radius: 1, x: 0, y: 0)
+        .offset(x: 8, y: 0)
+}
+```
+
+**Winamp 5 Accuracy:**
+- ✅ Small "1" character (matches Winamp)
+- ✅ White color (Winamp used white/light)
+- ✅ Top-right or center position (ours: centered)
+- ✅ Only appears in repeat-one mode
+
+**Cross-Skin Compatibility:**
+- Shadow ensures legibility on all backgrounds
+- Validated across 7 bundled skins (see repeat-mode-overlay-analysis.md)
+- Worst case: Sony MP3 (light button) - shadow provides contrast
+
+**Oracle Approval:**
+> "ZStack + Text is acceptable for MVP... shadow technique proven in subtitles/games."
+
+**Production Note:** Could upgrade to sprite later for pixel-perfection, but Text + shadow matches Winamp 5 functionally.
+
+---
+
+### 5. Migration: Preserve User Preference ✅
+
+**Decision:** Map old boolean to equivalent enum value
+
+```swift
+// Migration logic
+if let savedMode = UserDefaults.standard.string(forKey: "repeatMode") {
+    self.repeatMode = RepeatMode(rawValue: savedMode) ?? .off
+} else {
+    // Migrate from old boolean
+    let oldRepeat = UserDefaults.standard.bool(forKey: "audioPlayerRepeatEnabled")
+    self.repeatMode = oldRepeat ? .all : .off
+}
+```
+
+**Mapping:**
+- `true` → `.all` (user had repeat on, wants playlist loop)
+- `false` → `.off` (user had repeat off, wants stop at end)
+
+**Oracle Fix:**
+> "Map true → .all, false → .off to preserve user expectations."
 
 ---
 
 ## Implementation Approach
 
-### Data Flow
+### Data Flow (Winamp 5 Pattern)
+
 ```
-User Click/Shortcut
+User Clicks Button / Presses Ctrl+R
     ↓
-settings.repeatMode = repeatMode.next()
+audioPlayer.repeatMode = repeatMode.next()
     ↓
-UserDefaults.standard.set(repeatMode.rawValue, forKey: "repeatMode")
+(setter) appSettings.repeatMode = newValue
     ↓
-SwiftUI updates button sprite + badge visibility
+(didSet) UserDefaults.standard.set(...)
     ↓
-Playlist navigation uses new mode logic
+SwiftUI observes AudioPlayer.repeatMode change
+    ↓
+Button sprite updates (lit/unlit)
+Badge visibility updates (show/hide "1")
+Tooltip updates (Off/All/One)
+    ↓
+Next track uses repeatMode in nextTrack() switch
 ```
 
-### File Changes Summary
-- `AppSettings.swift`: +35 lines (enum, persistence)
-- `PlaylistManager.swift`: ~20 lines modified (navigation logic)
-- `WinampMainWindow.swift`: +15 lines (badge overlay)
-- `AppCommands.swift`: ~5 lines modified (keyboard shortcut)
-- Options menu: +15 lines (if integrated)
+### Code Location Summary
 
-**Total:** ~90 lines added/modified
+**State:**
+- Persistent: `AppSettings.repeatMode` (UserDefaults)
+- Authoritative: `AudioPlayer.repeatMode` (computed from AppSettings)
 
----
+**Logic:**
+- Navigation: `AudioPlayer.nextTrack()` (modified)
+- Playback restart: `AudioPlayer.seek()` or `coordinator.play()`
 
-## Known Constraints
-
-### Skin Limitations
-- Classic skins only have 2 button sprites (normal/selected)
-- No "repeat-one" specific sprite in any skin
-- **Solution:** SwiftUI overlay (doesn't require skin changes)
-
-### Badge Positioning
-- Must fit within 28×15px button bounds
-- Position (x:8, y:0) is starting estimate
-- **May need adjustment** after visual testing
-
-### Edge Cases
-1. **Empty Playlist:**
-   - All modes return nil (no track to play)
-   - Graceful degradation
-
-2. **Single Track:**
-   - Off: Stops after track
-   - All: Replays track (same as One)
-   - One: Replays track
-
-3. **Shuffle + Repeat One:**
-   - Repeat One takes precedence (always replay current)
-   - **Alternative:** Disable shuffle in repeat-one mode
-   - **Decision:** TBD during implementation
+**UI:**
+- Button: `WinampMainWindow.swift` (ZStack with badge)
+- Menu: `WinampMainWindow.swift` (O button menu)
+- Shortcut: `AppCommands.swift` (Ctrl+R)
 
 ---
 
-## Testing Strategy
+## Known Constraints & Solutions
 
-### Cross-Skin Verification Matrix
+### Constraint 1: Classic Skins Only Have 2 Sprites
+**Fact:** `MAIN_REPEAT_BUTTON` and `MAIN_REPEAT_BUTTON_SELECTED` only
+**Winamp 5 Solution:** Used overlay for "1" badge (plugins did same)
+**Our Solution:** SwiftUI Text overlay (matches Winamp 5)
 
-| Skin | Background Color | Badge Contrast | Expected Result |
-|------|-----------------|----------------|-----------------|
-| Classic Winamp | Green/Gray | High | ✅ Readable |
-| Internet Archive | Beige | Medium (shadow helps) | ✅ Readable |
-| Tron Vaporwave | Dark Blue | High | ✅ Readable |
-| Mac OS X | Light Gray | Medium (shadow helps) | ✅ Readable |
-| Sony MP3 | Silver/White | Low (shadow critical) | ⚠️ Test needed |
-| KenWood | Black/Red | High | ✅ Readable |
-| Winamp3 Classified | Dark Blue/Silver | High | ✅ Readable |
+### Constraint 2: Badge Must Work on Any Color
+**Fact:** Skins have vastly different button colors (black, white, green, beige, blue)
+**Winamp 5 Solution:** White badge (worked most places)
+**Our Solution:** White badge + shadow (works everywhere)
 
-**Worst Case:** Sony MP3 (light button + white badge)
-**Mitigation:** Shadow with 0.8 opacity ensures contrast
-
-### Behavior Test Cases
-
-**Playlist Boundaries:**
-- [ ] Off mode: Next at end → stops
-- [ ] Off mode: Previous at start → stops
-- [ ] All mode: Next at end → wraps to first
-- [ ] All mode: Previous at start → wraps to last
-- [ ] One mode: Next → replays current
-- [ ] One mode: Previous → replays current
-
-**State Cycling:**
-- [ ] Button click: Off → All
-- [ ] Button click: All → One
-- [ ] Button click: One → Off
-- [ ] Ctrl+R: Same cycling behavior
-- [ ] Options menu: Direct mode selection
-
-**Persistence:**
-- [ ] Mode saved to UserDefaults
-- [ ] Mode restored on app launch
-- [ ] Migration from boolean (defaults to .off)
+### Constraint 3: Double-Size Mode
+**Fact:** Button scales 2x in double-size mode
+**Concern:** Badge offset may need adjustment
+**Solution:** Test in double-size, adjust offset if needed
 
 ---
 
-## Risks & Contingencies
+## Edge Cases & Behavior
 
-### Risk 1: Badge Clipping on Some Skins
-**Probability:** Low-Medium
-**Impact:** Low (visual only)
-**Mitigation:**
-- Test all 7 skins before merge
-- Adjust offset x/y as needed
-- Reduce font size to 7px if needed
+### Shuffle + Repeat One Interaction
 
-### Risk 2: Shadow Insufficient on Light Skins
-**Probability:** Low
-**Impact:** Medium (badge unreadable)
-**Mitigation:**
-- Increase shadow opacity to 1.0
-- Increase shadow radius to 1.5
-- **Fallback:** Option B2 (badge circle)
+**Winamp 5 Behavior:** Unknown (research didn't find this)
+**Our Approach:** Repeat One takes precedence
+- Shuffle=On, Repeat=One → Always replays current track (shuffle ignored)
+- This is user-intuitive: "repeat one" means ONE track
 
-### Risk 3: Performance Impact of ZStack
-**Probability:** Very Low
-**Impact:** Low
-**Mitigation:**
-- ZStack only rendered when repeatMode == .one
-- Minimal overhead (1 Text view)
-- Profile if concerns arise
+**Alternative:** Auto-disable shuffle when entering repeat-one
+**Decision:** Keep independent, document precedence
+
+### Empty Playlist
+
+All modes return gracefully (no crash):
+```swift
+guard !playlist.isEmpty else { return }
+```
+
+### Single Track
+
+- **Off:** Track ends → stops
+- **All:** Track ends → replays (wraps to index 0)
+- **One:** Track ends → replays (seeks to 0)
+
+**Note:** All and One behave identically for single track (acceptable)
+
+### Internet Radio + Repeat One
+
+**Behavior:** Stream restarts via `coordinator.play()`
+**Edge case:** Infinite duration streams (24/7 radio)
+- Track never "ends" naturally
+- Repeat One only triggers on manual Next button
+- Acceptable behavior
+
+---
+
+## Testing Requirements (Winamp 5 Validation)
+
+### Must Pass Before Merge
+
+**Visual (All 7 Skins):**
+- [ ] Classic Winamp: "1" badge legible
+- [ ] Internet Archive: "1" badge legible
+- [ ] Tron Vaporwave: "1" badge legible
+- [ ] Mac OS X: "1" badge legible
+- [ ] Sony MP3: "1" badge legible (CRITICAL - lightest skin)
+- [ ] KenWood: "1" badge legible
+- [ ] Winamp3: "1" badge legible
+
+**Behavior:**
+- [ ] Off: Stops at playlist end
+- [ ] All: Wraps to first track
+- [ ] One: Replays current track
+- [ ] Button cycling: Off → All → One → Off
+- [ ] Ctrl+R cycling matches button
+- [ ] Persistence works
+
+**Edge Cases:**
+- [ ] Empty playlist: No crash
+- [ ] Single track: All modes work
+- [ ] Stream + Repeat One: Reloads stream
+
+---
+
+## Files Affected Summary
+
+| File | Changes | Lines | Type |
+|------|---------|-------|------|
+| AppSettings.swift | RepeatMode enum + persistence | +45 | Data model |
+| AudioPlayer.swift | Computed property + navigation | +30 | Logic |
+| WinampMainWindow.swift | Button + badge + menu | +35 | UI |
+| AppCommands.swift | Keyboard shortcut | +3 | Commands |
+| **TOTAL** | | **~113** | |
+
+**Low risk:** Small, focused changes, no architectural shifts
 
 ---
 
@@ -242,92 +340,45 @@ Playlist navigation uses new mode logic
 - ✅ All three modes work correctly
 - ✅ Playlist navigation respects mode
 - ✅ Mode persists across restarts
+- ✅ Migration preserves user preference
 
-**Visual:**
-- ✅ Badge visible in repeat-one mode
-- ✅ Badge legible on all 7 skins
-- ✅ Button states match Winamp 5 behavior
-
-**UX:**
-- ✅ Intuitive mode cycling
-- ✅ Tooltip shows current mode
-- ✅ Keyboard shortcut works
+**Visual (Winamp 5 Fidelity):**
+- ✅ Badge appears ONLY in repeat-one mode
+- ✅ Badge legible on all skins
+- ✅ Button states match Winamp 5 Modern
 
 **Code Quality:**
 - ✅ Type-safe enum (no boolean flags)
+- ✅ Single source of truth (AudioPlayer)
 - ✅ Clean state transitions
-- ✅ No crashes on edge cases
-- ✅ Oracle-reviewed (pending)
+- ✅ Oracle-approved (Grade A- with fixes)
 
 ---
 
 ## Next Steps
 
-1. **Validate with Oracle** (15-20 min)
-   - Review RepeatMode enum design
-   - Confirm badge overlay strategy
-   - Verify playlist navigation logic
-
-2. **Create Feature Branch** (2 min)
-   ```bash
-   git checkout -b repeat-mode-toggle
-   ```
-
-3. **Begin Implementation** (1.5-2 hours)
-   - Follow plan.md phases 1-5
-   - Commit incrementally
-
-4. **Testing** (30-45 min)
-   - Visual verification across skins
-   - Behavior testing
-   - Edge cases
-
-5. **Documentation & Merge** (15-30 min)
-   - Update README.md
-   - Create PR
-   - Merge to main
+1. ✅ **Consolidate Oracle findings** into plan.md (DONE)
+2. ⏳ **Update state.md** with corrections (IN PROGRESS)
+3. ⏳ **Create definitive todo.md** breakdown
+4. ⏳ **Begin implementation** following todo.md
 
 ---
 
-## Timeline
+## Oracle Grade Progression
 
-**Research:** ✅ Complete (2 hours)
-**Planning:** ✅ Complete (1 hour)
-**Oracle Validation:** ⏳ Pending (15 min)
-**Implementation:** ⏳ Not started (2 hours)
-**Testing:** ⏳ Not started (45 min)
-**Documentation:** ⏳ Not started (15 min)
+**Initial Plan:** B- (solid direction, structural gaps)
+**After Corrections:** A- (production-ready)
 
-**Total Estimated:** 6 hours (research + implementation)
-**Actual So Far:** 3 hours (research + planning)
-**Remaining:** 3 hours (validation + implementation + testing)
+**Remaining for A+:**
+- Sprite-based "1" badge (pixel-perfect, vs SwiftUI Text)
+- Unit tests for repeat logic
+- Animation on mode toggle
 
----
-
-## Open Questions for Oracle
-
-1. **RepeatMode Enum Design:**
-   - Is `next()` method the cleanest API?
-   - Should we use `CaseIterable` for menu generation?
-   - Better name than `RepeatMode`?
-
-2. **Badge Overlay Strategy:**
-   - Is ZStack the right approach or should we pre-render sprites?
-   - Shadow radius 1.0 sufficient or increase to 1.5?
-   - Font size 8px or reduce to 7px for safety?
-
-3. **Playlist Navigation Logic:**
-   - Confirm `getNextTrackId()` implementation is correct
-   - Edge case: Shuffle + Repeat One - disable shuffle?
-   - Edge case: Streams (infinite duration) + Repeat One?
-
-4. **Testing Strategy:**
-   - Any missing test cases?
-   - Should we add unit tests or manual testing sufficient?
-   - Performance profiling needed?
+**Acceptable for MVP:** Current A- plan ships Winamp 5 Modern fidelity
 
 ---
 
-**Status:** ✅ Ready for Oracle review and implementation
+**Status:** ✅ Ready for Implementation
 **Blocking:** None
-**Dependencies:** Oracle validation (optional but recommended)
+**Confidence:** High (Oracle-validated, Winamp 5 pattern confirmed)
+**Estimated Time:** 2.5 hours to complete

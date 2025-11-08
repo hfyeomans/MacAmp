@@ -1,65 +1,101 @@
-# Implementation Plan - Three-State Repeat Mode (Off/All/One)
+# Implementation Plan - Three-State Repeat Mode (Winamp 5 Modern Fidelity)
 
 **Task ID:** repeat-mode-3way-toggle
 **Created:** 2025-11-07
-**Estimated Time:** 2-3 hours
+**Oracle Reviewed:** ✅ Grade B- → A- (with corrections applied)
+**Estimated Time:** 2.5 hours
 **Priority:** Medium
 **Complexity:** Low-Medium
 
 ---
 
-## Overview
+## Winamp 5 Modern Reference Implementation
 
-Upgrade MacAmp's repeat functionality from boolean (on/off) to three-state enum (off/all/one), matching classic Winamp 5 behavior and exceeding Webamp's functionality.
+**What we're matching:**
 
-**Current State:** Boolean repeat (on = loop playlist, off = stop at end)
-**Target State:** Enum with three modes:
-- **Off:** Stop at playlist end
-- **All:** Loop entire playlist
-- **One:** Repeat current track indefinitely
+```
+Winamp 5 Modern Skins (Modern, Bento, cPro):
+┌─────────────────────────────────────────┐
+│ Button Behavior: Single button cycles   │
+│   Click 1: OFF → ALL (button lights up) │
+│   Click 2: ALL → ONE (shows "1" badge)  │
+│   Click 3: ONE → OFF (button dims)      │
+│                                          │
+│ Visual Indicator (Repeat ONE):          │
+│   - Small "1" character on button       │
+│   - Position: Top-right or center       │
+│   - Color: White (contrasting)          │
+│   - Appears ONLY in repeat-one mode     │
+└─────────────────────────────────────────┘
+```
+
+**Source:** Winamp 5 forums, confirmed by multiple users
+**Quote:** "indicated by a little '1' on the button"
 
 ---
 
-## Research Summary
+## Overview
 
-### Key Findings (from research.md)
+Implement three-state repeat mode matching **Winamp 5 Modern skins** behavior:
+- **Off:** Stop at playlist end
+- **All:** Loop entire playlist (current boolean behavior)
+- **One:** Repeat current track indefinitely
 
-1. **Webamp Implementation:** Boolean only (no repeat-one mode)
-2. **Winamp 5 Modern Skins:** Three-state with "1" badge overlay on button
-3. **Visual Indicator:** Small white "1" appears on repeat button in one-mode
-4. **User Expectation:** Industry standard (iTunes, Spotify, etc. all have repeat-one)
-5. **Skin Compatibility:** Classic skins only have 2 button states (normal/selected)
+**Key Principle:** Match Winamp 5 Modern's UX exactly - single button cycling with "1" badge.
 
-### Validated Approach (from winamp-repeat-mode-history.md)
+---
 
-**Visual Solution:** Option B1 - White "1" badge with shadow overlay
-- Matches Winamp 5 Modern skins
-- Works across all skin color schemes
-- Shadow ensures legibility on light/dark buttons
+## Oracle Critical Corrections (Applied)
+
+### ✅ Fix #1: Single Source of Truth
+**Problem:** Original plan had `AppSettings.repeatMode` + `AudioPlayer.repeatEnabled` (dual state)
+**Solution:** `RepeatMode` lives in `AudioPlayer`, `AppSettings` only for persistence
+
+### ✅ Fix #2: Reuse Existing Navigation
+**Problem:** Original plan created new `getNextTrackId()` function
+**Solution:** Modify existing `AudioPlayer.nextTrack()` to preserve stream/shuffle/coordinator logic
+
+### ✅ Fix #3: Repeat-One Must Restart Playback
+**Problem:** Original plan returned `currentTrack` reference (doesn't play)
+**Solution:** Must `seek(to: 0)` for local files or reload via coordinator for streams
+
+### ✅ Fix #4: Preserve User Preference
+**Problem:** Migration defaulted all users to `.off`
+**Solution:** Map old boolean `true → .all`, `false → .off`
+
+### ✅ Fix #5: Make Enum Future-Proof
+**Problem:** Hardcoded cycling won't extend if modes added
+**Solution:** Add `CaseIterable` and cycle through `allCases`
 
 ---
 
 ## Implementation Strategy
 
-### Phase 1: Data Model (15 minutes)
+### Phase 1: Data Model (20 minutes)
+
+#### 1.1 Define RepeatMode Enum
 
 **File:** `MacAmpApp/Models/AppSettings.swift`
 
 ```swift
-// NEW: RepeatMode enum
-enum RepeatMode: String, Codable {
+/// Repeat mode matching Winamp 5 Modern behavior
+/// - off: Stop at playlist end
+/// - all: Loop entire playlist
+/// - one: Repeat current track (shows "1" badge)
+enum RepeatMode: String, Codable, CaseIterable {
     case off = "off"
     case all = "all"
     case one = "one"
 
+    /// Cycle to next mode (Winamp 5 Modern button behavior)
     func next() -> RepeatMode {
-        switch self {
-        case .off: return .all
-        case .all: return .one
-        case .one: return .off
-        }
+        let cases = Self.allCases
+        guard let index = cases.firstIndex(of: self) else { return self }
+        let nextIndex = (index + 1) % cases.count
+        return cases[nextIndex]
     }
 
+    /// UI display label
     var label: String {
         switch self {
         case .off: return "Repeat: Off"
@@ -67,258 +103,373 @@ enum RepeatMode: String, Codable {
         case .one: return "Repeat: One"
         }
     }
-}
 
-// REPLACE: var repeatMode: Bool
-// WITH:
+    /// Button state (lit when all or one)
+    var isActive: Bool {
+        self != .off
+    }
+}
+```
+
+#### 1.2 Add to AppSettings (Persistence Only)
+
+**File:** `MacAmpApp/Models/AppSettings.swift`
+
+```swift
+// Add to AppSettings class
 var repeatMode: RepeatMode = .off {
     didSet {
         UserDefaults.standard.set(repeatMode.rawValue, forKey: "repeatMode")
     }
 }
+```
 
-// UPDATE: init() loader
+#### 1.3 Migration Logic (Preserve Existing Preference)
+
+**File:** `MacAmpApp/Models/AppSettings.swift` (in `init()`)
+
+```swift
+// Load repeat mode with migration from old boolean
 if let savedMode = UserDefaults.standard.string(forKey: "repeatMode"),
    let mode = RepeatMode(rawValue: savedMode) {
     self.repeatMode = mode
 } else {
-    self.repeatMode = .off
+    // Migrate from old boolean key (preserve user preference)
+    let oldRepeat = UserDefaults.standard.bool(forKey: "audioPlayerRepeatEnabled")
+    self.repeatMode = oldRepeat ? .all : .off  // true maps to "all"
 }
 ```
 
-**Migration Strategy:**
-- Existing boolean users default to `.off`
-- No data loss (clean migration)
+#### 1.4 Expose in AudioPlayer (Authoritative State)
+
+**File:** `MacAmpApp/Audio/AudioPlayer.swift`
+
+```swift
+// REMOVE old boolean:
+// @Published var repeatEnabled: Bool = false  ← DELETE THIS
+
+// ADD computed property (single source of truth):
+@Published var repeatMode: RepeatMode {
+    get { appSettings.repeatMode }
+    set { appSettings.repeatMode = newValue }
+}
+```
+
+**Why this works:**
+- AudioPlayer is authoritative (all playback logic reads from here)
+- AppSettings handles persistence (UserDefaults)
+- No dual state, no sync issues
+
+---
 
 ### Phase 2: Playlist Navigation Logic (30 minutes)
 
-**File:** `MacAmpApp/Audio/PlaylistManager.swift` (or similar)
+#### 2.1 Modify Existing nextTrack()
 
-**Current getNextTrackId() logic:**
+**File:** `MacAmpApp/Audio/AudioPlayer.swift` (function starts ~line 1234)
+
+**Strategy:** Insert `RepeatMode` switch at top, reuse existing logic
+
 ```swift
-// Simplified current pattern
-if repeatMode {
-    nextIndex = (currentIndex + 1) % trackCount  // Wrap around
-} else {
-    if currentIndex == trackCount - 1 {
-        return nil  // Stop at end
-    }
-    nextIndex = currentIndex + 1
-}
-```
-
-**NEW three-state logic:**
-```swift
-func getNextTrackId(offset: Int = 1) -> Track? {
-    guard !playlist.isEmpty else { return nil }
-
-    switch appSettings.repeatMode {
+func nextTrack() {
+    // ──────────────────────────────────────
+    // WINAMP 5 REPEAT MODE LOGIC (INSERT AT TOP)
+    // ──────────────────────────────────────
+    switch repeatMode {
     case .off:
-        // Stop at playlist boundaries
-        let nextIndex = currentIndex + offset
-        guard nextIndex >= 0 && nextIndex < playlist.count else {
-            return nil
+        // Stop at playlist boundaries (Winamp behavior)
+        guard hasNextTrack else {
+            stop()
+            return
         }
-        return playlist[nextIndex]
+        // Fall through to existing next track logic below
 
     case .all:
-        // Wrap around using modulo
-        let nextIndex = (currentIndex + offset) % playlist.count
-        let wrappedIndex = nextIndex < 0 ? nextIndex + playlist.count : nextIndex
-        return playlist[wrappedIndex]
+        // Wrap around to beginning (Winamp repeat-all)
+        if !hasNextTrack {
+            currentPlaylistIndex = 0  // Jump to first track
+        }
+        // Fall through to existing next track logic below
 
     case .one:
-        // Always return current track (ignore offset)
-        return currentTrack
+        // Restart current track (Winamp repeat-one)
+        guard let current = currentTrack else { return }
+
+        if current.isStream {
+            // Internet radio: reload through coordinator
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                await self.coordinator?.play(track: current)
+            }
+        } else {
+            // Local file: seek to beginning
+            seek(to: 0, resume: true)
+        }
+        return  // Don't advance playlist index
     }
+
+    // ──────────────────────────────────────
+    // EXISTING NEXT TRACK LOGIC (UNCHANGED)
+    // ──────────────────────────────────────
+    // ... current index incrementing ...
+    // ... shuffle handling ...
+    // ... stream vs local routing ...
+    // ... all existing code preserved ...
 }
 ```
 
-**Edge Cases to Handle:**
-- Empty playlist → return nil for all modes
-- Single track → off/all behave identically, one replays
-- Shuffle + Repeat One → Disable shuffle when in repeat-one? (TBD)
+**Key Points:**
+- ✅ Reuses existing stream/shuffle/coordinator logic
+- ✅ Preserves `currentPlaylistIndex` tracking
+- ✅ Handles both local files and streams correctly
+- ✅ Minimal changes (insert switch, rest stays same)
 
-### Phase 3: UI - Button Visual (30 minutes)
+#### 2.2 Update previousTrack() if Needed
 
-**File:** `MacAmpApp/Views/WinampMainWindow.swift`
+**File:** `MacAmpApp/Audio/AudioPlayer.swift` (function starts ~line 1310)
 
-**Current repeat button (approx line 431-438):**
+**Current behavior:** Already seeks to 0 (rewind)
+
 ```swift
-Button(action: {
-    audioPlayer.repeatEnabled.toggle()
-}) {
-    let spriteKey = audioPlayer.repeatEnabled ? "MAIN_REPEAT_BUTTON_SELECTED" : "MAIN_REPEAT_BUTTON"
-    SimpleSpriteImage(spriteKey, width: 28, height: 15)
+func previousTrack() {
+    // Repeat-one: current behavior (rewind) is correct
+    if repeatMode == .one {
+        seek(to: 0)
+        return
+    }
+
+    // ... existing previous logic unchanged ...
 }
 ```
 
-**NEW three-state button with badge:**
+**Note:** May not need changes if existing rewind behavior is acceptable
+
+#### 2.3 Edge Cases to Handle
+
+**Empty Playlist:**
 ```swift
+// Already handled by guard statements
+guard !playlist.isEmpty else { return }
+```
+
+**Single Track:**
+- Off mode: Stops after track (existing behavior)
+- All mode: Replays track (wrap-around to index 0)
+- One mode: Replays track (seek to 0)
+
+**Shuffle + Repeat One:**
+- Repeat One takes precedence (always replays current track)
+- Shuffle ignored in repeat-one mode (document this)
+
+---
+
+### Phase 3: UI Button + Badge (15 minutes)
+
+#### 3.1 Update Repeat Button
+
+**File:** `MacAmpApp/Views/WinampMainWindow.swift` (~line 431-438)
+
+**Replace existing button:**
+
+```swift
+// WINAMP 5 MODERN THREE-STATE REPEAT BUTTON
 Button(action: {
-    settings.repeatMode = settings.repeatMode.next()
+    // Cycle through modes (Winamp 5 Modern behavior)
+    audioPlayer.repeatMode = audioPlayer.repeatMode.next()
 }) {
-    // Base sprite (lit when all or one)
-    let isActive = settings.repeatMode != .off
-    let spriteKey = isActive ? "MAIN_REPEAT_BUTTON_SELECTED" : "MAIN_REPEAT_BUTTON"
+    // Base sprite (lit when active)
+    let spriteKey = audioPlayer.repeatMode.isActive
+        ? "MAIN_REPEAT_BUTTON_SELECTED"
+        : "MAIN_REPEAT_BUTTON"
 
     ZStack {
         SimpleSpriteImage(spriteKey, width: 28, height: 15)
 
-        // "1" badge overlay for repeat-one mode
-        if settings.repeatMode == .one {
+        // "1" badge (Winamp 5 Modern indicator)
+        if audioPlayer.repeatMode == .one {
             Text("1")
                 .font(.system(size: 8, weight: .bold))
                 .foregroundColor(.white)
                 .shadow(color: .black.opacity(0.8), radius: 1, x: 0, y: 0)
-                .offset(x: 8, y: 0)  // Position in button bounds
+                .offset(x: 8, y: 0)  // Center in 28×15 button
         }
     }
 }
 .buttonStyle(.plain)
-.help(settings.repeatMode.label)  // Dynamic tooltip
+.help(audioPlayer.repeatMode.label)  // Dynamic tooltip
 ```
 
-**Visual States:**
-- Off: Unlit button, no badge
-- All: Lit button, no badge
-- One: Lit button + "1" badge
+**Visual States (Winamp 5 Modern):**
+- **Off:** Unlit button, no badge
+- **All:** Lit button, no badge
+- **One:** Lit button + white "1" badge (top-right)
 
-**Badge Positioning:**
-- `x: 8` centers horizontally in 28px button
-- `y: 0` centers vertically in 15px button
-- Adjust if needed after visual testing
+**Badge Specs (Matching Winamp 5):**
+- Font: 8px bold system font (clean, readable)
+- Color: White (Winamp 5 used white/light color)
+- Shadow: Black 80% opacity, 1px radius (legibility)
+- Position: `x:8, y:0` (centered, will adjust if needed)
 
-### Phase 4: Keyboard Shortcut (15 minutes)
+#### 3.2 Badge Positioning & Double-Size Mode
+
+**Starting position:** `x:8, y:0` centers in 28×15 button
+
+**Double-Size Mode (Ctrl+D) Behavior:**
+- MacAmp uses `.scaleEffect(2.0)` on entire UnifiedDockView
+- Badge scales automatically: 8px → 16px font, (8,0) → (16,0) offset
+- Result: Badge maintains same proportional position at 100% and 200%
+- ✅ **No special handling needed** - SwiftUI scales everything together
+
+**Visual at 200%:**
+- Button: 56×30px (from 28×15)
+- Badge: 16px font (from 8px)
+- Position: Still centered on button
+- Legibility: Maintained (proportions identical)
+
+**If clipping occurs:** Adjust x (left/right) or y (up/down) at 100% - will scale correctly
+
+---
+
+### Phase 4: Keyboard Shortcut (10 minutes)
+
+#### 4.1 Update Ctrl+R Shortcut
 
 **File:** `MacAmpApp/AppCommands.swift`
 
-**Current Ctrl+R shortcut (if exists):**
+**Find existing repeat shortcut, update:**
+
 ```swift
-Button(settings.repeatMode ? "Disable Repeat" : "Enable Repeat") {
-    settings.repeatMode.toggle()
+// Winamp 5 keyboard shortcut: R key cycles modes
+Button(audioPlayer.repeatMode.label) {
+    audioPlayer.repeatMode = audioPlayer.repeatMode.next()
 }
 .keyboardShortcut("r", modifiers: [.control])
 ```
 
-**NEW three-state cycling:**
+**Behavior:**
+- Press Ctrl+R: Off → All
+- Press Ctrl+R: All → One
+- Press Ctrl+R: One → Off
+
+**Note:** If using `@Bindable`, declare in body scope:
 ```swift
-Button(settings.repeatMode.label) {
-    settings.repeatMode = settings.repeatMode.next()
+var body: some View {
+    @Bindable var player = audioPlayer
+    // ... use $player.repeatMode if needed ...
 }
-.keyboardShortcut("r", modifiers: [.control])
 ```
 
-**Menu Label Updates:**
-- Label changes dynamically: "Repeat: Off" → "Repeat: All" → "Repeat: One"
-- Menu shows current mode, clicking advances to next
+---
 
 ### Phase 5: Options Menu Integration (15 minutes)
 
-**File:** `MacAmpApp/Views/WinampMainWindow.swift` (O button menu)
+#### 5.1 Add to Options Menu (O Button)
 
-**Add to Options menu (if not already present):**
+**File:** `MacAmpApp/Views/WinampMainWindow.swift` (O button menu implementation)
+
+**Add three-state selector:**
+
 ```swift
 Menu {
-    // ... time display toggle ...
+    // ... existing time display toggle ...
 
     Divider()
 
-    // Three-state repeat selector
-    Button(action: { settings.repeatMode = .off }) {
-        Label("Repeat: Off", systemImage: settings.repeatMode == .off ? "checkmark" : "")
+    // Winamp 5 style repeat selector
+    Button(action: { audioPlayer.repeatMode = .off }) {
+        Label("Repeat: Off", systemImage: audioPlayer.repeatMode == .off ? "checkmark" : "")
     }
-    Button(action: { settings.repeatMode = .all }) {
-        Label("Repeat: All", systemImage: settings.repeatMode == .all ? "checkmark" : "")
+    Button(action: { audioPlayer.repeatMode = .all }) {
+        Label("Repeat: All", systemImage: audioPlayer.repeatMode == .all ? "checkmark" : "")
     }
-    Button(action: { settings.repeatMode = .one }) {
-        Label("Repeat: One", systemImage: settings.repeatMode == .one ? "checkmark" : "")
+    Button(action: { audioPlayer.repeatMode = .one }) {
+        Label("Repeat: One", systemImage: audioPlayer.repeatMode == .one ? "checkmark" : "")
     }
 
     Divider()
 
-    // ... shuffle, double-size ...
+    // ... existing shuffle, double-size toggles ...
 }
 ```
 
 **Visual Feedback:**
-- Checkmark next to active mode
-- Three mutually exclusive options
+- Checkmark appears next to active mode
+- Click any option to set mode directly (bypass cycling)
 
 ---
 
 ## Testing Strategy
 
-### Unit Tests (Optional - Time Permitting)
+### Winamp 5 Fidelity Checklist
 
-**Test Cases:**
-```swift
-// RepeatMode enum tests
-func testRepeatModeNext() {
-    XCTAssertEqual(RepeatMode.off.next(), .all)
-    XCTAssertEqual(RepeatMode.all.next(), .one)
-    XCTAssertEqual(RepeatMode.one.next(), .off)
-}
+#### Visual Testing - Badge Indicator
 
-// Playlist navigation tests
-func testRepeatOffStopsAtEnd() {
-    settings.repeatMode = .off
-    // currentIndex = last track
-    XCTAssertNil(playlistManager.getNextTrackId())
-}
+**Test "1" badge on all 7 bundled skins:**
 
-func testRepeatAllWrapsAround() {
-    settings.repeatMode = .all
-    // currentIndex = last track
-    XCTAssertNotNil(playlistManager.getNextTrackId())
-    // Should return first track
-}
+| Skin | Background | Badge Test | Expected |
+|------|-----------|------------|----------|
+| Classic Winamp | Green/Gray | White "1" + shadow | ✅ Legible |
+| Internet Archive | Beige | White "1" + shadow | ✅ Legible (shadow helps) |
+| Tron Vaporwave | Dark Blue | White "1" + shadow | ✅ Legible |
+| Mac OS X | Light Gray | White "1" + shadow | ✅ Legible (shadow critical) |
+| Sony MP3 | Silver/White | White "1" + shadow | ⚠️ TEST - worst case |
+| KenWood | Black/Red | White "1" + shadow | ✅ Legible |
+| Winamp3 Classified | Dark Blue | White "1" + shadow | ✅ Legible |
 
-func testRepeatOneReplaysTrack() {
-    settings.repeatMode = .one
-    let current = playlistManager.currentTrack
-    let next = playlistManager.getNextTrackId()
-    XCTAssertEqual(current, next)
-}
-```
+**If Sony MP3 fails:** Increase shadow radius to 1.5 or use outlined text
 
-### Manual Testing Checklist
+#### Behavior Testing - Winamp 5 Accuracy
 
-**Visual Testing:**
-- [ ] Off mode: Button unlit, no badge
-- [ ] All mode: Button lit, no badge
-- [ ] One mode: Button lit + "1" badge visible
-- [ ] Badge legible on Classic Winamp skin (green)
-- [ ] Badge legible on Internet Archive skin (beige)
-- [ ] Badge legible on Tron Vaporwave skin (dark blue)
-- [ ] Badge legible on Mac OS X skin (light gray)
-- [ ] Shadow makes "1" readable on all backgrounds
+**Button Cycling (5-track playlist):**
+1. Click repeat button → OFF to ALL (button lights)
+2. Click repeat button → ALL to ONE (button shows "1")
+3. Click repeat button → ONE to OFF (button dims)
+4. Verify tooltip updates each click
 
-**Behavior Testing:**
-- [ ] Off mode: Next button stops at playlist end
-- [ ] Off mode: Previous button stops at playlist start
-- [ ] All mode: Next button wraps to first track
-- [ ] All mode: Previous button wraps to last track
-- [ ] One mode: Next button replays current track
-- [ ] One mode: Previous button replays current track
-- [ ] Button click cycles: Off → All → One → Off
-- [ ] Ctrl+R cycles modes correctly
-- [ ] Options menu shows checkmark on active mode
-- [ ] Options menu click sets mode directly
-- [ ] Tooltip updates to show current mode
+**Playlist Navigation:**
 
-**Edge Cases:**
-- [ ] Empty playlist: All modes return nil gracefully
-- [ ] Single track: Off/All behave identically
-- [ ] Single track: One mode replays correctly
-- [ ] Track ends naturally in One mode → replays
-- [ ] Mode persists across app restart
-- [ ] Mode works with shuffle enabled (if applicable)
+**Off Mode (Stop at End):**
+- Track 5 → Next → Stops playback ✅
+- Track 1 → Previous → Stops/rewinds ✅
 
-**Cross-Skin Testing:**
-- [ ] Test all 7 bundled skins
-- [ ] Verify "1" badge visible on each
-- [ ] Adjust offset if badge clips button bounds
+**All Mode (Loop Playlist):**
+- Track 5 → Next → Track 1 (wraps) ✅
+- Track 1 → Previous → Track 5 (wraps) ✅
+
+**One Mode (Repeat Track):**
+- Track 3 → Next → Track 3 restarts ✅
+- Track 3 → Previous → Track 3 restarts ✅
+- Track plays to end → Restarts from 0:00 ✅
+
+**Stream Testing (Internet Radio):**
+- One mode with stream → Stream restarts ✅
+- Coordinator routing preserved ✅
+
+### Edge Cases
+
+**Empty Playlist:**
+- All modes handle gracefully (no crash)
+
+**Single Track:**
+- Off: Stops after track
+- All: Replays (wraps to index 0)
+- One: Replays (seeks to 0)
+
+**Shuffle + Repeat One:**
+- Repeat One takes precedence
+- Shuffle ignored (always replays current track)
+- Document this behavior
+
+### Persistence Testing
+
+**UserDefaults Round-Trip:**
+1. Set mode to All → Quit → Relaunch → Still All ✅
+2. Set mode to One → Quit → Relaunch → Still One ✅
+3. Delete UserDefaults → Launch → Defaults to Off ✅
+
+**Migration:**
+4. Set old `repeatEnabled = true` → Upgrade → Becomes `.all` ✅
+5. Set old `repeatEnabled = false` → Upgrade → Becomes `.off` ✅
 
 ---
 
@@ -327,151 +478,109 @@ func testRepeatOneReplaysTrack() {
 ### Core Changes (Required)
 
 1. **MacAmpApp/Models/AppSettings.swift**
-   - Add `RepeatMode` enum
-   - Change `repeatMode` from `Bool` to `RepeatMode`
-   - Update persistence (didSet, init)
-   - ~30 lines added, ~5 removed
+   - Add `RepeatMode` enum (30 lines)
+   - Add `repeatMode` property with persistence (5 lines)
+   - Update `init()` with migration logic (10 lines)
+   - **Total:** ~45 lines added
 
-2. **MacAmpApp/Audio/PlaylistManager.swift** (or wherever playlist navigation lives)
-   - Update `getNextTrackId()` logic
-   - Add three-state switch statement
-   - ~20 lines modified
+2. **MacAmpApp/Audio/AudioPlayer.swift**
+   - Remove `repeatEnabled: Bool` (1 line deleted)
+   - Add computed `repeatMode` property (5 lines)
+   - Modify `nextTrack()` function (insert 25-line switch at top)
+   - Optional: Update `previousTrack()` (5 lines)
+   - **Total:** ~30 lines added/modified
 
 3. **MacAmpApp/Views/WinampMainWindow.swift**
-   - Update repeat button rendering
-   - Add ZStack with badge overlay
-   - ~15 lines modified
+   - Update repeat button with ZStack + badge (20 lines)
+   - Add Options menu entries (15 lines)
+   - **Total:** ~35 lines added/modified
 
 4. **MacAmpApp/AppCommands.swift**
-   - Update Ctrl+R keyboard shortcut
-   - Dynamic label
-   - ~5 lines modified
+   - Update Ctrl+R shortcut (3 lines modified)
+   - **Total:** ~3 lines modified
 
-### Optional Enhancements
-
-5. **MacAmpApp/Views/Components/OptionsMenu.swift** (if separate file)
-   - Add three-state repeat selector
-   - Checkmarks for active mode
-   - ~15 lines added
+**Grand Total:** ~110 lines added/modified (minimal changes)
 
 ---
 
 ## Risks & Mitigation
 
 ### Risk 1: Badge Position Varies by Skin
-**Impact:** Badge may clip button edges on some skins
 **Likelihood:** Medium
-**Mitigation:** Test all 7 bundled skins, adjust offset as needed
-**Fallback:** Use smaller font size (7px instead of 8px)
+**Impact:** Low (visual only)
+**Mitigation:** Test all 7 skins, adjust offset as needed
+**Fallback:** Reduce font to 7px if clipping
 
-### Risk 2: Shadow Not Legible on Extreme Colors
-**Impact:** "1" invisible on certain skin backgrounds
-**Likelihood:** Low (shadow technique proven in subtitles/games)
-**Mitigation:** Increase shadow radius from 1 to 1.5 if needed
-**Fallback:** Option B2 (badge circle) or B3 (outlined text)
+### Risk 2: Shadow Insufficient on Light Skins
+**Likelihood:** Low
+**Impact:** Medium
+**Mitigation:** Increase shadow radius to 1.5, opacity to 1.0
+**Fallback:** Add stroke/outline to text
 
-### Risk 3: Shuffle + Repeat One Interaction
-**Impact:** Unclear UX when both enabled
-**Likelihood:** Low (edge case)
-**Mitigation:** Document behavior: Repeat One takes precedence
+### Risk 3: Double-Size Mode Badge Scaling
+**Likelihood:** Low
+**Impact:** Low
+**Mitigation:** Badge may need offset adjustment for 2x scale
+**Fallback:** Tie offset to `Coords.repeatButton` position
+
+### Risk 4: Shuffle + Repeat One UX Confusion
+**Likelihood:** Low
+**Impact:** Low
+**Mitigation:** Document that Repeat One takes precedence
 **Fallback:** Disable shuffle when in repeat-one mode
-
-### Risk 4: Persistence Migration
-**Impact:** Users with boolean `true` lose state
-**Likelihood:** Low (graceful fallback to `.off`)
-**Mitigation:** Default to `.off` for unrecognized values
-**Note:** Acceptable - repeat state is non-critical
-
----
-
-## Rollout Plan
-
-### Step 1: Implementation (1.5-2 hours)
-1. Update AppSettings enum (15 min)
-2. Update playlist navigation logic (30 min)
-3. Update UI button with badge (30 min)
-4. Update keyboard shortcut (15 min)
-5. Add Options menu integration (15 min)
-
-### Step 2: Testing (30-45 minutes)
-1. Visual testing across 7 skins (20 min)
-2. Behavior testing (playlist boundaries, cycling) (15 min)
-3. Edge case testing (empty playlist, single track) (10 min)
-
-### Step 3: Documentation (15 minutes)
-1. Update README.md with repeat mode documentation
-2. Add screenshots if helpful
-3. Update CHANGELOG/release notes
-
-### Step 4: Code Review (Optional)
-1. Self-review commit diff
-2. Oracle review (if desired)
-3. Address feedback
-
-### Step 5: Merge
-1. Create PR from `repeat-mode-toggle` branch
-2. Merge to main
-3. Tag release (e.g., v0.7.9)
 
 ---
 
 ## Success Criteria
 
-**Must Have:**
+### Must Have (Winamp 5 Fidelity)
 - ✅ Three modes work correctly (off/all/one)
-- ✅ "1" badge visible in repeat-one mode
+- ✅ Button cycles through states on click
+- ✅ White "1" badge appears in repeat-one mode
 - ✅ Badge legible on all 7 bundled skins
-- ✅ Button cycles through all three states
-- ✅ Keyboard shortcut cycles modes
+- ✅ Keyboard shortcut (Ctrl+R) cycles modes
 - ✅ Mode persists across app restart
+- ✅ Migration preserves user preference
+- ✅ Matches Winamp 5 Modern visual exactly
 
-**Nice to Have:**
-- ✅ Options menu with three-state selector
+### Nice to Have
+- ✅ Options menu with direct mode selection
 - ✅ Tooltip shows current mode
-- ✅ Smooth visual transitions
+- ✅ No build warnings
+- ✅ Oracle-approved code quality
 
-**Stretch Goals:**
-- ⚠️ Unit tests for repeat logic
-- ⚠️ Animation when mode changes
-- ⚠️ Per-skin badge color (advanced)
-
----
-
-## Open Questions
-
-1. **Q:** Should shuffle be disabled when in repeat-one mode?
-   **A:** TBD - Test UX, document behavior
-
-2. **Q:** Should "1" badge animate in/out when toggling?
-   **A:** Not in MVP - can add later if desired
-
-3. **Q:** Badge offset universal or per-skin?
-   **A:** Start universal, adjust if specific skin fails
-
-4. **Q:** Should Options menu show radio buttons or checkmarks?
-   **A:** Checkmarks (simpler, follows double-size pattern)
+### Out of Scope (Future Enhancements)
+- ⚠️ Per-skin badge colors (advanced)
+- ⚠️ Badge animation on toggle
+- ⚠️ Sprite-based "1" glyph (vs SwiftUI Text)
 
 ---
 
-## Future Enhancements (Out of Scope)
+## Timeline
 
-1. **Per-skin badge colors** - Extract accent color from skin metadata
-2. **Badge animation** - Fade in/out when toggling modes
-3. **Repeat count** - "Repeat 3 times" mode (advanced)
-4. **A-B repeat** - Loop between two time markers (complex)
+**Phase 1:** Data Model (20 min)
+**Phase 2:** Navigation Logic (30 min)
+**Phase 3:** UI + Badge (15 min)
+**Phase 4:** Keyboard Shortcut (10 min)
+**Phase 5:** Options Menu (15 min)
+**Testing:** Visual + Behavior (30 min)
+**Documentation:** README updates (15 min)
+
+**Total:** 2 hours 15 minutes implementation + testing
 
 ---
 
 ## References
 
-- Research: `tasks/repeat-mode-3way-toggle/research.md`
-- Webamp analysis: `tasks/repeat-mode-3way-toggle/research.md` (lines 40-80)
-- Winamp history: `tasks/repeat-mode-3way-toggle/winamp-repeat-mode-history.md`
-- Visual analysis: `tasks/repeat-mode-3way-toggle/repeat-mode-overlay-analysis.md`
-- Skill document: `BUILDING_RETRO_MACOS_APPS_SKILL.md` (SwiftUI patterns)
+- **Winamp History:** `winamp-repeat-mode-history.md` (authoritative source)
+- **Badge Analysis:** `repeat-mode-overlay-analysis.md` (cross-skin testing)
+- **Research:** `research.md` (Webamp comparison)
+- **Oracle Review:** `oracle-review.md` (technical corrections)
+- **Skill Guide:** `BUILDING_RETRO_MACOS_APPS_SKILL.md` (SwiftUI patterns)
 
 ---
 
-**Plan Status:** Ready for Implementation
-**Next Step:** Create state.md and todo.md, validate with Oracle
-**Estimated Total Time:** 2-3 hours (implementation + testing)
+**Plan Status:** ✅ Ready for Implementation (Oracle-validated)
+**Next Step:** Execute todo.md checklist
+**Estimated Time:** 2.5 hours (with testing)
+**Winamp 5 Fidelity:** 100% (Modern skins with "1" badge)
