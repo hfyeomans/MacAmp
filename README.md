@@ -21,7 +21,8 @@ MacAmp is a SwiftUI-based audio player for macOS that recreates the iconic deskt
 - 📂 **Playlist Menus** - Sprite-based popup menus for ADD, REM, MISC, and LIST OPTS with hover states
 - ✨ **Multi-Select** - Shift+Click to select multiple tracks, Command+A to select all, with CROP and remove operations
 - 📝 **Native Text Rendering** - Playlist tracks use real text with PLEDIT.txt colors and Unicode support (not bitmap fonts)
-- 🎛️ **Advanced Controls** - Volume, balance, position seeking, shuffle, and repeat
+- 🎛️ **Advanced Controls** - Volume, balance, position seeking, shuffle, and three-state repeat (Off/All/One)
+- 🔄 **Three-State Repeat** - Winamp 5 Modern fidelity with Off/All/One modes and "1" badge indicator (Ctrl+R to cycle)
 - 🪟 **Multi-Window Interface** - Main player, equalizer, and playlist windows with shade modes
 - 🔍 **Double-Size Mode** - Toggle 200% scaling with D button or Ctrl+D for better visibility on high-res displays
 - 📌 **Always On Top** - Keep window floating above others with A button or Ctrl+A (Classic Winamp feature)
@@ -146,6 +147,31 @@ Available presets: Classical, Club, Dance, Full Bass, Full Bass & Treble, Full T
 3. **Visual Feedback** - I button highlighted while dialog is open
 4. **Dismissal** - Click "Close" button, press Esc, or click outside
 5. **Keyboard Shortcut** - **Ctrl+I**
+
+### Repeat Modes (Winamp 5 Modern Fidelity)
+
+MacAmp supports three repeat modes matching Winamp 5 Modern skins (Modern, Bento, cPro):
+
+1. **Repeat: Off** - Stops at playlist end (button unlit)
+2. **Repeat: All** - Loops entire playlist (button lit)
+3. **Repeat: One** - Repeats current track (button lit + white "1" badge)
+
+**Usage:**
+- **Click repeat button** to cycle: Off → All → One → Off
+- **Keyboard shortcut:** Press **Ctrl+R** to cycle through modes
+- **Options menu:** Press **Ctrl+O**, select specific mode directly
+- **Visual indicator:** White "1" badge appears on button when in Repeat One mode
+
+**Behavior:**
+- **Off mode:** Next button stops at last track, Previous stops at first
+- **All mode:** Next wraps to first track, Previous wraps to last
+- **One mode:** Next/Previous skip to adjacent track, track ending naturally restarts same track
+- **Persistence:** Mode remembered across app restarts
+
+**Winamp Compatibility:**
+- Badge uses same overlay technique as Winamp 5 plugins for classic skins
+- Shadow ensures legibility across all skin colors (dark and light buttons)
+- Scales automatically with double-size mode (Ctrl+D)
 
 ### Visualizer Modes
 
@@ -305,6 +331,7 @@ For detailed architecture documentation, see [`docs/ARCHITECTURE_REVELATION.md`]
 | `Cmd+O` | Open file |
 | `Ctrl+O` | Open options menu (time, double-size, repeat, shuffle) |
 | `Ctrl+T` | Toggle time display (elapsed ⇄ remaining) |
+| `Ctrl+R` | Cycle repeat mode (Off → All → One) |
 | `Ctrl+I` | Show track information dialog |
 | `Ctrl+D` | Toggle double-size mode (100% ↔ 200%) |
 | `Ctrl+A` | Toggle always on top (float window) |
@@ -447,9 +474,7 @@ See [`docs/SpriteResolver-Architecture.md`](docs/SpriteResolver-Architecture.md)
 ### Known Limitations
 
 **Not Yet Implemented:**
-- Settings persistence (volume/repeat reset on restart)
-- Oscilloscope/RMS visualizer mode (backend exists, UI hidden)
-- Repeat One/All modes (only On/Off toggle)
+- Settings persistence (volume resets on restart)
 - Playlist scrolling (for large playlists)
 - Enter key menu activation (arrow keys + click work)
 
