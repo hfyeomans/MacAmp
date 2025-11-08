@@ -881,14 +881,34 @@ struct WinampMainWindow: View {
             }
         ))
 
-        // Repeat toggle
+        // Repeat mode selector (Winamp 5: three explicit options)
         menu.addItem(createMenuItem(
-            title: audioPlayer.repeatMode.label,  // Dynamic label: "Repeat: Off/All/One"
-            isChecked: audioPlayer.repeatMode.isActive,
+            title: "Repeat: Off",
+            isChecked: audioPlayer.repeatMode == .off,
+            keyEquivalent: "",
+            modifiers: [],
+            action: { [weak audioPlayer] in
+                audioPlayer?.repeatMode = .off
+            }
+        ))
+
+        menu.addItem(createMenuItem(
+            title: "Repeat: All",
+            isChecked: audioPlayer.repeatMode == .all,
+            keyEquivalent: "",
+            modifiers: [],
+            action: { [weak audioPlayer] in
+                audioPlayer?.repeatMode = .all
+            }
+        ))
+
+        menu.addItem(createMenuItem(
+            title: "Repeat: One",
+            isChecked: audioPlayer.repeatMode == .one,
             keyEquivalent: "r",
             modifiers: .control,
             action: { [weak audioPlayer] in
-                audioPlayer?.repeatMode = audioPlayer?.repeatMode.next() ?? .off
+                audioPlayer?.repeatMode = .one
             }
         ))
 

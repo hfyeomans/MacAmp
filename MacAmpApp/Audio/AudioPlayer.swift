@@ -1232,7 +1232,7 @@ final class AudioPlayer {
     }
 
     @discardableResult
-    func nextTrack() -> PlaylistAdvanceAction {
+    func nextTrack(isManualSkip: Bool = false) -> PlaylistAdvanceAction {
         guard !playlist.isEmpty else { return .none }
 
         trackHasEnded = false
@@ -1240,8 +1240,9 @@ final class AudioPlayer {
         // ──────────────────────────────────────
         // WINAMP 5 REPEAT MODE LOGIC
         // ──────────────────────────────────────
-        // Handle repeat-one specially (restart current track)
-        if repeatMode == .one {
+        // Repeat-one: Only auto-restart on track end, allow manual skips
+        if repeatMode == .one && !isManualSkip {
+            // Auto-advance (track ended naturally): restart current track
             guard let current = currentTrack else { return .none }
 
             if current.isStream {
@@ -1253,7 +1254,7 @@ final class AudioPlayer {
                 return .playLocally(current)
             }
         }
-        // For .off and .all modes, continue with normal advancement logic below
+        // Manual skip OR modes .off/.all: continue with normal advancement logic below
 
         if shuffleEnabled {
             guard let randomTrack = playlist.randomElement(),
