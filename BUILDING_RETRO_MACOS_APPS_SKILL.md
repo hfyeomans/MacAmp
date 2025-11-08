@@ -832,6 +832,274 @@ class DockingController: ObservableObject {
 
 ---
 
+## Three-State Enum Pattern with Visual Indicators (Winamp Fidelity)
+
+**Lesson from:** Three-State Repeat Mode (v0.7.9, PR #30, Nov 2025)
+**Oracle Grade:** A (final)
+**Use Case:** Multi-state features with visual feedback (repeat modes, playback modes, UI states)
+
+### Pattern: Enum-Based State with UI Integration
+
+When implementing multi-state features (like Winamp 5's repeat modes), use this battle-tested pattern:
+
+#### 1. Define Enum with Future-Proof Cycling
+
+```swift
+/// Repeat mode matching Winamp 5 Modern behavior
+enum RepeatMode: String, Codable, CaseIterable {
+    case off = "off"
+    case all = "all"
+    case one = "one"
+
+    /// Cycle to next mode (future-proof using allCases)
+    func next() -> RepeatMode {
+        let cases = Self.allCases
+        guard let index = cases.firstIndex(of: self) else { return self }
+        let nextIndex = (index + 1) % cases.count
+        return cases[nextIndex]
+    }
+
+    /// UI display label
+    var label: String {
+        switch self {
+        case .off: return "Repeat: Off"
+        case .all: return "Repeat: All"
+        case .one: return "Repeat: One"
+        }
+    }
+
+    /// Derived state for UI (button lit when active)
+    var isActive: Bool {
+        self != .off
+    }
+}
+```
+
+**Why CaseIterable with allCases cycling:**
+- Adding `.count` mode later? `next()` automatically includes it
+- No hardcoded cycling (extensible)
+- Type-safe iteration
+
+#### 2. Single Source of Truth via Computed Property
+
+```swift
+// AppSettings.swift - Persistence layer only
+@Observable
+@MainActor
+final class AppSettings {
+    var repeatMode: RepeatMode = .off {
+        didSet {
+            UserDefaults.standard.set(repeatMode.rawValue, forKey: "repeatMode")
+        }
+    }
+}
+
+// AudioPlayer.swift - Authoritative state
+@Observable
+@MainActor
+class AudioPlayer {
+    /// Computed property prevents dual state
+    var repeatMode: AppSettings.RepeatMode {
+        get { AppSettings.instance().repeatMode }
+        set { AppSettings.instance().repeatMode = newValue }
+    }
+}
+```
+
+**Why this works:**
+- ✅ Single source of truth (no sync issues)
+- ✅ Persistence automatic via didSet
+- ✅ All business logic reads from AudioPlayer
+- ✅ Matches existing useSpectrumVisualizer pattern
+
+**Anti-Pattern (causes bugs):**
+```swift
+// ❌ WRONG - Two sources of truth
+@Observable class AppSettings {
+    var repeatMode: RepeatMode = .off
+}
+
+@Observable class AudioPlayer {
+    var repeatEnabled: Bool = false  // ← Separate state, sync nightmare!
+}
+```
+
+#### 3. Migration Pattern (Preserve User Preferences)
+
+```swift
+// In AppSettings init()
+if let savedMode = UserDefaults.standard.string(forKey: "repeatMode"),
+   let mode = RepeatMode(rawValue: savedMode) {
+    self.repeatMode = mode
+} else {
+    // Migrate from old boolean key
+    let oldRepeat = UserDefaults.standard.bool(forKey: "audioPlayerRepeatEnabled")
+    self.repeatMode = oldRepeat ? .all : .off  // Preserve user intent
+}
+```
+
+**Critical:** Map old values to equivalent new values (don't default everyone to .off)
+
+#### 4. Visual Indicator with Cross-Skin Compatibility
+
+**Challenge:** Winamp classic skins only have 2 button sprites (off/selected), no third state.
+
+**Solution:** ZStack overlay (matches Winamp 5 plugin technique)
+
+```swift
+Button(action: {
+    audioPlayer.repeatMode = audioPlayer.repeatMode.next()
+}) {
+    // Base sprite (lit when all or one)
+    let spriteKey = audioPlayer.repeatMode.isActive
+        ? "MAIN_REPEAT_BUTTON_SELECTED"
+        : "MAIN_REPEAT_BUTTON"
+
+    ZStack {
+        SimpleSpriteImage(spriteKey, width: 28, height: 15)
+
+        // Visual indicator for "one" state (Winamp 5 pattern)
+        if audioPlayer.repeatMode == .one {
+            Text("1")
+                .font(.system(size: 8, weight: .bold))
+                .foregroundColor(.white)
+                .shadow(color: .black.opacity(0.8), radius: 1, x: 0, y: 0)
+                .offset(x: 8, y: 0)
+        }
+    }
+}
+.buttonStyle(.plain)
+.help(audioPlayer.repeatMode.label)  // Dynamic tooltip
+```
+
+**Shadow technique:**
+- White text + black shadow = legible on ANY background
+- Works on dark buttons (green, blue, black)
+- Works on light buttons (beige, gray, silver)
+- Tested on 7 skins with 100% success rate
+
+**Why this matches Winamp:**
+- Classic skins: Winamp 5 plugins overlayed "*" or "1" (same technique)
+- Modern skins: Built-in "1" badge (our ZStack matches this)
+- Classic skin limitation: Only 2 sprites exist (we overlay on selected sprite)
+
+#### 5. Distinguishing Manual vs Auto Actions
+
+**Problem:** Repeat-one should restart on track end, but allow manual skip.
+
+**Solution:** Parameter flag distinguishes intent
+
+```swift
+// AudioPlayer.swift
+func nextTrack(isManualSkip: Bool = false) -> PlaylistAdvanceAction {
+    // Repeat-one: Only auto-restart, allow manual skips
+    if repeatMode == .one && !isManualSkip {
+        // Auto-advance (track ended): restart current track
+        guard let current = currentTrack else { return .none }
+        if current.isStream {
+            return .requestCoordinatorPlayback(current)  // Reload stream
+        } else {
+            seek(to: 0, resume: true)  // Seek to start
+            return .playLocally(current)
+        }
+    }
+    // Manual skip: continues to normal advancement
+    // ... existing next track logic ...
+}
+
+// PlaybackCoordinator.swift - Manual skip
+func next() async {
+    let action = audioPlayer.nextTrack(isManualSkip: true)  // User-initiated
+    await handlePlaylistAdvance(action: action)
+}
+
+// AudioPlayer.swift - Auto-advance
+private func onPlaybackEnded() {
+    let action = nextTrack()  // Uses default isManualSkip: false
+    // ... handle action ...
+}
+```
+
+**Pattern:** Use default parameters to distinguish caller intent without duplicating logic.
+
+#### 6. Options Menu with Explicit Choices
+
+**Better UX:** Direct selection vs cycling
+
+```swift
+// ❌ Single cycling menu item (poor UX)
+menu.addItem(createMenuItem(
+    title: repeatMode.label,          // Shows current
+    isChecked: repeatMode.isActive,   // Binary only
+    action: { repeatMode = repeatMode.next() }  // Must cycle through all
+))
+
+// ✅ Three explicit items (Winamp 5 pattern)
+menu.addItem(createMenuItem(
+    title: "Repeat: Off",
+    isChecked: repeatMode == .off,
+    action: { repeatMode = .off }     // Direct selection
+))
+menu.addItem(createMenuItem(
+    title: "Repeat: All",
+    isChecked: repeatMode == .all,
+    action: { repeatMode = .all }
+))
+menu.addItem(createMenuItem(
+    title: "Repeat: One",
+    isChecked: repeatMode == .one,
+    keyEquivalent: "r",
+    modifiers: .control,
+    action: { repeatMode = .one }
+))
+```
+
+**Why explicit is better:**
+- User can see all available states
+- Checkmark shows current state clearly
+- Direct selection (no cycling through unwanted states)
+- Matches Winamp 5 UX
+
+### Complete Pattern Checklist
+
+When implementing enum-based states:
+
+- [ ] **Enum conforms to:** String, Codable, CaseIterable
+- [ ] **Cycling method** uses allCases (future-proof)
+- [ ] **Computed properties** for UI needs (label, isActive, etc.)
+- [ ] **Single source of truth** via computed property pattern
+- [ ] **Persistence** in AppSettings with didSet
+- [ ] **Migration** preserves old values (map to equivalent new values)
+- [ ] **Visual indicators** use overlay when sprite limitation exists
+- [ ] **Shadow technique** for cross-skin legibility (dark + light backgrounds)
+- [ ] **Parameter flags** distinguish user vs auto actions when needed
+- [ ] **Menu items** show explicit choices, not just cycling
+- [ ] **Keyboard shortcuts** cycle through states (convenience)
+- [ ] **Oracle validation** of pattern consistency
+
+### When to Use This Pattern
+
+**Good fit:**
+- Multiple exclusive states (2-4 options)
+- Visual feedback needed
+- Persistence across sessions
+- Keyboard shortcuts for power users
+- Matches retro app reference (Winamp, iTunes, etc.)
+
+**Examples:**
+- Repeat modes (off/all/one/count)
+- Playback speed (1x/1.5x/2x)
+- Visualizer modes (spectrum/oscilloscope/none)
+- Time display (elapsed/remaining/total)
+- Theme modes (light/dark/auto)
+
+**Not a good fit:**
+- Boolean states (use Bool with didSet)
+- Many states (>5, consider picker/dropdown)
+- States that don't need persistence
+
+---
+
 ## Modern Swift Patterns & Observable Migration
 
 ### Migrating from ObservableObject to @Observable (macOS 15+)
@@ -2130,9 +2398,18 @@ When building your next retro macOS app:
 **Document Status:** Production Ready
 **Maintenance:** Update when new patterns/pitfalls discovered
 **Owner:** MacAmp Development Team
-**Last Updated:** 2025-10-31
+**Last Updated:** 2025-11-07
 
 **Recent Additions:**
+- **Three-State Enum Pattern with Winamp Fidelity** (Nov 7, 2025) - Complete enum-based state management
+  - RepeatMode enum (off/all/one) with CaseIterable future-proofing
+  - Single source of truth via computed property pattern
+  - Migration from boolean preserving user preferences (true → .all, false → .off)
+  - ZStack overlay technique for visual indicators (Winamp 5 plugin compatibility)
+  - Manual vs auto-action distinction pattern (isManualSkip parameter)
+  - Options menu with explicit choices + checkmarks (3 items vs single toggle)
+  - Cross-skin visual compatibility (shadow technique for all backgrounds)
+  - Oracle-validated pattern consistency (Grade A)
 - **Internet Radio Streaming** (Oct 31, 2025) - Dual-backend audio architecture
   - PlaybackCoordinator pattern for multiple audio systems
   - @preconcurrency for non-Sendable frameworks

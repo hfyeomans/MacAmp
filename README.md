@@ -319,7 +319,7 @@ Package.swift                           # Swift Package Manager Configuration
 - **Visualizer Modes**: Clickable visualizer cycles through Spectrum → Oscilloscope → None
 - **Keyboard Navigation**: Arrow keys and VoiceOver support in all menus
 
-For detailed architecture documentation, see [`docs/ARCHITECTURE_REVELATION.md`](docs/ARCHITECTURE_REVELATION.md).
+For detailed architecture documentation, see [`docs/*]
 
 ## Keyboard Shortcuts
 

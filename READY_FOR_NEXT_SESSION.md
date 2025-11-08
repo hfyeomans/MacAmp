@@ -1,14 +1,51 @@
 # Ready for Next Session - MacAmp Development
 
-**Last Updated:** 2025-10-31
+**Last Updated:** 2025-11-07
 **Current Branch:** `main`
-**Build Status:** ✅ Swift 6.0 + Internet Radio Streaming + Clutter Bar (2 of 5 buttons functional)
+**Build Status:** ✅ Swift 6.0 + Internet Radio Streaming + Three-State Repeat Mode + Clutter Bar (4 of 5 buttons functional)
 
 ---
 
-## 🎉 **Latest: Internet Radio Streaming Complete!**
+## 🎉 **Latest: Three-State Repeat Mode Complete!**
 
-### **PR #28 - MERGED (2025-10-31)**
+### **PR #30 - MERGED (2025-11-07) - v0.7.9**
+
+**Major Feature Delivered:**
+- ✅ Three-state repeat mode (Off/All/One) matching Winamp 5 Modern skins
+- ✅ White "1" badge indicator (appears only in repeat-one mode)
+- ✅ Manual skip preserved in repeat-one (Next always advances)
+- ✅ Options menu with 3 explicit choices + checkmarks
+- ✅ Ctrl+R keyboard shortcut to cycle modes
+- ✅ Cross-skin compatibility (tested on all 7 bundled skins)
+- ✅ Persistence across app restarts
+- ✅ Migration from old boolean (true → .all, false → .off)
+
+**Architecture:**
+- RepeatMode enum in AppSettings (CaseIterable pattern)
+- Computed property in AudioPlayer (single source of truth)
+- isManualSkip parameter (distinguishes user vs auto actions)
+- ZStack overlay technique (Winamp 5 plugin compatibility)
+
+**Implementation:**
+- 7 commits (~5.5 hours)
+- 2 Oracle reviews (Grade B- → C → A final)
+- User tested - all features confirmed working
+- Oracle Grade: A (production ready)
+
+**Status:** ✅ **SHIPPED TO MAIN** (Release v0.7.9)
+
+**Exceeds Webamp:** Webamp only has boolean repeat
+**Matches Winamp 5:** Modern skins (Modern, Bento, cPro) with "1" badge
+**Menu Renamed:** "Windows" → "Options" (better reflects mixed functionality)
+
+**Documentation Created:**
+- tasks/done/repeat-mode-3way-toggle/ (complete task history)
+- Updated: docs/MACAMP_ARCHITECTURE_GUIDE.md (repeat mode patterns)
+- Updated: docs/IMPLEMENTATION_PATTERNS.md (enum migration pattern)
+
+---
+
+## 🎉 **PR #28 - Internet Radio Streaming (2025-10-31)**
 
 **Major Feature Delivered:**
 - ✅ HTTP/HTTPS stream playback with live ICY metadata
@@ -46,11 +83,11 @@
 ### **Clutter Bar Completion (3 buttons remaining)**
 
 **Current Status:**
-- O: Scaffolded (options menu) - Ready
+- O: FUNCTIONAL ✅ (options menu with time/repeat/shuffle/double-size)
 - A: FUNCTIONAL ✅ (always on top)
-- I: Scaffolded (info dialog) - Ready
+- I: FUNCTIONAL ✅ (track info dialog)
 - D: FUNCTIONAL ✅ (double-size)
-- V: Scaffolded (visualizer toggle) - Ready
+- V: Scaffolded (visualizer toggle) - Ready to implement (1 hour)
 
 **Quickest Wins:**
 
@@ -351,7 +388,6 @@ Pick the next button to implement:
 
 **Audio Features:**
 - Persist volume/balance settings
-- Repeat mode enhancements (off/one/all)
 
 **Window Features:**
 - Magnetic window docking (major task, 10-16 hours)
@@ -374,7 +410,7 @@ Pick the next button to implement:
 - Oracle-reviewed code
 - Complete documentation
 
-**Clutter Bar Progress:** 40% (2 of 5 buttons)
+**Clutter Bar Progress:** 80% (4 of 5 buttons functional)
 
 ---
 
@@ -514,6 +550,19 @@ xcodebuild -project MacAmpApp.xcodeproj \
 - Spectrum (frequency) / Oscilloscope (waveform) / None (off)
 - User discovered RMS issue, fixed to use time-domain samples
 - 7 commits, 2 Oracle reviews
+
+### **PR #29: O & I Buttons** ✅ MERGED (2025-11-07) - v0.7.8
+- O button: Options menu (time display, double-size, repeat, shuffle)
+- I button: Track info dialog (metadata display)
+- Ctrl+O and Ctrl+I shortcuts
+- 5 commits, 3 Oracle reviews
+
+### **PR #30: Three-State Repeat Mode** ✅ MERGED (2025-11-07) - v0.7.9
+- Winamp 5 Modern fidelity (Off/All/One with "1" badge)
+- Manual skip vs auto-advance distinction
+- Options menu: 3 explicit choices with checkmarks
+- Menu renamed: "Windows" → "Options"
+- 7 commits, 2 Oracle reviews (Grade A final)
 
 ### **Bundled Skins** ✅ SHIPPED
 - Added 5 new bundled skins (now 7 total)
