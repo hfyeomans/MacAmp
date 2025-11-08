@@ -54,6 +54,11 @@ struct AppCommands: Commands {
             }
             .keyboardShortcut("i", modifiers: [.control])
 
+            Button(audioPlayer.repeatMode.label) {
+                audioPlayer.repeatMode = audioPlayer.repeatMode.next()
+            }
+            .keyboardShortcut("r", modifiers: [.control])
+
             // Vertical stacking - no horizontal movement needed
             // Windows now stack vertically in fixed order: Main -> EQ -> Playlist
         }
