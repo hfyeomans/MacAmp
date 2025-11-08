@@ -62,6 +62,16 @@ final class AppSettings {
         // Load persisted visualizer mode (default to spectrum)
         let rawMode = UserDefaults.standard.integer(forKey: "visualizerMode")
         self.visualizerMode = VisualizerMode(rawValue: rawMode) ?? .spectrum
+
+        // Load repeat mode with migration from old boolean (preserves user preference)
+        if let savedMode = UserDefaults.standard.string(forKey: "repeatMode"),
+           let mode = RepeatMode(rawValue: savedMode) {
+            self.repeatMode = mode
+        } else {
+            // Migrate from old boolean key: true → .all, false → .off
+            let oldRepeat = UserDefaults.standard.bool(forKey: "audioPlayerRepeatEnabled")
+            self.repeatMode = oldRepeat ? .all : .off
+        }
     }
     
     static func instance() -> AppSettings {
@@ -210,6 +220,48 @@ final class AppSettings {
     var visualizerMode: VisualizerMode = .spectrum {
         didSet {
             UserDefaults.standard.set(visualizerMode.rawValue, forKey: "visualizerMode")
+        }
+    }
+
+    // MARK: - Repeat Mode
+
+    /// Repeat mode matching Winamp 5 Modern behavior
+    /// - off: Stop at playlist end
+    /// - all: Loop entire playlist (Winamp repeat-all)
+    /// - one: Repeat current track (shows "1" badge, Winamp repeat-one)
+    enum RepeatMode: String, Codable, CaseIterable {
+        case off = "off"
+        case all = "all"
+        case one = "one"
+
+        /// Cycle to next mode (Winamp 5 Modern button behavior: Off → All → One → Off)
+        func next() -> RepeatMode {
+            let cases = Self.allCases
+            guard let index = cases.firstIndex(of: self) else { return self }
+            let nextIndex = (index + 1) % cases.count
+            return cases[nextIndex]
+        }
+
+        /// UI display label for tooltips and menus
+        var label: String {
+            switch self {
+            case .off: return "Repeat: Off"
+            case .all: return "Repeat: All"
+            case .one: return "Repeat: One"
+            }
+        }
+
+        /// Button state - lit when all or one (Winamp 5 visual)
+        var isActive: Bool {
+            self != .off
+        }
+    }
+
+    /// Current repeat mode - persists across app restarts
+    /// Note: Using didSet pattern to maintain @Observable reactivity
+    var repeatMode: RepeatMode = .off {
+        didSet {
+            UserDefaults.standard.set(repeatMode.rawValue, forKey: "repeatMode")
         }
     }
 
