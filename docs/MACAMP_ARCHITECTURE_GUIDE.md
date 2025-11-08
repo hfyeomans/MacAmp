@@ -91,6 +91,11 @@ Deployment:               Developer ID signed, notarization-ready
    - I Button: Track Information dialog with metadata display (Ctrl+I)
    - D Button: Double Size UI scaling 100%/200% (Ctrl+D)
    - V Button: Visualizer control (scaffolded, pending implementation)
+7. **Three-State Repeat Mode (v0.7.9)**: Migrated from boolean to enum-based repeat system
+   - RepeatMode enum: off/all/one matching Winamp 5 Modern skins
+   - "1" badge overlay for repeat-one mode (ZStack pattern)
+   - Manual skip vs auto-advance distinction with isManualSkip parameter
+   - Options menu with 3 explicit items and checkmarks
 
 ---
 
@@ -851,6 +856,40 @@ struct PlayerView: View {
    @Environment(AppModel.self) var appModel
    ```
 
+5. **Enum State with Persistence (RepeatMode Pattern)**
+   ```swift
+   // File: MacAmpApp/Models/AppSettings.swift:232-266
+   enum RepeatMode: String, Codable, CaseIterable {
+       case off = "off"
+       case all = "all"
+       case one = "one"
+
+       func next() -> RepeatMode {
+           let cases = Self.allCases
+           guard let index = cases.firstIndex(of: self) else { return self }
+           let nextIndex = (index + 1) % cases.count
+           return cases[nextIndex]
+       }
+
+       var label: String {
+           switch self {
+           case .off: return "Repeat: Off"
+           case .all: return "Repeat: All"
+           case .one: return "Repeat: One"
+           }
+       }
+
+       var isActive: Bool { self != .off }
+   }
+
+   // In AppSettings class
+   var repeatMode: RepeatMode = .off {
+       didSet {
+           UserDefaults.standard.set(repeatMode.rawValue, forKey: "repeatMode")
+       }
+   }
+   ```
+
 ### Thread Safety with @MainActor
 
 ```swift
@@ -1245,6 +1284,56 @@ private func setupEQ() {
 
     // Apply current preset
     applyEQPreset(.flat)
+}
+```
+
+### Repeat Mode Implementation (Winamp 5 Modern Pattern)
+
+```swift
+// File: MacAmpApp/Audio/AudioPlayer.swift:159-164
+// Purpose: Three-state repeat mode with single source of truth
+// Context: Computed property pattern for state synchronization
+
+// In AudioPlayer - authoritative source via computed property
+var repeatMode: AppSettings.RepeatMode {
+    get { AppSettings.instance().repeatMode }
+    set { AppSettings.instance().repeatMode = newValue }
+}
+
+// File: MacAmpApp/Audio/AudioPlayer.swift:1240-1310
+// Track end behavior with manual skip distinction
+func handlePlaybackEnd(isManualSkip: Bool = false) -> NextTrackAction {
+    // Repeat-one: Only auto-restart on track end, allow manual skips
+    if repeatMode == .one && !isManualSkip {
+        // Auto-advance: restart current track
+        guard let current = currentTrack else { return .none }
+
+        if current.isStream {
+            // Internet radio: reload via coordinator
+            return .requestCoordinatorPlayback(current)
+        } else {
+            // Local file: seek to beginning and resume
+            seek(to: 0, resume: true)
+            return .playLocally(current)
+        }
+    }
+
+    // Continue with normal playlist advancement...
+
+    // End of playlist reached
+    if repeatMode == .all {
+        // Wrap to first track
+        let track = playlist[0]
+        currentPlaylistIndex = 0
+        // ...
+    }
+}
+
+// File: MacAmpApp/Audio/PlaybackCoordinator.swift
+// Manual skip propagation from UI controls
+func nextTrack() {
+    let action = audioPlayer.nextTrack(isManualSkip: true)  // Critical!
+    handleNextTrackAction(action)
 }
 ```
 
@@ -2431,11 +2520,14 @@ static let clutterButtonV = CGPoint(x: 10, y: 55)  // top: 33px relative
 - **Functionality**:
   - Time display toggle (elapsed ⇄ remaining)
   - Double-size mode toggle
-  - Repeat mode toggle
+  - Repeat mode options (3 items with checkmarks):
+    - Repeat: Off ✓ (when off)
+    - Repeat: All ✓ (when all)
+    - Repeat: One ✓ (when one)
   - Shuffle mode toggle
 - **Implementation**: NSMenu via MenuItemTarget bridge
-- **Keyboard Shortcuts**: Ctrl+O (menu), Ctrl+T (time toggle)
-- **State**: AppSettings.timeDisplayMode with UserDefaults persistence
+- **Keyboard Shortcuts**: Ctrl+O (menu), Ctrl+T (time toggle), Ctrl+R (cycle repeat)
+- **State**: AppSettings.timeDisplayMode, AppSettings.repeatMode with UserDefaults persistence
 - **Sprites**: MAIN_CLUTTER_BAR_BUTTON_O / BUTTON_O_SELECTED
 
 **A Button - Always On Top** (v0.7.6):
@@ -2497,6 +2589,45 @@ Button(action: {
 }
 .buttonStyle(.plain)
 .help("Toggle window size")
+```
+
+### Repeat Mode Button (Winamp 5 Modern Pattern)
+
+**Implementation** (v0.7.9):
+- **State**: AppSettings.RepeatMode enum (off/all/one)
+- **Persistence**: UserDefaults with didSet pattern
+- **Visual**: ZStack with "1" badge overlay for repeat-one mode
+- **Badge Specs**: 8px bold font, white color, shadow for legibility
+- **Interaction**: Click button to cycle Off → All → One → Off
+- **Keyboard**: Ctrl+R cycles through modes
+- **Migration**: Boolean true → .all, false → .off (preserves user preference)
+
+**UI Implementation Pattern**:
+```swift
+// File: MacAmpApp/Views/WinampMainWindow.swift
+// Repeat button with "1" badge overlay (Winamp 5 Modern fidelity)
+ZStack(alignment: .center) {
+    // Base repeat button
+    SimpleSpriteImage(
+        source: .legacy(settings.repeatMode.isActive ?
+                       "REPEAT_BUTTON_ACTIVE_NORM" :
+                       "REPEAT_BUTTON_INACTIVE_NORM"),
+        action: .button(onClick: {
+            settings.repeatMode = settings.repeatMode.next()
+        })
+    )
+
+    // "1" badge overlay (only for repeat-one mode)
+    if settings.repeatMode == .one {
+        Text("1")
+            .font(.system(size: 8, weight: .bold))
+            .foregroundColor(.white)
+            .shadow(color: .black.opacity(0.9), radius: 1, x: 0, y: 1)
+            .allowsHitTesting(false)  // Pass clicks through
+    }
+}
+.help(settings.repeatMode.label)
+.at(x: 210, y: 89)
 ```
 
 ### Time Display System
@@ -2786,6 +2917,17 @@ await playbackCoordinator.play(station: station)
 **Apply EQ preset:**
 ```swift
 audioPlayer.applyEQPreset(.rock)
+```
+
+**Set repeat mode:**
+```swift
+// Set specific mode
+audioPlayer.repeatMode = .one  // Repeat current track
+audioPlayer.repeatMode = .all  // Loop playlist
+audioPlayer.repeatMode = .off  // Stop at end
+
+// Cycle through modes (button behavior)
+audioPlayer.repeatMode = audioPlayer.repeatMode.next()
 ```
 
 **Add to playlist:**

@@ -158,6 +158,81 @@ final class PlaylistManager {
 
 **Real usage**: `PlaybackCoordinator.swift` for `displayTitle`, `canUseEQ`
 
+### Pattern: Enum State with Persistence (RepeatMode Pattern)
+
+**When to use**: Multi-state UI controls that need to persist across app launches
+
+**Implementation**:
+```swift
+// File: MacAmpApp/Models/AppSettings.swift:232-266
+// Purpose: Three-state repeat mode matching Winamp 5 Modern skins
+// Context: Replaces boolean repeatEnabled with richer state model
+
+enum RepeatMode: String, Codable, CaseIterable {
+    case off = "off"
+    case all = "all"  // Loop playlist
+    case one = "one"  // Repeat current track
+
+    /// Cycle to next mode (UI button behavior)
+    func next() -> RepeatMode {
+        let cases = Self.allCases
+        guard let index = cases.firstIndex(of: self) else { return self }
+        let nextIndex = (index + 1) % cases.count
+        return cases[nextIndex]
+    }
+
+    /// UI display label for tooltips and menus
+    var label: String {
+        switch self {
+        case .off: return "Repeat: Off"
+        case .all: return "Repeat: All"
+        case .one: return "Repeat: One"
+        }
+    }
+
+    /// Button state - lit when active
+    var isActive: Bool {
+        self != .off
+    }
+}
+
+// In AppSettings class (persistence layer)
+@Observable
+@MainActor
+final class AppSettings {
+    var repeatMode: RepeatMode = .off {
+        didSet {
+            UserDefaults.standard.set(repeatMode.rawValue, forKey: "repeatMode")
+        }
+    }
+
+    init() {
+        // Migration from old boolean key
+        if let savedMode = UserDefaults.standard.string(forKey: "repeatMode"),
+           let mode = RepeatMode(rawValue: savedMode) {
+            self.repeatMode = mode
+        } else {
+            // Migrate: preserve user preference
+            let oldRepeat = UserDefaults.standard.bool(forKey: "audioPlayerRepeatEnabled")
+            self.repeatMode = oldRepeat ? .all : .off
+        }
+    }
+}
+
+// In AudioPlayer (computed property for single source of truth)
+var repeatMode: AppSettings.RepeatMode {
+    get { AppSettings.instance().repeatMode }
+    set { AppSettings.instance().repeatMode = newValue }
+}
+```
+
+**Real usage**: `AppSettings.swift` RepeatMode, TimeDisplayMode, VisualizerMode
+
+**Pitfalls**:
+- Don't duplicate state (use computed property in AudioPlayer)
+- Remember migration logic for existing users
+- Use CaseIterable for future-proof cycling
+
 ---
 
 ## UI Component Patterns
@@ -818,6 +893,74 @@ final class MyModel {
     // No cancellables needed
 }
 ```
+
+### Migrating from Boolean to Enum State (RepeatMode Example)
+
+**When to migrate**: When a boolean flag becomes insufficient and you need 3+ states
+
+**Before**: Boolean flag with limited expressiveness
+```swift
+// Old implementation
+class AudioPlayer {
+    @Published var repeatEnabled: Bool = false  // Only on/off
+
+    func handleTrackEnd() {
+        if repeatEnabled {
+            // Repeat... but what exactly? Current track? Playlist?
+            restartPlaylist()  // Ambiguous behavior
+        }
+    }
+}
+```
+
+**After**: Rich enum with clear semantics
+```swift
+// New implementation with RepeatMode enum
+enum RepeatMode: String, Codable, CaseIterable {
+    case off = "off"   // Stop at end
+    case all = "all"   // Loop playlist
+    case one = "one"   // Repeat current track
+}
+
+class AudioPlayer {
+    var repeatMode: RepeatMode = .off
+
+    func handleTrackEnd() {
+        switch repeatMode {
+        case .off:
+            stop()  // Clear behavior
+        case .all:
+            playFirstTrack()  // Clear behavior
+        case .one:
+            restartCurrentTrack()  // Clear behavior
+        }
+    }
+}
+```
+
+**Migration with User Preference Preservation**:
+```swift
+// In AppSettings init()
+init() {
+    // Try to load new enum value
+    if let savedMode = UserDefaults.standard.string(forKey: "repeatMode"),
+       let mode = RepeatMode(rawValue: savedMode) {
+        self.repeatMode = mode
+    } else {
+        // Fall back to old boolean, preserve user's choice
+        let oldRepeat = UserDefaults.standard.bool(forKey: "audioPlayerRepeatEnabled")
+        self.repeatMode = oldRepeat ? .all : .off
+
+        // Save in new format
+        UserDefaults.standard.set(repeatMode.rawValue, forKey: "repeatMode")
+
+        // Optional: Clean up old key
+        UserDefaults.standard.removeObject(forKey: "audioPlayerRepeatEnabled")
+    }
+}
+```
+
+**Real usage**: RepeatMode migration in MacAmp v0.7.9
 
 ### Migrating from Timer to Task.sleep
 
