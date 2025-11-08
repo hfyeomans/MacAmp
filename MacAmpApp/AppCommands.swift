@@ -9,7 +9,7 @@ struct AppCommands: Commands {
     @Environment(\.openWindow) private var openWindow
 
     var body: some Commands {
-        CommandMenu("Windows") {
+        CommandMenu("Options") {
             Button(dockingController.showMain ? "Hide Main" : "Show Main") { dockingController.toggleMain() }
                 .keyboardShortcut("1", modifiers: [.command, .shift])
             Button(dockingController.showPlaylist ? "Hide Playlist" : "Show Playlist") { dockingController.togglePlaylist() }
