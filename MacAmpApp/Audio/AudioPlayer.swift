@@ -155,7 +155,13 @@ final class AudioPlayer {
     @ObservationIgnored private var currentPlaylistIndex: Int?
     var externalPlaybackHandler: ((Track) -> Void)?
     var shuffleEnabled: Bool = false
-    var repeatEnabled: Bool = false
+
+    /// Repeat mode (Winamp 5 Modern: off/all/one with "1" badge)
+    /// Backed by AppSettings for persistence
+    var repeatMode: AppSettings.RepeatMode {
+        get { AppSettings.instance().repeatMode }
+        set { AppSettings.instance().repeatMode = newValue }
+    }
 
     // Equalizer properties
     var preamp: Float = 0.0 // -12.0 to 12.0 dB (typical range)
@@ -1231,6 +1237,24 @@ final class AudioPlayer {
 
         trackHasEnded = false
 
+        // ──────────────────────────────────────
+        // WINAMP 5 REPEAT MODE LOGIC
+        // ──────────────────────────────────────
+        // Handle repeat-one specially (restart current track)
+        if repeatMode == .one {
+            guard let current = currentTrack else { return .none }
+
+            if current.isStream {
+                // Internet radio: reload via coordinator
+                return .requestCoordinatorPlayback(current)
+            } else {
+                // Local file: seek to beginning and resume
+                seek(to: 0, resume: true)
+                return .playLocally(current)
+            }
+        }
+        // For .off and .all modes, continue with normal advancement logic below
+
         if shuffleEnabled {
             guard let randomTrack = playlist.randomElement(),
                   let randomIndex = playlist.firstIndex(of: randomTrack) else {
@@ -1270,7 +1294,9 @@ final class AudioPlayer {
             return .playLocally(track)
         }
 
-        if repeatEnabled {
+        // End of playlist reached - handle based on repeat mode
+        if repeatMode == .all {
+            // Winamp 5 repeat-all: wrap to first track
             let track = playlist[0]
             currentPlaylistIndex = 0
             trackHasEnded = false
@@ -1282,6 +1308,7 @@ final class AudioPlayer {
             return .playLocally(track)
         }
 
+        // Repeat mode .off: stop at playlist end
         trackHasEnded = true
         currentPlaylistIndex = nil
         return .none
