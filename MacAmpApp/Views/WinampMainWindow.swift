@@ -427,14 +427,29 @@ struct WinampMainWindow: View {
             .buttonStyle(.plain)
             .at(Coords.shuffleButton)
 
-            // Repeat button
+            // Repeat button (Winamp 5 Modern: 3-state with "1" badge)
             Button(action: {
-                audioPlayer.repeatEnabled.toggle()
+                audioPlayer.repeatMode = audioPlayer.repeatMode.next()
             }) {
-                let spriteKey = audioPlayer.repeatEnabled ? "MAIN_REPEAT_BUTTON_SELECTED" : "MAIN_REPEAT_BUTTON"
-                SimpleSpriteImage(spriteKey, width: 28, height: 15)
+                let spriteKey = audioPlayer.repeatMode.isActive
+                    ? "MAIN_REPEAT_BUTTON_SELECTED"
+                    : "MAIN_REPEAT_BUTTON"
+
+                ZStack {
+                    SimpleSpriteImage(spriteKey, width: 28, height: 15)
+
+                    // "1" badge (Winamp 5 Modern indicator for repeat-one)
+                    if audioPlayer.repeatMode == .one {
+                        Text("1")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundColor(.white)
+                            .shadow(color: .black.opacity(0.8), radius: 1, x: 0, y: 0)
+                            .offset(x: 8, y: 0)
+                    }
+                }
             }
             .buttonStyle(.plain)
+            .help(audioPlayer.repeatMode.label)
             .at(Coords.repeatButton)
         }
     }
@@ -866,14 +881,34 @@ struct WinampMainWindow: View {
             }
         ))
 
-        // Repeat toggle
+        // Repeat mode selector (Winamp 5: three explicit options)
         menu.addItem(createMenuItem(
-            title: "Repeat",
-            isChecked: audioPlayer.repeatEnabled,
+            title: "Repeat: Off",
+            isChecked: audioPlayer.repeatMode == .off,
+            keyEquivalent: "",
+            modifiers: [],
+            action: { [weak audioPlayer] in
+                audioPlayer?.repeatMode = .off
+            }
+        ))
+
+        menu.addItem(createMenuItem(
+            title: "Repeat: All",
+            isChecked: audioPlayer.repeatMode == .all,
+            keyEquivalent: "",
+            modifiers: [],
+            action: { [weak audioPlayer] in
+                audioPlayer?.repeatMode = .all
+            }
+        ))
+
+        menu.addItem(createMenuItem(
+            title: "Repeat: One",
+            isChecked: audioPlayer.repeatMode == .one,
             keyEquivalent: "r",
             modifiers: .control,
             action: { [weak audioPlayer] in
-                audioPlayer?.repeatEnabled.toggle()
+                audioPlayer?.repeatMode = .one
             }
         ))
 

@@ -9,7 +9,7 @@ struct AppCommands: Commands {
     @Environment(\.openWindow) private var openWindow
 
     var body: some Commands {
-        CommandMenu("Windows") {
+        CommandMenu("Options") {
             Button(dockingController.showMain ? "Hide Main" : "Show Main") { dockingController.toggleMain() }
                 .keyboardShortcut("1", modifiers: [.command, .shift])
             Button(dockingController.showPlaylist ? "Hide Playlist" : "Show Playlist") { dockingController.togglePlaylist() }
@@ -53,6 +53,11 @@ struct AppCommands: Commands {
                 settings.showTrackInfoDialog = true
             }
             .keyboardShortcut("i", modifiers: [.control])
+
+            Button(audioPlayer.repeatMode.label) {
+                audioPlayer.repeatMode = audioPlayer.repeatMode.next()
+            }
+            .keyboardShortcut("r", modifiers: [.control])
 
             // Vertical stacking - no horizontal movement needed
             // Windows now stack vertically in fixed order: Main -> EQ -> Playlist

@@ -170,7 +170,7 @@ final class PlaybackCoordinator {
 
     /// Navigate to next track in playlist
     func next() async {
-        let action = audioPlayer.nextTrack()
+        let action = audioPlayer.nextTrack(isManualSkip: true)  // User-initiated skip
         await handlePlaylistAdvance(action: action)
     }
 
