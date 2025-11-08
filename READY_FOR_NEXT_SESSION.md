@@ -1,143 +1,128 @@
 # MacAmp - Ready for Next Session
 
-**Last Updated**: 2025-11-08
-**Current Branch**: `feature/magnetic-docking-foundation` ✅
-**Current Task**: Task 1 - Magnetic Docking Foundation
-**Oracle Grade**: **A** 🏆 (APPROVED FOR IMPLEMENTATION)
+**Last Updated**: 2025-11-08 (Day 1 started)  
+**Current Branch**: `feature/magnetic-docking-foundation` ✅  
+**Current Task**: Task 1 - Magnetic Docking Foundation  
+**Phase**: Day 1 (80% complete - needs Xcode integration)  
+**Oracle Grade**: **A** 🏆
 
 ---
 
-## 🚀 Start Here
+## 🚀 IMMEDIATE ACTION REQUIRED
 
-**First Action**: Create `MacAmpApp/ViewModels/WindowCoordinator.swift`
-**Implementation Guide**: `tasks/magnetic-docking-foundation/plan.md`
-**Checklist**: `tasks/magnetic-docking-foundation/todo.md` (Day 1, Phase 1A)
+**Day 1 is 80% complete** - Code written but files not in Xcode project yet.
+
+### Next Steps (5-10 minutes)
+
+**1. Open Xcode and Add Files**:
+```
+Open: MacAmpApp.xcodeproj in Xcode
+Add to project:
+  - MacAmpApp/ViewModels/WindowCoordinator.swift
+  - MacAmpApp/Windows/WinampMainWindowController.swift
+  - MacAmpApp/Windows/WinampEqualizerWindowController.swift
+  - MacAmpApp/Windows/WinampPlaylistWindowController.swift
+
+Ensure: All 4 files have "MacAmp" target checked
+```
+
+**2. Build and Test**:
+```bash
+# Build (should compile after files added)
+⌘B in Xcode
+
+# If successful, delete UnifiedDockView
+git rm MacAmpApp/Views/UnifiedDockView.swift
+
+# Test launch
+⌘R - Verify 3 windows appear in vertical stack
+```
+
+**3. Complete Day 1**:
+```bash
+git commit -m "test: Verify 3 NSWindows launch (Day 1 complete)"
+```
+
+**Progress File**: `tasks/magnetic-docking-foundation/DAY1_PROGRESS.md`
 
 ---
 
 ## 🎯 Task Sequence
 
-### TASK 1: magnetic-docking-foundation (CURRENT - A-Grade ✅)
-**Branch**: `feature/magnetic-docking-foundation` ✅
-**Status**: Oracle A-grade approved, ready to implement
-**Timeline**: Quality-focused approach (10-15 days)
+### TASK 1: magnetic-docking-foundation (CURRENT - Day 1 IN PROGRESS)
+**Branch**: `feature/magnetic-docking-foundation` ✅  
+**Status**: Day 1 started (80% complete)  
+**Oracle**: A-grade approved  
+**Timeline**: Quality-focused (10-15 days)
 
-**Scope**: Foundation infrastructure for 3-window system
-- Break Main/EQ/Playlist into 3 NSWindowControllers
-- Custom drag regions (borderless windows)
-- WindowSnapManager integration (magnetic snapping)
-- Delegate multiplexer
-- Basic double-size coordination
-- Basic persistence
+**Day 1 Progress**:
+- ✅ Code created (4 files, Oracle A-grade pattern)
+- ⏳ Xcode integration (needs IDE, 5-10 min)
+- ⏳ Build & test
+- ⏳ Delete UnifiedDockView
 
-**Documentation**:
-- Plan: `tasks/magnetic-docking-foundation/plan.md` (897 lines)
-- Checklist: `tasks/magnetic-docking-foundation/todo.md` (471 lines)
-- Commits: `tasks/magnetic-docking-foundation/COMMIT_STRATEGY.md`
+**Deliverable**: 3-window foundation
 
-### TASK 2: milk-drop-video-support (BLOCKED - Resumes After Task 1)
-**Status**: Research complete, implementation blocked on foundation
-**Timeline**: 8-10 days after Task 1 completes
+### TASK 2: milk-drop-video-support (BLOCKED)
+**Status**: Blocked on Task 1  
+**Resume**: After Task 1 complete
 
-**Scope**: Add Video + Milkdrop windows (5-window system)
-- Video window (NSWindowController pattern)
-- Milkdrop window (NSWindowController pattern)
-- VIDEO.bmp sprite parsing
-- Butterchurn visualization integration
-- All 5 windows snap together
-
-**Documentation**:
-- Research: `tasks/milk-drop-video-support/research.md` (1,316 lines)
-- Plan: `tasks/milk-drop-video-support/plan.md` (913 lines)
-- Checklist: `tasks/milk-drop-video-support/todo.md` (902 lines)
+**Deliverable**: Video + Milkdrop windows
 
 ---
 
-## 🧠 Oracle A-Grade Achievement
+## 📋 Day 1 Implementation Summary
 
-**Review Process**: 3 iterations to reach A-grade
-- Iteration 1: B+ (3 clarification items)
-- Iteration 2: B (2 blocking issues found)
-- Iteration 3: **A** (all issues resolved)
+### Created Files (Commit 645d88a)
 
-**Oracle's Final Verdict**: "Grade: A. Remaining issues: none. Ready for implementation: YES."
+**WindowCoordinator.swift** (81 lines):
+- @MainActor @Observable singleton
+- Manages 3 NSWindowControllers
+- Environment injection
+- Oracle fixes applied
 
-**Critical Issues Caught Before Implementation**:
-- Style mask bugs (would keep system chrome)
-- Delegate deallocation (snapping wouldn't work)
-- Hidden windows on launch (bad UX)
-- API mismatches (wouldn't compile)
-- Missing imports (wouldn't compile)
+**3 NSWindowController files** (36 lines each):
+- Borderless windows ([.borderless] ONLY - Oracle fix)
+- NSHostingView with environment injection
+- Custom chrome (no system titlebar)
 
----
+**Modified MacAmpApp.swift**:
+- WindowCoordinator initialization
+- UnifiedDockView removed from body
+- Settings{EmptyView()} placeholder
 
-## 🛠️ Implementation Workflow
+### Oracle Compliance ✅
 
-### 1. Atomic Commits
-**Pattern**: Small, logical commits (~15-20 total)
-**See**: `tasks/magnetic-docking-foundation/COMMIT_STRATEGY.md`
-
-**Example**:
-```bash
-git add MacAmpApp/ViewModels/WindowCoordinator.swift
-git commit -m "feat: Create WindowCoordinator singleton"
-```
-
-### 2. Test Each Phase
-**Not just at the end** - validate after each phase:
-- Phase 1A: Windows launch ✓
-- Phase 1B: Windows draggable ✓
-- Phase 2: Magnetic snapping works ✓
-- Phase 3: Double-size coordination ✓
-- Phase 4: State persistence ✓
-
-### 3. After Task 1 Completion
-
-```bash
-# Tag completion
-git tag -a v0.8.0-foundation-complete -m "Magnetic docking foundation complete"
-
-# Merge to main
-git checkout main
-git merge feature/magnetic-docking-foundation --no-ff
-git push origin main --tags
-
-# Archive task
-mv tasks/magnetic-docking-foundation tasks/done/
-
-# Start Task 2
-git checkout -b feature/video-milkdrop-windows
-# Resume milk-drop-video-support implementation
-```
+All A-grade fixes applied:
+- ✅ Truly borderless windows
+- ✅ Delegate multiplexers retained
+- ✅ Environment injection correct
+- ✅ Import Observation
+- ✅ AppSettings.instance() pattern
 
 ---
 
-## 🎯 Session Quick Start
+## 🛠️ Implementation Status
 
-**Branch**: `feature/magnetic-docking-foundation` ✅
-**Status**: Oracle A-grade approved, ready to code
-**First File**: `MacAmpApp/ViewModels/WindowCoordinator.swift`
-
-**Quick Reference**:
-- Implementation pattern: `plan.md` lines 61-133
-- First checklist items: `todo.md` lines 11-46
-- Commit strategy: `COMMIT_STRATEGY.md`
+**Current Commit**: 645d88a  
+**Day 1**: 80% complete  
+**Blocker**: Files not in Xcode project  
+**Resolution**: 5-10 minute Xcode IDE task  
+**Then**: Continue Day 1 → Day 2-3
 
 ---
 
-## 💡 Quality Philosophy Validated
+## 📊 Task Files
 
-**"Do this right" - Quality over speed**
+**Implementation Guides**:
+- `tasks/magnetic-docking-foundation/plan.md` (1,131 lines, Oracle A)
+- `tasks/magnetic-docking-foundation/todo.md` (471 lines)
+- `tasks/magnetic-docking-foundation/DAY1_PROGRESS.md` (current status)
 
-**Results**:
-- ✅ Oracle caught 5 blocking issues before implementation
-- ✅ A-grade plan = production-ready specifications
-- ✅ 10,000+ lines documentation prevents surprises
-- ✅ Clean task separation avoids technical debt
-
-**10x Engineering**: Measure twice, cut once.
+**Quick Start**: Add files to Xcode, build, test
 
 ---
 
-**Status**: 🚀 **READY TO BUILD!**
-**Next Action**: Create WindowCoordinator.swift
+**Status**: ⚙️ **DAY 1 IN PROGRESS** (80%)  
+**Next**: Add files to Xcode project (5-10 min)  
+**Then**: Build, test, complete Day 1
