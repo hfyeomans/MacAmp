@@ -200,3 +200,140 @@ magnetic-docking-foundation (THIS TASK)
 **Execution**: Sequential, not blended  
 **Status**: 🎯 READY FOR ORACLE VALIDATION  
 **Last Updated**: 2025-11-08
+
+---
+
+## Commit Strategy (Foundation Task)
+
+**Branch**: `feature/magnetic-docking-foundation`  
+**Pattern**: Atomic commits at logical checkpoints  
+**Total**: ~15-20 commits
+
+### Phase 1A: NSWindowController Setup (4-5 commits)
+
+1. `feat: Create WindowCoordinator singleton for multi-window management`
+2. `feat: Create WinampMainWindowController (NSWindowController)`
+3. `feat: Create Equalizer and Playlist NSWindowControllers`
+4. `refactor: Replace UnifiedDockView with WindowCoordinator`
+5. `refactor: Remove UnifiedDockView (replaced by 3 NSWindows)`
+
+### Phase 1B: Drag Regions (3-4 commits)
+
+1. `feat: Add WindowAccessor for SwiftUI → NSWindow bridge`
+2. `feat: Add custom titlebar drag region to Main window`
+3. `feat: Add titlebar drag regions to Equalizer and Playlist`
+4. `fix: Improve drag region performance and smoothness`
+
+### Phase 2: WindowSnapManager Integration (2-3 commits)
+
+1. `feat: Register 3 windows with WindowSnapManager`
+2. `feat: Enable 15px magnetic snapping for all windows`
+3. `fix: Adjust cluster movement for edge cases`
+
+### Phase 3: Delegate Multiplexer (1-2 commits)
+
+1. `feat: Create WindowDelegateMultiplexer for delegate conflicts`
+2. `feat: Integrate delegate multiplexer with all windows`
+
+### Phase 4: Double-Size Coordination (2-3 commits)
+
+1. `feat: Migrate double-size scaling to individual window views`
+2. `feat: Synchronize NSWindow frame resizing for double-size mode`
+3. `fix: Maintain docked alignment during double-size toggle`
+
+### Phase 5: Basic Persistence (1-2 commits)
+
+1. `feat: Add window position persistence to AppSettings`
+2. `feat: Implement window position save/restore`
+
+### Milestone Tags
+
+**Day 6**: `v0.8.0-three-windows-draggable`
+- 3 independent NSWindows with custom drag regions
+
+**Day 10**: `v0.8.0-magnetic-snapping`
+- WindowSnapManager integrated, 15px magnetic snapping functional
+
+**Day 14-15**: `v0.8.0-foundation-complete`
+- 3-window magnetic docking complete
+- Infrastructure ready for Video/Milkdrop
+
+### Merge Strategy (After Foundation Complete)
+
+```bash
+# Final commit
+git commit -m "docs: Foundation task completion summary"
+
+# Merge to main
+git checkout main
+git merge feature/magnetic-docking-foundation --no-ff
+git push origin main --tags
+
+# Delete branch
+git branch -d feature/magnetic-docking-foundation
+
+# Archive task
+mv tasks/magnetic-docking-foundation tasks/done/
+
+# Create Task 2 branch
+git checkout -b feature/video-milkdrop-windows
+```
+
+---
+
+## Oracle Review History
+
+### Review #1: B+ Grade
+**Date**: 2025-11-08  
+**Issues**: 3 clarification recommendations
+1. Align window style masks
+2. Document delegate superseding
+3. AppSettings thread safety notes
+
+### Review #2: B Grade
+**Date**: 2025-11-08  
+**Issues**: 2 blocking issues
+1. Delegate multiplexer retention (loop locals deallocate)
+2. AppSettings API (.shared vs .instance())
+
+### Review #3: A Grade ✅
+**Date**: 2025-11-08  
+**Issues**: NONE  
+**Status**: Production-ready, approved for implementation
+
+**Oracle's Final Assessment**:
+> "Grade: A. Remaining issues: none. Ready for implementation: YES."
+
+---
+
+**Last Updated**: 2025-11-08 (Oracle A-grade achieved)  
+**Status**: ✅ READY TO BEGIN IMPLEMENTATION  
+**Next**: Day 1, Phase 1A - Create WindowCoordinator.swift
+
+---
+
+## Cross-Reference: Dependent Tasks
+
+### This Task Enables
+**Task**: `tasks/milk-drop-video-support/`  
+**Status**: Research complete, blocked on this foundation  
+**Timeline**: 8-10 days (AFTER this task complete)  
+**Branch**: Will be `feature/video-milkdrop-windows` (after Task 1 merges)
+
+**What It Needs from Foundation**:
+- NSWindowController pattern (to follow for Video/Milkdrop)
+- WindowSnapManager integration (to register new windows)
+- Proven multi-window architecture (working reference)
+
+**When This Complete**: Task 2 can begin
+
+### Task Sequence
+**Position**: Task 1 of 2  
+**Enables**: Task 2 (Video/Milkdrop windows)  
+**Status**: Oracle A-grade approved, ready to implement  
+**Next**: Resume milk-drop-video-support after completion
+
+---
+
+**Task Relationship**: Task 1 (THIS) → Task 2 (dependent)  
+**Last Updated**: 2025-11-08 (Oracle A-grade achieved)

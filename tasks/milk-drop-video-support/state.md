@@ -193,3 +193,33 @@
 **Resume When**: Foundation complete (Est. 10-14 days)  
 **Timeline for This Task**: 8-10 days (after unblock)  
 **Last Updated**: 2025-11-08
+
+---
+
+## Cross-Reference: Related Tasks
+
+### Prerequisite Task (BLOCKING THIS)
+**Task**: `tasks/magnetic-docking-foundation/`  
+**Status**: Oracle A-grade approved, ready to begin  
+**Timeline**: Quality-focused (10-15 days)  
+**Branch**: `feature/magnetic-docking-foundation`
+
+**What It Provides**:
+- NSWindowController architecture (established pattern)
+- WindowCoordinator singleton (window lifecycle)
+- WindowSnapManager integration (magnetic snapping)
+- Custom drag regions (borderless windows)
+- Delegate multiplexer (extensibility)
+
+**When Complete**: This task (milk-drop-video-support) can resume
+
+### This Task Sequence
+**Position**: Task 2 of 2  
+**Depends On**: Task 1 (foundation)  
+**Status**: Research complete, blocked on prerequisite  
+**Resume When**: Foundation merged to main
+
+---
+
+**Task Relationship**: Task 1 → Task 2 (sequential, not parallel)  
+**Last Updated**: 2025-11-08
