@@ -418,84 +418,109 @@ init() {
 
 ---
 
-### Phase 4: Basic Double-Size Coordination (2-3 days)
+### Phase 4: Double-Size Coordination (2-3 days) - SCOPE UPDATED
 
-**Goal**: All 3 windows scale together (existing feature must work)
+**Goal**: Main + EQ windows double, Playlist window is user-resizable
 
-#### Migrate Scaling Logic
+**UPDATED SCOPE** (2025-11-09):
+- **Main Window**: Doubles (275×116 → 550×232) via D button
+- **EQ Window**: Doubles synchronized with Main
+- **Playlist Window**: User-resizable (NOT double-size) - drag corner for height
+- **Magnetic Snapping**: Works with variable playlist height (already supported)
+
+**Rationale**: Matches original Winamp behavior where playlist is independently resizable
+
+#### Migrate Scaling Logic (Main + EQ Only)
 **From**: `UnifiedDockView.swift` (deleted)
-**To**: Each individual window view
+**To**: WinampMainWindow and WinampEqualizerWindow views
 
 ```swift
 // WinampMainWindow.swift
 struct WinampMainWindow: View {
-    @Environment(AppSettings.self) private var appSettings
-    
+    @Environment(AppSettings.self) private var settings
+
     var body: some View {
         ZStack {
             // Window content at 1x coordinates...
         }
         .scaleEffect(
-            appSettings.isDoubleSizeMode ? 2.0 : 1.0,
+            settings.isDoubleSizeMode ? 2.0 : 1.0,
             anchor: .topLeading
         )
         .frame(
-            width: appSettings.isDoubleSizeMode ? 550 : 275,
-            height: appSettings.isDoubleSizeMode ? 232 : 116
+            width: settings.isDoubleSizeMode ? 550 : 275,
+            height: settings.isDoubleSizeMode ? 232 : 116
         )
     }
 }
 
-// Similar for Equalizer and Playlist...
+// WinampEqualizerWindow.swift - Same pattern as Main
 ```
 
-#### Synchronize Window Frames
+#### Configure Playlist Resize (NOT Double-Size)
+**File**: `MacAmpApp/Windows/WinampPlaylistWindowController.swift`
+
+```swift
+// Add resize configuration to NSWindow
+window.styleMask.insert(.resizable)
+window.minSize = NSSize(width: 275, height: 232)  // Minimum
+window.maxSize = NSSize(width: 275, height: 900)  // Width fixed, height variable
+```
+
+**WinampPlaylistWindow.swift**: No scaleEffect, size from NSWindow frame
+
+#### Synchronize Window Frames (Main + EQ Only)
 **File**: `MacAmpApp/ViewModels/WindowCoordinator.swift`
 
 ```swift
 // Observe AppSettings.isDoubleSizeMode
-func setupDoubleSize Observer() {
+func setupDoubleSizeObserver() {
     // When double-size mode changes:
-    // 1. Resize all 3 NSWindow frames
+    // 1. Resize Main + EQ NSWindow frames ONLY (not Playlist)
     // 2. Maintain relative positions (docking)
-    // 3. Update content scale (handled by views)
+    // 3. Update content scale (handled by views via .scaleEffect)
 }
 
 private func resizeWindows(scale: CGFloat) {
+    // UPDATED: Only Main and EQ double, Playlist is user-resizable
     let baseSizes: [(NSWindow?, CGSize)] = [
         (mainWindow, CGSize(width: 275, height: 116)),
-        (eqWindow, CGSize(width: 275, height: 116)),
-        (playlistWindow, CGSize(width: 275, height: 232))
+        (eqWindow, CGSize(width: 275, height: 116))
+        // Playlist NOT included - user controls size via resize handle
     ]
-    
+
     for (window, baseSize) in baseSizes {
         guard let window = window else { continue }
-        
+
         let newSize = NSSize(
             width: baseSize.width * scale,
             height: baseSize.height * scale
         )
-        
+
         var frame = window.frame
         frame.size = newSize
         window.setFrame(frame, display: true, animate: true)
     }
-    
-    // Maintain docked positions
+
+    // Maintain docked positions if windows are snapped
     maintainDockedLayout()
 }
 ```
 
 #### Testing
-- Click D button → all 3 windows scale together
+- Click D button → Main + EQ scale together, Playlist unchanged
+- Resize playlist (drag corner) → height changes, width stays 275
 - Docked windows maintain alignment
-- Origins adjust correctly
-- Content not cropped
+- Magnetic snapping works with variable playlist height
 - Toggle D multiple times → stable
+- Test cluster movement with mixed sizes
 
 #### Day 13-15 Deliverables
-- ✅ Double-size mode works with all 3 windows
-- ✅ Docked windows stay aligned during scale
+- ✅ Double-size mode works for Main + EQ windows
+- ✅ Playlist is user-resizable (height 232-900, width fixed 275)
+- ✅ Playlist does NOT double on D button
+- ✅ Docked windows stay aligned during Main/EQ scaling
+- ✅ Magnetic snapping works with variable playlist sizes
 - ✅ Content scales correctly (scaleEffect)
 - ✅ Window frames resize correctly (setFrame)
 - ✅ No visual artifacts

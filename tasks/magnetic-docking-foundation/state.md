@@ -1599,5 +1599,66 @@ private func buildBoxes() -> (BoundingBox, [ObjectIdentifier: Box]) {
 ---
 
 **Phase 3 Status**: ✅ COMPLETE (100%)
-**Next**: Phase 4 (Double-Size Coordination) - user choice
 **Total Phases Complete**: 3 of 5 (Foundation 60% complete)
+
+---
+
+## 🎯 PHASE 4: DOUBLE-SIZE COORDINATION (UPDATED SCOPE)
+
+**Status**: Ready to begin
+**Scope Change**: Main + EQ double, Playlist resizable (not double-size)
+
+### Phase 4 Requirements
+
+**Main Window**:
+- Default: 275×116
+- Double-size: 550×232 (2x scale)
+- Triggered by D button (Ctrl+D)
+- Uses .scaleEffect + .frame modifiers
+
+**EQ Window**:
+- Default: 275×116
+- Double-size: 550×232 (2x scale)
+- Synchronized with Main window
+- Uses .scaleEffect + .frame modifiers
+
+**Playlist Window** (UPDATED):
+- Default: 275×232
+- User-resizable via corner drag
+- Height: 232-900px (variable)
+- Width: 275px (fixed - Winamp design)
+- Does NOT respond to D button
+- NO scaleEffect applied
+
+### Why This Change
+
+**Original Winamp Behavior**:
+- Main/EQ have fixed sizes that double
+- Playlist is independently resizable
+- D button affects Main/EQ only (playlist ignores it)
+
+**Technical Benefits**:
+- ✅ More faithful to original Winamp
+- ✅ Playlist flexibility (user sizes to content)
+- ✅ Magnetic snapping already handles variable heights
+- ✅ WindowSnapManager supports heterogeneous window sizes
+- ✅ No special cluster logic needed
+
+### Implementation Plan
+
+**Tasks**:
+1. Add double-size logic to WinampMainWindow.swift (30 min)
+2. Add double-size logic to WinampEqualizerWindow.swift (30 min)
+3. Add resize configuration to WinampPlaylistWindowController (15 min)
+4. Test Main+EQ doubling synchronized (30 min)
+5. Test Playlist resize (corner drag) (30 min)
+6. Test magnetic snapping with mixed sizes (30 min)
+7. Test cluster movement (Main doubled + Playlist resized) (30 min)
+
+**Estimate**: 3-4 hours total
+
+**Readiness**: All prerequisites complete (Phases 1-3)
+**Oracle Grade**: A (production-ready for Phase 4)
+**Next**: Begin implementation
+
+---
