@@ -6,7 +6,6 @@ import AppKit
 final class TitlebarDragCaptureNSView: NSView {
     let windowKind: WindowKind
     var initialMouseLocation: NSPoint = .zero
-    var initialWindowOrigin: NSPoint = .zero
     var isDragging: Bool = false
 
     init(windowKind: WindowKind) {
@@ -26,7 +25,6 @@ final class TitlebarDragCaptureNSView: NSView {
         let screenLocation = window.convertPoint(toScreen: locationInWindow)
 
         initialMouseLocation = screenLocation
-        initialWindowOrigin = window.frame.origin
         isDragging = true
 
         // Begin custom drag tracking
@@ -50,7 +48,7 @@ final class TitlebarDragCaptureNSView: NSView {
         WindowSnapManager.shared.updateCustomDrag(kind: windowKind, cumulativeDelta: cumulativeDelta)
     }
 
-    override func mouseUp(with event: NSEvent) {
+    override func mouseUp(with _: NSEvent) {
         guard isDragging else { return }
         isDragging = false
 

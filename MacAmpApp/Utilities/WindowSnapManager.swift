@@ -200,7 +200,19 @@ final class WindowSnapManager: NSObject, NSWindowDelegate {
         guard let (virtualSpace, idToBox) = buildBoxes() else { return }
         let draggedID = ObjectIdentifier(window)
         guard idToBox[draggedID] != nil else { return }
-        let clusterIDs = connectedCluster(start: draggedID, boxes: idToBox)
+
+        // WEBAMP BEHAVIOR: Window-specific cluster logic
+        // Main window → drags entire cluster (static)
+        // EQ/Playlist → drags only itself (separates from cluster, allows re-snapping)
+        let clusterIDs: Set<ObjectIdentifier>
+        if kind == .main {
+            // Main window: Capture full connected cluster
+            clusterIDs = connectedCluster(start: draggedID, boxes: idToBox)
+        } else {
+            // EQ/Playlist: Move only this window (separates from cluster)
+            clusterIDs = [draggedID]
+        }
+
         var baseBoxes: [ObjectIdentifier: Box] = [:]
         for id in clusterIDs {
             if let box = idToBox[id] {
@@ -228,8 +240,7 @@ final class WindowSnapManager: NSObject, NSWindowDelegate {
         }
 
         guard
-            let draggedWindow = idToWindow[context.draggedWindowID],
-            let draggedBaseBox = context.baseBoxes[context.draggedWindowID]
+            context.baseBoxes[context.draggedWindowID] != nil
         else {
             dragContexts.removeValue(forKey: kind)
             return
@@ -241,20 +252,24 @@ final class WindowSnapManager: NSObject, NSWindowDelegate {
         }
 
         let topLeftDelta = CGPoint(x: delta.x, y: -delta.y)
-        var translatedDraggedBox = draggedBaseBox
-        translatedDraggedBox.x += topLeftDelta.x
-        translatedDraggedBox.y += topLeftDelta.y
 
-        let diffToOthers = SnapUtils.snapToMany(translatedDraggedBox, otherBoxes)
-        let diffWithin = SnapUtils.snapWithin(translatedDraggedBox, context.virtualSpace.bounds)
+        // P0 FIX (Oracle + Gemini): Snap cluster bounding box, not just dragged window
+        // This prevents cluster windows from drifting off-screen
+        let clusterBaseBox = SnapUtils.boundingBox(Array(context.baseBoxes.values))
+        var translatedGroupBox = clusterBaseBox
+        translatedGroupBox.x += topLeftDelta.x
+        translatedGroupBox.y += topLeftDelta.y
+
+        let diffToOthers = SnapUtils.snapToMany(translatedGroupBox, otherBoxes)
+        let diffWithin = SnapUtils.snapWithin(translatedGroupBox, context.virtualSpace.bounds)
         let snappedPoint = SnapUtils.applySnap(
-            Point(x: translatedDraggedBox.x, y: translatedDraggedBox.y),
+            Point(x: translatedGroupBox.x, y: translatedGroupBox.y),
             diffToOthers,
             diffWithin
         )
         let snapDelta = CGPoint(
-            x: snappedPoint.x - translatedDraggedBox.x,
-            y: snappedPoint.y - translatedDraggedBox.y
+            x: snappedPoint.x - translatedGroupBox.x,
+            y: snappedPoint.y - translatedGroupBox.y
         )
         let finalDelta = CGPoint(
             x: topLeftDelta.x + snapDelta.x,
