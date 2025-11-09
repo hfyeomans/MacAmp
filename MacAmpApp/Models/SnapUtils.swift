@@ -40,6 +40,10 @@ enum SnapUtils {
         top(a) <= bottom(b) + SNAP_DISTANCE && top(b) <= bottom(a) + SNAP_DISTANCE
     }
 
+    static func intersects(_ a: Box, _ b: Box) -> Bool {
+        return left(a) < right(b) && left(b) < right(a) && top(a) < bottom(b) && top(b) < bottom(a)
+    }
+
     // Return new position for `boxA` that snaps to `boxB` if needed
     static func snap(_ boxA: Box, _ boxB: Box) -> Diff {
         var x: CGFloat?
@@ -104,6 +108,45 @@ enum SnapUtils {
         return Diff(x: x, y: y)
     }
 
+    static func snapWithinUnion(_ a: Box, union bound: BoundingBox, regions: [Box]) -> Diff {
+        var diff = snapWithin(a, bound)
+        guard !regions.isEmpty else { return diff }
+
+        let candidate = Box(
+            x: diff.x ?? a.x,
+            y: diff.y ?? a.y,
+            width: a.width,
+            height: a.height
+        )
+
+        if regions.contains(where: { intersects(candidate, $0) }) {
+            return diff
+        }
+
+        guard let nearest = regions.min(by: { separationDistanceSquared(candidate, $0) < separationDistanceSquared(candidate, $1) }) else {
+            return diff
+        }
+
+        var adjusted = candidate
+        let nudge: CGFloat = 1
+
+        if right(adjusted) <= left(nearest) {
+            adjusted.x += left(nearest) - right(adjusted) + nudge
+        } else if left(adjusted) >= right(nearest) {
+            adjusted.x += right(nearest) - left(adjusted) - nudge
+        }
+
+        if bottom(adjusted) <= top(nearest) {
+            adjusted.y += top(nearest) - bottom(adjusted) + nudge
+        } else if top(adjusted) >= bottom(nearest) {
+            adjusted.y += bottom(nearest) - top(adjusted) - nudge
+        }
+
+        diff.x = adjusted.x
+        diff.y = adjusted.y
+        return diff
+    }
+
     static func snapWithinDiff(_ a: Box, _ bound: BoundingBox) -> Point {
         let newPos = snapWithin(a, bound)
         return Point(
@@ -166,5 +209,27 @@ enum SnapUtils {
             check(node)
             return connected
         }
+    }
+
+    private static func separationDistanceSquared(_ a: Box, _ b: Box) -> CGFloat {
+        let dx: CGFloat
+        if right(a) < left(b) {
+            dx = left(b) - right(a)
+        } else if left(a) > right(b) {
+            dx = left(a) - right(b)
+        } else {
+            dx = 0
+        }
+
+        let dy: CGFloat
+        if bottom(a) < top(b) {
+            dy = top(b) - bottom(a)
+        } else if top(a) > bottom(b) {
+            dy = top(a) - bottom(b)
+        } else {
+            dy = 0
+        }
+
+        return dx * dx + dy * dy
     }
 }

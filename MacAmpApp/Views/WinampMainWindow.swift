@@ -8,7 +8,6 @@ struct WinampMainWindow: View {
     @Environment(DockingController.self) var dockingController
     @Environment(AppSettings.self) var settings
     @Environment(PlaybackCoordinator.self) var playbackCoordinator
-    @Environment(\.openWindow) var openWindow
 
     // CRITICAL: Prevent unnecessary body re-evaluations that cause ghost images
     // SwiftUI re-evaluates body when ANY @EnvironmentObject publishes changes

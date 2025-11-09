@@ -177,8 +177,12 @@ final class WindowCoordinator {
         skinPresentationTask = Task { @MainActor [weak self] in
             guard let self else { return }
             while !self.canPresentImmediately {
+                // Check for cancellation to prevent zombie tasks
+                if Task.isCancelled { return }
                 try? await Task.sleep(for: .milliseconds(50))
             }
+            // Final cancellation check before presenting
+            if Task.isCancelled { return }
             self.presentInitialWindows()
         }
     }

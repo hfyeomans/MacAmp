@@ -17,6 +17,12 @@ final class TitlebarDragCaptureNSView: NSView {
         fatalError("init(coder:) has not been implemented")
     }
 
+    // ORACLE P2 FIX: Single-click drag on inactive windows (like classic Winamp)
+    // Without this, first click only activates window, second click drags
+    override func acceptsFirstMouse(for _: NSEvent?) -> Bool {
+        return true
+    }
+
     override func mouseDown(with event: NSEvent) {
         guard let window = self.window else { return }
 

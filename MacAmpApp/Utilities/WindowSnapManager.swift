@@ -20,6 +20,7 @@ final class WindowSnapManager: NSObject, NSWindowDelegate {
         let top: CGFloat
         let left: CGFloat
         let bounds: BoundingBox
+        let screenBoxes: [Box]
     }
 
     private var windows: [WindowKind: TrackedWindow] = [:]
@@ -44,15 +45,9 @@ final class WindowSnapManager: NSObject, NSWindowDelegate {
         // Determine which tracked kind moved
         guard let movedKind = windows.first(where: { $0.value.window === movedWindow })?.key else { return }
 
-        // Build Box list in a top-left origin coordinate space
-        let allScreens = NSScreen.screens
-        guard !allScreens.isEmpty else { return }
-        let virtualTop: CGFloat = allScreens.map { $0.frame.maxY }.max() ?? 0
-        let virtualLeft: CGFloat = allScreens.map { $0.frame.minX }.min() ?? 0
-        let virtualRight: CGFloat = allScreens.map { $0.frame.maxX }.max() ?? 0
-        let virtualBottom: CGFloat = allScreens.map { $0.frame.minY }.min() ?? 0
-        let virtualWidth = virtualRight - virtualLeft
-        let virtualHeight = (virtualTop - virtualBottom)
+        guard let virtualSpace = makeVirtualSpace() else { return }
+        let virtualTop = virtualSpace.top
+        let virtualLeft = virtualSpace.left
 
         func box(for window: NSWindow) -> Box {
             let f = window.frame
@@ -108,7 +103,7 @@ final class WindowSnapManager: NSObject, NSWindowDelegate {
         // Snap the whole cluster to other windows and screen edges
         let otherBoxes = otherIDs.compactMap { idToBox[$0] }
         let diffToOthers = SnapUtils.snapToMany(groupBox, otherBoxes)
-        let diffWithin = SnapUtils.snapWithin(groupBox, BoundingBox(width: virtualWidth, height: virtualHeight))
+        let diffWithin = SnapUtils.snapWithinUnion(groupBox, union: virtualSpace.bounds, regions: virtualSpace.screenBoxes)
         let snappedGroupPoint = SnapUtils.applySnap(Point(x: groupBox.x, y: groupBox.y), diffToOthers, diffWithin)
         let groupDelta = CGPoint(x: snappedGroupPoint.x - groupBox.x, y: snappedGroupPoint.y - groupBox.y)
 
@@ -262,7 +257,11 @@ final class WindowSnapManager: NSObject, NSWindowDelegate {
         translatedGroupBox.y += topLeftDelta.y
 
         let diffToOthers = SnapUtils.snapToMany(translatedGroupBox, otherBoxes)
-        let diffWithin = SnapUtils.snapWithin(translatedGroupBox, context.virtualSpace.bounds)
+        let diffWithin = SnapUtils.snapWithinUnion(
+            translatedGroupBox,
+            union: context.virtualSpace.bounds,
+            regions: context.virtualSpace.screenBoxes
+        )
         let snappedPoint = SnapUtils.applySnap(
             Point(x: translatedGroupBox.x, y: translatedGroupBox.y),
             diffToOthers,
@@ -320,7 +319,13 @@ final class WindowSnapManager: NSObject, NSWindowDelegate {
         let virtualRight: CGFloat = allScreens.map { $0.frame.maxX }.max() ?? 0
         let virtualBottom: CGFloat = allScreens.map { $0.frame.minY }.min() ?? 0
         let bounds = BoundingBox(width: virtualRight - virtualLeft, height: virtualTop - virtualBottom)
-        return VirtualScreenSpace(top: virtualTop, left: virtualLeft, bounds: bounds)
+        let screenBoxes = allScreens.map { screen -> Box in
+            let visible = screen.visibleFrame
+            let x = visible.origin.x - virtualLeft
+            let yTop = virtualTop - (visible.origin.y + visible.size.height)
+            return Box(x: x, y: yTop, width: visible.size.width, height: visible.size.height)
+        }
+        return VirtualScreenSpace(top: virtualTop, left: virtualLeft, bounds: bounds, screenBoxes: screenBoxes)
     }
 
     private func boxes(in space: VirtualScreenSpace) -> [ObjectIdentifier: Box] {
