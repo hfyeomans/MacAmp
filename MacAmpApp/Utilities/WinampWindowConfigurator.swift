@@ -10,6 +10,12 @@ struct WinampWindowConfigurator {
         window.styleMask.insert(.borderless)
         window.styleMask.remove(.titled)
 
+        // Ensure SwiftUI gestures receive mouse movement updates
+        window.acceptsMouseMovedEvents = true
+        window.ignoresMouseEvents = false
+        window.isRestorable = false
+        window.isReleasedWhenClosed = false
+
         // DO NOT make entire window draggable - causes slider conflicts
         // We'll use custom DragGesture on title bars only (Phase 1B)
         window.isMovableByWindowBackground = false

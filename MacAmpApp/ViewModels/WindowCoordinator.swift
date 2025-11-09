@@ -11,8 +11,12 @@ final class WindowCoordinator {
     private let eqController: NSWindowController
     private let playlistController: NSWindowController
 
-    // Store AppSettings reference for observation
+    // Store references for observation/state checks
     private let settings: AppSettings
+    private let skinManager: SkinManager
+
+    @ObservationIgnored private var skinPresentationTask: Task<Void, Never>?
+    private var hasPresentedInitialWindows = false
 
     // ORACLE BLOCKING ISSUE #2 FIX: Retain delegate multiplexers
     // NOTE: These will be added in Phase 3 (Day 11-12) when WindowDelegateMultiplexer is created
@@ -28,8 +32,9 @@ final class WindowCoordinator {
     var playlistWindow: NSWindow? { playlistController.window }
 
     init(skinManager: SkinManager, audioPlayer: AudioPlayer, dockingController: DockingController, settings: AppSettings, radioLibrary: RadioStationLibrary, playbackCoordinator: PlaybackCoordinator) {
-        // Store settings for observation
+        // Store shared state references
         self.settings = settings
+        self.skinManager = skinManager
 
         // Create Main window with environment injection
         mainController = WinampMainWindowController(
@@ -67,8 +72,8 @@ final class WindowCoordinator {
         // Position in default stack
         setDefaultPositions()
 
-        // Show windows
-        showAllWindows()
+        // Show windows only after the initial skin has loaded
+        presentWindowsWhenReady()
 
         // CRITICAL FIX #3: Set initial window levels from persisted always-on-top state
         // From UnifiedDockView.swift line 80
@@ -96,11 +101,48 @@ final class WindowCoordinator {
         }
     }
 
+    deinit {
+        skinPresentationTask?.cancel()
+    }
+
     private func updateWindowLevels(_ alwaysOnTop: Bool) {
         let level: NSWindow.Level = alwaysOnTop ? .floating : .normal
         mainWindow?.level = level
         eqWindow?.level = level
         playlistWindow?.level = level
+    }
+
+    private var canPresentImmediately: Bool {
+        if skinManager.isLoading {
+            return false
+        }
+        if skinManager.currentSkin != nil {
+            return true
+        }
+        return skinManager.loadingError != nil
+    }
+
+    private func presentWindowsWhenReady() {
+        if canPresentImmediately {
+            presentInitialWindows()
+            return
+        }
+
+        skinPresentationTask?.cancel()
+        skinPresentationTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            while !self.canPresentImmediately {
+                try? await Task.sleep(for: .milliseconds(50))
+            }
+            self.presentInitialWindows()
+        }
+    }
+
+    private func presentInitialWindows() {
+        guard !hasPresentedInitialWindows else { return }
+        hasPresentedInitialWindows = true
+        NSApp.activate(ignoringOtherApps: true)
+        showAllWindows()
     }
 
     private func configureWindows() {
@@ -127,6 +169,7 @@ final class WindowCoordinator {
         mainWindow?.makeKeyAndOrderFront(nil)
         eqWindow?.orderFront(nil)
         playlistWindow?.orderFront(nil)
+        focusAllWindows()
     }
 
     // Menu command integration
@@ -136,4 +179,12 @@ final class WindowCoordinator {
     func hideEqualizer() { eqWindow?.orderOut(nil) }
     func showPlaylist() { playlistWindow?.makeKeyAndOrderFront(nil) }
     func hidePlaylist() { playlistWindow?.orderOut(nil) }
+
+    private func focusAllWindows() {
+        [mainWindow, eqWindow, playlistWindow].forEach { window in
+            if let contentView = window?.contentView {
+                window?.makeFirstResponder(contentView)
+            }
+        }
+    }
 }

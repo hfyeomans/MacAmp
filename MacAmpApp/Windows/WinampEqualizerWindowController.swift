@@ -23,7 +23,7 @@ class WinampEqualizerWindowController: NSWindowController {
         window.backgroundColor = .clear
 
         // Create view with environment injection
-        let contentView = WinampEqualizerWindow()
+        let rootView = WinampEqualizerWindow()
             .environment(skinManager)
             .environment(audioPlayer)
             .environment(dockingController)
@@ -31,7 +31,14 @@ class WinampEqualizerWindowController: NSWindowController {
             .environment(radioLibrary)
             .environment(playbackCoordinator)
 
-        window.contentView = NSHostingView(rootView: contentView)
+        let hostingController = NSHostingController(rootView: rootView)
+        let hostingView = hostingController.view
+        hostingView.frame = NSRect(origin: .zero, size: window.contentLayoutRect.size)
+        hostingView.autoresizingMask = [.width, .height]
+
+        window.contentViewController = hostingController
+        window.contentView = hostingView
+        window.makeFirstResponder(hostingView)
 
         self.init(window: window)
     }
