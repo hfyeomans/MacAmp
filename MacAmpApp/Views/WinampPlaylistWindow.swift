@@ -719,7 +719,7 @@ struct WinampPlaylistWindow: View {
         menu.addItem(addFileItem)
 
         // Use playlist-specific positioning (not keyWindow)
-        presentPlaylistMenu(menu, at: NSPoint(x: 10, y: 396))
+        presentPlaylistMenu(menu, at: NSPoint(x: 12, y: 164))
     }
 
     private func showRemMenu() {
@@ -770,7 +770,7 @@ struct WinampPlaylistWindow: View {
         menu.addItem(remSelItem)
 
         // Use playlist-specific positioning (not first window)
-        presentPlaylistMenu(menu, at: NSPoint(x: 39, y: 378))
+        presentPlaylistMenu(menu, at: NSPoint(x: 41, y: 145))
     }
 
     private func showSelNotSupportedAlert() {
@@ -818,7 +818,7 @@ struct WinampPlaylistWindow: View {
         menu.addItem(miscOptionsItem)
 
         // Use playlist-specific positioning (not first window)
-        presentPlaylistMenu(menu, at: NSPoint(x: 100, y: 397))
+        presentPlaylistMenu(menu, at: NSPoint(x: 100, y: 164))
     }
 
     private func showListMenu() {
@@ -857,7 +857,7 @@ struct WinampPlaylistWindow: View {
         menu.addItem(loadListItem)
 
         // Use playlist-specific positioning (not first window)
-        presentPlaylistMenu(menu, at: NSPoint(x: 228, y: 397))
+        presentPlaylistMenu(menu, at: NSPoint(x: 229, y: 164))
     }
 }
 
