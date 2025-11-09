@@ -114,3 +114,32 @@ func updateAlwaysOnTop(_ enabled: Bool) {
 **Day 1 Assessment**: ✅ SUCCESSFUL (architecture works)  
 **Regressions**: Expected (features to rewire)  
 **Next**: Day 2 - Fix regressions, continue Phase 1A
+
+---
+
+### Regression #3: Windows Fall Behind on Click ⚠️ CRITICAL
+
+**Symptom**: Clicking buttons/sliders causes window to fall behind other windows
+
+**Root Cause**: Borderless NSWindows don't accept first responder by default
+- `.borderless` windows need explicit `canBecomeKey` configuration
+- Without this, clicks don't activate window
+- Window falls behind instead of becoming active
+
+**Fix Required** (IMMEDIATE - Day 1 hotfix):
+```swift
+// Override in NSWindowController subclasses
+override var canBecomeKey: Bool { true }
+override var canBecomeMain: Bool { true }
+```
+
+**Priority**: CRITICAL (app unusable without this)
+
+**Impact**: User can't interact with buttons, sliders, or any controls
+
+---
+
+**Critical Regressions**: 3 found
+1. Skins need refresh (medium)
+2. Always-on-top broken (high)
+3. Windows fall behind on click (CRITICAL - fixing now)
