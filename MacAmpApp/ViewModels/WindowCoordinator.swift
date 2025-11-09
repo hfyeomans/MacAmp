@@ -12,10 +12,13 @@ final class WindowCoordinator {
     private let playlistController: NSWindowController
 
     // ORACLE BLOCKING ISSUE #2 FIX: Retain delegate multiplexers
+    // NOTE: These will be added in Phase 3 (Day 11-12) when WindowDelegateMultiplexer is created
     // NSWindow.delegate is weak - must store multiplexers or they deallocate!
-    private var mainDelegateMultiplexer: WindowDelegateMultiplexer?
-    private var eqDelegateMultiplexer: WindowDelegateMultiplexer?
-    private var playlistDelegateMultiplexer: WindowDelegateMultiplexer?
+    // For now (Phase 1A), we don't use delegates yet - this comes in Phase 2-3
+    // TODO PHASE 3: Uncomment these properties when creating WindowDelegateMultiplexer
+    // private var mainDelegateMultiplexer: WindowDelegateMultiplexer?
+    // private var eqDelegateMultiplexer: WindowDelegateMultiplexer?
+    // private var playlistDelegateMultiplexer: WindowDelegateMultiplexer?
 
     var mainWindow: NSWindow? { mainController.window }
     var eqWindow: NSWindow? { eqController.window }
