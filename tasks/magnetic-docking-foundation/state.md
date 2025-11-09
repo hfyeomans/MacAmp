@@ -1194,3 +1194,171 @@ move all windows (already snapped)
 
 **Phase 2 Status**: Architecture redesign required  
 **Next**: Implement custom drag control
+
+---
+
+## 🔄 NEXT SESSION: Custom Drag Implementation
+
+**Status**: Phase 1 complete, Phase 2 in progress (custom drag needed)
+
+### What to Do Next Session
+
+**EXACT MESSAGE TO START**:
+```
+Continue magnetic-docking-foundation task. I'm ready to implement Oracle's custom drag solution for Phase 2.
+
+Current state:
+- Branch: feature/magnetic-docking-foundation  
+- Latest commit: b2332bf
+- Phase 1: COMPLETE (3-window architecture working)
+- Phase 2: Need custom drag implementation
+
+Oracle provided complete solution for custom drag (magnetic snapping).
+Please implement it following the guide in state.md and READY_FOR_NEXT_SESSION.md
+```
+
+### Oracle's Complete Solution (Ready to Implement)
+
+**Problem**: WindowDragGesture incompatible with WindowSnapManager
+
+**Solution**: Custom drag that controls movement before snapping
+
+**Components Ready**:
+1. WinampTitlebarDragHandle.swift (wrapper component)
+2. TitlebarDragCaptureView.swift (NSView drag capture)
+
+**WindowSnapManager Methods** (Oracle provided):
+```swift
+// Add INSIDE WindowSnapManager class, before closing brace (line 178)
+
+private struct DragContext {
+    let clusterIDs: Set<ObjectIdentifier>
+    let baseBoxes: [ObjectIdentifier: Box]
+    let stationaryBoxes: [Box]
+    let groupBox: Box
+    let virtualBounds: BoundingBox
+    var lastDelta: CGPoint = .zero
+}
+
+private var dragContexts: [WindowKind: DragContext] = [:]
+
+func beginCustomDrag(kind: WindowKind, startPointInScreen _: NSPoint) {
+    guard let window = windows[kind]?.window else { return }
+    let (virtualBounds, idToBox) = buildBoxes()
+    let startID = ObjectIdentifier(window)
+    let cluster = connectedCluster(start: startID, boxes: idToBox)
+    let stationaryIDs = Set(idToBox.keys).subtracting(cluster)
+    let baseBoxes = idToBox.filter { cluster.contains($0.key) }
+    guard !baseBoxes.isEmpty else { return }
+    let groupBox = SnapUtils.boundingBox(Array(baseBoxes.values))
+    let stationaryBoxes = stationaryIDs.compactMap { idToBox[$0] }
+    dragContexts[kind] = DragContext(
+        clusterIDs: cluster,
+        baseBoxes: baseBoxes,
+        stationaryBoxes: stationaryBoxes,
+        groupBox: groupBox,
+        virtualBounds: virtualBounds
+    )
+}
+
+func updateCustomDrag(kind: WindowKind, cumulativeDelta delta: CGPoint) {
+    guard var context = dragContexts[kind] else { return }
+    guard delta != context.lastDelta else { return }
+
+    let topLeftDelta = CGPoint(x: delta.x, y: -delta.y)
+    
+    var translatedGroup = context.groupBox
+    translatedGroup.x += topLeftDelta.x
+    translatedGroup.y += topLeftDelta.y
+
+    let diffToOthers = SnapUtils.snapToMany(translatedGroup, context.stationaryBoxes)
+    let diffWithin = SnapUtils.snapWithin(translatedGroup, context.virtualBounds)
+    let snappedPoint = SnapUtils.applySnap(
+        Point(x: translatedGroup.x, y: translatedGroup.y),
+        diffToOthers,
+        diffWithin
+    )
+    let snapDelta = CGPoint(
+        x: snappedPoint.x - translatedGroup.x,
+        y: snappedPoint.y - translatedGroup.y
+    )
+    let finalDelta = CGPoint(
+        x: topLeftDelta.x + snapDelta.x,
+        y: topLeftDelta.y + snapDelta.y
+    )
+
+    isAdjusting = true
+    for id in context.clusterIDs {
+        guard let window = windows.first(where: { 
+            $0.value.window != nil && ObjectIdentifier($0.value.window!) == id 
+        })?.value.window,
+              var box = context.baseBoxes[id] else { continue }
+        box.x += finalDelta.x
+        box.y += finalDelta.y
+        apply(box: box, to: window)
+    }
+    isAdjusting = false
+
+    context.lastDelta = delta
+    dragContexts[kind] = context
+}
+
+func endCustomDrag(kind: WindowKind) {
+    dragContexts.removeValue(forKey: kind)
+    for (_, tracked) in windows {
+        if let w = tracked.window {
+            lastOrigins[ObjectIdentifier(w)] = w.frame.origin
+        }
+    }
+}
+
+private func buildBoxes() -> (BoundingBox, [ObjectIdentifier: Box]) {
+    let allScreens = NSScreen.screens
+    guard !allScreens.isEmpty else {
+        return (BoundingBox(width: 1920, height: 1080), [:])
+    }
+    
+    let virtualTop: CGFloat = allScreens.map { $0.frame.maxY }.max() ?? 0
+    let virtualLeft: CGFloat = allScreens.map { $0.frame.minX }.min() ?? 0
+    let virtualRight: CGFloat = allScreens.map { $0.frame.maxX }.max() ?? 0
+    let virtualBottom: CGFloat = allScreens.map { $0.frame.minY }.min() ?? 0
+    let virtualWidth = virtualRight - virtualLeft
+    let virtualHeight = virtualTop - virtualBottom
+
+    func box(for window: NSWindow) -> Box {
+        let f = window.frame
+        let x = f.origin.x - virtualLeft
+        let yTop = virtualTop - (f.origin.y + f.size.height)
+        return Box(x: x, y: yTop, width: f.size.width, height: f.size.height)
+    }
+
+    var idToBox: [ObjectIdentifier: Box] = [:]
+    for (_, tracked) in windows {
+        if let w = tracked.window {
+            idToBox[ObjectIdentifier(w)] = box(for: w)
+        }
+    }
+
+    return (BoundingBox(width: virtualWidth, height: virtualHeight), idToBox)
+}
+```
+
+**CRITICAL**: Add BEFORE line 178 (before final `}` of class)
+
+### Implementation Checklist
+
+1. [ ] Insert methods into WindowSnapManager.swift (before class closing brace)
+2. [ ] Add WinampTitlebarDragHandle.swift to Xcode
+3. [ ] Add TitlebarDragCaptureView.swift to Xcode
+4. [ ] Remove WindowDragGesture from WinampMainWindow.swift
+5. [ ] Remove WindowDragGesture from WinampEqualizerWindow.swift
+6. [ ] Remove WindowDragGesture from WinampPlaylistWindow.swift
+7. [ ] Wrap titlebar sprites with WinampTitlebarDragHandle
+8. [ ] Test magnetic snapping
+9. [ ] Commit Phase 2 complete
+
+---
+
+**Session End**: Clean state, ready for custom drag implementation  
+**Latest Commit**: b2332bf  
+**Next**: Fresh session, implement Oracle's solution
