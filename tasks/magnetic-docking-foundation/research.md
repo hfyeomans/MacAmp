@@ -673,7 +673,111 @@ WindowSnapManager.shared.register(window: playlistWindow, kind: .playlist)
 
 ---
 
-**Research Consolidated**: 2025-11-08  
-**Sources**: 3 task directories + 1 architecture doc  
-**Total Research Time**: ~15 hours (across all sources)  
-**Next**: Create focused foundation plan
+## Part 15: Webamp Cluster Behavior - Actual Implementation (2025-11-09)
+
+**Source**: User testing actual Webamp in browser
+**Discovery Method**: Direct observation during development
+
+### Observed Behavior (CRITICAL INSIGHT)
+
+**Webamp's cluster behavior is window-specific, not uniform**:
+
+#### Main Window Dragging
+- Dragging **main window** → **entire cluster moves together**
+- All connected windows (EQ, Playlist) follow the main window
+- Cluster stays intact during drag
+- Windows move as single rigid unit
+
+#### Other Windows Dragging
+- Dragging **EQ window** → **windows come apart**
+- Dragging **Playlist window** → **windows come apart**
+- Separation happens immediately on drag start
+- After separation, windows can **re-snap in any order on any side**
+- Dynamic snapping during drag (not static cluster)
+
+### Implementation Pattern
+
+**Webamp's actual logic**:
+```javascript
+if (draggedWindow === mainWindow) {
+    // Move entire static cluster
+    const cluster = findConnectedWindows(mainWindow)
+    moveAllWindows(cluster, delta)
+} else {
+    // Move only dragged window, allow dynamic re-snapping
+    moveSingleWindow(draggedWindow, delta)
+    // Snap calculation happens on every mousemove
+    // Windows can attach/detach dynamically
+}
+```
+
+**Key differences from our assumption**:
+- ✅ Main window: Static cluster (what we implemented)
+- ❌ Other windows: Dynamic solo movement + live snapping (NOT implemented)
+
+### MacAmp Current Behavior
+
+**Current Implementation**: Uniform static cluster for ALL windows
+- Any window dragged → cluster moves as unit
+- Matches Webamp's **main window** behavior
+- Does NOT match Webamp's **EQ/Playlist** behavior
+
+### Implementation Complexity
+
+**To match Webamp exactly**:
+```swift
+func beginCustomDrag(kind: WindowKind, startPointInScreen: NSPoint) {
+    if kind == .main {
+        // Main window: Capture full cluster (static)
+        let cluster = connectedCluster(start: draggedID, boxes: idToBox)
+        let baseBoxes = cluster.map { id -> Box in idToBox[id] }
+        // Store cluster for movement
+    } else {
+        // EQ/Playlist: Solo movement only
+        let baseBox = idToBox[draggedID]
+        // Store only dragged window
+        // Allow dynamic re-snapping on every update
+    }
+}
+```
+
+**Complexity**: Medium
+- Requires window kind branching in drag logic
+- Main window gets static cluster behavior (current implementation)
+- EQ/Playlist windows move solo with dynamic snapping
+- Dynamic cluster recalculation needed for EQ/Playlist
+
+### Recommendation
+
+**Phase 2 Foundation** (current scope):
+- Keep uniform static cluster behavior for ALL windows
+- Simpler, consistent UX
+- Sufficient for foundation delivery
+
+**Phase 3+ Enhancement** (future):
+- Implement window-specific cluster logic
+- Main window → static cluster (current)
+- Other windows → dynamic solo + live snapping
+- Matches Webamp's actual UX exactly
+
+### User Decision Needed
+
+**Option A**: Current uniform behavior
+- Any window dragged → cluster moves
+- Simpler implementation
+- Consistent UX
+
+**Option B**: Webamp-accurate behavior
+- Main window → cluster moves
+- EQ/Playlist → windows separate, re-snap dynamically
+- More complex, matches original Winamp exactly
+
+**For Phase 2**: Proceeding with Option A (uniform) to complete foundation.
+
+---
+
+**Research Consolidated**: 2025-11-09
+**Sources**: 3 task directories + 1 architecture doc + live Webamp testing
+**Total Research Time**: ~16 hours (across all sources)
+**Critical Discovery**: Webamp uses window-specific cluster behavior
+**Next**: Complete Phase 2 with uniform behavior, defer window-specific logic
