@@ -101,11 +101,14 @@ final class WindowSnapManager: NSObject, NSWindowDelegate {
         }
         isAdjusting = false
 
-        // Recompute cluster box after move
-        var clusterBoxes: [Box] = []
+        // Recompute cluster boxes after move, mapping ID to Box
+        var clusterIdToBox: [ObjectIdentifier: Box] = [:]
         for id in clusterIDs {
-            if let w = idToWindow[id] { clusterBoxes.append(box(for: w)) }
+            if let w = idToWindow[id] {
+                clusterIdToBox[id] = box(for: w)
+            }
         }
+        let clusterBoxes = Array(clusterIdToBox.values)
         guard !clusterBoxes.isEmpty else { return }
         let groupBox = SnapUtils.boundingBox(clusterBoxes)
 
@@ -119,15 +122,12 @@ final class WindowSnapManager: NSObject, NSWindowDelegate {
         if abs(groupDelta.x) >= 1 || abs(groupDelta.y) >= 1 {
             isAdjusting = true
             for id in clusterIDs {
-                if let w = idToWindow[id] {
-                    let origin = w.frame.origin
-                    // CRITICAL FIX: Y-axis inversion for AppKit coordinates
-                    // groupDelta is in top-left space, NSWindow uses bottom-left
-                    // Must negate Y to convert coordinate systems
-                    w.setFrameOrigin(NSPoint(
-                        x: origin.x + groupDelta.x,
-                        y: origin.y - groupDelta.y  // Negate Y for AppKit
-                    ))
+                if let w = idToWindow[id], var b = clusterIdToBox[id] {
+                    // GEMINI FIX: Apply delta to box in top-left space
+                    b.x += groupDelta.x
+                    b.y += groupDelta.y
+                    // Convert the new box position back to AppKit coordinates and apply
+                    apply(box: b, to: w)
                 }
             }
             isAdjusting = false
