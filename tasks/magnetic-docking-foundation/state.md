@@ -1143,3 +1143,54 @@ Total: 8 critical issues fixed with Oracle guidance
 **Phase 1 Complete**: ✅ (1A done, 1B skipped - not needed)  
 **Oracle Grade**: A (maintained)  
 **Next**: Phase 2 (magnetic snapping)
+
+---
+
+## Phase 2: Architectural Pivot Required
+
+**Date**: 2025-11-08  
+**Discovery**: WindowDragGesture incompatible with WindowSnapManager
+
+### What We Learned
+
+**Gemini + Oracle Deep Analysis**:
+- WindowSnapManager designed for custom drag control (like Webamp)
+- WindowDragGesture moves windows automatically (Apple API)
+- Post-facto adjustment creates lag/repulsion
+- Architectural mismatch, not just coordinate bug
+
+**Test Results** (with Gemini's fix):
+- Still mostly repels
+- Requires overlapping to snap (not 15px distance)
+- Noticeable lag when moving groups
+- Easy to unsnap if moving fast
+
+### New Approach: Custom Drag Implementation
+
+**Oracle's Recommendation**: Option B
+- Remove WindowDragGesture
+- Implement custom drag recognizer
+- WindowSnapManager controls movement
+- Snap BEFORE windows move (like Webamp)
+
+**Flow** (Webamp-style):
+```
+mouseDown → find cluster → 
+mouseDragged → compute delta → snap math → 
+move all windows (already snapped)
+```
+
+### Implementation Plan (Phase 2 Revised)
+
+**Tasks**:
+1. Remove WindowDragGesture from all 3 windows
+2. Create custom drag gesture component
+3. Integrate with WindowSnapManager for snap math
+4. Test smooth snapping and group movement
+
+**Estimated**: 2-3 days for proper implementation
+
+---
+
+**Phase 2 Status**: Architecture redesign required  
+**Next**: Implement custom drag control

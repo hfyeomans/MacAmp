@@ -1129,3 +1129,69 @@ import Observation  // Required for @Observable
 
 **Updated**: 2025-11-08 (All Oracle blockers resolved)  
 **Status**: Ready for final Oracle approval
+
+---
+
+## CRITICAL ARCHITECTURAL DISCOVERY (Phase 2)
+
+**Date**: 2025-11-08  
+**Issue**: WindowSnapManager incompatible with WindowDragGesture
+
+### Problem Identified
+
+**Initial Approach**:
+- Use WindowDragGesture (macOS 15+ API) for dragging
+- WindowSnapManager.windowDidMove() reacts after window moves
+- Try to adjust positions post-facto
+
+**Test Results**:
+- Windows still repel (Gemini's coordinate fix insufficient)
+- Lag when moving groups (windows "catch up")
+- Easy to unsnap if moving fast
+- Requires overlapping to snap (not 15px distance)
+
+### Oracle's Deep Analysis
+
+**Webamp Architecture** (working):
+```
+mouseDown → capture cluster → mousemove → 
+  → compute delta → snap math → dispatch positions → 
+  → windows move (already snapped)
+```
+**Snapping happens BEFORE movement** ✅
+
+**Our Architecture** (broken):
+```
+WindowDragGesture → window moves → windowDidMove → 
+  → try to adjust → setFrameOrigin (lag/repel)
+```
+**Snapping happens AFTER movement** ❌
+
+**Fundamental Issue**: WindowSnapManager designed for custom drag control, incompatible with WindowDragGesture
+
+### Solution: Option B - Custom Drag Implementation
+
+**Approach**: Mirror Webamp architecture
+- Remove WindowDragGesture
+- Implement custom drag recognizer
+- WindowSnapManager controls movement (not reacts)
+- Snap happens DURING drag (before windows move)
+
+**Benefits**:
+- Lag eliminated (windows move together)
+- Proper 15px snap threshold
+- No repulsion
+- Smooth group movement
+
+**Implementation**:
+1. Remove .gesture(WindowDragGesture()) from all 3 windows
+2. Add custom NSPanGestureRecognizer or SwiftUI gesture
+3. Capture mouseDown → identify cluster
+4. On mouseDragged → compute snap → move all windows
+5. WindowSnapManager provides snap math
+
+---
+
+**Phase 2 Revised**: Custom drag implementation (not just registration)  
+**Estimated**: 2-3 days for proper custom drag  
+**Next**: Remove WindowDragGesture, implement custom control
