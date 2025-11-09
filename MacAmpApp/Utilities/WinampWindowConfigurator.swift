@@ -35,4 +35,23 @@ struct WinampWindowConfigurator {
         // Allow window to be moved (via custom drag regions in Phase 1B)
         window.isMovable = true
     }
+
+    /// Install translucent backing layer to prevent 0-alpha holes and bleed-through
+    /// Call after window.contentView is set
+    /// - Parameter window: The window with content view
+    static func installHitSurface(on window: NSWindow) {
+        window.isOpaque = false
+        window.backgroundColor = .clear
+
+        guard let contentView = window.contentView else { return }
+
+        // Ensure layer-backed for hit testing
+        if !contentView.wantsLayer {
+            contentView.wantsLayer = true
+        }
+
+        contentView.layer?.isOpaque = false
+        // Nearly invisible backing (0.001 alpha) - prevents bleed-through
+        contentView.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.001).cgColor
+    }
 }

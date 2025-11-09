@@ -40,6 +40,9 @@ class WinampPlaylistWindowController: NSWindowController {
         window.contentView = hostingView
         window.makeFirstResponder(hostingView)
 
+        // Install translucent backing layer (prevents bleed-through)
+        WinampWindowConfigurator.installHitSurface(on: window)
+
         self.init(window: window)
     }
 }
