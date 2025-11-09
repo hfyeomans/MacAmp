@@ -86,12 +86,6 @@ struct WinampMainWindow: View {
     
     var body: some View {
         ZStack(alignment: .topLeading) {
-            // PHASE 1B: Titlebar drag region (top 14px)
-            // Allows dragging window by titlebar area
-            TitlebarDragRegion()
-                .frame(width: 275, height: 14)
-                .position(x: 137.5, y: 7)  // Center at top of window
-                .zIndex(1000)  // Above all other content
             // Background (preprocessed to remove static digits, keeping ":")
             SimpleSpriteImage("MAIN_WINDOW_BACKGROUND",
                             width: WinampSizes.main.width,
