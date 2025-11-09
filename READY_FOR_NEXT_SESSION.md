@@ -1,88 +1,61 @@
 # MacAmp - Ready for Next Session
 
-**Last Updated**: 2025-11-08 (Day 1 Complete + Regressions Analyzed)  
+**Last Updated**: 2025-11-08 (Phase 1 COMPLETE!)  
 **Current Branch**: `feature/magnetic-docking-foundation` ✅  
 **Current Task**: Task 1 - Magnetic Docking Foundation  
-**Phase**: Day 2 Next - Fix Regressions (~45 min)  
+**Phase**: Phase 1 ✅ Complete, Phase 2 Next  
 **Oracle Grade**: **A** 🏆
 
 ---
 
-## 🎯 IMMEDIATE NEXT SESSION ACTIONS
+## 🎉 PHASE 1 COMPLETE!
 
-### 1. Add BorderlessWindow.swift to Xcode (2 min)
-**File**: `MacAmpApp/Windows/BorderlessWindow.swift`  
-**Action**: Right-click "Windows" group → Add Files  
-**Critical**: Fixes windows falling behind on click
+**Phase 1A** ✅: 3-window architecture + UnifiedDockView migration  
+**Phase 1B** ✅: SKIPPED (WindowDragGesture already works!)
 
-### 2. Fix 3 Critical Regressions (~45 min total)
+**All Working**:
+- 3 independent NSWindows
+- Full dragging by titlebar (WindowDragGesture)
+- Slider tracks clickable
+- Always-on-top (Ctrl+A)
+- Skins auto-load
+- Menus follow windows
+- No bleed-through
 
-**Regression #1**: Skin Auto-Loading (10 min)
-- Add ensureSkin() call to WindowCoordinator
-- See: `tasks/magnetic-docking-foundation/MIGRATION_ANALYSIS.md` Line 15-30
-
-**Regression #2**: Always-On-Top Broken (30 min)
-- Observe AppSettings.isAlwaysOnTop in WindowCoordinator
-- Update all 3 window levels when toggled
-- See: MIGRATION_ANALYSIS.md Lines 34-60
-
-**Regression #3**: Windows Fall Behind on Click (DONE ✅)
-- BorderlessWindow.swift created
-- Just needs Xcode integration
-
-### 3. Test & Continue Day 2-3
-
-After fixes:
-- Test: Ctrl+A works (windows stay on top)
-- Test: Skins auto-load
-- Test: Clicking buttons keeps window active
-- Continue Phase 1A
+**Deferred**:
+- D button (double-size) → Phase 4
+- Titlebar focus/unfocus sprites → Future polish (stretch goal)
 
 ---
 
-## 📋 Day 1 Summary
+## 🚀 Next: Phase 2 (WindowSnapManager Integration)
 
-### ✅ Achieved
-- WindowCoordinator architecture (Oracle A-grade)
-- 3 NSWindowControllers (borderless windows)
-- UnifiedDockView removed
-- App builds and launches ✅
-- 3 independent windows created ✅
+**Goal**: Magnetic snapping + group movement
 
-### ⚠️ Regressions Found (Expected & Analyzed)
-1. Skins need manual refresh → Fix identified ✅
-2. Always-on-top broken → Fix identified ✅
-3. Windows fall behind on click → Fix created ✅
+**Tasks** (Days 7-10):
+1. Register 3 windows with WindowSnapManager
+2. Test 15px magnetic snapping
+3. Test cluster detection
+4. Test group movement (docked windows move together)
 
-**Analysis Complete**: `tasks/magnetic-docking-foundation/MIGRATION_ANALYSIS.md`
+**See**: `tasks/magnetic-docking-foundation/todo.md` Line 145+
 
 ---
 
-## 🎯 Task Sequence
+## 📊 Session Summary
 
-**TASK 1** (IN PROGRESS - Day 1 ✅, Day 2 Next):
-- Day 1: Architecture created (complete)
-- Day 2: Fix regressions (~45 min)
-- Days 2-3: Continue Phase 1A
-- Days 4-6: Phase 1B (Drag Regions)
-- Days 7-15: Phases 2-5 (Snap, Multiplexer, Double-Size, Persistence)
+**Total**: ~18 hours (research + planning + Phase 1)
+- Research: 13 hours (comprehensive)
+- Planning: 3 hours (Oracle A-grade)
+- Phase 1: 2 hours (efficient!)
 
-**TASK 2** (BLOCKED):
-- Resume after Task 1 complete
-- Add Video + Milkdrop windows
+**Oracle Consultations**: 10 total
+**Commits**: 34 (atomic, rollback-safe)
+**Issues Fixed**: 8 critical bugs
 
 ---
 
-## 📊 Progress
-
-**Overall**: Day 1 of 10-15 complete (~7%)  
-**Phase 1A**: Day 1 done, Day 2-3 next  
-**Oracle Grade**: A (maintained)  
-**Build**: ✅ Working (after adding BorderlessWindow.swift)
-
----
-
-**Latest Commit**: `167bd2c` (migration analysis)  
-**Total Session Commits**: 18  
-**Next**: Day 2 regression fixes (~45 min)  
-**See**: MIGRATION_ANALYSIS.md for detailed fix guide
+**Latest Commit**: `638897b` (Phase 1 complete)  
+**Status**: ✅ PHASE 1 DONE  
+**Next**: Phase 2 (magnetic snapping)  
+**Context**: 525k tokens remaining
