@@ -258,3 +258,649 @@ Day 1 Implementation:
 **Day 1 Status**: ✅ COMPLETE (100%)  
 **Next**: Day 2-3 continue Phase 1A, then Days 4-6 Phase 1B (drag regions)  
 **Oracle Compliance**: A-grade maintained ✅
+# IMMEDIATE ACTION REQUIRED - Add BorderlessWindow.swift
+
+**Created File**: `MacAmpApp/Windows/BorderlessWindow.swift`  
+**Status**: On disk but NOT in Xcode project  
+**Build**: Failing (cannot find 'BorderlessWindow')
+
+---
+
+## User Action Needed (2 minutes)
+
+### In Xcode IDE:
+
+1. **Find the file**:
+   - File exists at: `MacAmpApp/Windows/BorderlessWindow.swift`
+
+2. **Add to project**:
+   - Right-click "Windows" group in Project Navigator
+   - Choose "Add Files to 'MacAmp'..."
+   - Navigate to MacAmpApp/Windows/
+   - Select: BorderlessWindow.swift
+   - Ensure "MacAmp" target is checked
+   - Click "Add"
+
+3. **Build** (⌘B):
+   - Should succeed now
+   - BorderlessWindow will be in scope
+
+4. **Test** (⌘R):
+   - Click buttons/sliders in windows
+   - Windows should stay in front now (not fall behind)
+
+---
+
+## Why This File Is Critical
+
+**BorderlessWindow.swift** (9 lines):
+```swift
+import AppKit
+
+class BorderlessWindow: NSWindow {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { true }
+}
+```
+
+**Purpose**: Allows borderless windows to accept clicks and become active
+
+**Without it**: Windows fall behind when clicking buttons (UNUSABLE)
+
+---
+
+**After adding**: Windows will respond to clicks properly ✅
+# Day 1 Regressions (Expected & Documented)
+
+**Date**: 2025-11-08  
+**Status**: App launches successfully, feature regressions expected
+
+---
+
+## ✅ Day 1 Success
+
+**3 Windows Launch**: Verified by user  
+**Build**: No errors  
+**Runtime**: No crashes
+
+---
+
+## ⚠️ Known Regressions (Expected After Removing UnifiedDockView)
+
+### Regression #1: Skins Don't Auto-Load
+
+**Symptom**: Skins didn't show up until user selected "Refresh Skins"
+
+**Root Cause**: 
+- UnifiedDockView likely had skin initialization logic
+- WindowCoordinator doesn't trigger skin loading yet
+
+**Fix Required** (Day 2):
+- Ensure SkinManager.loadDefaultSkin() called on launch
+- Or trigger skin loading in WindowCoordinator.init()
+
+**Priority**: Medium (workaround: user can refresh skins)
+
+---
+
+### Regression #2: Always-On-Top (Ctrl+A / A Button) Broken
+
+**Symptom**: Windows don't stay on top when toggled
+
+**Root Cause**:
+- UnifiedDockView likely handled window.level changes
+- Individual NSWindows need window.level = .floating when toggled
+
+**Fix Required** (Day 2-3):
+- WindowCoordinator needs to observe AppSettings.isAlwaysOnTop
+- Apply window.level to all 3 windows when toggled
+
+**Code Pattern**:
+```swift
+// In WindowCoordinator
+func updateAlwaysOnTop(_ enabled: Bool) {
+    let level: NSWindow.Level = enabled ? .floating : .normal
+    mainWindow?.level = level
+    eqWindow?.level = level
+    playlistWindow?.level = level
+}
+```
+
+**Priority**: High (common user feature)
+
+---
+
+### Other Potential Regressions (To Test)
+
+**Double-Size Mode (Ctrl+D)**:
+- UnifiedDockView handled scaling
+- Now each window needs individual scaling
+- To test: Press D button, verify windows scale
+- Fix: Phase 4 (Days 13-15) - already planned!
+
+**Window Visibility Toggles** (Menu: Window > Show/Hide):
+- Should still work (WindowCoordinator has show/hide methods)
+- To test: Menu commands
+
+**Playlist Resize**:
+- May not work yet (resizing not implemented)
+- Fix: Deferred feature (not in foundation scope)
+
+---
+
+## 📋 Day 2 Task List (Fix Regressions)
+
+### High Priority
+1. [ ] Fix Always-On-Top (window.level changes)
+2. [ ] Wire AppSettings.isAlwaysOnTop to WindowCoordinator
+3. [ ] Test Ctrl+A / A button works
+
+### Medium Priority
+4. [ ] Fix skin auto-loading on launch
+5. [ ] Test skin changes apply to all windows
+
+### Testing
+6. [ ] Test Double-Size mode (may be broken, fix in Phase 4)
+7. [ ] Test menu commands (Show/Hide windows)
+8. [ ] Test other clutter bar features
+
+---
+
+## Expected vs Actual Behavior
+
+**Expected (Day 1)**:
+- 3 windows launch ✅
+- Windows positioned in stack ✅
+- Windows NOT draggable (Phase 1B) ✅
+- Some features broken (expected) ✅
+
+**Actual**:
+- 3 windows launched ✅
+- Skins need refresh (regression)
+- Always-on-top broken (regression)
+
+**Conclusion**: Day 1 architecture successful, feature regressions expected and fixable!
+
+---
+
+**Day 1 Assessment**: ✅ SUCCESSFUL (architecture works)  
+**Regressions**: Expected (features to rewire)  
+**Next**: Day 2 - Fix regressions, continue Phase 1A
+
+---
+
+### Regression #3: Windows Fall Behind on Click ⚠️ CRITICAL
+
+**Symptom**: Clicking buttons/sliders causes window to fall behind other windows
+
+**Root Cause**: Borderless NSWindows don't accept first responder by default
+- `.borderless` windows need explicit `canBecomeKey` configuration
+- Without this, clicks don't activate window
+- Window falls behind instead of becoming active
+
+**Fix Required** (IMMEDIATE - Day 1 hotfix):
+```swift
+// Override in NSWindowController subclasses
+override var canBecomeKey: Bool { true }
+override var canBecomeMain: Bool { true }
+```
+
+**Priority**: CRITICAL (app unusable without this)
+
+**Impact**: User can't interact with buttons, sliders, or any controls
+
+---
+
+**Critical Regressions**: 3 found
+1. Skins need refresh (medium)
+2. Always-on-top broken (high)
+3. Windows fall behind on click (CRITICAL - fixing now)
+# UnifiedDockView Migration Analysis
+
+**Date**: 2025-11-08  
+**Source**: UnifiedDockView.swift (354 lines, from git history)  
+**Purpose**: Identify critical logic to migrate to WindowCoordinator
+
+---
+
+## Critical Features to Migrate
+
+### 1. Skin Loading (ensureSkin) - IMMEDIATE
+
+**UnifiedDockView Lines 92-96**:
+```swift
+private func ensureSkin() {
+    if skinManager.currentSkin == nil {
+        skinManager.loadInitialSkin()
+    }
+}
+```
+
+**Issue**: Skins don't auto-load on launch  
+**Fix Location**: WindowCoordinator.init() or configureWindows()  
+**Priority**: HIGH (user must manually refresh)
+
+**Migration**:
+```swift
+// In WindowCoordinator.init(), after showAllWindows():
+private func ensureSkinsLoaded(skinManager: SkinManager) {
+    if skinManager.currentSkin == nil {
+        skinManager.loadInitialSkin()
+    }
+}
+```
+
+---
+
+### 2. Always-On-Top (window.level) - IMMEDIATE
+
+**UnifiedDockView Lines 65-68**:
+```swift
+.onChange(of: settings.isAlwaysOnTop) { _, isOn in
+    // Toggle THIS window's level
+    dockWindow?.level = isOn ? .floating : .normal
+}
+```
+
+**And Lines 80**:
+```swift
+// Set initial window level based on persisted state
+window.level = settings.isAlwaysOnTop ? .floating : .normal
+```
+
+**Issue**: Always-on-top (Ctrl+A / A button) broken  
+**Fix Location**: WindowCoordinator needs to observe AppSettings.isAlwaysOnTop  
+**Priority**: HIGH (common feature)
+
+**Migration**:
+```swift
+// In WindowCoordinator, observe AppSettings
+func observeAlwaysOnTop(settings: AppSettings) {
+    // Watch settings.isAlwaysOnTop
+    // When changed, update all 3 window levels
+}
+
+func updateWindowLevels(alwaysOnTop: Bool) {
+    let level: NSWindow.Level = alwaysOnTop ? .floating : .normal
+    mainWindow?.level = level
+    eqWindow?.level = level
+    playlistWindow?.level = level
+}
+```
+
+---
+
+### 3. Window Configuration (configureWindow) - PARTIALLY DONE
+
+**UnifiedDockView Lines 99-126**:
+```swift
+private func configureWindow(_ window: NSWindow) {
+    window.styleMask.insert(.borderless)
+    window.styleMask.remove(.titled)
+    window.isMovableByWindowBackground = false
+    window.titlebarAppearsTransparent = true
+    window.titleVisibility = .hidden
+    window.toolbar = nil
+    window.level = .normal
+    window.isMovable = true
+}
+```
+
+**Status**: Mostly migrated to NSWindowController init  
+**Missing**: window.isMovable = true (allow dragging)  
+**Fix**: Add to NSWindowController convenience init
+
+---
+
+### 4. WindowAccessor Pattern - ALREADY EXISTS
+
+**UnifiedDockView Lines 70-82**:
+- WindowAccessor exists in codebase
+- Used to capture NSWindow reference
+- Store in @State variable for later manipulation
+
+**Migration**: Already have WindowAccessor available for Phase 1B (drag regions)
+
+---
+
+### 5. Double-Size Scaling - PLANNED FOR PHASE 4
+
+**UnifiedDockView Lines 35-53** (scaling logic):
+```swift
+let scale: CGFloat = settings.isDoubleSizeMode ? 2.0 : 1.0
+windowContent(for: pane.type)
+    .scaleEffect(scale, anchor: .topLeading)
+    .frame(width: baseSize.width * scale,
+           height: pane.isShaded ? 14 * scale : baseSize.height * scale)
+```
+
+**Status**: Deferred to Phase 4 (Days 13-15)  
+**Note**: Each window view will handle its own scaling  
+**Already Planned**: Yes (in original plan)
+
+---
+
+### 6. Shade Mode - DEFERRED
+
+**UnifiedDockView Line 41**:
+```swift
+height: pane.isShaded ? 14 * scale : baseSize.height * scale
+```
+
+**Status**: Not in foundation scope  
+**Note**: Docking controller has isShaded property  
+**Fix**: Deferred to post-foundation polish
+
+---
+
+### 7. Animation & Liquid Glass - NOT CRITICAL
+
+**Lines 129-236** - Background animations and materials
+
+**Status**: Visual polish only  
+**Priority**: LOW (nice-to-have)  
+**Note**: Can be added per-window later if desired
+
+---
+
+## Immediate Day 2 Fixes Required
+
+### Fix #1: Skin Auto-Loading
+**Priority**: HIGH  
+**Code**: Add ensureSkin call to WindowCoordinator  
+**Time**: 10 minutes
+
+### Fix #2: Always-On-Top
+**Priority**: HIGH  
+**Code**: Observe AppSettings.isAlwaysOnTop, update window levels  
+**Time**: 30 minutes
+
+### Fix #3: Window.isMovable
+**Priority**: MEDIUM  
+**Code**: Add window.isMovable = true to configureWindows()  
+**Time**: 5 minutes
+
+---
+
+## What Can Wait
+
+- ⏳ Double-size scaling (Phase 4, planned)
+- ⏳ Shade mode (post-foundation)
+- ⏳ Liquid Glass animations (visual polish)
+- ⏳ Material backgrounds (visual polish)
+
+---
+
+**Immediate Action**: Fix #1, #2, #3 in Day 2  
+**Analysis Complete**: All critical features identified  
+**Next**: Implement fixes, test, continue Phase 1A
+# Oracle Migration Strategy: UnifiedDockView → WindowCoordinator
+
+**Date**: 2025-11-08  
+**Oracle Consultation**: gpt-5-codex (high reasoning)  
+**Purpose**: Migrate critical UnifiedDockView features to new architecture
+
+---
+
+## Priority Classification (Oracle-Defined)
+
+### CRITICAL (Day 2 - Must Fix Immediately)
+
+**1. Skin Auto-Loading** (ensureSkin)
+- Location: UnifiedDockView lines 92-95
+- Issue: Skins don't load automatically
+- Fix: Call skinManager.loadInitialSkin() at startup
+
+**2. Always-On-Top Observer**
+- Location: UnifiedDockView lines 65-82
+- Issue: Ctrl+A / A button broken
+- Fix: Observe AppSettings.isAlwaysOnTop, update all window levels
+
+**3. Window Configuration** (configureWindow baseline)
+- Location: UnifiedDockView lines 99-126
+- Issue: Missing window setup (toolbar, isMovable, etc.)
+- Fix: Extract to shared helper, apply in all controllers
+
+### IMPORTANT (Days 2-3)
+
+**4. WindowAccessor Pattern**
+- Location: UnifiedDockView lines 70-82
+- Purpose: Capture NSWindow reference for later manipulation
+- Status: Exists, use in Phase 1B for drag regions
+
+**5. Double-Size Scaling**
+- Location: UnifiedDockView lines 35-53
+- Status: Deferred to Phase 4 (already planned)
+
+### DEFERRED (Phase 4+)
+
+**6. Animations & Backgrounds**
+- Location: UnifiedDockView lines 129-236
+- Purpose: Visual polish (Liquid Glass, shimmer, glow)
+- Status: Nice-to-have, not critical
+
+---
+
+## Migration Patterns (Oracle-Provided)
+
+### Fix #1: Skin Auto-Loading ✅
+
+**Destination**: MacAmpApp.swift (after singletons created)
+
+**Code**:
+```swift
+// In MacAmpApp.init(), after creating skinManager:
+if skinManager.currentSkin == nil {
+    skinManager.loadInitialSkin()
+}
+
+// Then create WindowCoordinator...
+```
+
+**Why**: Ensures skins loaded before windows render
+
+**Verification**: Launch app, skins appear without manual refresh
+
+---
+
+### Fix #2: Always-On-Top Observer ✅
+
+**Destination**: WindowCoordinator
+
+**Pattern**: Use Observation framework
+
+```swift
+@MainActor
+@Observable
+final class WindowCoordinator {
+    // Store settings reference
+    private let settings: AppSettings
+
+    init(..., settings: AppSettings, ...) {
+        self.settings = settings
+
+        // ... create windows ...
+
+        // Set initial window levels from persisted state
+        updateWindowLevels(settings.isAlwaysOnTop)
+
+        // Observe changes (using Observation framework)
+        setupObservations()
+    }
+
+    private func setupObservations() {
+        // React to always-on-top changes
+        // Note: With @Observable, changes propagate automatically
+        // Use withObservationTracking or onChange in views
+    }
+
+    private func updateWindowLevels(_ alwaysOnTop: Bool) {
+        let level: NSWindow.Level = alwaysOnTop ? .floating : .normal
+        mainWindow?.level = level
+        eqWindow?.level = level
+        playlistWindow?.level = level
+    }
+}
+```
+
+**Alternative (simpler for now)**:
+```swift
+// Use existing pattern from UnifiedDockView
+// In each NSWindowController, use WindowAccessor with onChange
+```
+
+**Verification**: Toggle Ctrl+A, all 3 windows stay on top
+
+---
+
+### Fix #3: configureWindow Helper ✅
+
+**Destination**: Shared utility (WinampWindowConfigurator.swift)
+
+**Code**:
+```swift
+import AppKit
+
+struct WinampWindowConfigurator {
+    static func apply(to window: NSWindow) {
+        // From UnifiedDockView.configureWindow (lines 99-126)
+        window.styleMask.insert(.borderless)
+        window.styleMask.remove(.titled)
+        window.isMovableByWindowBackground = false
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+
+        if #available(macOS 11.0, *) {
+            window.toolbar = nil
+        }
+
+        window.level = .normal
+        window.isMovable = true
+    }
+}
+```
+
+**Usage** (in each NSWindowController):
+```swift
+let window = BorderlessWindow(...)
+WinampWindowConfigurator.apply(to: window)
+window.contentView = NSHostingView(...)
+```
+
+**Verification**: No system chrome, windows properly configured
+
+---
+
+## Environment Observation Strategy
+
+**Oracle Recommendation**: Option A (Store dependencies, use Observation)
+
+**Implementation**:
+```swift
+@MainActor
+@Observable
+final class WindowCoordinator {
+    private let settings: AppSettings  // Store reference
+    private let skinManager: SkinManager
+
+    // Access settings.isAlwaysOnTop directly
+    // @Observable will track changes automatically
+}
+```
+
+**For reactive updates**: Use withObservationTracking or manual checks
+
+**Simpler alternative for Day 1**:
+- Don't observe yet
+- Set initial window levels in init()
+- Fix observer in Day 2
+
+---
+
+## BorderlessWindow Validation
+
+**Oracle Assessment**: ✅ CORRECT for Day 1
+
+**Current approach is sufficient**:
+```swift
+class BorderlessWindow: NSWindow {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { true }
+}
+```
+
+**Optional enhancements** (can add later):
+- `override func acceptsFirstMouse(_:) -> Bool { true }`
+- `override func performKeyEquivalent(_:) -> Bool`
+
+**For Day 1**: Current implementation is fine
+
+---
+
+## Day 1 Minimum Viable Completion
+
+**Oracle's Minimum Path**:
+
+1. **Add BorderlessWindow.swift to Xcode** (user action)
+   - Fixes "cannot find BorderlessWindow" error
+   - Fixes windows falling behind on click
+
+2. **Add skin auto-loading**
+   - MacAmpApp.init() calls skinManager.loadInitialSkin()
+   - Fixes blank windows on launch
+
+3. **Apply configureWindow baseline**
+   - Create WinampWindowConfigurator helper
+   - Apply in all 3 NSWindowControllers
+   - Fixes window setup
+
+**Can defer to Day 2**:
+- Always-on-top observer (complex, needs observation wiring)
+
+**Result**: Windows launch with skins, stay active on click, basic functionality works
+
+---
+
+## Risk Assessment
+
+**Risks Oracle Identified**:
+
+1. **Missing observation wiring** (always-on-top)
+   - Risk: Settings changes don't propagate to windows
+   - Mitigation: Centralize in WindowCoordinator with proper observation
+
+2. **configureWindow drift**
+   - Risk: Each controller configures differently, subtle bugs
+   - Mitigation: Shared WinampWindowConfigurator helper
+
+3. **Forgotten observation tokens**
+   - Risk: Updates silently stop working
+   - Mitigation: Store Combine/Observation tokens as WindowCoordinator properties
+
+4. **BorderlessWindow replacement**
+   - Risk: Other code might create standard NSWindow, lose focus ability
+   - Mitigation: Always use BorderlessWindow class
+
+---
+
+## Immediate Action Plan (Oracle-Approved)
+
+**Day 1 Completion (Next Hour)**:
+1. User adds BorderlessWindow.swift to Xcode (2 min)
+2. Add skin auto-loading to MacAmpApp.init() (5 min)
+3. Create WinampWindowConfigurator helper (10 min)
+4. Apply to all 3 controllers (5 min)
+5. Build & test (10 min)
+
+**Day 2 (After Day 1 Works)**:
+1. Implement always-on-top observer (30 min)
+2. Test all features (15 min)
+3. Continue Phase 1A
+
+**Total to functional Day 1**: ~30-45 minutes
+
+---
+
+**Oracle Recommendation**: Fix critical items NOW, defer always-on-top to Day 2 if complex
+
+**Philosophy**: Get basic functionality working, then add features incrementally
