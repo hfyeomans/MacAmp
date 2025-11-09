@@ -1069,3 +1069,77 @@ Total: 8 critical issues fixed with Oracle guidance
 **Day 1**: ✅ COMPLETE (100%)  
 **Oracle Grade**: A (maintained throughout)  
 **Next Session**: Begin Phase 1B (drag regions)
+
+---
+
+## ✅ PHASE 1A + 1B COMPLETE!
+
+**Date**: 2025-11-08  
+**Status**: Phase 1 fully complete (1A + 1B both done)
+
+### Key Discovery: Phase 1B Not Needed!
+
+**Original Plan**: Phase 1B (Days 4-6) - Custom drag regions
+
+**Oracle's Finding**: Windows already use `WindowDragGesture()` (macOS 15+ API)
+- Main window: Line 106 (WindowDragGesture on titlebar sprite)
+- EQ window: Similar pattern
+- Playlist window: Similar pattern
+
+**Decision**: SKIP Phase 1B entirely
+- Custom TitlebarDragRegion created, then removed
+- WindowDragGesture already provides dragging ✅
+- Works with WindowSnapManager (Phase 2) ✅
+
+### Phase 1 Complete Deliverables
+
+**Architecture** ✅:
+- WindowCoordinator (singleton manager)
+- 3 NSWindowControllers (borderless windows)
+- BorderlessWindow (activation support)
+- WinampWindowConfigurator (config + hit surface)
+
+**Features Working** ✅:
+- 3 windows launch
+- All windows DRAGGABLE (WindowDragGesture)
+- Skins auto-load
+- Slider tracks clickable
+- Always-on-top (Ctrl+A)
+- No bleed-through
+- Menus follow window position
+- Close button works
+
+**Deferred**:
+- D button (double-size) → Phase 4
+- Titlebar focus/unfocus sprites → Future polish (stretch goal)
+
+### Lessons Learned
+
+**Don't reinvent the wheel**:
+- macOS 15+ WindowDragGesture works perfectly
+- No need for custom drag implementation
+- Integrates with WindowSnapManager automatically
+
+**Test existing functionality before adding new**:
+- Could have discovered WindowDragGesture earlier
+- Saved time by not implementing TitlebarDragRegion
+
+---
+
+## Next: Phase 2 (Days 7-10) - WindowSnapManager Integration
+
+**Goal**: Magnetic snapping + group movement
+
+**Tasks**:
+- Register 3 windows with WindowSnapManager
+- Test 15px magnetic snapping
+- Test cluster detection
+- Test group movement (docked windows move together)
+
+**Estimated**: 3-4 days (simpler now that dragging works!)
+
+---
+
+**Phase 1 Complete**: ✅ (1A done, 1B skipped - not needed)  
+**Oracle Grade**: A (maintained)  
+**Next**: Phase 2 (magnetic snapping)
