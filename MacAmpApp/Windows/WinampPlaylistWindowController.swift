@@ -14,11 +14,13 @@ class WinampPlaylistWindowController: NSWindowController {
             defer: false
         )
 
-        // Borderless configuration
+        // CRITICAL FIX #2: Apply standard Winamp window configuration
+        WinampWindowConfigurator.apply(to: window)
+
+        // Borderless visual configuration
         window.isOpaque = false
         window.hasShadow = true
         window.backgroundColor = .clear
-        window.isMovableByWindowBackground = false  // Custom drag regions required
 
         // Create view with environment injection
         let contentView = WinampPlaylistWindow()

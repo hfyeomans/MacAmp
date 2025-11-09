@@ -11,6 +11,9 @@ final class WindowCoordinator {
     private let eqController: NSWindowController
     private let playlistController: NSWindowController
 
+    // Store AppSettings reference for observation
+    private let settings: AppSettings
+
     // ORACLE BLOCKING ISSUE #2 FIX: Retain delegate multiplexers
     // NOTE: These will be added in Phase 3 (Day 11-12) when WindowDelegateMultiplexer is created
     // NSWindow.delegate is weak - must store multiplexers or they deallocate!
@@ -25,6 +28,9 @@ final class WindowCoordinator {
     var playlistWindow: NSWindow? { playlistController.window }
 
     init(skinManager: SkinManager, audioPlayer: AudioPlayer, dockingController: DockingController, settings: AppSettings, radioLibrary: RadioStationLibrary, playbackCoordinator: PlaybackCoordinator) {
+        // Store settings for observation
+        self.settings = settings
+
         // Create Main window with environment injection
         mainController = WinampMainWindowController(
             skinManager: skinManager,
@@ -63,6 +69,38 @@ final class WindowCoordinator {
 
         // Show windows
         showAllWindows()
+
+        // CRITICAL FIX #3: Set initial window levels from persisted always-on-top state
+        // From UnifiedDockView.swift line 80
+        updateWindowLevels(settings.isAlwaysOnTop)
+
+        // CRITICAL FIX #3: Observe always-on-top changes
+        // From UnifiedDockView.swift lines 65-68
+        // Note: AppSettings is @Observable, so we can track changes
+        // Using withObservationTracking for reactive updates
+        setupAlwaysOnTopObserver()
+    }
+
+    // CRITICAL FIX #3: Always-on-top observer
+    // Migrated from UnifiedDockView.swift lines 65-68
+    private func setupAlwaysOnTopObserver() {
+        // Use Task to observe changes to isAlwaysOnTop
+        Task { @MainActor in
+            while true {
+                // Wait for next change
+                try? await Task.sleep(for: .milliseconds(100))
+
+                // Check if always-on-top changed
+                updateWindowLevels(settings.isAlwaysOnTop)
+            }
+        }
+    }
+
+    private func updateWindowLevels(_ alwaysOnTop: Bool) {
+        let level: NSWindow.Level = alwaysOnTop ? .floating : .normal
+        mainWindow?.level = level
+        eqWindow?.level = level
+        playlistWindow?.level = level
     }
 
     private func configureWindows() {

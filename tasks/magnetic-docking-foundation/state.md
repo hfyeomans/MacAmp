@@ -904,3 +904,21 @@ class BorderlessWindow: NSWindow {
 **Oracle Recommendation**: Fix critical items NOW, defer always-on-top to Day 2 if complex
 
 **Philosophy**: Get basic functionality working, then add features incrementally
+
+---
+
+## 🚧 CURRENT BLOCKER - Files Need Xcode Integration
+
+**2 Files Created But Not in Xcode Project**:
+1. `MacAmpApp/Windows/BorderlessWindow.swift` ✅ (user added)
+2. `MacAmpApp/Utilities/WinampWindowConfigurator.swift` ⏳ (needs adding)
+
+**User Action Required**:
+In Xcode, add WinampWindowConfigurator.swift:
+- Right-click "Utilities" group
+- Add Files to "MacAmp"...
+- Select: MacAmpApp/Utilities/WinampWindowConfigurator.swift
+- Check "MacAmp" target
+- Build - should succeed
+
+**Then**: All 3 critical UnifiedDockView migrations will be complete!

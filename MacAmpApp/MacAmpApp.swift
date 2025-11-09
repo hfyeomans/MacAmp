@@ -27,6 +27,12 @@ struct MacAmpApp: App {
         _streamPlayer = State(initialValue: streamPlayer)
         _playbackCoordinator = State(initialValue: playbackCoordinator)
 
+        // CRITICAL FIX #1: Skin auto-loading (from UnifiedDockView.ensureSkin)
+        // Load initial skin before creating windows
+        if skinManager.currentSkin == nil {
+            skinManager.loadInitialSkin()
+        }
+
         // PHASE 1A: Initialize WindowCoordinator (creates 3 independent NSWindows)
         // This replaces UnifiedDockView with separate windows
         WindowCoordinator.shared = WindowCoordinator(
