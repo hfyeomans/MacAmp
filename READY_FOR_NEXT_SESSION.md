@@ -1,128 +1,80 @@
 # MacAmp - Ready for Next Session
 
-**Last Updated**: 2025-11-08 (Day 1 started)  
+**Last Updated**: 2025-11-08 (Day 1 COMPLETE!)  
 **Current Branch**: `feature/magnetic-docking-foundation` ✅  
 **Current Task**: Task 1 - Magnetic Docking Foundation  
-**Phase**: Day 1 (80% complete - needs Xcode integration)  
+**Phase**: Day 1 ✅ Complete, Day 2-3 Next  
 **Oracle Grade**: **A** 🏆
 
 ---
 
-## 🚀 IMMEDIATE ACTION REQUIRED
+## 🎉 DAY 1 COMPLETE!
 
-**Day 1 is 80% complete** - Code written but files not in Xcode project yet.
+**Build**: ✅ Succeeded  
+**Launch**: ✅ App running  
+**Windows**: ✅ 3 NSWindows created  
+**Status**: Ready for Day 2-3
 
-### Next Steps (5-10 minutes)
+---
 
-**1. Open Xcode and Add Files**:
-```
-Open: MacAmpApp.xcodeproj in Xcode
-Add to project:
-  - MacAmpApp/ViewModels/WindowCoordinator.swift
-  - MacAmpApp/Windows/WinampMainWindowController.swift
-  - MacAmpApp/Windows/WinampEqualizerWindowController.swift
-  - MacAmpApp/Windows/WinampPlaylistWindowController.swift
+## 🚀 Next Session: Continue Day 2-3 (Phase 1A Completion)
 
-Ensure: All 4 files have "MacAmp" target checked
-```
+### Remaining Phase 1A Tasks (From todo.md)
 
-**2. Build and Test**:
-```bash
-# Build (should compile after files added)
-⌘B in Xcode
+**Day 2**: NSWindowController creation (more polishing if needed)  
+**Day 3**: MacAmpApp integration finalization
 
-# If successful, delete UnifiedDockView
-git rm MacAmpApp/Views/UnifiedDockView.swift
+**Then**: Days 4-6 - Phase 1B (Drag Regions) - CRITICAL PRIORITY
 
-# Test launch
-⌘R - Verify 3 windows appear in vertical stack
-```
+**Checklist**: `tasks/magnetic-docking-foundation/todo.md` Lines 51-85 (Day 2)
 
-**3. Complete Day 1**:
-```bash
-git commit -m "test: Verify 3 NSWindows launch (Day 1 complete)"
-```
+---
 
-**Progress File**: `tasks/magnetic-docking-foundation/DAY1_PROGRESS.md`
+## 📋 Day 1 Achievements
+
+### Created (Oracle A-Grade Pattern)
+- ✅ WindowCoordinator.swift (singleton coordinator)
+- ✅ 3 NSWindowController files (borderless windows)
+- ✅ MacAmpApp.swift updated
+- ✅ UnifiedDockView.swift deleted
+- ✅ Xcode project integrated
+- ✅ Build succeeded
+- ✅ App launched
+
+### Verified
+- ✅ 3 independent NSWindows created
+- ✅ No compile errors
+- ✅ No runtime crashes
+- ✅ Oracle A-grade compliance maintained
+
+**Expected**: Windows not draggable yet (Phase 1B will add drag regions)
 
 ---
 
 ## 🎯 Task Sequence
 
-### TASK 1: magnetic-docking-foundation (CURRENT - Day 1 IN PROGRESS)
-**Branch**: `feature/magnetic-docking-foundation` ✅  
-**Status**: Day 1 started (80% complete)  
-**Oracle**: A-grade approved  
-**Timeline**: Quality-focused (10-15 days)
-
-**Day 1 Progress**:
-- ✅ Code created (4 files, Oracle A-grade pattern)
-- ⏳ Xcode integration (needs IDE, 5-10 min)
-- ⏳ Build & test
-- ⏳ Delete UnifiedDockView
-
-**Deliverable**: 3-window foundation
+### TASK 1: magnetic-docking-foundation (IN PROGRESS - Day 1 ✅)
+**Day 1**: Complete ✅ (4 commits)  
+**Day 2-3**: Continue Phase 1A  
+**Days 4-6**: Phase 1B (Drag Regions) - CRITICAL  
+**Days 7-10**: Phase 2 (Magnetic Snapping)  
+**Days 11-15**: Phases 3-5 (Multiplexer, Double-Size, Persistence)
 
 ### TASK 2: milk-drop-video-support (BLOCKED)
-**Status**: Blocked on Task 1  
-**Resume**: After Task 1 complete
-
-**Deliverable**: Video + Milkdrop windows
+**Resume**: After Task 1 complete  
+**Timeline**: 8-10 days
 
 ---
 
-## 📋 Day 1 Implementation Summary
+## 📊 Progress
 
-### Created Files (Commit 645d88a)
-
-**WindowCoordinator.swift** (81 lines):
-- @MainActor @Observable singleton
-- Manages 3 NSWindowControllers
-- Environment injection
-- Oracle fixes applied
-
-**3 NSWindowController files** (36 lines each):
-- Borderless windows ([.borderless] ONLY - Oracle fix)
-- NSHostingView with environment injection
-- Custom chrome (no system titlebar)
-
-**Modified MacAmpApp.swift**:
-- WindowCoordinator initialization
-- UnifiedDockView removed from body
-- Settings{EmptyView()} placeholder
-
-### Oracle Compliance ✅
-
-All A-grade fixes applied:
-- ✅ Truly borderless windows
-- ✅ Delegate multiplexers retained
-- ✅ Environment injection correct
-- ✅ Import Observation
-- ✅ AppSettings.instance() pattern
+**Overall**: Day 1 of 10-15 complete (~7-10% done)  
+**Phase 1A**: 33% complete (Day 1 of 3)  
+**Build**: ✅ Working  
+**Quality**: Oracle A-grade maintained
 
 ---
 
-## 🛠️ Implementation Status
-
-**Current Commit**: 645d88a  
-**Day 1**: 80% complete  
-**Blocker**: Files not in Xcode project  
-**Resolution**: 5-10 minute Xcode IDE task  
-**Then**: Continue Day 1 → Day 2-3
-
----
-
-## 📊 Task Files
-
-**Implementation Guides**:
-- `tasks/magnetic-docking-foundation/plan.md` (1,131 lines, Oracle A)
-- `tasks/magnetic-docking-foundation/todo.md` (471 lines)
-- `tasks/magnetic-docking-foundation/DAY1_PROGRESS.md` (current status)
-
-**Quick Start**: Add files to Xcode, build, test
-
----
-
-**Status**: ⚙️ **DAY 1 IN PROGRESS** (80%)  
-**Next**: Add files to Xcode project (5-10 min)  
-**Then**: Build, test, complete Day 1
+**Latest Commit**: `22cd79c` (Day 1 forward reference fix)  
+**Status**: ✅ **DAY 1 COMPLETE!**  
+**Next**: Day 2-3, then Phase 1B drag regions
