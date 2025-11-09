@@ -666,6 +666,23 @@ struct WinampPlaylistWindow: View {
         selectedIndices.remove(index)
     }
 
+    // CRITICAL FIX: Menu positioning helper (Oracle solution)
+    // Get playlist window's contentView (not keyWindow which could be Main/EQ)
+    private func playlistContentView() -> NSView? {
+        // Try to get actual playlist window from WindowCoordinator
+        if let view = WindowCoordinator.shared?.playlistWindow?.contentView {
+            return view
+        }
+        // Fallback for previews/tooling
+        return NSApp.keyWindow?.contentView
+    }
+
+    // Present menu at correct position relative to playlist window
+    private func presentPlaylistMenu(_ menu: NSMenu, at point: NSPoint) {
+        guard let contentView = playlistContentView() else { return }
+        menu.popUp(positioning: nil, at: point, in: contentView)
+    }
+
     private func showAddMenu() {
         let menu = NSMenu()
         menu.autoenablesItems = false
@@ -701,11 +718,8 @@ struct WinampPlaylistWindow: View {
         addFileItem.representedObject = audioPlayer
         menu.addItem(addFileItem)
 
-        if let window = NSApp.keyWindow ?? NSApp.windows.first(where: { $0.isVisible }),
-           let contentView = window.contentView {
-            let location = NSPoint(x: 10, y: 396)
-            menu.popUp(positioning: nil, at: location, in: contentView)
-        }
+        // Use playlist-specific positioning (not keyWindow)
+        presentPlaylistMenu(menu, at: NSPoint(x: 10, y: 396))
     }
 
     private func showRemMenu() {
@@ -755,11 +769,8 @@ struct WinampPlaylistWindow: View {
         remSelItem.representedObject = audioPlayer
         menu.addItem(remSelItem)
 
-        if let window = NSApplication.shared.windows.first(where: { $0.contentView != nil }),
-           let contentView = window.contentView {
-            let location = NSPoint(x: 39, y: 378)
-            menu.popUp(positioning: nil, at: location, in: contentView)
-        }
+        // Use playlist-specific positioning (not first window)
+        presentPlaylistMenu(menu, at: NSPoint(x: 39, y: 378))
     }
 
     private func showSelNotSupportedAlert() {
@@ -806,11 +817,8 @@ struct WinampPlaylistWindow: View {
         miscOptionsItem.representedObject = audioPlayer
         menu.addItem(miscOptionsItem)
 
-        if let window = NSApplication.shared.windows.first(where: { $0.contentView != nil }),
-           let contentView = window.contentView {
-            let location = NSPoint(x: 100, y: 397)
-            menu.popUp(positioning: nil, at: location, in: contentView)
-        }
+        // Use playlist-specific positioning (not first window)
+        presentPlaylistMenu(menu, at: NSPoint(x: 100, y: 397))
     }
 
     private func showListMenu() {
@@ -848,11 +856,8 @@ struct WinampPlaylistWindow: View {
         loadListItem.representedObject = audioPlayer
         menu.addItem(loadListItem)
 
-        if let window = NSApplication.shared.windows.first(where: { $0.contentView != nil }),
-           let contentView = window.contentView {
-            let location = NSPoint(x: 228, y: 397)
-            menu.popUp(positioning: nil, at: location, in: contentView)
-        }
+        // Use playlist-specific positioning (not first window)
+        presentPlaylistMenu(menu, at: NSPoint(x: 228, y: 397))
     }
 }
 
