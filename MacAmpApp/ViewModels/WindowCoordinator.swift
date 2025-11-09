@@ -1,5 +1,4 @@
 import AppKit
-import SwiftUI
 import Observation  // ORACLE CODE QUALITY: Required for @Observable
 
 @MainActor
@@ -16,16 +15,8 @@ final class WindowCoordinator {
     private let skinManager: SkinManager
 
     @ObservationIgnored private var skinPresentationTask: Task<Void, Never>?
+    @ObservationIgnored private var alwaysOnTopTask: Task<Void, Never>?
     private var hasPresentedInitialWindows = false
-
-    // ORACLE BLOCKING ISSUE #2 FIX: Retain delegate multiplexers
-    // NOTE: These will be added in Phase 3 (Day 11-12) when WindowDelegateMultiplexer is created
-    // NSWindow.delegate is weak - must store multiplexers or they deallocate!
-    // For now (Phase 1A), we don't use delegates yet - this comes in Phase 2-3
-    // TODO PHASE 3: Uncomment these properties when creating WindowDelegateMultiplexer
-    // private var mainDelegateMultiplexer: WindowDelegateMultiplexer?
-    // private var eqDelegateMultiplexer: WindowDelegateMultiplexer?
-    // private var playlistDelegateMultiplexer: WindowDelegateMultiplexer?
 
     var mainWindow: NSWindow? { mainController.window }
     var eqWindow: NSWindow? { eqController.window }
@@ -77,7 +68,10 @@ final class WindowCoordinator {
 
         // CRITICAL FIX #3: Set initial window levels from persisted always-on-top state
         // From UnifiedDockView.swift line 80
-        updateWindowLevels(settings.isAlwaysOnTop)
+        let initialLevel: NSWindow.Level = settings.isAlwaysOnTop ? .floating : .normal
+        mainWindow?.level = initialLevel
+        eqWindow?.level = initialLevel
+        playlistWindow?.level = initialLevel
 
         // CRITICAL FIX #3: Observe always-on-top changes
         // From UnifiedDockView.swift lines 65-68
@@ -102,23 +96,32 @@ final class WindowCoordinator {
         }
     }
 
-    // CRITICAL FIX #3: Always-on-top observer
+    // CRITICAL FIX #3: Always-on-top observer (Oracle P1 fix - no memory leak)
     // Migrated from UnifiedDockView.swift lines 65-68
     private func setupAlwaysOnTopObserver() {
-        // Use Task to observe changes to isAlwaysOnTop
-        Task { @MainActor in
-            while true {
-                // Wait for next change
-                try? await Task.sleep(for: .milliseconds(100))
+        // Cancel any existing observer
+        alwaysOnTopTask?.cancel()
 
-                // Check if always-on-top changed
-                updateWindowLevels(settings.isAlwaysOnTop)
+        // Use withObservationTracking for reactive updates (no polling)
+        alwaysOnTopTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+
+            // Recursive observation pattern
+            withObservationTracking {
+                _ = self.settings.isAlwaysOnTop
+            } onChange: {
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    self.updateWindowLevels(self.settings.isAlwaysOnTop)
+                    self.setupAlwaysOnTopObserver()  // Re-establish observer
+                }
             }
         }
     }
 
     deinit {
         skinPresentationTask?.cancel()
+        alwaysOnTopTask?.cancel()
     }
 
     private func updateWindowLevels(_ alwaysOnTop: Bool) {
