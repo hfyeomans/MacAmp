@@ -84,6 +84,22 @@ final class WindowCoordinator {
         // Note: AppSettings is @Observable, so we can track changes
         // Using withObservationTracking for reactive updates
         setupAlwaysOnTopObserver()
+
+        // PHASE 2: Register windows with WindowSnapManager
+        // WindowSnapManager provides:
+        // - 15px magnetic snapping
+        // - Cluster detection (group movement)
+        // - Screen edge snapping
+        // - Multi-monitor support
+        if let main = mainWindow {
+            WindowSnapManager.shared.register(window: main, kind: .main)
+        }
+        if let eq = eqWindow {
+            WindowSnapManager.shared.register(window: eq, kind: .equalizer)
+        }
+        if let playlist = playlistWindow {
+            WindowSnapManager.shared.register(window: playlist, kind: .playlist)
+        }
     }
 
     // CRITICAL FIX #3: Always-on-top observer
