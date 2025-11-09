@@ -67,12 +67,14 @@ struct WinampEqualizerWindow: View {
                                 height: WinampSizes.equalizer.height)
 
                 // Title bar with "Winamp Equalizer" text
-                // Make ONLY the title bar draggable using macOS 15's WindowDragGesture
-                SimpleSpriteImage("EQ_TITLE_BAR_SELECTED",
-                                width: 275,
-                                height: 14)
-                    .at(CGPoint(x: 0, y: 0))
-                    .gesture(WindowDragGesture())
+                // Make ONLY the title bar draggable using custom drag (magnetic snapping)
+                // CRITICAL: Apply .at() to drag handle itself, not content inside (Oracle fix)
+                WinampTitlebarDragHandle(windowKind: .equalizer, size: CGSize(width: 275, height: 14)) {
+                    SimpleSpriteImage("EQ_TITLE_BAR_SELECTED",
+                                    width: 275,
+                                    height: 14)
+                }
+                .at(CGPoint(x: 0, y: 0))
 
                 // Build all EQ components
                 Group {

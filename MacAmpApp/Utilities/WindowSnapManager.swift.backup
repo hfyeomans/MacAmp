@@ -16,12 +16,6 @@ final class WindowSnapManager: NSObject, NSWindowDelegate {
         let kind: WindowKind
     }
 
-    private struct VirtualScreenSpace {
-        let top: CGFloat
-        let left: CGFloat
-        let bounds: BoundingBox
-    }
-
     private var windows: [WindowKind: TrackedWindow] = [:]
     private var lastOrigins: [ObjectIdentifier: NSPoint] = [:]
     private var isAdjusting = false
@@ -186,98 +180,80 @@ final class WindowSnapManager: NSObject, NSWindowDelegate {
     // MARK: - Custom Drag Support (Oracle's Solution - Phase 2)
 
     private struct DragContext {
-        let draggedWindowID: ObjectIdentifier
         let clusterIDs: Set<ObjectIdentifier>
         let baseBoxes: [ObjectIdentifier: Box]
-        let virtualSpace: VirtualScreenSpace
-        var lastInputDelta: CGPoint = .zero
+        let stationaryBoxes: [Box]
+        let groupBox: Box
+        let virtualBounds: BoundingBox
+        var lastDelta: CGPoint = .zero
     }
 
     private var dragContexts: [WindowKind: DragContext] = [:]
 
     func beginCustomDrag(kind: WindowKind, startPointInScreen _: NSPoint) {
         guard let window = windows[kind]?.window else { return }
-        guard let (virtualSpace, idToBox) = buildBoxes() else { return }
-        let draggedID = ObjectIdentifier(window)
-        guard idToBox[draggedID] != nil else { return }
-        let clusterIDs = connectedCluster(start: draggedID, boxes: idToBox)
-        var baseBoxes: [ObjectIdentifier: Box] = [:]
-        for id in clusterIDs {
-            if let box = idToBox[id] {
-                baseBoxes[id] = box
-            }
-        }
-
+        let (virtualBounds, idToBox) = buildBoxes()
+        let startID = ObjectIdentifier(window)
+        let cluster = connectedCluster(start: startID, boxes: idToBox)
+        let stationaryIDs = Set(idToBox.keys).subtracting(cluster)
+        let baseBoxes = idToBox.filter { cluster.contains($0.key) }
+        guard !baseBoxes.isEmpty else { return }
+        let groupBox = SnapUtils.boundingBox(Array(baseBoxes.values))
+        let stationaryBoxes = stationaryIDs.compactMap { idToBox[$0] }
         dragContexts[kind] = DragContext(
-            draggedWindowID: draggedID,
-            clusterIDs: clusterIDs,
+            clusterIDs: cluster,
             baseBoxes: baseBoxes,
-            virtualSpace: virtualSpace
+            stationaryBoxes: stationaryBoxes,
+            groupBox: groupBox,
+            virtualBounds: virtualBounds
         )
     }
 
     func updateCustomDrag(kind: WindowKind, cumulativeDelta delta: CGPoint) {
         guard var context = dragContexts[kind] else { return }
-        guard delta != context.lastInputDelta else { return }
-
-        var idToWindow: [ObjectIdentifier: NSWindow] = [:]
-        for (_, tracked) in windows {
-            if let window = tracked.window {
-                idToWindow[ObjectIdentifier(window)] = window
-            }
-        }
-
-        guard
-            let draggedWindow = idToWindow[context.draggedWindowID],
-            let draggedBaseBox = context.baseBoxes[context.draggedWindowID]
-        else {
-            dragContexts.removeValue(forKey: kind)
-            return
-        }
-
-        let liveBoxes = boxes(in: context.virtualSpace)
-        let otherBoxes = liveBoxes.compactMap { entry -> Box? in
-            context.clusterIDs.contains(entry.key) ? nil : entry.value
-        }
+        guard delta != context.lastDelta else { return }
 
         let topLeftDelta = CGPoint(x: delta.x, y: -delta.y)
-        var translatedDraggedBox = draggedBaseBox
-        translatedDraggedBox.x += topLeftDelta.x
-        translatedDraggedBox.y += topLeftDelta.y
 
-        let diffToOthers = SnapUtils.snapToMany(translatedDraggedBox, otherBoxes)
-        let diffWithin = SnapUtils.snapWithin(translatedDraggedBox, context.virtualSpace.bounds)
+        var translatedGroup = context.groupBox
+        translatedGroup.x += topLeftDelta.x
+        translatedGroup.y += topLeftDelta.y
+
+        let diffToOthers = SnapUtils.snapToMany(translatedGroup, context.stationaryBoxes)
+        let diffWithin = SnapUtils.snapWithin(translatedGroup, context.virtualBounds)
         let snappedPoint = SnapUtils.applySnap(
-            Point(x: translatedDraggedBox.x, y: translatedDraggedBox.y),
+            Point(x: translatedGroup.x, y: translatedGroup.y),
             diffToOthers,
             diffWithin
         )
         let snapDelta = CGPoint(
-            x: snappedPoint.x - translatedDraggedBox.x,
-            y: snappedPoint.y - translatedDraggedBox.y
+            x: snappedPoint.x - translatedGroup.x,
+            y: snappedPoint.y - translatedGroup.y
         )
         let finalDelta = CGPoint(
             x: topLeftDelta.x + snapDelta.x,
             y: topLeftDelta.y + snapDelta.y
         )
 
-        for (id, baseBox) in context.baseBoxes {
-            guard let window = idToWindow[id] else { continue }
-            var movedBox = baseBox
-            movedBox.x += finalDelta.x
-            movedBox.y += finalDelta.y
+        // Get virtual screen coordinates for apply() helper
+        let allScreens = NSScreen.screens
+        guard !allScreens.isEmpty else { return }
+        let virtualTop: CGFloat = allScreens.map { $0.frame.maxY }.max() ?? 0
+        let virtualLeft: CGFloat = allScreens.map { $0.frame.minX }.min() ?? 0
 
-            isAdjusting = true
-            apply(
-                box: movedBox,
-                to: window,
-                virtualTop: context.virtualSpace.top,
-                virtualLeft: context.virtualSpace.left
-            )
-            isAdjusting = false
+        isAdjusting = true
+        for id in context.clusterIDs {
+            guard let window = windows.first(where: {
+                $0.value.window != nil && ObjectIdentifier($0.value.window!) == id
+            })?.value.window,
+                  var box = context.baseBoxes[id] else { continue }
+            box.x += finalDelta.x
+            box.y += finalDelta.y
+            apply(box: box, to: window, virtualTop: virtualTop, virtualLeft: virtualLeft)
         }
+        isAdjusting = false
 
-        context.lastInputDelta = delta
+        context.lastDelta = delta
         dragContexts[kind] = context
     }
 
@@ -290,37 +266,33 @@ final class WindowSnapManager: NSObject, NSWindowDelegate {
         }
     }
 
-    private func buildBoxes() -> (VirtualScreenSpace, [ObjectIdentifier: Box])? {
-        guard let virtualSpace = makeVirtualSpace() else { return nil }
-        return (virtualSpace, boxes(in: virtualSpace))
-    }
-
-    private func makeVirtualSpace() -> VirtualScreenSpace? {
+    private func buildBoxes() -> (BoundingBox, [ObjectIdentifier: Box]) {
         let allScreens = NSScreen.screens
-        guard !allScreens.isEmpty else { return nil }
+        guard !allScreens.isEmpty else {
+            return (BoundingBox(width: 1920, height: 1080), [:])
+        }
 
         let virtualTop: CGFloat = allScreens.map { $0.frame.maxY }.max() ?? 0
         let virtualLeft: CGFloat = allScreens.map { $0.frame.minX }.min() ?? 0
         let virtualRight: CGFloat = allScreens.map { $0.frame.maxX }.max() ?? 0
         let virtualBottom: CGFloat = allScreens.map { $0.frame.minY }.min() ?? 0
-        let bounds = BoundingBox(width: virtualRight - virtualLeft, height: virtualTop - virtualBottom)
-        return VirtualScreenSpace(top: virtualTop, left: virtualLeft, bounds: bounds)
-    }
+        let virtualWidth = virtualRight - virtualLeft
+        let virtualHeight = virtualTop - virtualBottom
 
-    private func boxes(in space: VirtualScreenSpace) -> [ObjectIdentifier: Box] {
+        func box(for window: NSWindow) -> Box {
+            let f = window.frame
+            let x = f.origin.x - virtualLeft
+            let yTop = virtualTop - (f.origin.y + f.size.height)
+            return Box(x: x, y: yTop, width: f.size.width, height: f.size.height)
+        }
+
         var idToBox: [ObjectIdentifier: Box] = [:]
         for (_, tracked) in windows {
-            if let window = tracked.window {
-                idToBox[ObjectIdentifier(window)] = box(for: window, in: space)
+            if let w = tracked.window {
+                idToBox[ObjectIdentifier(w)] = box(for: w)
             }
         }
-        return idToBox
-    }
 
-    private func box(for window: NSWindow, in space: VirtualScreenSpace) -> Box {
-        let frame = window.frame
-        let x = frame.origin.x - space.left
-        let yTop = space.top - (frame.origin.y + frame.size.height)
-        return Box(x: x, y: yTop, width: frame.size.width, height: frame.size.height)
+        return (BoundingBox(width: virtualWidth, height: virtualHeight), idToBox)
     }
 }

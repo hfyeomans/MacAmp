@@ -27,6 +27,8 @@
 		36C0FFE42EB512A300916917 /* Winamp3_Classified_v5.5.wsz in Resources */ = {isa = PBXBuildFile; fileRef = 36C0FFE12EB512A300916917 /* Winamp3_Classified_v5.5.wsz */; };
 		36C0FFE52EB512A300916917 /* Sony_MP3_Player_.wsz in Resources */ = {isa = PBXBuildFile; fileRef = 36C0FFDF2EB512A300916917 /* Sony_MP3_Player_.wsz */; };
 		36C0FFE62EB512A300916917 /* KenWood_KDC_7000_Elite.wsz in Resources */ = {isa = PBXBuildFile; fileRef = 36C0FFDD2EB512A300916917 /* KenWood_KDC_7000_Elite.wsz */; };
+		36CAB6262EC13E3D00902330 /* WinampTitlebarDragHandle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36CAB6242EC13E3D00902330 /* WinampTitlebarDragHandle.swift */; };
+		36CAB6272EC13E3D00902330 /* TitlebarDragCaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36CAB6232EC13E3D00902330 /* TitlebarDragCaptureView.swift */; };
 		397CD3DA0D75924BD0B90FBE /* EQF.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDF85EA8990A038079FC0CC3 /* EQF.swift */; };
 		3D5787FD4B060D13BE690E2A /* WinampEqualizerWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A489CA15E452302405E6FAE /* WinampEqualizerWindow.swift */; };
 		4007DF219A7FEAB6FFC1AE73 /* ImageSlicing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D4BAA0F198BED23AAFABFEC /* ImageSlicing.swift */; };
@@ -89,6 +91,8 @@
 		36C0FFE02EB512A300916917 /* Tron-Vaporwave-by-LuigiHann.wsz */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Tron-Vaporwave-by-LuigiHann.wsz"; sourceTree = "<group>"; };
 		36C0FFE12EB512A300916917 /* Winamp3_Classified_v5.5.wsz */ = {isa = PBXFileReference; lastKnownFileType = file; path = Winamp3_Classified_v5.5.wsz; sourceTree = "<group>"; };
 		36C6A4148DF5415F9142A777 /* RadioStation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadioStation.swift; sourceTree = "<group>"; };
+		36CAB6232EC13E3D00902330 /* TitlebarDragCaptureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TitlebarDragCaptureView.swift; sourceTree = "<group>"; };
+		36CAB6242EC13E3D00902330 /* WinampTitlebarDragHandle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WinampTitlebarDragHandle.swift; sourceTree = "<group>"; };
 		3D258350F99A800B8CBF8AEA /* PresetsButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresetsButton.swift; sourceTree = "<group>"; };
 		3DCDB09162242F5E73FF35F6 /* SkinnedText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkinnedText.swift; sourceTree = "<group>"; };
 		43358BDD8D9B537C9109DF62 /* SnapUtils.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapUtils.swift; sourceTree = "<group>"; };
@@ -166,6 +170,15 @@
 			path = Windows;
 			sourceTree = "<group>";
 		};
+		36CAB6252EC13E3D00902330 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				36CAB6232EC13E3D00902330 /* TitlebarDragCaptureView.swift */,
+				36CAB6242EC13E3D00902330 /* WinampTitlebarDragHandle.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
 		679D4139BE833A25AB1CBCFA /* Products */ = {
 			isa = PBXGroup;
 			children = (
@@ -232,6 +245,7 @@
 		D4D715C613A4E03DDE1E814A /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				36CAB6252EC13E3D00902330 /* Shared */,
 				032A0DEAD316CCA0CDA2645D /* EqGraphView.swift */,
 				DE345F678901BCDE12345678 /* PreferencesView.swift */,
 				3D258350F99A800B8CBF8AEA /* PresetsButton.swift */,
@@ -410,6 +424,8 @@
 				878F770AF1608311F0C9BA09 /* WindowAccessor.swift in Sources */,
 				7C97F7855F700CA55821BFD1 /* WindowSnapManager.swift in Sources */,
 				366BB17A2EC03F9B006162E2 /* BorderlessWindow.swift in Sources */,
+				36CAB6262EC13E3D00902330 /* WinampTitlebarDragHandle.swift in Sources */,
+				36CAB6272EC13E3D00902330 /* TitlebarDragCaptureView.swift in Sources */,
 				47C40C273D4B4CD3804B3224 /* WindowSpec.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

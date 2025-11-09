@@ -92,12 +92,14 @@ struct WinampMainWindow: View {
                             height: WinampSizes.main.height)
 
             // Title bar with "Winamp" text (overlays on background)
-            // Make ONLY the title bar draggable using macOS 15's WindowDragGesture
-            SimpleSpriteImage("MAIN_TITLE_BAR_SELECTED",
-                            width: 275,
-                            height: 14)
-                .at(CGPoint(x: 0, y: 0))
-                .gesture(WindowDragGesture())
+            // Make ONLY the title bar draggable using custom drag (magnetic snapping)
+            // CRITICAL: Apply .at() to drag handle itself, not content inside (Oracle fix)
+            WinampTitlebarDragHandle(windowKind: .main, size: CGSize(width: 275, height: 14)) {
+                SimpleSpriteImage("MAIN_TITLE_BAR_SELECTED",
+                                width: 275,
+                                height: 14)
+            }
+            .at(CGPoint(x: 0, y: 0))
 
             if !isShadeMode {
                 // Full window mode

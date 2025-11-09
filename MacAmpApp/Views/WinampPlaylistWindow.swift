@@ -373,9 +373,10 @@ struct WinampPlaylistWindow: View {
                     .position(x: 25 + 12.5 + CGFloat(i) * 25, y: 10)
             }
             
-            SimpleSpriteImage("PLAYLIST_TITLE_BAR", width: 100, height: 20)
-                .position(x: 137.5, y: 10)
-                .gesture(WindowDragGesture())
+            WinampTitlebarDragHandle(windowKind: .playlist, size: CGSize(width: 100, height: 20)) {
+                SimpleSpriteImage("PLAYLIST_TITLE_BAR", width: 100, height: 20)
+            }
+            .position(x: 137.5, y: 10)
             
             SimpleSpriteImage("PLAYLIST_TOP_RIGHT_CORNER", width: 25, height: 20)
                 .position(x: 262.5, y: 10)
