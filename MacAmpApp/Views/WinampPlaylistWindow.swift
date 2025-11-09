@@ -330,6 +330,7 @@ struct WinampPlaylistWindow: View {
             .frame(width: windowWidth, height: isShadeMode ? 14 : windowHeight)
         }
         .frame(width: windowWidth, height: isShadeMode ? 14 : windowHeight)
+        .background(Color.black)
         .onAppear {
             // Store monitor reference to keep it alive
             keyboardMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [self] event in
@@ -404,14 +405,15 @@ struct WinampPlaylistWindow: View {
     
     @ViewBuilder
     private func buildContentOverlay() -> some View {
+        ZStack {
             playlistBackgroundColor
-                .frame(width: 243, height: 170)
-                .position(x: 133.5, y: 105)
 
             buildTrackList()
-                .frame(width: 243, height: 174)
-                .position(x: 133.5, y: 107)
-                .clipped()
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        }
+        .frame(width: 243, height: 174)
+        .position(x: 133.5, y: 107)
+        .clipped()
             
             buildBottomControls()
             buildPlaylistTransportButtons()
