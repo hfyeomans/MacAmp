@@ -50,8 +50,10 @@ struct WinampWindowConfigurator {
             contentView.wantsLayer = true
         }
 
-        contentView.layer?.isOpaque = false
-        // Nearly invisible backing (0.001 alpha) - prevents bleed-through
-        contentView.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.001).cgColor
+        contentView.layer?.isOpaque = true
+        // Fully opaque black backing - prevents bleed-through
+        // Oracle: Need 1.0 alpha to actually block background windows
+        // This only fills where SwiftUI doesn't draw (sprites sit above)
+        contentView.layer?.backgroundColor = NSColor.black.cgColor
     }
 }
