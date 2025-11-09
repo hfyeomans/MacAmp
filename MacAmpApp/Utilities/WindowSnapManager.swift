@@ -32,7 +32,8 @@ final class WindowSnapManager: NSObject, NSWindowDelegate {
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         windows[kind] = TrackedWindow(window: window, kind: kind)
-        window.delegate = self
+        // PHASE 3: Delegate is now set via WindowDelegateMultiplexer in WindowCoordinator
+        // This allows multiple delegates to coexist (WindowSnapManager + future custom handlers)
         lastOrigins[ObjectIdentifier(window)] = window.frame.origin
     }
 

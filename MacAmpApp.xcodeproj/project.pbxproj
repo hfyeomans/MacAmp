@@ -29,6 +29,7 @@
 		36C0FFE62EB512A300916917 /* KenWood_KDC_7000_Elite.wsz in Resources */ = {isa = PBXBuildFile; fileRef = 36C0FFDD2EB512A300916917 /* KenWood_KDC_7000_Elite.wsz */; };
 		36CAB6262EC13E3D00902330 /* WinampTitlebarDragHandle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36CAB6242EC13E3D00902330 /* WinampTitlebarDragHandle.swift */; };
 		36CAB6272EC13E3D00902330 /* TitlebarDragCaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36CAB6232EC13E3D00902330 /* TitlebarDragCaptureView.swift */; };
+		36CAB6292EC153FD00902330 /* WindowDelegateMultiplexer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36CAB6282EC153FD00902330 /* WindowDelegateMultiplexer.swift */; };
 		397CD3DA0D75924BD0B90FBE /* EQF.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDF85EA8990A038079FC0CC3 /* EQF.swift */; };
 		3D5787FD4B060D13BE690E2A /* WinampEqualizerWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A489CA15E452302405E6FAE /* WinampEqualizerWindow.swift */; };
 		4007DF219A7FEAB6FFC1AE73 /* ImageSlicing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D4BAA0F198BED23AAFABFEC /* ImageSlicing.swift */; };
@@ -93,6 +94,7 @@
 		36C6A4148DF5415F9142A777 /* RadioStation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadioStation.swift; sourceTree = "<group>"; };
 		36CAB6232EC13E3D00902330 /* TitlebarDragCaptureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TitlebarDragCaptureView.swift; sourceTree = "<group>"; };
 		36CAB6242EC13E3D00902330 /* WinampTitlebarDragHandle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WinampTitlebarDragHandle.swift; sourceTree = "<group>"; };
+		36CAB6282EC153FD00902330 /* WindowDelegateMultiplexer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowDelegateMultiplexer.swift; sourceTree = "<group>"; };
 		3D258350F99A800B8CBF8AEA /* PresetsButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresetsButton.swift; sourceTree = "<group>"; };
 		3DCDB09162242F5E73FF35F6 /* SkinnedText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkinnedText.swift; sourceTree = "<group>"; };
 		43358BDD8D9B537C9109DF62 /* SnapUtils.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapUtils.swift; sourceTree = "<group>"; };
@@ -264,6 +266,7 @@
 		EB257FE97ABCB16CE95A16E0 /* Utilities */ = {
 			isa = PBXGroup;
 			children = (
+				36CAB6282EC153FD00902330 /* WindowDelegateMultiplexer.swift */,
 				366BB17B2EC0411E006162E2 /* WinampWindowConfigurator.swift */,
 				F8A2F2CBA9954B0B144DA072 /* WindowAccessor.swift */,
 				7FF88FFEFCC2A65D88029ADB /* WindowSnapManager.swift */,
@@ -380,6 +383,7 @@
 				342759E1558D4553A66C3AD9 /* RadioStationLibrary.swift in Sources */,
 				93C52B55431F4E9C9E54ED8F /* StreamPlayer.swift in Sources */,
 				4B6ACCF9E12C4031AAA5DE1D /* PlaybackCoordinator.swift in Sources */,
+				36CAB6292EC153FD00902330 /* WindowDelegateMultiplexer.swift in Sources */,
 				AB123DEF4E567890ABCDEF12 /* AppSettings.swift in Sources */,
 				366BB17C2EC0411E006162E2 /* WinampWindowConfigurator.swift in Sources */,
 				B3A2FD6D778A60B9F0D92258 /* AppCommands.swift in Sources */,

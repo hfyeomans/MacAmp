@@ -5,6 +5,7 @@ import AppKit
 struct WinampWindowConfigurator {
     /// Apply standard Winamp window configuration to an NSWindow
     /// - Parameter window: The window to configure
+    @MainActor
     static func apply(to window: NSWindow) {
         // Configure window style mask to remove title bar completely
         window.styleMask.insert(.borderless)
@@ -39,6 +40,7 @@ struct WinampWindowConfigurator {
     /// Install translucent backing layer to prevent 0-alpha holes and bleed-through
     /// Call after window.contentView is set
     /// - Parameter window: The window with content view
+    @MainActor
     static func installHitSurface(on window: NSWindow) {
         window.isOpaque = false
         window.backgroundColor = .clear

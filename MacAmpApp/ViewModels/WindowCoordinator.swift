@@ -18,6 +18,11 @@ final class WindowCoordinator {
     @ObservationIgnored private var alwaysOnTopTask: Task<Void, Never>?
     private var hasPresentedInitialWindows = false
 
+    // PHASE 3: Delegate multiplexers (must store as properties - NSWindow.delegate is weak!)
+    private var mainDelegateMultiplexer: WindowDelegateMultiplexer?
+    private var eqDelegateMultiplexer: WindowDelegateMultiplexer?
+    private var playlistDelegateMultiplexer: WindowDelegateMultiplexer?
+
     var mainWindow: NSWindow? { mainController.window }
     var eqWindow: NSWindow? { eqController.window }
     var playlistWindow: NSWindow? { playlistController.window }
@@ -85,6 +90,7 @@ final class WindowCoordinator {
         // - Cluster detection (group movement)
         // - Screen edge snapping
         // - Multi-monitor support
+        // NOTE: register() no longer sets window.delegate (Phase 3 uses multiplexer)
         if let main = mainWindow {
             WindowSnapManager.shared.register(window: main, kind: .main)
         }
@@ -94,6 +100,26 @@ final class WindowCoordinator {
         if let playlist = playlistWindow {
             WindowSnapManager.shared.register(window: playlist, kind: .playlist)
         }
+
+        // PHASE 3: Set up delegate multiplexers
+        // Multiplexer pattern allows multiple delegates per window
+        // WindowSnapManager is first delegate, can add more later (resize, close, focus handlers)
+        // CRITICAL: Must store multiplexers as properties - NSWindow.delegate is weak!
+
+        // Main window multiplexer
+        mainDelegateMultiplexer = WindowDelegateMultiplexer()
+        mainDelegateMultiplexer?.add(delegate: WindowSnapManager.shared)
+        mainWindow?.delegate = mainDelegateMultiplexer
+
+        // EQ window multiplexer
+        eqDelegateMultiplexer = WindowDelegateMultiplexer()
+        eqDelegateMultiplexer?.add(delegate: WindowSnapManager.shared)
+        eqWindow?.delegate = eqDelegateMultiplexer
+
+        // Playlist window multiplexer
+        playlistDelegateMultiplexer = WindowDelegateMultiplexer()
+        playlistDelegateMultiplexer?.add(delegate: WindowSnapManager.shared)
+        playlistWindow?.delegate = playlistDelegateMultiplexer
     }
 
     // CRITICAL FIX #3: Always-on-top observer (Oracle P1 fix - no memory leak)
