@@ -121,7 +121,13 @@ final class WindowSnapManager: NSObject, NSWindowDelegate {
             for id in clusterIDs {
                 if let w = idToWindow[id] {
                     let origin = w.frame.origin
-                    w.setFrameOrigin(NSPoint(x: origin.x + groupDelta.x, y: origin.y + groupDelta.y))
+                    // CRITICAL FIX: Y-axis inversion for AppKit coordinates
+                    // groupDelta is in top-left space, NSWindow uses bottom-left
+                    // Must negate Y to convert coordinate systems
+                    w.setFrameOrigin(NSPoint(
+                        x: origin.x + groupDelta.x,
+                        y: origin.y - groupDelta.y  // Negate Y for AppKit
+                    ))
                 }
             }
             isAdjusting = false
