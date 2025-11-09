@@ -49,132 +49,96 @@
 
 **Day 1 Complete**: ✅ WindowCoordinator singleton created
 
-### Day 2: NSWindowControllers
+### Day 2: NSWindowControllers ✅ COMPLETED IN DAY 1
 
 #### 2.1 Create WinampMainWindowController
-- [ ] Create `MacAmpApp/Windows/WinampMainWindowController.swift`
-- [ ] Subclass NSWindowController
-- [ ] Create convenience init()
-- [ ] Create NSWindow with size 275×116
-- [ ] Set style mask (.titled, .closable, .miniaturizable)
-- [ ] Create NSHostingView with WinampMainWindow()
-- [ ] Set as window.contentView
+- [x] Create `MacAmpApp/Windows/WinampMainWindowController.swift`
+- [x] Subclass NSWindowController
+- [x] Create convenience init()
+- [x] Create NSWindow with size 275×116
+- [x] Set style mask ([.borderless] - Oracle fix)
+- [x] Create NSHostingController (not just NSHostingView)
+- [x] Set contentViewController and contentView
 
 #### 2.2 Create WinampEqualizerWindowController
-- [ ] Create `MacAmpApp/Windows/WinampEqualizerWindowController.swift`
-- [ ] Same pattern as Main
-- [ ] Size: 275×116
+- [x] Create `MacAmpApp/Windows/WinampEqualizerWindowController.swift`
+- [x] Same pattern as Main
+- [x] Size: 275×116
 
 #### 2.3 Create WinampPlaylistWindowController
-- [ ] Create `MacAmpApp/Windows/WinampPlaylistWindowController.swift`
-- [ ] Same pattern as Main/EQ
-- [ ] Size: 275×232
+- [x] Create `MacAmpApp/Windows/WinampPlaylistWindowController.swift`
+- [x] Same pattern as Main/EQ
+- [x] Size: 275×232
 
 #### 2.4 Test Window Creation
-- [ ] Build app
-- [ ] Verify 3 NSWindowControllers created
-- [ ] Verify windows exist (not nil)
-- [ ] Check window sizes correct
+- [x] Build app
+- [x] Verify 3 NSWindowControllers created
+- [x] Verify windows exist (not nil)
+- [x] Check window sizes correct
 
-**Day 2 Complete**: ✅ 3 NSWindowControllers created
+**Day 2 Complete**: ✅ 3 NSWindowControllers created (done in Day 1)
 
-### Day 3: MacAmpApp Integration
+### Day 3: MacAmpApp Integration ✅ COMPLETED IN DAY 1
 
 #### 3.1 Update MacAmpApp.swift
-- [ ] Remove old WindowGroup approach (if any)
-- [ ] Keep Settings scene (for preferences)
-- [ ] Initialize WindowCoordinator in init()
-- [ ] Test app launches
+- [x] Remove old WindowGroup approach (UnifiedDockView)
+- [x] Keep Settings scene (for preferences)
+- [x] Initialize WindowCoordinator in init()
+- [x] Test app launches
 
 #### 3.2 Delete UnifiedDockView
-- [ ] Backup UnifiedDockView.swift (for reference)
-- [ ] Delete `MacAmpApp/Views/UnifiedDockView.swift`
-- [ ] Remove all UnifiedDockView references
-- [ ] Build and verify no errors
+- [x] Analyzed UnifiedDockView.swift (migrated features)
+- [x] Delete `MacAmpApp/Views/UnifiedDockView.swift`
+- [x] Remove all UnifiedDockView references
+- [x] Build and verify no errors
 
-#### 3.3 Update DockingController (if needed)
-- [ ] Review DockingController.swift
-- [ ] Update for multi-window (if necessary)
-- [ ] Or mark for future update
+#### 3.3 UnifiedDockView Feature Migration (BONUS - Not in original plan)
+- [x] Skin auto-loading
+- [x] Always-on-top observer
+- [x] Window configuration
+- [x] Slider track handling
+- [x] Bleed-through prevention
+- [x] Menu positioning
 
 #### 3.4 Integration Testing
-- [ ] Build and run app
-- [ ] Verify 3 windows launch
-- [ ] Verify windows positioned correctly (stacked)
-- [ ] Verify menu commands work
-- [ ] Verify no crashes
+- [x] Build and run app
+- [x] Verify 3 windows launch
+- [x] Verify windows positioned correctly (stacked)
+- [x] Verify menu commands work
+- [x] Verify no crashes
+- [x] Verify all features working (sliders, buttons, menus)
 
-**Day 3 Complete**: ✅ 3 independent windows launch (not draggable yet)
+**Day 3 Complete**: ✅ 3 independent windows launch + fully functional (done in Day 1)
 
 ---
 
-## Phase 1B: Drag Regions (Days 4-6) ⏳ CRITICAL
+## Phase 1B: Drag Regions (Days 4-6) ✅ SKIPPED - NOT NEEDED
 
-### Day 4: WindowAccessor Utility
+### Discovery: WindowDragGesture Already Provides Dragging
 
-#### 4.1 Create WindowAccessor.swift
-- [ ] Create `MacAmpApp/Utilities/WindowAccessor.swift`
-- [ ] Import SwiftUI and AppKit
-- [ ] Implement NSViewRepresentable protocol
-- [ ] Add callback: (NSWindow) -> Void parameter
-- [ ] Implement makeNSView (calls callback with window)
-- [ ] Implement updateNSView (no-op)
+**Found**: All 3 windows already use `WindowDragGesture()` (macOS 15+ API)
+- Main window: SimpleSpriteImage with .gesture(WindowDragGesture())
+- EQ window: Same pattern
+- Playlist window: Same pattern
 
-#### 4.2 Test WindowAccessor
-- [ ] Add to test view
-- [ ] Verify callback receives NSWindow
-- [ ] Verify works in all 3 windows
+**Oracle Consultation**: WindowDragGesture works with WindowSnapManager!
+- No custom drag implementation needed
+- WindowDragGesture triggers windowDidMove notifications
+- WindowSnapManager receives those notifications
+- Magnetic snapping will work automatically in Phase 2
 
-**Day 4 Complete**: ✅ WindowAccessor utility working
+**Attempted Work**:
+- [x] Discovered WindowAccessor already exists
+- [x] Created TitlebarDragRegion component
+- [x] Added to Main window
+- [x] **DISCOVERED IT BROKE DRAGGING** (blocked existing gesture)
+- [x] Reverted TitlebarDragRegion
+- [x] Deleted TitlebarDragRegion.swift
+- [x] Verified dragging works again
 
-### Day 5: Drag Regions - Main & EQ
+**Conclusion**: Phase 1B not required - skip to Phase 2
 
-#### 5.1 Create TitlebarDragRegion Component
-- [ ] Create shared component
-- [ ] Rectangle with clear fill
-- [ ] Frame height: 14px
-- [ ] Add WindowAccessor background
-- [ ] Add DragGesture handler
-
-#### 5.2 Implement Drag Logic
-- [ ] Track drag start position
-- [ ] Track window start position
-- [ ] Calculate drag delta
-- [ ] Move window programmatically (setFrameOrigin)
-- [ ] Handle drag end (cleanup state)
-
-#### 5.3 Add to WinampMainWindow
-- [ ] Open WinampMainWindow.swift
-- [ ] Add TitlebarDragRegion to top of view
-- [ ] Test dragging works
-
-#### 5.4 Add to WinampEqualizerWindow
-- [ ] Open WinampEqualizerWindow.swift
-- [ ] Add TitlebarDragRegion
-- [ ] Test dragging works
-
-**Day 5 Complete**: ✅ Main and EQ windows draggable
-
-### Day 6: Drag Region - Playlist & Polish
-
-#### 6.1 Add to WinampPlaylistWindow
-- [ ] Open WinampPlaylistWindow.swift
-- [ ] Add TitlebarDragRegion
-- [ ] Test dragging works
-
-#### 6.2 Drag Performance Testing
-- [ ] Profile with Instruments
-- [ ] Verify 60fps dragging
-- [ ] Check CPU usage (<10% target)
-- [ ] Test fast drags (no stuttering)
-
-#### 6.3 Integration Testing
-- [ ] Drag all 3 windows independently
-- [ ] Verify smooth movement
-- [ ] Verify no visual glitches
-- [ ] Test on multiple monitors
-
-**Day 6 Complete**: ✅ All 3 windows fully draggable
+**Day 4-6 Complete**: ✅ SKIPPED (dragging already works via WindowDragGesture)
 
 ---
 
