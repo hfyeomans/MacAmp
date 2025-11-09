@@ -922,3 +922,71 @@ In Xcode, add WinampWindowConfigurator.swift:
 - Build - should succeed
 
 **Then**: All 3 critical UnifiedDockView migrations will be complete!
+
+---
+
+## Day 1 Implementation Summary (In Progress)
+
+**Date**: 2025-11-08  
+**Status**: ~95% Complete (awaiting menu coordinate adjustment)
+
+### ✅ Completed
+
+**Architecture**:
+- WindowCoordinator.swift created (singleton coordinator)
+- 3 NSWindowControllers created (Main, EQ, Playlist)
+- BorderlessWindow.swift (canBecomeKey/canBecomeMain)
+- WinampWindowConfigurator.swift (shared config helper)
+- MacAmpApp.swift updated (manual window creation)
+- UnifiedDockView.swift removed
+
+**Critical UnifiedDockView Migrations**:
+- ✅ Skin auto-loading (loadInitialSkin on startup)
+- ✅ Always-on-top observer (window.level tracking)
+- ✅ Window configuration baseline (WinampWindowConfigurator)
+- ✅ Skin flash prevention (presentWindowsWhenReady)
+- ✅ Slider track click handling (NSHostingController + acceptsMouseMovedEvents)
+- ✅ Bleed-through prevention (layout fix + 0.01 alpha backing)
+- ✅ Playlist menu positioning (WindowCoordinator.playlistWindow reference)
+
+**Oracle Consultations**: 3 sessions for Day 1 issues
+1. Migration strategy (CRITICAL features identified)
+2. Slider track click-through (NSHostingController fix)
+3. Menu positioning (window reference fix)
+
+### ⏳ Remaining
+
+**User Actions**:
+- [ ] Adjust menu coordinates (Lines 722, 773, 821, 860)
+- [ ] Test menus appear at correct positions
+- [ ] Final verification of all features
+
+### 🚫 Deferred (As Planned)
+
+**D Button (Double-Size)**: Phase 4 (Days 13-15)
+- User approved deferral
+- Already in original plan
+- Will implement synchronized window scaling later
+
+### Issues Resolved (Oracle-Guided)
+
+1. ✅ Forward reference (WindowDelegateMultiplexer)
+2. ✅ Build errors (Xcode project integration)
+3. ✅ Non-clickable controls (NSHostingController)
+4. ✅ Slider track pass-through (acceptsMouseMovedEvents)
+5. ✅ Bleed-through (layout gap + backing layer)
+6. ✅ Menu positioning (wrong window reference)
+7. ✅ Skin flash (wait for skin load)
+
+### Commits (Day 1): 25+ atomic commits
+
+**Major milestones**:
+- Architecture created
+- Build fixes
+- UnifiedDockView migrations
+- Oracle consultations & fixes
+
+---
+
+**Day 1 Status**: 95% complete (menu coordinates pending)  
+**Next**: User adjusts coordinates, tests, then Day 1 COMPLETE
