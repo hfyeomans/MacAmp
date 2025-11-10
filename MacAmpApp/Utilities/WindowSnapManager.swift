@@ -54,6 +54,28 @@ final class WindowSnapManager: NSObject, NSWindowDelegate {
         lastOrigins[ObjectIdentifier(window)] = window.frame.origin
     }
 
+    func clusterKinds(containing kind: WindowKind) -> Set<WindowKind>? {
+        guard let (_, idToBox) = buildBoxes() else { return nil }
+        guard let targetWindow = windows[kind]?.window else { return nil }
+        let targetID = ObjectIdentifier(targetWindow)
+        guard idToBox[targetID] != nil else { return nil }
+
+        let clusterIDs = connectedCluster(start: targetID, boxes: idToBox)
+        var connectedKinds: Set<WindowKind> = []
+        for (candidateKind, tracked) in windows {
+            guard let window = tracked.window else { continue }
+            if clusterIDs.contains(ObjectIdentifier(window)) {
+                connectedKinds.insert(candidateKind)
+            }
+        }
+        return connectedKinds
+    }
+
+    func areConnected(_ first: WindowKind, _ second: WindowKind) -> Bool {
+        guard let cluster = clusterKinds(containing: first) else { return false }
+        return cluster.contains(second)
+    }
+
     func windowDidMove(_ notification: Notification) {
         guard !isAdjusting else { return }
         guard let movedWindow = notification.object as? NSWindow else { return }

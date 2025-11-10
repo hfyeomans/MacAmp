@@ -55,7 +55,17 @@ MacAmp is a pure SwiftUI application for macOS 15+/26+ with the following charac
 3. **Docking System**
    - `DockingController` tracks visible panes with state persistence
    - WindowSnapManager registers windows and handles snapping
-   - Could be extended to include visualizer windows
+   - 2025-11 update: `WindowCoordinator` now asks `WindowSnapManager.clusterKinds(containing:)` for the playlist's cluster before every double-size toggle. The helper builds a `PlaylistDockingContext` (anchor + attachment) so the playlist can follow either the Equalizer or Main window instantly. Magnetic snapping is disabled via `beginProgrammaticAdjustment()` during the frame update and re-enabled afterwards. See `MacAmpApp/ViewModels/WindowCoordinator.swift` and `MacAmpApp/Utilities/WindowSnapManager.swift`.
+
+#### Instant Double-Size Docking Pipeline
+
+1. `AppSettings.isDoubleSizeMode` toggles via CTRL+D / "D" button.
+2. `WindowCoordinator.resizeMainAndEQWindows` captures the live frames for Main, EQ, and Playlist.
+3. `WindowSnapManager.clusterKinds(containing: .playlist)` returns the current magnetic cluster. If the playlist is touching the EQ or Main window, we derive an attachment enum (`below`, `above`, `left`, `right`) plus a saved anchor.
+4. Main and EQ windows resize synchronously (no NSAnimation). While `WindowSnapManager` is in programmatic adjustment mode the playlist is re-aligned relative to the anchor frame, preserving the Winamp stack.
+5. DEBUG logging prints `[ORACLE] Docking source: …` so QA can immediately see which anchor drove the adjustment.
+
+**Why this matters**: Visualizer windows (or other auxiliary panes) can plug into the same mechanism—once they register with `WindowSnapManager`, the coordinator can ask for their cluster membership and keep them glued to whichever window they are attached to. This architecture keeps the classic Winamp feel (instant 100 % ↔ 200 % snap) while honoring macOS snapping semantics.
 
 ---
 

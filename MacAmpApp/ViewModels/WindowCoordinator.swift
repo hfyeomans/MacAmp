@@ -1,15 +1,48 @@
 import AppKit
 import Observation  // ORACLE CODE QUALITY: Required for @Observable
 
-private struct PlaylistDockingSnapshot {
-    let playlistFrame: NSRect
-    let eqFrame: NSRect
-    let horizontalOverlap: Bool
-    let horizontalDelta: CGFloat
-    let verticalDelta: CGFloat
-    let tolerance: CGFloat
+private struct PlaylistAttachmentSnapshot {
+    let anchor: WindowKind
+    let attachment: PlaylistDockingContext.Attachment
+}
 
-    var isDocked: Bool { horizontalOverlap && verticalDelta < tolerance }
+private struct PlaylistDockingContext {
+    enum Source: CustomStringConvertible {
+        case cluster(Set<WindowKind>)
+        case heuristic
+        case memory
+
+        var description: String {
+            switch self {
+            case .cluster(let kinds):
+                return "cluster=" + kinds.map { "\($0)" }.sorted().joined(separator: ",")
+            case .heuristic:
+                return "heuristic"
+            case .memory:
+                return "memory"
+            }
+        }
+    }
+
+    enum Attachment: CustomStringConvertible {
+        case below(xOffset: CGFloat)
+        case above(xOffset: CGFloat)
+        case left(yOffset: CGFloat)
+        case right(yOffset: CGFloat)
+
+        var description: String {
+            switch self {
+            case .below(let offset): return ".below(xOffset: \(offset))"
+            case .above(let offset): return ".above(xOffset: \(offset))"
+            case .left(let offset): return ".left(yOffset: \(offset))"
+            case .right(let offset): return ".right(yOffset: \(offset))"
+            }
+        }
+    }
+
+    let anchor: WindowKind
+    let attachment: Attachment
+    let source: Source
 }
 
 @MainActor
@@ -34,6 +67,7 @@ final class WindowCoordinator {
     private var windowKinds: [ObjectIdentifier: WindowKind] = [:]
     private let windowFrameStore = WindowFrameStore()
     private var persistenceDelegate: WindowPersistenceDelegate?
+    private var lastPlaylistAttachment: PlaylistAttachmentSnapshot?
 
     // PHASE 3: Delegate multiplexers (must store as properties - NSWindow.delegate is weak!)
     private var mainDelegateMultiplexer: WindowDelegateMultiplexer?
@@ -224,151 +258,254 @@ final class WindowCoordinator {
         }
     }
 
-    private func resizeMainAndEQWindows(doubled: Bool, animated: Bool = true, persistResult: Bool = true) {
-        // PHASE 4: Main + EQ double, Playlist stays docked if attached
-        // Gemini + Oracle pattern: Check docking BEFORE resize, synchronize animations
+    private func resizeMainAndEQWindows(doubled: Bool, animated _: Bool = true, persistResult: Bool = true) {
         guard let main = mainWindow, let eq = eqWindow else { return }
 
-        // Get original frames BEFORE any calculations
         let originalMainFrame = main.frame
         let originalEqFrame = eq.frame
         let originalPlaylistFrame = playlistWindow?.frame
+        let playlistSize = originalPlaylistFrame?.size ?? playlistWindow?.frame.size
 
-        // Check if playlist is docked to EQ *before* the resize (Gemini fix)
-        let dockingSnapshot = originalPlaylistFrame.map { plFrame in
-            makePlaylistDockingSnapshot(playlistFrame: plFrame, eqFrame: originalEqFrame)
-        }
-        let isPlaylistDocked = dockingSnapshot?.isDocked ?? false
+        let dockingContext = makePlaylistDockingContext(
+            mainFrame: originalMainFrame,
+            eqFrame: originalEqFrame,
+            playlistFrame: originalPlaylistFrame
+        )
 
         logDoubleSizeDebug(
             mainFrame: originalMainFrame,
             eqFrame: originalEqFrame,
             playlistFrame: originalPlaylistFrame,
-            dockingSnapshot: dockingSnapshot
+            dockingContext: dockingContext
         )
 
-        // Calculate new sizes
         let scale: CGFloat = doubled ? 2.0 : 1.0
-        let mainSize = CGSize(
-            width: WinampSizes.main.width * scale,
-            height: WinampSizes.main.height * scale
-        )
-        let eqSize = CGSize(
-            width: WinampSizes.equalizer.width * scale,
-            height: WinampSizes.equalizer.height * scale
-        )
-
-        // Calculate new Main frame (top-aligned: title bar stays fixed)
         var newMainFrame = originalMainFrame
-        let mainDelta = mainSize.height - newMainFrame.size.height
-        newMainFrame.size = mainSize
-        newMainFrame.origin.y -= mainDelta  // Grows downward from fixed top
+        let newMainSize = CGSize(width: WinampSizes.main.width * scale, height: WinampSizes.main.height * scale)
+        let mainDelta = newMainSize.height - newMainFrame.size.height
+        newMainFrame.size = newMainSize
+        newMainFrame.origin.y -= mainDelta
 
-        // Calculate new EQ frame (stacked directly below Main - Oracle fix)
         var newEqFrame = originalEqFrame
-        newEqFrame.size = eqSize
-        newEqFrame.origin.y = newMainFrame.origin.y - newEqFrame.size.height  // Zero spacing
+        let newEqSize = CGSize(width: WinampSizes.equalizer.width * scale, height: WinampSizes.equalizer.height * scale)
+        newEqFrame.size = newEqSize
+        newEqFrame.origin.y = newMainFrame.origin.y - newEqFrame.size.height
 
-        // CRITICAL: Disable WindowSnapManager during resize to prevent cascade effects
-        // Gemini research: setFrame() triggers windowDidMove, causing unwanted snapping
+        let animationAnchorFrame = dockingContext.flatMap { context in
+            anchorFrame(context.anchor, mainFrame: newMainFrame, eqFrame: newEqFrame)
+        }
+
         beginSuppressingPersistence()
         WindowSnapManager.shared.beginProgrammaticAdjustment()
 
-        let finishAdjustment: () -> Void = { [weak self] in
-            WindowSnapManager.shared.endProgrammaticAdjustment()
-            self?.endSuppressingPersistence()
-            if persistResult {
-                self?.schedulePersistenceFlush()
-            }
+        main.setFrame(newMainFrame, display: true)
+        eq.setFrame(newEqFrame, display: true)
+
+        if let context = dockingContext,
+           let size = playlistSize,
+           let anchorFrame = animationAnchorFrame ?? liveAnchorFrame(context.anchor) ?? anchorFrame(context.anchor, mainFrame: newMainFrame, eqFrame: newEqFrame) {
+            movePlaylist(using: context, targetFrame: anchorFrame, playlistSize: size, animated: false)
         }
 
-        if animated {
-            // Gemini fix: Group animations to prevent visual tearing/overlap
-            NSAnimationContext.runAnimationGroup({ context in
-                context.duration = 0.2  // Match SwiftUI .animation() duration
-                context.allowsImplicitAnimation = true
+        logDockingStage(
+            "post-resize actual",
+            mainFrame: mainWindow?.frame,
+            eqFrame: eqWindow?.frame,
+            playlistFrame: playlistWindow?.frame
+        )
 
-                // Apply new frames using animator proxy for synchronized updates
-                main.animator().setFrame(newMainFrame, display: true)
-                eq.animator().setFrame(newEqFrame, display: true)
-
-                // If playlist was docked, move it to stay attached to EQ's new position
-                if isPlaylistDocked, let playlist = playlistWindow, var plFrame = originalPlaylistFrame {
-                    plFrame.origin.y = newEqFrame.origin.y - plFrame.size.height
-                    playlist.animator().setFrame(plFrame, display: true)
-                }
-            }, completionHandler: {
-                finishAdjustment()
-            })
-        } else {
-            main.setFrame(newMainFrame, display: true)
-            eq.setFrame(newEqFrame, display: true)
-
-            if isPlaylistDocked, let playlist = playlistWindow, var plFrame = originalPlaylistFrame {
-                plFrame.origin.y = newEqFrame.origin.y - plFrame.size.height
-                playlist.setFrame(plFrame, display: true)
-            }
-
-            finishAdjustment()
+        WindowSnapManager.shared.endProgrammaticAdjustment()
+        endSuppressingPersistence()
+        if persistResult {
+            schedulePersistenceFlush()
         }
     }
 
-    private func makePlaylistDockingSnapshot(playlistFrame: NSRect, eqFrame: NSRect) -> PlaylistDockingSnapshot {
-        let tolerance = SnapUtils.SNAP_DISTANCE
-        let playlistLeft = playlistFrame.minX
-        let playlistRight = playlistFrame.maxX
-        let eqLeft = eqFrame.minX
-        let eqRight = eqFrame.maxX
-        let overlapsX = playlistLeft <= eqRight + tolerance && eqLeft <= playlistRight + tolerance
+    private func makePlaylistDockingContext(mainFrame: NSRect, eqFrame: NSRect, playlistFrame: NSRect?) -> PlaylistDockingContext? {
+        guard let playlistFrame else { return nil }
 
-        let horizontalDelta: CGFloat
-        if overlapsX {
-            horizontalDelta = 0
-        } else if playlistRight < eqLeft {
-            horizontalDelta = eqLeft - playlistRight
-        } else if eqRight < playlistLeft {
-            horizontalDelta = playlistLeft - eqRight
-        } else {
-            horizontalDelta = 0
+        if let clusterKinds = WindowSnapManager.shared.clusterKinds(containing: .playlist) {
+            if clusterKinds.contains(.equalizer),
+               let attachment = determineAttachment(anchorFrame: eqFrame, playlistFrame: playlistFrame, strict: false) {
+                let snapshot = PlaylistAttachmentSnapshot(anchor: .equalizer, attachment: attachment)
+                lastPlaylistAttachment = snapshot
+                return PlaylistDockingContext(anchor: .equalizer, attachment: attachment, source: .cluster(clusterKinds))
+            }
+            if clusterKinds.contains(.main),
+               let attachment = determineAttachment(anchorFrame: mainFrame, playlistFrame: playlistFrame, strict: false) {
+                let snapshot = PlaylistAttachmentSnapshot(anchor: .main, attachment: attachment)
+                lastPlaylistAttachment = snapshot
+                return PlaylistDockingContext(anchor: .main, attachment: attachment, source: .cluster(clusterKinds))
+            }
+            if let snapshot = lastPlaylistAttachment,
+               clusterKinds.contains(snapshot.anchor),
+               let anchorFrame = anchorFrame(snapshot.anchor, mainFrame: mainFrame, eqFrame: eqFrame),
+               attachmentStillEligible(snapshot, anchorFrame: anchorFrame, playlistFrame: playlistFrame) {
+                return PlaylistDockingContext(anchor: snapshot.anchor, attachment: snapshot.attachment, source: .memory)
+            }
         }
 
-        let playlistTop = playlistFrame.maxY
-        let eqBottom = eqFrame.minY
-        let verticalDelta = abs(eqBottom - playlistTop)
+        if let attachment = determineAttachment(anchorFrame: eqFrame, playlistFrame: playlistFrame) {
+            let snapshot = PlaylistAttachmentSnapshot(anchor: .equalizer, attachment: attachment)
+            lastPlaylistAttachment = snapshot
+            return PlaylistDockingContext(anchor: .equalizer, attachment: attachment, source: .heuristic)
+        }
 
-        return PlaylistDockingSnapshot(
-            playlistFrame: playlistFrame,
-            eqFrame: eqFrame,
-            horizontalOverlap: overlapsX,
-            horizontalDelta: horizontalDelta,
-            verticalDelta: verticalDelta,
-            tolerance: tolerance
-        )
+        if let attachment = determineAttachment(anchorFrame: mainFrame, playlistFrame: playlistFrame) {
+            let snapshot = PlaylistAttachmentSnapshot(anchor: .main, attachment: attachment)
+            lastPlaylistAttachment = snapshot
+            return PlaylistDockingContext(anchor: .main, attachment: attachment, source: .heuristic)
+        }
+
+        if let snapshot = lastPlaylistAttachment,
+           let anchorFrame = anchorFrame(snapshot.anchor, mainFrame: mainFrame, eqFrame: eqFrame),
+           attachmentStillEligible(snapshot, anchorFrame: anchorFrame, playlistFrame: playlistFrame) {
+            return PlaylistDockingContext(anchor: snapshot.anchor, attachment: snapshot.attachment, source: .memory)
+        }
+
+        lastPlaylistAttachment = nil
+        return nil
+    }
+
+    private func determineAttachment(anchorFrame: NSRect, playlistFrame: NSRect, strict: Bool = true) -> PlaylistDockingContext.Attachment? {
+        let tolerance = SnapUtils.SNAP_DISTANCE
+
+        var candidates: [(distance: CGFloat, attachment: PlaylistDockingContext.Attachment)] = []
+
+        func overlapsX() -> Bool {
+            playlistFrame.minX <= anchorFrame.maxX + tolerance && anchorFrame.minX <= playlistFrame.maxX + tolerance
+        }
+
+        func overlapsY() -> Bool {
+            playlistFrame.minY <= anchorFrame.maxY + tolerance && anchorFrame.minY <= playlistFrame.maxY + tolerance
+        }
+
+        func consider(distance: CGFloat, attachment: PlaylistDockingContext.Attachment) {
+            if strict {
+                if distance <= tolerance {
+                    candidates.append((distance, attachment))
+                }
+            } else {
+                candidates.append((distance, attachment))
+            }
+        }
+
+        if overlapsX() {
+            let playlistTop = playlistFrame.maxY
+            let anchorBottom = anchorFrame.minY
+            consider(distance: abs(playlistTop - anchorBottom), attachment: .below(xOffset: playlistFrame.origin.x - anchorFrame.origin.x))
+
+            let playlistBottom = playlistFrame.minY
+            let anchorTop = anchorFrame.maxY
+            consider(distance: abs(playlistBottom - anchorTop), attachment: .above(xOffset: playlistFrame.origin.x - anchorFrame.origin.x))
+        }
+
+        if overlapsY() {
+            let playlistRight = playlistFrame.maxX
+            let anchorLeft = anchorFrame.minX
+            consider(distance: abs(playlistRight - anchorLeft), attachment: .left(yOffset: playlistFrame.origin.y - anchorFrame.origin.y))
+
+            let playlistLeft = playlistFrame.minX
+            let anchorRight = anchorFrame.maxX
+            consider(distance: abs(playlistLeft - anchorRight), attachment: .right(yOffset: playlistFrame.origin.y - anchorFrame.origin.y))
+        }
+
+        return candidates.min(by: { $0.distance < $1.distance })?.attachment
+    }
+
+    private func playlistOrigin(for attachment: PlaylistDockingContext.Attachment, anchorFrame: NSRect, playlistSize: NSSize) -> NSPoint {
+        switch attachment {
+        case .below(let xOffset):
+            return NSPoint(x: anchorFrame.origin.x + xOffset, y: anchorFrame.origin.y - playlistSize.height)
+        case .above(let xOffset):
+            return NSPoint(x: anchorFrame.origin.x + xOffset, y: anchorFrame.origin.y + anchorFrame.size.height)
+        case .left(let yOffset):
+            return NSPoint(x: anchorFrame.origin.x - playlistSize.width, y: anchorFrame.origin.y + yOffset)
+        case .right(let yOffset):
+            return NSPoint(x: anchorFrame.origin.x + anchorFrame.size.width, y: anchorFrame.origin.y + yOffset)
+        }
+    }
+
+    private func attachmentStillEligible(_ snapshot: PlaylistAttachmentSnapshot, anchorFrame: NSRect, playlistFrame: NSRect) -> Bool {
+        let expected = playlistOrigin(for: snapshot.attachment, anchorFrame: anchorFrame, playlistSize: playlistFrame.size)
+        let dx = abs(playlistFrame.origin.x - expected.x)
+        let dy = abs(playlistFrame.origin.y - expected.y)
+        let tolerance = SnapUtils.SNAP_DISTANCE
+
+        switch snapshot.attachment {
+        case .below, .above:
+            return dx <= tolerance && dy <= anchorFrame.size.height + tolerance
+        case .left, .right:
+            return dy <= tolerance && dx <= playlistFrame.size.width + tolerance
+        }
+    }
+
+    private func anchorFrame(_ anchor: WindowKind, mainFrame: NSRect, eqFrame: NSRect) -> NSRect? {
+        switch anchor {
+        case .main:
+            return mainFrame
+        case .equalizer:
+            return eqFrame
+        default:
+            return nil
+        }
+    }
+
+    private func liveAnchorFrame(_ anchor: WindowKind) -> NSRect? {
+        switch anchor {
+        case .main:
+            return mainWindow?.frame
+        case .equalizer:
+            return eqWindow?.frame
+        default:
+            return nil
+        }
+    }
+
+    private func movePlaylist(using context: PlaylistDockingContext, targetFrame: NSRect, playlistSize: NSSize, animated: Bool) {
+        guard let playlist = playlistWindow else { return }
+        let origin = playlistOrigin(for: context.attachment, anchorFrame: targetFrame, playlistSize: playlistSize)
+        if animated {
+            playlist.animator().setFrameOrigin(origin)
+        } else {
+            playlist.setFrameOrigin(origin)
+        }
+
+        if settings.windowDebugLoggingEnabled {
+            let stage = animated ? "playlist move (animated)" : "playlist move"
+            print("[ORACLE] \(stage) anchor=\(context.anchor): targetOrigin=(x: \(origin.x), y: \(origin.y)), actualFrame=\(playlist.frame)")
+        }
     }
 
     private func logDoubleSizeDebug(
         mainFrame: NSRect,
         eqFrame: NSRect,
         playlistFrame: NSRect?,
-        dockingSnapshot: PlaylistDockingSnapshot?
+        dockingContext: PlaylistDockingContext?
     ) {
         guard settings.windowDebugLoggingEnabled else { return }
         print("=== DOUBLE-SIZE DEBUG ===")
         print("Main frame: \(mainFrame)")
         print("EQ frame: \(eqFrame)")
         print("Playlist frame: \(String(describing: playlistFrame))")
-
-        guard let snapshot = dockingSnapshot else {
+        if let context = dockingContext {
+            print("[ORACLE] Docking source: \(context.source.description), anchor=\(context.anchor), attachment=\(context.attachment.description)")
+            print("Action: Playlist WILL move with EQ (cluster-locked)")
+        } else if playlistFrame == nil {
             print("Docking detection: playlist window unavailable")
-            return
+        } else {
+            print("Action: Playlist stays independent (no docking context)")
         }
+    }
 
-        print("Docking detection:")
-        print("  playlistTop: \(snapshot.playlistFrame.maxY)")
-        print("  eqBottom: \(snapshot.eqFrame.minY)")
-        print("  horizontalOverlap: \(snapshot.horizontalOverlap) (delta: \(snapshot.horizontalDelta))")
-        print("  verticalDelta: \(snapshot.verticalDelta) vs tolerance: \(snapshot.tolerance)")
-        print("  isPlaylistDocked: \(snapshot.isDocked)")
+    private func logDockingStage(
+        _ stage: String,
+        mainFrame: NSRect?,
+        eqFrame: NSRect?,
+        playlistFrame: NSRect?
+    ) {
+        guard settings.windowDebugLoggingEnabled else { return }
+        print("[ORACLE] \(stage): main=\(String(describing: mainFrame)), eq=\(String(describing: eqFrame)), playlist=\(String(describing: playlistFrame))")
     }
 
     private func debugLogWindowPositions(step: String) {

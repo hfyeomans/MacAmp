@@ -100,7 +100,7 @@ The MacAmp documentation serves multiple critical functions:
   - Internet radio streaming implementation
   - Component integration maps
   - 19-bar Goertzel-like spectrum analyzer
-  - Window snapping system (WindowSnapManager)
+  - Window snapping + double-size docking pipeline (updated 2025-11-09)
   - Custom menu patterns (SpriteMenuItem + PlaylistMenuDelegate)
 - **When to Read**: Starting development, architectural reviews, major refactoring
 - **Related Docs**: IMPLEMENTATION_PATTERNS.md, SPRITE_SYSTEM_COMPLETE.md

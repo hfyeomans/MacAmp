@@ -14,6 +14,7 @@ This documentation package provides comprehensive guidance for implementing mode
 - File checklist for implementation
 - Common mistakes to avoid
 - Testing checklist
+- Instant double-size docking checklist (added 2025-11-09)
 
 **Use This For**: Quick understanding, implementation checklist, debugging
 

@@ -119,7 +119,6 @@ struct WinampEqualizerWindow: View {
             alignment: .topLeading
         )
         .fixedSize()  // Lock measured size so background sees final geometry
-        .animation(.easeInOut(duration: 0.2), value: settings.isDoubleSizeMode)
         .background(Color.black) // Must be AFTER fixedSize to see scaled dimensions
     }
     

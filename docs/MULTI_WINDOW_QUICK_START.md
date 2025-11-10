@@ -253,6 +253,16 @@ Handle new WindowKind cases automatically (no changes needed if enum-based)
 - [ ] Keyboard shortcuts work (Cmd+Shift+V, etc.)
 - [ ] Thread sanitizer clean
 
+### Instant Double-Size Docking (New – 2025-11-09)
+
+1. Listen to `AppSettings.isDoubleSizeMode` and call `WindowCoordinator.resizeMainAndEQWindows` on change.
+2. Inside `resizeMainAndEQWindows`, call `WindowSnapManager.clusterKinds(containing: .playlist)` to detect whether the playlist is touching the EQ or Main window. Build a `PlaylistDockingContext` to capture the anchor + attachment.
+3. Call `WindowSnapManager.beginProgrammaticAdjustment()` before updating frames, resize Main/EQ synchronously (no NSAnimation), then `endProgrammaticAdjustment()`.
+4. Reposition the playlist via `movePlaylist(using:context,targetFrame:)` so it stays glued to the chosen anchor.
+5. Remove `.animation` modifiers from the Winamp Main/EQ SwiftUI views so the resize looks instantaneous like classic Winamp.
+
+If any of the steps above regress, the playlist will drift when CTRL+D toggles—use the `[ORACLE] Docking source …` logs to diagnose.
+
 ---
 
 ## Performance Tips
