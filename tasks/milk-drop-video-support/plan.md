@@ -1,10 +1,43 @@
 # Implementation Plan: Video & Milkdrop Windows (Two-Window Architecture)
 
-**Task ID**: milk-drop-video-support  
-**Architecture**: TWO Independent Windows (Video + Milkdrop)  
-**Priority**: Video Window FIRST, then Milkdrop Window  
-**Timeline**: 10 days (Phased implementation)  
-**Approved**: 2025-11-08 (Option A)
+**Task ID**: milk-drop-video-support
+**Architecture**: TWO Independent NSWindows (Video + Milkdrop)
+**Priority**: Video Window FIRST, then Milkdrop Window
+**Timeline**: 8-10 days (Phased implementation)
+**Approved**: 2025-11-08 (Initial), 2025-11-09 (Corrected with TASK 1 learnings)
+**Prerequisite**: TASK 1 (magnetic-docking-foundation) ✅ COMPLETE
+
+---
+
+## TASK 2 Decisions (2025-11-09)
+
+**User Decisions**:
+1. **V Button**: Opens Video window ✅
+2. **Milkdrop**: Options menu checkbox + Ctrl+Shift+K ✅
+3. **Resize**: Defer to TASK 3 (focus, no scope creep) ✅
+
+**Principle**: "Make it exist, then make it better"
+
+**Keyboard Shortcuts**:
+- Ctrl+K: Available ✅
+- Ctrl+M: Available ✅
+- **Using**: Ctrl+Shift+K (Winamp standard for visualizations)
+
+**Scope**:
+- ✅ Video + Milkdrop windows (5 total windows)
+- ✅ VIDEO.BMP parsing (new)
+- ✅ GEN.BMP reuse (existing)
+- ✅ NSWindowController pattern (TASK 1)
+- ✅ Single audio tap extension
+- ❌ Window resize (deferred to TASK 3)
+
+**Architecture Updates from TASK 1**:
+- Use NSWindowController pattern (not inline views)
+- WindowCoordinator integration
+- WindowSnapManager registration
+- Extend existing audio tap (not new AudioAnalyzer)
+- Delegate multiplexer integration
+- WindowFrameStore persistence
 
 ---
 
@@ -47,7 +80,7 @@ User Presses "V" (Ctrl+V)
 │  [■] [▶] [■] [◼] |========|  │ ← VIDEO.bmp controls
 └──────────────────────────────┘
 
-User Opens Milkdrop (Menu or Ctrl+Shift+M)
+User Opens Milkdrop (Options Menu or Ctrl+Shift+K)
          ↓
    Milkdrop Window Opens
          ↓
@@ -70,109 +103,240 @@ Both windows coexist independently!
 
 ## Phase Breakdown (10 Days)
 
-### Days 1-2: Foundation (Shared Infrastructure)
+### Days 1-2: NSWindowController Setup (Following TASK 1 Pattern)
 
-**Goal**: Set up state management and shared infrastructure for BOTH windows
+**Goal**: Create Video and Milkdrop NSWindowControllers using proven foundation pattern
 
-#### AppSettings Extension
-**File**: `MacAmpApp/Models/AppSettings.swift`
+#### Day 1: Video Window Controller
+
+**File**: `MacAmpApp/Windows/WinampVideoWindowController.swift`
 
 ```swift
-@Observable @MainActor
-final class AppSettings {
-    // VIDEO WINDOW STATE
-    var showVideoWindow: Bool = false {
-        didSet { UserDefaults.standard.set(showVideoWindow, forKey: "showVideoWindow") }
+import AppKit
+import SwiftUI
+
+class WinampVideoWindowController: NSWindowController {
+    convenience init(skinManager: SkinManager, audioPlayer: AudioPlayer,
+                    dockingController: DockingController, settings: AppSettings,
+                    radioLibrary: RadioStationLibrary, playbackCoordinator: PlaybackCoordinator) {
+        // Create borderless window (follows TASK 1 pattern)
+        let window = BorderlessWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 275, height: 116),  // Video window base size
+            styleMask: [.borderless],  // Borderless only
+            backing: .buffered,
+            defer: false
+        )
+
+        // Apply standard Winamp window configuration
+        WinampWindowConfigurator.apply(to: window)
+
+        // Borderless visual configuration
+        window.isOpaque = false
+        window.hasShadow = true
+        window.backgroundColor = .clear
+
+        // Create view with environment injection
+        let rootView = WinampVideoWindow()
+            .environment(skinManager)
+            .environment(audioPlayer)
+            .environment(dockingController)
+            .environment(settings)
+            .environment(radioLibrary)
+            .environment(playbackCoordinator)
+
+        let hostingController = NSHostingController(rootView: rootView)
+        let hostingView = hostingController.view
+        hostingView.frame = NSRect(origin: .zero, size: window.contentLayoutRect.size)
+        hostingView.autoresizingMask = [.width, .height]
+
+        window.contentViewController = hostingController
+        window.contentView = hostingView
+        window.makeFirstResponder(hostingView)
+
+        // Install hit surface
+        WinampWindowConfigurator.installHitSurface(on: window)
+
+        self.init(window: window)
     }
-    
-    var videoWindowFrame: CGRect? {
-        didSet {
-            if let frame = videoWindowFrame {
-                UserDefaults.standard.set(NSStringFromRect(frame), forKey: "videoWindowFrame")
-            }
+}
+```
+
+**Tasks**:
+- [ ] Create WinampVideoWindowController.swift
+- [ ] Follow BorderlessWindow pattern (like Main/EQ/Playlist)
+- [ ] Set base size 275×116 (matches Main/EQ)
+- [ ] Apply WinampWindowConfigurator
+- [ ] Create placeholder WinampVideoWindow SwiftUI view
+- [ ] Test window compiles
+
+#### Day 1: Milkdrop Window Controller
+
+**File**: `MacAmpApp/Windows/WinampMilkdropWindowController.swift`
+
+```swift
+class WinampMilkdropWindowController: NSWindowController {
+    convenience init(skinManager: SkinManager, audioPlayer: AudioPlayer,
+                    dockingController: DockingController, settings: AppSettings,
+                    radioLibrary: RadioStationLibrary, playbackCoordinator: PlaybackCoordinator) {
+        // Same pattern as Video window
+        let window = BorderlessWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 400, height: 300),  // Milkdrop larger default
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
+
+        WinampWindowConfigurator.apply(to: window)
+        window.isOpaque = false
+        window.hasShadow = true
+        window.backgroundColor = .clear
+
+        let rootView = WinampMilkdropWindow()
+            .environment(skinManager)
+            .environment(audioPlayer)
+            .environment(dockingController)
+            .environment(settings)
+            .environment(radioLibrary)
+            .environment(playbackCoordinator)
+
+        let hostingController = NSHostingController(rootView: rootView)
+        window.contentViewController = hostingController
+        window.contentView = hostingController.view
+        WinampWindowConfigurator.installHitSurface(on: window)
+
+        self.init(window: window)
+    }
+}
+```
+
+**Tasks**:
+- [ ] Create WinampMilkdropWindowController.swift
+- [ ] Same pattern as Video controller
+- [ ] Larger default size 400×300
+- [ ] Create placeholder WinampMilkdropWindow SwiftUI view
+- [ ] Test window compiles
+
+#### Day 2: WindowCoordinator Integration
+
+**File**: `MacAmpApp/ViewModels/WindowCoordinator.swift`
+
+```swift
+@MainActor
+@Observable
+final class WindowCoordinator {
+    // Existing controllers
+    private let mainController: NSWindowController
+    private let eqController: NSWindowController
+    private let playlistController: NSWindowController
+
+    // NEW: Video and Milkdrop controllers
+    private let videoController: NSWindowController
+    private let milkdropController: NSWindowController
+
+    var videoWindow: NSWindow? { videoController.window }
+    var milkdropWindow: NSWindow? { milkdropController.window }
+
+    init(...) {
+        // ... existing main/eq/playlist setup ...
+
+        // Create Video window
+        videoController = WinampVideoWindowController(
+            skinManager: skinManager,
+            audioPlayer: audioPlayer,
+            dockingController: dockingController,
+            settings: settings,
+            radioLibrary: radioLibrary,
+            playbackCoordinator: playbackCoordinator
+        )
+
+        // Create Milkdrop window
+        milkdropController = WinampMilkdropWindowController(
+            skinManager: skinManager,
+            audioPlayer: audioPlayer,
+            dockingController: dockingController,
+            settings: settings,
+            radioLibrary: radioLibrary,
+            playbackCoordinator: playbackCoordinator
+        )
+
+        // Register with WindowSnapManager
+        if let video = videoWindow {
+            WindowSnapManager.shared.register(window: video, kind: .video)
         }
-    }
-    
-    var videoWindowShaded: Bool = false {
-        didSet { UserDefaults.standard.set(videoWindowShaded, forKey: "videoWindowShaded") }
-    }
-    
-    // MILKDROP WINDOW STATE
-    var showMilkdropWindow: Bool = false {
-        didSet { UserDefaults.standard.set(showMilkdropWindow, forKey: "showMilkdropWindow") }
-    }
-    
-    var milkdropWindowFrame: CGRect? {
-        didSet {
-            if let frame = milkdropWindowFrame {
-                UserDefaults.standard.set(NSStringFromRect(frame), forKey: "milkdropWindowFrame")
-            }
+        if let milkdrop = milkdropWindow {
+            WindowSnapManager.shared.register(window: milkdrop, kind: .milkdrop)
         }
-    }
-    
-    var milkdropMode: MilkdropMode = .butterchurn {
-        didSet { UserDefaults.standard.set(milkdropMode.rawValue, forKey: "milkdropMode") }
-    }
-    
-    var lastUsedPresetIndex: Int = 0 {
-        didSet { UserDefaults.standard.set(lastUsedPresetIndex, forKey: "lastUsedPresetIndex") }
-    }
-}
 
-enum MilkdropMode: String, Codable {
-    case butterchurn
-    case fullscreen
-    case desktop
+        // Add to delegate multiplexers
+        videoDelegateMultiplexer = WindowDelegateMultiplexer()
+        videoDelegateMultiplexer?.add(delegate: WindowSnapManager.shared)
+        videoWindow?.delegate = videoDelegateMultiplexer
+
+        milkdropDelegateMultiplexer = WindowDelegateMultiplexer()
+        milkdropDelegateMultiplexer?.add(delegate: WindowSnapManager.shared)
+        milkdropWindow?.delegate = milkdropDelegateMultiplexer
+    }
+
+    // Window show/hide methods
+    func showVideo() { videoWindow?.makeKeyAndOrderFront(nil) }
+    func hideVideo() { videoWindow?.orderOut(nil) }
+    func showMilkdrop() { milkdropWindow?.makeKeyAndOrderFront(nil) }
+    func hideMilkdrop() { milkdropWindow?.orderOut(nil) }
 }
 ```
 
-#### AppCommands Extension
-**File**: `MacAmpApp/AppCommands.swift`
+**Tasks**:
+- [ ] Add videoController and milkdropController properties
+- [ ] Add videoWindow/milkdropWindow computed properties
+- [ ] Create both controllers in init()
+- [ ] Register with WindowSnapManager (2 windows)
+- [ ] Add delegate multiplexer properties
+- [ ] Create and assign multiplexers
+- [ ] Add showVideo/hideVideo/showMilkdrop/hideMilkdrop methods
+- [ ] Test windows can be shown/hidden
+
+#### Day 2: WindowKind Enum Extension
+
+**File**: `MacAmpApp/Utilities/WindowSnapManager.swift`
 
 ```swift
-CommandGroup(after: .windowArrangement) {
-    Button("Toggle Video Window") {
-        appSettings.showVideoWindow.toggle()
-    }
-    .keyboardShortcut("v", modifiers: [.control])
-    
-    Button("Toggle Milkdrop Window") {
-        appSettings.showMilkdropWindow.toggle()
-    }
-    .keyboardShortcut("m", modifiers: [.control, .shift])
+enum WindowKind: Hashable {
+    case main
+    case playlist
+    case equalizer
+    case video      // NEW
+    case milkdrop   // NEW
 }
 ```
 
-#### Window Stubs
-**File**: `MacAmpApp/Views/WinampMainWindow.swift`
+**Tasks**:
+- [ ] Add .video case to WindowKind enum
+- [ ] Add .milkdrop case to WindowKind enum
+- [ ] Verify WindowSnapManager compiles
+
+#### Day 2: Persistence Extension
+
+**File**: `MacAmpApp/ViewModels/WindowCoordinator.swift` (WindowFrameStore)
 
 ```swift
-// Add to body
-if appSettings.showVideoWindow {
-    VideoWindowView()
-        .environment(appSettings)
-        .environment(skinManager)
-        .environment(audioPlayer)
-}
-
-if appSettings.showMilkdropWindow {
-    MilkdropWindowView()
-        .environment(appSettings)
-        .environment(skinManager)
-        .environment(audioPlayer)
-}
+// persistenceKey extension already handles new kinds automatically!
+// Just works because WindowKind has persistenceKey computed property
 ```
 
-**Create Placeholder Views**:
-- `MacAmpApp/Views/Windows/VideoWindowView.swift`
-- `MacAmpApp/Views/Windows/MilkdropWindowView.swift`
+**Tasks**:
+- [ ] Verify WindowFrameStore handles .video kind
+- [ ] Verify WindowFrameStore handles .milkdrop kind
+- [ ] Test persistence save/restore
 
-#### Day 1-2 Deliverables
-- ✅ AppSettings extended with both window states
-- ✅ Keyboard shortcuts (Ctrl+V, Ctrl+Shift+M)
-- ✅ Placeholder views for both windows
-- ✅ State persists across restarts
-- ✅ Both windows can toggle independently
+#### Day 2 Deliverables
+- ✅ Both NSWindowControllers created
+- ✅ WindowCoordinator manages both windows
+- ✅ WindowSnapManager registered (5 windows total!)
+- ✅ Delegate multiplexers integrated
+- ✅ Persistence automatic (WindowFrameStore)
+- ✅ Show/hide methods working
+- ✅ Windows can be opened independently
+- ✅ Both windows invisible on startup (closed by default)
 
 ---
 
@@ -650,49 +814,192 @@ struct MilkdropWindowView: View {
 - ✅ 5-8 presets loaded
 - ✅ Canvas renders (no audio data yet)
 
-#### Day 9: FFT Audio Bridge
+#### Day 9: Audio Tap Extension for Milkdrop
 
-**Goal**: Connect audio analysis to Butterchurn
+**Goal**: Extend EXISTING AudioPlayer tap to provide Milkdrop FFT data (Oracle's guidance - single tap!)
 
-##### 9.1 AudioAnalyzer
-**File**: `MacAmpApp/Models/AudioAnalyzer.swift`
+##### 9.1 Extend AudioPlayer Tap (NOT new AudioAnalyzer)
+**File**: `MacAmpApp/Models/AudioPlayer.swift`
 
-(Same implementation as original plan - Accelerate FFT)
-
-##### 9.2 Wire to MilkdropWindowView
 ```swift
-struct MilkdropWindowView: View {
-    @State private var fftData: [Float] = []
-    
+@Observable @MainActor
+final class AudioPlayer {
+    // Existing tap infrastructure...
+
+    // NEW: Milkdrop FFT data (higher resolution than 20-band spectrum)
+    private var milkdropFFTData: [Float] = Array(repeating: 0, count: 512)  // 512 bins for Milkdrop
+    private var milkdropWaveform: [Float] = Array(repeating: 0, count: 576)  // 576 samples
+
+    // Public accessors for Milkdrop
+    func getMilkdropSpectrum() -> [Float] {
+        return milkdropFFTData
+    }
+
+    func getMilkdropWaveform() -> [Float] {
+        return milkdropWaveform
+    }
+
+    // In EXISTING makeVisualizerTapHandler() callback:
+    // - Extract PCM buffer (already doing this)
+    // - Run 512-bin FFT for Milkdrop (in addition to 20-band for spectrum)
+    // - Generate 576-sample waveform for Milkdrop
+    // - Update milkdropFFTData and milkdropWaveform
+    // - All from SAME audio buffer (single tap, no duplicate processing!)
+}
+```
+
+**Tasks**:
+- [ ] Add milkdropFFTData property (512 bins)
+- [ ] Add milkdropWaveform property (576 samples)
+- [ ] Add getMilkdropSpectrum() method
+- [ ] Add getMilkdropWaveform() method
+- [ ] Modify makeVisualizerTapHandler() to compute Milkdrop data
+- [ ] Use vDSP for 512-bin FFT (Accelerate framework)
+- [ ] Extract 576 PCM samples for waveform
+- [ ] Test FFT data generation during playback
+
+##### 9.2 Wire to WinampMilkdropWindow
+**File**: `MacAmpApp/Views/WinampMilkdropWindow.swift`
+
+```swift
+struct WinampMilkdropWindow: View {
+    @Environment(AudioPlayer.self) var audioPlayer
+    @State private var spectrum: [Float] = []
+    @State private var waveform: [Float] = []
+
     var body: some View {
-        ButterchurnWebView(fftData: $fftData)
+        ButterchurnWebView(spectrum: $spectrum, waveform: $waveform)
             .onReceive(Timer.publish(every: 0.016, on: .main, in: .common).autoconnect()) { _ in
-                fftData = audioPlayer.currentFFTData
+                // Read from EXISTING AudioPlayer tap
+                spectrum = audioPlayer.getMilkdropSpectrum()
+                waveform = audioPlayer.getMilkdropWaveform()
             }
     }
 }
 ```
 
+**Tasks**:
+- [ ] Add spectrum and waveform state properties
+- [ ] Add Timer publisher for 60fps updates
+- [ ] Call getMilkdropSpectrum() / getMilkdropWaveform()
+- [ ] Pass data to ButterchurnWebView
+- [ ] Test data flows correctly
+
+##### 9.3 Update ButterchurnWebView
+**File**: `MacAmpApp/Views/ButterchurnWebView.swift`
+
+```swift
+struct ButterchurnWebView: NSViewRepresentable {
+    @Binding var spectrum: [Float]   // 512 bins
+    @Binding var waveform: [Float]   // 576 samples
+
+    func updateNSView(_ webView: WKWebView, context: Context) {
+        // Send both spectrum and waveform to Butterchurn
+        let spectrumJSON = spectrum.map { "\($0)" }.joined(separator: ",")
+        let waveformJSON = waveform.map { "\($0)" }.joined(separator: ",")
+
+        let script = "updateAudioData([\(spectrumJSON)], [\(waveformJSON)])"
+        webView.evaluateJavaScript(script)
+    }
+}
+```
+
+**Tasks**:
+- [ ] Update ButterchurnWebView to accept spectrum AND waveform
+- [ ] Serialize both arrays to JavaScript
+- [ ] Update bridge.js to accept both parameters
+- [ ] Test data arrives in Butterchurn correctly
+
 ##### Day 9 Deliverables
-- ✅ FFT audio analysis working
+- ✅ EXTENDED existing AudioPlayer tap (no new analyzer!)
+- ✅ 512-bin FFT for Milkdrop generated
+- ✅ 576-sample waveform generated
+- ✅ Single tap serves both spectrum and Milkdrop
 - ✅ Audio data flows to Butterchurn
 - ✅ Visualization syncs to audio playback
 - ✅ 60fps rendering
+- ✅ No duplicate audio processing
 
-#### Day 10: Milkdrop Polish & Testing
+#### Day 10: UI Integration & Testing
 
-**Goal**: Complete Milkdrop window and test both windows
+**Goal**: Wire Video and Milkdrop to UI triggers, then test both windows
 
-##### 10.1 Preset Selection
-- Menu for preset selection
-- Ctrl+[ / Ctrl+] keyboard shortcuts
-- Auto-cycle every 30s
+##### 10.1 V Button Integration (Video Window)
+**File**: `MacAmpApp/Views/WinampMainWindow.swift`
 
-##### 10.2 Skin Integration
-- Apply skin colors to Butterchurn canvas
-- Border colors from SkinManager
+```swift
+// In buildClutterBarButtons():
+Button(action: {
+    WindowCoordinator.shared.showVideo()  // or hideVideo() if open
+}) {
+    SimpleSpriteImage("MAIN_CLUTTER_BAR_BUTTON_V", width: 8, height: 7)
+}
+.buttonStyle(.plain)
+.help("Video Window (Ctrl+V)")
+.at(Coords.clutterButtonV)
+```
 
-##### 10.3 Comprehensive Testing
+**Tasks**:
+- [ ] Update V button action (currently disabled)
+- [ ] Call WindowCoordinator.shared.showVideo() / hideVideo()
+- [ ] Add selected state sprite when window open
+- [ ] Test V button toggles video window
+- [ ] Verify Ctrl+V keyboard shortcut works
+
+##### 10.2 Options Menu Integration (Milkdrop)
+**File**: `MacAmpApp/Views/WinampMainWindow.swift` (showOptionsMenu)
+
+```swift
+// Add to Options menu after existing items:
+menu.addItem(.separator())
+
+menu.addItem(createMenuItem(
+    title: "Milkdrop",
+    isChecked: settings.showMilkdropWindow,  // Checkbox on/off
+    keyEquivalent: "k",
+    modifiers: [.control, .shift],
+    action: { [weak settings] in
+        if let show = settings?.showMilkdropWindow {
+            if show {
+                WindowCoordinator.shared.hideMilkdrop()
+                settings?.showMilkdropWindow = false
+            } else {
+                WindowCoordinator.shared.showMilkdrop()
+                settings?.showMilkdropWindow = true
+            }
+        }
+    }
+))
+```
+
+**Tasks**:
+- [ ] Add Milkdrop checkbox to Options menu
+- [ ] Show checkmark when window open
+- [ ] Wire to WindowCoordinator.showMilkdrop() / hideMilkdrop()
+- [ ] Add Ctrl+Shift+K keyboard shortcut
+- [ ] Test menu checkbox toggles window
+- [ ] Test keyboard shortcut works
+- [ ] Verify state persists
+
+##### 10.3 Preset Selection System
+**File**: `MacAmpApp/Views/WinampMilkdropWindow.swift`
+
+**Tasks**:
+- [ ] Add preset selection menu
+- [ ] Implement Ctrl+[ / Ctrl+] shortcuts (next/prev preset)
+- [ ] Add auto-cycle timer (30s)
+- [ ] Wire preset changes to Butterchurn
+- [ ] Test preset switching
+
+##### 10.4 Skin Integration
+**File**: `MacAmpApp/Views/ButterchurnWebView.swift`
+
+**Tasks**:
+- [ ] Extract skin colors from SkinManager
+- [ ] Pass to Butterchurn via JavaScript bridge
+- [ ] Test colors update with skin changes
+
+##### 10.5 Comprehensive Testing
 **Both Windows**:
 - [ ] Video window plays MP4/MOV
 - [ ] Milkdrop window shows visualization
@@ -700,7 +1007,7 @@ struct MilkdropWindowView: View {
 - [ ] Video playback + audio visualization at same time
 - [ ] State persists across restarts
 - [ ] Ctrl+V toggles video window
-- [ ] Ctrl+Shift+M toggles milkdrop window
+- [ ] Ctrl+Shift+K toggles milkdrop window
 - [ ] Windows can be positioned independently
 - [ ] Shade mode works for video window
 - [ ] No memory leaks (1hr+ test)
@@ -767,7 +1074,7 @@ docs/
 - ✅ Playlist integration (video files show with 🎬)
 
 ### Milkdrop Window (Must-Have)
-- ✅ Ctrl+Shift+M toggles milkdrop window
+- ✅ Ctrl+Shift+K toggles milkdrop window
 - ✅ Butterchurn visualization syncs to audio
 - ✅ 5-8 presets auto-cycle
 - ✅ Manual preset selection works
@@ -795,12 +1102,20 @@ docs/
 
 | Risk | Mitigation | Status |
 |------|------------|--------|
-| VIDEO.bmp parsing complexity | Fallback to classic chrome | ✅ Designed |
-| Sprite layout varies by skin | Use standard dimensions + detection | ✅ Designed |
-| Both windows open = resource usage | Profile CPU/GPU, optimize if needed | ⏳ Day 10 |
-| Video + audio sync issues | Proper mode switching | ✅ Designed |
-| WKWebView overhead | Throttle FFT updates, cap payloads | ✅ Designed |
-| Memory leaks (2 windows) | Proper cleanup, test 1hr+ | ⏳ Day 10 |
+| **AVPlayer Integration Complexity** | Use AVPlayerView (native controls disabled), test codec support, handle errors gracefully | ⏳ Day 5 |
+| **AVPlayer Format Support** | Focus on H.264/AAC (MP4, MOV, M4V), document unsupported formats, consider FFmpeg later | ⏳ Day 5-6 |
+| **AVPlayer Audio Routing** | Ensure video audio routes through AudioPlayer for consistency, test audio/video switching | ⏳ Day 5 |
+| **Butterchurn Bridge Security** | WKWebView sandbox, validate FFT data, rate-limit evaluateJavaScript calls, handle script errors | ⏳ Day 8-9 |
+| **WKWebView Content Security** | Use file:// URLs for local HTML, no external resources, Content Security Policy headers | ⏳ Day 8 |
+| **JavaScript Bridge Errors** | Try/catch in bridge.js, graceful degradation, log errors to Swift console | ⏳ Day 9 |
+| VIDEO.bmp parsing complexity | Fallback to classic chrome if VIDEO.bmp missing or malformed | ✅ Designed |
+| Sprite layout varies by skin | Use standard dimensions + auto-detection, test with 3+ skins | ✅ Designed |
+| Both windows open = resource usage | Profile CPU/GPU during simultaneous playback, optimize if >30% CPU | ⏳ Day 10 |
+| Video + audio mode switching | Proper AudioPlayer state machine, stop video when audio plays | ✅ Designed |
+| WKWebView FFT update overhead | Throttle to 60fps max, batch updates, monitor frame drops | ✅ Designed |
+| Memory leaks (5 windows total) | Proper NSWindowController cleanup, weak references, test 1hr+ playback | ⏳ Day 10 |
+| WindowSnapManager with 5 windows | Test cluster detection, verify snapping with all windows, edge case testing | ⏳ Day 2 |
+| Delegate multiplexer scaling | Verify 5 windows don't cause delegate forwarding issues | ⏳ Day 2 |
 
 ---
 
@@ -808,23 +1123,26 @@ docs/
 
 | Days | Phase | Deliverables |
 |------|-------|--------------|
-| **1-2** | Foundation | AppSettings, shortcuts, window stubs |
-| **3** | VIDEO.bmp | Sprite parsing, SkinManager extension |
-| **4** | Video Chrome | Skinnable window frame, controls |
-| **5** | AVPlayer | Video playback integration |
-| **6** | Video Polish | Playlist, persistence, V button |
-| **7** | Milkdrop Foundation | Window structure, placeholder |
-| **8** | Butterchurn | HTML bundle, WKWebView |
-| **9** | FFT Bridge | Audio analysis, real-time viz |
-| **10** | Final Polish | Presets, testing, docs |
+| **1-2** | NSWindowController Setup | Video + Milkdrop controllers, WindowCoordinator integration, WindowSnapManager registration |
+| **3** | VIDEO.bmp Parsing | Sprite extraction, SkinManager extension, fallback chrome |
+| **4** | Video Chrome | Skinnable window frame, controls, borders |
+| **5** | AVPlayer Integration | Video playback, AVPlayerView, codec support |
+| **6** | Video Polish | Playlist integration, V button wiring |
+| **7** | Milkdrop Foundation | GEN.BMP chrome (reuse existing), window structure |
+| **8** | Butterchurn | HTML bundle, WKWebView, preset system |
+| **9** | Audio Tap Extension | Extend existing tap, 512-bin FFT, 576-sample waveform |
+| **10** | UI Integration & Testing | Options menu, presets, comprehensive testing |
 
-**Total**: 10 working days  
-**Milestone**: Day 6 (Video window complete)  
-**Completion**: Day 10 (Both windows complete)
+**Total**: 8-10 working days
+**Milestone**: Day 6 (Video window complete)
+**Completion**: Day 8-10 (Both windows complete)
+**Architecture**: NSWindowController pattern (TASK 1 foundation)
 
 ---
 
-**Plan Approved**: 2025-11-08 (Two-Window Architecture)  
-**Implementation Start**: Upon final approval  
-**Target Completion**: Day 10  
-**Next Review**: End of Day 6 (Video window milestone)
+**Plan Created**: 2025-11-08 (Initial two-window architecture)
+**Plan Corrected**: 2025-11-09 (NS WindowController pattern, single audio tap, corrected triggers)
+**Oracle Review**: Awaiting final validation
+**Implementation Start**: Upon Oracle GO approval
+**Target Completion**: Day 8-10
+**Next Review**: End of Day 2 (NSWindowController foundation)

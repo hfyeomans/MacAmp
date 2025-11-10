@@ -39,12 +39,12 @@
 **Status**: ✅ Complete, merged to main (PR #31)
 **Completion Date**: 2025-11-09
 
-### TASK 2: milk-drop-video-support (THIS TASK) ✅ **READY**
-**Timeline**: 8-12 days estimated
-**Scope**: Add Video + Milkdrop windows (5-window architecture)
+### TASK 2: milk-drop-video-support (THIS TASK) ⏳ **PLANNING**
+**Timeline**: 8-10 days (corrected from initial 8-12)
+**Scope**: Add Video + Milkdrop windows (5-window architecture, NO resize)
 **Deliverable**: Video playback + audio visualization
 
-**Status**: ✅ Unblocked, ready to begin
+**Status**: ⏳ Plan corrected, awaiting Oracle validation
 **Current Branch**: `feature/video-milkdrop-windows`
 
 ---
