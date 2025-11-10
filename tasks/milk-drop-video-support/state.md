@@ -1,75 +1,93 @@
 # Video & Milkdrop Windows - Task State
 
-**Task ID**: milk-drop-video-support  
-**Created**: 2025-11-08  
-**Status**: 🚧 BLOCKED - Waiting for Foundation Task  
-**Priority**: P1 (High - but blocked on P0)
+**Task ID**: milk-drop-video-support
+**Created**: 2025-11-08
+**Updated**: 2025-11-09
+**Status**: ✅ READY TO BEGIN - Foundation Complete!
+**Priority**: P1 (High)
 
 ---
 
-## ⚠️ TASK STATUS: BLOCKED
+## ✅ TASK STATUS: UNBLOCKED & READY
 
-### Blocking Dependency
-**This task is BLOCKED by**: `magnetic-docking-foundation`
+### Foundation Complete!
+**Prerequisite**: `magnetic-docking-foundation` ✅ **COMPLETE**
 
-**Why**: Oracle identified that Video/Milkdrop windows require NSWindow infrastructure that doesn't exist yet.
+**Date Unblocked**: 2025-11-09
+**Foundation Merged**: PR #31 merged to main
+**Current Branch**: `feature/video-milkdrop-windows`
 
-**Resolution**: Complete `magnetic-docking-foundation` task FIRST, then resume this task.
+**What Foundation Provides**:
+- ✅ NSWindowController pattern (proven with 3 windows)
+- ✅ WindowCoordinator singleton (window lifecycle management)
+- ✅ WindowSnapManager integration (magnetic snapping working)
+- ✅ Custom drag regions (borderless windows draggable)
+- ✅ Delegate multiplexer (extensible delegate pattern)
+- ✅ Double-size coordination (with docking preservation)
+- ✅ Persistence system (WindowFrameStore)
+- ✅ Oracle Grade A (production-ready architecture)
 
 ---
 
 ## Task Sequencing
 
-### TASK 1 (In Progress): magnetic-docking-foundation
-**Timeline**: 10-14 days  
-**Scope**: Break out Main/EQ/Playlist + basic magnetic snapping  
-**Deliverable**: 3-window NSWindowController foundation
+### TASK 1: magnetic-docking-foundation ✅ **COMPLETE**
+**Timeline**: 14 days actual
+**Scope**: 3-window architecture + magnetic snapping + persistence
+**Deliverable**: NSWindowController foundation (Oracle Grade A)
 
-**Status**: Planning complete, ready for Oracle validation & implementation
+**Status**: ✅ Complete, merged to main (PR #31)
+**Completion Date**: 2025-11-09
 
-### TASK 2 (This Task - BLOCKED): milk-drop-video-support
-**Timeline**: 8-10 days (AFTER Task 1 complete)  
-**Scope**: Add Video + Milkdrop windows using foundation  
-**Deliverable**: Full 5-window architecture with video/visualization
+### TASK 2: milk-drop-video-support (THIS TASK) ✅ **READY**
+**Timeline**: 8-12 days estimated
+**Scope**: Add Video + Milkdrop windows (5-window architecture)
+**Deliverable**: Video playback + audio visualization
 
-**Status**: Research complete, waiting for foundation
-
----
-
-## Why We're Blocked
-
-### Oracle's Critical Feedback (B- Grade)
-
-**Issue #1**: No actual NSWindow infrastructure
-> "Plan says 'two independent windows' but still mounts views inside WinampMainWindow. NO actual NSWindow lifecycle exists."
-
-**Issue #2**: Missing window management architecture
-> "Need NSWindowController or WindowGroup infrastructure before adding auxiliary windows."
-
-**Strategic Decision**: Build foundation FIRST (Task 1), then add Video/Milkdrop (Task 2)
+**Status**: ✅ Unblocked, ready to begin
+**Current Branch**: `feature/video-milkdrop-windows`
 
 ---
 
-## When This Task Resumes
+## 🎯 TASK 2 READY TO BEGIN (2025-11-09)
 
-### After Foundation Complete
+### Sprite Sources Confirmed (Oracle + Gemini)
 
-**Foundation Provides**:
-- ✅ NSWindowController architecture (established pattern)
-- ✅ WindowCoordinator singleton (proven working)
-- ✅ WindowSnapManager integration (3 windows snapping)
-- ✅ Custom drag regions (borderless windows)
-- ✅ Delegate multiplexer (extensible)
-- ✅ Double-size coordination (working)
+**Video Window**:
+- **Sprite File**: VIDEO.BMP ✅ (exists in `tmp/Winamp/`)
+- **Sprites**: 16 total (titlebar, borders, buttons, controls)
+- **Parsing**: Need NEW parser for VIDEO.BMP
+- **Size**: 275×116 minimum (matches Main/EQ)
 
-**Task 2 Becomes Easy**:
-- Add VideoWindowController (follow pattern)
-- Add MilkdropWindowController (follow pattern)
-- Register with WindowSnapManager (1 line each!)
-- VIDEO.bmp parsing (isolated work)
-- Butterchurn integration (isolated work)
+**Milkdrop Window**:
+- **Sprite File**: GEN.BMP ✅ (already parsed!)
+- **Sprites**: Generic window chrome (reuses existing)
+- **Parsing**: No new work needed (use existing GEN sprites)
+- **Background**: AVSMAIN.BMP (optional, not required for chrome)
 
-**Estimated Timeline**: 8-10 days (vs 10-12 without foundation)
+**CRITICAL**: Milkdrop is MUCH simpler - reuses existing sprite system!
+
+### Window Resize Requirements
+
+**Both Windows Are Resizable** (like Playlist):
+- Resize pattern: WIDTH + HEIGHT (25×29 pixel segments)
+- 3-section bottom: LEFT (125px) + CENTER (expandable) + RIGHT (150px)
+- Complete spec: `tasks/playlist-resize-analysis/`
+
+**Options**:
+- Implement resize in TASK 2 (all 3 windows: Playlist/Video/Milkdrop)
+- Defer to TASK 3 (dedicated resize task)
+
+### V Button Assignment
+
+**Research Findings**:
+- Original plan: V button → Video window
+- Webamp: Only has Milkdrop (no Video implemented)
+- Winamp Classic: Has BOTH windows
+
+**For MacAmp**:
+- V button should open **Video window** (follows original Winamp)
+- Milkdrop: Separate trigger (menu or Ctrl+Shift+M)
 
 ---
 
