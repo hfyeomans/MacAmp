@@ -3,16 +3,20 @@ import SwiftUI
 
 class WinampPlaylistWindowController: NSWindowController {
     convenience init(skinManager: SkinManager, audioPlayer: AudioPlayer, dockingController: DockingController, settings: AppSettings, radioLibrary: RadioStationLibrary, playbackCoordinator: PlaybackCoordinator) {
-        // ORACLE BLOCKING ISSUE #1 FIX: Truly borderless windows
-        // .borderless = 0, so [.borderless, .titled] keeps .titled mask!
-        // For custom Winamp chrome, use .borderless ONLY (no system chrome)
-        // CRITICAL: Use BorderlessWindow subclass for canBecomeKey/canBecomeMain
+        // PHASE 4: Playlist window is user-resizable (not double-size)
+        // Use .resizable style mask to allow corner dragging
+        // Width: Fixed at 275 (Winamp design)
+        // Height: Variable 232-900 (user-controlled)
         let window = BorderlessWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 275, height: 232),  // Taller for playlist!
-            styleMask: [.borderless],  // ONLY borderless - no .titled!
+            contentRect: NSRect(x: 0, y: 0, width: 275, height: 232),
+            styleMask: [.borderless, .resizable],  // Allow resizing!
             backing: .buffered,
             defer: false
         )
+
+        // Resize constraints (Winamp behavior: height only, fixed width)
+        window.minSize = NSSize(width: 275, height: 232)  // Minimum size
+        window.maxSize = NSSize(width: 275, height: 900)  // Max height, fixed width
 
         // CRITICAL FIX #2: Apply standard Winamp window configuration
         WinampWindowConfigurator.apply(to: window)

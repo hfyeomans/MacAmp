@@ -27,6 +27,22 @@ final class WindowSnapManager: NSObject, NSWindowDelegate {
     private var lastOrigins: [ObjectIdentifier: NSPoint] = [:]
     private var isAdjusting = false
 
+    // PHASE 4: Public methods to disable snap manager during programmatic resizing
+    // Prevents windowDidMove from triggering during double-size transitions
+    func beginProgrammaticAdjustment() {
+        isAdjusting = true
+    }
+
+    func endProgrammaticAdjustment() {
+        isAdjusting = false
+        // Update lastOrigins for all windows after programmatic adjustment
+        for (_, tracked) in windows {
+            if let w = tracked.window {
+                lastOrigins[ObjectIdentifier(w)] = w.frame.origin
+            }
+        }
+    }
+
     func register(window: NSWindow, kind: WindowKind) {
         // Set minimum titlebar style and disable tabs for classic look
         window.tabbingMode = .disallowed

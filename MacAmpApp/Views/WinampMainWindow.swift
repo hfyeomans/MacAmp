@@ -109,9 +109,25 @@ struct WinampMainWindow: View {
             }
 
         }
-        .frame(width: WinampSizes.main.width,
-               height: isShadeMode ? WinampSizes.mainShade.height : WinampSizes.main.height)
-        .background(Color.black) // Fallback
+        .frame(
+            width: WinampSizes.main.width,
+            height: isShadeMode ? WinampSizes.mainShade.height : WinampSizes.main.height,
+            alignment: .topLeading
+        )
+        .scaleEffect(
+            settings.isDoubleSizeMode ? 2.0 : 1.0,
+            anchor: .topLeading
+        )
+        .frame(
+            width: settings.isDoubleSizeMode ? WinampSizes.main.width * 2 : WinampSizes.main.width,
+            height: isShadeMode
+                ? (settings.isDoubleSizeMode ? WinampSizes.mainShade.height * 2 : WinampSizes.mainShade.height)
+                : (settings.isDoubleSizeMode ? WinampSizes.main.height * 2 : WinampSizes.main.height),
+            alignment: .topLeading
+        )
+        .fixedSize()  // Lock measured size so background sees final geometry
+        .animation(.easeInOut(duration: 0.2), value: settings.isDoubleSizeMode)
+        .background(Color.black) // Must be AFTER fixedSize to see scaled dimensions
         .sheet(isPresented: Binding(
             get: { settings.showTrackInfoDialog },
             set: { settings.showTrackInfoDialog = $0 }
