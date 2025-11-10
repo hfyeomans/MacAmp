@@ -743,8 +743,8 @@ if appSettings.videoWindowShaded {
 - ✅ Window positioning works
 - ✅ State persists across restarts
 - ✅ Shade mode functional
-- ✅ V button opens/closes video window
-- ✅ VIDEO WINDOW COMPLETE!
+- ✅ V button location identified (wiring in Day 10.1)
+- ✅ VIDEO WINDOW COMPLETE (UI trigger wiring pending Day 10)
 
 ---
 

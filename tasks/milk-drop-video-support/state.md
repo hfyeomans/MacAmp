@@ -206,38 +206,103 @@
 
 ---
 
-**Task Status**: 🚧 BLOCKED (waiting for foundation)  
-**Blocking Task**: magnetic-docking-foundation  
-**Resume When**: Foundation complete (Est. 10-14 days)  
-**Timeline for This Task**: 8-10 days (after unblock)  
-**Last Updated**: 2025-11-08
+**Task Status**: ✅ **READY TO BEGIN** (foundation complete)
+**Prerequisite**: TASK 1 (magnetic-docking-foundation) ✅ COMPLETE
+**Timeline**: 8-10 days (corrected plan)
+**Last Updated**: 2025-11-09
 
 ---
 
 ## Cross-Reference: Related Tasks
 
-### Prerequisite Task (BLOCKING THIS)
-**Task**: `tasks/magnetic-docking-foundation/`  
-**Status**: Oracle A-grade approved, ready to begin  
-**Timeline**: Quality-focused (10-15 days)  
-**Branch**: `feature/magnetic-docking-foundation`
+### Prerequisite Task ✅ COMPLETE
+**Task**: `tasks/magnetic-docking-foundation/`
+**Status**: ✅ Complete, merged to main (PR #31)
+**Completion**: 2025-11-09
+**Grade**: Oracle A (Production-Ready)
 
-**What It Provides**:
-- NSWindowController architecture (established pattern)
-- WindowCoordinator singleton (window lifecycle)
-- WindowSnapManager integration (magnetic snapping)
-- Custom drag regions (borderless windows)
-- Delegate multiplexer (extensibility)
+**What It Provided**:
+- ✅ NSWindowController architecture (3 windows proven)
+- ✅ WindowCoordinator singleton (window lifecycle)
+- ✅ WindowSnapManager integration (magnetic snapping)
+- ✅ Custom drag regions (borderless windows)
+- ✅ Delegate multiplexer (extensible delegates)
+- ✅ WindowFrameStore persistence
+- ✅ Double-size coordination with docking
 
-**When Complete**: This task (milk-drop-video-support) can resume
+**TASK 2 Can Now**:
+- Follow proven NSWindowController pattern
+- Register Video + Milkdrop with WindowSnapManager
+- Use delegate multiplexer for both windows
+- Leverage WindowFrameStore for persistence
+- Add 4th and 5th windows to existing architecture
 
 ### This Task Sequence
-**Position**: Task 2 of 2  
-**Depends On**: Task 1 (foundation)  
-**Status**: Research complete, blocked on prerequisite  
-**Resume When**: Foundation merged to main
+**Position**: Task 2 of 2
+**Depends On**: Task 1 (foundation) ✅ COMPLETE
+**Status**: ⏳ Plan corrected, awaiting final Oracle validation
+**Current Branch**: feature/video-milkdrop-windows
 
 ---
 
-**Task Relationship**: Task 1 → Task 2 (sequential, not parallel)  
-**Last Updated**: 2025-11-08
+## Oracle Review History
+
+### Initial Review (2025-11-08): B- Grade, NO-GO
+**Issues Found**:
+1. No NSWindow infrastructure (mounting in WinampMainWindow)
+2. VIDEO.bmp parsing too rigid
+3. AppSettings loading logic missing
+
+**Decision**: Create TASK 1 (magnetic-docking-foundation) FIRST
+- Build NSWindowController pattern
+- Prove magnetic snapping works
+- Then add Video/Milkdrop (TASK 2)
+
+**Outcome**: Chose Option C (Combined implementation split into 2 tasks)
+
+### Re-validation #1 (2025-11-09): C+ Grade, NO-GO
+**Issues Found**:
+1. Plan says NSWindowController but shows inline views
+2. Plan says extend tap but creates new AudioAnalyzer
+3. Keyboard shortcut inconsistent (K vs M)
+4. Missing Options menu integration
+5. Missing WindowCoordinator details
+6. Missing V button integration
+7. Timeline conflict (10 vs 8-12)
+8. Insufficient risk assessment
+
+**Fixes Applied**: Complete rewrite of Days 1-2, Day 9, Day 10
+**Status**: All 8 issues addressed
+
+### Re-validation #2 (2025-11-09): B Grade, NO-GO
+**Issues Found**:
+1. AudioAnalyzer.swift still in File Structure
+2. V button wiring conflict (Day 6 vs Day 10)
+
+**Fixes Applied**: Removed AudioAnalyzer from files, unified V button wiring
+**Status**: Both issues resolved
+
+### Final Validation #3 (2025-11-09): **A- Grade, GO ✅**
+**Overall Grades**:
+- Architecture: A
+- Audio Strategy: A
+- Integration Points: A-
+- Scope: A-
+- Timeline: A
+- Risk Coverage: A
+- **Overall**: **A-**
+
+**Oracle's Verdict**: **GO with High Confidence** ✅
+
+**Remaining Cleanup** (minor):
+1. ✅ Remove "V button opens/closes" from Day 6 deliverables (FIXED)
+2. ✅ Remove BLOCKED section from state.md (FIXED)
+
+**Status**: ✅ **APPROVED FOR IMPLEMENTATION**
+**Confidence**: **HIGH**
+
+---
+
+**Task Relationship**: Task 1 → Task 2 (sequential, not parallel)
+**Last Updated**: 2025-11-09
+**Oracle Status**: ✅ GO (A- grade, High confidence)
