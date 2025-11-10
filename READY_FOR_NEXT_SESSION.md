@@ -1,110 +1,102 @@
 # MacAmp - Ready for Next Session
 
-**Last Updated**: 2025-11-08  
-**Current Branch**: `feature/magnetic-docking-foundation`  
-**Current Task**: Task 1 - Magnetic Docking Foundation  
-**Phase**: Phase 1 ✅ Complete, Phase 2 Custom Drag Implementation Next  
-**Latest Commit**: `b576ee2`
+**Last Updated**: 2025-11-09
+**Current Branch**: `feature/video-milkdrop-windows`
+**Current Task**: TASK 2 (milk-drop-video-support)
+**Status**: ✅ Planning Complete - Oracle GO (A- grade, High confidence)
 
 ---
 
-## 🎉 MAJOR PROGRESS - Phase 1 COMPLETE!
+## 🎯 START NEXT SESSION WITH THIS EXACT MESSAGE
 
-**Phase 1A** ✅: 3-window architecture + UnifiedDockView migration (fully working!)  
-**Phase 1B** ✅: Skipped (WindowDragGesture already provides dragging)
+Copy and paste exactly:
 
-**All Working**:
-- 3 independent NSWindows
-- Windows draggable by titlebar
-- Slider tracks clickable  
-- Always-on-top (Ctrl+A)
-- Skins auto-load
-- Menus follow windows
-- No bleed-through
+```
+Begin TASK 2 (milk-drop-video-support) - Video + Milkdrop Windows
 
----
+Context:
+- Branch: feature/video-milkdrop-windows ✅
+- TASK 1 (magnetic-docking-foundation): COMPLETE, merged to main (PR #31) ✅
+- TASK 2 Planning: COMPLETE with Oracle GO (A- grade) ✅
 
-## 🔍 Phase 2: Custom Drag Required (Architectural Discovery)
+Oracle Approved:
+- 8-10 day plan
+- NSWindowController pattern (following TASK 1)
+- Single audio tap extension
+- V button → Video window
+- Options menu → Milkdrop window
+- NO window resize (deferred to TASK 3)
 
-### Problem Discovered
+Ready to implement Day 1:
+1. Create WinampVideoWindowController.swift
+2. Create WinampMilkdropWindowController.swift
+3. Follow plan in: tasks/milk-drop-video-support/plan.md
 
-**Attempted**: WindowSnapManager with WindowDragGesture  
-**Result**: Windows repel instead of snap, lag when moving groups
-
-**Oracle + Gemini Analysis**:
-- WindowSnapManager designed for custom drag control (like Webamp)
-- WindowDragGesture moves windows automatically (Apple API)
-- Post-facto snap adjustment doesn't work
-- Need custom drag that snaps BEFORE windows move
-
-### Solution: Custom Drag Implementation
-
-**Oracle's Complete Solution** (provided, ready to implement):
-
-**Files Created** (on disk, need careful integration):
-1. `MacAmpApp/Views/Shared/WinampTitlebarDragHandle.swift` (wrapper)
-2. `MacAmpApp/Views/Shared/TitlebarDragCaptureView.swift` (NSView drag)
-
-**WindowSnapManager Methods** (Oracle provided, need to add):
-- `beginCustomDrag(kind:startPointInScreen:)`
-- `updateCustomDrag(kind:cumulativeDelta:)`  
-- `endCustomDrag(kind:)`
-- `buildBoxes()` helper
-- `DragContext` struct
-
-**Integration Steps** (next session):
-1. Add custom drag methods to WindowSnapManager (INSIDE class, before closing brace)
-2. Add 2 drag component files to Xcode project
-3. Remove WindowDragGesture from all 3 windows
-4. Replace with WinampTitlebarDragHandle (wrap titlebar sprites)
-5. Test smooth snapping (no lag, 15px attraction)
+Start with: Day 1, line 110 in plan.md
+```
 
 ---
 
-## 📋 Oracle's Implementation Guide
+## 📋 TASK 2 QUICK REFERENCE
 
-**See**: Oracle's last response for complete code patterns
+**What We're Building**:
+- Video window (VIDEO.BMP skinning, AVPlayer playback)
+- Milkdrop window (GEN.BMP chrome, Butterchurn visualization)
+- Total: 5 windows (Main, EQ, Playlist, Video, Milkdrop)
 
-**Key Points**:
-- Custom drag captures events BEFORE windows move
-- Snap math runs on every mouseDragged
-- All windows in cluster move atomically
-- No lag, proper 15px snap threshold
-- Mirrors Webamp architecture
+**Architecture**:
+- NSWindowController pattern (proven in TASK 1)
+- WindowCoordinator integration
+- WindowSnapManager registration
+- Single audio tap extension (no new analyzer)
 
----
+**Timeline**: 8-10 days
+**Current Day**: Starting Day 1
 
-## 📊 Session Summary
-
-**Total**: ~20 hours (research + planning + Phase 1 implementation)
-
-**Achievements**:
-- ✅ Oracle A-grade plan (3 review iterations)
-- ✅ 10,000+ lines documentation
-- ✅ Phase 1 complete (3-window architecture working!)
-- ✅ Phase 2 architectural issue diagnosed
-- ✅ Complete custom drag solution from Oracle
-
-**Commits**: 41 total  
-**Oracle Consultations**: 11  
-**Gemini Research**: 2 deep analyses
+**Plan Location**: `tasks/milk-drop-video-support/plan.md`
 
 ---
 
-## 🚀 Next Session: Implement Custom Drag
+## ✅ TASK 1 COMPLETE (Foundation Available)
 
-**Immediate Tasks**:
-1. Carefully add custom drag methods to WindowSnapManager.swift
-2. Add drag component files to Xcode
-3. Update all 3 windows (remove WindowDragGesture, add custom)
-4. Test magnetic snapping
+**Status**: ✅ Merged to main (PR #31)
+**Grade**: Oracle A (Production-Ready)
 
-**Estimated**: 2-3 hours for complete custom drag implementation
+**What TASK 1 Provides**:
+- NSWindowController pattern for borderless windows
+- WindowCoordinator singleton (manages all windows)
+- WindowSnapManager (magnetic snapping)
+- Delegate multiplexer (extensible)
+- WindowFrameStore (automatic persistence)
 
-**Context**: 45% remaining (plenty for implementation)
+**TASK 2 follows this exact pattern!**
 
 ---
 
-**Latest Commit**: `b576ee2`  
-**Status**: Phase 1 ✅ Complete, Phase 2 solution ready  
-**Next**: Custom drag implementation
+## 🚀 DAY 1 FIRST TASK
+
+**Create**: `MacAmpApp/Windows/WinampVideoWindowController.swift`
+
+**Pattern** (see plan.md lines 112-161):
+```swift
+class WinampVideoWindowController: NSWindowController {
+    convenience init(...) {
+        let window = BorderlessWindow(...)
+        // Follow TASK 1 pattern exactly
+    }
+}
+```
+
+**Checklist**: tasks/milk-drop-video-support/plan.md lines 165-170
+
+---
+
+## 📊 ORACLE STATUS
+
+**Final Validation**: A- Grade, GO ✅
+**Confidence**: HIGH
+**Blockers**: NONE
+
+---
+
+That's it! Ready to start TASK 2 implementation. 🚀
