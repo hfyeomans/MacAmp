@@ -3,6 +3,32 @@
 **Task ID**: milk-drop-video-support
 **Research Date**: 2025-11-08
 **Researchers**: Claude Code + Gemini CLI + Explore Agents
+**Prerequisite**: TASK 1 (magnetic-docking-foundation) MUST be complete first
+
+---
+
+## CRITICAL: Resizable Window Pattern (Shared Across Tasks)
+
+**Discovery from TASK 1**: Video and Milkdrop windows are ALSO resizable (like Playlist)
+
+**Shared Resize Pattern** (applies to Playlist, Video, Milkdrop):
+- Bottom section: LEFT (125px) + CENTER (expandable) + RIGHT (150px)
+- Quantized segments: 25px width × 29px height increments
+- BOTTOM_TILE sprite for center tiling
+- Transparent 20×20 drag handle at bottom-right corner
+- Minimum: 275×116 pixels (segments [0,0])
+- See: `tasks/playlist-resize-analysis/` for complete specification
+
+**Implementation Strategy for TASK 2**:
+- Video window will use same resize pattern
+- Milkdrop window will use same resize pattern
+- Can implement resize for ALL 3 windows together (Playlist + Video + Milkdrop)
+- Solve once, apply to all 3!
+
+**If NOT implemented in TASK 2**:
+- Could become TASK 3: "Resizable Window System"
+- Implement resize for Playlist/Video/Milkdrop together
+- ~12-20 hours total (first window hardest, others follow pattern)
 
 ---
 
