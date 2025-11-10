@@ -724,17 +724,18 @@ if appSettings.videoWindowShaded {
 }
 ```
 
-##### 6.4 V Button Final Wiring
-**File**: `MacAmpApp/Views/ClutterBar.swift` (or wherever V button is)
+##### 6.4 V Button Preparation
+**File**: `MacAmpApp/Views/WinampMainWindow.swift` (buildClutterBarButtons)
 
-```swift
-Button(action: {
-    appSettings.showVideoWindow.toggle()
-}) {
-    // V button sprite from skin
-}
-.help("Video Window (Ctrl+V)")
-```
+**Note**: Full V button wiring happens in Day 10.1 (after WindowCoordinator has show/hide methods)
+
+**Day 6 Prep**:
+- [ ] Identify V button location in clutter bar (line ~589-597)
+- [ ] Verify V button sprite exists (MAIN_CLUTTER_BAR_BUTTON_V)
+- [ ] Document current state (disabled/stub)
+- [ ] Plan integration point for Day 10.1
+
+**Actual wiring**: Deferred to Day 10.1 (WindowCoordinator.showVideo() approach)
 
 ##### Day 6 Deliverables
 - ✅ Video files appear in playlist
@@ -1026,10 +1027,16 @@ menu.addItem(createMenuItem(
 ```
 MacAmpApp/
 ├── Models/
-│   ├── AudioAnalyzer.swift              [NEW - FFT analysis]
-│   ├── AudioPlayer.swift                 [MODIFIED - video support]
+│   ├── AudioPlayer.swift                 [MODIFIED - video support + Milkdrop FFT extension]
 │   ├── AppSettings.swift                 [MODIFIED - 2 window states]
 │   └── SkinManager.swift                 [MODIFIED - VIDEO.bmp parsing]
+├── Windows/
+│   ├── WinampVideoWindowController.swift [NEW - Video NSWindowController]
+│   └── WinampMilkdropWindowController.swift [NEW - Milkdrop NSWindowController]
+├── ViewModels/
+│   └── WindowCoordinator.swift           [MODIFIED - Add video + milkdrop controllers]
+├── Utilities/
+│   └── WindowSnapManager.swift           [MODIFIED - Add .video and .milkdrop kinds]
 ├── Views/
 │   └── Windows/                          [NEW DIRECTORY]
 │       ├── VideoWindowView.swift         [NEW - video window container]
