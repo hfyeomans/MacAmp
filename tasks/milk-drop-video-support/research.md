@@ -1043,6 +1043,61 @@ case "video":
 
 **Timeline**: 8-10 days (acceptable per user)
 
+### Part 15: Sprite Source Audit (Video vs. Milkdrop Chrome)
+
+**Date**: 2025-11-09  
+**Goal**: Answer the “CRITICAL SPRITE SOURCE RESEARCH” questions for Task 2.
+
+#### 15.1 VIDEO.bmp Summary
+
+- **File & size**: `tmp/Winamp/VIDEO.BMP` – `file` reports `234 x 119` (Windows 3.x BMP, 8-bit palette).
+- **Layout of sprites**: Taken directly from Winamp’s classic skin definition (`webamp_clone/packages/webamp-modern/assets/winamp_classic/xml/classic-elements.xml:112-141`). Active and inactive title bars are stacked vertically, followed by border pieces and the control pod.
+
+| ID (per XML) | Rect (x, y, w, h) | Notes |
+| --- | --- | --- |
+| `video.topleft.(active|inactive)` | `(0,0,25,20)` / `(0,21,25,20)` | Left cap of titlebar; hold Winamp logo highlight |
+| `video.top.center.(active|inactive)` | `(26,0,100,20)` / `(26,21,100,20)` | Center strip behind title text |
+| `video.top.stretchybit.(active|inactive)` | `(127,0,25,20)` / `(127,21,25,20)` | Tile to span between center and right cap |
+| `video.topright.(active|inactive)` | `(153,0,25,20)` / `(153,21,25,20)` | Right cap plus bevel highlight |
+| `video.left` / `video.right` | `(127,42,11,29)` / `(139,42,8,29)` | Vertical borders for resizable body |
+| `video.bottomleft` / `video.bottomright` | `(0,42,125,38)` / `(0,81,125,38)` | Fixed ends of the control bar |
+| `video.bottom.stretchybit` | `(127,81,25,38)` | Tileable center under playhead |
+| `video.close` / `video.closep` | `(167,3,9,9)` / `(148,42,9,9)` | Close button (normal/pressed) used by `<button action="Close">` |
+| `video.fullscreen` / `video.fullscreenp` | `(9,51,15,18)` / `(158,42,15,18)` | Fullscreen toggle |
+| `video.1x` / `video.1xp` | `(24,51,15,18)` / `(173,42,15,18)` | 1× zoom |
+| `video.2x` / `video.2xp` | `(39,51,15,18)` / `(188,42,15,18)` | 2× zoom |
+| `video.misc` / `video.miscp` | `(69,51,15,18)` / `(218,42,15,18)` | Misc/options drop-down |
+
+`video.xml` confirms the resize scheme: `minimum_w="275"` / `minimum_h="116"`; bottom edges use the shared “left cap + stretch + right cap” pattern; the `<layer ... resize="bottomright">` entry creates the transparent drag handle so no dedicated sprite is present.
+
+**Parsing requirement**: MacAmp must extract the 16 sprite pairs above and expose them as a little 9-slice kit (top row, center row, bottom row) plus individual command buttons. No sign of extra hover/disabled states, so the unpressed + pressed assets are sufficient.
+
+#### 15.2 Milkdrop Chrome Provenance
+
+- `MilkdropWindow` renders a `GenWindow` (`webamp_clone/packages/webamp/js/components/MilkdropWindow/index.tsx:60`) which provides titlebar, borders, and resize affordances.
+- `GenWindow` composes the chrome entirely from the `GEN_*` sprite set defined in `skinSprites.ts:700-738` and styled via `css/gen-window.css`.
+- There is **no** reference to `AVSMAIN.bmp` anywhere in the component tree; the visualization simply fills the GenWindow content area with a black `<Background>` until Butterchurn paints.
+- Therefore, Milkdrop’s chrome always comes from `GEN.BMP` (and optionally `GEN_CLOSE_SELECTED`), matching other “general” plugin hosts in Winamp.
+
+#### 15.3 GEN.bmp vs. GENEX.bmp
+
+- `GEN.bmp` – Required; contains the six top pieces, vertical borders, bottom tiles, and the close button. It forms a strict 9-slice frame (see `WinampSkinRenderingProcessResearch.md:90-118` for historical documentation).
+- `GENEX.bmp` – Optional; adds shared button backgrounds, scrollbars, and the color configuration pixels Nullsoft encoded in the top-right corner. Webamp leaves the `GENEX` entry commented out (`skinSprites.ts:760-820`) because it does not ship a Media Library, but nothing prevents MacAmp from parsing the same file later.
+- **Implication**: For Task 2 we only need the `GEN` sprites we already parse; Milkdrop does not require new chrome assets even if `AVSMAIN.bmp` is missing from the skin.
+
+#### 15.4 Sprite Parsing Checklist
+
+1. **Video window**
+   - Detect `VIDEO.bmp`, slice every sprite from the table above, build a 3×3 tiling system, and wire the command buttons (normal + pressed states).
+   - Provide fallback chrome (bundled VIDEO.bmp) when the sheet is absent.
+2. **Milkdrop window**
+   - Reuse the `GEN.bmp` surfaces already in SkinManager; only ensure we expose the necessary sprites to the SwiftUI Milkdrop shell.
+   - `GENEX.bmp` remains optional metadata—useful for scrollbars later but not needed for chrome.
+
+**Key takeaway**: VIDEO.bmp is the *only* new required sprite sheet for Task 2; the Milkdrop window inherits all chrome from the existing `GEN.bmp` general-window system.
+
+---
+
 ### Video Window Requirements (Detailed)
 
 #### 1. Window Chrome (VIDEO.bmp Parsing)
