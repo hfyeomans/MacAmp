@@ -1876,6 +1876,10 @@ final class WindowSnapManager: NSObject, NSWindowDelegate {
         lastOrigins[ObjectIdentifier(window)] = window.frame.origin
     }
 }
+
+> **2025-11 Update** – `WindowSnapManager` now exposes two additional helpers that the coordinator relies on during double-size toggles:
+> - `beginProgrammaticAdjustment()` / `endProgrammaticAdjustment()` suspend magnetic snapping while we recompute frames.
+> - `clusterKinds(containing:)` returns the set of `WindowKind` values currently touching the requested window. `resizeMainAndEQWindows` calls this with `.playlist` to determine whether the playlist is docked to the main window, the equalizer, or floating.
 ```
 
 ### Core Algorithm: Window Move Handler

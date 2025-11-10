@@ -8,7 +8,6 @@ struct WinampMainWindow: View {
     @Environment(DockingController.self) var dockingController
     @Environment(AppSettings.self) var settings
     @Environment(PlaybackCoordinator.self) var playbackCoordinator
-    @Environment(\.openWindow) var openWindow
 
     // CRITICAL: Prevent unnecessary body re-evaluations that cause ghost images
     // SwiftUI re-evaluates body when ANY @EnvironmentObject publishes changes
@@ -92,12 +91,14 @@ struct WinampMainWindow: View {
                             height: WinampSizes.main.height)
 
             // Title bar with "Winamp" text (overlays on background)
-            // Make ONLY the title bar draggable using macOS 15's WindowDragGesture
-            SimpleSpriteImage("MAIN_TITLE_BAR_SELECTED",
-                            width: 275,
-                            height: 14)
-                .at(CGPoint(x: 0, y: 0))
-                .gesture(WindowDragGesture())
+            // Make ONLY the title bar draggable using custom drag (magnetic snapping)
+            // CRITICAL: Apply .at() to drag handle itself, not content inside (Oracle fix)
+            WinampTitlebarDragHandle(windowKind: .main, size: CGSize(width: 275, height: 14)) {
+                SimpleSpriteImage("MAIN_TITLE_BAR_SELECTED",
+                                width: 275,
+                                height: 14)
+            }
+            .at(CGPoint(x: 0, y: 0))
 
             if !isShadeMode {
                 // Full window mode
@@ -108,9 +109,24 @@ struct WinampMainWindow: View {
             }
 
         }
-        .frame(width: WinampSizes.main.width,
-               height: isShadeMode ? WinampSizes.mainShade.height : WinampSizes.main.height)
-        .background(Color.black) // Fallback
+        .frame(
+            width: WinampSizes.main.width,
+            height: isShadeMode ? WinampSizes.mainShade.height : WinampSizes.main.height,
+            alignment: .topLeading
+        )
+        .scaleEffect(
+            settings.isDoubleSizeMode ? 2.0 : 1.0,
+            anchor: .topLeading
+        )
+        .frame(
+            width: settings.isDoubleSizeMode ? WinampSizes.main.width * 2 : WinampSizes.main.width,
+            height: isShadeMode
+                ? (settings.isDoubleSizeMode ? WinampSizes.mainShade.height * 2 : WinampSizes.mainShade.height)
+                : (settings.isDoubleSizeMode ? WinampSizes.main.height * 2 : WinampSizes.main.height),
+            alignment: .topLeading
+        )
+        .fixedSize()  // Lock measured size so background sees final geometry
+        .background(Color.black) // Must be AFTER fixedSize to see scaled dimensions
         .sheet(isPresented: Binding(
             get: { settings.showTrackInfoDialog },
             set: { settings.showTrackInfoDialog = $0 }

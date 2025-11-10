@@ -1,0 +1,866 @@
+import AppKit
+import Observation  // ORACLE CODE QUALITY: Required for @Observable
+
+private struct PlaylistAttachmentSnapshot {
+    let anchor: WindowKind
+    let attachment: PlaylistDockingContext.Attachment
+}
+
+private struct PlaylistDockingContext {
+    enum Source: CustomStringConvertible {
+        case cluster(Set<WindowKind>)
+        case heuristic
+        case memory
+
+        var description: String {
+            switch self {
+            case .cluster(let kinds):
+                return "cluster=" + kinds.map { "\($0)" }.sorted().joined(separator: ",")
+            case .heuristic:
+                return "heuristic"
+            case .memory:
+                return "memory"
+            }
+        }
+    }
+
+    enum Attachment: CustomStringConvertible {
+        case below(xOffset: CGFloat)
+        case above(xOffset: CGFloat)
+        case left(yOffset: CGFloat)
+        case right(yOffset: CGFloat)
+
+        var description: String {
+            switch self {
+            case .below(let offset): return ".below(xOffset: \(offset))"
+            case .above(let offset): return ".above(xOffset: \(offset))"
+            case .left(let offset): return ".left(yOffset: \(offset))"
+            case .right(let offset): return ".right(yOffset: \(offset))"
+            }
+        }
+    }
+
+    let anchor: WindowKind
+    let attachment: Attachment
+    let source: Source
+}
+
+@MainActor
+@Observable
+final class WindowCoordinator {
+    static var shared: WindowCoordinator!  // Initialized in MacAmpApp.init()
+
+    private let mainController: NSWindowController
+    private let eqController: NSWindowController
+    private let playlistController: NSWindowController
+
+    // Store references for observation/state checks
+    private let settings: AppSettings
+    private let skinManager: SkinManager
+
+    @ObservationIgnored private var skinPresentationTask: Task<Void, Never>?
+    @ObservationIgnored private var alwaysOnTopTask: Task<Void, Never>?
+    @ObservationIgnored private var doubleSizeTask: Task<Void, Never>?
+    @ObservationIgnored private var persistenceTask: Task<Void, Never>?
+    private var hasPresentedInitialWindows = false
+    private var persistenceSuppressionCount = 0
+    private var windowKinds: [ObjectIdentifier: WindowKind] = [:]
+    private let windowFrameStore = WindowFrameStore()
+    private var persistenceDelegate: WindowPersistenceDelegate?
+    private var lastPlaylistAttachment: PlaylistAttachmentSnapshot?
+
+    // PHASE 3: Delegate multiplexers (must store as properties - NSWindow.delegate is weak!)
+    private var mainDelegateMultiplexer: WindowDelegateMultiplexer?
+    private var eqDelegateMultiplexer: WindowDelegateMultiplexer?
+    private var playlistDelegateMultiplexer: WindowDelegateMultiplexer?
+    private enum LayoutDefaults {
+        static let stackX: CGFloat = 100
+        static let mainY: CGFloat = 500
+        static let playlistMaxHeight: CGFloat = 900
+    }
+
+    var mainWindow: NSWindow? { mainController.window }
+    var eqWindow: NSWindow? { eqController.window }
+    var playlistWindow: NSWindow? { playlistController.window }
+
+    init(skinManager: SkinManager, audioPlayer: AudioPlayer, dockingController: DockingController, settings: AppSettings, radioLibrary: RadioStationLibrary, playbackCoordinator: PlaybackCoordinator) {
+        // Store shared state references
+        self.settings = settings
+        self.skinManager = skinManager
+
+        // Create Main window with environment injection
+        mainController = WinampMainWindowController(
+            skinManager: skinManager,
+            audioPlayer: audioPlayer,
+            dockingController: dockingController,
+            settings: settings,
+            radioLibrary: radioLibrary,
+            playbackCoordinator: playbackCoordinator
+        )
+
+        // Create EQ window with environment injection
+        eqController = WinampEqualizerWindowController(
+            skinManager: skinManager,
+            audioPlayer: audioPlayer,
+            dockingController: dockingController,
+            settings: settings,
+            radioLibrary: radioLibrary,
+            playbackCoordinator: playbackCoordinator
+        )
+
+        // Create Playlist window with environment injection
+        playlistController = WinampPlaylistWindowController(
+            skinManager: skinManager,
+            audioPlayer: audioPlayer,
+            dockingController: dockingController,
+            settings: settings,
+            radioLibrary: radioLibrary,
+            playbackCoordinator: playbackCoordinator
+        )
+
+        // Configure windows (borderless, transparent titlebar)
+        configureWindows()
+        mapWindowsToKinds()
+
+        // PHASE 4: Set initial window sizes based on current double-size state
+        resizeMainAndEQWindows(
+            doubled: settings.isDoubleSizeMode,
+            animated: false,
+            persistResult: false
+        )
+        debugLogWindowPositions(step: "after initial resizeMainAndEQWindows")
+
+        // Apply persisted positions or fall back to defaults
+        applyInitialWindowLayout()
+        debugLogWindowPositions(step: "after applying initial window layout")
+
+        // Show windows only after the initial skin has loaded
+        presentWindowsWhenReady()
+        debugLogWindowPositions(step: "after presentWindowsWhenReady call")
+
+        // CRITICAL FIX #3: Set initial window levels from persisted always-on-top state
+        // From UnifiedDockView.swift line 80
+        let initialLevel: NSWindow.Level = settings.isAlwaysOnTop ? .floating : .normal
+        mainWindow?.level = initialLevel
+        eqWindow?.level = initialLevel
+        playlistWindow?.level = initialLevel
+        debugLogWindowPositions(step: "after initial window level assignment")
+
+        // CRITICAL FIX #3: Observe always-on-top changes
+        // From UnifiedDockView.swift lines 65-68
+        // Note: AppSettings is @Observable, so we can track changes
+        // Using withObservationTracking for reactive updates
+        setupAlwaysOnTopObserver()
+        debugLogWindowPositions(step: "after setupAlwaysOnTopObserver")
+
+        // PHASE 4: Observe for double-size changes
+        setupDoubleSizeObserver()
+        debugLogWindowPositions(step: "after setupDoubleSizeObserver")
+
+        // PHASE 2: Register windows with WindowSnapManager
+        // WindowSnapManager provides:
+        // - 15px magnetic snapping
+        // - Cluster detection (group movement)
+        // - Screen edge snapping
+        // - Multi-monitor support
+        // NOTE: register() no longer sets window.delegate (Phase 3 uses multiplexer)
+        if let main = mainWindow {
+            WindowSnapManager.shared.register(window: main, kind: .main)
+        }
+        if let eq = eqWindow {
+            WindowSnapManager.shared.register(window: eq, kind: .equalizer)
+        }
+        if let playlist = playlistWindow {
+            WindowSnapManager.shared.register(window: playlist, kind: .playlist)
+        }
+        debugLogWindowPositions(step: "after WindowSnapManager registration")
+
+        // PHASE 3: Set up delegate multiplexers
+        // Multiplexer pattern allows multiple delegates per window
+        // WindowSnapManager is first delegate, can add more later (resize, close, focus handlers)
+        // CRITICAL: Must store multiplexers as properties - NSWindow.delegate is weak!
+
+        // Main window multiplexer
+        mainDelegateMultiplexer = WindowDelegateMultiplexer()
+        mainDelegateMultiplexer?.add(delegate: WindowSnapManager.shared)
+        mainWindow?.delegate = mainDelegateMultiplexer
+
+        // EQ window multiplexer
+        eqDelegateMultiplexer = WindowDelegateMultiplexer()
+        eqDelegateMultiplexer?.add(delegate: WindowSnapManager.shared)
+        eqWindow?.delegate = eqDelegateMultiplexer
+
+        // Playlist window multiplexer
+        playlistDelegateMultiplexer = WindowDelegateMultiplexer()
+        playlistDelegateMultiplexer?.add(delegate: WindowSnapManager.shared)
+        playlistWindow?.delegate = playlistDelegateMultiplexer
+
+        // Persist window movement/resizes
+        persistenceDelegate = WindowPersistenceDelegate(coordinator: self)
+        if let persistenceDelegate {
+            mainDelegateMultiplexer?.add(delegate: persistenceDelegate)
+            eqDelegateMultiplexer?.add(delegate: persistenceDelegate)
+            playlistDelegateMultiplexer?.add(delegate: persistenceDelegate)
+        }
+
+        debugLogWindowPositions(step: "after delegate multiplexer setup")
+    }
+
+    // CRITICAL FIX #3: Always-on-top observer (Oracle P1 fix - no memory leak)
+    // Migrated from UnifiedDockView.swift lines 65-68
+    private func setupAlwaysOnTopObserver() {
+        // Cancel any existing observer
+        alwaysOnTopTask?.cancel()
+
+        // Use withObservationTracking for reactive updates (no polling)
+        alwaysOnTopTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+
+            // Recursive observation pattern
+            withObservationTracking {
+                _ = self.settings.isAlwaysOnTop
+            } onChange: {
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    self.updateWindowLevels(self.settings.isAlwaysOnTop)
+                    self.setupAlwaysOnTopObserver()  // Re-establish observer
+                }
+            }
+        }
+    }
+
+    deinit {
+        skinPresentationTask?.cancel()
+        alwaysOnTopTask?.cancel()
+        doubleSizeTask?.cancel()
+        persistenceTask?.cancel()
+    }
+
+    // PHASE 4: Double-size observer (Main + EQ only, not Playlist)
+    private func setupDoubleSizeObserver() {
+        // Cancel any existing observer
+        doubleSizeTask?.cancel()
+
+        // Use withObservationTracking for reactive updates
+        doubleSizeTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+
+            // Recursive observation pattern
+            withObservationTracking {
+                _ = self.settings.isDoubleSizeMode
+            } onChange: {
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    self.resizeMainAndEQWindows(doubled: self.settings.isDoubleSizeMode)
+                    self.setupDoubleSizeObserver()  // Re-establish observer
+                }
+            }
+        }
+    }
+
+    private func resizeMainAndEQWindows(doubled: Bool, animated _: Bool = true, persistResult: Bool = true) {
+        guard let main = mainWindow, let eq = eqWindow else { return }
+
+        let originalMainFrame = main.frame
+        let originalEqFrame = eq.frame
+        let originalPlaylistFrame = playlistWindow?.frame
+        let playlistSize = originalPlaylistFrame?.size ?? playlistWindow?.frame.size
+
+        let dockingContext = makePlaylistDockingContext(
+            mainFrame: originalMainFrame,
+            eqFrame: originalEqFrame,
+            playlistFrame: originalPlaylistFrame
+        )
+
+        logDoubleSizeDebug(
+            mainFrame: originalMainFrame,
+            eqFrame: originalEqFrame,
+            playlistFrame: originalPlaylistFrame,
+            dockingContext: dockingContext
+        )
+
+        let scale: CGFloat = doubled ? 2.0 : 1.0
+        var newMainFrame = originalMainFrame
+        let newMainSize = CGSize(width: WinampSizes.main.width * scale, height: WinampSizes.main.height * scale)
+        let mainDelta = newMainSize.height - newMainFrame.size.height
+        newMainFrame.size = newMainSize
+        newMainFrame.origin.y -= mainDelta
+
+        var newEqFrame = originalEqFrame
+        let newEqSize = CGSize(width: WinampSizes.equalizer.width * scale, height: WinampSizes.equalizer.height * scale)
+        newEqFrame.size = newEqSize
+        newEqFrame.origin.y = newMainFrame.origin.y - newEqFrame.size.height
+
+        let animationAnchorFrame = dockingContext.flatMap { context in
+            anchorFrame(context.anchor, mainFrame: newMainFrame, eqFrame: newEqFrame)
+        }
+
+        beginSuppressingPersistence()
+        WindowSnapManager.shared.beginProgrammaticAdjustment()
+
+        main.setFrame(newMainFrame, display: true)
+        eq.setFrame(newEqFrame, display: true)
+
+        if let context = dockingContext,
+           let size = playlistSize,
+           let anchorFrame = animationAnchorFrame ?? liveAnchorFrame(context.anchor) ?? anchorFrame(context.anchor, mainFrame: newMainFrame, eqFrame: newEqFrame) {
+            movePlaylist(using: context, targetFrame: anchorFrame, playlistSize: size, animated: false)
+        }
+
+        logDockingStage(
+            "post-resize actual",
+            mainFrame: mainWindow?.frame,
+            eqFrame: eqWindow?.frame,
+            playlistFrame: playlistWindow?.frame
+        )
+
+        WindowSnapManager.shared.endProgrammaticAdjustment()
+        endSuppressingPersistence()
+        if persistResult {
+            schedulePersistenceFlush()
+        }
+    }
+
+    private func makePlaylistDockingContext(mainFrame: NSRect, eqFrame: NSRect, playlistFrame: NSRect?) -> PlaylistDockingContext? {
+        guard let playlistFrame else { return nil }
+
+        if let clusterKinds = WindowSnapManager.shared.clusterKinds(containing: .playlist) {
+            if clusterKinds.contains(.equalizer),
+               let attachment = determineAttachment(anchorFrame: eqFrame, playlistFrame: playlistFrame, strict: false) {
+                let snapshot = PlaylistAttachmentSnapshot(anchor: .equalizer, attachment: attachment)
+                lastPlaylistAttachment = snapshot
+                return PlaylistDockingContext(anchor: .equalizer, attachment: attachment, source: .cluster(clusterKinds))
+            }
+            if clusterKinds.contains(.main),
+               let attachment = determineAttachment(anchorFrame: mainFrame, playlistFrame: playlistFrame, strict: false) {
+                let snapshot = PlaylistAttachmentSnapshot(anchor: .main, attachment: attachment)
+                lastPlaylistAttachment = snapshot
+                return PlaylistDockingContext(anchor: .main, attachment: attachment, source: .cluster(clusterKinds))
+            }
+            if let snapshot = lastPlaylistAttachment,
+               clusterKinds.contains(snapshot.anchor),
+               let anchorFrame = anchorFrame(snapshot.anchor, mainFrame: mainFrame, eqFrame: eqFrame),
+               attachmentStillEligible(snapshot, anchorFrame: anchorFrame, playlistFrame: playlistFrame) {
+                return PlaylistDockingContext(anchor: snapshot.anchor, attachment: snapshot.attachment, source: .memory)
+            }
+        }
+
+        if let attachment = determineAttachment(anchorFrame: eqFrame, playlistFrame: playlistFrame) {
+            let snapshot = PlaylistAttachmentSnapshot(anchor: .equalizer, attachment: attachment)
+            lastPlaylistAttachment = snapshot
+            return PlaylistDockingContext(anchor: .equalizer, attachment: attachment, source: .heuristic)
+        }
+
+        if let attachment = determineAttachment(anchorFrame: mainFrame, playlistFrame: playlistFrame) {
+            let snapshot = PlaylistAttachmentSnapshot(anchor: .main, attachment: attachment)
+            lastPlaylistAttachment = snapshot
+            return PlaylistDockingContext(anchor: .main, attachment: attachment, source: .heuristic)
+        }
+
+        if let snapshot = lastPlaylistAttachment,
+           let anchorFrame = anchorFrame(snapshot.anchor, mainFrame: mainFrame, eqFrame: eqFrame),
+           attachmentStillEligible(snapshot, anchorFrame: anchorFrame, playlistFrame: playlistFrame) {
+            return PlaylistDockingContext(anchor: snapshot.anchor, attachment: snapshot.attachment, source: .memory)
+        }
+
+        lastPlaylistAttachment = nil
+        return nil
+    }
+
+    private func determineAttachment(anchorFrame: NSRect, playlistFrame: NSRect, strict: Bool = true) -> PlaylistDockingContext.Attachment? {
+        let tolerance = SnapUtils.SNAP_DISTANCE
+
+        var candidates: [(distance: CGFloat, attachment: PlaylistDockingContext.Attachment)] = []
+
+        func overlapsX() -> Bool {
+            playlistFrame.minX <= anchorFrame.maxX + tolerance && anchorFrame.minX <= playlistFrame.maxX + tolerance
+        }
+
+        func overlapsY() -> Bool {
+            playlistFrame.minY <= anchorFrame.maxY + tolerance && anchorFrame.minY <= playlistFrame.maxY + tolerance
+        }
+
+        func consider(distance: CGFloat, attachment: PlaylistDockingContext.Attachment) {
+            if strict {
+                if distance <= tolerance {
+                    candidates.append((distance, attachment))
+                }
+            } else {
+                candidates.append((distance, attachment))
+            }
+        }
+
+        if overlapsX() {
+            let playlistTop = playlistFrame.maxY
+            let anchorBottom = anchorFrame.minY
+            consider(distance: abs(playlistTop - anchorBottom), attachment: .below(xOffset: playlistFrame.origin.x - anchorFrame.origin.x))
+
+            let playlistBottom = playlistFrame.minY
+            let anchorTop = anchorFrame.maxY
+            consider(distance: abs(playlistBottom - anchorTop), attachment: .above(xOffset: playlistFrame.origin.x - anchorFrame.origin.x))
+        }
+
+        if overlapsY() {
+            let playlistRight = playlistFrame.maxX
+            let anchorLeft = anchorFrame.minX
+            consider(distance: abs(playlistRight - anchorLeft), attachment: .left(yOffset: playlistFrame.origin.y - anchorFrame.origin.y))
+
+            let playlistLeft = playlistFrame.minX
+            let anchorRight = anchorFrame.maxX
+            consider(distance: abs(playlistLeft - anchorRight), attachment: .right(yOffset: playlistFrame.origin.y - anchorFrame.origin.y))
+        }
+
+        return candidates.min(by: { $0.distance < $1.distance })?.attachment
+    }
+
+    private func playlistOrigin(for attachment: PlaylistDockingContext.Attachment, anchorFrame: NSRect, playlistSize: NSSize) -> NSPoint {
+        switch attachment {
+        case .below(let xOffset):
+            return NSPoint(x: anchorFrame.origin.x + xOffset, y: anchorFrame.origin.y - playlistSize.height)
+        case .above(let xOffset):
+            return NSPoint(x: anchorFrame.origin.x + xOffset, y: anchorFrame.origin.y + anchorFrame.size.height)
+        case .left(let yOffset):
+            return NSPoint(x: anchorFrame.origin.x - playlistSize.width, y: anchorFrame.origin.y + yOffset)
+        case .right(let yOffset):
+            return NSPoint(x: anchorFrame.origin.x + anchorFrame.size.width, y: anchorFrame.origin.y + yOffset)
+        }
+    }
+
+    private func attachmentStillEligible(_ snapshot: PlaylistAttachmentSnapshot, anchorFrame: NSRect, playlistFrame: NSRect) -> Bool {
+        let expected = playlistOrigin(for: snapshot.attachment, anchorFrame: anchorFrame, playlistSize: playlistFrame.size)
+        let dx = abs(playlistFrame.origin.x - expected.x)
+        let dy = abs(playlistFrame.origin.y - expected.y)
+        let tolerance = SnapUtils.SNAP_DISTANCE
+
+        switch snapshot.attachment {
+        case .below, .above:
+            return dx <= tolerance && dy <= anchorFrame.size.height + tolerance
+        case .left, .right:
+            return dy <= tolerance && dx <= playlistFrame.size.width + tolerance
+        }
+    }
+
+    private func anchorFrame(_ anchor: WindowKind, mainFrame: NSRect, eqFrame: NSRect) -> NSRect? {
+        switch anchor {
+        case .main:
+            return mainFrame
+        case .equalizer:
+            return eqFrame
+        default:
+            return nil
+        }
+    }
+
+    private func liveAnchorFrame(_ anchor: WindowKind) -> NSRect? {
+        switch anchor {
+        case .main:
+            return mainWindow?.frame
+        case .equalizer:
+            return eqWindow?.frame
+        default:
+            return nil
+        }
+    }
+
+    private func movePlaylist(using context: PlaylistDockingContext, targetFrame: NSRect, playlistSize: NSSize, animated: Bool) {
+        guard let playlist = playlistWindow else { return }
+        let origin = playlistOrigin(for: context.attachment, anchorFrame: targetFrame, playlistSize: playlistSize)
+        if animated {
+            playlist.animator().setFrameOrigin(origin)
+        } else {
+            playlist.setFrameOrigin(origin)
+        }
+
+        if settings.windowDebugLoggingEnabled {
+            let stage = animated ? "playlist move (animated)" : "playlist move"
+            print("[ORACLE] \(stage) anchor=\(context.anchor): targetOrigin=(x: \(origin.x), y: \(origin.y)), actualFrame=\(playlist.frame)")
+        }
+    }
+
+    private func logDoubleSizeDebug(
+        mainFrame: NSRect,
+        eqFrame: NSRect,
+        playlistFrame: NSRect?,
+        dockingContext: PlaylistDockingContext?
+    ) {
+        guard settings.windowDebugLoggingEnabled else { return }
+        print("=== DOUBLE-SIZE DEBUG ===")
+        print("Main frame: \(mainFrame)")
+        print("EQ frame: \(eqFrame)")
+        print("Playlist frame: \(String(describing: playlistFrame))")
+        if let context = dockingContext {
+            print("[ORACLE] Docking source: \(context.source.description), anchor=\(context.anchor), attachment=\(context.attachment.description)")
+            print("Action: Playlist WILL move with EQ (cluster-locked)")
+        } else if playlistFrame == nil {
+            print("Docking detection: playlist window unavailable")
+        } else {
+            print("Action: Playlist stays independent (no docking context)")
+        }
+    }
+
+    private func logDockingStage(
+        _ stage: String,
+        mainFrame: NSRect?,
+        eqFrame: NSRect?,
+        playlistFrame: NSRect?
+    ) {
+        guard settings.windowDebugLoggingEnabled else { return }
+        print("[ORACLE] \(stage): main=\(String(describing: mainFrame)), eq=\(String(describing: eqFrame)), playlist=\(String(describing: playlistFrame))")
+    }
+
+    private func debugLogWindowPositions(step: String) {
+        guard settings.windowDebugLoggingEnabled else { return }
+        print("🔍 \(step)")
+
+        func describe(window: NSWindow?, label: String) {
+            guard let window else {
+                print("  \(label): unavailable")
+                return
+            }
+            let frame = window.frame
+            print("  \(label): origin=(x: \(frame.origin.x), y: \(frame.origin.y)) size=(w: \(frame.size.width), h: \(frame.size.height))")
+        }
+
+        describe(window: mainWindow, label: "Main")
+        describe(window: eqWindow, label: "EQ")
+        describe(window: playlistWindow, label: "Playlist")
+    }
+
+    private func updateWindowLevels(_ alwaysOnTop: Bool) {
+        let level: NSWindow.Level = alwaysOnTop ? .floating : .normal
+        mainWindow?.level = level
+        eqWindow?.level = level
+        playlistWindow?.level = level
+    }
+
+    private var canPresentImmediately: Bool {
+        if skinManager.isLoading {
+            return false
+        }
+        if skinManager.currentSkin != nil {
+            return true
+        }
+        return skinManager.loadingError != nil
+    }
+
+    private func presentWindowsWhenReady() {
+        if canPresentImmediately {
+            presentInitialWindows()
+            return
+        }
+
+        skinPresentationTask?.cancel()
+        skinPresentationTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            while !self.canPresentImmediately {
+                // Check for cancellation to prevent zombie tasks
+                if Task.isCancelled { return }
+                try? await Task.sleep(for: .milliseconds(50))
+            }
+            // Final cancellation check before presenting
+            if Task.isCancelled { return }
+            self.presentInitialWindows()
+        }
+    }
+
+    private func presentInitialWindows() {
+        guard !hasPresentedInitialWindows else { return }
+        hasPresentedInitialWindows = true
+        NSApp.activate(ignoringOtherApps: true)
+        showAllWindows()
+    }
+
+    private func configureWindows() {
+        // ORACLE NOTE: Windows already created as borderless in controllers
+        // No additional style mask changes needed here
+        // This method can be removed or used for other window setup
+
+        // Optional: Additional window configuration
+        [mainWindow, eqWindow, playlistWindow].forEach { window in
+            window?.level = .normal
+            window?.collectionBehavior = [.managed, .participatesInCycle]
+        }
+    }
+
+    private func setDefaultPositions() {
+        // Stack vertically with ZERO spacing (VStack spacing: 0)
+        // AppKit origin = bottom-left, so we calculate from top down
+        // Main at Y=500, each window positioned directly below the one above
+        performWithoutPersistence {
+            let x = LayoutDefaults.stackX
+            let mainY = LayoutDefaults.mainY
+
+            // Main window
+            mainWindow?.setFrameOrigin(NSPoint(x: x, y: mainY))
+
+            // EQ directly below Main
+            if let eqHeight = eqWindow?.frame.size.height {
+                eqWindow?.setFrameOrigin(NSPoint(x: x, y: mainY - eqHeight))
+            }
+
+            // Playlist directly below EQ
+            if let eqY = eqWindow?.frame.origin.y,
+               let playlistHeight = playlistWindow?.frame.size.height {
+                playlistWindow?.setFrameOrigin(NSPoint(x: x, y: eqY - playlistHeight))
+            }
+        }
+
+        if settings.windowDebugLoggingEnabled {
+            print("✅ Default positions set (should be touching with 0 spacing):")
+            if let main = mainWindow { print("  Main: \(main.frame)") }
+            if let eq = eqWindow { print("  EQ: \(eq.frame)") }
+            if let playlist = playlistWindow { print("  Playlist: \(playlist.frame)") }
+        }
+    }
+
+    /// Reset windows to default vertical stack (for testing double-size docking)
+    /// Call this to ensure windows are properly docked before testing
+    func resetToDefaultStack() {
+        // Disable snap manager during reset
+        WindowSnapManager.shared.beginProgrammaticAdjustment()
+        beginSuppressingPersistence()
+
+        // Calculate positions based on current window sizes
+        guard let main = mainWindow, let eq = eqWindow, let playlist = playlistWindow else {
+            WindowSnapManager.shared.endProgrammaticAdjustment()
+            endSuppressingPersistence()
+            return
+        }
+
+        let x = LayoutDefaults.stackX  // Aligned X position
+
+        // Main at top
+        var mainFrame = main.frame
+        mainFrame.origin = NSPoint(x: x, y: LayoutDefaults.mainY)
+        main.setFrame(mainFrame, display: true)
+
+        // EQ directly below Main (zero spacing)
+        var eqFrame = eq.frame
+        eqFrame.origin = NSPoint(x: x, y: mainFrame.origin.y - eqFrame.size.height)
+        eq.setFrame(eqFrame, display: true)
+
+        // Playlist directly below EQ (zero spacing)
+        var playlistFrame = playlist.frame
+        playlistFrame.origin = NSPoint(x: x, y: eqFrame.origin.y - playlistFrame.size.height)
+        playlist.setFrame(playlistFrame, display: true)
+
+        WindowSnapManager.shared.endProgrammaticAdjustment()
+        endSuppressingPersistence()
+        schedulePersistenceFlush()
+
+        if settings.windowDebugLoggingEnabled {
+            print("✅ Windows reset to default vertical stack")
+            print("  Main: \(mainFrame)")
+            print("  EQ: \(eqFrame)")
+            print("  Playlist: \(playlistFrame)")
+        }
+    }
+
+    private func applyInitialWindowLayout() {
+        setDefaultPositions()
+        _ = applyPersistedWindowPositions()
+        persistAllWindowFrames()
+    }
+
+    @discardableResult
+    private func applyPersistedWindowPositions() -> Bool {
+        var applied = false
+        performWithoutPersistence {
+            if let main = mainWindow,
+               let storedMain = windowFrameStore.frame(for: .main) {
+                var frame = main.frame
+                frame.size = CGSize(
+                    width: WinampSizes.main.width * (settings.isDoubleSizeMode ? 2 : 1),
+                    height: WinampSizes.main.height * (settings.isDoubleSizeMode ? 2 : 1)
+                )
+                frame.origin = storedMain.origin
+                main.setFrame(frame, display: true)
+                applied = true
+            }
+
+            if let eq = eqWindow,
+               let storedEq = windowFrameStore.frame(for: .equalizer) {
+                var frame = eq.frame
+                frame.size = CGSize(
+                    width: WinampSizes.equalizer.width * (settings.isDoubleSizeMode ? 2 : 1),
+                    height: WinampSizes.equalizer.height * (settings.isDoubleSizeMode ? 2 : 1)
+                )
+                frame.origin = storedEq.origin
+                eq.setFrame(frame, display: true)
+                applied = true
+            }
+
+            if let playlist = playlistWindow,
+               var storedPlaylist = windowFrameStore.frame(for: .playlist) {
+                storedPlaylist.size.width = WinampSizes.playlistBase.width
+                let clampedHeight = max(
+                    WinampSizes.playlistBase.height,
+                    min(LayoutDefaults.playlistMaxHeight, storedPlaylist.size.height)
+                )
+                storedPlaylist.size.height = clampedHeight
+                playlist.setFrame(storedPlaylist, display: true)
+                applied = true
+            }
+        }
+        return applied
+    }
+
+    private func persistAllWindowFrames() {
+        if let main = mainWindow {
+            windowFrameStore.save(frame: main.frame, for: .main)
+        }
+        if let eq = eqWindow {
+            windowFrameStore.save(frame: eq.frame, for: .equalizer)
+        }
+        if let playlist = playlistWindow {
+            windowFrameStore.save(frame: playlist.frame, for: .playlist)
+        }
+    }
+
+    private func schedulePersistenceFlush() {
+        guard persistenceSuppressionCount == 0 else { return }
+        persistenceTask?.cancel()
+        persistenceTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(150))
+            guard let self else { return }
+            self.persistAllWindowFrames()
+        }
+    }
+
+    private func handleWindowGeometryChange(notification: Notification) {
+        guard persistenceSuppressionCount == 0 else { return }
+        guard let window = notification.object as? NSWindow else { return }
+        guard windowKind(for: window) != nil else { return }
+        schedulePersistenceFlush()
+    }
+
+    private func mapWindowsToKinds() {
+        windowKinds.removeAll()
+        if let main = mainWindow {
+            windowKinds[ObjectIdentifier(main)] = .main
+        }
+        if let eq = eqWindow {
+            windowKinds[ObjectIdentifier(eq)] = .equalizer
+        }
+        if let playlist = playlistWindow {
+            windowKinds[ObjectIdentifier(playlist)] = .playlist
+        }
+    }
+
+    private func windowKind(for window: NSWindow) -> WindowKind? {
+        windowKinds[ObjectIdentifier(window)]
+    }
+
+    private func beginSuppressingPersistence() {
+        persistenceSuppressionCount += 1
+    }
+
+    private func endSuppressingPersistence() {
+        persistenceSuppressionCount = max(0, persistenceSuppressionCount - 1)
+    }
+
+    private func performWithoutPersistence(_ work: () -> Void) {
+        beginSuppressingPersistence()
+        work()
+        endSuppressingPersistence()
+    }
+
+    func showAllWindows() {
+        mainWindow?.makeKeyAndOrderFront(nil)
+        eqWindow?.orderFront(nil)
+        playlistWindow?.orderFront(nil)
+        focusAllWindows()
+    }
+
+    // Menu command integration
+    func showMain() { mainWindow?.makeKeyAndOrderFront(nil) }
+    func hideMain() { mainWindow?.orderOut(nil) }
+    func showEqualizer() { eqWindow?.makeKeyAndOrderFront(nil) }
+    func hideEqualizer() { eqWindow?.orderOut(nil) }
+    func showPlaylist() { playlistWindow?.makeKeyAndOrderFront(nil) }
+    func hidePlaylist() { playlistWindow?.orderOut(nil) }
+
+    private func focusAllWindows() {
+        [mainWindow, eqWindow, playlistWindow].forEach { window in
+            if let contentView = window?.contentView {
+                window?.makeFirstResponder(contentView)
+            }
+        }
+    }
+
+    private struct PersistedWindowFrame: Codable {
+        let originX: Double
+        let originY: Double
+        let width: Double
+        let height: Double
+
+        init(frame: NSRect) {
+            originX = Double(frame.origin.x)
+            originY = Double(frame.origin.y)
+            width = Double(frame.size.width)
+            height = Double(frame.size.height)
+        }
+
+        func asRect() -> NSRect {
+            NSRect(
+                x: CGFloat(originX),
+                y: CGFloat(originY),
+                width: CGFloat(width),
+                height: CGFloat(height)
+            )
+        }
+
+    }
+
+    private struct WindowFrameStore {
+        private let defaults = UserDefaults.standard
+        private let encoder = JSONEncoder()
+        private let decoder = JSONDecoder()
+
+        func frame(for kind: WindowKind) -> NSRect? {
+            guard let data = defaults.data(forKey: key(for: kind)),
+                  let record = try? decoder.decode(PersistedWindowFrame.self, from: data) else {
+                return nil
+            }
+            return record.asRect()
+        }
+
+        func save(frame: NSRect, for kind: WindowKind) {
+            let record = PersistedWindowFrame(frame: frame)
+            if let data = try? encoder.encode(record) {
+                defaults.set(data, forKey: key(for: kind))
+            }
+        }
+
+        private func key(for kind: WindowKind) -> String {
+            "WindowFrame.\(kind.persistenceKey)"
+        }
+    }
+
+    @MainActor
+    private final class WindowPersistenceDelegate: NSObject, NSWindowDelegate {
+        weak var coordinator: WindowCoordinator?
+
+        init(coordinator: WindowCoordinator) {
+            self.coordinator = coordinator
+        }
+
+        func windowDidMove(_ notification: Notification) {
+            coordinator?.handleWindowGeometryChange(notification: notification)
+        }
+
+        func windowDidResize(_ notification: Notification) {
+            coordinator?.handleWindowGeometryChange(notification: notification)
+        }
+    }
+}
+
+private extension WindowKind {
+    var persistenceKey: String {
+        switch self {
+        case .main: return "main"
+        case .playlist: return "playlist"
+        case .equalizer: return "equalizer"
+        }
+    }
+}

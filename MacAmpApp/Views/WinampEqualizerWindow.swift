@@ -6,6 +6,7 @@ import UniformTypeIdentifiers
 struct WinampEqualizerWindow: View {
     @Environment(SkinManager.self) var skinManager
     @Environment(AudioPlayer.self) var audioPlayer
+    @Environment(AppSettings.self) var settings
 
     @State private var isShadeMode: Bool = false
     @State private var showPresetPicker: Bool = false
@@ -67,12 +68,14 @@ struct WinampEqualizerWindow: View {
                                 height: WinampSizes.equalizer.height)
 
                 // Title bar with "Winamp Equalizer" text
-                // Make ONLY the title bar draggable using macOS 15's WindowDragGesture
-                SimpleSpriteImage("EQ_TITLE_BAR_SELECTED",
-                                width: 275,
-                                height: 14)
-                    .at(CGPoint(x: 0, y: 0))
-                    .gesture(WindowDragGesture())
+                // Make ONLY the title bar draggable using custom drag (magnetic snapping)
+                // CRITICAL: Apply .at() to drag handle itself, not content inside (Oracle fix)
+                WinampTitlebarDragHandle(windowKind: .equalizer, size: CGSize(width: 275, height: 14)) {
+                    SimpleSpriteImage("EQ_TITLE_BAR_SELECTED",
+                                    width: 275,
+                                    height: 14)
+                }
+                .at(CGPoint(x: 0, y: 0))
 
                 // Build all EQ components
                 Group {
@@ -99,9 +102,24 @@ struct WinampEqualizerWindow: View {
                 buildShadeMode()
             }
         }
-        .frame(width: WinampSizes.equalizer.width,
-               height: isShadeMode ? WinampSizes.equalizerShade.height : WinampSizes.equalizer.height)
-        .background(Color.black) // Fallback
+        .frame(
+            width: WinampSizes.equalizer.width,
+            height: isShadeMode ? WinampSizes.equalizerShade.height : WinampSizes.equalizer.height,
+            alignment: .topLeading
+        )
+        .scaleEffect(
+            settings.isDoubleSizeMode ? 2.0 : 1.0,
+            anchor: .topLeading
+        )
+        .frame(
+            width: settings.isDoubleSizeMode ? WinampSizes.equalizer.width * 2 : WinampSizes.equalizer.width,
+            height: isShadeMode
+                ? (settings.isDoubleSizeMode ? WinampSizes.equalizerShade.height * 2 : WinampSizes.equalizerShade.height)
+                : (settings.isDoubleSizeMode ? WinampSizes.equalizer.height * 2 : WinampSizes.equalizer.height),
+            alignment: .topLeading
+        )
+        .fixedSize()  // Lock measured size so background sees final geometry
+        .background(Color.black) // Must be AFTER fixedSize to see scaled dimensions
     }
     
     @ViewBuilder

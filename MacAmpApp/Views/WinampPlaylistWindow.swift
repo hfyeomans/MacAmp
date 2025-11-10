@@ -330,6 +330,7 @@ struct WinampPlaylistWindow: View {
             .frame(width: windowWidth, height: isShadeMode ? 14 : windowHeight)
         }
         .frame(width: windowWidth, height: isShadeMode ? 14 : windowHeight)
+        .background(Color.black)
         .onAppear {
             // Store monitor reference to keep it alive
             keyboardMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [self] event in
@@ -372,9 +373,10 @@ struct WinampPlaylistWindow: View {
                     .position(x: 25 + 12.5 + CGFloat(i) * 25, y: 10)
             }
             
-            SimpleSpriteImage("PLAYLIST_TITLE_BAR", width: 100, height: 20)
-                .position(x: 137.5, y: 10)
-                .gesture(WindowDragGesture())
+            WinampTitlebarDragHandle(windowKind: .playlist, size: CGSize(width: 100, height: 20)) {
+                SimpleSpriteImage("PLAYLIST_TITLE_BAR", width: 100, height: 20)
+            }
+            .position(x: 137.5, y: 10)
             
             SimpleSpriteImage("PLAYLIST_TOP_RIGHT_CORNER", width: 25, height: 20)
                 .position(x: 262.5, y: 10)
@@ -404,14 +406,15 @@ struct WinampPlaylistWindow: View {
     
     @ViewBuilder
     private func buildContentOverlay() -> some View {
+        ZStack {
             playlistBackgroundColor
-                .frame(width: 243, height: 170)
-                .position(x: 133.5, y: 105)
 
             buildTrackList()
-                .frame(width: 243, height: 174)
-                .position(x: 133.5, y: 107)
-                .clipped()
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        }
+        .frame(width: 243, height: 174)
+        .position(x: 133.5, y: 107)
+        .clipped()
             
             buildBottomControls()
             buildPlaylistTransportButtons()
@@ -664,6 +667,23 @@ struct WinampPlaylistWindow: View {
         selectedIndices.remove(index)
     }
 
+    // CRITICAL FIX: Menu positioning helper (Oracle solution)
+    // Get playlist window's contentView (not keyWindow which could be Main/EQ)
+    private func playlistContentView() -> NSView? {
+        // Try to get actual playlist window from WindowCoordinator
+        if let view = WindowCoordinator.shared?.playlistWindow?.contentView {
+            return view
+        }
+        // Fallback for previews/tooling
+        return NSApp.keyWindow?.contentView
+    }
+
+    // Present menu at correct position relative to playlist window
+    private func presentPlaylistMenu(_ menu: NSMenu, at point: NSPoint) {
+        guard let contentView = playlistContentView() else { return }
+        menu.popUp(positioning: nil, at: point, in: contentView)
+    }
+
     private func showAddMenu() {
         let menu = NSMenu()
         menu.autoenablesItems = false
@@ -699,11 +719,8 @@ struct WinampPlaylistWindow: View {
         addFileItem.representedObject = audioPlayer
         menu.addItem(addFileItem)
 
-        if let window = NSApp.keyWindow ?? NSApp.windows.first(where: { $0.isVisible }),
-           let contentView = window.contentView {
-            let location = NSPoint(x: 10, y: 396)
-            menu.popUp(positioning: nil, at: location, in: contentView)
-        }
+        // Use playlist-specific positioning (not keyWindow)
+        presentPlaylistMenu(menu, at: NSPoint(x: 12, y: 164))
     }
 
     private func showRemMenu() {
@@ -753,11 +770,8 @@ struct WinampPlaylistWindow: View {
         remSelItem.representedObject = audioPlayer
         menu.addItem(remSelItem)
 
-        if let window = NSApplication.shared.windows.first(where: { $0.contentView != nil }),
-           let contentView = window.contentView {
-            let location = NSPoint(x: 39, y: 378)
-            menu.popUp(positioning: nil, at: location, in: contentView)
-        }
+        // Use playlist-specific positioning (not first window)
+        presentPlaylistMenu(menu, at: NSPoint(x: 41, y: 145))
     }
 
     private func showSelNotSupportedAlert() {
@@ -804,11 +818,8 @@ struct WinampPlaylistWindow: View {
         miscOptionsItem.representedObject = audioPlayer
         menu.addItem(miscOptionsItem)
 
-        if let window = NSApplication.shared.windows.first(where: { $0.contentView != nil }),
-           let contentView = window.contentView {
-            let location = NSPoint(x: 100, y: 397)
-            menu.popUp(positioning: nil, at: location, in: contentView)
-        }
+        // Use playlist-specific positioning (not first window)
+        presentPlaylistMenu(menu, at: NSPoint(x: 100, y: 164))
     }
 
     private func showListMenu() {
@@ -846,11 +857,8 @@ struct WinampPlaylistWindow: View {
         loadListItem.representedObject = audioPlayer
         menu.addItem(loadListItem)
 
-        if let window = NSApplication.shared.windows.first(where: { $0.contentView != nil }),
-           let contentView = window.contentView {
-            let location = NSPoint(x: 228, y: 397)
-            menu.popUp(positioning: nil, at: location, in: contentView)
-        }
+        // Use playlist-specific positioning (not first window)
+        presentPlaylistMenu(menu, at: NSPoint(x: 229, y: 164))
     }
 }
 

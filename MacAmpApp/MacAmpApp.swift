@@ -26,20 +26,32 @@ struct MacAmpApp: App {
         _radioLibrary = State(initialValue: radioLibrary)
         _streamPlayer = State(initialValue: streamPlayer)
         _playbackCoordinator = State(initialValue: playbackCoordinator)
+
+        // CRITICAL FIX #1: Skin auto-loading (from UnifiedDockView.ensureSkin)
+        // Load initial skin before creating windows
+        if skinManager.currentSkin == nil {
+            skinManager.loadInitialSkin()
+        }
+
+        // PHASE 1A: Initialize WindowCoordinator (creates 3 independent NSWindows)
+        // This replaces UnifiedDockView with separate windows
+        WindowCoordinator.shared = WindowCoordinator(
+            skinManager: skinManager,
+            audioPlayer: audioPlayer,
+            dockingController: dockingController,
+            settings: settings,
+            radioLibrary: radioLibrary,
+            playbackCoordinator: playbackCoordinator
+        )
     }
 
     var body: some Scene {
-        WindowGroup {
-            UnifiedDockView()
-                .environment(skinManager)
-                .environment(audioPlayer)
-                .environment(dockingController)
-                .environment(settings)
-                .environment(radioLibrary)
-                .environment(playbackCoordinator)
+        // PHASE 1A: UnifiedDockView replaced by WindowCoordinator
+        // 3 independent NSWindows created manually in WindowCoordinator.init()
+        // Keep Settings window for preferences
+        Settings {
+            EmptyView()
         }
-        .windowStyle(.hiddenTitleBar)
-        .windowResizability(.contentSize)
 
         WindowGroup("Preferences", id: "preferences") {
             PreferencesView()

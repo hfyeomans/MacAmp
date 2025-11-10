@@ -1,688 +1,110 @@
-# Ready for Next Session - MacAmp Development
+# MacAmp - Ready for Next Session
 
-**Last Updated:** 2025-11-07
-**Current Branch:** `main`
-**Build Status:** ✅ Swift 6.0 + Internet Radio Streaming + Three-State Repeat Mode + Clutter Bar (4 of 5 buttons functional)
-
----
-
-## 🎉 **Latest: Three-State Repeat Mode Complete!**
-
-### **PR #30 - MERGED (2025-11-07) - v0.7.9**
-
-**Major Feature Delivered:**
-- ✅ Three-state repeat mode (Off/All/One) matching Winamp 5 Modern skins
-- ✅ White "1" badge indicator (appears only in repeat-one mode)
-- ✅ Manual skip preserved in repeat-one (Next always advances)
-- ✅ Options menu with 3 explicit choices + checkmarks
-- ✅ Ctrl+R keyboard shortcut to cycle modes
-- ✅ Cross-skin compatibility (tested on all 7 bundled skins)
-- ✅ Persistence across app restarts
-- ✅ Migration from old boolean (true → .all, false → .off)
-
-**Architecture:**
-- RepeatMode enum in AppSettings (CaseIterable pattern)
-- Computed property in AudioPlayer (single source of truth)
-- isManualSkip parameter (distinguishes user vs auto actions)
-- ZStack overlay technique (Winamp 5 plugin compatibility)
-
-**Implementation:**
-- 7 commits (~5.5 hours)
-- 2 Oracle reviews (Grade B- → C → A final)
-- User tested - all features confirmed working
-- Oracle Grade: A (production ready)
-
-**Status:** ✅ **SHIPPED TO MAIN** (Release v0.7.9)
-
-**Exceeds Webamp:** Webamp only has boolean repeat
-**Matches Winamp 5:** Modern skins (Modern, Bento, cPro) with "1" badge
-**Menu Renamed:** "Windows" → "Options" (better reflects mixed functionality)
-
-**Documentation Created:**
-- tasks/done/repeat-mode-3way-toggle/ (complete task history)
-- Updated: docs/MACAMP_ARCHITECTURE_GUIDE.md (repeat mode patterns)
-- Updated: docs/IMPLEMENTATION_PATTERNS.md (enum migration pattern)
+**Last Updated**: 2025-11-08  
+**Current Branch**: `feature/magnetic-docking-foundation`  
+**Current Task**: Task 1 - Magnetic Docking Foundation  
+**Phase**: Phase 1 ✅ Complete, Phase 2 Custom Drag Implementation Next  
+**Latest Commit**: `b576ee2`
 
 ---
 
-## 🎉 **PR #28 - Internet Radio Streaming (2025-10-31)**
+## 🎉 MAJOR PROGRESS - Phase 1 COMPLETE!
 
-**Major Feature Delivered:**
-- ✅ HTTP/HTTPS stream playback with live ICY metadata
-- ✅ M3U/M3U8 mixed playlists (local files + streams together)
-- ✅ ADD URL dialog for manual stream entry
-- ✅ Buffering status display ("Connecting...", "buffer 0%")
-- ✅ Next/Previous navigation across both types
-- ✅ Shuffle/Repeat with mixed playlists
-- ✅ Complete Winamp parity
+**Phase 1A** ✅: 3-window architecture + UnifiedDockView migration (fully working!)  
+**Phase 1B** ✅: Skipped (WindowDragGesture already provides dragging)
 
-**Architecture:**
-- Dual-backend system (AVAudioEngine + AVPlayer)
-- PlaybackCoordinator (single source of truth)
-- Modern Swift 6 / macOS 15+ APIs (@preconcurrency)
-- Zero deprecated APIs
-
-**Implementation:**
-- 40 commits (~15-16 hours)
-- 5 Oracle reviews (comprehensive architectural validation)
-- 7 critical bugs fixed during testing
-- Oracle Grade: A- (production ready)
-- User tested - all features confirmed working
-
-**Status:** ✅ **SHIPPED TO MAIN**
-
-**Documentation Created:**
-- BUILDING_RETRO_MACOS_APP_SKILLS.md (766 lines)
-- Complete institutional knowledge from implementation
-- Reference for future similar projects
+**All Working**:
+- 3 independent NSWindows
+- Windows draggable by titlebar
+- Slider tracks clickable  
+- Always-on-top (Ctrl+A)
+- Skins auto-load
+- Menus follow windows
+- No bleed-through
 
 ---
 
-## 🎯 **Immediate Next Tasks (Ready to Implement)**
+## 🔍 Phase 2: Custom Drag Required (Architectural Discovery)
 
-### **Clutter Bar Completion (3 buttons remaining)**
+### Problem Discovered
 
-**Current Status:**
-- O: FUNCTIONAL ✅ (options menu with time/repeat/shuffle/double-size)
-- A: FUNCTIONAL ✅ (always on top)
-- I: FUNCTIONAL ✅ (track info dialog)
-- D: FUNCTIONAL ✅ (double-size)
-- V: Scaffolded (visualizer toggle) - Ready to implement (1 hour)
+**Attempted**: WindowSnapManager with WindowDragGesture  
+**Result**: Windows repel instead of snap, lag when moving groups
 
-**Quickest Wins:**
+**Oracle + Gemini Analysis**:
+- WindowSnapManager designed for custom drag control (like Webamp)
+- WindowDragGesture moves windows automatically (Apple API)
+- Post-facto snap adjustment doesn't work
+- Need custom drag that snaps BEFORE windows move
 
-#### **I Button (Track Info Dialog) - 1-2 hours**
-- Display current track metadata
-- Simple sheet/dialog UI
-- Add Ctrl+I shortcut
-- Follow D/A button pattern
+### Solution: Custom Drag Implementation
 
-#### **V Button (Visualizer Toggle) - 1 hour**
-- Toggle visualizer mode
-- Already have mode cycling (click)
-- Add keyboard shortcut Ctrl+V
-- Simpler than I button
+**Oracle's Complete Solution** (provided, ready to implement):
 
-#### **O Button (Options Menu) - 2-3 hours**
-- Context menu with settings
-- Skin selection, preferences access
-- More complex than I/V
+**Files Created** (on disk, need careful integration):
+1. `MacAmpApp/Views/Shared/WinampTitlebarDragHandle.swift` (wrapper)
+2. `MacAmpApp/Views/Shared/TitlebarDragCaptureView.swift` (NSView drag)
 
----
+**WindowSnapManager Methods** (Oracle provided, need to add):
+- `beginCustomDrag(kind:startPointInScreen:)`
+- `updateCustomDrag(kind:cumulativeDelta:)`  
+- `endCustomDrag(kind:)`
+- `buildBoxes()` helper
+- `DragContext` struct
 
-### **AirPlay Integration (PLANNED - Oracle-Reviewed)**
-
-**Status:** ✅ Complete task ready in `tasks/airplay/`
-**Effort:** 2-6 hours (3 phases)
-**Priority:** HIGH - User-requested feature
-
-**What's Ready:**
-- ✅ Gemini research complete (with Oracle corrections)
-- ✅ Oracle review complete (5 critical issues fixed)
-- ✅ Entitlements verified (no changes needed)
-- ✅ Implementation plan with Winamp logo overlay approach
-- ✅ All task files created (research, plan, state, todo)
-
-**Key Findings:**
-- ✅ AVRoutePickerView (import AVKit, not AVFoundation)
-- ✅ **CRITICAL:** Must add engine configuration observer or audio goes silent
-- ❌ Custom UI impossible (APIs don't exist)
-- ✅ Logo overlay approach validated (user's creative idea!)
-- ❌ No Info.plist changes needed (NSLocalNetworkUsageDescription is iOS-only)
-
-**See:** `tasks/airplay/IMPLEMENTATION_SUMMARY.md` for overview
+**Integration Steps** (next session):
+1. Add custom drag methods to WindowSnapManager (INSIDE class, before closing brace)
+2. Add 2 drag component files to Xcode project
+3. Remove WindowDragGesture from all 3 windows
+4. Replace with WinampTitlebarDragHandle (wrap titlebar sprites)
+5. Test smooth snapping (no lag, 15px attraction)
 
 ---
 
-### **SHIPPED: Oscilloscope/Spectrum Analyzer Modes (PR #27 - MERGED)**
+## 📋 Oracle's Implementation Guide
 
-**Status:** ✅ Complete and merged to main
-**Date:** 2025-10-30
-**Time Spent:** ~3 hours
+**See**: Oracle's last response for complete code patterns
 
-**What Was Delivered:**
-- ✅ Click spectrum analyzer to cycle modes
-- ✅ 3 modes: Spectrum, Oscilloscope, None
-- ✅ Spectrum: FFT frequency bars (19 bars)
-- ✅ Oscilloscope: Time-domain waveform (connected line)
-- ✅ None: Off/blank
-- ✅ State persistence
-- ✅ Type-safe VisualizerMode enum
-- ✅ Centralized constants (VisualizerLayout)
-
-**User Feedback:** "Amazing! It works!"
-
-**Key Learning:**
-- User discovered oscilloscope wasn't active enough
-- Root cause: Using RMS (averaged) instead of raw waveform samples
-- Fixed: Expose actual time-domain mono buffer samples
-- Result: Very dynamic oscilloscope! ✅
-
-**Oracle Reviews:** 2 rounds, 7 issues fixed, production-ready
+**Key Points**:
+- Custom drag captures events BEFORE windows move
+- Snap math runs on every mouseDragged
+- All windows in cluster move atomically
+- No lag, proper 15px snap threshold
+- Mirrors Webamp architecture
 
 ---
 
-### **Clutter Bar Completion (3 buttons remaining)**
+## 📊 Session Summary
 
-**Current Status:**
-- O: Scaffolded (options menu) - Ready to implement
-- A: FUNCTIONAL ✅ (always on top + Ctrl+A)
-- I: Scaffolded (info dialog) - Ready to implement
-- D: FUNCTIONAL ✅ (double-size + Ctrl+D)
-- V: Scaffolded (visualizer) - **Could be Oscilloscope/RMS toggle!**
+**Total**: ~20 hours (research + planning + Phase 1 implementation)
 
-### **Recommended: I Button (Track Info Dialog) - 1-2 hours**
+**Achievements**:
+- ✅ Oracle A-grade plan (3 review iterations)
+- ✅ 10,000+ lines documentation
+- ✅ Phase 1 complete (3-window architecture working!)
+- ✅ Phase 2 architectural issue diagnosed
+- ✅ Complete custom drag solution from Oracle
 
-**Why start here:**
-- Simple feature (just display metadata)
-- Follow established D/A button pattern
-- Quick win
-- Uses existing AudioPlayer data
-
-**Implementation steps:**
-1. Create task directory: `tasks/info-button/`
-2. Review pattern: `tasks/double-size-button/state.md`
-3. Remove `.disabled(true)` from I button
-4. Create `TrackInfoView.swift` sheet
-5. Display: currentTitle, duration, bitrate, format
-6. Add Ctrl+I keyboard shortcut to AppCommands
-7. Test and commit
-
-**Files to modify:**
-- `WinampMainWindow.swift` - Enable I button (Lines 524-528)
-- Create `TrackInfoView.swift` - Info dialog
-- `AppCommands.swift` - Add Ctrl+I shortcut
-
-### **Alternative: V Button (Visualizer Modes) - 1 hour**
-
-**Even quicker:**
-- Visualizer already exists in codebase
-- Just add mode cycling (0=off, 1=spectrum, 2=oscilloscope)
-- Follow D/A button pattern
-- Add Ctrl+V shortcut
-
-### **Alternative: O Button (Options Menu) - 2-3 hours**
-
-**More complex:**
-- Context menu with settings
-- Skin selection
-- Preferences access
-- Reference webamp implementation
+**Commits**: 41 total  
+**Oracle Consultations**: 11  
+**Gemini Research**: 2 deep analyses
 
 ---
 
-## 💡 **Important Context from Recent Sessions**
+## 🚀 Next Session: Implement Custom Drag
 
-### **Critical Pattern: @Observable Reactivity**
+**Immediate Tasks**:
+1. Carefully add custom drag methods to WindowSnapManager.swift
+2. Add drag component files to Xcode
+3. Update all 3 windows (remove WindowDragGesture, add custom)
+4. Test magnetic snapping
 
-**DO NOT use @ObservationIgnored with properties you want to observe!**
+**Estimated**: 2-3 hours for complete custom drag implementation
 
-```swift
-// ❌ WRONG - Blocks reactivity:
-@ObservationIgnored
-@AppStorage("key") var value: Bool = false
-
-// ✅ CORRECT - Maintains @Observable:
-var value: Bool = false {
-    didSet {
-        UserDefaults.standard.set(value, forKey: "key")
-    }
-}
-```
-
-This caused the double-size button to not trigger window resize initially.
-
-### **AirPlay Critical Finding: AVAudioEngine Configuration**
-
-**Oracle Discovery:** Engine STOPS when switching to AirPlay (sample rate changes)
-
-**MUST implement engine restart observer or AirPlay audio goes silent:**
-
-```swift
-NotificationCenter.default.addObserver(
-    forName: .AVAudioEngineConfigurationChange,
-    object: audioEngine,
-    queue: .main
-) { [weak self] _ in
-    // Save state, restart engine, resume playback
-    self?.handleEngineConfigurationChange()
-}
-```
-
-**Without this:** User switches to AirPlay → audio stops → appears broken
-**With this:** Seamless routing with automatic resume
-
-### **Oracle vs Gemini: API Accuracy**
-
-**Lesson Learned:**
-- Gemini: Good for conceptual research, 60% technically accurate
-- Oracle: Catches implementation details, API existence, edge cases
-- **Always have Oracle review Gemini's findings!**
-
-**AirPlay Example:**
-- Gemini said: "Use AVFoundation" → ❌ Wrong (it's AVKit)
-- Gemini said: "Use outputNode.setDeviceID()" → ❌ Doesn't exist
-- Gemini said: "Add NSLocalNetworkUsageDescription" → ❌ iOS-only
-- Oracle caught all 5 critical errors before implementation ✅
-
-### **Clutter Bar Button Pattern (Use for O, I, V)**
-
-Complete working example from D and A buttons:
-
-```swift
-// 1. Add state to AppSettings (already done for O, I, V)
-var showInfoDialog: Bool = false {
-    didSet {
-        UserDefaults.standard.set(showInfoDialog, forKey: "showInfoDialog")
-    }
-}
-
-// Load in init():
-self.showInfoDialog = UserDefaults.standard.bool(forKey: "showInfoDialog")
-
-// 2. In buildClutterBarButtons() in WinampMainWindow.swift:
-let iSpriteName = settings.showInfoDialog
-    ? "MAIN_CLUTTER_BAR_BUTTON_I_SELECTED"
-    : "MAIN_CLUTTER_BAR_BUTTON_I"
-
-Button(action: {
-    settings.showInfoDialog.toggle()
-}) {
-    SimpleSpriteImage(iSpriteName, width: 8, height: 7)
-}
-.buttonStyle(.plain)
-.help("Show track info (Ctrl+I)")
-.at(Coords.clutterButtonI)
-
-// 3. Add keyboard shortcut to AppCommands.swift:
-Button(settings.showInfoDialog ? "Hide Info" : "Show Info") {
-    settings.showInfoDialog.toggle()
-}
-.keyboardShortcut("i", modifiers: [.control])
-
-// 4. Implement the feature:
-// - Create TrackInfoView.swift
-// - Show as sheet or window
-// - Display audioPlayer.currentTitle, duration, etc.
-```
-
-### **Unified Window Architecture**
-
-**Important:** All 3 windows (main, EQ, playlist) are in ONE macOS window.
-
-- Managed by `UnifiedDockView.swift`
-- Uses `.scaleEffect()` for double-size mode
-- Window level (.normal/.floating) applies to all 3 together
-- Future: Will be separated with magnetic docking (see `tasks/magnetic-window-docking/`)
-
-### **Oracle Usage**
-
-When you need code review, architecture advice, or research:
-
-```bash
-codex-mcp "@file1.swift @file2.swift Your question or review request"
-```
-
-Oracle found and helped fix:
-- 8 code quality issues (dead code, bugs, sprite coordinates)
-- NSApp.keyWindow bug (wrong window targeted)
-- @Bindable reactivity issue (menu labels stuck)
+**Context**: 45% remaining (plenty for implementation)
 
 ---
 
-## 📚 **Key Documentation**
-
-**This Session (Double-Size Button):**
-- `tasks/double-size-button/` - Complete implementation docs
-  - state.md - All 12 commits, Oracle reviews, final status
-  - FEATURE_DOCUMENTATION.md - User guide
-  - COMPLETION_SUMMARY.md - Stats and learnings
-
-**For Next Button:**
-- Copy the pattern from `tasks/double-size-button/`
-- All sprites already defined in `SkinSprites.swift`
-- All state properties already scaffolded in `AppSettings.swift`
-- Just wire button, add feature logic, add shortcut
-
-**For Future Magnetic Docking:**
-- `tasks/magnetic-window-docking/research.md` - Complete migration guide
-  - How double-size mode will work with separate windows
-  - Playlist menu scaling notes
-
-**Swift Modernization (Previous Sessions):**
-- `tasks/swift-modernization-recommendations/` - All phases complete
-- @Observable migration patterns
-- Swift 6 strict concurrency patterns
-
----
-
-## 🚀 **Where to Start Next Session**
-
-### **Option A: Continue Clutter Bar (Recommended)**
-
-Pick the next button to implement:
-
-**I Button (Info) - Easiest (1-2 hours):**
-1. Create `tasks/info-button/`
-2. Follow D/A button pattern
-3. Create simple sheet with track metadata
-4. Add Ctrl+I shortcut
-
-**V Button (Visualizer) - Quick (1 hour):**
-1. Create `tasks/visualizer-button/`
-2. Add mode cycling logic
-3. Visualizer component already exists
-4. Add Ctrl+V shortcut
-
-**O Button (Options) - Complex (2-3 hours):**
-1. Create `tasks/options-button/`
-2. Context menu with settings
-3. Reference webamp implementation
-4. Add Ctrl+O shortcut (or right-click menu)
-
-### **Option B: Different Priority**
-
-**Playlist Features:**
-- Add scrolling (currently fixed height)
-- Fix menu button scaling in double-size mode (needs magnetic docking)
-
-**Audio Features:**
-- Persist volume/balance settings
-
-**Window Features:**
-- Magnetic window docking (major task, 10-16 hours)
-- Screen bounds validation
-
----
-
-## 📊 **Project Metrics**
-
-**Recent PRs:**
-- PR #23-25: Swift modernization (3 PRs)
-- PR #26: Clutter bar D & A buttons
-- PR #27: Oscilloscope/Spectrum modes
-- PR #28: Internet radio streaming (40 commits!)
-
-**Current State:**
-- Main branch is production-ready
-- Zero build warnings
-- All features tested
-- Oracle-reviewed code
-- Complete documentation
-
-**Clutter Bar Progress:** 80% (4 of 5 buttons functional)
-
----
-
-## ⚠️ **Known Issues**
-
-**Playlist Menu Scaling:**
-- Menu buttons (ADD, REM, SEL, MISC, LIST OPTS) don't scale in double-size mode
-- Expected: Will fix when implementing magnetic-window-docking
-- Documented in `tasks/magnetic-window-docking/research.md`
-- Not blocking for current features
-
-**No Other Known Issues** ✅
-
----
-
-## 🎓 **Key Learnings from This Session**
-
-### **1. @Observable + @AppStorage Reactivity**
-- Don't use `@ObservationIgnored` with `@AppStorage`
-- Use `didSet` with `UserDefaults.standard.set()` instead
-- Maintains @Observable reactivity
-
-### **2. Window Reference Targeting**
-- Don't use `NSApp.keyWindow` for feature toggles
-- Capture specific window reference via `WindowAccessor`
-- Store in `@State private var dockWindow: NSWindow?`
-
-### **3. Commands Reactivity**
-- Use `@Bindable var` not `let` for Commands struct parameters
-- Ensures menu labels update in real-time
-- Mirrors existing `SkinsCommands` pattern
-
-### **4. Clutter Bar Implementation Pattern**
-- State in AppSettings with `didSet` persistence
-- Sprite name computed outside button closure for reactivity
-- Simple Button (not Toggle) for cleaner code
-- Add `@Environment(AppSettings.self)` to view
-- Keyboard shortcut in AppCommands with `@Bindable`
-
-### **5. Oracle Code Review Process**
-- Review early and often (caught 8 issues before merge)
-- Round 1: Dead code, sprite bugs, debug prints
-- Round 2: NSApp.keyWindow bug, @Bindable reactivity
-- Final: Production-ready code
-
----
-
-## 📂 **Task Organization**
-
-**Use this workflow for next buttons:**
-
-1. **Research Phase:**
-   - Create `tasks/[button-name]/`
-   - Create research.md (gather requirements, check webamp)
-
-2. **Planning Phase:**
-   - Create plan.md (implementation steps)
-   - Create state.md (track current status)
-   - Create todo.md (checklist)
-
-3. **Implementation:**
-   - Follow the clutter bar button pattern above
-   - Update todo.md as you go
-   - Commit frequently with good messages
-
-4. **Oracle Review:**
-   - Request code review from Oracle
-   - Fix any issues found
-   - Request final approval
-
-5. **Documentation:**
-   - Update README.md with new feature
-   - Complete task docs
-   - Create PR
-
-**Reference:** See `tasks/double-size-button/` for complete example
-
----
-
-## 🔧 **Build & Run**
-
-```bash
-# Build with Thread Sanitizer
-xcodebuild -project MacAmpApp.xcodeproj \
-  -scheme MacAmpApp \
-  -enableThreadSanitizer YES \
-  build
-
-# Or use Xcode MCP:
-# build_macos({
-#   projectPath: "/Users/hank/dev/src/MacAmp/MacAmpApp.xcodeproj",
-#   scheme: "MacAmpApp",
-#   extraArgs: ["-enableThreadSanitizer", "YES"]
-# })
-```
-
----
-
-## 📝 **Summary**
-
-**MacAmp is now:**
-- Modern (Swift 6, @Observable)
-- Functional (2/5 clutter buttons working)
-- Production-ready (Oracle-reviewed, tested)
-- Well-documented (complete task histories)
-
-**Next session:**
-- Pick next clutter button (I or V recommended)
-- Follow established pattern
-- Should take 1-2 hours
-- Consult Oracle if needed
-
-**All context preserved in:**
-- `tasks/double-size-button/` for implementation patterns
-- `tasks/magnetic-window-docking/` for future work
-- This file for quick start
-
----
-
-**Status:** ✅ Ready for next development session
-**Recommended:** Implement I button (track info dialog)
-**Branch:** `main` (clean, all work merged)
-
-🚀 **Ready to continue!**
-
----
-
-## ✅ **Latest Session Accomplishments (2025-10-30 to 2025-10-31)**
-
-### **PR #26: Clutter Bar (D & A Buttons)** ✅ MERGED
-- D button: Double-size mode (Ctrl+D)
-- A button: Always on top (Ctrl+A)  
-- 12 commits, 2 Oracle reviews
-
-### **PR #27: Oscilloscope/Spectrum Modes** ✅ MERGED
-- Click visualizer to cycle 3 modes
-- Spectrum (frequency) / Oscilloscope (waveform) / None (off)
-- User discovered RMS issue, fixed to use time-domain samples
-- 7 commits, 2 Oracle reviews
-
-### **PR #29: O & I Buttons** ✅ MERGED (2025-11-07) - v0.7.8
-- O button: Options menu (time display, double-size, repeat, shuffle)
-- I button: Track info dialog (metadata display)
-- Ctrl+O and Ctrl+I shortcuts
-- 5 commits, 3 Oracle reviews
-
-### **PR #30: Three-State Repeat Mode** ✅ MERGED (2025-11-07) - v0.7.9
-- Winamp 5 Modern fidelity (Off/All/One with "1" badge)
-- Manual skip vs auto-advance distinction
-- Options menu: 3 explicit choices with checkmarks
-- Menu renamed: "Windows" → "Options"
-- 7 commits, 2 Oracle reviews (Grade A final)
-
-### **Bundled Skins** ✅ SHIPPED
-- Added 5 new bundled skins (now 7 total)
-- KenWood KDC-7000, Mac OS X, Sony MP3, Tron, Winamp3
-- Duplicate prevention (skip user copies of bundled skins)
-- All with keyboard shortcuts Cmd+Shift+1-7
-
-### **Distribution** ✅ VERIFIED
-- Signed Release builds created (3 total)
-- Tested on another macOS machine successfully! ✅
-- Cross-machine compatibility confirmed
-- Ready to share with users
-
-### **Tasks Planned** ✅ READY
-- AirPlay integration (2-6 hours, Oracle-reviewed)
-- Internet radio streaming (12-15 hours, Oracle-reviewed)
-- Both with complete planning and Oracle validation
-
-**Total Work:** 4 PRs merged, 6 features shipped
-**Oracle Reviews:** 11 total (all issues fixed)
-**Time:** ~27 hours active work across sessions
-
----
-
-## 💡 **Fresh Context - Important Learnings**
-
-### **Distribution Success:**
-- Signed app works on other Macs with right-click → Open
-- All bundled resources (skins) included correctly
-- No notarization needed for beta testing
-- Cross-machine testing validates build process
-
-### **Bundled Skins Architecture:**
-- Files in MacAmpApp/Skins/ folder
-- Must add to Xcode target membership (Build Phases)
-- Scan prevents user directory duplicates
-- Clean "Bundled" vs "My Skins" separation
-
-### **Oscilloscope Data Source:**
-**Critical Learning:** RMS vs Time-Domain Samples
-- RMS = Root Mean Square (averaged amplitude) → Smooth
-- Time-domain = Raw audio samples → Wiggly waveform
-- Oscilloscope needs raw samples for activity
-- User caught this issue through testing! ✅
-
-### **Commit Strategy for Large Tasks:**
-**12-15 hour tasks:** 7-8 commits per component
-- Not per phase (too large)
-- Not per tiny step (too noisy)
-- Per significant component (~2 hours work)
-- Oracle review checkpoints mid-way and pre-merge
-
----
-
-## 🚀 **Ready for Next Session**
-
-**On Main Branch:**
-- All work merged
-- Signed release in /Applications
-- Clean working tree
-
-**Tasks Ready:**
-1. **Internet Radio** (12-15h, highest complexity, Oracle-reviewed)
-2. **AirPlay** (2-6h, user-requested, Oracle-reviewed)
-3. **I Button** (1-2h, quick win)
-4. **O Button** (2-3h, options menu)
-
-**Recommended Start (Based on Momentum):**
-
-**Quick Wins (Maintain Momentum):**
-1. **V Button** (1 hour) - Visualizer toggle, simplest
-2. **I Button** (1-2 hours) - Track info dialog
-3. Finish remaining clutter bar (O button)
-
-**Next Major Feature:**
-4. **Favorites Menu for Radio Stations** (Phase 5)
-   - RadioStationLibrary infrastructure ready
-   - Top menu implementation (like "Skins", "Windows")
-   - Add/edit/delete favorites UI
-   - Estimated: 4-6 hours
-
-5. **AirPlay Integration** (2-6 hours)
-   - Complete Oracle-reviewed planning in tasks/airplay/
-   - Engine configuration observer critical
-   - Logo overlay approach
-
-6. **MTAudioProcessingTap** (10-20+ hours)
-   - Enable visualizers for internet radio streams
-   - Complex Core Audio work
-   - High value for completeness
-
-**Context Status:** 516K / 1M (51.6%) used this session
-**New Session:** Fresh context recommended for next major feature
-
----
-
-## 📋 **Suggested Next Session Priority**
-
-Based on project momentum and learning curve:
-
-**Session 1 (Quick Wins):** V + I buttons (2-3 hours total)
-  - Completes 80% of clutter bar
-  - Low risk, high visibility
-  - Maintains development momentum
-
-**Session 2 (Polish):** O button (2-3 hours)
-  - 100% clutter bar complete
-  - All 5 buttons functional
-  - Major UI milestone
-
-**Session 3 (Feature):** Favorites Menu (4-6 hours)
-  - RadioStationLibrary UI
-  - Natural extension of internet radio
-  - User-requested feature
-
-**Session 4 (Advanced):** MTAudioProcessingTap (10-20 hours)
-  - Stream visualizers
-  - Technical deep-dive
-  - Full Winamp parity
-
----
-
-**Everything documented, Oracle-reviewed, and ready for implementation!**
+**Latest Commit**: `b576ee2`  
+**Status**: Phase 1 ✅ Complete, Phase 2 solution ready  
+**Next**: Custom drag implementation
