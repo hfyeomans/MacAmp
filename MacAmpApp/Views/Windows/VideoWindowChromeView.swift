@@ -118,7 +118,7 @@ struct VideoWindowChromeView<Content: View>: View {
         // Render video metadata using TEXT.bmp sprites (same pattern as main window)
         let text = audioPlayer.videoMetadataString
         let textWidth = CGFloat(text.count * 5)  // 5px per character
-        let displayWidth: CGFloat = 160  // Available space in VIDEO_BOTTOM_RIGHT (125px - margins)
+        let displayWidth: CGFloat = 115  // Constrained to VIDEO_BOTTOM_RIGHT sprite (125px - margins)
 
         HStack(spacing: 0) {
             ForEach(Array(text.uppercased().enumerated()), id: \.offset) { _, character in

@@ -53,24 +53,26 @@ struct VideoWindowFallbackChrome<Content: View>: View {
     var body: some View {
         ZStack(alignment: .topLeading) {
             // Background
-            Color(red: 0.16, green: 0.16, blue: 0.20)  // Classic Winamp dark gray
+            Color(red: 0.16, green: 0.16, blue: 0.20)
                 .frame(width: 275, height: 232)
 
-            // Titlebar with classic Winamp gradient
-            LinearGradient(
-                colors: [
-                    Color(red: 0.0, green: 0.0, blue: 0.5),  // Dark blue
-                    Color(red: 0.0, green: 0.5, blue: 0.8)   // Lighter blue
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .frame(width: 275, height: 20)
-            .overlay(
-                Text("WINAMP VIDEO")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(.white)
-            )
+            // Draggable titlebar with classic Winamp gradient
+            WinampTitlebarDragHandle(windowKind: .video, size: CGSize(width: 275, height: 20)) {
+                LinearGradient(
+                    colors: [
+                        Color(red: 0.0, green: 0.0, blue: 0.5),
+                        Color(red: 0.0, green: 0.5, blue: 0.8)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(width: 275, height: 20)
+                .overlay(
+                    Text("WINAMP VIDEO")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.white)
+                )
+            }
             .position(x: 137.5, y: 10)
 
             // Content area

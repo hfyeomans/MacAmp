@@ -60,10 +60,12 @@
 - [ ] Sync volume changes during video playback
 - [ ] Mute button affects video
 
-#### 5. Active/Inactive Titlebar (Already Working!)
-- [x] VIDEO titlebar switches between ACTIVE/INACTIVE sprites ✅
-- [ ] Wire `isWindowActive` to actual window focus events (optional polish)
-- [ ] Document pattern for fixing Main/EQ windows later
+#### 5. Active/Inactive Titlebar (Infrastructure Complete)
+- [x] VIDEO titlebar has ACTIVE/INACTIVE sprite infrastructure ✅
+- [x] SkinSprites.swift defines both states ✅
+- [x] VideoWindowChromeView switches sprites based on isWindowActive ✅
+- [ ] FUTURE: Wire `isWindowActive` to NSWindow.didBecomeKeyNotification
+- [ ] FUTURE: Apply pattern to Main/EQ windows
 
 ---
 
