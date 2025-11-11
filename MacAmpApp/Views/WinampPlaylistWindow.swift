@@ -19,11 +19,11 @@ final class PlaylistWindowActions: NSObject {
 
     func presentAddFilesPanel(audioPlayer: AudioPlayer, playbackCoordinator: PlaybackCoordinator? = nil) {
         let openPanel = NSOpenPanel()
-        openPanel.allowedContentTypes = [.audio, .playlist]
+        openPanel.allowedContentTypes = [.audio, .playlist, .movie]  // NEW: Support video files
         openPanel.allowsMultipleSelection = true
         openPanel.canChooseDirectories = false
         openPanel.title = "Add Files to Playlist"
-        openPanel.message = "Select audio files or playlists"
+        openPanel.message = "Select audio files, video files, or playlists"
 
         openPanel.begin { response in
             if response == .OK {

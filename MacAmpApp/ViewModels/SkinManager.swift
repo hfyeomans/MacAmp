@@ -108,8 +108,105 @@ final class SkinManager {
     var availableSkins: [SkinMetadata] = []
     var loadingError: String? = nil
 
+    // Default skin (Winamp.wsz) - loaded once, used as fallback for missing sprites
+    @ObservationIgnored private var defaultSkin: Skin?
+
     init() {
         // Scan will happen on first access since we're @MainActor
+    }
+
+    /// Load default Winamp skin for fallback sprites
+    /// MUST run synchronously before loading other skins
+    private func loadDefaultSkinIfNeeded() {
+        NSLog("🔍 ENTRY: loadDefaultSkinIfNeeded() called")
+
+        guard defaultSkin == nil else {
+            NSLog("ℹ️ Default skin already loaded")
+            return
+        }
+
+        NSLog("🔍 Looking for bundled Winamp skin for default fallback...")
+        NSLog("🔍 SkinMetadata.bundledSkins count: \(SkinMetadata.bundledSkins.count)")
+
+        // Find bundled Winamp.wsz
+        guard let winampSkin = SkinMetadata.bundledSkins.first(where: { $0.id == "bundled:Winamp" }) else {
+            NSLog("⚠️ Default Winamp skin not found in bundle - no fallback available")
+            NSLog("   Available bundled skins: \(SkinMetadata.bundledSkins.map { $0.id })")
+            return
+        }
+
+        NSLog("📦 Loading default skin (Winamp.wsz) for fallback sprites from: \(winampSkin.url.path)")
+
+        do {
+            let expectedSheets = Set(SkinSprites.defaultSprites.sheets.keys.map { $0.lowercased() })
+            let payload = try SkinArchiveLoader.load(from: winampSkin.url, expectedSheets: expectedSheets)
+
+            NSLog("📦 Default skin archive loaded, parsing sprites...")
+
+            // Parse default skin sprites using same pipeline
+            let skin = try parseDefaultSkin(payload: payload, sourceURL: winampSkin.url)
+            defaultSkin = skin
+
+            NSLog("✅ Default skin loaded successfully!")
+            NSLog("   Sheets available: \(skin.loadedSheets.sorted().joined(separator: ", "))")
+            NSLog("   VIDEO sprites: \(skin.images.keys.filter { $0.hasPrefix("VIDEO_") }.count)")
+        } catch {
+            NSLog("❌ Failed to load default skin: \(error)")
+        }
+    }
+
+    /// Parse default skin payload (simplified version of applySkinPayload)
+    private func parseDefaultSkin(payload: SkinArchivePayload, sourceURL: URL) throws -> Skin {
+        var extractedImages: [String: NSImage] = [:]
+        var loadedSheets: Set<String> = []
+        let sheetsToProcess = SkinSprites.defaultSprites.sheets
+
+        for (sheetName, sprites) in sheetsToProcess {
+            guard let data = payload.sheets[sheetName.lowercased()],
+                  let sheetImage = NSImage(data: data) else {
+                continue  // Skip missing sheets in default skin
+            }
+
+            loadedSheets.insert(sheetName)
+
+            for sprite in sprites {
+                if let croppedImage = sheetImage.cropped(to: sprite.rect) {
+                    extractedImages[sprite.name] = croppedImage
+                }
+            }
+        }
+
+        // Parse PLEDIT for playlist style
+        let playlistStyle: PlaylistStyle
+        if let pleditData = payload.pledit, let parsed = PLEditParser.parse(from: pleditData) {
+            playlistStyle = parsed
+        } else {
+            // Default Winamp classic playlist colors
+            playlistStyle = PlaylistStyle(
+                normalTextColor: Color.green,
+                currentTextColor: Color.white,
+                backgroundColor: Color.black,
+                selectedBackgroundColor: Color.blue,
+                fontName: nil
+            )
+        }
+
+        // Parse visualizer colors
+        let visualizerColors: [Color]
+        if let visData = payload.viscolor, let colors = VisColorParser.parse(from: visData) {
+            visualizerColors = colors
+        } else {
+            // Default visualizer colors (24 colors)
+            visualizerColors = (0..<24).map { _ in Color.green }
+        }
+
+        return Skin(
+            visualizerColors: visualizerColors,
+            playlistStyle: playlistStyle,
+            images: extractedImages,
+            cursors: [:],
+            loadedSheets: loadedSheets
+        )
     }
 
     @ObservationIgnored private var loadGeneration = UUID()
@@ -188,7 +285,10 @@ final class SkinManager {
 
     /// Load the initial skin (from UserDefaults or default to "bundled:Winamp")
     func loadInitialSkin() {
-        // First, discover all available skins
+        // First, load default skin for fallback sprites (all BMPs)
+        loadDefaultSkinIfNeeded()
+
+        // Then discover all available skins
         scanAvailableSkins()
 
         let selectedID = AppSettings.instance().selectedSkinIdentifier ?? "bundled:Winamp"
@@ -414,6 +514,22 @@ final class SkinManager {
 
     // MARK: - Fallback Sprite Generation
 
+    /// Get sprites from default Winamp skin for a missing sheet
+    /// Returns sprites from Winamp.wsz if available, nil otherwise
+    private func fallbackSpritesFromDefaultSkin(sheet sheetName: String, sprites: [Sprite]) -> [String: NSImage]? {
+        guard let defaultSkin = defaultSkin else { return nil }
+        guard defaultSkin.loadedSheets.contains(sheetName) else { return nil }
+
+        var fallbackSprites: [String: NSImage] = [:]
+        for sprite in sprites {
+            if let defaultImage = defaultSkin.images[sprite.name] {
+                fallbackSprites[sprite.name] = defaultImage
+            }
+        }
+
+        return fallbackSprites.isEmpty ? nil : fallbackSprites
+    }
+
     /// Create a transparent fallback image for a missing sprite
     /// - Parameter spriteName: Name of the missing sprite
     /// - Returns: A transparent NSImage with appropriate dimensions, or a default size if dimensions unknown
@@ -471,6 +587,7 @@ final class SkinManager {
 
         var expectedSheets = Set(SkinSprites.defaultSprites.sheets.keys.map { $0.lowercased() })
         expectedSheets.insert("nums_ex")
+        // VIDEO now in SkinSprites.defaultSprites - no need to insert manually
 
         Task { @MainActor [weak self] in
             guard let self else { return }
@@ -494,6 +611,7 @@ final class SkinManager {
 
     private func applySkinPayload(_ payload: SkinArchivePayload, sourceURL: URL) throws {
         var extractedImages: [String: NSImage] = [:]
+        var loadedSheets: Set<String> = []  // Track which sheets actually loaded
         var sheetsToProcess = SkinSprites.defaultSprites.sheets
 
         if payload.sheets.keys.contains("nums_ex") {
@@ -521,10 +639,21 @@ final class SkinManager {
             NSLog("🔍 Processing sheet: \(sheetName)")
             guard let data = payload.sheets[sheetName.lowercased()] else {
                 NSLog("⚠️ MISSING SHEET DATA: \(sheetName)")
-                let fallbackSprites = createFallbackSprites(forSheet: sheetName, sprites: sprites)
-                for (name, image) in fallbackSprites {
-                    extractedImages[name] = image
+
+                // Try to use default skin sprites first (all BMPs from Winamp.wsz)
+                if let defaultSprites = fallbackSpritesFromDefaultSkin(sheet: sheetName, sprites: sprites) {
+                    NSLog("♻️ Using default Winamp skin sprites for \(sheetName)")
+                    for (name, image) in defaultSprites {
+                        extractedImages[name] = image
+                    }
+                } else {
+                    // Last resort: transparent fallback
+                    let fallbackSprites = createFallbackSprites(forSheet: sheetName, sprites: sprites)
+                    for (name, image) in fallbackSprites {
+                        extractedImages[name] = image
+                    }
                 }
+                // Don't add to loadedSheets - using fallback
                 continue
             }
 
@@ -534,8 +663,12 @@ final class SkinManager {
                 for (name, image) in fallbackSprites {
                     extractedImages[name] = image
                 }
+                // Don't add to loadedSheets - using fallback
                 continue
             }
+
+            // Sheet loaded successfully - track it
+            loadedSheets.insert(sheetName)
 
             #if DEBUG
             print("✅ Sheet \(sheetName) decoded (\(Int(sheetImage.size.width))x\(Int(sheetImage.size.height)))")
@@ -561,6 +694,9 @@ final class SkinManager {
                 }
             }
         }
+
+        // VIDEO.bmp now handled by standard extraction loop (defined in SkinSprites.swift)
+        // No special handling needed
 
         var aliasCount = 0
         if extractedImages["MAIN_VOLUME_THUMB"] == nil, let selected = extractedImages["MAIN_VOLUME_THUMB_SELECTED"] {
@@ -609,11 +745,14 @@ final class SkinManager {
             visualizerColors = colors
         }
 
+        // VIDEO.bmp sprites now handled by standard extraction loop (like PLEDIT)
+        // No special parsing needed - defined in SkinSprites.swift
         let newSkin = Skin(
             visualizerColors: visualizerColors,
             playlistStyle: playlistStyle,
-            images: extractedImages,
-            cursors: [:]
+            images: extractedImages,  // Now includes VIDEO_* sprite keys
+            cursors: [:],
+            loadedSheets: loadedSheets  // Track which sheets actually loaded
         )
 
         currentSkin = newSkin

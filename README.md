@@ -23,7 +23,10 @@ MacAmp is a SwiftUI-based audio player for macOS that recreates the iconic deskt
 - 📝 **Native Text Rendering** - Playlist tracks use real text with PLEDIT.txt colors and Unicode support (not bitmap fonts)
 - 🎛️ **Advanced Controls** - Volume, balance, position seeking, shuffle, and three-state repeat (Off/All/One)
 - 🔄 **Three-State Repeat** - Winamp 5 Modern fidelity with Off/All/One modes and "1" badge indicator (Ctrl+R to cycle)
-- 🪟 **Multi-Window Interface** - Main player, equalizer, and playlist windows with shade modes
+- 🪟 **Multi-Window Interface** - Main player, equalizer, playlist, and video windows with shade modes
+- 📺 **Video Playback** - Native video support (MP4, MOV, M4V) with V button or Ctrl+V
+- 🎬 **Video Window** - Skinnable video window with VIDEO.bmp chrome or classic fallback
+- 🧲 **Magnetic Docking** - Windows snap together and stay docked when resizing (Ctrl+D compatible)
 - 🔍 **Double-Size Mode** - Toggle 200% scaling with D button or Ctrl+D for better visibility on high-res displays
 - 📌 **Always On Top** - Keep window floating above others with A button or Ctrl+A (Classic Winamp feature)
 - ⚙️ **Options Menu** - Quick access to player settings via O button or Ctrl+O with time display toggle (Ctrl+T)
@@ -69,7 +72,7 @@ open Package.swift
 
 ### Basic Playback
 
-1. **Load Audio Files** - Click the eject button or drag audio files to the window
+1. **Load Audio/Video Files** - Click the eject button (supports MP3, FLAC, WAV, MP4, MOV, M4V) or drag files to the window
 2. **Play/Pause/Stop** - Use transport controls
 3. **Seek** - Drag the position slider to jump to any point in the track
 4. **Volume** - Adjust with the vertical volume slider

@@ -602,14 +602,19 @@ struct WinampMainWindow: View {
             .help("Toggle window size")
             .at(Coords.clutterButtonD)
 
-            // V - Visualizer (Scaffold - not yet implemented)
-            Button(action: {}) {
-                SimpleSpriteImage("MAIN_CLUTTER_BAR_BUTTON_V", width: 8, height: 7)
+            // V - Video Window (FUNCTIONAL - TASK 2 Day 6)
+            // Oracle fix: Only toggle setting - observer handles show/hide
+            let vSpriteName = settings.showVideoWindow
+                ? "MAIN_CLUTTER_BAR_BUTTON_V_SELECTED"
+                : "MAIN_CLUTTER_BAR_BUTTON_V"
+
+            Button(action: {
+                settings.showVideoWindow.toggle()
+            }) {
+                SimpleSpriteImage(vSpriteName, width: 8, height: 7)
             }
             .buttonStyle(.plain)
-            .disabled(true)
-            .accessibilityHidden(true)
-            .help("Visualizer (not yet implemented)")
+            .help("Video Window (Ctrl+V)")
             .at(Coords.clutterButtonV)
         }
     }

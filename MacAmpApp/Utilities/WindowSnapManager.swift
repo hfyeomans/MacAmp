@@ -5,6 +5,8 @@ enum WindowKind: Hashable {
     case main
     case playlist
     case equalizer
+    case video      // NEW: Video window (VIDEO.bmp chrome, AVPlayer)
+    case milkdrop   // NEW: Milkdrop visualization window (Butterchurn)
 }
 
 @MainActor

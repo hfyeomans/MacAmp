@@ -59,6 +59,13 @@ struct AppCommands: Commands {
             }
             .keyboardShortcut("r", modifiers: [.control])
 
+            // NEW: Video Window toggle (TASK 2 Day 6)
+            // Oracle fix: Only toggle setting - observer handles show/hide
+            Button(settings.showVideoWindow ? "Hide Video Window" : "Show Video Window") {
+                settings.showVideoWindow.toggle()
+            }
+            .keyboardShortcut("v", modifiers: [.control])
+
             // Vertical stacking - no horizontal movement needed
             // Windows now stack vertically in fixed order: Main -> EQ -> Playlist
         }

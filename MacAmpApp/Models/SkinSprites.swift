@@ -300,7 +300,47 @@ struct SkinSprites {
         ],
 
         // TEXT.bmp (font characters) – indices computed dynamically similar to Webamp
-        "TEXT": SkinSprites.generateTextSprites()
+        "TEXT": SkinSprites.generateTextSprites(),
+
+        // VIDEO.bmp (Video window chrome)
+        "VIDEO": [
+            // Titlebar active (row 1: y=0-19)
+            Sprite(name: "VIDEO_TITLEBAR_TOP_LEFT_ACTIVE", x: 0, y: 0, width: 25, height: 20),
+            Sprite(name: "VIDEO_TITLEBAR_TOP_CENTER_ACTIVE", x: 26, y: 0, width: 100, height: 20),
+            Sprite(name: "VIDEO_TITLEBAR_STRETCHY_ACTIVE", x: 127, y: 0, width: 25, height: 20),
+            Sprite(name: "VIDEO_TITLEBAR_TOP_RIGHT_ACTIVE", x: 153, y: 0, width: 25, height: 20),
+
+            // Titlebar inactive (row 2: y=21-40)
+            Sprite(name: "VIDEO_TITLEBAR_TOP_LEFT_INACTIVE", x: 0, y: 21, width: 25, height: 20),
+            Sprite(name: "VIDEO_TITLEBAR_TOP_CENTER_INACTIVE", x: 26, y: 21, width: 100, height: 20),
+            Sprite(name: "VIDEO_TITLEBAR_STRETCHY_INACTIVE", x: 127, y: 21, width: 25, height: 20),
+            Sprite(name: "VIDEO_TITLEBAR_TOP_RIGHT_INACTIVE", x: 153, y: 21, width: 25, height: 20),
+
+            // Side borders (vertical tiles)
+            Sprite(name: "VIDEO_BORDER_LEFT", x: 127, y: 42, width: 11, height: 29),
+            Sprite(name: "VIDEO_BORDER_RIGHT", x: 139, y: 42, width: 8, height: 29),
+
+            // Bottom bar (row 3-4: y=42-119)
+            // Row 3: Left corner with buttons (x=0-124)
+            Sprite(name: "VIDEO_BOTTOM_LEFT", x: 0, y: 42, width: 125, height: 38),
+            // Row 4: Right corner with resize + tile for stretching (x=0-124 is right corner, x=127+ is tile)
+            Sprite(name: "VIDEO_BOTTOM_RIGHT", x: 0, y: 81, width: 125, height: 38),
+            Sprite(name: "VIDEO_BOTTOM_TILE", x: 127, y: 81, width: 25, height: 38),
+
+            // Buttons (normal state)
+            Sprite(name: "VIDEO_CLOSE_BUTTON", x: 167, y: 3, width: 9, height: 9),
+            Sprite(name: "VIDEO_FULLSCREEN_BUTTON", x: 9, y: 51, width: 15, height: 18),
+            Sprite(name: "VIDEO_1X_BUTTON", x: 24, y: 51, width: 15, height: 18),
+            Sprite(name: "VIDEO_2X_BUTTON", x: 39, y: 51, width: 15, height: 18),
+            Sprite(name: "VIDEO_MISC_BUTTON", x: 69, y: 51, width: 15, height: 18),
+
+            // Buttons (pressed state)
+            Sprite(name: "VIDEO_CLOSE_BUTTON_PRESSED", x: 148, y: 42, width: 9, height: 9),
+            Sprite(name: "VIDEO_FULLSCREEN_BUTTON_PRESSED", x: 158, y: 42, width: 15, height: 18),
+            Sprite(name: "VIDEO_1X_BUTTON_PRESSED", x: 173, y: 42, width: 15, height: 18),
+            Sprite(name: "VIDEO_2X_BUTTON_PRESSED", x: 188, y: 42, width: 15, height: 18),
+            Sprite(name: "VIDEO_MISC_BUTTON_PRESSED", x: 218, y: 42, width: 15, height: 18),
+        ]
     ])
 }
 

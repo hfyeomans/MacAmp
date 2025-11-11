@@ -1,16 +1,73 @@
 # TODO: Video & Milkdrop Windows (Two-Window Architecture)
 
-**Status**: Ready to begin  
-**Timeline**: 10 days  
-**Last Updated**: 2025-11-08
+**Status**: Days 1-6 Complete, Finishing Touches
+**Timeline**: 10 days
+**Last Updated**: 2025-11-10
 
-**PRIORITY**:
-1. Video Window (Days 1-6)
-2. Milkdrop Window (Days 7-10)
+**CURRENT**: Video Window Polish & Completion
+**NEXT**: Milkdrop Window (Days 7-10)
 
 ---
 
-## Days 1-2: Foundation (Shared Infrastructure) ⏳
+## VIDEO WINDOW COMPLETION (Before Moving to Milkdrop)
+
+### Remaining Items for Video Window:
+
+#### 1. Video Metadata Display in Bottom Bar ✅ COMPLETE
+- [x] Research what video metadata to display (filename, type, resolution)
+- [x] Extract metadata from AVPlayer (AVURLAsset.load(.tracks))
+- [x] Use TEXT.bmp sprites to render metadata (like main window track display)
+- [x] Position metadata text in bottom bar black area (x:170, y:213)
+- [x] Make text scroll if too long (115px display width, scrolls at 5px/0.15s)
+- [x] Format: "filename (M4V): Video: 1280x720"
+- [x] Fixed MainActor concurrency warning in timer
+- [x] Tested and working!
+
+#### 2. Window Position Persistence ✅ COMPLETE
+- [x] Added video to persistAllWindowFrames()
+- [x] Added video to applyPersistedWindowPositions()
+- [x] WindowFrameStore.frame(for: .video) saves/loads
+- [x] Video window position persists across app restarts
+- [x] Same pattern as Main/EQ/Playlist
+- [x] Tested and working!
+
+#### 3. Docking with Double-Size Mode (Ctrl+D) ✅ COMPLETE
+- [x] Reviewed `tasks/magnetic-docking-foundation/` for playlist docking pattern
+- [x] Added VideoAttachmentSnapshot structure
+- [x] Added makeVideoDockingContext() function
+- [x] Added moveVideoWindow() function
+- [x] Integrated into resizeMainAndEQWindows()
+- [x] Video can dock to Main, EQ, or Playlist
+- [x] Video stays docked when Ctrl+D pressed
+- [x] Cluster-aware positioning working
+- [x] Build succeeded - ready for testing!
+
+#### 4. Document Baked-On Buttons (Deferred)
+- [ ] Note buttons in bottom left: fullscreen, 1x, 2x, TV, dropdown
+- [ ] Document their sprite locations
+- [ ] Mark as TODO for future implementation
+- [ ] These will be clickable controls later
+
+#### 6. FUTURE: Video Time Display (Post-MVP)
+- [ ] Show video elapsed/remaining time in main window timer display
+- [ ] Show video time in playlist window (like audio tracks)
+- [ ] Sync video playback time with main window display
+- [ ] Update as video plays
+
+#### 7. FUTURE: Video Volume Control (Post-MVP)
+- [ ] Main window volume slider should control video volume
+- [ ] AVPlayer.volume = audioPlayer.volume
+- [ ] Sync volume changes during video playback
+- [ ] Mute button affects video
+
+#### 5. Active/Inactive Titlebar (Already Working!)
+- [x] VIDEO titlebar switches between ACTIVE/INACTIVE sprites ✅
+- [ ] Wire `isWindowActive` to actual window focus events (optional polish)
+- [ ] Document pattern for fixing Main/EQ windows later
+
+---
+
+## Days 1-6: Foundation (Shared Infrastructure) ✅ COMPLETE
 
 ### Day 1: AppSettings & Commands
 

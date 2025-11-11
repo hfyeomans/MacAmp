@@ -62,6 +62,7 @@ final class AppSettings {
         // Load persisted clutter bar states (default to false)
         self.isDoubleSizeMode = UserDefaults.standard.bool(forKey: "isDoubleSizeMode")
         self.isAlwaysOnTop = UserDefaults.standard.bool(forKey: "isAlwaysOnTop")
+        self.showVideoWindow = UserDefaults.standard.bool(forKey: "showVideoWindow")
 
         // Load persisted time display mode (default to elapsed)
         if let rawTimeMode = UserDefaults.standard.string(forKey: "timeDisplayMode"),
@@ -218,6 +219,15 @@ final class AppSettings {
 
     /// I - Track Info Dialog (transient, not persisted)
     var showTrackInfoDialog: Bool = false
+
+    // MARK: - Video Window (TASK 2: Day 6)
+
+    /// V - Video Window visibility state (persisted)
+    var showVideoWindow: Bool = false {
+        didSet {
+            UserDefaults.standard.set(showVideoWindow, forKey: "showVideoWindow")
+        }
+    }
 
     // MARK: - Visualizer Mode
 

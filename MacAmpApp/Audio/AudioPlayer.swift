@@ -5,6 +5,19 @@ import AVFoundation
 import Accelerate
 import Observation
 
+// Helper to convert FourCC codes to strings
+extension String {
+    init(fourCC: FourCharCode) {
+        let bytes = [
+            UInt8((fourCC >> 24) & 0xFF),
+            UInt8((fourCC >> 16) & 0xFF),
+            UInt8((fourCC >> 8) & 0xFF),
+            UInt8(fourCC & 0xFF)
+        ]
+        self = String(bytes: bytes, encoding: .ascii) ?? "????"
+    }
+}
+
 // Scratch buffers are confined to the audio tap queue, so @unchecked Sendable is safe.
 private final class VisualizerScratchBuffers: @unchecked Sendable {
     private(set) var mono: [Float] = []
@@ -156,6 +169,17 @@ final class AudioPlayer {
     var externalPlaybackHandler: ((Track) -> Void)?
     var shuffleEnabled: Bool = false
 
+    // Video playback support
+    var videoPlayer: AVPlayer?
+    var currentMediaType: MediaType = .audio
+    var videoMetadataString: String = ""
+    @ObservationIgnored private var videoEndObserver: NSObjectProtocol?
+
+    enum MediaType {
+        case audio  // MP3, FLAC, WAV, etc.
+        case video  // MP4, MOV, M4V
+    }
+
     /// Repeat mode (Winamp 5 Modern: off/all/one with "1" badge)
     /// Backed by AppSettings for persistence
     var repeatMode: AppSettings.RepeatMode {
@@ -298,7 +322,7 @@ final class AudioPlayer {
 
         updatePlaylistPosition(with: track)
 
-        // CRITICAL: Don't call stop() here - it triggers completion handlers mid-transition.
+        // Don't call stop() here - it triggers completion handlers mid-transition
         // Instead, directly stop the player node and reset state
         playerNode.stop()
         progressTimer?.invalidate()
@@ -315,8 +339,16 @@ final class AudioPlayer {
 
         print("AudioPlayer: Playing track '\(track.title)'")
 
-        // Load the audio file for playback
-        loadAudioFile(url: track.url)
+        // Detect media type and route appropriately
+        let mediaType = detectMediaType(url: track.url)
+        currentMediaType = mediaType
+
+        switch mediaType {
+        case .audio:
+            loadAudioFile(url: track.url)
+        case .video:
+            loadVideoFile(url: track.url)
+        }
 
         // Apply EQ auto preset if enabled
         if eqAutoEnabled {
@@ -327,8 +359,105 @@ final class AudioPlayer {
         play()
     }
 
+    // Detect if URL is video or audio file
+    private func detectMediaType(url: URL) -> MediaType {
+        let videoExtensions = ["mp4", "mov", "m4v", "avi"]
+        let ext = url.pathExtension.lowercased()
+        return videoExtensions.contains(ext) ? .video : .audio
+    }
+
+    // Load video file for playback
+    private func loadVideoFile(url: URL) {
+        // Stop any existing audio playback
+        playerNode.stop()
+        progressTimer?.invalidate()
+
+        // Oracle fix: Clean up old video player before creating new one
+        if let oldPlayer = videoPlayer {
+            oldPlayer.pause()
+            videoPlayer = nil
+        }
+
+        // Create video player
+        videoPlayer = AVPlayer(url: url)
+        currentMediaType = .video
+
+        // Observe video completion
+        if let playerItem = videoPlayer?.currentItem {
+            videoEndObserver = NotificationCenter.default.addObserver(
+                forName: .AVPlayerItemDidPlayToEndTime,
+                object: playerItem,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor in
+                    self?.onPlaybackEnded()
+                }
+            }
+        }
+
+        // Start video playback
+        videoPlayer?.play()
+
+        // Update state
+        transition(to: .playing)
+        isPlaying = true
+        isPaused = false
+
+        NSLog("📺 AudioPlayer: Loading video file: \(url.lastPathComponent)")
+
+        // Extract and format video metadata for display
+        Task { @MainActor in
+            await self.loadVideoMetadata(url: url)
+        }
+    }
+
+    /// Extract video metadata for display in video window
+    /// Format: "filename M4V 1280x720" (simple, matches Winamp classic)
+    private func loadVideoMetadata(url: URL) async {
+        // Get filename (without extension)
+        let filename = url.deletingPathExtension().lastPathComponent
+
+        // Get file extension as video type
+        let videoType = url.pathExtension.uppercased()
+
+        do {
+            let asset = AVURLAsset(url: url)
+            let tracks = try await asset.load(.tracks)
+
+            // Get video resolution
+            if let videoTrack = tracks.first(where: { $0.mediaType == .video }) {
+                let naturalSize = try await videoTrack.load(.naturalSize)
+                let width = Int(naturalSize.width)
+                let height = Int(naturalSize.height)
+
+                // Winamp format: "filename (WMV): Video: 1280x720"
+                videoMetadataString = "\(filename) (\(videoType)): Video: \(width)x\(height)"
+                NSLog("📺 Video metadata: \(videoMetadataString)")
+            } else {
+                // No video track found
+                videoMetadataString = "\(filename) (\(videoType)): Video: Unknown"
+                NSLog("📺 Video metadata (no track): \(videoMetadataString)")
+            }
+        } catch {
+            videoMetadataString = "\(filename) (\(videoType)): Video: Unknown"
+            NSLog("⚠️ Failed to load video metadata: \(error)")
+        }
+    }
+
     /// Private: Load audio file for playback (does NOT modify playlist)
     private func loadAudioFile(url: URL) {
+        // Stop any existing video playback
+        if currentMediaType == .video {
+            videoPlayer?.pause()
+            videoPlayer = nil
+            if let observer = videoEndObserver {
+                NotificationCenter.default.removeObserver(observer)
+                videoEndObserver = nil
+            }
+            videoMetadataString = ""  // Clear video metadata
+        }
+        currentMediaType = .audio
+
         do {
             audioFile = try AVAudioFile(forReading: url)
             rewireForCurrentFile()
@@ -411,6 +540,21 @@ final class AudioPlayer {
             return
         }
 
+        // Handle video playback
+        if currentMediaType == .video {
+            guard let player = videoPlayer else {
+                print("AudioPlayer: No video loaded to play.")
+                return
+            }
+            player.play()
+            transition(to: .playing)
+            isPlaying = true
+            isPaused = false
+            print("AudioPlayer: Play (Video)")
+            return
+        }
+
+        // Audio playback
         guard let file = audioFile else {
             print("AudioPlayer: No track loaded to play.")
             return
@@ -437,6 +581,17 @@ final class AudioPlayer {
     }
 
     func pause() {
+        // Handle video playback
+        if currentMediaType == .video {
+            videoPlayer?.pause()
+            transition(to: .paused)
+            isPlaying = false
+            isPaused = true
+            print("AudioPlayer: Pause (Video)")
+            return
+        }
+
+        // Audio playback
         guard playerNode.isPlaying else { return }
         playerNode.pause()
         transition(to: .paused)
@@ -446,6 +601,21 @@ final class AudioPlayer {
 
     func stop() {
         transition(to: .stopped(.manual))
+
+        // Handle video playback cleanup
+        if currentMediaType == .video {
+            videoPlayer?.pause()
+            videoPlayer = nil
+            if let observer = videoEndObserver {
+                NotificationCenter.default.removeObserver(observer)
+                videoEndObserver = nil
+            }
+            videoMetadataString = ""
+            currentMediaType = .audio
+            print("AudioPlayer: Stop (Video) - cleaned up AVPlayer")
+        }
+
+        // Audio playback cleanup
         playerNode.stop()
         currentSeekID = UUID()
         let _ = scheduleFrom(time: 0, seekID: currentSeekID)  // Ignore return - reset to beginning
