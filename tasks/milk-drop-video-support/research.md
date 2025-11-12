@@ -1395,3 +1395,1033 @@ Despite these errors, we successfully gathered all needed information through:
 ## Conclusion
 
 The errors were cosmetic - Gemini couldn't read specific source files but gathered enough context through alternative methods. All research objectives were met.
+
+---
+
+## Part 15: GEN Sprite Extraction Methodology (2025-11-11)
+
+### Critical Learning: Sprite Coordinate Verification
+
+**Context**: Implementing Milkdrop window titlebar with GEN.bmp letter sprites
+
+### The Problem
+
+Webamp documentation specified letter sprite coordinates:
+- Selected letters: Y=88
+- Normal letters: Y=96
+
+However, visual testing showed letters were **cut off at the bottom** when using these coordinates.
+
+### Investigation Process
+
+**Tool Used**: ImageMagick (available on macOS via Homebrew)
+
+**Systematic Extraction Testing**:
+```bash
+# Extract letter 'M' at different Y positions
+magick /tmp/GEN.png -crop 8x7+86+85 /tmp/M_Y85.png
+magick /tmp/GEN.png -crop 8x7+86+86 /tmp/M_Y86.png  # ✅ Complete letter
+magick /tmp/GEN.png -crop 8x7+86+87 /tmp/M_Y87.png
+magick /tmp/GEN.png -crop 8x7+86+88 /tmp/M_Y88.png  # ❌ Top cut off
+magick /tmp/GEN.png -crop 8x7+86+96 /tmp/M_Y96.png  # ✅ Complete letter
+magick /tmp/GEN.png -crop 8x7+86+97 /tmp/M_Y97.png
+```
+
+**Visual Inspection**: Open extracted PNGs and compare
+
+### The Solution
+
+**Correct Coordinates** (verified by extraction):
+- Selected (bright) letters: **Y=86** (not 88)
+- Normal (dim) letters: **Y=96** (matches Webamp!)
+
+**Why Offset Exists**:
+1. Different Winamp skin versions may have varying sprite layouts
+2. Classic Winamp vs Winamp 5 vs Winamp 3 used different GEN.BMP versions
+3. Webamp docs may reference a different skin variant
+
+### Tools for Sprite Coordinate Verification
+
+#### 1. ImageMagick (Recommended) ✅
+
+**Extract sprite region**:
+```bash
+magick input.png -crop WIDTHxHEIGHT+X+Y output.png
+
+# Example: Extract 8×7 pixel letter at (86,86)
+magick /tmp/GEN.png -crop 8x7+86+86 /tmp/letter_test.png
+open /tmp/letter_test.png
+```
+
+**Extract horizontal strip** (find Y position):
+```bash
+# Extract 10-pixel tall strip starting at Y=85
+magick /tmp/GEN.png -crop 194x10+0+85 /tmp/strip_Y85.png
+```
+
+**Get image info**:
+```bash
+identify -verbose image.png  # Full metadata
+identify image.png           # Quick dimensions
+```
+
+#### 2. macOS Preview.app ✅
+
+**Coordinate Inspection**:
+1. `open -a Preview /tmp/GEN.png`
+2. Tools → Show Inspector (⌘I)
+3. Tools → Rectangular Selection
+4. Hover mouse over image
+5. Bottom-left shows coordinates
+
+**Important**: Preview coordinates are relative to monitor, not image (0,0) = top-left of *screen*
+**Workaround**: Use selection tool, Inspector shows selection dimensions
+
+#### 3. Python + Pillow (Programmatic)
+
+```python
+from PIL import Image
+img = Image.open('/tmp/GEN.png')
+print(f'Size: {img.size}')  # (194, 109)
+
+# Extract region (left, top, right, bottom)
+letter = img.crop((86, 86, 86+8, 86+7))
+letter.save('/tmp/extracted.png')
+```
+
+### Titlebar Tiling Pattern (ZStack vs HStack)
+
+**Problem**: HStack compresses tiles, doesn't fill width
+
+**Solution**: Use **ZStack with explicit .position()** (like VIDEO window):
+
+```swift
+ZStack(alignment: .topLeading) {
+    // Left corner
+    SimpleSpriteImage("GEN_TOP_LEFT", width: 25, height: 20)
+        .position(x: 12.5, y: 10)  // Center at X=12.5 (0-25 range)
+    
+    // Left fill tiles
+    ForEach(0..<8, id: \.self) { i in
+        SimpleSpriteImage("GEN_TOP_CENTER_FILL", width: 25, height: 20)
+            .position(x: 50 + 12.5 + CGFloat(i) * 25, y: 10)
+    }
+    
+    // Letters overlay (HStack positioned at center)
+    HStack(spacing: 0) {
+        SimpleSpriteImage("GEN_TEXT_M", width: 8, height: 7)
+        // ... more letters
+    }
+    .position(x: 256, y: 10)  // Center of 512px window
+    
+    // Right fill tiles
+    ForEach(0..<8, id: \.self) { i in
+        SimpleSpriteImage("GEN_TOP_CENTER_FILL", width: 25, height: 20)
+            .position(x: 280 + 12.5 + CGFloat(i) * 25, y: 10)
+    }
+}
+```
+
+**Why this works**:
+- Each tile explicitly positioned (no SwiftUI layout compression)
+- Tiles fill space from edges to center
+- Letters overlay on top at center
+- Matches VIDEO window pattern exactly
+
+### Key Learnings
+
+1. **Never trust documentation blindly** - Always verify sprite coordinates with actual bitmap extraction
+2. **Use ImageMagick for systematic testing** - Extract at multiple Y values to find complete sprites
+3. **ZStack + .position() for tiling** - HStack gets compressed by SwiftUI layout system
+4. **Visual verification is critical** - Extract test sprites before updating code
+5. **Different skin versions exist** - Webamp docs may reference different GEN.BMP variant
+
+### Added to @BUILDING_RETRO_MACOS_APPS_SKILL.md
+
+These sprite extraction patterns should be documented in the main skill guide for future retro app development.
+
+
+### Critical Discovery: GEN Letters Are Two-Piece Sprites
+
+**Date**: 2025-11-11
+**Discovered By**: User visual inspection + ImageMagick systematic extraction
+
+#### The Problem
+
+Initial implementation used single 7px tall letter sprites, but letters appeared **cut off at the bottom** in the rendered window.
+
+#### The Root Cause
+
+**GEN.BMP letters are split into TWO separate sprite pieces:**
+
+1. **Top portion**: 4 pixels tall (main body of letter)
+2. **Bottom portion**: 3 pixels tall (serifs/feet of letters)
+3. **Total height**: 7 pixels when combined
+
+#### Coordinates (Verified by ImageMagick Extraction)
+
+**Selected (bright) letters for active window:**
+- Top piece: Y=86, Height=4
+- Bottom piece: Y=90, Height=3
+- Gap between pieces: 0px (stack directly)
+
+**Normal (dim) letters for inactive window:**
+- Top piece: Y=96, Height=4
+- Bottom piece: Y=100, Height=3
+- Gap between pieces: 0px (stack directly)
+
+#### Extraction Test Commands
+
+```bash
+# Extract both pieces of letter M (selected)
+magick /tmp/GEN.png -crop 8x4+86+86 /tmp/M_top.png     # Top 4px
+magick /tmp/GEN.png -crop 8x3+86+90 /tmp/M_bottom.png  # Bottom 3px
+
+# Combine to verify (should be complete 7px M)
+magick /tmp/M_top.png /tmp/M_bottom.png -append /tmp/M_complete.png
+open /tmp/M_complete.png
+```
+
+#### Implementation Pattern
+
+**SkinSprites.swift** - Define both pieces:
+```swift
+// 32 sprites total: 8 letters × 2 pieces × 2 states
+Sprite(name: "GEN_TEXT_SELECTED_M_TOP", x: 86, y: 86, width: 8, height: 4),
+Sprite(name: "GEN_TEXT_SELECTED_M_BOTTOM", x: 86, y: 90, width: 8, height: 3),
+Sprite(name: "GEN_TEXT_M_TOP", x: 86, y: 96, width: 8, height: 4),
+Sprite(name: "GEN_TEXT_M_BOTTOM", x: 86, y: 100, width: 8, height: 3),
+// ... repeat for I, L, K, D, R, O, P
+```
+
+**View Code** - Stack pieces vertically:
+```swift
+@ViewBuilder
+private func makeLetter(_ letter: String, width: CGFloat, isActive: Bool) -> some View {
+    let prefix = isActive ? "GEN_TEXT_SELECTED_" : "GEN_TEXT_"
+    VStack(spacing: 0) {
+        SimpleSpriteImage("\(prefix)\(letter)_TOP", width: width, height: 4)
+        SimpleSpriteImage("\(prefix)\(letter)_BOTTOM", width: width, height: 3)
+    }
+}
+
+// Usage in HStack
+HStack(spacing: 0) {
+    makeLetter("M", width: 8, isActive: true)
+    makeLetter("I", width: 4, isActive: true)
+    // ...
+}
+```
+
+#### Why Webamp Might Not Show This
+
+Webamp's CSS-based rendering likely uses:
+- Background image positioning to show only top OR both pieces
+- CSS `background-position` with negative offsets
+- Single sprite request that includes both pieces in one image crop
+
+Our bitmap-based extraction requires explicit handling of both pieces.
+
+#### Lesson Learned
+
+**ALWAYS visually verify sprite extraction at pixel level** when dealing with multi-color/multi-layer retro graphics. What appears as a single "letter" sprite may actually be composite pieces that must be assembled.
+
+**Verification Workflow**:
+1. Extract suspected sprite region
+2. Visual inspection - does it look complete?
+3. If cut off, search adjacent rows/columns for missing pieces
+4. Test combinations until complete graphic is assembled
+5. Document exact coordinates of all pieces
+
+
+---
+
+## Part 16: Webamp's GEN Letter Sprite Solution (2025-11-11)
+
+### The Elegant Solution: Include the Separator
+
+**Investigation**: Specialized Explore agent analyzed webamp_clone codebase completely
+
+**Key Finding**: Webamp extracts **7-pixel tall sprites that INCLUDE the cyan separator**
+
+### Webamp Extraction Code (skinParser.js, lines 107-128)
+
+```javascript
+const getLetters = (y, prefix) => {
+  const getColorAt = (x) => context.getImageData(x, y, 1, 1).data.join(",");
+  let x = 1;
+  const backgroundColor = getColorAt(0);  // Cyan separator color
+  const height = 7;  // FIXED - includes separator!
+  
+  return LETTERS.map((letter) => {
+    let nextBackground = x;
+    while (getColorAt(nextBackground) !== backgroundColor && nextBackground < canvas.width) {
+      nextBackground++;
+    }
+    const width = nextBackground - x;
+    const name = `${prefix}_${letter}`;
+    const sprite = { x, y, height, width, name };
+    x = nextBackground + 1;
+    return sprite;
+  });
+};
+
+// Extract both letter rows
+const sprites = [
+  ...getLetters(88, "GEN_TEXT_SELECTED"),  // Bright letters
+  ...getLetters(96, "GEN_TEXT"),           // Dim letters
+];
+```
+
+**What This Does**:
+1. Samples at Y=88 (or Y=96) to detect letter boundaries
+2. Uses color detection to find where each letter ends (hits cyan)
+3. Extracts **7-pixel tall sprites** starting from that Y
+4. The 7px naturally includes: top piece + cyan + bottom piece
+
+### Why This Is Genius
+
+**The cyan separator is NOT removed** - it's part of the sprite:
+
+```
+Extracted 7px sprite for "M":
+Row 0-1: Top of letter (white/bright pixels)
+Row 2:   Cyan separator (thin line)  ← INCLUDED
+Row 3-6: Bottom of letter (white/bright pixels)
+```
+
+**Benefits**:
+- ✅ Simple extraction (single sprite per letter)
+- ✅ Authentic Winamp appearance (cyan is original design)
+- ✅ Perfect alignment (no stacking/positioning math)
+- ✅ Robust (works with any separator color or thickness)
+
+### MacAmp Implementation
+
+**SkinSprites.swift**:
+```swift
+// Single 7px sprite per letter (includes separator)
+Sprite(name: "GEN_TEXT_SELECTED_M", x: 86, y: 86, width: 8, height: 7),
+Sprite(name: "GEN_TEXT_M", x: 86, y: 96, width: 8, height: 7),
+```
+
+**View Code**:
+```swift
+HStack(spacing: 0) {
+    SimpleSpriteImage("GEN_TEXT_SELECTED_M", width: 8, height: 7)  // Single sprite
+    SimpleSpriteImage("GEN_TEXT_SELECTED_I", width: 4, height: 7)
+    // ...
+}
+```
+
+**No VStack needed, no piece combination, just render the 7px sprite as-is!**
+
+### Coordinate Correction: Y=86 vs Y=88
+
+**Webamp docs**: Y=88 and Y=96
+**MacAmp reality**: Y=86 and Y=96
+
+**Reason**: Different GEN.BMP variants or skin versions have 2px offset
+
+**Verification method**:
+```bash
+# Test extraction at different Y values
+magick GEN.png -crop 8x7+86+86 M_Y86.png  # Complete ✅
+magick GEN.png -crop 8x7+86+88 M_Y88.png  # Top cut off ❌
+```
+
+**Lesson**: Always verify with actual bitmap extraction - don't trust docs blindly
+
+### Final Pattern
+
+**For any GEN.BMP letter rendering**:
+1. Extract 7px tall sprites (includes separator)
+2. Start at Y=86 (selected) or Y=96 (normal)
+3. Variable width per letter (auto-detected or documented)
+4. Render with SimpleSpriteImage - cyan separator shows naturally
+5. Result: Authentic Winamp pixel-perfect letters
+
+
+---
+
+## Part 17: Day 7 Session - Complete Lessons Learned (2025-11-11)
+
+### Executive Summary: GEN Sprite Integration Complexity
+
+This session focused on integrating GEN.BMP sprites for the Milkdrop window titlebar and chrome. Multiple approaches were attempted, with significant learnings about sprite extraction, coordinate systems, and the complexity of GEN's two-piece letter system.
+
+**Status**: Day 7 foundation work in progress - code will be reset, knowledge preserved
+
+---
+
+### Critical Discovery 1: GEN Letter Sprites Are Two Discontiguous Pieces
+
+**The Problem**: Letters appeared cut off at the bottom when using documented coordinates.
+
+**Root Cause**: Each GEN letter is **TWO separate sprites** separated by cyan boundary pixels:
+- **Top piece**: 6 pixels tall
+- **Cyan separator**: 1px (selected) or 6px+ (normal) 
+- **Bottom piece**: 2px (selected) or 1px (normal)
+
+**Verified Coordinates** (via ImageMagick systematic extraction):
+
+**Selected (bright) letters**:
+```
+TOP: Y=88, H=6 (no cyan)
+BOTTOM: Y=95, H=2 (no cyan)
+Cyan gap at Y=94 (1px, excluded)
+Total combined: 8px
+```
+
+**Normal (dim) letters**:
+```
+TOP: Y=96, H=6 (no cyan)
+BOTTOM: Y=108, H=1 (no cyan, last pixel row of GEN.BMP)
+Cyan gap at Y=102-107 (6px, excluded)
+Total combined: 7px
+```
+
+**Implementation**:
+```swift
+// 32 sprites total: 8 letters × 2 pieces × 2 states
+Sprite(name: "GEN_TEXT_SELECTED_M_TOP", x: 86, y: 88, width: 8, height: 6)
+Sprite(name: "GEN_TEXT_SELECTED_M_BOTTOM", x: 86, y: 95, width: 8, height: 2)
+Sprite(name: "GEN_TEXT_M_TOP", x: 86, y: 96, width: 8, height: 6)
+Sprite(name: "GEN_TEXT_M_BOTTOM", x: 86, y: 108, width: 8, height: 1)
+
+// VStack to combine pieces
+VStack(spacing: 0) {
+    SimpleSpriteImage("GEN_TEXT_SELECTED_M_TOP", width: 8, height: 6)
+    SimpleSpriteImage("GEN_TEXT_SELECTED_M_BOTTOM", width: 8, height: 2)
+}
+```
+
+**Key Insight**: Unlike webamp which includes cyan in the sprite (web can handle any pixels), MacAmp's ImageSlicing extracts exact rectangles - cyan boundaries must be explicitly excluded.
+
+---
+
+### Critical Discovery 2: Cyan Is A Boundary Marker (Not Display Content)
+
+**User Clarification**: "The cyan should not be included - it's a boundary, a way to show the limits of the sprite. If there is cyan, it's not to be displayed - it shows the edge of sprites across all BMPs. You do this in every sprite in your entire project already."
+
+**What This Means**:
+- Cyan (#00C6FF, #00FFFF) pixels mark sprite boundaries
+- These boundary pixels must NOT be extracted
+- Extract only the clean sprite pixels between cyan boundaries
+- This applies to ALL BMP sprite sheets (MAIN, GEN, VIDEO, PLEDIT, etc.)
+
+**Testing Method**:
+```bash
+# Extract sprite and check for cyan
+magick GEN.png -crop 8x6+86+88 test.png
+magick test.png txt:- | grep "00C6FF"
+
+# If cyan found: adjust Y coordinate or height
+# Keep testing until no cyan in extracted sprite
+```
+
+---
+
+### Critical Discovery 3: GEN Titlebar Has 6 Distinct Pieces
+
+**Complete GEN.BMP Titlebar Specification** (from user):
+
+```
+Row 1 (Y=0-19): Active/selected titlebar
+Row 2 (Y=21-40): Inactive titlebar
+
+Each row has 6 pieces (separated by cyan):
+1. TOP_LEFT (X=0): Left corner with close X button
+2. TOP_LEFT_END (X=26): Fixed non-repeating graphic (gold with lines)
+3. TOP_CENTER_FILL (X=52): Main title container (grey, repeatable for text area)
+4. TOP_RIGHT_END (X=78): Non-repeating graphic (gold with lines)
+5. TOP_LEFT_RIGHT_FILL (X=104): Horizontal scaling piece (gold, repeats when resizing)
+6. TOP_RIGHT (X=130): Right corner (plain gold)
+```
+
+**Usage Pattern**:
+- Pieces 1, 2, 4, 6 = **Used once each** (corners/transitions)
+- Piece 3 (grey) = **Under "MILKDROP" text** (2-3 tiles constant)
+- Piece 5 (gold) = **Scales with window width** (more tiles as window grows)
+
+**WRONG Approach** (our mistake):
+- Using only ONE piece (CENTER_FILL or LEFT_END) repeated across entire titlebar
+- Results in monochrome titlebar (all grey or all gold)
+
+**CORRECT Approach**:
+- Use variety: corners → ends → scaling fills → grey center → scaling fills → ends → corners
+- Gold on sides, grey under text
+- Smooth visual transitions between piece types
+
+---
+
+### Critical Discovery 4: Window Dimension Standards
+
+**MacAmp Window Heights** (confirmed):
+```
+Main:     275 × 116  (1× base height)
+EQ:       275 × 116  (1×)
+Playlist: 275 × 232  (2×) ← User confirmed
+Video:    275 × 232  (2×) ← Matches Playlist
+Milkdrop: 275 × 232  (2×) ← SHOULD match Playlist/Video
+```
+
+**Why This Matters**:
+- GEN sprites designed for 275px width windows
+- Using wider windows (384px, 512px) causes tile layout issues
+- Vertical proportions matter for sprite alignment
+- 232px height = 2× main window = standard for secondary windows
+
+**Webamp Default**: 275×116 initially, but user-resizable
+**Gemini Research**: Milkdrop has no fixed default, designed to be flexible
+
+**MacAmp Decision**: Start at 275×232 (matches Video/Playlist), will add resize later
+
+---
+
+### Tool Discovery: ImageMagick for Sprite Coordinate Verification
+
+**Essential Tool**: ImageMagick (`magick` command) for systematic sprite extraction testing
+
+**Key Commands**:
+```bash
+# Extract sprite region
+magick input.png -crop WIDTHxHEIGHT+X+Y output.png
+
+# Example: Extract letter M top piece
+magick /tmp/GEN.png -crop 8x6+86+88 /tmp/M_top.png
+
+# Verify no cyan in extracted sprite
+magick /tmp/M_top.png txt:- | grep "00C6FF"
+# No output = clean extraction ✓
+
+# Combine two pieces to verify complete letter
+magick top.png bottom.png -append combined.png
+open combined.png
+
+# Extract horizontal strip to find Y position
+magick /tmp/GEN.png -crop 194x10+0+85 /tmp/strip_Y85.png
+```
+
+**Workflow**:
+1. Extract sprite at documented Y coordinate
+2. Check pixel data for cyan (#00C6FF)
+3. If cyan present: adjust Y or height
+4. Test multiple Y values systematically
+5. Verify extracted sprite is complete and clean
+6. Document final coordinates
+
+**Why This Is Critical**:
+- Documentation may have errors or version differences
+- Webamp docs (Y=88/96) vs actual GEN.BMP (Y=88/108) had offsets
+- Visual inspection required - AI cannot reliably determine sprite coordinates
+- Only way to ensure cyan boundaries are excluded
+
+---
+
+### Lesson 5: SwiftUI ZStack + .position() vs HStack for Tiling
+
+**Problem**: HStack gets compressed by SwiftUI's layout system
+**Solution**: Use ZStack with explicit .position() for each tile
+
+**WRONG (HStack - gets compressed)**:
+```swift
+HStack(spacing: 0) {
+    SimpleSpriteImage("TILE1", width: 25, height: 20)
+    ForEach(0..<10) { _ in
+        SimpleSpriteImage("TILE2", width: 25, height: 20)
+    }
+    SimpleSpriteImage("TILE3", width: 25, height: 20)
+}
+// Result: Tiles don't fill expected width, gaps appear
+```
+
+**CORRECT (ZStack with .position())**:
+```swift
+ZStack(alignment: .topLeading) {
+    SimpleSpriteImage("TILE1", width: 25, height: 20)
+        .position(x: 12.5, y: 10)  // Explicit position
+    
+    ForEach(0..<10) { i in
+        SimpleSpriteImage("TILE2", width: 25, height: 20)
+            .position(x: 25 + 12.5 + CGFloat(i) * 25, y: 10)
+    }
+    
+    SimpleSpriteImage("TILE3", width: 25, height: 20)
+        .position(x: 262.5, y: 10)
+}
+// Result: Tiles positioned exactly where specified, no gaps
+```
+
+**Pattern from VIDEO window** - proven to work for titlebar tiling
+
+---
+
+### Lesson 6: Coordinate System Confusion - NO Y-Flip Needed
+
+**Initial Belief**: SkinSprites.swift might use Webamp top-down coords that need CGImage bottom-up conversion
+
+**Oracle Investigation**: Confirmed that sprite extraction uses coordinates AS-IS from SkinSprites.swift
+- No flipY() function exists or is needed
+- CGImage.cropping operates in the same top-down coordinate space
+- Y=0 is at top for both Webamp docs AND our extraction
+
+**Implication**: Use documented Y coordinates directly, no conversion math needed
+
+**Testing confirmed**: VIDEO window renders correctly with Y=0 at top, proving no flip occurs
+
+---
+
+### Lesson 7: Documentation vs Reality - Always Verify
+
+**Webamp Documentation vs Actual GEN.BMP**:
+
+| Source | Selected Letters Y | Normal Letters Y | Verified? |
+|--------|-------------------|------------------|-----------|
+| Webamp skinParser.js | 88 | 96 | Documented |
+| ImageMagick extraction (top only) | 88 | 96 | ✓ Clean top pieces |
+| ImageMagick extraction (7px full) | 86 | 96 | Earlier attempt |
+| Final two-piece | TOP: 88, BOTTOM: 95 | TOP: 96, BOTTOM: 108 | ✓ No cyan |
+
+**Why Offsets Exist**:
+- Different GEN.BMP versions across Winamp releases
+- Classic Winamp vs Winamp 5 vs Winamp 3 variations
+- Skin variations (some skins have custom GEN.BMP)
+
+**Lesson**: Never trust documentation alone - verify with actual bitmap extraction using ImageMagick
+
+---
+
+### Lesson 8: Observer Pattern for Window Visibility
+
+**Pattern Used** (copied from VIDEO window, works perfectly):
+
+```swift
+// AppSettings - persistence
+@Observable
+@MainActor
+final class AppSettings {
+    var showMilkdropWindow: Bool = false {
+        didSet {
+            UserDefaults.standard.set(showMilkdropWindow, forKey: "showMilkdropWindow")
+        }
+    }
+}
+
+// WindowCoordinator - observer
+private func setupMilkdropWindowObserver() {
+    milkdropWindowTask?.cancel()
+    
+    milkdropWindowTask = Task { @MainActor [weak self] in
+        guard let self else { return }
+        
+        withObservationTracking {
+            _ = self.settings.showMilkdropWindow
+        } onChange: {
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                if self.settings.showMilkdropWindow {
+                    self.showMilkdrop()
+                } else {
+                    self.hideMilkdrop()
+                }
+                self.setupMilkdropWindowObserver()  // Re-establish
+            }
+        }
+    }
+    
+    // Honor initial state immediately
+    if settings.showMilkdropWindow {
+        showMilkdrop()
+    }
+}
+
+// Keyboard shortcut
+Button(settings.showMilkdropWindow ? "Hide Milkdrop" : "Show Milkdrop") {
+    settings.showMilkdropWindow.toggle()
+}
+.keyboardShortcut("k", modifiers: [.control, .shift])
+```
+
+**Why This Works**:
+- Single source of truth (AppSettings)
+- Automatic persistence via didSet
+- Reactive observer responds to all changes
+- Works from button, menu, or keyboard
+- Thread-safe with @MainActor
+
+---
+
+### Lesson 9: GEN.BMP Complete Structure (from User)
+
+**Authoritative specification**:
+
+```
+GEN.BMP Layout (194×109 pixels):
+
+ROW 1 (Y=0-19): Active titlebar - 6 pieces
+ROW 2 (Y=21-40): Inactive titlebar - 6 pieces
+
+Below titlebars:
+- Y=42-55: Left bottom corner (125×14)
+- Y=57-70: Right bottom corner (125×14)
+- Y=42-70: Sidewalls (left 11×29, right 8×29)
+- Y=42-51: Close button (9×9)
+- Y=42-65: Bottom corner sidewalls (left 11×24, right 8×24 with resize grip)
+- Y=72-85: Bottom fill tile (25×14, repeats horizontally when resizing)
+
+- Y=86-92: Selected letters (top 6px) + separator
+- Y=93-94: Cyan separator
+- Y=95-96: Selected letters (bottom 2px)
+
+- Y=96-101: Normal letters (top 6px)
+- Y=102-107: Cyan separator (6px!)
+- Y=108: Normal letters (bottom 1px, last row of image)
+```
+
+**Resizing Behavior**:
+- **Titlebar**: LEFT_RIGHT_FILL (piece 5) tiles multiply as width grows
+- **CENTER_FILL (piece 3)**: CONSTANT 2-3 tiles (50-75px) under "MILKDROP" text
+- **Side borders**: MIDDLE_LEFT/RIGHT tile vertically as height grows
+- **Bottom bar**: BOTTOM_FILL tiles multiply as width grows
+- **Min size**: 275×116, **Max tested**: 464×464
+
+---
+
+### Lesson 10: Debugging Sprite Rendering Issues
+
+**Symptoms Encountered**:
+1. Letters cut off at bottom → Wrong Y coordinates
+2. Cyan showing in letters → Not excluding boundary pixels
+3. All-grey or all-gold titlebar → Using only one piece type repeatedly
+4. Gaps between tiles → Incorrect position calculations
+5. Side borders overlapping corners → Starting at Y=0 instead of Y=20
+
+**Systematic Debugging Approach**:
+
+```bash
+# Step 1: Extract suspect sprite
+magick GEN.png -crop WxH+X+Y test.png
+
+# Step 2: Visual inspection
+open test.png
+# Does it look complete? Any cyan visible?
+
+# Step 3: Pixel data analysis
+magick test.png txt:- | grep "00C6FF"
+# Cyan found = wrong coordinates
+
+# Step 4: Test adjacent rows/columns
+magick GEN.png -crop 8x6+86+86 M_Y86.png  # Too high
+magick GEN.png -crop 8x6+86+88 M_Y88.png  # Just right ✓
+magick GEN.png -crop 8x6+86+90 M_Y90.png  # Too low
+
+# Step 5: Document verified coordinates
+# Add to research.md and SkinSprites.swift
+```
+
+---
+
+### Lesson 11: File Organization for Task Work
+
+**WRONG Files Updated**:
+- ❌ READY_FOR_NEXT_SESSION.md (only for end of session)
+- ❌ Multiple premature updates to state.md
+
+**CORRECT Files to Update**:
+- ✓ todo.md - Check off completed tasks
+- ✓ state.md - Update at end of day/major milestones
+- ✓ research.md - Document discoveries and lessons learned
+- ✓ READY_FOR_NEXT_SESSION.md - ONLY at actual session end
+
+**Pattern**:
+- Work incrementally
+- Document in research.md as you learn
+- Update todo.md frequently (task completion)
+- Update state.md at day boundaries
+- Update READY file when actually ending session
+
+---
+
+### Lesson 12: When to Reset and Start Fresh
+
+**Indicators It's Time to Reset**:
+1. Multiple approaches attempted without success
+2. Code becoming increasingly complex/messy
+3. Losing track of what works vs what doesn't
+4. Good knowledge gained but implementation tangled
+
+**Smart Reset Strategy**:
+1. Document ALL lessons learned in research.md
+2. Commit research.md (preserve knowledge)
+3. Git reset --hard to last clean commit
+4. Apply lessons correctly from the start
+
+**This Session** - good candidate for reset:
+- ✓ Learned GEN letter system (two-piece, verified coordinates)
+- ✓ Learned 6-piece titlebar structure
+- ✓ Learned window sizing (275×232)
+- ✓ Learned cyan boundary exclusion principle
+- ✗ Code has gaps, overlaps, incomplete rendering
+- ✗ Multiple dimension changes (512→384→464→275)
+- ✗ Titlebar tile calculations changed many times
+
+**Better Approach**: Start fresh with all lessons, implement once correctly
+
+---
+
+### Lesson 13: ImageMagick Workflow for Sprite Sheets
+
+**Essential workflow established**:
+
+```bash
+# 1. Convert BMP to PNG for easier viewing
+sips -s format png input.BMP --out /tmp/output.png
+
+# 2. View in Preview for interactive inspection
+open -a Preview /tmp/output.png
+# Tools → Show Inspector
+# Use rectangular selection tool
+# Inspector shows selection Width × Height
+
+# 3. Systematic extraction testing
+for y in 86 87 88 89 90; do
+    magick /tmp/GEN.png -crop 8x6+86+$y /tmp/M_Y${y}.png
+done
+
+# 4. Find clean extraction (no cyan)
+magick /tmp/M_Y88.png txt:- | grep "00C6FF" || echo "Y=88 is clean"
+
+# 5. Test two-piece combination
+magick /tmp/M_top.png /tmp/M_bottom.png -append /tmp/M_complete.png
+open /tmp/M_complete.png
+
+# 6. Document verified coordinates
+# Add to SkinSprites.swift with comments
+```
+
+**Tools Available**:
+- ✅ ImageMagick (installed)
+- ✅ macOS Preview (coordinate inspection)
+- ✅ Python + Pillow (programmatic extraction)
+
+---
+
+### Lesson 14: Sprite Naming Consistency
+
+**Pattern for Two-Piece Sprites**:
+```swift
+// Clear suffix indicating which piece
+GEN_TEXT_SELECTED_M_TOP      // ✓ Clear
+GEN_TEXT_SELECTED_M_BOTTOM   // ✓ Clear
+
+// Not:
+GEN_TEXT_SELECTED_M          // ✗ Ambiguous if two pieces exist
+GEN_TEXT_SELECTED_M_1        // ✗ Unclear what "1" means
+```
+
+**Total sprites for "MILKDROP"**:
+- 8 letters (M, I, L, K, D, R, O, P)
+- 2 pieces each (TOP, BOTTOM)
+- 2 states (SELECTED, normal)
+- **32 total letter sprites**
+
+---
+
+### Lesson 15: Content Area Coverage Issues
+
+**Problem**: Black background or content area covering bottom portions of titlebar sprites
+
+**GEN sprite structure**: Titlebar pieces have decorative elements that extend beyond the nominal 20px height
+
+**Solution**: Ensure proper Z-ordering and positioning:
+```swift
+ZStack(alignment: .topLeading) {
+    // 1. Background (bottom layer)
+    Color.black.frame(width: 275, height: 232)
+    
+    // 2. Titlebar (middle layer) - positioned at top
+    MilkdropTitlebar(...)
+        .position(x: 137.5, y: 10)  // Y=10 for 20px titlebar
+    
+    // 3. Content (top layer) - starts BELOW titlebar
+    content
+        .frame(width: 256, height: 198)
+        .position(x: 137.5, y: 119)  // Y=20 + (198/2) = 119
+}
+```
+
+Content must start at Y=20 (below titlebar) to not cover titlebar decorations
+
+---
+
+### Key Learnings for @BUILDING_RETRO_MACOS_APPS_SKILL.md
+
+1. **Cyan boundaries are universal** - all Winamp BMP sprite sheets use cyan to delimit sprites, must be excluded from extraction
+
+2. **Two-piece sprites exist** - some sprites (like GEN letters) are discontiguous pieces that must be extracted separately and stacked
+
+3. **ImageMagick is essential** - systematic sprite extraction testing required, documentation alone is insufficient
+
+4. **Sprite variety matters** - using one piece repeatedly creates monotone visuals, must use proper sequence
+
+5. **Window dimensions have patterns** - secondary windows often 2× main window height (232px vs 116px)
+
+6. **Reset when tangled** - preserving knowledge + clean start > continuing with messy code
+
+---
+
+### Deferred Work (For Fresh Implementation)
+
+**What Needs Completion**:
+1. ✅ Milkdrop window foundation (275×232)
+2. ✅ GEN sprite integration (all pieces identified)
+3. ✅ Letter sprites (32 sprites, coordinates verified)
+4. ⚠️ Titlebar tile layout (known structure, implementation incomplete)
+5. ⚠️ Side border positioning (overlaps corners currently)
+6. ⚠️ Bottom chrome integration
+7. ⏳ Resize functionality (deferred, spec documented)
+
+**With Clean Start, We Can**:
+- Implement titlebar with correct 6-piece sequence from the beginning
+- Use verified letter coordinates (no trial and error)
+- Apply 275×232 dimensions from start
+- Follow VIDEO window ZStack pattern exactly
+- Avoid dimension thrashing (512→384→464→275)
+
+---
+
+**Session End**: Comprehensive knowledge captured, ready for clean re-implementation
+
+**Files to Preserve**:
+- tasks/milk-drop-video-support/research.md (this file) ← KEEP
+- tasks/milk-drop-video-support/MILKDROP_RESIZE_SPEC.md ← KEEP
+- tasks/milk-drop-video-support/TITLEBAR_EDITING_GUIDE.md ← KEEP
+
+**Files to Reset**:
+- All MacAmpApp/*.swift files
+- All task tracking files (todo.md, state.md)
+- READY_FOR_NEXT_SESSION.md
+
+**Next Session Start**:
+With this knowledge, Day 7 implementation should be straightforward:
+1. Window: 275×232 (known)
+2. Letters: 32 sprites with verified coordinates (known)
+3. Titlebar: 6-piece sequence with proper tiles (known)
+4. Pattern: Follow VIDEO window ZStack approach (proven)
+
+Estimated: 2-3 hours for clean implementation vs 8+ hours of exploration this session.
+
+
+---
+
+## WORKING CODE: MILKDROP Letter Extraction and Rendering
+
+**Status**: ✅ THIS CODE WORKS CORRECTLY - Preserve for re-implementation
+
+### SkinSprites.swift - Letter Sprite Definitions (32 sprites)
+
+```swift
+// In "GEN" sprite array:
+
+// Letter sprites for titlebar text (GEN.BMP 194×109)
+// CRITICAL: Letters are TWO DISCONTIGUOUS pieces separated by cyan boundaries
+// Verified by ImageMagick extraction testing (no PNG conversion needed)
+// Selected: TOP Y=88 H=6, BOTTOM Y=95 H=2 (1px cyan gap at Y=94)
+// Normal: TOP Y=96 H=6, BOTTOM Y=108 H=1 (6px cyan gap at Y=102-107)
+
+// Selected (focused) letter TOPS - Y=88, H=6 (no cyan)
+Sprite(name: "GEN_TEXT_SELECTED_M_TOP", x: 86, y: 88, width: 8, height: 6),
+Sprite(name: "GEN_TEXT_SELECTED_I_TOP", x: 60, y: 88, width: 4, height: 6),
+Sprite(name: "GEN_TEXT_SELECTED_L_TOP", x: 80, y: 88, width: 5, height: 6),
+Sprite(name: "GEN_TEXT_SELECTED_K_TOP", x: 72, y: 88, width: 7, height: 6),
+Sprite(name: "GEN_TEXT_SELECTED_D_TOP", x: 24, y: 88, width: 6, height: 6),
+Sprite(name: "GEN_TEXT_SELECTED_R_TOP", x: 124, y: 88, width: 7, height: 6),
+Sprite(name: "GEN_TEXT_SELECTED_O_TOP", x: 102, y: 88, width: 6, height: 6),
+Sprite(name: "GEN_TEXT_SELECTED_P_TOP", x: 109, y: 88, width: 6, height: 6),
+
+// Selected (focused) letter BOTTOMS - Y=95, H=2 (no cyan)
+Sprite(name: "GEN_TEXT_SELECTED_M_BOTTOM", x: 86, y: 95, width: 8, height: 2),
+Sprite(name: "GEN_TEXT_SELECTED_I_BOTTOM", x: 60, y: 95, width: 4, height: 2),
+Sprite(name: "GEN_TEXT_SELECTED_L_BOTTOM", x: 80, y: 95, width: 5, height: 2),
+Sprite(name: "GEN_TEXT_SELECTED_K_BOTTOM", x: 72, y: 95, width: 7, height: 2),
+Sprite(name: "GEN_TEXT_SELECTED_D_BOTTOM", x: 24, y: 95, width: 6, height: 2),
+Sprite(name: "GEN_TEXT_SELECTED_R_BOTTOM", x: 124, y: 95, width: 7, height: 2),
+Sprite(name: "GEN_TEXT_SELECTED_O_BOTTOM", x: 102, y: 95, width: 6, height: 2),
+Sprite(name: "GEN_TEXT_SELECTED_P_BOTTOM", x: 109, y: 95, width: 6, height: 2),
+
+// Normal (unfocused) letter TOPS - Y=96, H=6 (no cyan)
+Sprite(name: "GEN_TEXT_M_TOP", x: 86, y: 96, width: 8, height: 6),
+Sprite(name: "GEN_TEXT_I_TOP", x: 60, y: 96, width: 4, height: 6),
+Sprite(name: "GEN_TEXT_L_TOP", x: 80, y: 96, width: 5, height: 6),
+Sprite(name: "GEN_TEXT_K_TOP", x: 72, y: 96, width: 7, height: 6),
+Sprite(name: "GEN_TEXT_D_TOP", x: 24, y: 96, width: 6, height: 6),
+Sprite(name: "GEN_TEXT_R_TOP", x: 124, y: 96, width: 7, height: 6),
+Sprite(name: "GEN_TEXT_O_TOP", x: 102, y: 96, width: 6, height: 6),
+Sprite(name: "GEN_TEXT_P_TOP", x: 109, y: 96, width: 6, height: 6),
+
+// Normal (unfocused) letter BOTTOMS - Y=108, H=1 (no cyan, at image edge)
+Sprite(name: "GEN_TEXT_M_BOTTOM", x: 86, y: 108, width: 8, height: 1),
+Sprite(name: "GEN_TEXT_I_BOTTOM", x: 60, y: 108, width: 4, height: 1),
+Sprite(name: "GEN_TEXT_L_BOTTOM", x: 80, y: 108, width: 5, height: 1),
+Sprite(name: "GEN_TEXT_K_BOTTOM", x: 72, y: 108, width: 7, height: 1),
+Sprite(name: "GEN_TEXT_D_BOTTOM", x: 24, y: 108, width: 6, height: 1),
+Sprite(name: "GEN_TEXT_R_BOTTOM", x: 124, y: 108, width: 7, height: 1),
+Sprite(name: "GEN_TEXT_O_BOTTOM", x: 102, y: 108, width: 6, height: 1),
+Sprite(name: "GEN_TEXT_P_BOTTOM", x: 109, y: 108, width: 6, height: 1),
+```
+
+### WinampMilkdropWindow.swift - Letter Rendering Code
+
+```swift
+// Helper function to build a two-piece letter (excluding cyan boundaries)
+// Selected: TOP (6px) + BOTTOM (2px) = 8px total
+// Normal: TOP (6px) + BOTTOM (1px) = 7px total
+@ViewBuilder
+private func makeLetter(_ letter: String, width: CGFloat, isActive: Bool) -> some View {
+    let prefix = isActive ? "GEN_TEXT_SELECTED_" : "GEN_TEXT_"
+    VStack(spacing: 0) {
+        SimpleSpriteImage("\(prefix)\(letter)_TOP", width: width, height: 6)
+        SimpleSpriteImage("\(prefix)\(letter)_BOTTOM", width: width, height: isActive ? 2 : 1)
+    }
+}
+
+// Usage in titlebar:
+HStack(spacing: 0) {
+    makeLetter("M", width: 8, isActive: isActive)
+    makeLetter("I", width: 4, isActive: isActive)
+    makeLetter("L", width: 5, isActive: isActive)
+    makeLetter("K", width: 7, isActive: isActive)
+    makeLetter("D", width: 6, isActive: isActive)
+    makeLetter("R", width: 7, isActive: isActive)
+    makeLetter("O", width: 6, isActive: isActive)
+    makeLetter("P", width: 6, isActive: isActive)
+}
+.position(x: 137.5, y: 9)  // Centered in 275px titlebar, Y=9 (slightly up)
+```
+
+### Verification Commands (ImageMagick)
+
+```bash
+# Verify selected letter M extraction (should show complete letter, no cyan)
+magick /tmp/GEN.png -crop 8x6+86+88 /tmp/M_sel_top.png
+magick /tmp/GEN.png -crop 8x2+86+95 /tmp/M_sel_bottom.png
+magick /tmp/M_sel_top.png /tmp/M_sel_bottom.png -append /tmp/M_selected_complete.png
+magick /tmp/M_selected_complete.png txt:- | grep "00C6FF"  # Should return nothing
+
+# Verify normal letter M extraction
+magick /tmp/GEN.png -crop 8x6+86+96 /tmp/M_norm_top.png
+magick /tmp/GEN.png -crop 8x1+86+108 /tmp/M_norm_bottom.png
+magick /tmp/M_norm_top.png /tmp/M_norm_bottom.png -append /tmp/M_normal_complete.png
+magick /tmp/M_normal_complete.png txt:- | grep "00C6FF"  # Should return nothing
+
+# Visual check
+open /tmp/M_selected_complete.png /tmp/M_normal_complete.png
+```
+
+**Result**: Complete letters with no cyan boundaries, ready for rendering
+
+---
+
+**IMPORTANT**: This letter extraction approach is VERIFIED WORKING. Use these exact coordinates and the two-piece VStack pattern when re-implementing from clean start.
+
