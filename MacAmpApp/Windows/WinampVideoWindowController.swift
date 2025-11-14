@@ -29,13 +29,10 @@ class WinampVideoWindowController: NSWindowController {
             .environment(playbackCoordinator)
 
         let hostingController = NSHostingController(rootView: rootView)
-        let hostingView = hostingController.view
-        hostingView.frame = NSRect(origin: .zero, size: window.contentLayoutRect.size)
-        hostingView.autoresizingMask = [.width, .height]
 
+        // CRITICAL: Only set contentViewController - DO NOT set contentView
+        // Setting contentView releases the hosting controller, breaking SwiftUI lifecycle
         window.contentViewController = hostingController
-        window.contentView = hostingView
-        window.makeFirstResponder(hostingView)
 
         // Install translucent backing layer (prevents bleed-through)
         WinampWindowConfigurator.installHitSurface(on: window)

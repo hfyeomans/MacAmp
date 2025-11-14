@@ -71,6 +71,7 @@ final class WindowCoordinator {
     @ObservationIgnored private var doubleSizeTask: Task<Void, Never>?
     @ObservationIgnored private var persistenceTask: Task<Void, Never>?
     @ObservationIgnored private var videoWindowTask: Task<Void, Never>?  // NEW: Video window observer
+    @ObservationIgnored private var milkdropWindowTask: Task<Void, Never>?  // NEW: Milkdrop window observer
     private var hasPresentedInitialWindows = false
     private var persistenceSuppressionCount = 0
     private var windowKinds: [ObjectIdentifier: WindowKind] = [:]
@@ -196,6 +197,10 @@ final class WindowCoordinator {
         // NEW: Observe for video window visibility changes (Oracle fix)
         setupVideoWindowObserver()
         debugLogWindowPositions(step: "after setupVideoWindowObserver")
+
+        // NEW: Observe for milkdrop window visibility changes (TASK 2 Day 7)
+        setupMilkdropWindowObserver()
+        debugLogWindowPositions(step: "after setupMilkdropWindowObserver")
 
         // PHASE 2: Register windows with WindowSnapManager
         // WindowSnapManager provides:
@@ -348,6 +353,42 @@ final class WindowCoordinator {
         // Oracle fix: Honor initial state immediately
         if settings.showVideoWindow {
             showVideo()
+        }
+    }
+
+    // NEW: Milkdrop window visibility observer (TASK 2 Day 7)
+    // Honors persisted showMilkdropWindow state and keeps window in sync
+    private func setupMilkdropWindowObserver() {
+        print("🔵 WindowCoordinator: setupMilkdropWindowObserver() called")
+        // Cancel any existing observer
+        milkdropWindowTask?.cancel()
+
+        // Use withObservationTracking for reactive updates
+        milkdropWindowTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+
+            // Recursive observation pattern
+            withObservationTracking {
+                _ = self.settings.showMilkdropWindow
+            } onChange: {
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    print("🔵 WindowCoordinator: showMilkdropWindow changed to \(self.settings.showMilkdropWindow)")
+                    // React to showMilkdropWindow changes
+                    if self.settings.showMilkdropWindow {
+                        self.showMilkdrop()
+                    } else {
+                        self.hideMilkdrop()
+                    }
+                    self.setupMilkdropWindowObserver()  // Re-establish observer
+                }
+            }
+        }
+
+        // Honor initial state immediately
+        print("🔵 WindowCoordinator: Initial showMilkdropWindow state: \(settings.showMilkdropWindow)")
+        if settings.showMilkdropWindow {
+            showMilkdrop()
         }
     }
 
@@ -765,6 +806,18 @@ final class WindowCoordinator {
                let playlistHeight = playlistWindow?.frame.size.height {
                 playlistWindow?.setFrameOrigin(NSPoint(x: x, y: eqY - playlistHeight))
             }
+
+            // Video directly below Playlist (if visible)
+            if let playlistY = playlistWindow?.frame.origin.y,
+               let videoHeight = videoWindow?.frame.size.height {
+                videoWindow?.setFrameOrigin(NSPoint(x: x, y: playlistY - videoHeight))
+            }
+
+            // Milkdrop directly below Video (if visible)
+            if let videoY = videoWindow?.frame.origin.y,
+               let milkdropHeight = milkdropWindow?.frame.size.height {
+                milkdropWindow?.setFrameOrigin(NSPoint(x: x, y: videoY - milkdropHeight))
+            }
         }
 
         if settings.windowDebugLoggingEnabled {
@@ -772,6 +825,8 @@ final class WindowCoordinator {
             if let main = mainWindow { print("  Main: \(main.frame)") }
             if let eq = eqWindow { print("  EQ: \(eq.frame)") }
             if let playlist = playlistWindow { print("  Playlist: \(playlist.frame)") }
+            if let video = videoWindow { print("  Video: \(video.frame)") }
+            if let milkdrop = milkdropWindow { print("  Milkdrop: \(milkdrop.frame)") }
         }
     }
 
@@ -974,10 +1029,23 @@ final class WindowCoordinator {
     func showPlaylist() { playlistWindow?.makeKeyAndOrderFront(nil) }
     func hidePlaylist() { playlistWindow?.orderOut(nil) }
     // NEW: Video and Milkdrop window show/hide
-    func showVideo() { videoWindow?.makeKeyAndOrderFront(nil) }
-    func hideVideo() { videoWindow?.orderOut(nil) }
-    func showMilkdrop() { milkdropWindow?.makeKeyAndOrderFront(nil) }
-    func hideMilkdrop() { milkdropWindow?.orderOut(nil) }
+    func showVideo() {
+        print("🔵 WindowCoordinator: showVideo() called")
+        videoWindow?.makeKeyAndOrderFront(nil)
+    }
+    func hideVideo() {
+        print("🔵 WindowCoordinator: hideVideo() called")
+        videoWindow?.orderOut(nil)
+    }
+    func showMilkdrop() {
+        print("🔵 WindowCoordinator: showMilkdrop() called, window exists: \(milkdropWindow != nil)")
+        milkdropWindow?.makeKeyAndOrderFront(nil)
+        print("🔵 WindowCoordinator: milkdropWindow.isVisible: \(milkdropWindow?.isVisible ?? false)")
+    }
+    func hideMilkdrop() {
+        print("🔵 WindowCoordinator: hideMilkdrop() called")
+        milkdropWindow?.orderOut(nil)
+    }
 
     private func focusAllWindows() {
         [mainWindow, eqWindow, playlistWindow, videoWindow, milkdropWindow].forEach { window in

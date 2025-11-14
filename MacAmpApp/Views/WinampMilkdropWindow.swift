@@ -1,32 +1,32 @@
 import SwiftUI
 
-/// Milkdrop Window - Placeholder for Butterchurn visualization
+/// Milkdrop Window - Audio visualization using Butterchurn
 struct WinampMilkdropWindow: View {
     @Environment(SkinManager.self) var skinManager
     @Environment(AudioPlayer.self) var audioPlayer
     @Environment(AppSettings.self) var settings
 
+    @State private var spectrum: [Float] = []
+    @State private var waveform: [Float] = []
+
     var body: some View {
-        ZStack {
-            // Black background for visualization area
-            Color.black
-
-            // Placeholder text
-            VStack {
-                Text("Milkdrop Window")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(.white)
-
-                Text("400 × 300")
-                    .font(.system(size: 10))
-                    .foregroundColor(.gray)
-
-                Text("Butterchurn visualization will appear here")
-                    .font(.system(size: 9))
-                    .foregroundColor(.gray)
-                    .padding(.top, 4)
-            }
+        MilkdropWindowChromeView {
+            // Butterchurn visualization WebView
+            ButterchurnWebView(spectrum: $spectrum, waveform: $waveform)
+                .frame(minWidth: 100, minHeight: 100)  // Ensure minimum size
+                .onAppear {
+                    print("🟢 WinampMilkdropWindow: Content area appeared")
+                }
+                .onReceive(Timer.publish(every: 0.016, on: .main, in: .common).autoconnect()) { _ in
+                    // Update audio data at ~60fps
+                    // TODO: Get FFT data from AudioPlayer (Day 9)
+                    // For now, pass empty arrays - Butterchurn will show default animation
+                    spectrum = []
+                    waveform = []
+                }
         }
-        .frame(width: 400, height: 300)
+        .onAppear {
+            print("🟢 WinampMilkdropWindow: Window appeared")
+        }
     }
 }

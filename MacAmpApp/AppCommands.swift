@@ -66,6 +66,13 @@ struct AppCommands: Commands {
             }
             .keyboardShortcut("v", modifiers: [.control])
 
+            // NEW: Milkdrop Window toggle (TASK 2 Day 7)
+            // Only toggle setting - observer handles show/hide
+            Button(settings.showMilkdropWindow ? "Hide Milkdrop" : "Show Milkdrop") {
+                settings.showMilkdropWindow.toggle()
+            }
+            .keyboardShortcut("k", modifiers: [.control])
+
             // Vertical stacking - no horizontal movement needed
             // Windows now stack vertically in fixed order: Main -> EQ -> Playlist
         }

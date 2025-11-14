@@ -63,6 +63,7 @@ final class AppSettings {
         self.isDoubleSizeMode = UserDefaults.standard.bool(forKey: "isDoubleSizeMode")
         self.isAlwaysOnTop = UserDefaults.standard.bool(forKey: "isAlwaysOnTop")
         self.showVideoWindow = UserDefaults.standard.bool(forKey: "showVideoWindow")
+        self.showMilkdropWindow = UserDefaults.standard.bool(forKey: "showMilkdropWindow")
 
         // Load persisted time display mode (default to elapsed)
         if let rawTimeMode = UserDefaults.standard.string(forKey: "timeDisplayMode"),
@@ -226,6 +227,15 @@ final class AppSettings {
     var showVideoWindow: Bool = false {
         didSet {
             UserDefaults.standard.set(showVideoWindow, forKey: "showVideoWindow")
+        }
+    }
+
+    // MARK: - Milkdrop Window (TASK 2: Day 7)
+
+    /// Milkdrop Window visibility state (persisted)
+    var showMilkdropWindow: Bool = false {
+        didSet {
+            UserDefaults.standard.set(showMilkdropWindow, forKey: "showMilkdropWindow")
         }
     }
 

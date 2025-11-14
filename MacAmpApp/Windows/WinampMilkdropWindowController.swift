@@ -3,13 +3,17 @@ import SwiftUI
 
 class WinampMilkdropWindowController: NSWindowController {
     convenience init(skinManager: SkinManager, audioPlayer: AudioPlayer, dockingController: DockingController, settings: AppSettings, radioLibrary: RadioStationLibrary, playbackCoordinator: PlaybackCoordinator) {
+        print("🟣 WinampMilkdropWindowController: init() called")
+
         // Create borderless window (follows TASK 1 pattern)
         let window = BorderlessWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 400, height: 300),  // Milkdrop larger default
+            contentRect: NSRect(x: 0, y: 0, width: 275, height: 232),  // Matches Video/Playlist size
             styleMask: [.borderless],  // Borderless only
             backing: .buffered,
             defer: false
         )
+
+        print("🟣 WinampMilkdropWindowController: BorderlessWindow created")
 
         // Apply standard Winamp window configuration
         WinampWindowConfigurator.apply(to: window)
@@ -29,13 +33,14 @@ class WinampMilkdropWindowController: NSWindowController {
             .environment(playbackCoordinator)
 
         let hostingController = NSHostingController(rootView: rootView)
-        let hostingView = hostingController.view
-        hostingView.frame = NSRect(origin: .zero, size: window.contentLayoutRect.size)
-        hostingView.autoresizingMask = [.width, .height]
 
+        print("🟣 WinampMilkdropWindowController: Creating window with size \(window.frame.size)")
+
+        // CRITICAL: Only set contentViewController - DO NOT set contentView
+        // Setting contentView releases the hosting controller, breaking SwiftUI lifecycle
         window.contentViewController = hostingController
-        window.contentView = hostingView
-        window.makeFirstResponder(hostingView)
+
+        print("🟣 WinampMilkdropWindowController: Content controller set, SwiftUI lifecycle enabled")
 
         // Install translucent backing layer (prevents bleed-through)
         WinampWindowConfigurator.installHitSurface(on: window)
