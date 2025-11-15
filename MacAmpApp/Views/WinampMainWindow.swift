@@ -535,7 +535,7 @@ struct WinampMainWindow: View {
     private func buildWindowToggleButtons() -> some View {
         Group {
             // EQ button - lights when EQ window visible
-            let eqSprite = dockingController.eqWindow?.isVisible == true
+            let eqSprite = WindowCoordinator.shared?.eqWindow?.isVisible == true
                 ? "MAIN_EQ_BUTTON_SELECTED"
                 : "MAIN_EQ_BUTTON"
 
@@ -549,7 +549,7 @@ struct WinampMainWindow: View {
             .at(Coords.eqButton)
 
             // Playlist button - lights when Playlist window visible
-            let playlistSprite = dockingController.playlistWindow?.isVisible == true
+            let playlistSprite = WindowCoordinator.shared?.playlistWindow?.isVisible == true
                 ? "MAIN_PLAYLIST_BUTTON_SELECTED"
                 : "MAIN_PLAYLIST_BUTTON"
 
