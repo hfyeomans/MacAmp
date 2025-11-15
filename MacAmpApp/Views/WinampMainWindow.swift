@@ -398,6 +398,7 @@ struct WinampMainWindow: View {
                 SimpleSpriteImage("MAIN_PREVIOUS_BUTTON", width: 23, height: 18)
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .at(Coords.prevButton)
 
             // Play
@@ -540,7 +541,14 @@ struct WinampMainWindow: View {
                 : "MAIN_EQ_BUTTON"
 
             Button(action: {
-                dockingController.toggleEqualizer()
+                // Toggle actual NSWindow visibility
+                if let eqWindow = WindowCoordinator.shared?.eqWindow {
+                    if eqWindow.isVisible {
+                        eqWindow.orderOut(nil)
+                    } else {
+                        eqWindow.orderFront(nil)
+                    }
+                }
             }) {
                 SimpleSpriteImage(eqSprite, width: 23, height: 12)
             }
@@ -554,7 +562,14 @@ struct WinampMainWindow: View {
                 : "MAIN_PLAYLIST_BUTTON"
 
             Button(action: {
-                dockingController.togglePlaylist()
+                // Toggle actual NSWindow visibility
+                if let playlistWindow = WindowCoordinator.shared?.playlistWindow {
+                    if playlistWindow.isVisible {
+                        playlistWindow.orderOut(nil)
+                    } else {
+                        playlistWindow.orderFront(nil)
+                    }
+                }
             }) {
                 SimpleSpriteImage(playlistSprite, width: 23, height: 12)
             }
