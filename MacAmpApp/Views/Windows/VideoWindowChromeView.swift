@@ -18,6 +18,7 @@ struct VideoWindowChromeView<Content: View>: View {
 
     @State private var metadataScrollOffset: CGFloat = 0
     @State private var metadataScrollTimer: Timer?
+    @State private var dragStartSize: Size2D?  // Oracle fix: struct-level state for drag
 
     @Environment(AudioPlayer.self) private var audioPlayer
     @Environment(WindowFocusState.self) private var windowFocusState
@@ -91,22 +92,28 @@ struct VideoWindowChromeView<Content: View>: View {
         WinampTitlebarDragHandle(windowKind: .video, size: CGSize(width: pixelSize.width, height: VideoWindowLayout.titlebarHeight)) {
             ZStack(alignment: .topLeading) {
                 let suffix = isWindowActive ? "ACTIVE" : "INACTIVE"
-                let stretchyCount = sizeState.stretchyTitleTileCount
+                let distribution = sizeState.titlebarTileDistribution
+                let centerX = pixelSize.width / 2
 
                 // Left cap (25px)
                 SimpleSpriteImage("VIDEO_TITLEBAR_TOP_LEFT_\(suffix)", width: 25, height: 20)
                     .position(x: 12.5, y: 10)
 
-                // Stretchy tiles (dynamic count based on width)
-                ForEach(0..<stretchyCount, id: \.self) { i in
+                // Left stretchy tiles (grow from right to left)
+                ForEach(0..<distribution.left, id: \.self) { i in
                     SimpleSpriteImage("VIDEO_TITLEBAR_STRETCHY_\(suffix)", width: 25, height: 20)
-                        .position(x: 25 + 12.5 + CGFloat(i) * 25, y: 10)
+                        .position(x: centerX - 50 - 12.5 - CGFloat(i) * 25, y: 10)
                 }
 
-                // Center "WINAMP VIDEO" text (fixed 100px)
-                let centerTextX = 25 + CGFloat(stretchyCount) * 25 + 50  // After stretchy tiles
+                // Center "WINAMP VIDEO" text (100px, always centered)
                 SimpleSpriteImage("VIDEO_TITLEBAR_TOP_CENTER_\(suffix)", width: 100, height: 20)
-                    .position(x: centerTextX, y: 10)
+                    .position(x: centerX, y: 10)
+
+                // Right stretchy tiles (grow from left to right)
+                ForEach(0..<distribution.right, id: \.self) { i in
+                    SimpleSpriteImage("VIDEO_TITLEBAR_STRETCHY_\(suffix)", width: 25, height: 20)
+                        .position(x: centerX + 50 + 12.5 + CGFloat(i) * 25, y: 10)
+                }
 
                 // Right cap (25px)
                 SimpleSpriteImage("VIDEO_TITLEBAR_TOP_RIGHT_\(suffix)", width: 25, height: 20)
@@ -256,8 +263,6 @@ struct VideoWindowChromeView<Content: View>: View {
 
     @ViewBuilder
     private func buildResizeHandle() -> some View {
-        @State var startSize = Size2D.zero
-
         Rectangle()
             .fill(Color.clear)
             .frame(width: 20, height: 20)
@@ -265,30 +270,35 @@ struct VideoWindowChromeView<Content: View>: View {
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { value in
-                        // Quantize drag to 25×29px segments
-                        let deltaWidth = Int(round(value.translation.width / 25))
-                        let deltaHeight = Int(round(value.translation.height / 29))
+                        // Oracle fix: Capture start size on first drag tick
+                        if dragStartSize == nil {
+                            dragStartSize = sizeState.size
+                            WindowSnapManager.shared.beginProgrammaticAdjustment()
+                        }
 
-                        // Apply with minimum constraint
-                        let newSize = Size2D(
-                            width: max(0, startSize.width + deltaWidth),
-                            height: max(0, startSize.height + deltaHeight)
+                        guard let baseSize = dragStartSize else { return }
+
+                        // Oracle fix: Use towardZero rounding to prevent oscillation
+                        let widthDelta = Int((value.translation.width / 25).rounded(.towardZero))
+                        let heightDelta = Int((value.translation.height / 29).rounded(.towardZero))
+
+                        // Calculate new size with minimum constraint
+                        let candidate = Size2D(
+                            width: max(0, baseSize.width + widthDelta),
+                            height: max(0, baseSize.height + heightDelta)
                         )
 
-                        sizeState.size = newSize
+                        // Oracle fix: Only update if size actually changed (prevents fighting)
+                        if candidate != sizeState.size {
+                            sizeState.size = candidate
+                        }
                     }
                     .onEnded { _ in
-                        // Capture final size as new start
-                        startSize = sizeState.size
+                        // Oracle fix: Clean up and end snap suppression
+                        dragStartSize = nil
+                        WindowSnapManager.shared.endProgrammaticAdjustment()
                     }
             )
-            .onAppear {
-                startSize = sizeState.size
-            }
-            .onChange(of: sizeState.size) { _, newSize in
-                // Update start size when size changes externally (e.g., from buttons)
-                startSize = newSize
-            }
             .position(x: pixelSize.width - 10, y: pixelSize.height - 10)
     }
 }

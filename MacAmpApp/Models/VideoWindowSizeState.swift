@@ -40,6 +40,14 @@ final class VideoWindowSizeState {
         max(0, Int((pixelSize.width - 150) / 25))
     }
 
+    /// Distribution of stretchy tiles (left and right of center text)
+    var titlebarTileDistribution: (left: Int, right: Int) {
+        let total = stretchyTitleTileCount
+        let left = total / 2
+        let right = total - left  // Handles odd counts (right gets extra tile)
+        return (left, right)
+    }
+
     /// Number of vertical border tiles needed based on height
     var verticalBorderTileCount: Int {
         let contentHeight = pixelSize.height - 20 - 38  // Minus titlebar and bottom bar
