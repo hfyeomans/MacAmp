@@ -611,7 +611,18 @@ Includes:
 | **VIDEO.bmp sprites** | VIDEO_WINDOW.md | §Appendix: Sprite Definitions |
 | **Video formats** | VIDEO_WINDOW.md | §Video Playback System |
 | **Video window chrome** | VIDEO_WINDOW.md | §Chrome Components |
-| **Video window resizing** | VIDEO_WINDOW.md | §Window Resizing (1x/2x) |
+| **Video window resizing** | VIDEO_WINDOW.md | §Window Resizing (Full Quantized) |
+| **Video volume sync** | VIDEO_WINDOW.md | §Part 21: Unified Video Controls |
+| **Video seek bar** | VIDEO_WINDOW.md | §Part 21: Unified Video Controls |
+| **Video time display** | VIDEO_WINDOW.md | §Part 21: Unified Video Controls |
+| **VideoWindowSizeState** | VIDEO_WINDOW.md | §VideoWindowSizeState Observable |
+| **Size2D quantized resize** | VIDEO_WINDOW.md | §Size2D Model |
+| **WindowResizePreviewOverlay** | VIDEO_WINDOW.md | §Preview Overlay (AppKit) |
+| **Metadata ticker** | VIDEO_WINDOW.md | §Metadata Display |
+| **Task { @MainActor in } pattern** | VIDEO_WINDOW.md | §Part 21: Time Observer Pattern |
+| **cleanupVideoPlayer()** | VIDEO_WINDOW.md | §Shared Cleanup Function |
+| **currentSeekID invalidation** | VIDEO_WINDOW.md | §Critical Bug Fix |
+| **playbackProgress stored** | VIDEO_WINDOW.md | §Part 21: Time Observer Pattern |
 | **Visualization** | MACAMP_ARCHITECTURE_GUIDE.md | §8.4 Visualization |
 | **Window clustering** | MULTI_WINDOW_ARCHITECTURE.md | §Window Grouping |
 | **Window focus tracking** | WINDOW_FOCUS_ARCHITECTURE.md | Full document |
@@ -648,6 +659,12 @@ Includes:
 | "How does window focus tracking work?" | WINDOW_FOCUS_ARCHITECTURE.md + MACAMP_ARCHITECTURE_GUIDE.md §Window Focus State |
 | "How to make titlebars active/inactive?" | WINDOW_FOCUS_ARCHITECTURE.md §View Layer Usage |
 | "How does video playback work?" | VIDEO_WINDOW.md §Video Playback System |
+| "How to sync volume with video?" | VIDEO_WINDOW.md §Part 21: Unified Video Controls |
+| "How to implement video seeking?" | VIDEO_WINDOW.md §Part 21: Unified Video Controls |
+| "How to resize video window?" | VIDEO_WINDOW.md §Size2D Model + §Resize Handle Implementation |
+| "What is Size2D quantized resize?" | VIDEO_WINDOW.md §Size2D Model (25×29px segments) |
+| "How to use Task { @MainActor in }?" | VIDEO_WINDOW.md §Part 21: Time Observer Pattern |
+| "Why must playbackProgress be assigned?" | VIDEO_WINDOW.md §Part 21: Time Observer Pattern (stored, not computed) |
 | "What video formats are supported?" | VIDEO_WINDOW.md §Format Support |
 | "How do I add VIDEO.bmp to a skin?" | VIDEO_WINDOW.md §Appendix + WINAMP_SKIN_VARIATIONS.md |
 | "How does the Milkdrop window work?" | MILKDROP_WINDOW.md + GEN.bmp sprite system |

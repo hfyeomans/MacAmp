@@ -1146,6 +1146,454 @@ When implementing enum-based states:
 
 ---
 
+## Video/Milkdrop Window Patterns (Part 21, November 2025)
+
+**Lesson from:** Video & Milkdrop Windows implementation
+**Oracle Grade:** A (all architectural concerns resolved)
+**Total Commits:** 30+ commits over 10 hours
+**Files Created:** 10 new files, 7 modified
+
+### Pattern 1: Two-Piece Sprite Extraction (GEN.bmp Letters)
+
+**Problem:** Milkdrop titlebar letters appeared cut off when using documented coordinates.
+
+**Root Cause:** GEN.bmp letters are TWO SEPARATE SPRITES stacked vertically:
+- Top portion: 4-6 pixels (main body)
+- Bottom portion: 1-3 pixels (serifs/feet)
+- Cyan delimiter between pieces (excluded from extraction)
+
+**Verification Process (ImageMagick):**
+```bash
+# Extract different Y positions to find correct coordinates
+magick /tmp/GEN.png -crop 8x7+86+86 /tmp/M_Y86.png  # ✅ Complete
+magick /tmp/GEN.png -crop 8x7+86+88 /tmp/M_Y88.png  # ❌ Top cut off
+
+# Two-piece extraction (correct):
+magick /tmp/GEN.png -crop 8x6+86+88 /tmp/M_top.png     # Top 6px
+magick /tmp/GEN.png -crop 8x2+86+95 /tmp/M_bottom.png  # Bottom 2px
+magick /tmp/M_top.png /tmp/M_bottom.png -append /tmp/M_complete.png
+```
+
+**Implementation Pattern:**
+```swift
+// SkinSprites.swift - Define both pieces (32 sprites: 8 letters × 2 pieces × 2 states)
+Sprite(name: "GEN_TEXT_SELECTED_M_TOP", x: 86, y: 88, width: 8, height: 6),
+Sprite(name: "GEN_TEXT_SELECTED_M_BOTTOM", x: 86, y: 95, width: 8, height: 2),
+Sprite(name: "GEN_TEXT_M_TOP", x: 86, y: 96, width: 8, height: 6),
+Sprite(name: "GEN_TEXT_M_BOTTOM", x: 86, y: 108, width: 8, height: 1),
+
+// MilkdropWindowChromeView.swift - Stack pieces vertically
+@ViewBuilder
+func makeLetter(_ letter: String, width: CGFloat, isActive: Bool) -> some View {
+    let prefix = isActive ? "GEN_TEXT_SELECTED_" : "GEN_TEXT_"
+    VStack(spacing: 0) {
+        SimpleSpriteImage("\(prefix)\(letter)_TOP", width: width, height: 6)
+        SimpleSpriteImage("\(prefix)\(letter)_BOTTOM", width: width, height: isActive ? 2 : 1)
+    }
+}
+```
+
+**Key Insight:** Never trust documentation blindly. Always verify sprite coordinates with actual bitmap extraction using ImageMagick before updating code.
+
+---
+
+### Pattern 2: Size2D Quantized Resize Model
+
+**Problem:** Video window needed smooth, any-to-any resize with consistent chrome tiling.
+
+**Solution:** Quantized segment model (25×29px increments matching Winamp pattern):
+
+```swift
+// Size2D.swift - Quantized resize with 25×29px segments
+struct Size2D: Codable, Equatable {
+    var w: Int  // Width segments (0 = 275px base)
+    var h: Int  // Height segments (0 = 116px base)
+
+    // Presets
+    static let videoMinimum = Size2D(w: 0, h: 0)   // 275×116 (matches Main/EQ)
+    static let videoDefault = Size2D(w: 0, h: 4)   // 275×232 (standard VIDEO size)
+    static let video2x = Size2D(w: 11, h: 12)      // 550×464 (2x default)
+
+    // Conversion to pixels
+    func toVideoPixels() -> CGSize {
+        CGSize(
+            width: 275 + CGFloat(w) * 25,   // 25px width increments
+            height: 116 + CGFloat(h) * 29    // 29px height increments
+        )
+    }
+}
+
+// VideoWindowSizeState.swift - Observable state with persistence
+@Observable
+@MainActor
+final class VideoWindowSizeState {
+    var size: Size2D = .videoDefault {
+        didSet { persist() }
+    }
+
+    var pixelSize: CGSize { size.toVideoPixels() }
+    var centerTileCount: Int { max(0, Int((pixelSize.width - 250) / 25)) }
+
+    private func persist() {
+        UserDefaults.standard.set(size.w, forKey: "videoSizeW")
+        UserDefaults.standard.set(size.h, forKey: "videoSizeH")
+    }
+}
+```
+
+**Why Quantized:**
+- Chrome tiles render without gaps or overlaps
+- Consistent segment boundaries
+- Matches Winamp's playlist resize behavior
+- Prevents fractional pixel artifacts
+
+---
+
+### Pattern 3: Task { @MainActor in } for Timer/Observer Closures
+
+**Problem:** Timer and AVPlayer observer callbacks execute on various threads, causing Thread Sanitizer warnings.
+
+**❌ WRONG (causes data races):**
+```swift
+Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { [weak self] _ in
+    self?.metadataScrollOffset -= 5  // ⚠️ Not on main actor
+}
+```
+
+**✅ CORRECT (explicit main actor hop):**
+```swift
+Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { _ in
+    Task { @MainActor in
+        metadataScrollOffset -= 5  // ✅ Explicitly on main actor
+    }
+}
+
+// AVPlayer time observer
+videoTimeObserver = player.addPeriodicTimeObserver(
+    forInterval: interval,
+    queue: .main
+) { [weak self] time in
+    Task { @MainActor in  // ✅ Even with .main queue, explicit hop is safer
+        guard let self else { return }
+        self.currentTime = time.seconds
+        // ... update other state
+    }
+}
+```
+
+**When to use:**
+- Timer closures updating @Observable/@State
+- AVPlayer periodic observers
+- NotificationCenter observers
+- Any callback that modifies UI state
+
+**Oracle Validated:** This pattern passed Oracle Grade A review for Thread Sanitizer compliance.
+
+---
+
+### Pattern 4: playbackProgress Stored Property Contract
+
+**Critical Discovery:** playbackProgress is a STORED property, not computed. Must explicitly assign all three values.
+
+**❌ WRONG (assumes computed):**
+```swift
+// Only updating two values (assumes progress calculated automatically)
+self.currentTime = seconds
+self.currentDuration = duration
+// Missing: playbackProgress doesn't update! Slider stays frozen.
+```
+
+**✅ CORRECT (assign all three):**
+```swift
+Task { @MainActor in
+    guard let self else { return }
+    let seconds = time.seconds
+
+    // CRITICAL: Must assign ALL THREE values
+    self.currentTime = seconds
+    if let duration = player.currentItem?.duration.seconds, duration.isFinite {
+        self.currentDuration = duration
+        self.playbackProgress = duration > 0 ? seconds / duration : 0
+    }
+}
+```
+
+**Why this matters:**
+- Slider position depends on playbackProgress
+- UI won't update without explicit assignment
+- Progress timer uses playbackProgress for position calculations
+
+**Applies to:**
+- setupVideoTimeObserver()
+- seek(to:resume:) completion
+- seekToPercent() implementation
+
+---
+
+### Pattern 5: currentSeekID Invalidation Before Stop
+
+**Critical Bug:** When switching from audio to video, audio keeps playing alongside video.
+
+**Root Cause Chain:**
+1. loadVideoFile() calls playerNode.stop()
+2. stop() triggers completion handler from current audio segment
+3. Completion handler calls nextTrack()
+4. nextTrack() re-schedules audio → both play simultaneously
+
+**Solution:** Invalidate currentSeekID BEFORE stopping to prevent completion handler from re-scheduling:
+
+```swift
+func loadAudioFile(url: URL) {
+    // CRITICAL: Invalidate seek ID BEFORE stopping playerNode
+    // This prevents completion handler from re-scheduling audio
+    currentSeekID = UUID()
+
+    playerNode.stop()  // Now completion handler is ignored
+    cleanupVideoPlayer()
+    // ... rest of audio loading
+}
+
+// In completion handler:
+private func handleSegmentCompletion(seekID: UUID) {
+    // Guard ignores stale completions
+    guard seekID == currentSeekID else { return }
+    // ... handle completion
+}
+```
+
+**Pattern Generalizes To:**
+- Any state machine where old operations must be invalidated
+- Async operations that can be superseded
+- Preventing race conditions in sequential operations
+
+---
+
+### Pattern 6: AppKit Preview Overlay for SwiftUI Resize (Jitter Solution)
+
+**Problem:** On-the-fly SwiftUI window resizing causes severe jitter and performance degradation.
+
+**Root Cause:**
+- Each drag movement triggers SwiftUI body re-evaluation
+- Window frame changes cause expensive layout recalculation
+- SwiftUI .overlay() clips when resizing larger than current bounds
+- Result: Janky, unresponsive resize experience with visual artifacts
+
+**Investigation:** The jitter was identified during Part 21 development. Attempts to resize the video window in real-time as the user dragged the resize handle caused:
+- Frame rate drops below 30fps
+- Visible tearing and flickering
+- CPU spikes from continuous layout passes
+- Poor user experience compared to native macOS resize
+
+**Solution:** Cyan/dashed preview box pattern - AppKit NSPanel overlay that renders outside SwiftUI view hierarchy, with size committed only at drag end:
+
+```swift
+// WindowResizePreviewOverlay.swift
+class WindowResizePreviewOverlay {
+    private var overlayWindow: NSPanel?
+
+    func show(in parentWindow: NSWindow, previewSize: CGSize) {
+        // Create borderless panel (not child of parent)
+        let panel = NSPanel(
+            contentRect: NSRect(origin: .zero, size: previewSize),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+
+        // Position relative to parent
+        let parentFrame = parentWindow.frame
+        panel.setFrameOrigin(parentFrame.origin)
+
+        // Draw dashed preview rectangle
+        let contentView = ResizePreviewView(frame: NSRect(origin: .zero, size: previewSize))
+        panel.contentView = contentView
+        panel.orderFront(nil)
+
+        overlayWindow = panel
+    }
+
+    func hide() {
+        overlayWindow?.orderOut(nil)
+        overlayWindow = nil
+    }
+}
+
+// WindowCoordinator bridge methods:
+func showVideoResizePreview(_ overlay: WindowResizePreviewOverlay, previewSize: CGSize) {
+    guard let window = videoWindow else { return }
+    overlay.show(in: window, previewSize: previewSize)
+}
+
+func hideVideoResizePreview(_ overlay: WindowResizePreviewOverlay) {
+    overlay.hide()
+}
+```
+
+**Why This Solves Jitter:**
+1. **No SwiftUI re-evaluation during drag** - Only AppKit NSPanel updates (lightweight)
+2. **Preview extends beyond bounds** - NSPanel renders independently, not clipped
+3. **Single commit at drag end** - SwiftUI body evaluates only once when user releases mouse
+4. **Immediate visual feedback** - Cyan dashed rectangle provides responsive feedback without layout cost
+5. **Decoupled from expensive operations** - No video frame scaling, no compositor recalc during preview
+
+**Pattern:**
+```swift
+// During drag: Only update preview overlay (fast)
+func onDragChanged(size: CGSize) {
+    windowCoordinator.showVideoResizePreview(overlay, previewSize: size)
+    // NO SwiftUI state changes here!
+}
+
+// On drag end: Commit final size (single expensive operation)
+func onDragEnded(finalSize: Size2D) {
+    windowCoordinator.hideVideoResizePreview(overlay)
+    appSettings.videoSize = finalSize  // Triggers single SwiftUI update
+}
+```
+
+**Result:** Smooth 60fps resize preview with cyan dashed box, zero jitter, native macOS feel
+
+---
+
+### Pattern 7: WindowCoordinator Bridge for AppKit/SwiftUI Separation
+
+**Problem:** SwiftUI views should not directly manipulate NSWindow (causes tight coupling and threading issues).
+
+**Oracle Identified Issue:**
+```swift
+// ❌ WRONG: Direct AppKit calls in SwiftUI view
+Button(action: {
+    NSApp.keyWindow?.miniaturize(nil)  // Direct AppKit call
+}) { ... }
+```
+
+**✅ CORRECT: Bridge through WindowCoordinator:**
+```swift
+// WindowCoordinator.swift - Bridge methods
+@MainActor
+final class WindowCoordinator {
+    func minimizeKeyWindow() {
+        NSApp.keyWindow?.miniaturize(nil)
+    }
+
+    func closeKeyWindow() {
+        NSApp.keyWindow?.close()
+    }
+
+    func toggleEQWindowVisibility() -> Bool {
+        guard let eq = eqWindow else { return false }
+        if eq.isVisible {
+            eq.orderOut(nil)
+            isEQWindowVisible = false  // Update observable state
+            return false
+        } else {
+            eq.orderFront(nil)
+            isEQWindowVisible = true
+            return true
+        }
+    }
+
+    // Observable visibility state (single source of truth)
+    var isEQWindowVisible: Bool = false
+    var isPlaylistWindowVisible: Bool = false
+}
+
+// SwiftUI view uses bridge:
+Button(action: {
+    WindowCoordinator.shared?.minimizeKeyWindow()
+}) { ... }
+
+// Reactive binding to observable state:
+let eqVisible = coordinator?.isEQWindowVisible ?? false
+```
+
+**Benefits:**
+- Clean AppKit/SwiftUI separation
+- @MainActor isolation in coordinator
+- Observable state for reactive UI updates
+- Single source of truth for window visibility
+
+---
+
+### Pattern 8: Invisible Window Phantom Bug
+
+**User Detective Work:** "The gap is whatever size the video window is, as if the video window is there when it's not"
+
+**Problem:** Hidden VIDEO window at x=0 included in WindowSnapManager calculations, preventing cluster from reaching left monitor edge.
+
+**Root Cause:** Two locations missing `isVisible` check:
+1. `windowDidMove()` - building window→box mapping
+2. `boxes(in:)` helper - used by all cluster functions
+
+**Fix:**
+```swift
+// WindowSnapManager.swift - windowDidMove()
+func windowDidMove(_ notification: Notification) {
+    guard let window = notification.object as? NSWindow,
+          window.isVisible else { return }  // ← Added isVisible check
+    // ... rest of move handling
+}
+
+// boxes(in:) helper
+private func boxes(in region: CGRect) -> [WindowKind: Box] {
+    var result: [WindowKind: Box] = [:]
+    for (kind, window) in windowMap {
+        guard window.isVisible else { continue }  // ← Added isVisible check
+        // ... rest of box calculation
+    }
+    return result
+}
+```
+
+**Key Insight:** Hidden windows must be excluded from ALL layout calculations, not just rendering. User testing revealed this phantom window blocking cluster movement.
+
+---
+
+### Pattern 9: Titlebar Tile Coverage with ceil()
+
+**Problem:** Blank 12.5px strip on left side of titlebar.
+
+**Root Cause:** Insufficient tiles (only 2 left vs 3 right), wrong positioning.
+
+**Solution:** Calculate tiles per side using `ceil()`:
+
+```swift
+// ❌ WRONG: Only 2 tiles (leaves gap)
+let tilesPerSide = centerTileCount / 2
+
+// ✅ CORRECT: 3 tiles minimum with ceil()
+let stretchyTilesPerSide = Int(ceil(CGFloat(centerTileCount) / 2))
+
+// Left stretchy tiles (fill gap from left cap to center)
+ForEach(0..<stretchyTilesPerSide, id: \.self) { i in
+    SimpleSpriteImage("VIDEO_TITLEBAR_STRETCHY_\(suffix)", width: 25, height: 20)
+        .position(x: 25 + 12.5 + CGFloat(i) * 25, y: 10)
+}
+```
+
+**General Rule:** When tiling sprites to fill variable width, use `ceil()` to ensure full coverage rather than leaving gaps.
+
+---
+
+### Video/Milkdrop Pattern Checklist
+
+When implementing similar multi-window features:
+
+- [ ] **Verify sprite coordinates** with ImageMagick extraction (never trust docs blindly)
+- [ ] **Check for two-piece sprites** (TOP + BOTTOM with delimiter)
+- [ ] **Use quantized segments** for resize (consistent tiling)
+- [ ] **Task { @MainActor in }** for ALL timer/observer closures
+- [ ] **Assign all three** in time observers (currentTime, currentDuration, playbackProgress)
+- [ ] **Invalidate seek ID** BEFORE stopping to prevent completion conflicts
+- [ ] **AppKit overlay** when SwiftUI clipping is an issue
+- [ ] **WindowCoordinator bridge** for AppKit operations
+- [ ] **isVisible check** in all window layout calculations
+- [ ] **ceil() for tile coverage** to prevent gaps
+- [ ] **Thread Sanitizer clean** builds required
+- [ ] **Oracle Grade A** validation before merge
+
+---
+
 ## Modern Swift Patterns & Observable Migration
 
 ### Migrating from ObservableObject to @Observable (macOS 15+)
@@ -2447,6 +2895,16 @@ When building your next retro macOS app:
 **Last Updated:** 2025-11-07
 
 **Recent Additions:**
+- **Video/Milkdrop Window Patterns** (Nov 15, 2025) - Complete multi-window video integration
+  - Two-piece sprite extraction (GEN.bmp letters split into TOP + BOTTOM)
+  - Size2D quantized resize model (25×29px segments)
+  - Task { @MainActor in } for timer/observer closures
+  - playbackProgress stored property contract (must assign all three values)
+  - currentSeekID invalidation before playerNode.stop()
+  - AppKit preview overlay solving SwiftUI clipping
+  - WindowCoordinator bridge for AppKit/SwiftUI separation
+  - Invisible window phantom bug (isVisible check in WindowSnapManager)
+  - Oracle Grade A validated architecture
 - **Three-State Enum Pattern with Winamp Fidelity** (Nov 7, 2025) - Complete enum-based state management
   - RepeatMode enum (off/all/one) with CaseIterable future-proofing
   - Single source of truth via computed property pattern

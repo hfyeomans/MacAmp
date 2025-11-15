@@ -26,6 +26,11 @@ MacAmp is a SwiftUI-based audio player for macOS that recreates the iconic deskt
 - 🪟 **Multi-Window Interface** - Main player, equalizer, playlist, and video windows with shade modes
 - 📺 **Video Playback** - Native video support (MP4, MOV, M4V) with V button or Ctrl+V
 - 🎬 **Video Window** - Skinnable video window with VIDEO.bmp chrome or classic fallback
+- 🔲 **Full Video Resize** - Drag any size with 25×29px quantized segments (1x/2x preset buttons)
+- 🎚️ **Unified Video Controls** - Volume slider, seek bar, and time display work for both audio and video
+- 📝 **Video Metadata Ticker** - Auto-scrolling display showing filename, codec, and resolution
+- 🎨 **Milkdrop Window** - Visualization window with GEN.bmp chrome and two-piece letter sprites (Ctrl+K)
+- 🖼️ **5-Window Architecture** - Main, Equalizer, Playlist, VIDEO, and Milkdrop windows with unified focus tracking
 - 🧲 **Magnetic Docking** - Windows snap together and stay docked when resizing (Ctrl+D compatible)
 - 🔍 **Double-Size Mode** - Toggle 200% scaling with D button or Ctrl+D for better visibility on high-res displays
 - 📌 **Always On Top** - Keep window floating above others with A button or Ctrl+A (Classic Winamp feature)
@@ -199,7 +204,26 @@ MacAmp supports three repeat modes matching Winamp 5 Modern skins (Modern, Bento
 - **A** - Always On Top window floating (functional) ✅
 - **I** - Track Information metadata dialog (functional) ✅
 - **D** - Double Size 100%/200% scaling (functional) ✅
-- **V** - Visualizer mode cycling (scaffolded, pending)
+- **V** - Video Window toggle (functional) ✅
+
+### Video Window
+
+1. **Open Video Window** - Click the "V" button in the clutter bar OR press **Ctrl+V**
+2. **Load Video** - Drop MP4, MOV, or M4V files into playlist and double-click
+3. **Resize** - Drag bottom-right corner (25×29px quantized segments) or use 1x/2x buttons
+4. **Controls** - Volume slider, seek bar, and time display work just like audio
+5. **Metadata** - Bottom bar shows scrolling filename, codec, and resolution
+6. **Skinnable** - VIDEO.bmp chrome (from skin) or classic fallback
+7. **Docking** - Video window snaps to other MacAmp windows magnetically
+8. **Persistence** - Window position and size remembered across restarts
+
+### Milkdrop Window (Visualization)
+
+1. **Open Milkdrop** - Press **Ctrl+K** (Ctrl+Shift+K in some configurations)
+2. **Window Chrome** - GEN.bmp sprites with "MILKDROP" two-piece letters
+3. **Visualization** - Placeholder (Butterchurn integration deferred)
+4. **Focus States** - Active/Inactive titlebar sprites
+5. **Docking** - Snaps to other windows magnetically
 
 ## Architecture
 
@@ -243,8 +267,11 @@ MacAmpApp/
 │   ├── PLEditParser.swift                  # PLEDIT.txt color parser
 │   ├── RadioStation.swift                  # ⭐ NEW: Radio station model
 │   ├── RadioStationLibrary.swift           # ⭐ NEW: Favorite stations persistence
+│   ├── Size2D.swift                        # ⭐ NEW: Quantized 25×29px resize segments
+│   ├── VideoWindowSizeState.swift          # ⭐ NEW: Video window resize state management
+│   ├── WindowFocusState.swift              # ⭐ NEW: Window focus tracking for active/inactive
 │   ├── Skin.swift                          # Skin package data model
-│   ├── SkinSprites.swift                   # Sprite name definitions and mappings
+│   ├── SkinSprites.swift                   # Sprite name definitions and mappings (VIDEO + GEN letters)
 │   ├── SnapUtils.swift                     # Window snapping utilities
 │   ├── SpritePositions.swift               # Sprite coordinate definitions
 │   ├── SpriteResolver.swift                # Semantic sprite resolution (cross-skin compat)
@@ -253,7 +280,15 @@ MacAmpApp/
 │
 ├── ViewModels/                         # 🌉 BRIDGE LAYER - State Management & Controllers
 │   ├── DockingController.swift             # Multi-window coordination and positioning
-│   └── SkinManager.swift                   # Dynamic skin loading, hot-swapping, sprite caching
+│   ├── SkinManager.swift                   # Dynamic skin loading, hot-swapping, sprite caching
+│   └── WindowCoordinator.swift             # ⭐ NEW: 5-window lifecycle, AppKit bridge, focus tracking
+│
+├── Windows/                            # 🖼️ NSWindowController Layer (AppKit)
+│   ├── WinampMainWindowController.swift    # Main window controller with @MainActor
+│   ├── WinampEqualizerWindowController.swift   # EQ window controller
+│   ├── WinampPlaylistWindowController.swift    # Playlist window controller
+│   ├── WinampVideoWindowController.swift   # ⭐ NEW: Video window controller
+│   └── WinampMilkdropWindowController.swift    # ⭐ NEW: Milkdrop window controller
 │
 ├── Views/                              # 🎨 PRESENTATION LAYER - SwiftUI Windows & Views
 │   ├── Components/                         # Reusable UI Components
@@ -263,6 +298,11 @@ MacAmpApp/
 │   │   ├── SimpleSpriteImage.swift             # Pixel-perfect sprite rendering (.interpolation(.none))
 │   │   ├── SpriteMenuItem.swift                # Sprite-based popup menu items
 │   │   └── WinampVolumeSlider.swift            # Frame-based volume/balance sliders
+│   ├── Windows/                            # ⭐ NEW: Window Chrome Components
+│   │   ├── VideoWindowChromeView.swift         # VIDEO.bmp chrome with dynamic sizing
+│   │   ├── MilkdropWindowChromeView.swift      # GEN.bmp chrome with two-piece letters
+│   │   ├── AVPlayerViewRepresentable.swift     # NSViewRepresentable for AVPlayerView
+│   │   └── WindowResizePreviewOverlay.swift    # AppKit overlay for resize preview
 │   ├── EqGraphView.swift                   # Equalizer frequency response graph
 │   ├── PreferencesView.swift               # Settings and preferences window
 │   ├── PresetsButton.swift                 # EQ preset selector button
@@ -273,10 +313,13 @@ MacAmpApp/
 │   ├── VisualizerView.swift                # Spectrum analyzer & oscilloscope rendering
 │   ├── WinampEqualizerWindow.swift         # 10-band equalizer window
 │   ├── WinampMainWindow.swift              # Main player window with transport controls
-│   └── WinampPlaylistWindow.swift          # Playlist window with sprite-based menus
+│   ├── WinampPlaylistWindow.swift          # Playlist window with sprite-based menus
+│   ├── WinampVideoWindow.swift             # ⭐ NEW: Video window with AVPlayer
+│   └── WinampMilkdropWindow.swift          # ⭐ NEW: Milkdrop visualization window
 │
 ├── Utilities/                          # 🔧 Helper Functions & Extensions
 │   ├── WindowAccessor.swift                # NSWindow access from SwiftUI
+│   ├── WindowFocusDelegate.swift           # ⭐ NEW: NSWindowDelegate for focus tracking
 │   └── WindowSnapManager.swift             # Magnetic window snapping
 │
 ├── AppCommands.swift                   # Global keyboard shortcuts and menu commands
@@ -301,6 +344,16 @@ Package.swift                           # Swift Package Manager Configuration
 
 ### Recent Architectural Changes (2025)
 
+**Video & Milkdrop Windows** (November 2025):
+- Added **WindowCoordinator** for 5-window lifecycle management and AppKit/SwiftUI bridge
+- Added **WindowFocusState** and **WindowFocusDelegate** for active/inactive titlebar tracking
+- Added **Size2D** and **VideoWindowSizeState** for quantized 25×29px resize segments
+- Added **VIDEO.bmp sprites** (24 sprites) to SkinSprites.swift for skinnable chrome
+- Added **GEN.bmp two-piece letter sprites** (32 sprites) for Milkdrop titlebar
+- Video playback integrated into AudioPlayer (MediaType routing, AVPlayer backend)
+- Task { @MainActor in } pattern for timer/observer closures (Thread Sanitizer clean)
+- Observable visibility state for window toggle coordination
+
 **Internet Radio Support** (October 2025):
 - Added **PlaybackCoordinator** to orchestrate dual audio backends
 - Added **StreamPlayer** for AVPlayer-based HTTP/HTTPS streaming
@@ -314,11 +367,15 @@ Package.swift                           # Swift Package Manager Configuration
 - Full Swift 6 strict concurrency compliance
 
 **UI Enhancements** (October-November 2025):
-- **Clutter Bar Controls** (v0.7.8): 4 of 5 buttons functional
+- **Video & Milkdrop Windows** (v0.8.9): 5-window architecture complete
+  - **V Button**: Video Window toggle (Ctrl+V) - 1x/2x resize, metadata ticker
+  - **Milkdrop Window**: GEN.bmp chrome foundation (Ctrl+K)
+- **Clutter Bar Controls** (v0.7.8): 5 of 5 buttons functional
   - **O Button**: Options menu with time display toggle, settings access (Ctrl+O, Ctrl+T)
   - **A Button**: Always On Top window floating (Ctrl+A)
   - **I Button**: Track Information metadata dialog (Ctrl+I)
   - **D Button**: Double-Size 100%/200% scaling (Ctrl+D)
+  - **V Button**: Video Window toggle (Ctrl+V)
 - **Visualizer Modes**: Clickable visualizer cycles through Spectrum → Oscilloscope → None
 - **Keyboard Navigation**: Arrow keys and VoiceOver support in all menus
 
@@ -338,6 +395,8 @@ For detailed architecture documentation, see [`docs/*]
 | `Ctrl+I` | Show track information dialog |
 | `Ctrl+D` | Toggle double-size mode (100% ↔ 200%) |
 | `Ctrl+A` | Toggle always on top (float window) |
+| `Ctrl+V` | Toggle video window |
+| `Ctrl+K` | Toggle Milkdrop window |
 | `Cmd+Shift+E` | Toggle equalizer window |
 | `Cmd+Shift+P` | Toggle playlist window |
 | `Cmd+Shift+1` | Switch to Classic Winamp skin |
@@ -409,6 +468,49 @@ See [`docs/SpriteResolver-Architecture.md`](docs/SpriteResolver-Architecture.md)
 
 ## Recent Updates
 
+### v0.8.9 (November 2025) - Video & Milkdrop Windows 🎬
+
+**Major Features:**
+- ✅ **Video Window** - Native video playback with VIDEO.bmp skinned chrome
+  - Full resize with 25×29px quantized segments
+  - 1x/2x size preset buttons
+  - VIDEO.bmp sprite rendering (24 sprites) or classic fallback
+  - Metadata ticker with auto-scrolling (filename, codec, resolution)
+- ✅ **Milkdrop Window Foundation** - GEN.bmp two-piece letter sprites
+  - "MILKDROP" titlebar with 32 letter sprites
+  - Active/Inactive focus states
+  - Foundation ready for future visualization
+- ✅ **Unified Video Controls** (Part 21)
+  - Volume slider synced to video playback
+  - Seek bar works for video files (drag to any position)
+  - Time display shows video elapsed/remaining
+  - Clean switch between audio↔video playback
+
+**5-Window Architecture:**
+- Main, Equalizer, Playlist, VIDEO, and Milkdrop windows
+- Magnetic docking for all windows
+- Window focus tracking with active/inactive sprites
+- Position persistence via WindowFrameStore
+- V button (Ctrl+V) and K button (Ctrl+K) shortcuts
+
+**Technical Achievements:**
+- Size2D quantized resize model (25×29px segments)
+- WindowCoordinator bridge methods for AppKit/SwiftUI separation
+- Observable visibility state (isEQWindowVisible, isPlaylistWindowVisible)
+- Task { @MainActor in } pattern for timer/observer closures
+- playbackProgress stored pattern (must assign all three values)
+- currentSeekID invalidation before playerNode.stop()
+- AppKit preview overlay for resize visualization
+- Oracle Grade A validation (all architectural concerns resolved)
+
+**Bug Fixes:**
+- Fixed invisible window phantom affecting cluster docking
+- Fixed titlebar gap with proper tile calculation (ceil())
+- Fixed EQ/PL button state sync with WindowCoordinator
+- Fixed timer closures using proper MainActor hopping
+
+**Status:** Video window 100% complete, Milkdrop foundation complete (visualization deferred)
+
 ### v0.7.8 (November 2025) - Clutter Bar O & I Buttons 🎉
 
 **New Features:**
@@ -429,7 +531,7 @@ See [`docs/SpriteResolver-Architecture.md`](docs/SpriteResolver-Architecture.md)
 - Fixed keyboard shortcuts working with any window focused
 - Fixed SwiftUI state mutation warning
 
-**Clutter Bar Status:** 4 of 5 buttons functional (O, A, I, D)
+**Clutter Bar Status:** 5 of 5 buttons functional (O, A, I, D, V)
 
 ### v0.2.0 (October 2025) - Swift 6 Modernization 🎉
 
