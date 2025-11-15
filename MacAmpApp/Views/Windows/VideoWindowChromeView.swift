@@ -309,16 +309,10 @@ struct VideoWindowChromeView<Content: View>: View {
                             height: max(0, baseSize.height + heightDelta)
                         )
 
-                        // APPKIT PREVIEW: Show overlay window with target size
-                        let previewPixels = candidate.toVideoPixels()
-
+                        // APPKIT PREVIEW: Update overlay window every tick
                         if let window = WindowCoordinator.shared?.videoWindow {
-                            if isDragging && dragStartSize != nil {
-                                // First tick or update
-                                resizePreview.show(in: window, previewSize: previewPixels)
-                            } else {
-                                resizePreview.update(previewSize: previewPixels)
-                            }
+                            let previewPixels = candidate.toVideoPixels()
+                            resizePreview.show(in: window, previewSize: previewPixels)
                         }
                     }
                     .onEnded { value in

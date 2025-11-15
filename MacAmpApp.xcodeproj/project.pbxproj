@@ -23,6 +23,7 @@
 		366BB17C2EC0411E006162E2 /* WinampWindowConfigurator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 366BB17B2EC0411E006162E2 /* WinampWindowConfigurator.swift */; };
 		3686476C2EC8336B009D1D8E /* Size2D.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3686476A2EC8336B009D1D8E /* Size2D.swift */; };
 		3686476D2EC8336B009D1D8E /* VideoWindowSizeState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3686476B2EC8336B009D1D8E /* VideoWindowSizeState.swift */; };
+		3686476F2EC8DAE7009D1D8E /* WindowResizePreviewOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3686476E2EC8DAE7009D1D8E /* WindowResizePreviewOverlay.swift */; };
 		36B64EDC2EB3023D004274F8 /* PlaylistMenuDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36B64EDB2EB3023D004274F8 /* PlaylistMenuDelegate.swift */; };
 		36C0FFE22EB512A300916917 /* Mac_OS-X_skin.wsz in Resources */ = {isa = PBXBuildFile; fileRef = 36C0FFDE2EB512A300916917 /* Mac_OS-X_skin.wsz */; };
 		36C0FFE32EB512A300916917 /* Tron-Vaporwave-by-LuigiHann.wsz in Resources */ = {isa = PBXBuildFile; fileRef = 36C0FFE02EB512A300916917 /* Tron-Vaporwave-by-LuigiHann.wsz */; };
@@ -98,6 +99,7 @@
 		366BB17B2EC0411E006162E2 /* WinampWindowConfigurator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WinampWindowConfigurator.swift; sourceTree = "<group>"; };
 		3686476A2EC8336B009D1D8E /* Size2D.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Size2D.swift; sourceTree = "<group>"; };
 		3686476B2EC8336B009D1D8E /* VideoWindowSizeState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoWindowSizeState.swift; sourceTree = "<group>"; };
+		3686476E2EC8DAE7009D1D8E /* WindowResizePreviewOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowResizePreviewOverlay.swift; sourceTree = "<group>"; };
 		36B64EDB2EB3023D004274F8 /* PlaylistMenuDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaylistMenuDelegate.swift; sourceTree = "<group>"; };
 		36C0FFDD2EB512A300916917 /* KenWood_KDC_7000_Elite.wsz */ = {isa = PBXFileReference; lastKnownFileType = file; path = KenWood_KDC_7000_Elite.wsz; sourceTree = "<group>"; };
 		36C0FFDE2EB512A300916917 /* Mac_OS-X_skin.wsz */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Mac_OS-X_skin.wsz"; sourceTree = "<group>"; };
@@ -313,6 +315,7 @@
 		EB257FE97ABCB16CE95A16E0 /* Utilities */ = {
 			isa = PBXGroup;
 			children = (
+				3686476E2EC8DAE7009D1D8E /* WindowResizePreviewOverlay.swift */,
 				36CABCFE2EC8016000902330 /* WindowFocusDelegate.swift */,
 				36CAB6282EC153FD00902330 /* WindowDelegateMultiplexer.swift */,
 				366BB17B2EC0411E006162E2 /* WinampWindowConfigurator.swift */,
@@ -446,6 +449,7 @@
 				0E00109AB5375E26C755CA89 /* M3UEntry.swift in Sources */,
 				8806F9498EDA22C217C91D30 /* M3UParser.swift in Sources */,
 				B9F51DB9B3BAF8611108D699 /* MacAmpApp.swift in Sources */,
+				3686476F2EC8DAE7009D1D8E /* WindowResizePreviewOverlay.swift in Sources */,
 				41559151451B3CDCDAF46147 /* PLEditParser.swift in Sources */,
 				36B64EDC2EB3023D004274F8 /* PlaylistMenuDelegate.swift in Sources */,
 				BC234EF567890ABCD1234567 /* PreferencesView.swift in Sources */,

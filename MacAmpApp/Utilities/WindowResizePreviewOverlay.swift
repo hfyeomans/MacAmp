@@ -11,6 +11,7 @@ final class WindowResizePreviewOverlay {
 
         // Create overlay window if needed
         if overlayWindow == nil {
+            print("🔷 Creating overlay window")
             let overlay = NSWindow(
                 contentRect: .zero,
                 styleMask: [.borderless],
@@ -29,16 +30,24 @@ final class WindowResizePreviewOverlay {
 
         guard let overlay = overlayWindow else { return }
 
-        // Position overlay at same location as target window
+        // Position overlay at same location as target window, with preview size
         var frame = window.frame
+        let topLeft = NSPoint(x: frame.origin.x, y: frame.origin.y + frame.size.height)
         frame.size = previewSize
-        overlay.setFrame(frame, display: false)
+        frame.origin = NSPoint(x: topLeft.x, y: topLeft.y - previewSize.height)
 
-        // Create visual content
-        let contentView = PreviewContentView(frame: NSRect(origin: .zero, size: previewSize))
-        overlay.contentView = contentView
+        overlay.setFrame(frame, display: true, animate: false)
+
+        // Update or create visual content
+        if let existingView = overlay.contentView as? PreviewContentView {
+            existingView.previewSize = previewSize
+        } else {
+            let contentView = PreviewContentView(frame: NSRect(origin: .zero, size: previewSize))
+            overlay.contentView = contentView
+        }
 
         overlay.orderFront(nil)
+        print("🔷 Preview shown at \(frame), size: \(previewSize)")
     }
 
     func update(previewSize: CGSize) {
