@@ -565,6 +565,7 @@ struct WinampMainWindow: View {
                 SimpleSpriteImage("MAIN_CLUTTER_BAR_BUTTON_O", width: 8, height: 8)
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .help("Options menu (Ctrl+O, Ctrl+T for time)")
             .at(Coords.clutterButtonO)
 
@@ -579,6 +580,7 @@ struct WinampMainWindow: View {
                 SimpleSpriteImage(aSpriteName, width: 8, height: 7)
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .help("Toggle always on top (Ctrl+A)")
             .at(Coords.clutterButtonA)
 
@@ -593,6 +595,7 @@ struct WinampMainWindow: View {
                 SimpleSpriteImage(iSpriteName, width: 8, height: 7)
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .help("Track information (Ctrl+I)")
             .at(Coords.clutterButtonI)
 
@@ -608,6 +611,7 @@ struct WinampMainWindow: View {
                 SimpleSpriteImage(dSpriteName, width: 8, height: 8)
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .help("Toggle window size")
             .at(Coords.clutterButtonD)
 
@@ -623,6 +627,7 @@ struct WinampMainWindow: View {
                 SimpleSpriteImage(vSpriteName, width: 8, height: 7)
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .help("Video Window (Ctrl+V)")
             .at(Coords.clutterButtonV)
         }

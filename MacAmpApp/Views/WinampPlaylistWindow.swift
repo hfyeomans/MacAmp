@@ -598,6 +598,7 @@ struct WinampPlaylistWindow: View {
                 SimpleSpriteImage("MAIN_MINIMIZE_BUTTON", width: 9, height: 9)
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .position(x: 248.5, y: 7.5)
             
             Button(action: {
