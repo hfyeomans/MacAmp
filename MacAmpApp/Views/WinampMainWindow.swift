@@ -8,6 +8,7 @@ struct WinampMainWindow: View {
     @Environment(DockingController.self) var dockingController
     @Environment(AppSettings.self) var settings
     @Environment(PlaybackCoordinator.self) var playbackCoordinator
+    @Environment(WindowFocusState.self) var windowFocusState
 
     // CRITICAL: Prevent unnecessary body re-evaluations that cause ghost images
     // SwiftUI re-evaluates body when ANY @EnvironmentObject publishes changes
@@ -31,6 +32,11 @@ struct WinampMainWindow: View {
 
     // Timer publisher for pause blink animation (Swift 6 pattern)
     let pauseBlinkTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
+
+    // Computed: Is this window currently focused?
+    private var isWindowActive: Bool {
+        windowFocusState.isMainKey
+    }
 
     // Winamp coordinate constants (from original Winamp and webamp)
     private struct Coords {
@@ -94,7 +100,7 @@ struct WinampMainWindow: View {
             // Make ONLY the title bar draggable using custom drag (magnetic snapping)
             // CRITICAL: Apply .at() to drag handle itself, not content inside (Oracle fix)
             WinampTitlebarDragHandle(windowKind: .main, size: CGSize(width: 275, height: 14)) {
-                SimpleSpriteImage("MAIN_TITLE_BAR_SELECTED",
+                SimpleSpriteImage(isWindowActive ? "MAIN_TITLE_BAR_SELECTED" : "MAIN_TITLE_BAR",
                                 width: 275,
                                 height: 14)
             }
