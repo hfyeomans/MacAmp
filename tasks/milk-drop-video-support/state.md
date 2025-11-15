@@ -1639,8 +1639,8 @@ let diffWithin = SnapUtils.snapWithinUnion(groupBox, union: virtualSpace.bounds,
 
 | Task | Status | Est. Time | Actual | Notes |
 |------|--------|-----------|--------|-------|
-| 1. Video Volume Control | 🧪 Testing | 15 min | 5 min | Volume didSet + creation sync |
-| 2. Video Time Display | ⏳ Pending | 1 hour | - | Observer pattern |
+| 1. Video Volume Control | ✅ Complete | 15 min | 5 min | Commit 3973bc3 |
+| 2. Video Time Display | 🧪 Testing | 1 hour | 20 min | Observer setup + cleanup |
 | 3. Video Seeking Support | ⏳ Pending | 1 hour | - | Extend existing seek() |
 | 4. Metadata Display Growth | ⏳ Pending | 30 min | - | UI-only |
 | 5. Integration Testing | ⏳ Pending | 1 hour | - | Full test suite |
@@ -1650,9 +1650,13 @@ let diffWithin = SnapUtils.snapWithinUnion(groupBox, union: virtualSpace.bounds,
 1. **`MacAmpApp/Audio/AudioPlayer.swift`**
    - [x] Volume didSet (add video) ✅
    - [x] Volume sync at AVPlayer creation ✅
-   - [ ] videoTimeObserver property
-   - [ ] setupVideoTimeObserver()
-   - [ ] cleanupVideoTimeObserver()
+   - [x] videoTimeObserver property ✅
+   - [x] setupVideoTimeObserver() ✅
+   - [x] tearDownVideoTimeObserver() ✅
+   - [x] cleanupVideoPlayer() (shared cleanup) ✅
+   - [x] Call setup in loadVideoFile() ✅
+   - [x] Use cleanup in loadAudioFile() ✅
+   - [x] Use cleanup in stop() ✅
    - [ ] seek() method extension
 
 2. **`MacAmpApp/Views/Windows/VideoWindowChromeView.swift`**

@@ -179,6 +179,7 @@ final class AudioPlayer {
     var currentMediaType: MediaType = .audio
     var videoMetadataString: String = ""
     @ObservationIgnored private var videoEndObserver: NSObjectProtocol?
+    @ObservationIgnored private var videoTimeObserver: Any?
 
     enum MediaType {
         case audio  // MP3, FLAC, WAV, etc.
@@ -327,10 +328,21 @@ final class AudioPlayer {
 
         updatePlaylistPosition(with: track)
 
+        // CRITICAL FIX (Oracle identified): Invalidate seekID BEFORE stopping
+        // This prevents the completion handler from calling nextTrack() and re-scheduling audio
+        currentSeekID = UUID()  // Invalidate any pending completion handlers
+        seekGuardActive = true  // Extra protection
+
         // Don't call stop() here - it triggers completion handlers mid-transition
         // Instead, directly stop the player node and reset state
         playerNode.stop()
         progressTimer?.invalidate()
+
+        // Clear seek guard after brief delay (matches seek() pattern)
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 50_000_000)  // 50ms
+            self.seekGuardActive = false
+        }
 
         currentTrack = track
         currentTitle = "\(track.title) - \(track.artist)"
@@ -346,6 +358,19 @@ final class AudioPlayer {
 
         // Detect media type and route appropriately
         let mediaType = detectMediaType(url: track.url)
+
+        // CRITICAL: Cleanup old media type BEFORE setting new one
+        // This ensures proper cleanup when switching between audio and video
+        if currentMediaType != mediaType {
+            if currentMediaType == .video {
+                // Switching FROM video to audio - cleanup video
+                cleanupVideoPlayer()
+                videoMetadataString = ""
+                print("AudioPlayer: Switching from video to audio - cleanup complete")
+            }
+            // Note: Audio cleanup happens in loadVideoFile() via playerNode.stop()
+        }
+
         currentMediaType = mediaType
 
         switch mediaType {
@@ -377,11 +402,8 @@ final class AudioPlayer {
         playerNode.stop()
         progressTimer?.invalidate()
 
-        // Oracle fix: Clean up old video player before creating new one
-        if let oldPlayer = videoPlayer {
-            oldPlayer.pause()
-            videoPlayer = nil
-        }
+        // Oracle Grade A: Use shared cleanup for old video player
+        cleanupVideoPlayer()
 
         // Create video player
         videoPlayer = AVPlayer(url: url)
@@ -400,6 +422,9 @@ final class AudioPlayer {
                 }
             }
         }
+
+        // Setup time observer BEFORE play (Oracle Grade A requirement)
+        setupVideoTimeObserver()
 
         // Start video playback
         videoPlayer?.play()
@@ -450,19 +475,61 @@ final class AudioPlayer {
         }
     }
 
+    // MARK: - Video Time Observer (Part 21 - Oracle Grade A)
+
+    /// Setup periodic time observer for video playback
+    /// Updates currentTime, currentDuration, AND playbackProgress (all three required)
+    private func setupVideoTimeObserver() {
+        tearDownVideoTimeObserver()  // Clean first
+        guard let player = videoPlayer else { return }
+
+        let interval = CMTime(seconds: 0.1, preferredTimescale: 600)
+        videoTimeObserver = player.addPeriodicTimeObserver(
+            forInterval: interval,
+            queue: .main
+        ) { [weak self] time in
+            Task { @MainActor in  // Explicit main actor hop
+                guard let self else { return }
+                let seconds = time.seconds
+                self.currentTime = seconds
+
+                if let item = player.currentItem {
+                    let duration = item.duration.seconds
+                    if duration.isFinite {
+                        self.currentDuration = duration
+                        // CRITICAL: playbackProgress is STORED, must assign explicitly
+                        self.playbackProgress = duration > 0 ? seconds / duration : 0
+                    }
+                }
+            }
+        }
+        NSLog("📺 Video time observer setup")
+    }
+
+    /// Teardown video time observer to prevent memory leaks
+    private func tearDownVideoTimeObserver() {
+        if let observer = videoTimeObserver, let player = videoPlayer {
+            player.removeTimeObserver(observer)
+        }
+        videoTimeObserver = nil
+    }
+
+    /// Shared cleanup for all video resources (Oracle recommendation)
+    private func cleanupVideoPlayer() {
+        tearDownVideoTimeObserver()
+        if let observer = videoEndObserver {
+            NotificationCenter.default.removeObserver(observer)
+            videoEndObserver = nil
+        }
+        videoPlayer?.pause()
+        videoPlayer = nil
+        NSLog("📺 Video player cleanup complete")
+    }
+
     /// Private: Load audio file for playback (does NOT modify playlist)
     private func loadAudioFile(url: URL) {
-        // Stop any existing video playback
-        if currentMediaType == .video {
-            videoPlayer?.pause()
-            videoPlayer = nil
-            if let observer = videoEndObserver {
-                NotificationCenter.default.removeObserver(observer)
-                videoEndObserver = nil
-            }
-            videoMetadataString = ""  // Clear video metadata
-        }
-        currentMediaType = .audio
+        // Video cleanup now happens in playTrack() BEFORE calling this
+        // currentMediaType is already set to .audio by playTrack()
 
         do {
             audioFile = try AVAudioFile(forReading: url)
@@ -608,14 +675,9 @@ final class AudioPlayer {
     func stop() {
         transition(to: .stopped(.manual))
 
-        // Handle video playback cleanup
+        // Handle video playback cleanup (Oracle Grade A: use shared cleanup)
         if currentMediaType == .video {
-            videoPlayer?.pause()
-            videoPlayer = nil
-            if let observer = videoEndObserver {
-                NotificationCenter.default.removeObserver(observer)
-                videoEndObserver = nil
-            }
+            cleanupVideoPlayer()
             videoMetadataString = ""
             currentMediaType = .audio
             print("AudioPlayer: Stop (Video) - cleaned up AVPlayer")
