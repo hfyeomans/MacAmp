@@ -19,6 +19,10 @@ struct WinampMainWindow: View {
     @State private var wasPlayingPreScrub: Bool = false
     @State private var scrubbingProgress: Double = 0.0
 
+    // EQ/PL window visibility tracking (for reactive button lights)
+    @State private var isEQWindowVisible: Bool = true
+    @State private var isPlaylistWindowVisible: Bool = true
+
     // Track info scrolling state
     @State private var scrollOffset: CGFloat = 0
     @State private var scrollTimer: Timer?
@@ -230,6 +234,7 @@ struct WinampMainWindow: View {
                         .scaleEffect(0.6) // Scale down for shade mode
                 }
                 .buttonStyle(.plain)
+                .focusable(false)
 
                 // Play
                 Button(action: { playbackCoordinator.togglePlayPause() }) {
@@ -237,6 +242,7 @@ struct WinampMainWindow: View {
                         .scaleEffect(0.6)
                 }
                 .buttonStyle(.plain)
+                .focusable(false)
 
                 // Pause
                 Button(action: { playbackCoordinator.pause() }) {
@@ -244,6 +250,7 @@ struct WinampMainWindow: View {
                         .scaleEffect(0.6)
                 }
                 .buttonStyle(.plain)
+                .focusable(false)
 
                 // Stop
                 Button(action: { playbackCoordinator.stop() }) {
@@ -251,6 +258,7 @@ struct WinampMainWindow: View {
                         .scaleEffect(0.6)
                 }
                 .buttonStyle(.plain)
+                .focusable(false)
 
                 // Next
                 Button(action: { Task { await playbackCoordinator.next() } }) {
@@ -258,6 +266,7 @@ struct WinampMainWindow: View {
                         .scaleEffect(0.6)
                 }
                 .buttonStyle(.plain)
+                .focusable(false)
             }
             .at(CGPoint(x: 45, y: 3))
 
@@ -406,6 +415,7 @@ struct WinampMainWindow: View {
                 SimpleSpriteImage("MAIN_PLAY_BUTTON", width: 23, height: 18)
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .at(Coords.playButton)
 
             // Pause
@@ -413,6 +423,7 @@ struct WinampMainWindow: View {
                 SimpleSpriteImage("MAIN_PAUSE_BUTTON", width: 23, height: 18)
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .at(Coords.pauseButton)
 
             // Stop
@@ -420,6 +431,7 @@ struct WinampMainWindow: View {
                 SimpleSpriteImage("MAIN_STOP_BUTTON", width: 23, height: 18)
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .at(Coords.stopButton)
 
             // Next
@@ -427,15 +439,17 @@ struct WinampMainWindow: View {
                 SimpleSpriteImage("MAIN_NEXT_BUTTON", width: 23, height: 18)
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .at(Coords.nextButton)
-            
+
             // Eject (handles file loading like original Winamp)
-            Button(action: { 
+            Button(action: {
                 openFileDialog() // File loading integrated into eject button
             }) {
                 SimpleSpriteImage("MAIN_EJECT_BUTTON", width: 22, height: 16)
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .at(Coords.ejectButton)
         }
     }
@@ -451,6 +465,7 @@ struct WinampMainWindow: View {
                 SimpleSpriteImage(spriteKey, width: 47, height: 15)
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .at(Coords.shuffleButton)
 
             // Repeat button (Winamp 5 Modern: 3-state with "1" badge)
@@ -475,6 +490,7 @@ struct WinampMainWindow: View {
                 }
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .help(audioPlayer.repeatMode.label)
             .at(Coords.repeatButton)
         }
@@ -535,18 +551,20 @@ struct WinampMainWindow: View {
     @ViewBuilder
     private func buildWindowToggleButtons() -> some View {
         Group {
-            // EQ button - lights when EQ window visible
-            let eqSprite = WindowCoordinator.shared?.eqWindow?.isVisible == true
+            // EQ button - lights when EQ window visible (uses @State for reactivity)
+            let eqSprite = isEQWindowVisible
                 ? "MAIN_EQ_BUTTON_SELECTED"
                 : "MAIN_EQ_BUTTON"
 
             Button(action: {
-                // Toggle actual NSWindow visibility
+                // Toggle actual NSWindow visibility and update @State
                 if let eqWindow = WindowCoordinator.shared?.eqWindow {
                     if eqWindow.isVisible {
                         eqWindow.orderOut(nil)
+                        isEQWindowVisible = false
                     } else {
                         eqWindow.orderFront(nil)
+                        isEQWindowVisible = true
                     }
                 }
             }) {
@@ -556,18 +574,20 @@ struct WinampMainWindow: View {
             .focusable(false)
             .at(Coords.eqButton)
 
-            // Playlist button - lights when Playlist window visible
-            let playlistSprite = WindowCoordinator.shared?.playlistWindow?.isVisible == true
+            // Playlist button - lights when Playlist window visible (uses @State for reactivity)
+            let playlistSprite = isPlaylistWindowVisible
                 ? "MAIN_PLAYLIST_BUTTON_SELECTED"
                 : "MAIN_PLAYLIST_BUTTON"
 
             Button(action: {
-                // Toggle actual NSWindow visibility
+                // Toggle actual NSWindow visibility and update @State
                 if let playlistWindow = WindowCoordinator.shared?.playlistWindow {
                     if playlistWindow.isVisible {
                         playlistWindow.orderOut(nil)
+                        isPlaylistWindowVisible = false
                     } else {
                         playlistWindow.orderFront(nil)
+                        isPlaylistWindowVisible = true
                     }
                 }
             }) {
