@@ -716,6 +716,18 @@ final class WindowCoordinator {
         }
     }
 
+    func updateVideoWindowSize(to pixelSize: CGSize) {
+        guard let video = videoWindow else { return }
+
+        var frame = video.frame
+        guard frame.size != pixelSize else { return }
+
+        let topLeft = NSPoint(x: frame.origin.x, y: frame.origin.y + frame.size.height)
+        frame.size = pixelSize
+        frame.origin = NSPoint(x: topLeft.x, y: topLeft.y - pixelSize.height)
+        video.setFrame(frame, display: true)
+    }
+
     private func movePlaylist(using context: PlaylistDockingContext, targetFrame: NSRect, playlistSize: NSSize, animated: Bool) {
         guard let playlist = playlistWindow else { return }
         let origin = playlistOrigin(for: context.attachment, anchorFrame: targetFrame, playlistSize: playlistSize)

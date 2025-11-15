@@ -11,51 +11,57 @@ struct WinampVideoWindow: View {
     var body: some View {
         let hasVideo = skinManager.currentSkin?.hasVideoSprites ?? false
 
-        // Use VIDEO.bmp chrome if available, otherwise fallback
-        if hasVideo {
-            // Skinned chrome using VIDEO.bmp sprites with dynamic sizing
-            VideoWindowChromeView(content: {
-                // Content area - video player or placeholder
-                if audioPlayer.currentMediaType == .video,
-                   let player = audioPlayer.videoPlayer {
-                    // Show video player
-                    AVPlayerViewRepresentable(player: player)
-                } else {
-                    // No video loaded
+        Group {
+            if hasVideo {
+                // Skinned chrome using VIDEO.bmp sprites with dynamic sizing
+                VideoWindowChromeView(content: {
+                    // Content area - video player or placeholder
+                    if audioPlayer.currentMediaType == .video,
+                       let player = audioPlayer.videoPlayer {
+                        // Show video player
+                        AVPlayerViewRepresentable(player: player)
+                    } else {
+                        // No video loaded
+                        ZStack {
+                            Color.black
+
+                            Text("No video loaded")
+                                .font(.system(size: 10))
+                                .foregroundColor(.gray)
+                        }
+                    }
+                }, sizeState: sizeState)
+            } else {
+                // Fallback chrome when VIDEO.bmp not available
+                VideoWindowFallbackChrome(content: {
                     ZStack {
                         Color.black
 
-                        Text("No video loaded")
+                        Text("Video Window (No VIDEO.bmp)")
                             .font(.system(size: 10))
                             .foregroundColor(.gray)
                     }
-                }
-            }, sizeState: sizeState)
-            .frame(
-                width: sizeState.pixelSize.width,
-                height: sizeState.pixelSize.height,
-                alignment: .topLeading
-            )
-            .fixedSize()
-            .background(Color.black)
-        } else {
-            // Fallback chrome when VIDEO.bmp not available
-            VideoWindowFallbackChrome(content: {
-                ZStack {
-                    Color.black
+                }, sizeState: sizeState)
+            }
+        }
+        .frame(
+            width: sizeState.pixelSize.width,
+            height: sizeState.pixelSize.height,
+            alignment: .topLeading
+        )
+        .fixedSize()
+        .background(Color.black)
+        .onAppear {
+            syncVideoWindowFrame()
+        }
+        .onChange(of: sizeState.size) { _, _ in
+            syncVideoWindowFrame()
+        }
+    }
 
-                    Text("Video Window (No VIDEO.bmp)")
-                        .font(.system(size: 10))
-                        .foregroundColor(.gray)
-                }
-            }, sizeState: sizeState)
-            .frame(
-                width: sizeState.pixelSize.width,
-                height: sizeState.pixelSize.height,
-                alignment: .topLeading
-            )
-            .fixedSize()
-            .background(Color.black)
+    private func syncVideoWindowFrame() {
+        if let coordinator = WindowCoordinator.shared {
+            coordinator.updateVideoWindowSize(to: sizeState.pixelSize)
         }
     }
 }

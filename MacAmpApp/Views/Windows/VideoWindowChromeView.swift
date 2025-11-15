@@ -38,6 +38,10 @@ struct VideoWindowChromeView<Content: View>: View {
         sizeState.contentSize
     }
 
+    private var contentCenterX: CGFloat {
+        VideoWindowLayout.leftBorderWidth + contentSize.width / 2
+    }
+
     private var contentCenterY: CGFloat {
         VideoWindowLayout.titlebarHeight + contentSize.height / 2
     }
@@ -61,7 +65,7 @@ struct VideoWindowChromeView<Content: View>: View {
             // Content area
             content
                 .frame(width: contentSize.width, height: contentSize.height)
-                .position(x: pixelSize.width / 2, y: contentCenterY)
+                .position(x: contentCenterX, y: contentCenterY)
 
             // Bottom bar - three-section layout with dynamic center
             buildDynamicBottomBar()
@@ -234,7 +238,9 @@ struct VideoWindowChromeView<Content: View>: View {
         // Sprite coordinates in VIDEO_BOTTOM_LEFT: x=24, y=9 (relative to sprite)
         // Window coordinates: Fixed to LEFT section
         Button(action: {
+            WindowSnapManager.shared.beginProgrammaticAdjustment()
             sizeState.size = .videoDefault  // Set to [0,4] = 275×232
+            WindowSnapManager.shared.endProgrammaticAdjustment()
         }) {
             Color.clear
                 .frame(width: 15, height: 18)
@@ -248,7 +254,9 @@ struct VideoWindowChromeView<Content: View>: View {
         // Sprite coordinates in VIDEO_BOTTOM_LEFT: x=39, y=9 (relative to sprite)
         // Window coordinates: Fixed to LEFT section
         Button(action: {
+            WindowSnapManager.shared.beginProgrammaticAdjustment()
             sizeState.size = .video2x  // Set to [11,12] = 550×464
+            WindowSnapManager.shared.endProgrammaticAdjustment()
         }) {
             Color.clear
                 .frame(width: 15, height: 18)
