@@ -238,7 +238,10 @@ struct VideoWindowChromeView<Content: View>: View {
         // 1X button - clickable region over baked-on sprite
         Button(action: {
             WindowSnapManager.shared.beginProgrammaticAdjustment()
-            sizeState.size = .videoDefault  // Set to [0,4] = 275×232
+
+            withAnimation(.none) {
+                sizeState.size = .videoDefault  // Set to [0,4] = 275×232
+            }
 
             // Sync NSWindow after button press (since onChange removed)
             if let coordinator = WindowCoordinator.shared {
@@ -257,7 +260,10 @@ struct VideoWindowChromeView<Content: View>: View {
         // 2X button - clickable region over baked-on sprite
         Button(action: {
             WindowSnapManager.shared.beginProgrammaticAdjustment()
-            sizeState.size = .video2x  // Set to [11,12] = 550×464
+
+            withAnimation(.none) {
+                sizeState.size = .video2x  // Set to [11,12] = 550×464
+            }
 
             // Sync NSWindow after button press (since onChange removed)
             if let coordinator = WindowCoordinator.shared {
@@ -304,9 +310,11 @@ struct VideoWindowChromeView<Content: View>: View {
                             height: max(0, baseSize.height + heightDelta)
                         )
 
-                        // Update size (onChange will be suppressed during drag)
+                        // Update size with explicit animation control
                         if candidate != sizeState.size {
-                            sizeState.size = candidate
+                            withAnimation(.none) {
+                                sizeState.size = candidate
+                            }
                         }
                     }
                     .onEnded { _ in
