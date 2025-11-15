@@ -1243,6 +1243,20 @@ final class AudioPlayer {
     /// Seek to a percentage of the track (0.0 to 1.0)
     /// This method calculates time using file.length directly, avoiding race conditions
     func seekToPercent(_ percent: Double, resume: Bool? = nil) {
+        // VIDEO SEEKING (Part 21)
+        if currentMediaType == .video {
+            guard let player = videoPlayer,
+                  let duration = player.currentItem?.duration.seconds,
+                  duration.isFinite else {
+                NSLog("⚠️ seekToPercent: No video player or invalid duration")
+                return
+            }
+            let targetTime = percent * duration
+            seek(to: targetTime, resume: resume)
+            return
+        }
+
+        // AUDIO SEEKING
         guard let file = audioFile else {
             #if DEBUG
             NSLog("⚠️ seekToPercent: No audio file loaded")
@@ -1260,6 +1274,47 @@ final class AudioPlayer {
     }
 
     func seek(to time: Double, resume: Bool? = nil) {
+        // VIDEO SEEKING (Oracle Grade A - Part 21)
+        if currentMediaType == .video {
+            guard let player = videoPlayer else {
+                NSLog("⚠️ seek: Cannot seek - no video player loaded")
+                return
+            }
+            let shouldPlay = resume ?? isPlaying
+
+            let timescale = player.currentItem?.duration.timescale ?? CMTimeScale(NSEC_PER_SEC)
+            let targetTime = CMTime(seconds: max(0, time), preferredTimescale: timescale)
+
+            // Use default tolerance (not .zero) to allow seeking to nearest keyframe
+            // This is MUCH faster and avoids -12860 errors from trying to decode exact frames
+            // AVPlayer will seek to the nearest keyframe, which is typically within 0.5s
+            player.seek(to: targetTime) { [weak self] finished in
+                Task { @MainActor in
+                    guard let self, finished else { return }
+
+                    // Update to actual seek position (may differ slightly from requested)
+                    let actualTime = player.currentTime().seconds
+                    self.currentTime = actualTime
+
+                    if let duration = player.currentItem?.duration.seconds, duration.isFinite {
+                        self.currentDuration = duration
+                        self.playbackProgress = duration > 0 ? actualTime / duration : 0
+                    }
+
+                    if shouldPlay {
+                        player.play()
+                        self.transition(to: .playing)
+                    } else {
+                        player.pause()
+                        self.transition(to: .paused)
+                    }
+                }
+            }
+            NSLog("📺 Video seek to \(time)s")
+            return  // Exit early for video
+        }
+
+        // AUDIO SEEKING
         // Guard: Ensure file is loaded before seeking
         guard let file = audioFile else {
             #if DEBUG

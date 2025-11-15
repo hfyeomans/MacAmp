@@ -1640,8 +1640,8 @@ let diffWithin = SnapUtils.snapWithinUnion(groupBox, union: virtualSpace.bounds,
 | Task | Status | Est. Time | Actual | Notes |
 |------|--------|-----------|--------|-------|
 | 1. Video Volume Control | ✅ Complete | 15 min | 5 min | Commit 3973bc3 |
-| 2. Video Time Display | 🧪 Testing | 1 hour | 20 min | Observer setup + cleanup |
-| 3. Video Seeking Support | ⏳ Pending | 1 hour | - | Extend existing seek() |
+| 2. Video Time Display | ✅ Complete | 1 hour | 35 min | Commit 058a0e5 + bug fix |
+| 3. Video Seeking Support | 🔄 In Progress | 1 hour | - | Extend existing seek() |
 | 4. Metadata Display Growth | ⏳ Pending | 30 min | - | UI-only |
 | 5. Integration Testing | ⏳ Pending | 1 hour | - | Full test suite |
 
@@ -1657,7 +1657,7 @@ let diffWithin = SnapUtils.snapWithinUnion(groupBox, union: virtualSpace.bounds,
    - [x] Call setup in loadVideoFile() ✅
    - [x] Use cleanup in loadAudioFile() ✅
    - [x] Use cleanup in stop() ✅
-   - [ ] seek() method extension
+   - [x] seek() method extension (video branch at top) ✅
 
 2. **`MacAmpApp/Views/Windows/VideoWindowChromeView.swift`**
    - [ ] dynamicDisplayWidth computed property
