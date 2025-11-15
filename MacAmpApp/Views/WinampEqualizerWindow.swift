@@ -240,6 +240,7 @@ struct WinampEqualizerWindow: View {
             SimpleSpriteImage("EQ_PRESETS_BUTTON", width: 44, height: 12)
         }
         .buttonStyle(.plain)
+        .focusable(false)
         .popover(isPresented: $showPresetPicker, arrowEdge: .bottom) {
             PresetPickerView(
                 builtInPresets: EQPreset.builtIn,
