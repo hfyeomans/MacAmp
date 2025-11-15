@@ -19,11 +19,16 @@ private enum VideoWindowLayout {
 struct VideoWindowChromeView<Content: View>: View {
     @ViewBuilder let content: Content
 
-    @State private var isWindowActive = true
     @State private var metadataScrollOffset: CGFloat = 0
     @State private var metadataScrollTimer: Timer?
 
     @Environment(AudioPlayer.self) private var audioPlayer
+    @Environment(WindowFocusState.self) private var windowFocusState
+
+    // Computed: Is this window currently focused?
+    private var isWindowActive: Bool {
+        windowFocusState.isVideoKey
+    }
 
     var body: some View {
         ZStack(alignment: .topLeading) {

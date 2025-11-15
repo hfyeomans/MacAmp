@@ -65,6 +65,7 @@ final class WindowCoordinator {
     // Store references for observation/state checks
     private let settings: AppSettings
     private let skinManager: SkinManager
+    private let windowFocusState: WindowFocusState  // NEW: Window focus tracking
 
     @ObservationIgnored private var skinPresentationTask: Task<Void, Never>?
     @ObservationIgnored private var alwaysOnTopTask: Task<Void, Never>?
@@ -77,6 +78,11 @@ final class WindowCoordinator {
     private var windowKinds: [ObjectIdentifier: WindowKind] = [:]
     private let windowFrameStore = WindowFrameStore()
     private var persistenceDelegate: WindowPersistenceDelegate?
+    private var mainFocusDelegate: WindowFocusDelegate?  // NEW: Focus delegates for all windows
+    private var eqFocusDelegate: WindowFocusDelegate?
+    private var playlistFocusDelegate: WindowFocusDelegate?
+    private var videoFocusDelegate: WindowFocusDelegate?
+    private var milkdropFocusDelegate: WindowFocusDelegate?
     private var lastPlaylistAttachment: PlaylistAttachmentSnapshot?
     private var lastVideoAttachment: VideoAttachmentSnapshot?  // NEW: Video attachment memory
 
@@ -98,10 +104,11 @@ final class WindowCoordinator {
     var videoWindow: NSWindow? { videoController.window }           // NEW: Video window accessor
     var milkdropWindow: NSWindow? { milkdropController.window }     // NEW: Milkdrop window accessor
 
-    init(skinManager: SkinManager, audioPlayer: AudioPlayer, dockingController: DockingController, settings: AppSettings, radioLibrary: RadioStationLibrary, playbackCoordinator: PlaybackCoordinator) {
+    init(skinManager: SkinManager, audioPlayer: AudioPlayer, dockingController: DockingController, settings: AppSettings, radioLibrary: RadioStationLibrary, playbackCoordinator: PlaybackCoordinator, windowFocusState: WindowFocusState) {
         // Store shared state references
         self.settings = settings
         self.skinManager = skinManager
+        self.windowFocusState = windowFocusState
 
         // Create Main window with environment injection
         mainController = WinampMainWindowController(
@@ -140,7 +147,8 @@ final class WindowCoordinator {
             dockingController: dockingController,
             settings: settings,
             radioLibrary: radioLibrary,
-            playbackCoordinator: playbackCoordinator
+            playbackCoordinator: playbackCoordinator,
+            windowFocusState: windowFocusState
         )
 
         // NEW: Create Milkdrop window with environment injection
@@ -266,6 +274,19 @@ final class WindowCoordinator {
             videoDelegateMultiplexer?.add(delegate: persistenceDelegate)        // NEW
             milkdropDelegateMultiplexer?.add(delegate: persistenceDelegate)     // NEW
         }
+
+        // Track window focus for active/inactive titlebar sprites
+        mainFocusDelegate = WindowFocusDelegate(kind: .main, focusState: windowFocusState)
+        eqFocusDelegate = WindowFocusDelegate(kind: .equalizer, focusState: windowFocusState)
+        playlistFocusDelegate = WindowFocusDelegate(kind: .playlist, focusState: windowFocusState)
+        videoFocusDelegate = WindowFocusDelegate(kind: .video, focusState: windowFocusState)
+        milkdropFocusDelegate = WindowFocusDelegate(kind: .milkdrop, focusState: windowFocusState)
+
+        mainDelegateMultiplexer?.add(delegate: mainFocusDelegate!)
+        eqDelegateMultiplexer?.add(delegate: eqFocusDelegate!)
+        playlistDelegateMultiplexer?.add(delegate: playlistFocusDelegate!)
+        videoDelegateMultiplexer?.add(delegate: videoFocusDelegate!)
+        milkdropDelegateMultiplexer?.add(delegate: milkdropFocusDelegate!)
 
         debugLogWindowPositions(step: "after delegate multiplexer setup")
     }

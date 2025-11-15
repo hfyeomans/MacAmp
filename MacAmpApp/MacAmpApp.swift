@@ -9,6 +9,7 @@ struct MacAmpApp: App {
     @State private var radioLibrary: RadioStationLibrary
     @State private var streamPlayer: StreamPlayer
     @State private var playbackCoordinator: PlaybackCoordinator
+    @State private var windowFocusState: WindowFocusState
 
     init() {
         let skinManager = SkinManager()
@@ -33,6 +34,10 @@ struct MacAmpApp: App {
             skinManager.loadInitialSkin()
         }
 
+        // Create window focus state for all windows
+        let windowFocusState = WindowFocusState()
+        _windowFocusState = State(initialValue: windowFocusState)
+
         // PHASE 1A: Initialize WindowCoordinator (creates 3 independent NSWindows)
         // This replaces UnifiedDockView with separate windows
         WindowCoordinator.shared = WindowCoordinator(
@@ -41,7 +46,8 @@ struct MacAmpApp: App {
             dockingController: dockingController,
             settings: settings,
             radioLibrary: radioLibrary,
-            playbackCoordinator: playbackCoordinator
+            playbackCoordinator: playbackCoordinator,
+            windowFocusState: windowFocusState
         )
     }
 
