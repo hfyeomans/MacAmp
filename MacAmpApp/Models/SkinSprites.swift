@@ -294,6 +294,13 @@ struct SkinSprites {
 
         // PLEDIT.bmp (Playlist window chrome/buttons)
         "PLEDIT": [
+            // Selected/Focused titlebar (row 1: y=0)
+            Sprite(name: "PLAYLIST_TOP_LEFT_SELECTED", x: 0, y: 0, width: 25, height: 20),
+            Sprite(name: "PLAYLIST_TITLE_BAR_SELECTED", x: 26, y: 0, width: 100, height: 20),
+            Sprite(name: "PLAYLIST_TOP_TILE_SELECTED", x: 127, y: 0, width: 25, height: 20),
+            Sprite(name: "PLAYLIST_TOP_RIGHT_CORNER_SELECTED", x: 153, y: 0, width: 25, height: 20),
+
+            // Unselected/Unfocused titlebar (row 2: y=21)
             Sprite(name: "PLAYLIST_TOP_TILE", x: 127, y: 21, width: 25, height: 20),
             Sprite(name: "PLAYLIST_TOP_LEFT_CORNER", x: 0, y: 21, width: 25, height: 20),
             Sprite(name: "PLAYLIST_TITLE_BAR", x: 26, y: 21, width: 100, height: 20),

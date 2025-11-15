@@ -254,6 +254,7 @@ struct WinampPlaylistWindow: View {
     @Environment(AppSettings.self) var settings
     @Environment(RadioStationLibrary.self) var radioLibrary
     @Environment(PlaybackCoordinator.self) var playbackCoordinator
+    @Environment(WindowFocusState.self) var windowFocusState
 
     @State private var selectedIndices: Set<Int> = []
     @State private var isShadeMode: Bool = false
@@ -262,6 +263,11 @@ struct WinampPlaylistWindow: View {
 
     private let windowWidth: CGFloat = 275
     private let windowHeight: CGFloat = 232
+
+    // Computed: Is this window currently focused?
+    private var isWindowActive: Bool {
+        windowFocusState.isPlaylistKey
+    }
 
     private var totalPlaylistDuration: Double {
         audioPlayer.playlist.reduce(0.0) { total, track in
@@ -610,7 +616,8 @@ struct WinampPlaylistWindow: View {
     @ViewBuilder
     private func buildShadeMode() -> some View {
         ZStack {
-            SimpleSpriteImage("PLAYLIST_TITLE_BAR", width: 275, height: 14)
+            let suffix = isWindowActive ? "_SELECTED" : ""
+            SimpleSpriteImage("PLAYLIST_TITLE_BAR\(suffix)", width: 275, height: 14)
                 .position(x: 137.5, y: 7)
 
             if let currentTrack = playbackCoordinator.currentTrack {
