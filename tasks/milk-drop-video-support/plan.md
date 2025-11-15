@@ -1,10 +1,43 @@
 # Implementation Plan: Video & Milkdrop Windows (Two-Window Architecture)
 
-**Task ID**: milk-drop-video-support  
-**Architecture**: TWO Independent Windows (Video + Milkdrop)  
-**Priority**: Video Window FIRST, then Milkdrop Window  
-**Timeline**: 10 days (Phased implementation)  
-**Approved**: 2025-11-08 (Option A)
+**Task ID**: milk-drop-video-support
+**Architecture**: TWO Independent NSWindows (Video + Milkdrop)
+**Priority**: Video Window FIRST, then Milkdrop Window
+**Timeline**: 8-10 days (Phased implementation)
+**Approved**: 2025-11-08 (Initial), 2025-11-09 (Corrected with TASK 1 learnings)
+**Prerequisite**: TASK 1 (magnetic-docking-foundation) ✅ COMPLETE
+
+---
+
+## TASK 2 Decisions (2025-11-09)
+
+**User Decisions**:
+1. **V Button**: Opens Video window ✅
+2. **Milkdrop**: Options menu checkbox + Ctrl+Shift+K ✅
+3. **Resize**: Defer to TASK 3 (focus, no scope creep) ✅
+
+**Principle**: "Make it exist, then make it better"
+
+**Keyboard Shortcuts**:
+- Ctrl+K: Available ✅
+- Ctrl+M: Available ✅
+- **Using**: Ctrl+Shift+K (Winamp standard for visualizations)
+
+**Scope**:
+- ✅ Video + Milkdrop windows (5 total windows)
+- ✅ VIDEO.BMP parsing (new)
+- ✅ GEN.BMP reuse (existing)
+- ✅ NSWindowController pattern (TASK 1)
+- ✅ Single audio tap extension
+- ❌ Window resize (deferred to TASK 3)
+
+**Architecture Updates from TASK 1**:
+- Use NSWindowController pattern (not inline views)
+- WindowCoordinator integration
+- WindowSnapManager registration
+- Extend existing audio tap (not new AudioAnalyzer)
+- Delegate multiplexer integration
+- WindowFrameStore persistence
 
 ---
 
@@ -47,7 +80,7 @@ User Presses "V" (Ctrl+V)
 │  [■] [▶] [■] [◼] |========|  │ ← VIDEO.bmp controls
 └──────────────────────────────┘
 
-User Opens Milkdrop (Menu or Ctrl+Shift+M)
+User Opens Milkdrop (Options Menu or Ctrl+Shift+K)
          ↓
    Milkdrop Window Opens
          ↓
@@ -70,109 +103,240 @@ Both windows coexist independently!
 
 ## Phase Breakdown (10 Days)
 
-### Days 1-2: Foundation (Shared Infrastructure)
+### Days 1-2: NSWindowController Setup (Following TASK 1 Pattern)
 
-**Goal**: Set up state management and shared infrastructure for BOTH windows
+**Goal**: Create Video and Milkdrop NSWindowControllers using proven foundation pattern
 
-#### AppSettings Extension
-**File**: `MacAmpApp/Models/AppSettings.swift`
+#### Day 1: Video Window Controller
+
+**File**: `MacAmpApp/Windows/WinampVideoWindowController.swift`
 
 ```swift
-@Observable @MainActor
-final class AppSettings {
-    // VIDEO WINDOW STATE
-    var showVideoWindow: Bool = false {
-        didSet { UserDefaults.standard.set(showVideoWindow, forKey: "showVideoWindow") }
+import AppKit
+import SwiftUI
+
+class WinampVideoWindowController: NSWindowController {
+    convenience init(skinManager: SkinManager, audioPlayer: AudioPlayer,
+                    dockingController: DockingController, settings: AppSettings,
+                    radioLibrary: RadioStationLibrary, playbackCoordinator: PlaybackCoordinator) {
+        // Create borderless window (follows TASK 1 pattern)
+        let window = BorderlessWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 275, height: 116),  // Video window base size
+            styleMask: [.borderless],  // Borderless only
+            backing: .buffered,
+            defer: false
+        )
+
+        // Apply standard Winamp window configuration
+        WinampWindowConfigurator.apply(to: window)
+
+        // Borderless visual configuration
+        window.isOpaque = false
+        window.hasShadow = true
+        window.backgroundColor = .clear
+
+        // Create view with environment injection
+        let rootView = WinampVideoWindow()
+            .environment(skinManager)
+            .environment(audioPlayer)
+            .environment(dockingController)
+            .environment(settings)
+            .environment(radioLibrary)
+            .environment(playbackCoordinator)
+
+        let hostingController = NSHostingController(rootView: rootView)
+        let hostingView = hostingController.view
+        hostingView.frame = NSRect(origin: .zero, size: window.contentLayoutRect.size)
+        hostingView.autoresizingMask = [.width, .height]
+
+        window.contentViewController = hostingController
+        window.contentView = hostingView
+        window.makeFirstResponder(hostingView)
+
+        // Install hit surface
+        WinampWindowConfigurator.installHitSurface(on: window)
+
+        self.init(window: window)
     }
-    
-    var videoWindowFrame: CGRect? {
-        didSet {
-            if let frame = videoWindowFrame {
-                UserDefaults.standard.set(NSStringFromRect(frame), forKey: "videoWindowFrame")
-            }
+}
+```
+
+**Tasks**:
+- [ ] Create WinampVideoWindowController.swift
+- [ ] Follow BorderlessWindow pattern (like Main/EQ/Playlist)
+- [ ] Set base size 275×116 (matches Main/EQ)
+- [ ] Apply WinampWindowConfigurator
+- [ ] Create placeholder WinampVideoWindow SwiftUI view
+- [ ] Test window compiles
+
+#### Day 1: Milkdrop Window Controller
+
+**File**: `MacAmpApp/Windows/WinampMilkdropWindowController.swift`
+
+```swift
+class WinampMilkdropWindowController: NSWindowController {
+    convenience init(skinManager: SkinManager, audioPlayer: AudioPlayer,
+                    dockingController: DockingController, settings: AppSettings,
+                    radioLibrary: RadioStationLibrary, playbackCoordinator: PlaybackCoordinator) {
+        // Same pattern as Video window
+        let window = BorderlessWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 400, height: 300),  // Milkdrop larger default
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
+
+        WinampWindowConfigurator.apply(to: window)
+        window.isOpaque = false
+        window.hasShadow = true
+        window.backgroundColor = .clear
+
+        let rootView = WinampMilkdropWindow()
+            .environment(skinManager)
+            .environment(audioPlayer)
+            .environment(dockingController)
+            .environment(settings)
+            .environment(radioLibrary)
+            .environment(playbackCoordinator)
+
+        let hostingController = NSHostingController(rootView: rootView)
+        window.contentViewController = hostingController
+        window.contentView = hostingController.view
+        WinampWindowConfigurator.installHitSurface(on: window)
+
+        self.init(window: window)
+    }
+}
+```
+
+**Tasks**:
+- [ ] Create WinampMilkdropWindowController.swift
+- [ ] Same pattern as Video controller
+- [ ] Larger default size 400×300
+- [ ] Create placeholder WinampMilkdropWindow SwiftUI view
+- [ ] Test window compiles
+
+#### Day 2: WindowCoordinator Integration
+
+**File**: `MacAmpApp/ViewModels/WindowCoordinator.swift`
+
+```swift
+@MainActor
+@Observable
+final class WindowCoordinator {
+    // Existing controllers
+    private let mainController: NSWindowController
+    private let eqController: NSWindowController
+    private let playlistController: NSWindowController
+
+    // NEW: Video and Milkdrop controllers
+    private let videoController: NSWindowController
+    private let milkdropController: NSWindowController
+
+    var videoWindow: NSWindow? { videoController.window }
+    var milkdropWindow: NSWindow? { milkdropController.window }
+
+    init(...) {
+        // ... existing main/eq/playlist setup ...
+
+        // Create Video window
+        videoController = WinampVideoWindowController(
+            skinManager: skinManager,
+            audioPlayer: audioPlayer,
+            dockingController: dockingController,
+            settings: settings,
+            radioLibrary: radioLibrary,
+            playbackCoordinator: playbackCoordinator
+        )
+
+        // Create Milkdrop window
+        milkdropController = WinampMilkdropWindowController(
+            skinManager: skinManager,
+            audioPlayer: audioPlayer,
+            dockingController: dockingController,
+            settings: settings,
+            radioLibrary: radioLibrary,
+            playbackCoordinator: playbackCoordinator
+        )
+
+        // Register with WindowSnapManager
+        if let video = videoWindow {
+            WindowSnapManager.shared.register(window: video, kind: .video)
         }
-    }
-    
-    var videoWindowShaded: Bool = false {
-        didSet { UserDefaults.standard.set(videoWindowShaded, forKey: "videoWindowShaded") }
-    }
-    
-    // MILKDROP WINDOW STATE
-    var showMilkdropWindow: Bool = false {
-        didSet { UserDefaults.standard.set(showMilkdropWindow, forKey: "showMilkdropWindow") }
-    }
-    
-    var milkdropWindowFrame: CGRect? {
-        didSet {
-            if let frame = milkdropWindowFrame {
-                UserDefaults.standard.set(NSStringFromRect(frame), forKey: "milkdropWindowFrame")
-            }
+        if let milkdrop = milkdropWindow {
+            WindowSnapManager.shared.register(window: milkdrop, kind: .milkdrop)
         }
-    }
-    
-    var milkdropMode: MilkdropMode = .butterchurn {
-        didSet { UserDefaults.standard.set(milkdropMode.rawValue, forKey: "milkdropMode") }
-    }
-    
-    var lastUsedPresetIndex: Int = 0 {
-        didSet { UserDefaults.standard.set(lastUsedPresetIndex, forKey: "lastUsedPresetIndex") }
-    }
-}
 
-enum MilkdropMode: String, Codable {
-    case butterchurn
-    case fullscreen
-    case desktop
+        // Add to delegate multiplexers
+        videoDelegateMultiplexer = WindowDelegateMultiplexer()
+        videoDelegateMultiplexer?.add(delegate: WindowSnapManager.shared)
+        videoWindow?.delegate = videoDelegateMultiplexer
+
+        milkdropDelegateMultiplexer = WindowDelegateMultiplexer()
+        milkdropDelegateMultiplexer?.add(delegate: WindowSnapManager.shared)
+        milkdropWindow?.delegate = milkdropDelegateMultiplexer
+    }
+
+    // Window show/hide methods
+    func showVideo() { videoWindow?.makeKeyAndOrderFront(nil) }
+    func hideVideo() { videoWindow?.orderOut(nil) }
+    func showMilkdrop() { milkdropWindow?.makeKeyAndOrderFront(nil) }
+    func hideMilkdrop() { milkdropWindow?.orderOut(nil) }
 }
 ```
 
-#### AppCommands Extension
-**File**: `MacAmpApp/AppCommands.swift`
+**Tasks**:
+- [ ] Add videoController and milkdropController properties
+- [ ] Add videoWindow/milkdropWindow computed properties
+- [ ] Create both controllers in init()
+- [ ] Register with WindowSnapManager (2 windows)
+- [ ] Add delegate multiplexer properties
+- [ ] Create and assign multiplexers
+- [ ] Add showVideo/hideVideo/showMilkdrop/hideMilkdrop methods
+- [ ] Test windows can be shown/hidden
+
+#### Day 2: WindowKind Enum Extension
+
+**File**: `MacAmpApp/Utilities/WindowSnapManager.swift`
 
 ```swift
-CommandGroup(after: .windowArrangement) {
-    Button("Toggle Video Window") {
-        appSettings.showVideoWindow.toggle()
-    }
-    .keyboardShortcut("v", modifiers: [.control])
-    
-    Button("Toggle Milkdrop Window") {
-        appSettings.showMilkdropWindow.toggle()
-    }
-    .keyboardShortcut("m", modifiers: [.control, .shift])
+enum WindowKind: Hashable {
+    case main
+    case playlist
+    case equalizer
+    case video      // NEW
+    case milkdrop   // NEW
 }
 ```
 
-#### Window Stubs
-**File**: `MacAmpApp/Views/WinampMainWindow.swift`
+**Tasks**:
+- [ ] Add .video case to WindowKind enum
+- [ ] Add .milkdrop case to WindowKind enum
+- [ ] Verify WindowSnapManager compiles
+
+#### Day 2: Persistence Extension
+
+**File**: `MacAmpApp/ViewModels/WindowCoordinator.swift` (WindowFrameStore)
 
 ```swift
-// Add to body
-if appSettings.showVideoWindow {
-    VideoWindowView()
-        .environment(appSettings)
-        .environment(skinManager)
-        .environment(audioPlayer)
-}
-
-if appSettings.showMilkdropWindow {
-    MilkdropWindowView()
-        .environment(appSettings)
-        .environment(skinManager)
-        .environment(audioPlayer)
-}
+// persistenceKey extension already handles new kinds automatically!
+// Just works because WindowKind has persistenceKey computed property
 ```
 
-**Create Placeholder Views**:
-- `MacAmpApp/Views/Windows/VideoWindowView.swift`
-- `MacAmpApp/Views/Windows/MilkdropWindowView.swift`
+**Tasks**:
+- [ ] Verify WindowFrameStore handles .video kind
+- [ ] Verify WindowFrameStore handles .milkdrop kind
+- [ ] Test persistence save/restore
 
-#### Day 1-2 Deliverables
-- ✅ AppSettings extended with both window states
-- ✅ Keyboard shortcuts (Ctrl+V, Ctrl+Shift+M)
-- ✅ Placeholder views for both windows
-- ✅ State persists across restarts
-- ✅ Both windows can toggle independently
+#### Day 2 Deliverables
+- ✅ Both NSWindowControllers created
+- ✅ WindowCoordinator manages both windows
+- ✅ WindowSnapManager registered (5 windows total!)
+- ✅ Delegate multiplexers integrated
+- ✅ Persistence automatic (WindowFrameStore)
+- ✅ Show/hide methods working
+- ✅ Windows can be opened independently
+- ✅ Both windows invisible on startup (closed by default)
 
 ---
 
@@ -560,17 +724,18 @@ if appSettings.videoWindowShaded {
 }
 ```
 
-##### 6.4 V Button Final Wiring
-**File**: `MacAmpApp/Views/ClutterBar.swift` (or wherever V button is)
+##### 6.4 V Button Preparation
+**File**: `MacAmpApp/Views/WinampMainWindow.swift` (buildClutterBarButtons)
 
-```swift
-Button(action: {
-    appSettings.showVideoWindow.toggle()
-}) {
-    // V button sprite from skin
-}
-.help("Video Window (Ctrl+V)")
-```
+**Note**: Full V button wiring happens in Day 10.1 (after WindowCoordinator has show/hide methods)
+
+**Day 6 Prep**:
+- [ ] Identify V button location in clutter bar (line ~589-597)
+- [ ] Verify V button sprite exists (MAIN_CLUTTER_BAR_BUTTON_V)
+- [ ] Document current state (disabled/stub)
+- [ ] Plan integration point for Day 10.1
+
+**Actual wiring**: Deferred to Day 10.1 (WindowCoordinator.showVideo() approach)
 
 ##### Day 6 Deliverables
 - ✅ Video files appear in playlist
@@ -578,8 +743,8 @@ Button(action: {
 - ✅ Window positioning works
 - ✅ State persists across restarts
 - ✅ Shade mode functional
-- ✅ V button opens/closes video window
-- ✅ VIDEO WINDOW COMPLETE!
+- ✅ V button location identified (wiring in Day 10.1)
+- ✅ VIDEO WINDOW COMPLETE (UI trigger wiring pending Day 10)
 
 ---
 
@@ -650,49 +815,192 @@ struct MilkdropWindowView: View {
 - ✅ 5-8 presets loaded
 - ✅ Canvas renders (no audio data yet)
 
-#### Day 9: FFT Audio Bridge
+#### Day 9: Audio Tap Extension for Milkdrop
 
-**Goal**: Connect audio analysis to Butterchurn
+**Goal**: Extend EXISTING AudioPlayer tap to provide Milkdrop FFT data (Oracle's guidance - single tap!)
 
-##### 9.1 AudioAnalyzer
-**File**: `MacAmpApp/Models/AudioAnalyzer.swift`
+##### 9.1 Extend AudioPlayer Tap (NOT new AudioAnalyzer)
+**File**: `MacAmpApp/Models/AudioPlayer.swift`
 
-(Same implementation as original plan - Accelerate FFT)
-
-##### 9.2 Wire to MilkdropWindowView
 ```swift
-struct MilkdropWindowView: View {
-    @State private var fftData: [Float] = []
-    
+@Observable @MainActor
+final class AudioPlayer {
+    // Existing tap infrastructure...
+
+    // NEW: Milkdrop FFT data (higher resolution than 20-band spectrum)
+    private var milkdropFFTData: [Float] = Array(repeating: 0, count: 512)  // 512 bins for Milkdrop
+    private var milkdropWaveform: [Float] = Array(repeating: 0, count: 576)  // 576 samples
+
+    // Public accessors for Milkdrop
+    func getMilkdropSpectrum() -> [Float] {
+        return milkdropFFTData
+    }
+
+    func getMilkdropWaveform() -> [Float] {
+        return milkdropWaveform
+    }
+
+    // In EXISTING makeVisualizerTapHandler() callback:
+    // - Extract PCM buffer (already doing this)
+    // - Run 512-bin FFT for Milkdrop (in addition to 20-band for spectrum)
+    // - Generate 576-sample waveform for Milkdrop
+    // - Update milkdropFFTData and milkdropWaveform
+    // - All from SAME audio buffer (single tap, no duplicate processing!)
+}
+```
+
+**Tasks**:
+- [ ] Add milkdropFFTData property (512 bins)
+- [ ] Add milkdropWaveform property (576 samples)
+- [ ] Add getMilkdropSpectrum() method
+- [ ] Add getMilkdropWaveform() method
+- [ ] Modify makeVisualizerTapHandler() to compute Milkdrop data
+- [ ] Use vDSP for 512-bin FFT (Accelerate framework)
+- [ ] Extract 576 PCM samples for waveform
+- [ ] Test FFT data generation during playback
+
+##### 9.2 Wire to WinampMilkdropWindow
+**File**: `MacAmpApp/Views/WinampMilkdropWindow.swift`
+
+```swift
+struct WinampMilkdropWindow: View {
+    @Environment(AudioPlayer.self) var audioPlayer
+    @State private var spectrum: [Float] = []
+    @State private var waveform: [Float] = []
+
     var body: some View {
-        ButterchurnWebView(fftData: $fftData)
+        ButterchurnWebView(spectrum: $spectrum, waveform: $waveform)
             .onReceive(Timer.publish(every: 0.016, on: .main, in: .common).autoconnect()) { _ in
-                fftData = audioPlayer.currentFFTData
+                // Read from EXISTING AudioPlayer tap
+                spectrum = audioPlayer.getMilkdropSpectrum()
+                waveform = audioPlayer.getMilkdropWaveform()
             }
     }
 }
 ```
 
+**Tasks**:
+- [ ] Add spectrum and waveform state properties
+- [ ] Add Timer publisher for 60fps updates
+- [ ] Call getMilkdropSpectrum() / getMilkdropWaveform()
+- [ ] Pass data to ButterchurnWebView
+- [ ] Test data flows correctly
+
+##### 9.3 Update ButterchurnWebView
+**File**: `MacAmpApp/Views/ButterchurnWebView.swift`
+
+```swift
+struct ButterchurnWebView: NSViewRepresentable {
+    @Binding var spectrum: [Float]   // 512 bins
+    @Binding var waveform: [Float]   // 576 samples
+
+    func updateNSView(_ webView: WKWebView, context: Context) {
+        // Send both spectrum and waveform to Butterchurn
+        let spectrumJSON = spectrum.map { "\($0)" }.joined(separator: ",")
+        let waveformJSON = waveform.map { "\($0)" }.joined(separator: ",")
+
+        let script = "updateAudioData([\(spectrumJSON)], [\(waveformJSON)])"
+        webView.evaluateJavaScript(script)
+    }
+}
+```
+
+**Tasks**:
+- [ ] Update ButterchurnWebView to accept spectrum AND waveform
+- [ ] Serialize both arrays to JavaScript
+- [ ] Update bridge.js to accept both parameters
+- [ ] Test data arrives in Butterchurn correctly
+
 ##### Day 9 Deliverables
-- ✅ FFT audio analysis working
+- ✅ EXTENDED existing AudioPlayer tap (no new analyzer!)
+- ✅ 512-bin FFT for Milkdrop generated
+- ✅ 576-sample waveform generated
+- ✅ Single tap serves both spectrum and Milkdrop
 - ✅ Audio data flows to Butterchurn
 - ✅ Visualization syncs to audio playback
 - ✅ 60fps rendering
+- ✅ No duplicate audio processing
 
-#### Day 10: Milkdrop Polish & Testing
+#### Day 10: UI Integration & Testing
 
-**Goal**: Complete Milkdrop window and test both windows
+**Goal**: Wire Video and Milkdrop to UI triggers, then test both windows
 
-##### 10.1 Preset Selection
-- Menu for preset selection
-- Ctrl+[ / Ctrl+] keyboard shortcuts
-- Auto-cycle every 30s
+##### 10.1 V Button Integration (Video Window)
+**File**: `MacAmpApp/Views/WinampMainWindow.swift`
 
-##### 10.2 Skin Integration
-- Apply skin colors to Butterchurn canvas
-- Border colors from SkinManager
+```swift
+// In buildClutterBarButtons():
+Button(action: {
+    WindowCoordinator.shared.showVideo()  // or hideVideo() if open
+}) {
+    SimpleSpriteImage("MAIN_CLUTTER_BAR_BUTTON_V", width: 8, height: 7)
+}
+.buttonStyle(.plain)
+.help("Video Window (Ctrl+V)")
+.at(Coords.clutterButtonV)
+```
 
-##### 10.3 Comprehensive Testing
+**Tasks**:
+- [ ] Update V button action (currently disabled)
+- [ ] Call WindowCoordinator.shared.showVideo() / hideVideo()
+- [ ] Add selected state sprite when window open
+- [ ] Test V button toggles video window
+- [ ] Verify Ctrl+V keyboard shortcut works
+
+##### 10.2 Options Menu Integration (Milkdrop)
+**File**: `MacAmpApp/Views/WinampMainWindow.swift` (showOptionsMenu)
+
+```swift
+// Add to Options menu after existing items:
+menu.addItem(.separator())
+
+menu.addItem(createMenuItem(
+    title: "Milkdrop",
+    isChecked: settings.showMilkdropWindow,  // Checkbox on/off
+    keyEquivalent: "k",
+    modifiers: [.control, .shift],
+    action: { [weak settings] in
+        if let show = settings?.showMilkdropWindow {
+            if show {
+                WindowCoordinator.shared.hideMilkdrop()
+                settings?.showMilkdropWindow = false
+            } else {
+                WindowCoordinator.shared.showMilkdrop()
+                settings?.showMilkdropWindow = true
+            }
+        }
+    }
+))
+```
+
+**Tasks**:
+- [ ] Add Milkdrop checkbox to Options menu
+- [ ] Show checkmark when window open
+- [ ] Wire to WindowCoordinator.showMilkdrop() / hideMilkdrop()
+- [ ] Add Ctrl+Shift+K keyboard shortcut
+- [ ] Test menu checkbox toggles window
+- [ ] Test keyboard shortcut works
+- [ ] Verify state persists
+
+##### 10.3 Preset Selection System
+**File**: `MacAmpApp/Views/WinampMilkdropWindow.swift`
+
+**Tasks**:
+- [ ] Add preset selection menu
+- [ ] Implement Ctrl+[ / Ctrl+] shortcuts (next/prev preset)
+- [ ] Add auto-cycle timer (30s)
+- [ ] Wire preset changes to Butterchurn
+- [ ] Test preset switching
+
+##### 10.4 Skin Integration
+**File**: `MacAmpApp/Views/ButterchurnWebView.swift`
+
+**Tasks**:
+- [ ] Extract skin colors from SkinManager
+- [ ] Pass to Butterchurn via JavaScript bridge
+- [ ] Test colors update with skin changes
+
+##### 10.5 Comprehensive Testing
 **Both Windows**:
 - [ ] Video window plays MP4/MOV
 - [ ] Milkdrop window shows visualization
@@ -700,7 +1008,7 @@ struct MilkdropWindowView: View {
 - [ ] Video playback + audio visualization at same time
 - [ ] State persists across restarts
 - [ ] Ctrl+V toggles video window
-- [ ] Ctrl+Shift+M toggles milkdrop window
+- [ ] Ctrl+Shift+K toggles milkdrop window
 - [ ] Windows can be positioned independently
 - [ ] Shade mode works for video window
 - [ ] No memory leaks (1hr+ test)
@@ -719,10 +1027,16 @@ struct MilkdropWindowView: View {
 ```
 MacAmpApp/
 ├── Models/
-│   ├── AudioAnalyzer.swift              [NEW - FFT analysis]
-│   ├── AudioPlayer.swift                 [MODIFIED - video support]
+│   ├── AudioPlayer.swift                 [MODIFIED - video support + Milkdrop FFT extension]
 │   ├── AppSettings.swift                 [MODIFIED - 2 window states]
 │   └── SkinManager.swift                 [MODIFIED - VIDEO.bmp parsing]
+├── Windows/
+│   ├── WinampVideoWindowController.swift [NEW - Video NSWindowController]
+│   └── WinampMilkdropWindowController.swift [NEW - Milkdrop NSWindowController]
+├── ViewModels/
+│   └── WindowCoordinator.swift           [MODIFIED - Add video + milkdrop controllers]
+├── Utilities/
+│   └── WindowSnapManager.swift           [MODIFIED - Add .video and .milkdrop kinds]
 ├── Views/
 │   └── Windows/                          [NEW DIRECTORY]
 │       ├── VideoWindowView.swift         [NEW - video window container]
@@ -767,7 +1081,7 @@ docs/
 - ✅ Playlist integration (video files show with 🎬)
 
 ### Milkdrop Window (Must-Have)
-- ✅ Ctrl+Shift+M toggles milkdrop window
+- ✅ Ctrl+Shift+K toggles milkdrop window
 - ✅ Butterchurn visualization syncs to audio
 - ✅ 5-8 presets auto-cycle
 - ✅ Manual preset selection works
@@ -795,12 +1109,20 @@ docs/
 
 | Risk | Mitigation | Status |
 |------|------------|--------|
-| VIDEO.bmp parsing complexity | Fallback to classic chrome | ✅ Designed |
-| Sprite layout varies by skin | Use standard dimensions + detection | ✅ Designed |
-| Both windows open = resource usage | Profile CPU/GPU, optimize if needed | ⏳ Day 10 |
-| Video + audio sync issues | Proper mode switching | ✅ Designed |
-| WKWebView overhead | Throttle FFT updates, cap payloads | ✅ Designed |
-| Memory leaks (2 windows) | Proper cleanup, test 1hr+ | ⏳ Day 10 |
+| **AVPlayer Integration Complexity** | Use AVPlayerView (native controls disabled), test codec support, handle errors gracefully | ⏳ Day 5 |
+| **AVPlayer Format Support** | Focus on H.264/AAC (MP4, MOV, M4V), document unsupported formats, consider FFmpeg later | ⏳ Day 5-6 |
+| **AVPlayer Audio Routing** | Ensure video audio routes through AudioPlayer for consistency, test audio/video switching | ⏳ Day 5 |
+| **Butterchurn Bridge Security** | WKWebView sandbox, validate FFT data, rate-limit evaluateJavaScript calls, handle script errors | ⏳ Day 8-9 |
+| **WKWebView Content Security** | Use file:// URLs for local HTML, no external resources, Content Security Policy headers | ⏳ Day 8 |
+| **JavaScript Bridge Errors** | Try/catch in bridge.js, graceful degradation, log errors to Swift console | ⏳ Day 9 |
+| VIDEO.bmp parsing complexity | Fallback to classic chrome if VIDEO.bmp missing or malformed | ✅ Designed |
+| Sprite layout varies by skin | Use standard dimensions + auto-detection, test with 3+ skins | ✅ Designed |
+| Both windows open = resource usage | Profile CPU/GPU during simultaneous playback, optimize if >30% CPU | ⏳ Day 10 |
+| Video + audio mode switching | Proper AudioPlayer state machine, stop video when audio plays | ✅ Designed |
+| WKWebView FFT update overhead | Throttle to 60fps max, batch updates, monitor frame drops | ✅ Designed |
+| Memory leaks (5 windows total) | Proper NSWindowController cleanup, weak references, test 1hr+ playback | ⏳ Day 10 |
+| WindowSnapManager with 5 windows | Test cluster detection, verify snapping with all windows, edge case testing | ⏳ Day 2 |
+| Delegate multiplexer scaling | Verify 5 windows don't cause delegate forwarding issues | ⏳ Day 2 |
 
 ---
 
@@ -808,23 +1130,805 @@ docs/
 
 | Days | Phase | Deliverables |
 |------|-------|--------------|
-| **1-2** | Foundation | AppSettings, shortcuts, window stubs |
-| **3** | VIDEO.bmp | Sprite parsing, SkinManager extension |
-| **4** | Video Chrome | Skinnable window frame, controls |
-| **5** | AVPlayer | Video playback integration |
-| **6** | Video Polish | Playlist, persistence, V button |
-| **7** | Milkdrop Foundation | Window structure, placeholder |
-| **8** | Butterchurn | HTML bundle, WKWebView |
-| **9** | FFT Bridge | Audio analysis, real-time viz |
-| **10** | Final Polish | Presets, testing, docs |
+| **1-2** | NSWindowController Setup | Video + Milkdrop controllers, WindowCoordinator integration, WindowSnapManager registration |
+| **3** | VIDEO.bmp Parsing | Sprite extraction, SkinManager extension, fallback chrome |
+| **4** | Video Chrome | Skinnable window frame, controls, borders |
+| **5** | AVPlayer Integration | Video playback, AVPlayerView, codec support |
+| **6** | Video Polish | Playlist integration, V button wiring |
+| **7** | Milkdrop Foundation | GEN.BMP chrome (reuse existing), window structure |
+| **8** | Butterchurn | HTML bundle, WKWebView, preset system |
+| **9** | Audio Tap Extension | Extend existing tap, 512-bin FFT, 576-sample waveform |
+| **10** | UI Integration & Testing | Options menu, presets, comprehensive testing |
 
-**Total**: 10 working days  
-**Milestone**: Day 6 (Video window complete)  
-**Completion**: Day 10 (Both windows complete)
+**Total**: 8-10 working days
+**Milestone**: Day 6 (Video window complete)
+**Completion**: Day 8-10 (Both windows complete)
+**Architecture**: NSWindowController pattern (TASK 1 foundation)
 
 ---
 
-**Plan Approved**: 2025-11-08 (Two-Window Architecture)  
-**Implementation Start**: Upon final approval  
-**Target Completion**: Day 10  
-**Next Review**: End of Day 6 (Video window milestone)
+---
+
+## ADDENDUM: VIDEO Window Full Resize (Post-MVP)
+
+**Date Added**: 2025-11-14
+**Priority**: Post-MVP enhancement
+**Research**: Complete (Oracle + Webamp analysis)
+**Status**: Specification ready, implementation deferred
+
+### Overview
+
+Implement full drag-resize for VIDEO window using the same quantized segment pattern as Playlist window (25×29px grid). This replaces the current 1x/2x scaleEffect approach with true window resizing.
+
+### Oracle Guidance Summary
+
+**Key Decisions (Oracle-validated):**
+1. **Use identical 25×29px segmented resize as Playlist** - keeps windows aligned with docking grid
+2. **Minimum size:** 275×116px (matches Main/EQ windows exactly) - absolute minimum
+3. **Default size:** 275×232px (current VIDEO window size) - [0,4] segments
+4. **Maximum size:** Unbounded, screen-constrained at runtime
+5. **Aspect ratio:** Freeform window resize, video content uses aspectFit internally
+6. **Chrome layout:** Three-section pattern (LEFT 125px + CENTER tiles + RIGHT 125px)
+7. **Resize handle:** 20×20px bottom-right corner (matches Playlist)
+8. **1x/2x buttons:** KEEP as "preset size" shortcuts (1x=[0,4] default, 2x=[11,12] double)
+9. **Resize type:** Quantized to segments (not continuous pixels)
+10. **Base dimensions:** 275×116px matching Main/EQ windows
+
+### Size Model (Reuse Playlist Pattern)
+
+```swift
+// From tasks/playlist-resize-analysis/QUICK_REFERENCE.md
+// Adapted for VIDEO window dimensions
+struct Size2D: Equatable, Codable {
+    var width: Int   // Number of 25px segments (beyond 275px base)
+    var height: Int  // Number of 29px segments (beyond 116px base)
+
+    // VIDEO window base dimensions (matches Main/EQ)
+    static let videoBase = CGSize(width: 275, height: 116)
+
+    func toPixels() -> CGSize {
+        CGSize(
+            width: 275 + width * 25,
+            height: 116 + height * 29
+        )
+    }
+
+    // Video-specific presets
+    static let videoMinimum = Size2D(width: 0, height: 0)   // 275×116 (same as Main/EQ)
+    static let videoDefault = Size2D(width: 0, height: 4)   // 275×232 (current default)
+    static let video2x = Size2D(width: 11, height: 12)      // 550×464 (2x of default)
+}
+```
+
+**Note:**
+- Minimum: 275×116 (identical to Main/EQ windows)
+- Default: 275×232 (current VIDEO window size, [0,4] segments)
+- 2x Default: 550×464 (exactly 2× the default size, [11,12] segments)
+- Base dimensions: 275×116px matching WinampSizes.main and WinampSizes.equalizer
+
+### Chrome Architecture Changes
+
+**Current (scaleEffect-based):**
+```swift
+.frame(width: 275, height: 232)
+.scaleEffect(videoWindowSizeMode == .twoX ? 2.0 : 1.0)
+.frame(width: 275 * scale, height: 232 * scale)
+```
+
+**Target (segment-based):**
+```swift
+let pixelSize = videoSize.toPixels()  // e.g., 275×232 or 300×261 or 550×464
+
+// Chrome components calculate from pixelSize
+let contentWidth = pixelSize.width - 11 - 8   // Minus borders
+let contentHeight = pixelSize.height - 20 - 38  // Minus top/bottom
+
+VideoWindowChromeView(size: videoSize) {
+    AVPlayerView()
+        .frame(width: contentWidth, height: contentHeight)
+}
+.frame(width: pixelSize.width, height: pixelSize.height)
+// NO scaleEffect - true window sizing
+```
+
+### Bottom Bar Three-Section Pattern
+
+**Current:**
+- LEFT (125px) + TILE (25px fixed) + RIGHT (125px)
+- Total: 275px fixed
+
+**Target (resizable):**
+```swift
+HStack(spacing: 0) {
+    // LEFT section (125px fixed) - baked-on buttons (fullscreen, 1x, 2x, TV)
+    SimpleSpriteImage("VIDEO_BOTTOM_LEFT", width: 125, height: 38)
+
+    // CENTER section (dynamic) - tiles VIDEO_BOTTOM_TILE
+    let centerWidth = pixelSize.width - 250  // Can be 0 at minimum
+    if centerWidth > 0 {
+        ForEach(0..<Int(centerWidth / 25), id: \.self) { _ in
+            SimpleSpriteImage("VIDEO_BOTTOM_TILE", width: 25, height: 38)
+        }
+    }
+
+    // RIGHT section (125px fixed) - metadata display area
+    SimpleSpriteImage("VIDEO_BOTTOM_RIGHT", width: 125, height: 38)
+}
+```
+
+### Titlebar Stretchy Tiles
+
+**Oracle Note:** VIDEO.bmp already has VIDEO_TITLEBAR_STRETCHY sprites for width expansion
+
+**Pattern:**
+```swift
+// Base titlebar: LEFT (25px) + CENTER (100px) + RIGHT (25px) = 150px fixed
+// Stretchy section: Tiles VIDEO_TITLEBAR_STRETCHY (25px) to fill gap
+
+let stretchyTileCount = Int((pixelSize.width - 150) / 25)  // Number of stretch tiles
+
+ForEach(0..<stretchyTileCount, id: \.self) { i in
+    SimpleSpriteImage("VIDEO_TITLEBAR_STRETCHY_\(suffix)", width: 25, height: 20)
+        .position(x: 25 + 12.5 + CGFloat(i) * 25, y: 10)
+}
+```
+
+### Resize Handle Implementation
+
+**Location:** Bottom-right corner of VIDEO_BOTTOM_RIGHT sprite
+**Size:** 20×20px (invisible drag area)
+**Pattern:** Reuse Playlist resize gesture (quantized drag)
+
+```swift
+@ViewBuilder
+private func buildVideoResizeHandle() -> some View {
+    Rectangle()
+        .fill(Color.clear)
+        .frame(width: 20, height: 20)
+        .contentShape(Rectangle())
+        .cursor(.resizeNorthWestSouthEast)  // macOS resize cursor
+        .gesture(videoResizeGesture)
+        .position(x: pixelSize.width - 10, y: pixelSize.height - 10)  // Bottom-right
+}
+
+private var videoResizeGesture: some Gesture {
+    DragGesture()
+        .onChanged { value in
+            let deltaW = Int(round(value.translation.width / 25))
+            let deltaH = Int(round(value.translation.height / 29))
+
+            videoSize = Size2D(
+                width: max(0, startSize.width + deltaW),
+                height: max(0, startSize.height + deltaH)
+            )
+        }
+}
+```
+
+### 1x/2x Button Behavior Change
+
+**Current:** Sets scaleEffect multiplier
+**Target:** Sets Size2D segments as presets
+
+```swift
+// 1x button action
+Button(action: {
+    videoSize = .video1x  // [0,0] = 275×232
+}) { /* invisible overlay */ }
+
+// 2x button action
+Button(action: {
+    videoSize = .video2x  // [11,8] = 550×464
+}) { /* invisible overlay */ }
+```
+
+### Implementation Phases
+
+**Phase 1: Size2D Integration** (2 hours)
+- Create VideoWindowSizeState observable wrapping Size2D
+- Replace scaleEffect with segment-based sizing
+- Update chrome layout to calculate from pixelSize
+- Test at sizes [0,0], [1,0], [0,1]
+
+**Phase 2: Chrome Tiling** (2 hours)
+- Implement three-section bottom bar (LEFT + CENTER tiles + RIGHT)
+- Add titlebar stretchy tile rendering
+- Add vertical border tiling for height changes
+- Test chrome aligns perfectly at all sizes
+
+**Phase 3: Resize Handle** (1 hour)
+- Add 20×20px drag area in bottom-right
+- Implement quantized drag gesture
+- Wire to VideoWindowSizeState
+- Test drag resizing works
+
+**Phase 4: Button Migration** (1 hour)
+- Change 1x/2x buttons to set Size2D presets
+- Remove videoWindowSizeMode enum (no longer needed)
+- Remove scaleEffect logic
+- Test buttons set correct sizes
+
+**Phase 5: Integration & Testing** (2 hours)
+- Update WindowCoordinator.resizeVideoWindow()
+- Test docking with resized VIDEO window
+- Test persistence (save/restore Size2D)
+- Verify no regressions
+
+**Total:** ~8 hours
+
+### Files to Modify
+
+1. `MacAmpApp/Models/VideoWindowSizeState.swift` [NEW]
+   - Wraps Size2D for VIDEO window
+   - Persists to UserDefaults
+   - Observable for reactive updates
+
+2. `MacAmpApp/Views/Windows/VideoWindowChromeView.swift`
+   - Accept Size2D parameter
+   - Calculate dimensions from segments
+   - Implement three-section bottom bar
+   - Add titlebar stretchy tiles
+   - Add resize handle
+
+3. `MacAmpApp/Views/WinampVideoWindow.swift`
+   - Remove scaleEffect logic
+   - Pass Size2D to chrome view
+   - Use segment-based frame sizing
+
+4. `MacAmpApp/ViewModels/WindowCoordinator.swift`
+   - Update resizeVideoWindow() to use Size2D
+   - Update docking context for segment-based sizing
+   - Update persistence to save Size2D
+
+5. `MacAmpApp/Models/AppSettings.swift`
+   - Replace videoWindowSizeMode with videoWindowSize: Size2D
+   - Update UserDefaults persistence
+
+### Success Criteria
+
+- [ ] VIDEO window can be drag-resized from bottom-right corner
+- [ ] Resizes in 25×29px increments (quantized)
+- [ ] Minimum size: 275×232px (no smaller)
+- [ ] Maximum size: Screen bounds minus margins
+- [ ] Chrome tiles correctly at all sizes (no gaps or overlaps)
+- [ ] Video content maintains aspect ratio (letterbox/pillarbox)
+- [ ] 1x/2x buttons set preset sizes [0,0] and [11,8]
+- [ ] Docking preserved during resize
+- [ ] Size persists across app restarts
+- [ ] No scaleEffect used (true window sizing)
+
+---
+
+---
+
+## ADDENDUM: Video Volume Control Integration (Post-MVP)
+
+**Date Added**: 2025-11-14
+**Priority**: Post-MVP enhancement
+**Estimated Effort**: 1-2 hours
+**Status**: Specification ready, implementation deferred
+
+### Overview
+
+Sync main window volume control with video playback. Currently, the volume slider only affects audio playback through AVAudioEngine - video played through AVPlayer has independent volume.
+
+### Current Behavior (Bug)
+
+**Audio Playback:**
+- Main window volume slider → `audioPlayer.volume` → AVAudioEngine.mainMixerNode.volume
+- Works correctly ✅
+
+**Video Playback:**
+- Main window volume slider → `audioPlayer.volume` → NO EFFECT on AVPlayer ❌
+- Video plays at system volume (100%)
+- User expectation: Volume slider should control video audio
+
+### Implementation Specification
+
+**Sync Pattern:**
+```swift
+// In AudioPlayer.swift
+var volume: Float = 0.75 {
+    didSet {
+        // Existing: Update audio engine
+        audioEngine.mainMixerNode.volume = volume
+
+        // NEW: Update video player
+        videoPlayer?.volume = volume
+    }
+}
+```
+
+**Initialization:**
+```swift
+// In loadVideoFile()
+func loadVideoFile(url: URL) {
+    videoPlayer = AVPlayer(url: url)
+    videoPlayer?.volume = volume  // Apply current volume immediately
+    videoPlayer?.play()
+}
+```
+
+**Mute Button:**
+```swift
+// In toggleMute() or similar
+func setMuted(_ muted: Bool) {
+    isMuted = muted
+
+    // Existing: Mute audio engine
+    audioEngine.mainMixerNode.volume = muted ? 0.0 : volume
+
+    // NEW: Mute video player
+    videoPlayer?.isMuted = muted
+}
+```
+
+### Files to Modify
+
+1. **MacAmpApp/Audio/AudioPlayer.swift**
+   - Update `volume` didSet to sync with videoPlayer
+   - Update `loadVideoFile()` to apply initial volume
+   - Update mute functionality to affect video
+
+### Success Criteria
+
+- [ ] Main window volume slider controls video audio level
+- [ ] Mute button mutes video audio
+- [ ] Volume changes during video playback apply immediately
+- [ ] Switching from audio to video preserves volume level
+- [ ] Switching from video to audio preserves volume level
+- [ ] Volume persists across app restarts (already working for audio)
+
+### Testing
+
+**Test Cases:**
+1. Load video file, adjust volume slider → video audio changes
+2. Mute button while video playing → video audio mutes
+3. Change volume during video playback → immediate effect
+4. Load audio file, change volume, load video → video uses same volume
+5. Video at 50% volume, quit/relaunch, play video → still 50%
+
+**Estimated Time:** 1-2 hours (simple sync logic)
+
+---
+
+**Plan Created**: 2025-11-08 (Initial two-window architecture)
+**Plan Corrected**: 2025-11-09 (NSWindowController pattern, single audio tap, corrected triggers)
+**Plan Updated**: 2025-11-14 (Added VIDEO resize + volume control specs - Oracle validated)
+**Oracle Review**: A- grade (High confidence), Resize spec A grade
+**Implementation Start**: Upon user approval
+**Target Completion**: Days 8-10 + 8 hours resize + 2 hours volume
+**Next Review**: Post VIDEO 2x chrome scaling completion
+
+---
+
+## LESSONS LEARNED: VIDEO Window Resize
+
+For applying to Playlist window later.
+
+**Key Insights:**
+1. Calculate tile counts with ceil() for full coverage
+2. Use OLD positioning formulas that worked
+3. Exclude invisible windows from snap (window.isVisible)
+4. Preview pattern reduces jitter (commit at end only)
+5. Don't sync NSWindow during drag
+6. Preview needs AppKit overlay to extend beyond bounds
+
+**Pattern:**
+- Size2D quantization
+- Dynamic tile calculation
+- Preview during drag, commit at end
+- isVisible filtering critical
+
+---
+
+## PART 21: Video Window Audio/Video Control Unification (2025-11-15)
+
+### Objective
+
+Extend MacAmp's audio controls to also manage video playback. Currently volume, seeking, and time display only affect audio - they must work with video too.
+
+### 4 Enhancement Items
+
+1. **Video Metadata Display Area Growth** - Dynamic width based on window size
+2. **Video Volume Control** - Volume slider affects video playback
+3. **Video Seeking Support** - Position slider seeks video files
+4. **Video Time Display** - Time display shows video elapsed/remaining time
+
+### Current Architecture (Problem)
+
+**AudioPlayer.swift** (Lines 159-161, 173-174):
+```swift
+var volume: Float = 1.0 {
+    didSet { playerNode.volume = volume }  // ❌ Only audio!
+}
+
+var videoPlayer: AVPlayer?
+var currentMediaType: MediaType = .audio
+var currentTime: Double = 0.0  // ❌ Only tracks audio position
+```
+
+**Issue:** Volume didSet only updates audio engine, ignoring videoPlayer. Time tracking doesn't observe video playback.
+
+### Unified Media Control Pattern
+
+All media controls check `currentMediaType` and apply to both backends:
+- **Audio:** `audioEngine.mainMixerNode` / `playerNode`
+- **Video:** `videoPlayer` (AVPlayer)
+
+---
+
+### Implementation Details
+
+#### 1. Video Volume Control (15 min)
+
+**File:** `MacAmpApp/Audio/AudioPlayer.swift`
+
+```swift
+// Change Line ~160
+var volume: Float = 1.0 {
+    didSet {
+        playerNode.volume = volume           // Audio
+        videoPlayer?.volume = volume         // ✅ ADD Video
+    }
+}
+```
+
+**Why:** Single line addition, immediate effect.
+
+---
+
+#### 2. Video Time Display (1 hour)
+
+**File:** `MacAmpApp/Audio/AudioPlayer.swift`
+
+Add video time observation:
+
+```swift
+@ObservationIgnored private var videoTimeObserver: Any?
+
+private func setupVideoTimeObserver() {
+    guard let player = videoPlayer else { return }
+
+    // Cleanup any existing observer
+    if let observer = videoTimeObserver {
+        player.removeTimeObserver(observer)
+        videoTimeObserver = nil
+    }
+
+    // Update time every 0.1 seconds
+    let interval = CMTime(seconds: 0.1, preferredTimescale: 600)
+    videoTimeObserver = player.addPeriodicTimeObserver(
+        forInterval: interval,
+        queue: .main
+    ) { [weak self] time in
+        guard let self = self else { return }
+        self.currentTime = time.seconds
+
+        if let duration = player.currentItem?.duration,
+           duration.isNumeric && !duration.isIndefinite {
+            self.currentDuration = duration.seconds
+        }
+    }
+}
+
+private func cleanupVideoTimeObserver() {
+    if let observer = videoTimeObserver, let player = videoPlayer {
+        player.removeTimeObserver(observer)
+    }
+    videoTimeObserver = nil
+}
+```
+
+**Integration Points:**
+- Call `setupVideoTimeObserver()` in `playVideo(url:)`
+- Call `cleanupVideoTimeObserver()` in video cleanup code
+- Main window time display will auto-update (already bound to currentTime)
+
+---
+
+#### 3. Video Seeking Support (1 hour)
+
+**File:** `MacAmpApp/Audio/AudioPlayer.swift`
+
+Add unified seek method:
+
+```swift
+func seek(to position: Double) {
+    switch currentMediaType {
+    case .audio:
+        // Existing audio seek logic (schedule from position)
+        currentTime = position
+        // ... existing audio engine scheduling
+
+    case .video:
+        let cmTime = CMTime(seconds: position, preferredTimescale: 600)
+        videoPlayer?.seek(
+            to: cmTime,
+            toleranceBefore: .zero,
+            toleranceAfter: .zero
+        ) { [weak self] finished in
+            if finished {
+                self?.currentTime = position
+            }
+        }
+
+    case .stream:
+        // Streams are not seekable
+        break
+    }
+}
+```
+
+**File:** `MacAmpApp/Views/WinampMainWindow.swift`
+
+Wire position slider to new seek method:
+
+```swift
+// In position slider drag gesture
+.onEnded { _ in
+    playbackCoordinator.seek(to: newPosition)
+}
+```
+
+---
+
+#### 4. Metadata Display Growth (30 min)
+
+**File:** `MacAmpApp/Views/Windows/VideoWindowChromeView.swift`
+
+```swift
+// In buildBottomInfoSection()
+private var dynamicDisplayWidth: CGFloat {
+    let minWidth: CGFloat = 115
+    let leftSectionWidth: CGFloat = 58  // Play state + bitrate
+    let margins: CGFloat = 10
+
+    let availableWidth = sizeState.size.width - leftSectionWidth - margins
+    return max(minWidth, availableWidth)
+}
+
+// Usage in the marquee/scroll view
+ScrollView(.horizontal, showsIndicators: false) {
+    Text(metadataString)
+        .frame(width: dynamicDisplayWidth)  // Use dynamic width
+}
+```
+
+---
+
+### Implementation Order (Risk-Based)
+
+1. **Video Volume** (Lowest Risk) - 15 min
+   - Single line change
+   - Immediate testable result
+
+2. **Video Time Display** (Medium Risk) - 1 hour
+   - Needs proper cleanup (memory leaks)
+   - Main window auto-updates
+
+3. **Video Seeking** (Medium Risk) - 1 hour
+   - CMTime precision
+   - Async completion handler
+
+4. **Metadata Width** (Low Risk) - 30 min
+   - UI-only change
+   - No backend impact
+
+---
+
+### Files to Modify
+
+1. **`MacAmpApp/Audio/AudioPlayer.swift`** - Core control logic
+   - Volume didSet (1 line)
+   - Time observer setup/cleanup
+   - Seek method
+
+2. **`MacAmpApp/Views/Windows/VideoWindowChromeView.swift`** - Metadata display
+   - Dynamic width calculation
+
+3. **`MacAmpApp/Views/WinampMainWindow.swift`** - Position slider (if needed)
+   - Wire to unified seek method
+
+---
+
+### Testing Strategy
+
+**Unit Tests:**
+- Volume propagates to both audio and video
+- Time observer updates currentTime
+- Seek method works for both media types
+
+**Manual Integration:**
+- Load video, adjust volume → video sound changes
+- Load video, drag slider → video seeks
+- Main window shows video time
+- Metadata area grows with window
+
+**Edge Cases:**
+- Switch audio→video→audio
+- Video ends → cleanup
+- Seek near end of video
+
+---
+
+### Success Criteria
+
+- [ ] Volume slider affects video playback sound
+- [ ] Position slider seeks within video file
+- [ ] Time display shows video elapsed/remaining time
+- [ ] Metadata area grows proportionally with window width
+- [ ] No memory leaks from video time observer
+- [ ] Smooth seeking without frame drops
+- [ ] Clean switch between audio and video playback
+
+---
+
+### Estimated Time
+
+- Video Volume: 15 minutes
+- Video Time Display: 1 hour
+- Video Seeking: 1 hour
+- Metadata Width: 30 minutes
+- Testing & Polish: 1 hour
+
+**Total: 3-4 hours**
+
+---
+
+### Oracle Validation Request
+
+Before implementation, validate:
+1. Does this pattern align with existing PlaybackCoordinator architecture?
+2. Should seek() live in AudioPlayer or PlaybackCoordinator?
+3. Are there existing patterns for time observation we should follow?
+4. Memory management concerns with AVPlayer observers?
+
+**Status:** ✅ Oracle Reviewed (Grade A - Final corrections applied)
+
+---
+
+### Oracle Feedback Round 2 (2025-11-15)
+
+**Grade: A** - All edge cases and patterns now addressed.
+
+**Critical Discoveries:**
+
+1. **playbackProgress is STORED, not computed** (Line 157)
+   - Must explicitly assign all three: `currentTime`, `currentDuration`, AND `playbackProgress`
+   - No auto-recompute when dependencies change
+
+2. **Volume sync at creation time**
+   - Set `videoPlayer?.volume = volume` immediately after `AVPlayer(url:)`
+   - Also update in didSet when `currentMediaType == .video`
+
+3. **Shared cleanup function**
+   - Create `cleanupVideoPlayer()` that handles both observers
+   - Call from: `loadVideoFile()`, `loadAudioFile()`, `stop()`
+
+4. **Task { @MainActor in }** pattern
+   - Observer closures need explicit main actor hop
+   - Matches existing `videoEndObserver` pattern
+
+**Final Grade A Implementation:**
+
+```swift
+// In AudioPlayer.swift
+
+// 1. VOLUME - Line ~160
+var volume: Float = 1.0 {
+    didSet {
+        playerNode.volume = volume
+        if currentMediaType == .video {
+            videoPlayer?.volume = volume  // ✅ Only when video active
+        }
+    }
+}
+
+// 2. OBSERVER PROPERTY - Line ~175
+@ObservationIgnored private var videoTimeObserver: Any?
+
+// 3. TIME OBSERVER SETUP
+private func setupVideoTimeObserver() {
+    tearDownVideoTimeObserver()  // ✅ Clean first
+    guard let player = videoPlayer else { return }
+
+    let interval = CMTime(seconds: 0.1, preferredTimescale: 600)
+    videoTimeObserver = player.addPeriodicTimeObserver(
+        forInterval: interval,
+        queue: .main
+    ) { [weak self] time in
+        Task { @MainActor in  // ✅ Explicit main actor hop
+            guard let self else { return }
+            let seconds = time.seconds
+            self.currentTime = seconds
+
+            if let item = player.currentItem {
+                let duration = item.duration.seconds
+                if duration.isFinite {
+                    self.currentDuration = duration
+                    // ✅ CRITICAL: playbackProgress is STORED, must assign explicitly
+                    self.playbackProgress = duration > 0 ? seconds / duration : 0
+                }
+            }
+        }
+    }
+}
+
+private func tearDownVideoTimeObserver() {
+    if let observer = videoTimeObserver, let player = videoPlayer {
+        player.removeTimeObserver(observer)
+    }
+    videoTimeObserver = nil
+}
+
+// 4. SHARED CLEANUP
+private func cleanupVideoPlayer() {
+    tearDownVideoTimeObserver()
+    if let observer = videoEndObserver {
+        NotificationCenter.default.removeObserver(observer)
+        videoEndObserver = nil
+    }
+    videoPlayer?.pause()
+    videoPlayer = nil
+}
+
+// 5. IN loadVideoFile() - Line ~382
+videoPlayer = AVPlayer(url: url)
+videoPlayer?.volume = volume  // ✅ Sync volume at creation
+currentMediaType = .video
+// ... add observers ...
+setupVideoTimeObserver()  // ✅ Before play()
+videoPlayer?.play()
+
+// 6. SEEK METHOD - Add at TOP of seek(to:resume:) Line ~1179
+func seek(to time: Double, resume: Bool? = nil) {
+    if currentMediaType == .video {
+        guard let player = videoPlayer else { return }
+        let shouldPlay = resume ?? isPlaying  // ✅ Reuse resume semantics
+
+        let timescale = player.currentItem?.duration.timescale ?? CMTimeScale(NSEC_PER_SEC)
+        let targetTime = CMTime(seconds: max(0, time), preferredTimescale: timescale)
+
+        player.seek(to: targetTime, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                self.currentTime = time
+
+                if let duration = player.currentItem?.duration.seconds, duration.isFinite {
+                    self.currentDuration = duration
+                    self.playbackProgress = duration > 0 ? time / duration : 0  // ✅ Explicit assign
+                }
+
+                if shouldPlay {
+                    player.play()
+                    self.transition(to: .playing)
+                } else {
+                    player.pause()
+                    self.transition(to: .paused)
+                }
+            }
+        }
+        return  // ✅ Exit early for video
+    }
+
+    // ... existing audio path unchanged ...
+}
+```
+
+**Integration Points (EXACT locations):**
+
+1. **loadVideoFile()** - Line ~376
+   - Call `cleanupVideoPlayer()` at start (before creating new player)
+   - Set `videoPlayer?.volume = volume` after creation (line 382)
+   - Call `setupVideoTimeObserver()` before `videoPlayer?.play()` (line 399)
+
+2. **loadAudioFile()** - Line ~447-459
+   - Replace manual cleanup with `cleanupVideoPlayer()`
+
+3. **stop()** - Line ~602-616
+   - Replace manual cleanup with `cleanupVideoPlayer()`
+
+**Key Insight:** `playbackProgress` is a stored `@Observable` property, NOT computed. The time observer must explicitly assign it for the UI to update. This is why audio works (done in `startProgressTimer()`).
+
+**Confidence:** Grade A - All patterns now match existing codebase exactly

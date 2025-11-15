@@ -8,6 +8,7 @@ struct WinampMainWindow: View {
     @Environment(DockingController.self) var dockingController
     @Environment(AppSettings.self) var settings
     @Environment(PlaybackCoordinator.self) var playbackCoordinator
+    @Environment(WindowFocusState.self) var windowFocusState
 
     // CRITICAL: Prevent unnecessary body re-evaluations that cause ghost images
     // SwiftUI re-evaluates body when ANY @EnvironmentObject publishes changes
@@ -31,6 +32,11 @@ struct WinampMainWindow: View {
 
     // Timer publisher for pause blink animation (Swift 6 pattern)
     let pauseBlinkTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
+
+    // Computed: Is this window currently focused?
+    private var isWindowActive: Bool {
+        windowFocusState.isMainKey
+    }
 
     // Winamp coordinate constants (from original Winamp and webamp)
     private struct Coords {
@@ -94,7 +100,7 @@ struct WinampMainWindow: View {
             // Make ONLY the title bar draggable using custom drag (magnetic snapping)
             // CRITICAL: Apply .at() to drag handle itself, not content inside (Oracle fix)
             WinampTitlebarDragHandle(windowKind: .main, size: CGSize(width: 275, height: 14)) {
-                SimpleSpriteImage("MAIN_TITLE_BAR_SELECTED",
+                SimpleSpriteImage(isWindowActive ? "MAIN_TITLE_BAR_SELECTED" : "MAIN_TITLE_BAR",
                                 width: 275,
                                 height: 14)
             }
@@ -224,6 +230,7 @@ struct WinampMainWindow: View {
                         .scaleEffect(0.6) // Scale down for shade mode
                 }
                 .buttonStyle(.plain)
+                .focusable(false)
 
                 // Play
                 Button(action: { playbackCoordinator.togglePlayPause() }) {
@@ -231,6 +238,7 @@ struct WinampMainWindow: View {
                         .scaleEffect(0.6)
                 }
                 .buttonStyle(.plain)
+                .focusable(false)
 
                 // Pause
                 Button(action: { playbackCoordinator.pause() }) {
@@ -238,6 +246,7 @@ struct WinampMainWindow: View {
                         .scaleEffect(0.6)
                 }
                 .buttonStyle(.plain)
+                .focusable(false)
 
                 // Stop
                 Button(action: { playbackCoordinator.stop() }) {
@@ -245,6 +254,7 @@ struct WinampMainWindow: View {
                         .scaleEffect(0.6)
                 }
                 .buttonStyle(.plain)
+                .focusable(false)
 
                 // Next
                 Button(action: { Task { await playbackCoordinator.next() } }) {
@@ -252,6 +262,7 @@ struct WinampMainWindow: View {
                         .scaleEffect(0.6)
                 }
                 .buttonStyle(.plain)
+                .focusable(false)
             }
             .at(CGPoint(x: 45, y: 3))
 
@@ -270,13 +281,14 @@ struct WinampMainWindow: View {
         Group {
             // Minimize button
             Button(action: {
-                NSApp.keyWindow?.miniaturize(nil)
+                WindowCoordinator.shared?.minimizeKeyWindow()
             }) {
                 SimpleSpriteImage("MAIN_MINIMIZE_BUTTON", width: 9, height: 9)
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .at(Coords.minimizeButton)
-            
+
             // Shade button
             Button(action: {
                 isShadeMode.toggle()
@@ -284,8 +296,9 @@ struct WinampMainWindow: View {
                 SimpleSpriteImage("MAIN_SHADE_BUTTON", width: 9, height: 9)
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .at(Coords.shadeButton)
-            
+
             // Close button
             Button(action: {
                 NSApplication.shared.terminate(nil)
@@ -293,6 +306,7 @@ struct WinampMainWindow: View {
                 SimpleSpriteImage("MAIN_CLOSE_BUTTON", width: 9, height: 9)
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .at(Coords.closeButton)
         }
     }
@@ -389,6 +403,7 @@ struct WinampMainWindow: View {
                 SimpleSpriteImage("MAIN_PREVIOUS_BUTTON", width: 23, height: 18)
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .at(Coords.prevButton)
 
             // Play
@@ -396,6 +411,7 @@ struct WinampMainWindow: View {
                 SimpleSpriteImage("MAIN_PLAY_BUTTON", width: 23, height: 18)
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .at(Coords.playButton)
 
             // Pause
@@ -403,6 +419,7 @@ struct WinampMainWindow: View {
                 SimpleSpriteImage("MAIN_PAUSE_BUTTON", width: 23, height: 18)
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .at(Coords.pauseButton)
 
             // Stop
@@ -410,6 +427,7 @@ struct WinampMainWindow: View {
                 SimpleSpriteImage("MAIN_STOP_BUTTON", width: 23, height: 18)
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .at(Coords.stopButton)
 
             // Next
@@ -417,15 +435,17 @@ struct WinampMainWindow: View {
                 SimpleSpriteImage("MAIN_NEXT_BUTTON", width: 23, height: 18)
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .at(Coords.nextButton)
-            
+
             // Eject (handles file loading like original Winamp)
-            Button(action: { 
+            Button(action: {
                 openFileDialog() // File loading integrated into eject button
             }) {
                 SimpleSpriteImage("MAIN_EJECT_BUTTON", width: 22, height: 16)
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .at(Coords.ejectButton)
         }
     }
@@ -441,6 +461,7 @@ struct WinampMainWindow: View {
                 SimpleSpriteImage(spriteKey, width: 47, height: 15)
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .at(Coords.shuffleButton)
 
             // Repeat button (Winamp 5 Modern: 3-state with "1" badge)
@@ -465,6 +486,7 @@ struct WinampMainWindow: View {
                 }
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .help(audioPlayer.repeatMode.label)
             .at(Coords.repeatButton)
         }
@@ -524,23 +546,40 @@ struct WinampMainWindow: View {
     
     @ViewBuilder
     private func buildWindowToggleButtons() -> some View {
+        // Access coordinator's observable properties directly for reactive updates
+        let coordinator = WindowCoordinator.shared
+        let eqVisible = coordinator?.isEQWindowVisible ?? false
+        let playlistVisible = coordinator?.isPlaylistWindowVisible ?? false
+
         Group {
-            // EQ button
+            // EQ button - lights when EQ window visible (bound to coordinator state)
+            let eqSprite = eqVisible
+                ? "MAIN_EQ_BUTTON_SELECTED"
+                : "MAIN_EQ_BUTTON"
+
             Button(action: {
-                dockingController.toggleEqualizer()
+                // Toggle via WindowCoordinator (AppKit bridge)
+                _ = coordinator?.toggleEQWindowVisibility()
             }) {
-                SimpleSpriteImage("MAIN_EQ_BUTTON", width: 23, height: 12)
+                SimpleSpriteImage(eqSprite, width: 23, height: 12)
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .at(Coords.eqButton)
 
-            // Playlist button
+            // Playlist button - lights when Playlist window visible (bound to coordinator state)
+            let playlistSprite = playlistVisible
+                ? "MAIN_PLAYLIST_BUTTON_SELECTED"
+                : "MAIN_PLAYLIST_BUTTON"
+
             Button(action: {
-                dockingController.togglePlaylist()
+                // Toggle via WindowCoordinator (AppKit bridge)
+                _ = coordinator?.togglePlaylistWindowVisibility()
             }) {
-                SimpleSpriteImage("MAIN_PLAYLIST_BUTTON", width: 23, height: 12)
+                SimpleSpriteImage(playlistSprite, width: 23, height: 12)
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .at(Coords.playlistButton)
         }
     }
@@ -556,6 +595,7 @@ struct WinampMainWindow: View {
                 SimpleSpriteImage("MAIN_CLUTTER_BAR_BUTTON_O", width: 8, height: 8)
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .help("Options menu (Ctrl+O, Ctrl+T for time)")
             .at(Coords.clutterButtonO)
 
@@ -570,6 +610,7 @@ struct WinampMainWindow: View {
                 SimpleSpriteImage(aSpriteName, width: 8, height: 7)
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .help("Toggle always on top (Ctrl+A)")
             .at(Coords.clutterButtonA)
 
@@ -584,6 +625,7 @@ struct WinampMainWindow: View {
                 SimpleSpriteImage(iSpriteName, width: 8, height: 7)
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .help("Track information (Ctrl+I)")
             .at(Coords.clutterButtonI)
 
@@ -599,17 +641,24 @@ struct WinampMainWindow: View {
                 SimpleSpriteImage(dSpriteName, width: 8, height: 8)
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .help("Toggle window size")
             .at(Coords.clutterButtonD)
 
-            // V - Visualizer (Scaffold - not yet implemented)
-            Button(action: {}) {
-                SimpleSpriteImage("MAIN_CLUTTER_BAR_BUTTON_V", width: 8, height: 7)
+            // V - Video Window (FUNCTIONAL - TASK 2 Day 6)
+            // Oracle fix: Only toggle setting - observer handles show/hide
+            let vSpriteName = settings.showVideoWindow
+                ? "MAIN_CLUTTER_BAR_BUTTON_V_SELECTED"
+                : "MAIN_CLUTTER_BAR_BUTTON_V"
+
+            Button(action: {
+                settings.showVideoWindow.toggle()
+            }) {
+                SimpleSpriteImage(vSpriteName, width: 8, height: 7)
             }
             .buttonStyle(.plain)
-            .disabled(true)
-            .accessibilityHidden(true)
-            .help("Visualizer (not yet implemented)")
+            .focusable(false)
+            .help("Video Window (Ctrl+V)")
             .at(Coords.clutterButtonV)
         }
     }
@@ -742,9 +791,8 @@ struct WinampMainWindow: View {
         guard isViewVisible else { return }
 
         scrollTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { [playbackCoordinator] _ in
-            // Access main actor properties synchronously to prevent race conditions
-            // The timer already fires on the main thread, so we can use assumeIsolated
-            MainActor.assumeIsolated {
+            // Hop to main actor explicitly (Oracle recommendation)
+            Task { @MainActor in
                 let trackText = playbackCoordinator.displayTitle.isEmpty ? "MacAmp" : playbackCoordinator.displayTitle
                 let textWidth = CGFloat(trackText.count * 5)
                 let displayWidth = Coords.trackInfo.width

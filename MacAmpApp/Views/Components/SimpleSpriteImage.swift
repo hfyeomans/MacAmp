@@ -102,6 +102,8 @@ struct WinampSizes {
     static let equalizerShade = CGSize(width: 275, height: 14)
     static let playlistBase = CGSize(width: 275, height: 232)
     static let playlistShade = CGSize(width: 275, height: 14)
+    static let video = CGSize(width: 275, height: 232)
+    static let milkdrop = CGSize(width: 275, height: 232)
 }
 
 #Preview {

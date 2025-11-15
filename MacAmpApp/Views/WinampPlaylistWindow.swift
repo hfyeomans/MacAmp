@@ -19,11 +19,11 @@ final class PlaylistWindowActions: NSObject {
 
     func presentAddFilesPanel(audioPlayer: AudioPlayer, playbackCoordinator: PlaybackCoordinator? = nil) {
         let openPanel = NSOpenPanel()
-        openPanel.allowedContentTypes = [.audio, .playlist]
+        openPanel.allowedContentTypes = [.audio, .playlist, .movie]  // NEW: Support video files
         openPanel.allowsMultipleSelection = true
         openPanel.canChooseDirectories = false
         openPanel.title = "Add Files to Playlist"
-        openPanel.message = "Select audio files or playlists"
+        openPanel.message = "Select audio files, video files, or playlists"
 
         openPanel.begin { response in
             if response == .OK {
@@ -254,6 +254,7 @@ struct WinampPlaylistWindow: View {
     @Environment(AppSettings.self) var settings
     @Environment(RadioStationLibrary.self) var radioLibrary
     @Environment(PlaybackCoordinator.self) var playbackCoordinator
+    @Environment(WindowFocusState.self) var windowFocusState
 
     @State private var selectedIndices: Set<Int> = []
     @State private var isShadeMode: Bool = false
@@ -262,6 +263,11 @@ struct WinampPlaylistWindow: View {
 
     private let windowWidth: CGFloat = 275
     private let windowHeight: CGFloat = 232
+
+    // Computed: Is this window currently focused?
+    private var isWindowActive: Bool {
+        windowFocusState.isPlaylistKey
+    }
 
     private var totalPlaylistDuration: Double {
         audioPlayer.playlist.reduce(0.0) { total, track in
@@ -365,20 +371,22 @@ struct WinampPlaylistWindow: View {
 
     @ViewBuilder
     private func buildCompleteBackground() -> some View {
-            SimpleSpriteImage("PLAYLIST_TOP_LEFT_CORNER", width: 25, height: 20)
+            let suffix = isWindowActive ? "_SELECTED" : ""
+
+            SimpleSpriteImage("PLAYLIST_TOP_LEFT\(isWindowActive ? "_SELECTED" : "_CORNER")", width: 25, height: 20)
                 .position(x: 12.5, y: 10)
-            
+
             ForEach(0..<10, id: \.self) { i in
-                SimpleSpriteImage("PLAYLIST_TOP_TILE", width: 25, height: 20)
+                SimpleSpriteImage("PLAYLIST_TOP_TILE\(suffix)", width: 25, height: 20)
                     .position(x: 25 + 12.5 + CGFloat(i) * 25, y: 10)
             }
-            
+
             WinampTitlebarDragHandle(windowKind: .playlist, size: CGSize(width: 100, height: 20)) {
-                SimpleSpriteImage("PLAYLIST_TITLE_BAR", width: 100, height: 20)
+                SimpleSpriteImage("PLAYLIST_TITLE_BAR\(suffix)", width: 100, height: 20)
             }
             .position(x: 137.5, y: 10)
-            
-            SimpleSpriteImage("PLAYLIST_TOP_RIGHT_CORNER", width: 25, height: 20)
+
+            SimpleSpriteImage("PLAYLIST_TOP_RIGHT_CORNER\(suffix)", width: 25, height: 20)
                 .position(x: 262.5, y: 10)
             
             let sideHeight = 192
@@ -491,23 +499,23 @@ struct WinampPlaylistWindow: View {
     private func buildBottomControls() -> some View {
         Button(action: { showAddMenu() }) {
             Color.clear.frame(width: 22, height: 18).contentShape(Rectangle())
-        }.buttonStyle(.plain).position(x: 16, y: 208)
+        }.buttonStyle(.plain).focusable(false).position(x: 16, y: 208)
 
         Button(action: { showRemMenu() }) {
             Color.clear.frame(width: 22, height: 18).contentShape(Rectangle())
-        }.buttonStyle(.plain).position(x: 42, y: 208)
+        }.buttonStyle(.plain).focusable(false).position(x: 42, y: 208)
 
         Button(action: { showSelNotSupportedAlert() }) {
             Color.clear.frame(width: 18, height: 18).contentShape(Rectangle())
-        }.buttonStyle(.plain).position(x: 78, y: 208)
+        }.buttonStyle(.plain).focusable(false).position(x: 78, y: 208)
 
         Button(action: { showMiscMenu() }) {
             Color.clear.frame(width: 18, height: 18).contentShape(Rectangle())
-        }.buttonStyle(.plain).position(x: 105, y: 208)
+        }.buttonStyle(.plain).focusable(false).position(x: 105, y: 208)
 
         Button(action: { showListMenu() }) {
             Color.clear.frame(width: 22, height: 18).contentShape(Rectangle())
-        }.buttonStyle(.plain).position(x: 243, y: 208)
+        }.buttonStyle(.plain).focusable(false).position(x: 243, y: 208)
     }
 
     @ViewBuilder
@@ -520,6 +528,7 @@ struct WinampPlaylistWindow: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .position(x: 133, y: 220)
 
             Button(action: {
@@ -530,6 +539,7 @@ struct WinampPlaylistWindow: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .position(x: 144, y: 220)
 
             Button(action: {
@@ -540,6 +550,7 @@ struct WinampPlaylistWindow: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .position(x: 155, y: 220)
 
             Button(action: {
@@ -550,6 +561,7 @@ struct WinampPlaylistWindow: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .position(x: 166, y: 220)
 
             Button(action: {
@@ -560,6 +572,7 @@ struct WinampPlaylistWindow: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .position(x: 177, y: 220)
 
             Button(action: {
@@ -570,6 +583,7 @@ struct WinampPlaylistWindow: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .position(x: 183, y: 220)
     }
 
@@ -586,31 +600,35 @@ struct WinampPlaylistWindow: View {
 
     @ViewBuilder
     private func buildTitleBarButtons() -> some View {
-            Button(action: { NSApp.keyWindow?.miniaturize(nil) }) {
+            Button(action: { WindowCoordinator.shared?.minimizeKeyWindow() }) {
                 SimpleSpriteImage("MAIN_MINIMIZE_BUTTON", width: 9, height: 9)
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .position(x: 248.5, y: 7.5)
-            
+
             Button(action: {
                 isShadeMode.toggle()
             }) {
                 SimpleSpriteImage("MAIN_SHADE_BUTTON", width: 9, height: 9)
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .position(x: 258.5, y: 7.5)
-            
-            Button(action: { NSApp.keyWindow?.close() }) {
+
+            Button(action: { WindowCoordinator.shared?.hidePlaylistWindow() }) {
                 SimpleSpriteImage("MAIN_CLOSE_BUTTON", width: 9, height: 9)
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .position(x: 268.5, y: 7.5)
     }
 
     @ViewBuilder
     private func buildShadeMode() -> some View {
         ZStack {
-            SimpleSpriteImage("PLAYLIST_TITLE_BAR", width: 275, height: 14)
+            let suffix = isWindowActive ? "_SELECTED" : ""
+            SimpleSpriteImage("PLAYLIST_TITLE_BAR\(suffix)", width: 275, height: 14)
                 .position(x: 137.5, y: 7)
 
             if let currentTrack = playbackCoordinator.currentTrack {

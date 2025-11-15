@@ -21,7 +21,21 @@ struct Skin: @unchecked Sendable {
     // A dictionary mapping cursor names to NSCursor objects.
     let cursors: [String: NSCursor]
 
+    // Track which optional sheets were actually loaded (not fallback)
+    let loadedSheets: Set<String>
+
     // Additional skin elements (region maps, letter widths, etc.) can be added as parsing expands.
+}
+
+// MARK: - Video Window Sprite Access
+
+extension Skin {
+    /// Check if VIDEO sprites are available (either from this skin or default fallback)
+    var hasVideoSprites: Bool {
+        // Check if VIDEO sprites exist in images dictionary
+        // This works whether they came from current skin or default Winamp fallback
+        return images["VIDEO_TITLEBAR_TOP_CENTER_ACTIVE"] != nil
+    }
 }
 
 struct PlaylistStyle: Sendable {

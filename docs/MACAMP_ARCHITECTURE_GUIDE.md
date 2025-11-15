@@ -1,8 +1,8 @@
 # MacAmp Complete Architecture Guide
 
-**Version:** 2.0.0
-**Date:** 2025-11-01
-**Project State:** Production-Ready (Internet Radio, Swift 6, macOS 15+/26+)
+**Version:** 2.1.0
+**Date:** 2025-11-14
+**Project State:** Production-Ready (5-Window System, Video Playback, Swift 6, macOS 15+/26+)
 **Purpose:** Deep technical reference for developers joining or maintaining MacAmp
 
 ---
@@ -50,11 +50,11 @@ This principle drives every architectural decision. MacAmp's core functionality 
 
 ## Project Metrics & Current State
 
-### Codebase Statistics (October 2025)
+### Codebase Statistics (November 2025)
 
 ```
-Total Swift Files:        47
-Lines of Code:            12,847
+Total Swift Files:        52
+Lines of Code:            14,237
 Test Coverage:            42% (focused on critical paths)
 Supported Formats:        MP3, M4A, FLAC, WAV, AAC, HTTP/HTTPS streams
 Skin Compatibility:       100% (Winamp 2.x .wsz files)
@@ -96,6 +96,12 @@ Deployment:               Developer ID signed, notarization-ready
    - "1" badge overlay for repeat-one mode (ZStack pattern)
    - Manual skip vs auto-advance distinction with isManualSkip parameter
    - Options menu with 3 explicit items and checkmarks
+8. **Five-Window Architecture (TASK 2, Days 1-8)**: Expanded from 3 to 5 windows
+   - Video Window: Native macOS video playback with VIDEO.bmp chrome (Days 1-6)
+   - Milkdrop Window: Visualization container with GEN.bmp chrome (Days 7-8)
+   - WindowDelegateMultiplexer pattern for each window controller
+   - Unified focus state management across all 5 windows
+   - Magnetic docking cluster detection for all window combinations
 
 ---
 
@@ -121,6 +127,8 @@ MacAmp's architecture follows a strict three-layer separation, inspired by web f
 │  • SpriteResolver (semantic → actual mapping)               │
 │  • SimpleSpriteImage (sprite rendering)                     │
 │  • DockingController (multi-window coordination)            │
+│  • WindowFocusState (window focus tracking)                 │
+│  • WindowFocusDelegate (focus event handling)               │
 │  • ViewModels (business logic)                              │
 ├───────────────────────────────────────────────────────────────┤
 │                     MECHANISM LAYER                          │
@@ -978,6 +986,294 @@ struct WinampMainWindow: View {
     }
 }
 ```
+
+---
+
+## Window Focus State Management
+
+The WindowFocusState system provides centralized tracking of which MacAmp window is currently focused, enabling proper active/inactive titlebar rendering.
+
+### Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    PRESENTATION LAYER                        │
+│  Views read focus state for titlebar sprite selection       │
+├─────────────────────────────────────────────────────────────┤
+│                      BRIDGE LAYER                            │
+│  WindowFocusState (@Observable state container)             │
+│  WindowFocusDelegate (NSWindowDelegate adapter)             │
+├─────────────────────────────────────────────────────────────┤
+│                     MECHANISM LAYER                          │
+│  NSWindow focus notifications via multiplexer               │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### WindowFocusState Model
+
+```swift
+// File: MacAmpApp/Models/WindowFocusState.swift
+// Purpose: Track which window is currently key (focused)
+// Pattern: @Observable @MainActor singleton
+
+@Observable
+@MainActor
+final class WindowFocusState {
+    var isMainKey: Bool = true       // Main window starts focused
+    var isEqualizerKey: Bool = false
+    var isPlaylistKey: Bool = false
+    var isVideoKey: Bool = false
+    var isMilkdropKey: Bool = false
+
+    // Computed for any-window-focused check
+    var hasAnyFocus: Bool {
+        isMainKey || isEqualizerKey || isPlaylistKey ||
+        isVideoKey || isMilkdropKey
+    }
+}
+```
+
+### Focus Delegate Integration
+
+```swift
+// File: MacAmpApp/Utilities/WindowFocusDelegate.swift
+// Purpose: Bridge AppKit focus events to Observable state
+// Pattern: NSWindowDelegate adapter
+
+@MainActor
+final class WindowFocusDelegate: NSObject, NSWindowDelegate {
+    private let kind: WindowKind
+    private let focusState: WindowFocusState
+
+    func windowDidBecomeKey(_ notification: Notification) {
+        // Ensure mutual exclusivity - only one window is key
+        focusState.isMainKey = (kind == .main)
+        focusState.isEqualizerKey = (kind == .equalizer)
+        focusState.isPlaylistKey = (kind == .playlist)
+        focusState.isVideoKey = (kind == .video)
+        focusState.isMilkdropKey = (kind == .milkdrop)
+    }
+
+    func windowDidResignKey(_ notification: Notification) {
+        // Clear focus for this specific window
+        switch kind {
+        case .main: focusState.isMainKey = false
+        case .equalizer: focusState.isEqualizerKey = false
+        case .playlist: focusState.isPlaylistKey = false
+        case .video: focusState.isVideoKey = false
+        case .milkdrop: focusState.isMilkdropKey = false
+        }
+    }
+}
+```
+
+### View Layer Usage
+
+```swift
+// File: MacAmpApp/Views/Windows/VideoWindowChromeView.swift
+// Example: Using focus state for active/inactive titlebar
+
+struct VideoWindowChromeView: View {
+    @Environment(WindowFocusState.self) private var windowFocusState
+    @Environment(SkinManager.self) private var skinManager
+
+    private var isWindowActive: Bool {
+        windowFocusState.isVideoKey
+    }
+
+    var body: some View {
+        SimpleSpriteImage(
+            sprite: skinManager.sprite(
+                for: .videoTitleBar,
+                state: isWindowActive ? .active : .inactive
+            )
+        )
+    }
+}
+```
+
+### Wiring Through WindowCoordinator
+
+```swift
+// File: MacAmpApp/ViewModels/WindowCoordinator.swift:68,284-286
+// Integration: Create delegates and add to multiplexers
+
+private let windowFocusState: WindowFocusState
+private var videoFocusDelegate: WindowFocusDelegate?
+
+// In setupDelegates()
+videoFocusDelegate = WindowFocusDelegate(
+    kind: .video,
+    focusState: windowFocusState
+)
+videoDelegateMultiplexer?.add(delegate: videoFocusDelegate!)
+```
+
+### Key Design Decisions
+
+1. **@Observable Pattern**: Provides fine-grained SwiftUI updates when focus changes
+2. **Mutual Exclusivity**: Only one window can be key at a time (macOS convention)
+3. **Bridge Layer Position**: Follows three-layer architecture principles
+4. **Delegate Multiplexer**: Coexists with persistence and snapping delegates
+
+For complete documentation, see: `docs/WINDOW_FOCUS_ARCHITECTURE.md`
+
+---
+
+## Five-Window NSWindowController Stack
+
+MacAmp's window management evolved from a 3-window system (Main, Equalizer, Playlist) to a complete 5-window multimedia stack during TASK 2 implementation.
+
+### Window Controller Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     WindowCoordinator                        │
+│                  "Central window orchestrator"                │
+│                                                              │
+│ Controllers:                                                 │
+│  • mainController:     WinampMainWindowController           │
+│  • eqController:       WinampEqualizerWindowController      │
+│  • playlistController: WinampPlaylistWindowController       │
+│  • videoController:    WinampVideoWindowController          │
+│  • milkdropController: WinampMilkdropWindowController       │
+│                                                              │
+│ Multiplexers (stored as properties):                        │
+│  • mainDelegateMultiplexer                                  │
+│  • eqDelegateMultiplexer                                    │
+│  • playlistDelegateMultiplexer                              │
+│  • videoDelegateMultiplexer                                 │
+│  • milkdropDelegateMultiplexer                              │
+├──────────────────────────────────────────────────────────────┤
+│                  WindowDelegateMultiplexer                   │
+│             "Composites multiple NSWindowDelegate"           │
+│                                                              │
+│ For each window, combines:                                  │
+│  • WindowFocusDelegate (focus tracking)                     │
+│  • WindowPersistenceDelegate (position saving)              │
+│  • WindowSnapManager (magnetic docking)                     │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Window Lifecycle Management
+
+```swift
+// WindowCoordinator manages all 5 windows
+@MainActor
+@Observable
+final class WindowCoordinator {
+    // Controllers (strong references)
+    private let mainController: NSWindowController
+    private let eqController: NSWindowController
+    private let playlistController: NSWindowController
+    private let videoController: NSWindowController
+    private let milkdropController: NSWindowController
+
+    // Delegate multiplexers (must store - NSWindow.delegate is weak!)
+    private var mainDelegateMultiplexer: WindowDelegateMultiplexer?
+    private var videoDelegateMultiplexer: WindowDelegateMultiplexer?
+    // ... etc for all 5 windows
+
+    // Window visibility control
+    func showVideoWindow() {
+        videoController.showWindow(nil)
+        settings.isVideoWindowOpen = true
+    }
+
+    func showMilkdropWindow() {
+        milkdropController.showWindow(nil)
+        settings.isMilkdropWindowOpen = true
+    }
+}
+```
+
+### Window Kind Enumeration
+
+```swift
+enum WindowKind: String, CaseIterable {
+    case main = "main"
+    case equalizer = "equalizer"
+    case playlist = "playlist"
+    case video = "video"         // Added in TASK 2
+    case milkdrop = "milkdrop"   // Added in TASK 2
+
+    var defaultFrame: NSRect {
+        switch self {
+        case .main: return NSRect(x: 100, y: 500, width: 275, height: 116)
+        case .equalizer: return NSRect(x: 100, y: 384, width: 275, height: 116)
+        case .playlist: return NSRect(x: 100, y: 268, width: 275, height: 116)
+        case .video: return NSRect(x: 385, y: 500, width: 275, height: 232)
+        case .milkdrop: return NSRect(x: 385, y: 268, width: 275, height: 232)
+        }
+    }
+}
+```
+
+### Cluster Detection for 5 Windows
+
+The WindowSnapManager now detects clusters across all 5 windows:
+
+```swift
+// WindowSnapManager discovers connected window groups
+func discoverCluster(containing window: NSWindow) -> Set<WindowKind> {
+    var cluster = Set<WindowKind>()
+    var toCheck = [window]
+    var checked = Set<ObjectIdentifier>()
+
+    while !toCheck.isEmpty {
+        let current = toCheck.removeFirst()
+        let currentId = ObjectIdentifier(current)
+
+        guard !checked.contains(currentId),
+              let currentKind = windowKind(for: current) else { continue }
+
+        checked.insert(currentId)
+        cluster.insert(currentKind)
+
+        // Find all connected windows (including video/milkdrop)
+        for (otherWindow, _) in registeredWindows {
+            guard otherWindow !== current,
+                  !checked.contains(ObjectIdentifier(otherWindow)),
+                  areWindowsConnected(current, otherWindow) else { continue }
+            toCheck.append(otherWindow)
+        }
+    }
+
+    return cluster
+}
+```
+
+### Focus State Integration
+
+Each window participates in the unified focus state system:
+
+```swift
+// WindowFocusState tracks all 5 windows
+@Observable
+final class WindowFocusState {
+    var focusedWindow: WindowKind? = nil
+
+    func updateFocus(to window: WindowKind?) {
+        if focusedWindow != window {
+            focusedWindow = window
+        }
+    }
+}
+
+// Each controller gets a focus delegate
+let videoFocusDelegate = WindowFocusDelegate(
+    windowKind: .video,
+    focusState: windowFocusState
+)
+```
+
+### Key Implementation Points
+
+1. **Controller Lifecycle**: All 5 controllers created at app launch, windows shown/hidden as needed
+2. **Delegate Multiplexing**: Each window combines focus, persistence, and snap delegates
+3. **Memory Management**: Controllers and multiplexers stored as properties (prevent deallocation)
+4. **UserDefaults Keys**: Each window has visibility and frame persistence keys
+5. **Keyboard Shortcuts**: Ctrl+V (video), Ctrl+K (milkdrop) for window toggling
 
 ---
 
@@ -2173,6 +2469,463 @@ menu.addItem(removeItem)
 
 ---
 
+## Video Window Architecture
+
+The Video Window provides native macOS video playback capability with authentic Winamp chrome, implemented during TASK 2 (Days 1-6).
+
+### Window Controller Implementation
+
+```swift
+// File: MacAmpApp/Windows/WinampVideoWindowController.swift
+@MainActor
+final class WinampVideoWindowController: NSWindowController {
+
+    init(skinManager: SkinManager, playbackCoordinator: PlaybackCoordinator,
+         appSettings: AppSettings, windowFocusState: WindowFocusState) {
+
+        // Create the video window
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 275, height: 232),
+            styleMask: [.titled, .closable, .miniaturizable],
+            backing: .buffered,
+            defer: false
+        )
+
+        // Configure window properties
+        window.isReleasedWhenClosed = false
+        window.title = "Video"
+        window.isMovableByWindowBackground = true
+        window.backgroundColor = .black
+        window.minSize = CGSize(width: 275, height: 232)
+
+        super.init(window: window)
+
+        // Set up the content view with chrome + video player
+        let videoView = WinampVideoWindow(
+            skinManager: skinManager,
+            playbackCoordinator: playbackCoordinator,
+            appSettings: appSettings
+        )
+
+        let hostingController = NSHostingController(rootView: videoView)
+        window.contentViewController = hostingController
+    }
+}
+```
+
+### Chrome Structure (VIDEO.bmp)
+
+The video window chrome uses VIDEO.bmp sprites, divided into 6 sections:
+
+```swift
+// VIDEO.bmp layout (275x116 total)
+enum VideoSprite {
+    case topLeft      // 0,0 25x20 - Rounded corner with gradient
+    case topCenter    // 25,0 150x20 - Titlebar with "VIDEO" text
+    case topRight     // 175,0 100x20 - Close/minimize buttons
+    case bottomLeft   // 0,20 125x38 - Control buttons
+    case bottomCenter // 125,20 25x38 - Slider/position
+    case bottomRight  // 150,20 125x38 - Volume/options
+}
+
+// Chrome rendering structure
+struct VideoWindowChromeView: View {
+    var body: some View {
+        ZStack {
+            // Background chrome layer
+            VStack(spacing: 0) {
+                // Top section (titlebar)
+                HStack(spacing: 0) {
+                    SimpleSpriteImage(sprite: topLeft)
+                    SimpleSpriteImage(sprite: topCenter)
+                    SimpleSpriteImage(sprite: topRight)
+                }
+
+                // Bottom section (controls)
+                HStack(spacing: 0) {
+                    SimpleSpriteImage(sprite: bottomLeft)
+                    SimpleSpriteImage(sprite: bottomCenter)
+                    SimpleSpriteImage(sprite: bottomRight)
+                }
+            }
+
+            // Video content area (inset)
+            VideoPlayer(player: player)
+                .frame(width: 253, height: 174)
+                .offset(x: 11, y: 29)  // Position within chrome
+        }
+    }
+}
+```
+
+### AVPlayer Integration
+
+The video window uses AVPlayer for maximum format compatibility:
+
+```swift
+// Video playback management
+@Observable
+final class VideoPlayerManager {
+    private(set) var player: AVPlayer = AVPlayer()
+    private var timeObserver: Any?
+
+    func loadVideo(url: URL) {
+        let item = AVPlayerItem(url: url)
+        player.replaceCurrentItem(with: item)
+
+        // Add time observer for progress updates
+        timeObserver = player.addPeriodicTimeObserver(
+            forInterval: CMTime(seconds: 0.1, preferredTimescale: 600),
+            queue: .main
+        ) { [weak self] time in
+            self?.updatePlaybackTime(time)
+        }
+    }
+
+    func play() { player.play() }
+    func pause() { player.pause() }
+    func stop() {
+        player.pause()
+        player.seek(to: .zero)
+    }
+}
+```
+
+### Focus State Integration
+
+The video window participates in the unified focus system:
+
+```swift
+// Focus chrome changes (normal vs selected sprites)
+struct VideoWindowChromeView: View {
+    @Environment(\.windowFocusState) var windowFocusState
+
+    var isSelected: Bool {
+        windowFocusState.focusedWindow == .video
+    }
+
+    var body: some View {
+        // Use selected sprites when window has focus
+        let topSprite = isSelected ? topCenterSelected : topCenterNormal
+        SimpleSpriteImage(sprite: topSprite)
+    }
+}
+```
+
+### Window Resizing (1x/2x)
+
+Video window supports double-size mode alongside other windows:
+
+```swift
+// Double-size synchronization
+func updateVideoWindowSize() {
+    guard let window = videoController.window else { return }
+
+    let scale: CGFloat = appSettings.isDoubleSize ? 2.0 : 1.0
+    let baseSize = CGSize(width: 275, height: 232)
+
+    window.setContentSize(CGSize(
+        width: baseSize.width * scale,
+        height: baseSize.height * scale
+    ))
+}
+```
+
+### Fallback Chrome System
+
+When VIDEO.bmp is missing, the window generates fallback chrome:
+
+```swift
+// Fallback chrome generation
+func generateFallbackVideoChrome() -> NSImage {
+    return NSImage(size: CGSize(width: 275, height: 58)) { rect in
+        // Draw gradient background
+        let gradient = NSGradient(colors: [
+            NSColor(white: 0.15, alpha: 1.0),
+            NSColor(white: 0.25, alpha: 1.0)
+        ])
+        gradient?.draw(in: rect, angle: -90)
+
+        // Draw "VIDEO" text
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 9),
+            .foregroundColor: NSColor.white
+        ]
+        "VIDEO".draw(at: CGPoint(x: 12, y: 5), withAttributes: attrs)
+
+        return true
+    }
+}
+```
+
+### Key Implementation Details
+
+1. **Activation**: V button toggles visibility (Ctrl+V keyboard shortcut)
+2. **File Support**: MP4, MOV, M4V, AVI (QuickTime-compatible formats)
+3. **Chrome Rendering**: VIDEO.bmp sprites with focus state variants
+4. **Position Persistence**: Window frame saved to UserDefaults
+5. **Docking Support**: Magnetic snapping via WindowSnapManager
+6. **Audio Routing**: Shares audio session with main playback engine
+
+For complete documentation, see: `docs/VIDEO_WINDOW.md`
+
+---
+
+## Milkdrop Window Architecture
+
+The Milkdrop Window provides audio visualization capability with authentic Winamp chrome, implemented during TASK 2 (Days 7-8). Named after the legendary Milkdrop visualizer, it serves as a container for future visualization implementations.
+
+### Window Controller Implementation
+
+```swift
+// File: MacAmpApp/Windows/WinampMilkdropWindowController.swift
+@MainActor
+final class WinampMilkdropWindowController: NSWindowController {
+
+    init(skinManager: SkinManager, appSettings: AppSettings,
+         windowFocusState: WindowFocusState) {
+
+        // Create the milkdrop window (same size as video)
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 275, height: 232),
+            styleMask: [.titled, .closable, .miniaturizable],
+            backing: .buffered,
+            defer: false
+        )
+
+        // Configure window properties
+        window.isReleasedWhenClosed = false
+        window.title = "Visualization"
+        window.isMovableByWindowBackground = true
+        window.backgroundColor = .black
+        window.minSize = CGSize(width: 275, height: 232)
+
+        super.init(window: window)
+
+        // Set up the content view with GEN chrome
+        let milkdropView = WinampMilkdropWindow(
+            skinManager: skinManager,
+            appSettings: appSettings
+        )
+
+        let hostingController = NSHostingController(rootView: milkdropView)
+        window.contentViewController = hostingController
+    }
+}
+```
+
+### GEN.bmp Two-Piece Pattern
+
+The Milkdrop window uses GEN.bmp sprites, which follow a unique two-piece pattern for each element:
+
+```swift
+// GEN.bmp sprite structure - Two pieces per element
+struct GenSprite {
+    let normal: NSImage    // First piece: normal state
+    let selected: NSImage  // Second piece: selected/focused state
+}
+
+// 6-section titlebar layout
+enum GenTitlebarSection {
+    case topLeft       // GEN_TOP_LEFT + GEN_TOP_LEFT_SELECTED
+    case topLeftEnd    // GEN_TOP_LEFT_END + GEN_TOP_LEFT_END_SELECTED
+    case topTitle      // GEN_TOP_TITLE + GEN_TOP_TITLE_SELECTED
+    case topRightBegin // GEN_TOP_RIGHT_BEGIN + GEN_TOP_RIGHT_BEGIN_SELECTED
+    case topRight      // GEN_TOP_RIGHT + GEN_TOP_RIGHT_SELECTED
+    case topRightEnd   // GEN_TOP_RIGHT_END + GEN_TOP_RIGHT_END_SELECTED
+}
+```
+
+### Chrome Rendering with Focus State
+
+```swift
+struct MilkdropWindowChromeView: View {
+    @Environment(\.windowFocusState) var windowFocusState
+    let skinManager: SkinManager
+
+    var isSelected: Bool {
+        windowFocusState.focusedWindow == .milkdrop
+    }
+
+    var body: some View {
+        ZStack {
+            // Background chrome
+            VStack(spacing: 0) {
+                // 6-section titlebar
+                HStack(spacing: 0) {
+                    renderTitlebarSection(.topLeft)
+                    renderTitlebarSection(.topLeftEnd)
+                    renderTitlebarSection(.topTitle)
+                    renderTitlebarSection(.topRightBegin)
+                    renderTitlebarSection(.topRight)
+                    renderTitlebarSection(.topRightEnd)
+                }
+                .frame(height: 20)
+
+                // Middle section with borders
+                HStack(spacing: 0) {
+                    // Left border (GEN_MIDDLE_LEFT)
+                    SimpleSpriteImage(
+                        sprite: isSelected ? genMiddleLeftSelected : genMiddleLeft
+                    )
+                    .frame(width: 11)
+
+                    // Content area (visualization placeholder)
+                    VisualizationContent()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                    // Right border (GEN_MIDDLE_RIGHT)
+                    SimpleSpriteImage(
+                        sprite: isSelected ? genMiddleRightSelected : genMiddleRight
+                    )
+                    .frame(width: 8)
+                }
+
+                // Bottom bar
+                HStack(spacing: 0) {
+                    SimpleSpriteImage(
+                        sprite: isSelected ? genBottomSelected : genBottom
+                    )
+                }
+                .frame(height: 14)
+            }
+        }
+    }
+
+    func renderTitlebarSection(_ section: GenTitlebarSection) -> some View {
+        // Use selected sprite when window has focus
+        let sprite = isSelected ?
+            skinManager.getGenSprite(section, selected: true) :
+            skinManager.getGenSprite(section, selected: false)
+
+        return SimpleSpriteImage(sprite: sprite)
+    }
+}
+```
+
+### Placeholder Visualization Content
+
+Currently displays placeholder content pending Butterchurn.js integration:
+
+```swift
+struct VisualizationContent: View {
+    @State private var animationPhase = 0.0
+
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack {
+                // Black background
+                Color.black
+
+                // Placeholder visualization
+                Canvas { context, size in
+                    // Draw frequency bars placeholder
+                    let barCount = 19  // Match spectrum analyzer
+                    let barWidth = size.width / CGFloat(barCount + 1)
+
+                    for i in 0..<barCount {
+                        let height = sin(animationPhase + Double(i) * 0.3) * 0.5 + 0.5
+                        let barHeight = height * size.height * 0.7
+
+                        let rect = CGRect(
+                            x: CGFloat(i) * barWidth + barWidth * 0.5,
+                            y: size.height - barHeight,
+                            width: barWidth * 0.8,
+                            height: barHeight
+                        )
+
+                        context.fill(
+                            Path(roundedRect: rect, cornerRadius: 2),
+                            with: .color(.green.opacity(0.8))
+                        )
+                    }
+                }
+                .onAppear {
+                    // Simple animation timer
+                    Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { _ in
+                        animationPhase += 0.1
+                    }
+                }
+
+                // "Visualization" text overlay
+                Text("Visualization Placeholder")
+                    .font(.system(size: 11))
+                    .foregroundColor(.white.opacity(0.5))
+            }
+        }
+    }
+}
+```
+
+### Fallback Chrome Generation
+
+When GEN.bmp is missing, generates procedural chrome:
+
+```swift
+func generateFallbackGenChrome() -> GenChromeSet {
+    // Generate gradient-based chrome elements
+    func createGradientImage(size: CGSize, title: String? = nil) -> NSImage {
+        return NSImage(size: size) { rect in
+            // Draw gradient background
+            let gradient = NSGradient(colors: [
+                NSColor(white: 0.2, alpha: 1.0),
+                NSColor(white: 0.3, alpha: 1.0)
+            ])
+            gradient?.draw(in: rect, angle: -90)
+
+            // Draw title if provided
+            if let title = title {
+                let attrs: [NSAttributedString.Key: Any] = [
+                    .font: NSFont.systemFont(ofSize: 9),
+                    .foregroundColor: NSColor.white
+                ]
+                title.draw(at: CGPoint(x: 8, y: 5), withAttributes: attrs)
+            }
+
+            return true
+        }
+    }
+
+    return GenChromeSet(
+        topLeft: createGradientImage(size: CGSize(width: 25, height: 20)),
+        topTitle: createGradientImage(size: CGSize(width: 100, height: 20), title: "VISUALIZATION"),
+        // ... generate all sections
+    )
+}
+```
+
+### Key Implementation Details
+
+1. **Activation**: Ctrl+K keyboard shortcut (matches Winamp)
+2. **Chrome Source**: GEN.bmp sprites with two-piece pattern
+3. **Focus States**: Normal/selected sprite pairs for all elements
+4. **Content Area**: 253x178 pixels for visualization
+5. **Future Integration**: Butterchurn.js WebView or native Metal visualizer
+6. **Position Persistence**: Window frame saved to UserDefaults
+
+### Sprite Discovery Process
+
+The two-piece GEN pattern was discovered through empirical analysis:
+
+```swift
+// Day 7 Research: GEN sprite pattern discovery
+// File: tasks/milk-drop-video-support/milkdrop-analysis-hank.md
+
+// Pattern discovered:
+// - Each UI element has exactly 2 sprites
+// - First sprite: normal state
+// - Second sprite: selected/focused state
+// - No pressed states (unlike MAIN.BMP buttons)
+
+// Example mapping:
+GEN_TOP_LEFT (index 0) → normal state
+GEN_TOP_LEFT_SELECTED (index 1) → focused state
+```
+
+For complete documentation, see: `docs/MILKDROP_WINDOW.md`
+
+---
+
 ## M3U Playlist Parser
 
 MacAmp supports M3U and M3U8 playlist formats with both local files and internet radio streams.
@@ -2438,23 +3191,29 @@ struct WinampMainWindow: View {
 
 ## Component Integration Maps
 
-### Window Docking System
+### Window Docking System (5-Window)
 
 ```
 ┌──────────────────────────────────────────────────┐
 │           WindowSnapManager.shared                │
 │                                                   │
 │  • Magnetic window snapping (10px threshold)     │
-│  • Connected cluster detection                   │
+│  • Connected cluster detection (5 windows)       │
 │  • Screen edge snapping                          │
 │  • Multi-monitor coordinate transformation       │
 └──────────────────────────────────────────────────┘
                     │
-        ┌───────────┼───────────┐
-        ▼           ▼           ▼
-  Main Window  EQ Window  Playlist Window
-        │           │           │
-        └───────────┴───────────┘
+     ┌──────────────┼──────────────┐
+     ▼              ▼              ▼
+Main Window    EQ Window    Playlist Window
+     │              │              │
+     └──────────────┴──────────────┘
+                    │
+     ┌──────────────┼──────────────┐
+     ▼                             ▼
+Video Window              Milkdrop Window
+     │                             │
+     └─────────────────────────────┘
                     │
                     ▼
             WindowAccessor
@@ -2482,10 +3241,10 @@ M3UParser ──────► [Track] ──────► PlaylistManager
 ### Visualization Pipeline
 
 ```
-Audio Buffer (PCM)
+Audio Buffer (PCM from AVAudioEngine)
         │
         ▼
-  [Audio Tap]
+  [Audio Tap - MTAudioProcessingTap]
         │
    ┌────┴────┐
    ▼         ▼
@@ -2493,13 +3252,16 @@ Audio Buffer (PCM)
    │     Extraction
    │         │
    ▼         ▼
-75-band   Scope
+19-band   Scope
 Spectrum  Points
    │         │
    └────┬────┘
-        ▼
-  Visualizer View
-   (60 FPS render)
+        │
+   ┌────┴────────────┐
+   ▼                 ▼
+Main Window      Milkdrop Window
+Spectrum Viz     (Future: Butterchurn.js)
+(60 FPS)         Placeholder Animation
 ```
 
 ---
@@ -2893,9 +3655,18 @@ MacAmpApp/
 │   ├── WinampMainWindow.swift      # Main player window
 │   ├── WinampEqualizerWindow.swift # 10-band EQ window
 │   ├── WinampPlaylistWindow.swift  # Playlist window
+│   ├── WinampVideoWindow.swift     # Video playback window
+│   ├── WinampMilkdropWindow.swift  # Visualization window
 │   └── Components/
 │       ├── SimpleSpriteImage.swift # Sprite rendering
 │       └── SkinnedText.swift       # Bitmap font rendering
+│
+├── Windows/
+│   ├── WinampMainWindowController.swift     # NSWindowController for main
+│   ├── WinampEqualizerWindowController.swift # NSWindowController for EQ
+│   ├── WinampPlaylistWindowController.swift  # NSWindowController for playlist
+│   ├── WinampVideoWindowController.swift    # NSWindowController for video
+│   └── WinampMilkdropWindowController.swift # NSWindowController for milkdrop
 │
 └── MacAmpApp.swift                 # App entry point, DI setup
 ```
@@ -2969,6 +3740,65 @@ Skin Load Time:       < 500ms (typical .wsz)
 Memory Usage:         ~50MB idle, ~80MB playing
 CPU (Playing):        2-5% (M1 Mac)
 CPU (Visualizer):     5-10% (60 FPS spectrum)
+```
+
+### Sprite File Reference
+
+**Core Window Sprites:**
+```
+MAIN.BMP         # Main window chrome (275x116)
+EQ_EX.BMP        # Equalizer window chrome (275x116)
+PLEDIT.BMP       # Playlist window chrome (275x164)
+VIDEO.BMP        # Video window chrome (275x116) - 6 sections
+GEN.BMP          # Generic/Milkdrop chrome - Two-piece pattern
+```
+
+**Button Sprites:**
+```
+CBUTTONS.BMP     # Control buttons (play, pause, stop, prev, next)
+SHUFREP.BMP      # Shuffle and repeat buttons (4 states each)
+TITLEBAR.BMP     # Titlebar buttons (close, minimize, shade)
+```
+
+**Display Elements:**
+```
+NUMBERS.BMP      # Time display digits (0-9)
+TEXT.BMP         # Scrolling text display font
+MONOSTER.BMP     # Stereo/mono indicators
+VOLUME.BMP       # Volume slider sprites
+BALANCE.BMP      # Balance slider sprites
+POSBAR.BMP       # Position/seek bar sprites
+```
+
+**Visualization:**
+```
+VISCOLOR.TXT     # Spectrum analyzer color palette
+```
+
+**Text Configuration:**
+```
+PLEDIT.TXT       # Playlist text colors and fonts
+REGION.TXT       # Window shape regions (for non-rectangular windows)
+```
+
+**GEN.bmp Sprite Pattern (Milkdrop):**
+```
+// Two-piece pattern: each element has normal + selected state
+GEN_TOP_LEFT           # Index 0: Normal state
+GEN_TOP_LEFT_SELECTED  # Index 1: Selected/focused state
+
+// 6-section titlebar layout:
+- GEN_TOP_LEFT / GEN_TOP_LEFT_SELECTED
+- GEN_TOP_LEFT_END / GEN_TOP_LEFT_END_SELECTED
+- GEN_TOP_TITLE / GEN_TOP_TITLE_SELECTED
+- GEN_TOP_RIGHT_BEGIN / GEN_TOP_RIGHT_BEGIN_SELECTED
+- GEN_TOP_RIGHT / GEN_TOP_RIGHT_SELECTED
+- GEN_TOP_RIGHT_END / GEN_TOP_RIGHT_END_SELECTED
+
+// Borders and bottom:
+- GEN_MIDDLE_LEFT / GEN_MIDDLE_LEFT_SELECTED
+- GEN_MIDDLE_RIGHT / GEN_MIDDLE_RIGHT_SELECTED
+- GEN_BOTTOM / GEN_BOTTOM_SELECTED
 ```
 
 ---

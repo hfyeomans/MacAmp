@@ -1,8 +1,9 @@
 import AppKit
 import SwiftUI
 
+@MainActor
 class WinampEqualizerWindowController: NSWindowController {
-    convenience init(skinManager: SkinManager, audioPlayer: AudioPlayer, dockingController: DockingController, settings: AppSettings, radioLibrary: RadioStationLibrary, playbackCoordinator: PlaybackCoordinator) {
+    convenience init(skinManager: SkinManager, audioPlayer: AudioPlayer, dockingController: DockingController, settings: AppSettings, radioLibrary: RadioStationLibrary, playbackCoordinator: PlaybackCoordinator, windowFocusState: WindowFocusState) {
         // ORACLE BLOCKING ISSUE #1 FIX: Truly borderless windows
         // .borderless = 0, so [.borderless, .titled] keeps .titled mask!
         // For custom Winamp chrome, use .borderless ONLY (no system chrome)
@@ -30,6 +31,7 @@ class WinampEqualizerWindowController: NSWindowController {
             .environment(settings)
             .environment(radioLibrary)
             .environment(playbackCoordinator)
+            .environment(windowFocusState)
 
         let hostingController = NSHostingController(rootView: rootView)
         let hostingView = hostingController.view

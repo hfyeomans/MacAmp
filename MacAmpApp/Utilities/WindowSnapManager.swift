@@ -5,6 +5,8 @@ enum WindowKind: Hashable {
     case main
     case playlist
     case equalizer
+    case video      // NEW: Video window (VIDEO.bmp chrome, AVPlayer)
+    case milkdrop   // NEW: Milkdrop visualization window (Butterchurn)
 }
 
 @MainActor
@@ -102,11 +104,11 @@ final class WindowSnapManager: NSObject, NSWindowDelegate {
         let lastOrigin = lastOrigins[movedID] ?? currentOrigin
         let userDelta = NSPoint(x: currentOrigin.x - lastOrigin.x, y: currentOrigin.y - lastOrigin.y)
 
-        // Build mapping from window -> box
+        // Build mapping from window -> box (ONLY for visible windows)
         var idToWindow: [ObjectIdentifier: NSWindow] = [:]
         var idToBox: [ObjectIdentifier: Box] = [:]
         for (_, tracked) in windows {
-            if let w = tracked.window {
+            if let w = tracked.window, w.isVisible {  // FIX: Skip invisible windows
                 let id = ObjectIdentifier(w)
                 idToWindow[id] = w
                 idToBox[id] = box(for: w)
@@ -369,7 +371,7 @@ final class WindowSnapManager: NSObject, NSWindowDelegate {
     private func boxes(in space: VirtualScreenSpace) -> [ObjectIdentifier: Box] {
         var idToBox: [ObjectIdentifier: Box] = [:]
         for (_, tracked) in windows {
-            if let window = tracked.window {
+            if let window = tracked.window, window.isVisible {  // CRITICAL: Skip invisible windows
                 idToBox[ObjectIdentifier(window)] = box(for: window, in: space)
             }
         }

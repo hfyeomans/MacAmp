@@ -207,32 +207,100 @@ struct SkinSprites {
             Sprite(name: "EQ_SHADE_CLOSE_BUTTON_ACTIVE", x: 11, y: 47, width: 9, height: 9),
         ],
 
-        // GEN.bmp (generic window pieces)
+        // GEN.bmp (generic window pieces) - 194×109 pixels
+        // NOTE: Using top-down Y coordinates (same as Webamp)
+        // CENTER_FILL is TWO-PIECE sprite like letters (excludes cyan delimiter)
         "GEN": [
+            // Active titlebar (row 1) - Full height sprites (20px)
             Sprite(name: "GEN_TOP_LEFT_SELECTED", x: 0, y: 0, width: 25, height: 20),
             Sprite(name: "GEN_TOP_LEFT_END_SELECTED", x: 26, y: 0, width: 25, height: 20),
-            Sprite(name: "GEN_TOP_CENTER_FILL_SELECTED", x: 52, y: 0, width: 25, height: 20),
             Sprite(name: "GEN_TOP_RIGHT_END_SELECTED", x: 78, y: 0, width: 25, height: 20),
             Sprite(name: "GEN_TOP_LEFT_RIGHT_FILL_SELECTED", x: 104, y: 0, width: 25, height: 20),
             Sprite(name: "GEN_TOP_RIGHT_SELECTED", x: 130, y: 0, width: 25, height: 20),
+
+            // Active titlebar CENTER_FILL (grey section for text)
+            Sprite(name: "GEN_TOP_CENTER_FILL_SELECTED", x: 52, y: 0, width: 25, height: 20),
+
+            // Inactive titlebar (row 2) - Full height sprites (20px)
             Sprite(name: "GEN_TOP_LEFT", x: 0, y: 21, width: 25, height: 20),
             Sprite(name: "GEN_TOP_LEFT_END", x: 26, y: 21, width: 25, height: 20),
             Sprite(name: "GEN_TOP_CENTER_FILL", x: 52, y: 21, width: 25, height: 20),
             Sprite(name: "GEN_TOP_RIGHT_END", x: 78, y: 21, width: 25, height: 20),
             Sprite(name: "GEN_TOP_LEFT_RIGHT_FILL", x: 104, y: 21, width: 25, height: 20),
             Sprite(name: "GEN_TOP_RIGHT", x: 130, y: 21, width: 25, height: 20),
+
+            // Bottom sections - Webamp coordinates
             Sprite(name: "GEN_BOTTOM_LEFT", x: 0, y: 42, width: 125, height: 14),
             Sprite(name: "GEN_BOTTOM_RIGHT", x: 0, y: 57, width: 125, height: 14),
-            Sprite(name: "GEN_BOTTOM_FILL", x: 127, y: 72, width: 25, height: 14),
+
+            // Bottom fill - TWO PIECES (verified: y=72-84 top + y=87 bottom, no cyan)
+            Sprite(name: "GEN_BOTTOM_FILL_TOP", x: 127, y: 72, width: 25, height: 13),
+            Sprite(name: "GEN_BOTTOM_FILL_BOTTOM", x: 127, y: 87, width: 25, height: 1),
+
+            // Side walls - Webamp coordinates
             Sprite(name: "GEN_MIDDLE_LEFT", x: 127, y: 42, width: 11, height: 29),
             Sprite(name: "GEN_MIDDLE_LEFT_BOTTOM", x: 158, y: 42, width: 11, height: 24),
             Sprite(name: "GEN_MIDDLE_RIGHT", x: 139, y: 42, width: 8, height: 29),
             Sprite(name: "GEN_MIDDLE_RIGHT_BOTTOM", x: 170, y: 42, width: 8, height: 24),
+
+            // Close button - Webamp coordinates
             Sprite(name: "GEN_CLOSE_SELECTED", x: 148, y: 42, width: 9, height: 9),
+
+            // Letter sprites for titlebar text (GEN.BMP 194×109)
+            // CRITICAL: Letters are TWO DISCONTIGUOUS pieces separated by cyan boundaries
+            // Selected: TOP Y=88 H=6, BOTTOM Y=95 H=2 (1px cyan gap at Y=94)
+            // Normal: TOP Y=96 H=6, BOTTOM Y=108 H=1 (6px cyan gap at Y=102-107)
+
+            // Selected (focused) letter TOPS - Y=88, H=6
+            Sprite(name: "GEN_TEXT_SELECTED_M_TOP", x: 86, y: 88, width: 8, height: 6),
+            Sprite(name: "GEN_TEXT_SELECTED_I_TOP", x: 60, y: 88, width: 4, height: 6),
+            Sprite(name: "GEN_TEXT_SELECTED_L_TOP", x: 80, y: 88, width: 5, height: 6),
+            Sprite(name: "GEN_TEXT_SELECTED_K_TOP", x: 72, y: 88, width: 7, height: 6),
+            Sprite(name: "GEN_TEXT_SELECTED_D_TOP", x: 24, y: 88, width: 6, height: 6),
+            Sprite(name: "GEN_TEXT_SELECTED_R_TOP", x: 124, y: 88, width: 7, height: 6),
+            Sprite(name: "GEN_TEXT_SELECTED_O_TOP", x: 102, y: 88, width: 6, height: 6),
+            Sprite(name: "GEN_TEXT_SELECTED_P_TOP", x: 109, y: 88, width: 6, height: 6),
+
+            // Selected (focused) letter BOTTOMS - Y=95, H=2
+            Sprite(name: "GEN_TEXT_SELECTED_M_BOTTOM", x: 86, y: 95, width: 8, height: 2),
+            Sprite(name: "GEN_TEXT_SELECTED_I_BOTTOM", x: 60, y: 95, width: 4, height: 2),
+            Sprite(name: "GEN_TEXT_SELECTED_L_BOTTOM", x: 80, y: 95, width: 5, height: 2),
+            Sprite(name: "GEN_TEXT_SELECTED_K_BOTTOM", x: 72, y: 95, width: 7, height: 2),
+            Sprite(name: "GEN_TEXT_SELECTED_D_BOTTOM", x: 24, y: 95, width: 6, height: 2),
+            Sprite(name: "GEN_TEXT_SELECTED_R_BOTTOM", x: 124, y: 95, width: 7, height: 2),
+            Sprite(name: "GEN_TEXT_SELECTED_O_BOTTOM", x: 102, y: 95, width: 6, height: 2),
+            Sprite(name: "GEN_TEXT_SELECTED_P_BOTTOM", x: 109, y: 95, width: 6, height: 2),
+
+            // Normal (unfocused) letter TOPS - Y=96, H=6
+            Sprite(name: "GEN_TEXT_M_TOP", x: 86, y: 96, width: 8, height: 6),
+            Sprite(name: "GEN_TEXT_I_TOP", x: 60, y: 96, width: 4, height: 6),
+            Sprite(name: "GEN_TEXT_L_TOP", x: 80, y: 96, width: 5, height: 6),
+            Sprite(name: "GEN_TEXT_K_TOP", x: 72, y: 96, width: 7, height: 6),
+            Sprite(name: "GEN_TEXT_D_TOP", x: 24, y: 96, width: 6, height: 6),
+            Sprite(name: "GEN_TEXT_R_TOP", x: 124, y: 96, width: 7, height: 6),
+            Sprite(name: "GEN_TEXT_O_TOP", x: 102, y: 96, width: 6, height: 6),
+            Sprite(name: "GEN_TEXT_P_TOP", x: 109, y: 96, width: 6, height: 6),
+
+            // Normal (unfocused) letter BOTTOMS - Y=108, H=1
+            Sprite(name: "GEN_TEXT_M_BOTTOM", x: 86, y: 108, width: 8, height: 1),
+            Sprite(name: "GEN_TEXT_I_BOTTOM", x: 60, y: 108, width: 4, height: 1),
+            Sprite(name: "GEN_TEXT_L_BOTTOM", x: 80, y: 108, width: 5, height: 1),
+            Sprite(name: "GEN_TEXT_K_BOTTOM", x: 72, y: 108, width: 7, height: 1),
+            Sprite(name: "GEN_TEXT_D_BOTTOM", x: 24, y: 108, width: 6, height: 1),
+            Sprite(name: "GEN_TEXT_R_BOTTOM", x: 124, y: 108, width: 7, height: 1),
+            Sprite(name: "GEN_TEXT_O_BOTTOM", x: 102, y: 108, width: 6, height: 1),
+            Sprite(name: "GEN_TEXT_P_BOTTOM", x: 109, y: 108, width: 6, height: 1),
         ],
 
         // PLEDIT.bmp (Playlist window chrome/buttons)
         "PLEDIT": [
+            // Selected/Focused titlebar (row 1: y=0)
+            Sprite(name: "PLAYLIST_TOP_LEFT_SELECTED", x: 0, y: 0, width: 25, height: 20),
+            Sprite(name: "PLAYLIST_TITLE_BAR_SELECTED", x: 26, y: 0, width: 100, height: 20),
+            Sprite(name: "PLAYLIST_TOP_TILE_SELECTED", x: 127, y: 0, width: 25, height: 20),
+            Sprite(name: "PLAYLIST_TOP_RIGHT_CORNER_SELECTED", x: 153, y: 0, width: 25, height: 20),
+
+            // Unselected/Unfocused titlebar (row 2: y=21)
             Sprite(name: "PLAYLIST_TOP_TILE", x: 127, y: 21, width: 25, height: 20),
             Sprite(name: "PLAYLIST_TOP_LEFT_CORNER", x: 0, y: 21, width: 25, height: 20),
             Sprite(name: "PLAYLIST_TITLE_BAR", x: 26, y: 21, width: 100, height: 20),
@@ -300,7 +368,47 @@ struct SkinSprites {
         ],
 
         // TEXT.bmp (font characters) – indices computed dynamically similar to Webamp
-        "TEXT": SkinSprites.generateTextSprites()
+        "TEXT": SkinSprites.generateTextSprites(),
+
+        // VIDEO.bmp (Video window chrome)
+        "VIDEO": [
+            // Titlebar active (row 1: y=0-19)
+            Sprite(name: "VIDEO_TITLEBAR_TOP_LEFT_ACTIVE", x: 0, y: 0, width: 25, height: 20),
+            Sprite(name: "VIDEO_TITLEBAR_TOP_CENTER_ACTIVE", x: 26, y: 0, width: 100, height: 20),
+            Sprite(name: "VIDEO_TITLEBAR_STRETCHY_ACTIVE", x: 127, y: 0, width: 25, height: 20),
+            Sprite(name: "VIDEO_TITLEBAR_TOP_RIGHT_ACTIVE", x: 153, y: 0, width: 25, height: 20),
+
+            // Titlebar inactive (row 2: y=21-40)
+            Sprite(name: "VIDEO_TITLEBAR_TOP_LEFT_INACTIVE", x: 0, y: 21, width: 25, height: 20),
+            Sprite(name: "VIDEO_TITLEBAR_TOP_CENTER_INACTIVE", x: 26, y: 21, width: 100, height: 20),
+            Sprite(name: "VIDEO_TITLEBAR_STRETCHY_INACTIVE", x: 127, y: 21, width: 25, height: 20),
+            Sprite(name: "VIDEO_TITLEBAR_TOP_RIGHT_INACTIVE", x: 153, y: 21, width: 25, height: 20),
+
+            // Side borders (vertical tiles)
+            Sprite(name: "VIDEO_BORDER_LEFT", x: 127, y: 42, width: 11, height: 29),
+            Sprite(name: "VIDEO_BORDER_RIGHT", x: 139, y: 42, width: 8, height: 29),
+
+            // Bottom bar (row 3-4: y=42-119)
+            // Row 3: Left corner with buttons (x=0-124)
+            Sprite(name: "VIDEO_BOTTOM_LEFT", x: 0, y: 42, width: 125, height: 38),
+            // Row 4: Right corner with resize + tile for stretching (x=0-124 is right corner, x=127+ is tile)
+            Sprite(name: "VIDEO_BOTTOM_RIGHT", x: 0, y: 81, width: 125, height: 38),
+            Sprite(name: "VIDEO_BOTTOM_TILE", x: 127, y: 81, width: 25, height: 38),
+
+            // Buttons (normal state)
+            Sprite(name: "VIDEO_CLOSE_BUTTON", x: 167, y: 3, width: 9, height: 9),
+            Sprite(name: "VIDEO_FULLSCREEN_BUTTON", x: 9, y: 51, width: 15, height: 18),
+            Sprite(name: "VIDEO_1X_BUTTON", x: 24, y: 51, width: 15, height: 18),
+            Sprite(name: "VIDEO_2X_BUTTON", x: 39, y: 51, width: 15, height: 18),
+            Sprite(name: "VIDEO_MISC_BUTTON", x: 69, y: 51, width: 15, height: 18),
+
+            // Buttons (pressed state)
+            Sprite(name: "VIDEO_CLOSE_BUTTON_PRESSED", x: 148, y: 42, width: 9, height: 9),
+            Sprite(name: "VIDEO_FULLSCREEN_BUTTON_PRESSED", x: 158, y: 42, width: 15, height: 18),
+            Sprite(name: "VIDEO_1X_BUTTON_PRESSED", x: 173, y: 42, width: 15, height: 18),
+            Sprite(name: "VIDEO_2X_BUTTON_PRESSED", x: 188, y: 42, width: 15, height: 18),
+            Sprite(name: "VIDEO_MISC_BUTTON_PRESSED", x: 218, y: 42, width: 15, height: 18),
+        ]
     ])
 }
 

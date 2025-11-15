@@ -5,6 +5,19 @@ import AVFoundation
 import Accelerate
 import Observation
 
+// Helper to convert FourCC codes to strings
+extension String {
+    init(fourCC: FourCharCode) {
+        let bytes = [
+            UInt8((fourCC >> 24) & 0xFF),
+            UInt8((fourCC >> 16) & 0xFF),
+            UInt8((fourCC >> 8) & 0xFF),
+            UInt8(fourCC & 0xFF)
+        ]
+        self = String(bytes: bytes, encoding: .ascii) ?? "????"
+    }
+}
+
 // Scratch buffers are confined to the audio tap queue, so @unchecked Sendable is safe.
 private final class VisualizerScratchBuffers: @unchecked Sendable {
     private(set) var mono: [Float] = []
@@ -144,7 +157,12 @@ final class AudioPlayer {
     var playbackProgress: Double = 0.0 // New: 0.0 to 1.0
 
     var volume: Float = 1.0 { // 0.0 to 1.0
-        didSet { playerNode.volume = volume }
+        didSet {
+            playerNode.volume = volume
+            if currentMediaType == .video {
+                videoPlayer?.volume = volume
+            }
+        }
     }
     var balance: Float = 0.0 { // -1.0 (left) to 1.0 (right)
         didSet { playerNode.pan = balance }
@@ -155,6 +173,18 @@ final class AudioPlayer {
     @ObservationIgnored private var currentPlaylistIndex: Int?
     var externalPlaybackHandler: ((Track) -> Void)?
     var shuffleEnabled: Bool = false
+
+    // Video playback support
+    var videoPlayer: AVPlayer?
+    var currentMediaType: MediaType = .audio
+    var videoMetadataString: String = ""
+    @ObservationIgnored private var videoEndObserver: NSObjectProtocol?
+    @ObservationIgnored private var videoTimeObserver: Any?
+
+    enum MediaType {
+        case audio  // MP3, FLAC, WAV, etc.
+        case video  // MP4, MOV, M4V
+    }
 
     /// Repeat mode (Winamp 5 Modern: off/all/one with "1" badge)
     /// Backed by AppSettings for persistence
@@ -298,10 +328,21 @@ final class AudioPlayer {
 
         updatePlaylistPosition(with: track)
 
-        // CRITICAL: Don't call stop() here - it triggers completion handlers mid-transition.
+        // CRITICAL FIX (Oracle identified): Invalidate seekID BEFORE stopping
+        // This prevents the completion handler from calling nextTrack() and re-scheduling audio
+        currentSeekID = UUID()  // Invalidate any pending completion handlers
+        seekGuardActive = true  // Extra protection
+
+        // Don't call stop() here - it triggers completion handlers mid-transition
         // Instead, directly stop the player node and reset state
         playerNode.stop()
         progressTimer?.invalidate()
+
+        // Clear seek guard after brief delay (matches seek() pattern)
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 50_000_000)  // 50ms
+            self.seekGuardActive = false
+        }
 
         currentTrack = track
         currentTitle = "\(track.title) - \(track.artist)"
@@ -315,8 +356,29 @@ final class AudioPlayer {
 
         print("AudioPlayer: Playing track '\(track.title)'")
 
-        // Load the audio file for playback
-        loadAudioFile(url: track.url)
+        // Detect media type and route appropriately
+        let mediaType = detectMediaType(url: track.url)
+
+        // CRITICAL: Cleanup old media type BEFORE setting new one
+        // This ensures proper cleanup when switching between audio and video
+        if currentMediaType != mediaType {
+            if currentMediaType == .video {
+                // Switching FROM video to audio - cleanup video
+                cleanupVideoPlayer()
+                videoMetadataString = ""
+                print("AudioPlayer: Switching from video to audio - cleanup complete")
+            }
+            // Note: Audio cleanup happens in loadVideoFile() via playerNode.stop()
+        }
+
+        currentMediaType = mediaType
+
+        switch mediaType {
+        case .audio:
+            loadAudioFile(url: track.url)
+        case .video:
+            loadVideoFile(url: track.url)
+        }
 
         // Apply EQ auto preset if enabled
         if eqAutoEnabled {
@@ -327,8 +389,148 @@ final class AudioPlayer {
         play()
     }
 
+    // Detect if URL is video or audio file
+    private func detectMediaType(url: URL) -> MediaType {
+        let videoExtensions = ["mp4", "mov", "m4v", "avi"]
+        let ext = url.pathExtension.lowercased()
+        return videoExtensions.contains(ext) ? .video : .audio
+    }
+
+    // Load video file for playback
+    private func loadVideoFile(url: URL) {
+        // Stop any existing audio playback
+        playerNode.stop()
+        progressTimer?.invalidate()
+
+        // Oracle Grade A: Use shared cleanup for old video player
+        cleanupVideoPlayer()
+
+        // Create video player
+        videoPlayer = AVPlayer(url: url)
+        videoPlayer?.volume = volume  // Sync volume at creation time
+        currentMediaType = .video
+
+        // Observe video completion
+        if let playerItem = videoPlayer?.currentItem {
+            videoEndObserver = NotificationCenter.default.addObserver(
+                forName: .AVPlayerItemDidPlayToEndTime,
+                object: playerItem,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor in
+                    self?.onPlaybackEnded()
+                }
+            }
+        }
+
+        // Setup time observer BEFORE play (Oracle Grade A requirement)
+        setupVideoTimeObserver()
+
+        // Start video playback
+        videoPlayer?.play()
+
+        // Update state
+        transition(to: .playing)
+        isPlaying = true
+        isPaused = false
+
+        NSLog("📺 AudioPlayer: Loading video file: \(url.lastPathComponent)")
+
+        // Extract and format video metadata for display
+        Task { @MainActor in
+            await self.loadVideoMetadata(url: url)
+        }
+    }
+
+    /// Extract video metadata for display in video window
+    /// Format: "filename M4V 1280x720" (simple, matches Winamp classic)
+    private func loadVideoMetadata(url: URL) async {
+        // Get filename (without extension)
+        let filename = url.deletingPathExtension().lastPathComponent
+
+        // Get file extension as video type
+        let videoType = url.pathExtension.uppercased()
+
+        do {
+            let asset = AVURLAsset(url: url)
+            let tracks = try await asset.load(.tracks)
+
+            // Get video resolution
+            if let videoTrack = tracks.first(where: { $0.mediaType == .video }) {
+                let naturalSize = try await videoTrack.load(.naturalSize)
+                let width = Int(naturalSize.width)
+                let height = Int(naturalSize.height)
+
+                // Winamp format: "filename (WMV): Video: 1280x720"
+                videoMetadataString = "\(filename) (\(videoType)): Video: \(width)x\(height)"
+                NSLog("📺 Video metadata: \(videoMetadataString)")
+            } else {
+                // No video track found
+                videoMetadataString = "\(filename) (\(videoType)): Video: Unknown"
+                NSLog("📺 Video metadata (no track): \(videoMetadataString)")
+            }
+        } catch {
+            videoMetadataString = "\(filename) (\(videoType)): Video: Unknown"
+            NSLog("⚠️ Failed to load video metadata: \(error)")
+        }
+    }
+
+    // MARK: - Video Time Observer (Part 21 - Oracle Grade A)
+
+    /// Setup periodic time observer for video playback
+    /// Updates currentTime, currentDuration, AND playbackProgress (all three required)
+    private func setupVideoTimeObserver() {
+        tearDownVideoTimeObserver()  // Clean first
+        guard let player = videoPlayer else { return }
+
+        let interval = CMTime(seconds: 0.1, preferredTimescale: 600)
+        videoTimeObserver = player.addPeriodicTimeObserver(
+            forInterval: interval,
+            queue: .main
+        ) { [weak self] time in
+            Task { @MainActor in  // Explicit main actor hop
+                guard let self else { return }
+                let seconds = time.seconds
+                self.currentTime = seconds
+
+                if let item = player.currentItem {
+                    let duration = item.duration.seconds
+                    if duration.isFinite {
+                        self.currentDuration = duration
+                        // CRITICAL: playbackProgress is STORED, must assign explicitly
+                        self.playbackProgress = duration > 0 ? seconds / duration : 0
+                    }
+                }
+            }
+        }
+        NSLog("📺 Video time observer setup")
+    }
+
+    /// Teardown video time observer to prevent memory leaks
+    private func tearDownVideoTimeObserver() {
+        if let observer = videoTimeObserver, let player = videoPlayer {
+            player.removeTimeObserver(observer)
+        }
+        videoTimeObserver = nil
+    }
+
+    /// Shared cleanup for all video resources (Oracle recommendation)
+    private func cleanupVideoPlayer() {
+        tearDownVideoTimeObserver()
+        if let observer = videoEndObserver {
+            NotificationCenter.default.removeObserver(observer)
+            videoEndObserver = nil
+        }
+        videoPlayer?.pause()
+        videoPlayer = nil
+        NSLog("📺 Video player cleanup complete")
+    }
+
     /// Private: Load audio file for playback (does NOT modify playlist)
     private func loadAudioFile(url: URL) {
+        // Video cleanup now happens in playTrack() BEFORE calling this
+        // currentMediaType is already set to .audio by playTrack()
+
         do {
             audioFile = try AVAudioFile(forReading: url)
             rewireForCurrentFile()
@@ -411,6 +613,21 @@ final class AudioPlayer {
             return
         }
 
+        // Handle video playback
+        if currentMediaType == .video {
+            guard let player = videoPlayer else {
+                print("AudioPlayer: No video loaded to play.")
+                return
+            }
+            player.play()
+            transition(to: .playing)
+            isPlaying = true
+            isPaused = false
+            print("AudioPlayer: Play (Video)")
+            return
+        }
+
+        // Audio playback
         guard let file = audioFile else {
             print("AudioPlayer: No track loaded to play.")
             return
@@ -437,6 +654,17 @@ final class AudioPlayer {
     }
 
     func pause() {
+        // Handle video playback
+        if currentMediaType == .video {
+            videoPlayer?.pause()
+            transition(to: .paused)
+            isPlaying = false
+            isPaused = true
+            print("AudioPlayer: Pause (Video)")
+            return
+        }
+
+        // Audio playback
         guard playerNode.isPlaying else { return }
         playerNode.pause()
         transition(to: .paused)
@@ -446,6 +674,16 @@ final class AudioPlayer {
 
     func stop() {
         transition(to: .stopped(.manual))
+
+        // Handle video playback cleanup (Oracle Grade A: use shared cleanup)
+        if currentMediaType == .video {
+            cleanupVideoPlayer()
+            videoMetadataString = ""
+            currentMediaType = .audio
+            print("AudioPlayer: Stop (Video) - cleaned up AVPlayer")
+        }
+
+        // Audio playback cleanup
         playerNode.stop()
         currentSeekID = UUID()
         let _ = scheduleFrom(time: 0, seekID: currentSeekID)  // Ignore return - reset to beginning
@@ -1005,6 +1243,20 @@ final class AudioPlayer {
     /// Seek to a percentage of the track (0.0 to 1.0)
     /// This method calculates time using file.length directly, avoiding race conditions
     func seekToPercent(_ percent: Double, resume: Bool? = nil) {
+        // VIDEO SEEKING (Part 21)
+        if currentMediaType == .video {
+            guard let player = videoPlayer,
+                  let duration = player.currentItem?.duration.seconds,
+                  duration.isFinite else {
+                NSLog("⚠️ seekToPercent: No video player or invalid duration")
+                return
+            }
+            let targetTime = percent * duration
+            seek(to: targetTime, resume: resume)
+            return
+        }
+
+        // AUDIO SEEKING
         guard let file = audioFile else {
             #if DEBUG
             NSLog("⚠️ seekToPercent: No audio file loaded")
@@ -1022,6 +1274,47 @@ final class AudioPlayer {
     }
 
     func seek(to time: Double, resume: Bool? = nil) {
+        // VIDEO SEEKING (Oracle Grade A - Part 21)
+        if currentMediaType == .video {
+            guard let player = videoPlayer else {
+                NSLog("⚠️ seek: Cannot seek - no video player loaded")
+                return
+            }
+            let shouldPlay = resume ?? isPlaying
+
+            let timescale = player.currentItem?.duration.timescale ?? CMTimeScale(NSEC_PER_SEC)
+            let targetTime = CMTime(seconds: max(0, time), preferredTimescale: timescale)
+
+            // Use default tolerance (not .zero) to allow seeking to nearest keyframe
+            // This is MUCH faster and avoids -12860 errors from trying to decode exact frames
+            // AVPlayer will seek to the nearest keyframe, which is typically within 0.5s
+            player.seek(to: targetTime) { [weak self] finished in
+                Task { @MainActor in
+                    guard let self, finished else { return }
+
+                    // Update to actual seek position (may differ slightly from requested)
+                    let actualTime = player.currentTime().seconds
+                    self.currentTime = actualTime
+
+                    if let duration = player.currentItem?.duration.seconds, duration.isFinite {
+                        self.currentDuration = duration
+                        self.playbackProgress = duration > 0 ? actualTime / duration : 0
+                    }
+
+                    if shouldPlay {
+                        player.play()
+                        self.transition(to: .playing)
+                    } else {
+                        player.pause()
+                        self.transition(to: .paused)
+                    }
+                }
+            }
+            NSLog("📺 Video seek to \(time)s")
+            return  // Exit early for video
+        }
+
+        // AUDIO SEEKING
         // Guard: Ensure file is loaded before seeking
         guard let file = audioFile else {
             #if DEBUG

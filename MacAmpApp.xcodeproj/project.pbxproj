@@ -21,6 +21,9 @@
 		366BB1782EC03A18006162E2 /* WinampEqualizerWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 366BB1722EC03A18006162E2 /* WinampEqualizerWindowController.swift */; };
 		366BB17A2EC03F9B006162E2 /* BorderlessWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 366BB1792EC03F9B006162E2 /* BorderlessWindow.swift */; };
 		366BB17C2EC0411E006162E2 /* WinampWindowConfigurator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 366BB17B2EC0411E006162E2 /* WinampWindowConfigurator.swift */; };
+		3686476C2EC8336B009D1D8E /* Size2D.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3686476A2EC8336B009D1D8E /* Size2D.swift */; };
+		3686476D2EC8336B009D1D8E /* VideoWindowSizeState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3686476B2EC8336B009D1D8E /* VideoWindowSizeState.swift */; };
+		3686476F2EC8DAE7009D1D8E /* WindowResizePreviewOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3686476E2EC8DAE7009D1D8E /* WindowResizePreviewOverlay.swift */; };
 		36B64EDC2EB3023D004274F8 /* PlaylistMenuDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36B64EDB2EB3023D004274F8 /* PlaylistMenuDelegate.swift */; };
 		36C0FFE22EB512A300916917 /* Mac_OS-X_skin.wsz in Resources */ = {isa = PBXBuildFile; fileRef = 36C0FFDE2EB512A300916917 /* Mac_OS-X_skin.wsz */; };
 		36C0FFE32EB512A300916917 /* Tron-Vaporwave-by-LuigiHann.wsz in Resources */ = {isa = PBXBuildFile; fileRef = 36C0FFE02EB512A300916917 /* Tron-Vaporwave-by-LuigiHann.wsz */; };
@@ -30,6 +33,15 @@
 		36CAB6262EC13E3D00902330 /* WinampTitlebarDragHandle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36CAB6242EC13E3D00902330 /* WinampTitlebarDragHandle.swift */; };
 		36CAB6272EC13E3D00902330 /* TitlebarDragCaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36CAB6232EC13E3D00902330 /* TitlebarDragCaptureView.swift */; };
 		36CAB6292EC153FD00902330 /* WindowDelegateMultiplexer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36CAB6282EC153FD00902330 /* WindowDelegateMultiplexer.swift */; };
+		36CAB62C2EC2589C00902330 /* WinampVideoWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36CAB62B2EC2589C00902330 /* WinampVideoWindow.swift */; };
+		36CAB62D2EC2589C00902330 /* WinampMilkdropWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36CAB62A2EC2589C00902330 /* WinampMilkdropWindow.swift */; };
+		36CAB6302EC258AD00902330 /* WinampVideoWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36CAB62F2EC258AD00902330 /* WinampVideoWindowController.swift */; };
+		36CAB6312EC258AD00902330 /* WinampMilkdropWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36CAB62E2EC258AD00902330 /* WinampMilkdropWindowController.swift */; };
+		36CAB6362EC25E4000902330 /* VideoWindowChromeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36CAB6342EC25E4000902330 /* VideoWindowChromeView.swift */; };
+		36CAB6382EC265BE00902330 /* AVPlayerViewRepresentable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36CAB6372EC265BE00902330 /* AVPlayerViewRepresentable.swift */; };
+		36CAB63A2EC7845000902330 /* MilkdropWindowChromeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36CAB6392EC7845000902330 /* MilkdropWindowChromeView.swift */; };
+		36CABCFF2EC8016000902330 /* WindowFocusDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36CABCFE2EC8016000902330 /* WindowFocusDelegate.swift */; };
+		36CABD012EC8016700902330 /* WindowFocusState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36CABD002EC8016700902330 /* WindowFocusState.swift */; };
 		397CD3DA0D75924BD0B90FBE /* EQF.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDF85EA8990A038079FC0CC3 /* EQF.swift */; };
 		3D5787FD4B060D13BE690E2A /* WinampEqualizerWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A489CA15E452302405E6FAE /* WinampEqualizerWindow.swift */; };
 		4007DF219A7FEAB6FFC1AE73 /* ImageSlicing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D4BAA0F198BED23AAFABFEC /* ImageSlicing.swift */; };
@@ -85,6 +97,9 @@
 		366BB1742EC03A18006162E2 /* WinampPlaylistWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WinampPlaylistWindowController.swift; sourceTree = "<group>"; };
 		366BB1792EC03F9B006162E2 /* BorderlessWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BorderlessWindow.swift; sourceTree = "<group>"; };
 		366BB17B2EC0411E006162E2 /* WinampWindowConfigurator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WinampWindowConfigurator.swift; sourceTree = "<group>"; };
+		3686476A2EC8336B009D1D8E /* Size2D.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Size2D.swift; sourceTree = "<group>"; };
+		3686476B2EC8336B009D1D8E /* VideoWindowSizeState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoWindowSizeState.swift; sourceTree = "<group>"; };
+		3686476E2EC8DAE7009D1D8E /* WindowResizePreviewOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowResizePreviewOverlay.swift; sourceTree = "<group>"; };
 		36B64EDB2EB3023D004274F8 /* PlaylistMenuDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaylistMenuDelegate.swift; sourceTree = "<group>"; };
 		36C0FFDD2EB512A300916917 /* KenWood_KDC_7000_Elite.wsz */ = {isa = PBXFileReference; lastKnownFileType = file; path = KenWood_KDC_7000_Elite.wsz; sourceTree = "<group>"; };
 		36C0FFDE2EB512A300916917 /* Mac_OS-X_skin.wsz */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Mac_OS-X_skin.wsz"; sourceTree = "<group>"; };
@@ -95,6 +110,15 @@
 		36CAB6232EC13E3D00902330 /* TitlebarDragCaptureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TitlebarDragCaptureView.swift; sourceTree = "<group>"; };
 		36CAB6242EC13E3D00902330 /* WinampTitlebarDragHandle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WinampTitlebarDragHandle.swift; sourceTree = "<group>"; };
 		36CAB6282EC153FD00902330 /* WindowDelegateMultiplexer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowDelegateMultiplexer.swift; sourceTree = "<group>"; };
+		36CAB62A2EC2589C00902330 /* WinampMilkdropWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WinampMilkdropWindow.swift; sourceTree = "<group>"; };
+		36CAB62B2EC2589C00902330 /* WinampVideoWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WinampVideoWindow.swift; sourceTree = "<group>"; };
+		36CAB62E2EC258AD00902330 /* WinampMilkdropWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WinampMilkdropWindowController.swift; sourceTree = "<group>"; };
+		36CAB62F2EC258AD00902330 /* WinampVideoWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WinampVideoWindowController.swift; sourceTree = "<group>"; };
+		36CAB6342EC25E4000902330 /* VideoWindowChromeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoWindowChromeView.swift; sourceTree = "<group>"; };
+		36CAB6372EC265BE00902330 /* AVPlayerViewRepresentable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AVPlayerViewRepresentable.swift; sourceTree = "<group>"; };
+		36CAB6392EC7845000902330 /* MilkdropWindowChromeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MilkdropWindowChromeView.swift; sourceTree = "<group>"; };
+		36CABCFE2EC8016000902330 /* WindowFocusDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowFocusDelegate.swift; sourceTree = "<group>"; };
+		36CABD002EC8016700902330 /* WindowFocusState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowFocusState.swift; sourceTree = "<group>"; };
 		3D258350F99A800B8CBF8AEA /* PresetsButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresetsButton.swift; sourceTree = "<group>"; };
 		3DCDB09162242F5E73FF35F6 /* SkinnedText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkinnedText.swift; sourceTree = "<group>"; };
 		43358BDD8D9B537C9109DF62 /* SnapUtils.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapUtils.swift; sourceTree = "<group>"; };
@@ -164,6 +188,8 @@
 		366BB1752EC03A18006162E2 /* Windows */ = {
 			isa = PBXGroup;
 			children = (
+				36CAB62E2EC258AD00902330 /* WinampMilkdropWindowController.swift */,
+				36CAB62F2EC258AD00902330 /* WinampVideoWindowController.swift */,
 				366BB1792EC03F9B006162E2 /* BorderlessWindow.swift */,
 				366BB1722EC03A18006162E2 /* WinampEqualizerWindowController.swift */,
 				366BB1732EC03A18006162E2 /* WinampMainWindowController.swift */,
@@ -179,6 +205,23 @@
 				36CAB6242EC13E3D00902330 /* WinampTitlebarDragHandle.swift */,
 			);
 			path = Shared;
+			sourceTree = "<group>";
+		};
+		36CAB6352EC25E4000902330 /* Windows */ = {
+			isa = PBXGroup;
+			children = (
+				36CAB6392EC7845000902330 /* MilkdropWindowChromeView.swift */,
+				36CAB6372EC265BE00902330 /* AVPlayerViewRepresentable.swift */,
+				36CAB6342EC25E4000902330 /* VideoWindowChromeView.swift */,
+			);
+			path = Windows;
+			sourceTree = "<group>";
+		};
+		36CABCEC2EC7D8CD00902330 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Resources;
 			sourceTree = "<group>";
 		};
 		679D4139BE833A25AB1CBCFA /* Products */ = {
@@ -224,6 +267,9 @@
 		BD7D477F80E8626CFB2297F5 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				3686476A2EC8336B009D1D8E /* Size2D.swift */,
+				3686476B2EC8336B009D1D8E /* VideoWindowSizeState.swift */,
+				36CABD002EC8016700902330 /* WindowFocusState.swift */,
 				BC98BCD0ED814A6F90A8021D /* RadioStationLibrary.swift */,
 				36C6A4148DF5415F9142A777 /* RadioStation.swift */,
 				CD234EF56789ABCD01234567 /* AppSettings.swift */,
@@ -247,6 +293,9 @@
 		D4D715C613A4E03DDE1E814A /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				36CAB6352EC25E4000902330 /* Windows */,
+				36CAB62A2EC2589C00902330 /* WinampMilkdropWindow.swift */,
+				36CAB62B2EC2589C00902330 /* WinampVideoWindow.swift */,
 				36CAB6252EC13E3D00902330 /* Shared */,
 				032A0DEAD316CCA0CDA2645D /* EqGraphView.swift */,
 				DE345F678901BCDE12345678 /* PreferencesView.swift */,
@@ -266,6 +315,8 @@
 		EB257FE97ABCB16CE95A16E0 /* Utilities */ = {
 			isa = PBXGroup;
 			children = (
+				3686476E2EC8DAE7009D1D8E /* WindowResizePreviewOverlay.swift */,
+				36CABCFE2EC8016000902330 /* WindowFocusDelegate.swift */,
 				36CAB6282EC153FD00902330 /* WindowDelegateMultiplexer.swift */,
 				366BB17B2EC0411E006162E2 /* WinampWindowConfigurator.swift */,
 				F8A2F2CBA9954B0B144DA072 /* WindowAccessor.swift */,
@@ -277,6 +328,7 @@
 		F3B9E0E999F4022FE2955A62 /* MacAmpApp */ = {
 			isa = PBXGroup;
 			children = (
+				36CABCEC2EC7D8CD00902330 /* Resources */,
 				366BB1752EC03A18006162E2 /* Windows */,
 				A7CCE1500578ECAEED8FAA42 /* AppCommands.swift */,
 				E5AF78956321BB7B21810429 /* Info.plist */,
@@ -379,6 +431,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				36CAB62C2EC2589C00902330 /* WinampVideoWindow.swift in Sources */,
+				36CAB62D2EC2589C00902330 /* WinampMilkdropWindow.swift in Sources */,
 				5F1472E33F7A417E8C9E4107 /* RadioStation.swift in Sources */,
 				342759E1558D4553A66C3AD9 /* RadioStationLibrary.swift in Sources */,
 				93C52B55431F4E9C9E54ED8F /* StreamPlayer.swift in Sources */,
@@ -395,6 +449,7 @@
 				0E00109AB5375E26C755CA89 /* M3UEntry.swift in Sources */,
 				8806F9498EDA22C217C91D30 /* M3UParser.swift in Sources */,
 				B9F51DB9B3BAF8611108D699 /* MacAmpApp.swift in Sources */,
+				3686476F2EC8DAE7009D1D8E /* WindowResizePreviewOverlay.swift in Sources */,
 				41559151451B3CDCDAF46147 /* PLEditParser.swift in Sources */,
 				36B64EDC2EB3023D004274F8 /* PlaylistMenuDelegate.swift in Sources */,
 				BC234EF567890ABCD1234567 /* PreferencesView.swift in Sources */,
@@ -408,21 +463,30 @@
 				09ABEB45DA77F1178E0F5317 /* SkinManager.swift in Sources */,
 				C4B3FE7E889G20H9G1F93269 /* SkinsCommands.swift in Sources */,
 				C71871258DD93C12C88EBED2 /* SkinSprites.swift in Sources */,
+				36CAB63A2EC7845000902330 /* MilkdropWindowChromeView.swift in Sources */,
 				366BB1762EC03A18006162E2 /* WinampMainWindowController.swift in Sources */,
 				366BB1772EC03A18006162E2 /* WinampPlaylistWindowController.swift in Sources */,
+				36CAB6382EC265BE00902330 /* AVPlayerViewRepresentable.swift in Sources */,
 				366BB1782EC03A18006162E2 /* WinampEqualizerWindowController.swift in Sources */,
 				9C74995B7081637EB964D3AA /* SkinnedBanner.swift in Sources */,
 				00818CBB70425D395EE2B862 /* SkinnedText.swift in Sources */,
 				77129ADBBBC75DF6BA1EC1C8 /* SnapUtils.swift in Sources */,
 				5E12F332C6929193D1EBFB8D /* SpritePositions.swift in Sources */,
 				70120b5751e24a3084c04a0b /* SpriteResolver.swift in Sources */,
+				36CABD012EC8016700902330 /* WindowFocusState.swift in Sources */,
+				3686476C2EC8336B009D1D8E /* Size2D.swift in Sources */,
+				3686476D2EC8336B009D1D8E /* VideoWindowSizeState.swift in Sources */,
 				366BB1702EC039E6006162E2 /* WindowCoordinator.swift in Sources */,
+				36CAB6362EC25E4000902330 /* VideoWindowChromeView.swift in Sources */,
+				36CAB6302EC258AD00902330 /* WinampVideoWindowController.swift in Sources */,
+				36CAB6312EC258AD00902330 /* WinampMilkdropWindowController.swift in Sources */,
 				49B5BA3F742A4C3CB430A8E3 /* EQPreset.swift in Sources */,
 				93EBD6FADA9285C58A329F5C /* VisColorParser.swift in Sources */,
 				11C6F38CB7C5AADA7B5AFE57 /* VisualizerOptions.swift in Sources */,
 				D077337C4C05A6658475376F /* VisualizerView.swift in Sources */,
 				3D5787FD4B060D13BE690E2A /* WinampEqualizerWindow.swift in Sources */,
 				34EEE95E7D965A0D94D12C30 /* WinampMainWindow.swift in Sources */,
+				36CABCFF2EC8016000902330 /* WindowFocusDelegate.swift in Sources */,
 				ADDBF8E53028E97A7A005307 /* WinampPlaylistWindow.swift in Sources */,
 				592F5C98FC8B29F71341CBD8 /* WinampVolumeSlider.swift in Sources */,
 				878F770AF1608311F0C9BA09 /* WindowAccessor.swift in Sources */,
@@ -460,7 +524,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.8;
+				MARKETING_VERSION = 0.8.9;
 				PRODUCT_BUNDLE_IDENTIFIER = com.hankyeomans.MacAmp;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = macosx;
@@ -617,7 +681,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.8;
+				MARKETING_VERSION = 0.8.9;
 				PRODUCT_BUNDLE_IDENTIFIER = com.hankyeomans.MacAmp;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = macosx;

@@ -59,6 +59,22 @@ struct AppCommands: Commands {
             }
             .keyboardShortcut("r", modifiers: [.control])
 
+            // NEW: Video Window toggle (TASK 2 Day 6)
+            // Oracle fix: Only toggle setting - observer handles show/hide
+            Button(settings.showVideoWindow ? "Hide Video Window" : "Show Video Window") {
+                settings.showVideoWindow.toggle()
+            }
+            .keyboardShortcut("v", modifiers: [.control])
+
+            // NEW: Milkdrop Window toggle (TASK 2 Day 7)
+            // Only toggle setting - observer handles show/hide
+            Button(settings.showMilkdropWindow ? "Hide Milkdrop" : "Show Milkdrop") {
+                settings.showMilkdropWindow.toggle()
+            }
+            .keyboardShortcut("k", modifiers: [.control])
+
+            // NOTE: Ctrl+1/Ctrl+2 removed - VIDEO window now uses drag resize with 1x/2x button presets
+
             // Vertical stacking - no horizontal movement needed
             // Windows now stack vertically in fixed order: Main -> EQ -> Playlist
         }

@@ -1,8 +1,9 @@
 import AppKit
 import SwiftUI
 
+@MainActor
 class WinampPlaylistWindowController: NSWindowController {
-    convenience init(skinManager: SkinManager, audioPlayer: AudioPlayer, dockingController: DockingController, settings: AppSettings, radioLibrary: RadioStationLibrary, playbackCoordinator: PlaybackCoordinator) {
+    convenience init(skinManager: SkinManager, audioPlayer: AudioPlayer, dockingController: DockingController, settings: AppSettings, radioLibrary: RadioStationLibrary, playbackCoordinator: PlaybackCoordinator, windowFocusState: WindowFocusState) {
         // PHASE 4: Playlist window is user-resizable (not double-size)
         // Use .resizable style mask to allow corner dragging
         // Width: Fixed at 275 (Winamp design)
@@ -34,6 +35,7 @@ class WinampPlaylistWindowController: NSWindowController {
             .environment(settings)
             .environment(radioLibrary)
             .environment(playbackCoordinator)
+            .environment(windowFocusState)
 
         let hostingController = NSHostingController(rootView: rootView)
         let hostingView = hostingController.view

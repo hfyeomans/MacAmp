@@ -3,10 +3,11 @@
 <plist version="1.0">
 <dict>
 	<!-- Hardened Runtime Entitlements -->
+	<!-- JIT REQUIRED for WKWebView JavaScript (Butterchurn) -->
 	<key>com.apple.security.cs.allow-jit</key>
-	<false/>
+	<true/>
 	<key>com.apple.security.cs.allow-unsigned-executable-memory</key>
-	<false/>
+	<true/>
 	<key>com.apple.security.cs.allow-dyld-environment-variables</key>
 	<false/>
 	<key>com.apple.security.cs.disable-library-validation</key>

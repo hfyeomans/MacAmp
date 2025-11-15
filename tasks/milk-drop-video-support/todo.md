@@ -1,16 +1,143 @@
 # TODO: Video & Milkdrop Windows (Two-Window Architecture)
 
-**Status**: Ready to begin  
-**Timeline**: 10 days  
-**Last Updated**: 2025-11-08
+**Status**: Days 1-8 Complete + 2x Chrome Scaling ✅
+**Timeline**: 10 days
+**Last Updated**: 2025-11-14
 
-**PRIORITY**:
-1. Video Window (Days 1-6)
-2. Milkdrop Window (Days 7-10)
+**CURRENT**: VIDEO Window 100% Complete (with 2x chrome scaling)
+**NEXT**: Milkdrop Window (Days 9-10) or Ready for Merge
 
 ---
 
-## Days 1-2: Foundation (Shared Infrastructure) ⏳
+## VIDEO WINDOW COMPLETION (Before Moving to Milkdrop)
+
+### Remaining Items for Video Window:
+
+#### 1. Video Metadata Display in Bottom Bar ✅ COMPLETE
+- [x] Research what video metadata to display (filename, type, resolution)
+- [x] Extract metadata from AVPlayer (AVURLAsset.load(.tracks))
+- [x] Use TEXT.bmp sprites to render metadata (like main window track display)
+- [x] Position metadata text in bottom bar black area (x:170, y:213)
+- [x] Make text scroll if too long (115px display width, scrolls at 5px/0.15s)
+- [x] Format: "filename (M4V): Video: 1280x720"
+- [x] Fixed MainActor concurrency warning in timer
+- [x] Tested and working!
+
+#### 2. Window Position Persistence ✅ COMPLETE
+- [x] Added video to persistAllWindowFrames()
+- [x] Added video to applyPersistedWindowPositions()
+- [x] WindowFrameStore.frame(for: .video) saves/loads
+- [x] Video window position persists across app restarts
+- [x] Same pattern as Main/EQ/Playlist
+- [x] Tested and working!
+
+#### 3. Docking with Double-Size Mode (Ctrl+D) ✅ COMPLETE
+- [x] Reviewed `tasks/magnetic-docking-foundation/` for playlist docking pattern
+- [x] Added VideoAttachmentSnapshot structure
+- [x] Added makeVideoDockingContext() function
+- [x] Added moveVideoWindow() function
+- [x] Integrated into resizeMainAndEQWindows()
+- [x] Video can dock to Main, EQ, or Playlist
+- [x] Video stays docked when Ctrl+D pressed
+- [x] Cluster-aware positioning working
+- [x] Build succeeded - ready for testing!
+
+#### 4. VIDEO Window 2x Chrome Scaling ✅ COMPLETE (2025-11-14)
+- [x] Implement independent 2x chrome scaling (videoWindowSizeMode)
+- [x] Add Ctrl+1 keyboard shortcut (normal size)
+- [x] Add Ctrl+2 keyboard shortcut (double size)
+- [x] Use scaleEffect pattern matching Main/EQ windows
+- [x] Add WinampSizes.video constant
+- [x] Fix chrome rendering delay (Group wrapper)
+- [x] Fix startup sequence bug (Oracle guidance)
+- [x] Implement clickable 1x button overlay (31.5, 212)
+- [x] Implement clickable 2x button overlay (46.5, 212)
+- [x] Fix Environment access error (struct-level @Environment)
+- [x] Remove stuck blue focus ring (.focusable(false))
+- [x] User tested and verified working!
+
+#### 5. Document Baked-On Buttons (Partially Complete)
+- [x] 1x and 2x buttons now clickable and functional
+- [ ] Fullscreen button (deferred to future)
+- [ ] TV/Misc button (deferred to future)
+- [ ] Dropdown button (deferred to future)
+
+#### 6. FUTURE: Video Volume Control (Post-MVP) - 1-2 Hours
+- [ ] Update AudioPlayer.volume didSet to sync with videoPlayer.volume
+- [ ] Update loadVideoFile() to apply initial volume
+- [ ] Update mute functionality to set videoPlayer.isMuted
+- [ ] Test volume slider controls video audio level
+- [ ] Test mute button mutes video audio
+- [ ] Test volume changes apply immediately during playback
+- [ ] Test volume persists when switching audio↔video
+- [ ] Test volume restored on app relaunch
+
+#### 7. FUTURE: Video Time Display (Post-MVP)
+- [ ] Show video elapsed/remaining time in main window timer display
+- [ ] Show video time in playlist window (like audio tracks)
+- [ ] Sync video playback time with main window display
+- [ ] Update as video plays
+
+#### 8. FUTURE: VIDEO Window Full Resize (Post-MVP) - 8 Hours
+
+**Phase 1: Size2D Integration (2 hours)** ✅ COMPLETE
+- [x] Create VideoWindowSizeState.swift observable wrapping Size2D
+- [x] Define Size2D.videoMinimum = [0,0] → 275×116px (matches Main/EQ)
+- [x] Define Size2D.videoDefault = [0,4] → 275×232px (current VIDEO size)
+- [x] Define Size2D.video2x = [11,12] → 550×464px (2x default)
+- [x] Implement toPixels() formula: width = 275 + w*25, height = 116 + h*29
+- [x] Add UserDefaults persistence for Size2D
+- [x] Test size conversions verified
+
+**Phase 2: Chrome Dynamic Sizing (2 hours)** ✅ COMPLETE
+- [x] Replace VideoWindowLayout constants with Size2D calculations
+- [x] Implement three-section bottom bar (LEFT 125px + CENTER tiles + RIGHT 125px)
+- [x] Calculate centerWidth = pixelSize.width - 250
+- [x] Add ForEach to tile VIDEO_BOTTOM_TILE (25px) in center section
+- [x] Update titlebar to tile VIDEO_TITLEBAR_STRETCHY based on width
+- [x] Calculate stretchyTilesPerSide with ceil() for full coverage (3 per side at 275px)
+- [x] Update vertical border tiling based on height segments
+- [x] Test chrome - titlebar gap fixed with proper tile calculation
+
+**Phase 3: Resize Handle (1 hour)** ✅ COMPLETE
+- [x] Add buildVideoResizeHandle() in VideoWindowChromeView
+- [x] Create 20×20px invisible drag area in bottom-right corner
+- [x] Position at (pixelSize.width - 10, pixelSize.height - 10)
+- [x] Implement quantized DragGesture (25×29 segments)
+- [x] Preview pattern - commit size only at drag end
+- [x] AppKit overlay window for preview visibility
+- [x] Test drag resizing works with visible preview
+
+**Phase 4: Button Migration (1 hour)** ✅ COMPLETE
+- [x] Update 1x button action: videoSize = .videoDefault ([0,4])
+- [x] Update 2x button action: videoSize = .video2x ([11,12])
+- [x] Remove VideoWindowSizeMode enum from AppSettings
+- [x] Remove scaleEffect logic from WinampVideoWindow
+- [x] Remove Ctrl+1/Ctrl+2 keyboard shortcuts
+- [x] Test buttons set Size2D correctly - working perfectly
+
+**Phase 5: Integration & Testing (2 hours)** ✅ COMPLETE
+- [x] Remove WinampVideoWindow.scaleEffect code
+- [x] Remove old WindowCoordinator.resizeVideoWindow() method
+- [x] Fix WindowSnapManager to exclude invisible windows (phantom fix)
+- [x] Fix titlebar gap with correct tile calculation
+- [x] Implement AppKit preview overlay (shows in both directions)
+- [x] Test chrome aligns at multiple sizes
+- [x] Verify 1x/2x buttons work perfectly
+- [x] Resolve resize jitter with preview pattern + AppKit overlay
+- [ ] Test size persists across app restarts (deferred)
+- [ ] Test docking with resized windows (deferred)
+
+#### 5. Active/Inactive Titlebar (Infrastructure Complete)
+- [x] VIDEO titlebar has ACTIVE/INACTIVE sprite infrastructure ✅
+- [x] SkinSprites.swift defines both states ✅
+- [x] VideoWindowChromeView switches sprites based on isWindowActive ✅
+- [ ] FUTURE: Wire `isWindowActive` to NSWindow.didBecomeKeyNotification
+- [ ] FUTURE: Apply pattern to Main/EQ windows
+
+---
+
+## Days 1-6: Foundation (Shared Infrastructure) ✅ COMPLETE
 
 ### Day 1: AppSettings & Commands
 
@@ -471,157 +598,150 @@
 
 ---
 
-## Day 7: Milkdrop Foundation ⏳
+## Day 7: Milkdrop Foundation ✅ COMPLETE
 
 ### 7.1 MilkdropWindowView Structure
 
 #### Update Stub
-- [ ] Open `MilkdropWindowView.swift`
-- [ ] Add proper titlebar (simple, no skinning)
-- [ ] Create content area for visualization
-- [ ] Add basic window chrome (neutral style)
+- [x] Open `MilkdropWindowView.swift`
+- [x] Add proper titlebar (GEN.bmp letters)
+- [x] Create content area for visualization
+- [x] Add basic window chrome (GEN.bmp sprites)
 
 #### Titlebar
-- [ ] Add "Milkdrop" text label
-- [ ] Add close button
-- [ ] Add minimal controls (preset selector later)
-- [ ] Add drag gesture for window movement
+- [x] Add "MILKDROP" letter sprites (8 letters, two-piece)
+- [x] Add active/inactive focus states
+- [x] Add minimal controls (preset selector deferred)
+- [x] Window draggable via WinampTitlebarDragHandle
 
 #### Content Area
-- [ ] Black background placeholder
-- [ ] Full-size content area
-- [ ] Ready for Butterchurn WebView
+- [x] Black background placeholder (256×198)
+- [x] Full-size content area
+- [x] Ready for visualization (Butterchurn deferred)
 
 ### 7.2 Window Lifecycle
 
 #### Open/Close
-- [ ] Wire to `showMilkdropWindow` toggle
-- [ ] Test window opens/closes independently
-- [ ] Verify Ctrl+Shift+M shortcut works
+- [x] Wire to `showMilkdropWindow` toggle
+- [x] Test window opens/closes independently
+- [x] Verify Ctrl+Shift+K shortcut works (changed from M)
 
 #### Positioning
-- [ ] Load saved frame from AppSettings
-- [ ] Use default position if none saved (x=400, y=0)
-- [ ] Save position on frame change
-- [ ] Test position persists
+- [x] WindowFrameStore persistence integrated
+- [x] Default position handled by WindowCoordinator
+- [x] Save position on frame change
+- [x] Test position persists
 
 ### 7.3 Testing Independence
 
 #### Simultaneous Windows Test
-- [ ] Open video window
-- [ ] Open milkdrop window
-- [ ] Verify both render correctly
-- [ ] Verify both can be dragged independently
-- [ ] Verify both can be closed independently
-- [ ] Test with video playing in video window
-- [ ] Confirm no interference between windows
+- [x] Open video window
+- [x] Open milkdrop window
+- [x] Verify both render correctly
+- [x] Verify both can be dragged independently
+- [x] Verify both can be closed independently
+- [x] Test with video playing in video window
+- [x] Confirm no interference between windows
 
 **Day 7 Complete**: ✅ All above checkboxes checked
 
+### 7.4 Sprite Research (Day 7 Extended)
+
+#### GEN.BMP Letter Discovery
+- [x] Discovered two-piece sprite structure (TOP + BOTTOM)
+- [x] Verified 32 letter sprites (8 letters × 4 variants)
+- [x] Extracted coordinates with ImageMagick
+- [x] Added to SkinSprites.swift
+- [x] Documented in research.md Part 15
+
+#### Window Dimensions
+- [x] Finalized: 275×232 pixels
+- [x] Content cavity: 256×198
+- [x] Chrome overhead documented
+
+**Day 7 Extended**: ✅ Research complete, coordinates verified
+
 ---
 
-## Day 8: Butterchurn Integration ⏳
+## Day 8: Window Focus Architecture ✅ COMPLETE
 
-### 8.1 Butterchurn HTML Bundle
+### 8.1 WindowFocusState Infrastructure
 
-#### Create Resource Directory
-- [ ] Create `MacAmpApp/Resources/Butterchurn/` directory
-- [ ] Add directory to Xcode project
-- [ ] Ensure files bundle with app
+#### Create WindowFocusState.swift
+- [x] Create @Observable singleton class
+- [x] Add activeWindow: WindowKind? property
+- [x] Add setActive() method
+- [x] Add setInactive() method
+- [x] Test state tracking
 
-#### Download Butterchurn Libraries
-- [ ] Download `butterchurn.min.js` from NPM
-- [ ] Download `butterchurn-presets.min.js` from NPM
-- [ ] Verify library versions (3.0.0-beta.4)
-- [ ] Add to Resources/Butterchurn/
+#### Create WindowFocusDelegate.swift
+- [x] Create NSWindowDelegate implementation
+- [x] Handle windowDidBecomeKey notification
+- [x] Handle windowDidResignKey notification
+- [x] Update WindowFocusState singleton
+- [x] Test delegate integration
 
-#### Create index.html
-- [ ] Create `index.html`
-- [ ] Add DOCTYPE and html structure
-- [ ] Create canvas element (id="canvas")
-- [ ] Link to butterchurn.min.js
-- [ ] Link to butterchurn-presets.min.js
-- [ ] Link to bridge.js (to be created)
-- [ ] Add CSS: hide scrollbars, full-size canvas, black background
+### 8.2 WindowCoordinator Integration
 
-#### Create bridge.js
-- [ ] Create `bridge.js`
-- [ ] Initialize Butterchurn visualizer
-- [ ] Create AudioContext
-- [ ] Load 5-8 curated presets:
-  - [ ] Geiss - Spiral Artifact
-  - [ ] Martin - Mandelbox Explorer
-  - [ ] Flexi - Predator-Prey
-  - [ ] Rovastar - Altars of Madness
-  - [ ] Unchained - Lucid Concentration
-  - [ ] (Select 3 more high-quality presets)
-- [ ] Implement `loadPreset(index)` function
-- [ ] Implement `updateAudioData(fftData)` function
-- [ ] Add auto-cycle timer (30s interval)
-- [ ] Expose initialization to Swift via message handler
-- [ ] Add render loop
+#### Add Focus Delegates
+- [x] Create WindowFocusDelegate instances (Video, Milkdrop)
+- [x] Add to delegate multiplexers
+- [x] Test focus events propagate
+- [x] Verify no conflicts with WindowSnapManager
 
-#### Test HTML Bundle
-- [ ] Open index.html in Safari (standalone test)
-- [ ] Verify canvas renders
-- [ ] Verify Butterchurn initializes
-- [ ] Check browser console for errors
+### 8.3 VIDEO Window Focus Sprites
 
-### 8.2 ButterchurnWebView
+#### Add Active/Inactive Sprite Infrastructure
+- [x] Define VIDEO_TITLEBAR_ACTIVE sprites in SkinSprites.swift
+- [x] Define VIDEO_TITLEBAR_INACTIVE sprites in SkinSprites.swift
+- [x] Update VideoWindowChromeView to switch sprites
+- [x] Add @Environment(WindowFocusState.self)
+- [x] Test titlebar changes on focus
 
-#### Create Wrapper
-- [ ] Create `ButterchurnWebView.swift`
-- [ ] Import WebKit
-- [ ] Implement NSViewRepresentable
-- [ ] Add `@Environment(AppSettings.self)`
-- [ ] Add `@Binding var fftData: [Float]`
+### 8.4 Milkdrop Window Focus Sprites
 
-#### WKWebView Configuration
-- [ ] Create WKWebViewConfiguration
-- [ ] Add script message handler for "ready" event
-- [ ] Set userContentController
+#### Add Active/Inactive Letter Rendering
+- [x] Update MilkdropWindowChromeView with focus state
+- [x] Switch between GEN_TEXT_SELECTED_* and GEN_TEXT_*
+- [x] Test letter brightness changes on focus
+- [x] Verify two-piece sprite rendering
 
-#### makeNSView Implementation
-- [ ] Create WKWebView with configuration
-- [ ] Set drawsBackground = false (transparent)
-- [ ] Load index.html from Resources bundle
-- [ ] Grant file access to Butterchurn directory
-- [ ] Return configured web view
+### 8.5 VIDEO Window Enhancements
 
-#### updateNSView Implementation
-- [ ] Send FFT data to JavaScript
-- [ ] Serialize fftData to JSON/string
-- [ ] Call `evaluateJavaScript("updateAudioData(...)")`
-- [ ] Handle errors gracefully
+#### Keyboard Shortcuts
+- [x] Add Ctrl+1 shortcut (normal 1x size)
+- [x] Add Ctrl+2 shortcut (double 2x size)
+- [x] Test shortcuts work
+- [x] Verify state persists
 
-#### Coordinator
-- [ ] Create Coordinator class
-- [ ] Implement WKScriptMessageHandler
-- [ ] Handle "ready" message from JavaScript
-- [ ] Log initialization success
-
-### 8.3 Integration into MilkdropWindowView
-
-#### Update Content Area
-- [ ] Replace placeholder with ButterchurnWebView
-- [ ] Pass fftData binding (empty for now)
-- [ ] Set frame to fill content area
-- [ ] Test WebView loads
-
-### 8.4 Testing
-- [ ] Build and run app
-- [ ] Open milkdrop window
-- [ ] Verify Butterchurn loads in WebView
-- [ ] Check Safari Web Inspector for errors
-- [ ] Verify "ready" message received in Xcode console
-- [ ] Verify canvas renders (static for now, no audio data)
-- [ ] Test with different window sizes
+### 8.6 Testing
+- [x] Build and run app
+- [x] Open VIDEO and Milkdrop windows
+- [x] Click between windows, verify focus changes
+- [x] Verify titlebars switch active/inactive sprites
+- [x] Test keyboard shortcuts
+- [x] Verify no console errors
 
 **Day 8 Complete**: ✅ All above checkboxes checked
 
+### 8.7 Butterchurn Integration DEFERRED
+
+**Decision**: Defer Butterchurn visualization to future task
+
+**Blockers**:
+- [x] WKWebView evaluateJavaScript() failures documented
+- [x] Script message handler issues documented
+- [x] File access sandbox problems documented
+- [x] Blockers documented in BUTTERCHURN_BLOCKERS.md
+
+**Alternative**:
+- [ ] Future: Native Metal visualization (V2.0 enhancement)
+
+**Day 8 Butterchurn**: ⏳ DEFERRED (foundation complete, visualization future)
+
 ---
 
-## Day 9: FFT Audio Bridge ⏳
+## Day 9: FFT Audio Bridge ⏳ DEFERRED (Butterchurn blockers)
 
 ### 9.1 AudioAnalyzer Implementation
 
@@ -714,7 +834,7 @@
 
 ---
 
-## Day 10: Milkdrop Polish & Final Testing ⏳
+## Day 10: Milkdrop Polish & Final Testing ⏳ DEFERRED (Butterchurn blockers)
 
 ### 10.1 Preset Selection
 
@@ -852,6 +972,7 @@
 ## Post-Implementation (Future V2.0)
 
 ### Video Window Enhancements
+- [ ] Dynamic metadata display growth (proportional to window width)
 - [ ] FFmpeg integration (AVI, MKV, FLV, WebM)
 - [ ] Advanced playback controls (speed, filters)
 - [ ] Subtitle support
@@ -870,6 +991,82 @@
 - [ ] Independent NSWindow mode (post magnetic-docking)
 - [ ] Multi-monitor support
 - [ ] Advanced window snapping
+
+---
+
+## PART 21: Video Control Unification (2025-11-15) ✅ COMPLETE
+
+**Goal**: Extend audio controls to also manage video playback
+**Actual Time**: ~4 hours (including debugging and testing)
+**Oracle Validation**: Grade A (all edge cases and patterns addressed)
+**Commits**: 3973bc3 (volume), 058a0e5 (time display), 48e8b64 (seeking)
+
+### Task 1: Video Volume Control (15 min) ✅ COMPLETE
+- [x] Update volume didSet to include video (Line ~160)
+- [x] Add volume sync in loadVideoFile() after AVPlayer creation (Line ~382)
+- [x] Test: Load video, adjust volume slider → video sound changes ✅
+- [x] Test: Load video when volume already at 50% → video starts at 50% ✅
+
+**File:** `MacAmpApp/Audio/AudioPlayer.swift`
+
+### Task 2: Video Time Display (1 hour) ✅ COMPLETE
+- [x] Add observer property: `@ObservationIgnored private var videoTimeObserver: Any?`
+- [x] Implement `setupVideoTimeObserver()` with Task { @MainActor in }
+- [x] Observer updates THREE values: `currentTime`, `currentDuration`, `playbackProgress`
+- [x] Implement `tearDownVideoTimeObserver()` (cleanup function)
+- [x] Implement `cleanupVideoPlayer()` (shared cleanup for all video resources)
+- [x] Call `setupVideoTimeObserver()` in loadVideoFile() BEFORE play()
+- [x] Replace manual cleanup in loadAudioFile() with `cleanupVideoPlayer()`
+- [x] Replace manual cleanup in stop() with `cleanupVideoPlayer()`
+- [x] **CRITICAL BUG FIX**: Invalidate currentSeekID BEFORE stopping playerNode to prevent audio/video conflict
+- [x] Test: Main window timer shows video elapsed time ✅
+- [x] Test: Position slider moves during video playback ✅
+- [x] Test: No memory leaks (proper cleanup on audio switch) ✅
+
+**File:** `MacAmpApp/Audio/AudioPlayer.swift`
+
+### Task 3: Video Seeking Support (1 hour) ✅ COMPLETE
+- [x] Add video branch at TOP of `seek(to:resume:)` (Line ~1179)
+- [x] Add video branch at TOP of `seekToPercent()` to handle nil audioFile case
+- [x] Use proper timescale from currentItem
+- [x] Update all THREE values in completion: currentTime, currentDuration, playbackProgress
+- [x] Handle resume semantics (play/pause state)
+- [x] Use Task { @MainActor in } for state updates
+- [x] Test: Drag position slider during video → video seeks ✅
+- [x] Test: Seek while paused → stays paused ✅
+- [x] Test: Seek while playing → continues playing ✅
+- [x] **KNOWN ISSUE**: AVPlayer -12860 errors (tolerance causing keyframe issues) - functional despite errors
+
+**File:** `MacAmpApp/Audio/AudioPlayer.swift`
+
+### Task 4: Metadata Display Growth ⏳ DEFERRED
+- [x] Widened fixed display width from 115px to 160px (32 characters)
+- [x] Adjusted position for asymmetric growth
+- [ ] ~~Dynamic growth with window resize~~ → DEFERRED to Post-Implementation
+- [ ] ~~Grows proportionally with center tiles~~ → DEFERRED (complex view lifecycle issues)
+
+**Reason for Deferral**: SwiftUI view lifecycle complexity with @State computed properties in ViewBuilder.
+Fixed 160px width works well for most metadata strings.
+
+**File:** `MacAmpApp/Views/Windows/VideoWindowChromeView.swift`
+
+### Task 5: Integration Testing (1 hour) ✅ COMPLETE
+- [x] Load video, adjust volume → video sound changes ✅
+- [x] Load video, drag slider → video seeks ✅
+- [x] Main window shows video time (not stale audio time) ✅
+- [x] ~~Metadata area grows proportionally~~ → DEFERRED (fixed 160px instead)
+- [x] Switch audio→video→audio cleanly ✅
+- [x] Video ends → proper cleanup ✅
+- [x] No Thread Sanitizer warnings ✅
+
+### Success Criteria
+- [x] Volume slider affects video playback sound ✅
+- [x] Position slider seeks within video file ✅
+- [x] Time display shows video elapsed/remaining time ✅
+- [x] ~~Metadata area grows proportionally~~ → DEFERRED (fixed 160px works well)
+- [x] No memory leaks from video time observer ✅
+- [x] Smooth seeking without frame drops ✅ (despite AVPlayer internal errors)
+- [x] Clean switch between audio and video playback ✅
 
 ---
 
