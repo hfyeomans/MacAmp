@@ -1633,7 +1633,7 @@ let diffWithin = SnapUtils.snapWithinUnion(groupBox, union: virtualSpace.bounds,
 
 **Phase:** Implementation Ready
 **Estimated Time:** 3-4 hours
-**Oracle Validation:** Grade B (architecturally sound)
+**Oracle Validation:** Grade A (all edge cases addressed)
 
 ### Tasks Status
 
@@ -1658,12 +1658,13 @@ let diffWithin = SnapUtils.snapWithinUnion(groupBox, union: virtualSpace.bounds,
    - [ ] dynamicDisplayWidth computed property
    - [ ] Metadata scroll view width
 
-### Key Implementation Decisions (Oracle Validated)
+### Key Implementation Decisions (Oracle Grade A)
 
-1. **Extend existing seek() method** - Don't add new API
-2. **Use @ObservationIgnored** - Standard pattern for observers
-3. **Mirror videoEndObserver cleanup** - Established pattern
-4. **Update both currentTime AND currentDuration** - For playbackProgress to work
+1. **playbackProgress is STORED** - Must explicitly assign all three: currentTime, currentDuration, AND playbackProgress
+2. **Volume sync at creation** - Set videoPlayer?.volume immediately after AVPlayer(url:)
+3. **Shared cleanupVideoPlayer()** - Handles both videoTimeObserver and videoEndObserver
+4. **Task { @MainActor in }** - Observer closures need explicit main actor hop
+5. **Extend existing seek()** - Add video branch at TOP, return early
 
 ### Blockers
 

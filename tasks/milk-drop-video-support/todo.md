@@ -997,35 +997,63 @@
 
 **Goal**: Extend audio controls to also manage video playback
 **Estimated Time**: 3-4 hours
-**Oracle Validation**: Grade B (architecturally sound, minor adjustments applied)
+**Oracle Validation**: Grade A (all edge cases and patterns addressed)
 
 ### Task 1: Video Volume Control (15 min) ⏳
-- [ ] Add `videoPlayer?.volume = volume` to AudioPlayer.volume didSet
+- [ ] Update volume didSet to include video (Line ~160):
+  ```swift
+  var volume: Float = 1.0 {
+      didSet {
+          playerNode.volume = volume
+          if currentMediaType == .video {
+              videoPlayer?.volume = volume
+          }
+      }
+  }
+  ```
+- [ ] Add volume sync in loadVideoFile() after AVPlayer creation (Line ~382):
+  ```swift
+  videoPlayer = AVPlayer(url: url)
+  videoPlayer?.volume = volume  // Sync volume at creation
+  ```
 - [ ] Test: Load video, adjust volume slider → video sound changes
-- [ ] Test: Mute button mutes video
-- [ ] Test: Volume persists when switching audio↔video
+- [ ] Test: Load video when volume already at 50% → video starts at 50%
 
-**File:** `MacAmpApp/Audio/AudioPlayer.swift` (Line ~160)
+**File:** `MacAmpApp/Audio/AudioPlayer.swift`
 
 ### Task 2: Video Time Display (1 hour) ⏳
-- [ ] Add `@ObservationIgnored private var videoTimeObserver: Any?`
-- [ ] Implement `setupVideoTimeObserver()` using AVPlayer.addPeriodicTimeObserver
-- [ ] Observer updates both `currentTime` AND `currentDuration`
-- [ ] Implement `cleanupVideoTimeObserver()` (mirror videoEndObserver pattern)
-- [ ] Call `setupVideoTimeObserver()` in `loadVideoFile()`
-- [ ] Call `cleanupVideoTimeObserver()` in `loadAudioFile()` and `stop()`
+- [ ] Add observer property (Line ~175):
+  ```swift
+  @ObservationIgnored private var videoTimeObserver: Any?
+  ```
+- [ ] Implement `setupVideoTimeObserver()` with Task { @MainActor in }
+- [ ] Observer must update THREE values: `currentTime`, `currentDuration`, `playbackProgress`
+- [ ] Implement `tearDownVideoTimeObserver()` (cleanup function)
+- [ ] Implement `cleanupVideoPlayer()` (shared cleanup for all video resources)
+- [ ] Call `setupVideoTimeObserver()` in loadVideoFile() BEFORE play()
+- [ ] Replace manual cleanup in loadAudioFile() with `cleanupVideoPlayer()`
+- [ ] Replace manual cleanup in stop() with `cleanupVideoPlayer()`
 - [ ] Test: Main window timer shows video elapsed time
-- [ ] Test: No memory leaks from observer (proper cleanup)
+- [ ] Test: Position slider moves during video playback
+- [ ] Test: No memory leaks (proper cleanup on audio switch)
 
 **File:** `MacAmpApp/Audio/AudioPlayer.swift`
 
 ### Task 3: Video Seeking Support (1 hour) ⏳
-- [ ] Extend existing `seek(to:resume:)` method (Line ~1177)
-- [ ] Add `case .video:` branch using `videoPlayer?.seek(to:)`
-- [ ] Use CMTime with toleranceBefore/toleranceAfter .zero for precision
+- [ ] Add video branch at TOP of `seek(to:resume:)` (Line ~1179):
+  ```swift
+  if currentMediaType == .video {
+      // ... video seek logic with completion handler
+      return  // Exit early
+  }
+  ```
+- [ ] Use proper timescale from currentItem
+- [ ] Update all THREE values in completion: currentTime, currentDuration, playbackProgress
+- [ ] Handle resume semantics (play/pause state)
+- [ ] Use Task { @MainActor in } for state updates
 - [ ] Test: Drag position slider during video → video seeks
-- [ ] Test: Seek near end of video works correctly
-- [ ] Test: Switching audio↔video doesn't break seeking
+- [ ] Test: Seek while paused → stays paused
+- [ ] Test: Seek while playing → continues playing
 
 **File:** `MacAmpApp/Audio/AudioPlayer.swift`
 

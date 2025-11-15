@@ -1784,86 +1784,151 @@ Before implementation, validate:
 3. Are there existing patterns for time observation we should follow?
 4. Memory management concerns with AVPlayer observers?
 
-**Status:** ✅ Oracle Reviewed (Grade B - Minor adjustments needed)
+**Status:** ✅ Oracle Reviewed (Grade A - Final corrections applied)
 
 ---
 
-### Oracle Feedback (2025-11-15)
+### Oracle Feedback Round 2 (2025-11-15)
 
-**Grade: B** - Architecturally sound, but needs tweaks.
+**Grade: A** - All edge cases and patterns now addressed.
 
-**Key Corrections:**
+**Critical Discoveries:**
 
-1. **DON'T add new seek() method** - Extend existing `AudioPlayer.seek(to:resume:)` instead
-   - Current location: `AudioPlayer.swift:1177-1243`
-   - Branch on `currentMediaType` inside existing method
-   - Avoid touching every caller
+1. **playbackProgress is STORED, not computed** (Line 157)
+   - Must explicitly assign all three: `currentTime`, `currentDuration`, AND `playbackProgress`
+   - No auto-recompute when dependencies change
 
-2. **Update BOTH currentTime AND playbackProgress**
-   - Main window slider uses `playbackProgress` computed property
-   - Time observer must feed both values
-   - Use `currentItem.duration` for progress calculation
+2. **Volume sync at creation time**
+   - Set `videoPlayer?.volume = volume` immediately after `AVPlayer(url:)`
+   - Also update in didSet when `currentMediaType == .video`
 
-3. **Follow existing observer patterns:**
-   - Use `@ObservationIgnored` (same as timers/handles)
-   - Mirror `videoEndObserver` cleanup pattern (lines 385-395, 449-458, 603-615)
-   - Remove observer before nil-ing player
+3. **Shared cleanup function**
+   - Create `cleanupVideoPlayer()` that handles both observers
+   - Call from: `loadVideoFile()`, `loadAudioFile()`, `stop()`
 
-4. **Reuse existing switching hooks:**
-   - `loadVideoFile` already stops engine/timer
-   - `loadAudioFile` tears down video player/observers
-   - `stop()` clears video-specific state
-   - Don't duplicate logic in PlaybackCoordinator
+4. **Task { @MainActor in }** pattern
+   - Observer closures need explicit main actor hop
+   - Matches existing `videoEndObserver` pattern
 
-**Revised Implementation:**
+**Final Grade A Implementation:**
 
 ```swift
 // In AudioPlayer.swift
 
-@ObservationIgnored private var videoTimeObserver: Any?
-
-// Extend existing seek method (line ~1177)
-func seek(to time: Double, resume: Bool = false) {
-    switch currentMediaType {
-    case .video:
-        let cmTime = CMTime(seconds: time, preferredTimescale: 600)
-        videoPlayer?.seek(to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero)
-        currentTime = time
-        // playbackProgress will auto-compute from currentTime/currentDuration
-
-    case .audio:
-        // ... existing audio seek logic
-    }
-}
-
-// Time observer must update both currentTime AND ensure playbackProgress works
-func setupVideoTimeObserver() {
-    guard let player = videoPlayer else { return }
-
-    let interval = CMTime(seconds: 0.1, preferredTimescale: 600)
-    videoTimeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
-        guard let self = self else { return }
-        self.currentTime = time.seconds
-
-        // Also update duration so playbackProgress computes correctly
-        if let duration = player.currentItem?.duration, duration.isNumeric && !duration.isIndefinite {
-            self.currentDuration = duration.seconds
+// 1. VOLUME - Line ~160
+var volume: Float = 1.0 {
+    didSet {
+        playerNode.volume = volume
+        if currentMediaType == .video {
+            videoPlayer?.volume = volume  // ✅ Only when video active
         }
     }
 }
 
-// Mirror videoEndObserver cleanup pattern
-func cleanupVideoTimeObserver() {
+// 2. OBSERVER PROPERTY - Line ~175
+@ObservationIgnored private var videoTimeObserver: Any?
+
+// 3. TIME OBSERVER SETUP
+private func setupVideoTimeObserver() {
+    tearDownVideoTimeObserver()  // ✅ Clean first
+    guard let player = videoPlayer else { return }
+
+    let interval = CMTime(seconds: 0.1, preferredTimescale: 600)
+    videoTimeObserver = player.addPeriodicTimeObserver(
+        forInterval: interval,
+        queue: .main
+    ) { [weak self] time in
+        Task { @MainActor in  // ✅ Explicit main actor hop
+            guard let self else { return }
+            let seconds = time.seconds
+            self.currentTime = seconds
+
+            if let item = player.currentItem {
+                let duration = item.duration.seconds
+                if duration.isFinite {
+                    self.currentDuration = duration
+                    // ✅ CRITICAL: playbackProgress is STORED, must assign explicitly
+                    self.playbackProgress = duration > 0 ? seconds / duration : 0
+                }
+            }
+        }
+    }
+}
+
+private func tearDownVideoTimeObserver() {
     if let observer = videoTimeObserver, let player = videoPlayer {
         player.removeTimeObserver(observer)
     }
     videoTimeObserver = nil
 }
+
+// 4. SHARED CLEANUP
+private func cleanupVideoPlayer() {
+    tearDownVideoTimeObserver()
+    if let observer = videoEndObserver {
+        NotificationCenter.default.removeObserver(observer)
+        videoEndObserver = nil
+    }
+    videoPlayer?.pause()
+    videoPlayer = nil
+}
+
+// 5. IN loadVideoFile() - Line ~382
+videoPlayer = AVPlayer(url: url)
+videoPlayer?.volume = volume  // ✅ Sync volume at creation
+currentMediaType = .video
+// ... add observers ...
+setupVideoTimeObserver()  // ✅ Before play()
+videoPlayer?.play()
+
+// 6. SEEK METHOD - Add at TOP of seek(to:resume:) Line ~1179
+func seek(to time: Double, resume: Bool? = nil) {
+    if currentMediaType == .video {
+        guard let player = videoPlayer else { return }
+        let shouldPlay = resume ?? isPlaying  // ✅ Reuse resume semantics
+
+        let timescale = player.currentItem?.duration.timescale ?? CMTimeScale(NSEC_PER_SEC)
+        let targetTime = CMTime(seconds: max(0, time), preferredTimescale: timescale)
+
+        player.seek(to: targetTime, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                self.currentTime = time
+
+                if let duration = player.currentItem?.duration.seconds, duration.isFinite {
+                    self.currentDuration = duration
+                    self.playbackProgress = duration > 0 ? time / duration : 0  // ✅ Explicit assign
+                }
+
+                if shouldPlay {
+                    player.play()
+                    self.transition(to: .playing)
+                } else {
+                    player.pause()
+                    self.transition(to: .paused)
+                }
+            }
+        }
+        return  // ✅ Exit early for video
+    }
+
+    // ... existing audio path unchanged ...
+}
 ```
 
-**Integration Points (already exist):**
-- `loadVideoFile()` - Add `setupVideoTimeObserver()` call
-- `loadAudioFile()` - Already tears down video, add `cleanupVideoTimeObserver()`
-- `stop()` - Add `cleanupVideoTimeObserver()` call
+**Integration Points (EXACT locations):**
 
-**Confidence:** High - patterns already established in codebase
+1. **loadVideoFile()** - Line ~376
+   - Call `cleanupVideoPlayer()` at start (before creating new player)
+   - Set `videoPlayer?.volume = volume` after creation (line 382)
+   - Call `setupVideoTimeObserver()` before `videoPlayer?.play()` (line 399)
+
+2. **loadAudioFile()** - Line ~447-459
+   - Replace manual cleanup with `cleanupVideoPlayer()`
+
+3. **stop()** - Line ~602-616
+   - Replace manual cleanup with `cleanupVideoPlayer()`
+
+**Key Insight:** `playbackProgress` is a stored `@Observable` property, NOT computed. The time observer must explicitly assign it for the UI to update. This is why audio works (done in `startProgressTimer()`).
+
+**Confidence:** Grade A - All patterns now match existing codebase exactly
