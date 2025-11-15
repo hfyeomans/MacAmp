@@ -128,7 +128,8 @@ final class WindowCoordinator {
             dockingController: dockingController,
             settings: settings,
             radioLibrary: radioLibrary,
-            playbackCoordinator: playbackCoordinator
+            playbackCoordinator: playbackCoordinator,
+            windowFocusState: windowFocusState
         )
 
         // Create Playlist window with environment injection

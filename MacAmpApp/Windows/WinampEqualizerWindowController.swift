@@ -30,6 +30,7 @@ class WinampEqualizerWindowController: NSWindowController {
             .environment(settings)
             .environment(radioLibrary)
             .environment(playbackCoordinator)
+            .environment(windowFocusState)
 
         let hostingController = NSHostingController(rootView: rootView)
         let hostingView = hostingController.view
