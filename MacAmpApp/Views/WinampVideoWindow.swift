@@ -52,17 +52,17 @@ struct WinampVideoWindow: View {
         .fixedSize()
         .background(Color.black)
         .onAppear {
-            syncVideoWindowFrame()
+            // Initial NSWindow frame sync with integral coordinates
+            if let coordinator = WindowCoordinator.shared {
+                let clampedSize = CGSize(
+                    width: round(sizeState.pixelSize.width),
+                    height: round(sizeState.pixelSize.height)
+                )
+                coordinator.updateVideoWindowSize(to: clampedSize)
+            }
         }
-        .onChange(of: sizeState.size) { _, _ in
-            syncVideoWindowFrame()
-        }
-    }
-
-    private func syncVideoWindowFrame() {
-        if let coordinator = WindowCoordinator.shared {
-            coordinator.updateVideoWindowSize(to: sizeState.pixelSize)
-        }
+        // NOTE: onChange removed - NSWindow sync happens in resize gesture onEnded
+        // This prevents calling setFrame() on every size change during drag (jitter source)
     }
 }
 

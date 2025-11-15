@@ -19,6 +19,7 @@ struct VideoWindowChromeView<Content: View>: View {
     @State private var metadataScrollOffset: CGFloat = 0
     @State private var metadataScrollTimer: Timer?
     @State private var dragStartSize: Size2D?  // Oracle fix: struct-level state for drag
+    @State private var isDragging: Bool = false  // Track if currently resizing
 
     @Environment(AudioPlayer.self) private var audioPlayer
     @Environment(WindowFocusState.self) private var windowFocusState
@@ -278,17 +279,18 @@ struct VideoWindowChromeView<Content: View>: View {
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { value in
-                        // Oracle fix: Capture start size on first drag tick
+                        // Capture start size on first drag tick
                         if dragStartSize == nil {
                             dragStartSize = sizeState.size
+                            isDragging = true
                             WindowSnapManager.shared.beginProgrammaticAdjustment()
                         }
 
                         guard let baseSize = dragStartSize else { return }
 
-                        // Oracle fix: Use towardZero rounding to prevent oscillation
-                        let widthDelta = Int((value.translation.width / 25).rounded(.towardZero))
-                        let heightDelta = Int((value.translation.height / 29).rounded(.towardZero))
+                        // Webamp pattern: Use Math.round() on the delta
+                        let widthDelta = Int(round(value.translation.width / 25))
+                        let heightDelta = Int(round(value.translation.height / 29))
 
                         // Calculate new size with minimum constraint
                         let candidate = Size2D(
@@ -296,15 +298,25 @@ struct VideoWindowChromeView<Content: View>: View {
                             height: max(0, baseSize.height + heightDelta)
                         )
 
-                        // Oracle fix: Only update if size actually changed (prevents fighting)
+                        // Update size (onChange will be suppressed during drag)
                         if candidate != sizeState.size {
                             sizeState.size = candidate
                         }
                     }
                     .onEnded { _ in
-                        // Oracle fix: Clean up and end snap suppression
+                        // Clean up
+                        isDragging = false
                         dragStartSize = nil
                         WindowSnapManager.shared.endProgrammaticAdjustment()
+
+                        // Sync NSWindow frame ONCE at drag end (critical for smoothness)
+                        if let coordinator = WindowCoordinator.shared {
+                            let clampedSize = CGSize(
+                                width: round(sizeState.pixelSize.width),
+                                height: round(sizeState.pixelSize.height)
+                            )
+                            coordinator.updateVideoWindowSize(to: clampedSize)
+                        }
                     }
             )
             .position(x: pixelSize.width - 10, y: pixelSize.height - 10)
