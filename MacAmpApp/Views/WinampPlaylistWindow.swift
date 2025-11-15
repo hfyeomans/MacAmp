@@ -499,23 +499,23 @@ struct WinampPlaylistWindow: View {
     private func buildBottomControls() -> some View {
         Button(action: { showAddMenu() }) {
             Color.clear.frame(width: 22, height: 18).contentShape(Rectangle())
-        }.buttonStyle(.plain).position(x: 16, y: 208)
+        }.buttonStyle(.plain).focusable(false).position(x: 16, y: 208)
 
         Button(action: { showRemMenu() }) {
             Color.clear.frame(width: 22, height: 18).contentShape(Rectangle())
-        }.buttonStyle(.plain).position(x: 42, y: 208)
+        }.buttonStyle(.plain).focusable(false).position(x: 42, y: 208)
 
         Button(action: { showSelNotSupportedAlert() }) {
             Color.clear.frame(width: 18, height: 18).contentShape(Rectangle())
-        }.buttonStyle(.plain).position(x: 78, y: 208)
+        }.buttonStyle(.plain).focusable(false).position(x: 78, y: 208)
 
         Button(action: { showMiscMenu() }) {
             Color.clear.frame(width: 18, height: 18).contentShape(Rectangle())
-        }.buttonStyle(.plain).position(x: 105, y: 208)
+        }.buttonStyle(.plain).focusable(false).position(x: 105, y: 208)
 
         Button(action: { showListMenu() }) {
             Color.clear.frame(width: 22, height: 18).contentShape(Rectangle())
-        }.buttonStyle(.plain).position(x: 243, y: 208)
+        }.buttonStyle(.plain).focusable(false).position(x: 243, y: 208)
     }
 
     @ViewBuilder
@@ -528,6 +528,7 @@ struct WinampPlaylistWindow: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .position(x: 133, y: 220)
 
             Button(action: {
@@ -538,6 +539,7 @@ struct WinampPlaylistWindow: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .position(x: 144, y: 220)
 
             Button(action: {
@@ -548,6 +550,7 @@ struct WinampPlaylistWindow: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .position(x: 155, y: 220)
 
             Button(action: {
@@ -558,6 +561,7 @@ struct WinampPlaylistWindow: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .position(x: 166, y: 220)
 
             Button(action: {
@@ -568,6 +572,7 @@ struct WinampPlaylistWindow: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .position(x: 177, y: 220)
 
             Button(action: {
@@ -578,6 +583,7 @@ struct WinampPlaylistWindow: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .position(x: 183, y: 220)
     }
 

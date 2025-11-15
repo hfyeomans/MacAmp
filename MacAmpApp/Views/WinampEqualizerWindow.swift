@@ -174,8 +174,9 @@ struct WinampEqualizerWindow: View {
                 SimpleSpriteImage(spriteKey, width: 26, height: 12)
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .at(EQCoords.onButton)
-            
+
             // AUTO button
             Button(action: {
                 audioPlayer.setAutoEQEnabled(!audioPlayer.eqAutoEnabled)
@@ -184,6 +185,7 @@ struct WinampEqualizerWindow: View {
                 SimpleSpriteImage(spriteKey, width: 32, height: 12)
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .at(EQCoords.autoButton)
         }
     }
