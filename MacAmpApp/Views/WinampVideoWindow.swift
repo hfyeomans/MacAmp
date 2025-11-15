@@ -8,57 +8,66 @@ struct WinampVideoWindow: View {
 
     var body: some View {
         let hasVideo = skinManager.currentSkin?.hasVideoSprites ?? false
+        let scale = settings.videoWindowSizeMode == .twoX ? 2.0 : 1.0
 
-        Group {
-            // Use VIDEO.bmp chrome if available, otherwise fallback
-            if hasVideo {
-                // Skinned chrome using VIDEO.bmp sprites (registered as VIDEO_* keys)
-                VideoWindowChromeView {
-                    // Content area - video player or placeholder
-                    if audioPlayer.currentMediaType == .video,
-                       let player = audioPlayer.videoPlayer {
-                        // Show video player
-                        AVPlayerViewRepresentable(player: player)
-                    } else {
-                        // No video loaded
-                        ZStack {
-                            Color.black
-
-                            Text("No video loaded")
-                                .font(.system(size: 10))
-                                .foregroundColor(.gray)
-                        }
-                    }
-                }
-            } else {
-                // Fallback chrome when VIDEO.bmp not available
-                VideoWindowFallbackChrome {
+        // Use VIDEO.bmp chrome if available, otherwise fallback
+        if hasVideo {
+            // Skinned chrome using VIDEO.bmp sprites (registered as VIDEO_* keys)
+            VideoWindowChromeView {
+                // Content area - video player or placeholder
+                if audioPlayer.currentMediaType == .video,
+                   let player = audioPlayer.videoPlayer {
+                    // Show video player
+                    AVPlayerViewRepresentable(player: player)
+                } else {
+                    // No video loaded
                     ZStack {
                         Color.black
 
-                        Text("Video Window (No VIDEO.bmp)")
+                        Text("No video loaded")
                             .font(.system(size: 10))
                             .foregroundColor(.gray)
                     }
                 }
             }
+            .frame(
+                width: WinampSizes.video.width,
+                height: WinampSizes.video.height,
+                alignment: .topLeading
+            )
+            .scaleEffect(scale, anchor: .topLeading)
+            .frame(
+                width: WinampSizes.video.width * scale,
+                height: WinampSizes.video.height * scale,
+                alignment: .topLeading
+            )
+            .fixedSize()
+            .background(Color.black)
+        } else {
+            // Fallback chrome when VIDEO.bmp not available
+            VideoWindowFallbackChrome {
+                ZStack {
+                    Color.black
+
+                    Text("Video Window (No VIDEO.bmp)")
+                        .font(.system(size: 10))
+                        .foregroundColor(.gray)
+                }
+            }
+            .frame(
+                width: WinampSizes.video.width,
+                height: WinampSizes.video.height,
+                alignment: .topLeading
+            )
+            .scaleEffect(scale, anchor: .topLeading)
+            .frame(
+                width: WinampSizes.video.width * scale,
+                height: WinampSizes.video.height * scale,
+                alignment: .topLeading
+            )
+            .fixedSize()
+            .background(Color.black)
         }
-        .frame(
-            width: WinampSizes.video.width,
-            height: WinampSizes.video.height,
-            alignment: .topLeading
-        )
-        .scaleEffect(
-            settings.videoWindowSizeMode == .twoX ? 2.0 : 1.0,
-            anchor: .topLeading
-        )
-        .frame(
-            width: settings.videoWindowSizeMode == .twoX ? WinampSizes.video.width * 2 : WinampSizes.video.width,
-            height: settings.videoWindowSizeMode == .twoX ? WinampSizes.video.height * 2 : WinampSizes.video.height,
-            alignment: .topLeading
-        )
-        .fixedSize()  // Lock measured size so background sees final geometry
-        .background(Color.black)  // Must be AFTER fixedSize to see scaled dimensions
     }
 }
 
