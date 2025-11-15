@@ -138,8 +138,9 @@ struct WinampEqualizerWindow: View {
                 SimpleSpriteImage("MAIN_MINIMIZE_BUTTON", width: 9, height: 9)
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .at(EQCoords.minimizeButton)
-            
+
             // Shade button
             Button(action: {
                 isShadeMode.toggle()
@@ -147,8 +148,9 @@ struct WinampEqualizerWindow: View {
                 SimpleSpriteImage("MAIN_SHADE_BUTTON", width: 9, height: 9)
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .at(EQCoords.shadeButton)
-            
+
             // Close button
             Button(action: {
                 NSApp.keyWindow?.close()
@@ -156,6 +158,7 @@ struct WinampEqualizerWindow: View {
                 SimpleSpriteImage("MAIN_CLOSE_BUTTON", width: 9, height: 9)
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .at(EQCoords.closeButton)
         }
     }
