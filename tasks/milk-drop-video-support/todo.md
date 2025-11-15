@@ -1,11 +1,11 @@
 # TODO: Video & Milkdrop Windows (Two-Window Architecture)
 
-**Status**: Days 1-6 Complete, Finishing Touches
+**Status**: Days 1-8 Complete + 2x Chrome Scaling ✅
 **Timeline**: 10 days
-**Last Updated**: 2025-11-10
+**Last Updated**: 2025-11-14
 
-**CURRENT**: Video Window Polish & Completion
-**NEXT**: Milkdrop Window (Days 7-10)
+**CURRENT**: VIDEO Window 100% Complete (with 2x chrome scaling)
+**NEXT**: Milkdrop Window (Days 9-10) or Ready for Merge
 
 ---
 
@@ -42,11 +42,25 @@
 - [x] Cluster-aware positioning working
 - [x] Build succeeded - ready for testing!
 
-#### 4. Document Baked-On Buttons (Deferred)
-- [ ] Note buttons in bottom left: fullscreen, 1x, 2x, TV, dropdown
-- [ ] Document their sprite locations
-- [ ] Mark as TODO for future implementation
-- [ ] These will be clickable controls later
+#### 4. VIDEO Window 2x Chrome Scaling ✅ COMPLETE (2025-11-14)
+- [x] Implement independent 2x chrome scaling (videoWindowSizeMode)
+- [x] Add Ctrl+1 keyboard shortcut (normal size)
+- [x] Add Ctrl+2 keyboard shortcut (double size)
+- [x] Use scaleEffect pattern matching Main/EQ windows
+- [x] Add WinampSizes.video constant
+- [x] Fix chrome rendering delay (Group wrapper)
+- [x] Fix startup sequence bug (Oracle guidance)
+- [x] Implement clickable 1x button overlay (31.5, 212)
+- [x] Implement clickable 2x button overlay (46.5, 212)
+- [x] Fix Environment access error (struct-level @Environment)
+- [x] Remove stuck blue focus ring (.focusable(false))
+- [x] User tested and verified working!
+
+#### 5. Document Baked-On Buttons (Partially Complete)
+- [x] 1x and 2x buttons now clickable and functional
+- [ ] Fullscreen button (deferred to future)
+- [ ] TV/Misc button (deferred to future)
+- [ ] Dropdown button (deferred to future)
 
 #### 6. FUTURE: Video Time Display (Post-MVP)
 - [ ] Show video elapsed/remaining time in main window timer display

@@ -955,20 +955,63 @@ xcodebuild -scheme MacAmpApp -destination 'platform=macOS' -enableThreadSanitize
 
 ---
 
-## 🎯 Next Session: Docking OR Milkdrop
+---
 
-**Option A**: Fix video docking with double-size (~2-3 hours)
-- Review TASK 1 playlist docking solution
-- Apply cluster-aware positioning to video window
-- Test video stays docked with Ctrl+D
+## 🎉 VIDEO Window 2x Chrome Scaling COMPLETE (2025-11-14)
 
-**Option B**: Move to Milkdrop (Days 7-10)
-- Video window is functional without docking
-- Can circle back to docking later
-- Milkdrop: ~4 days of work remaining
+### Session Summary
+**Duration:** ~2 hours
+**Commits:** 7 commits (bbf75a5 → 25fa1c8)
+**Status:** ✅ Production Ready - User Verified
+**User Verdict:** "fully functional no visual artifacts works as expected"
 
-**Recommended**: Move to Milkdrop, circle back to docking when polishing both windows
+### Features Implemented ✅
+
+1. **Independent 2x Chrome Scaling**
+   - Ctrl+1 → 275×232 (normal size)
+   - Ctrl+2 → 550×464 (double size)
+   - Uses videoWindowSizeMode (.oneX / .twoX)
+   - Independent from global Ctrl+D mode
+   - Pixel-perfect chrome scaling with scaleEffect
+
+2. **Clickable 1x/2x Buttons**
+   - Transparent overlay buttons over baked-on sprites
+   - 1X button at window position (31.5, 212)
+   - 2X button at window position (46.5, 212)
+   - No focus rings (.focusable(false))
+   - Pattern matches playlist transport buttons
+
+3. **Bug Fixes (Oracle-Guided)**
+   - Fixed chrome rendering delay (removed Group wrapper)
+   - Fixed startup sequence (VIDEO appeared before Main/EQ/Playlist)
+   - Fixed Environment access error (moved to struct level)
+   - Fixed stuck blue focus ring
+
+### Commits
+1. `bbf75a5` - feat: VIDEO window 2x chrome scaling (Ctrl+1/Ctrl+2)
+2. `59dc64d` - fix: Remove chrome rendering delay
+3. `73f93f2` - fix: Startup sequence bug (Oracle)
+4. `6023cc6` - feat: Clickable 1x/2x buttons
+5. `e5731d0` - fix: Environment access error
+6. `d293e95` - fix: Focus ring removal
+7. `25fa1c8` - docs: Completion documentation (removed)
+
+### Files Modified
+- MacAmpApp/Views/Windows/VideoWindowChromeView.swift (+36 lines)
+- MacAmpApp/Views/WinampVideoWindow.swift (refactored scaling)
+- MacAmpApp/ViewModels/WindowCoordinator.swift (startup sequence fix)
+- MacAmpApp/Views/Components/SimpleSpriteImage.swift (+2 constants)
+
+### Testing Results ✅
+- ✅ Ctrl+1/Ctrl+2 keyboard shortcuts work
+- ✅ Clicking 1x/2x buttons works
+- ✅ Chrome scales pixel-perfect at 2x
+- ✅ No visual artifacts or focus rings
+- ✅ VIDEO independent from Ctrl+D
+- ✅ Proper startup sequence (Main/EQ/Playlist first)
+- ✅ Immediate chrome rendering (no delays)
+- ✅ State persistence working
 
 ---
 
-**Next**: Days 7-10 (Milkdrop Window) - apply all lessons learned!
+**Next**: Days 7-10 (Milkdrop Window) or additional VIDEO features
