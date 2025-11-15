@@ -200,6 +200,7 @@ struct VideoWindowChromeView<Content: View>: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .focusable(false)  // Disable focus ring
         .position(x: 31.5, y: 212)
 
         // 2X button - clickable region over baked-on sprite
@@ -213,6 +214,7 @@ struct VideoWindowChromeView<Content: View>: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .focusable(false)  // Disable focus ring
         .position(x: 46.5, y: 212)
     }
 }
