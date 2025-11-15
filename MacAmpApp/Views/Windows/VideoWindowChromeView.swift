@@ -236,11 +236,14 @@ struct VideoWindowChromeView<Content: View>: View {
     @ViewBuilder
     private func buildVideoWindowButtons() -> some View {
         // 1X button - clickable region over baked-on sprite
-        // Sprite coordinates in VIDEO_BOTTOM_LEFT: x=24, y=9 (relative to sprite)
-        // Window coordinates: Fixed to LEFT section
         Button(action: {
             WindowSnapManager.shared.beginProgrammaticAdjustment()
             sizeState.size = .videoDefault  // Set to [0,4] = 275×232
+
+            // Sync NSWindow after button press (since onChange removed)
+            if let coordinator = WindowCoordinator.shared {
+                coordinator.updateVideoWindowSize(to: sizeState.pixelSize)
+            }
             WindowSnapManager.shared.endProgrammaticAdjustment()
         }) {
             Color.clear
@@ -252,11 +255,14 @@ struct VideoWindowChromeView<Content: View>: View {
         .position(x: 31.5, y: bottomBarY)  // Dynamic Y position
 
         // 2X button - clickable region over baked-on sprite
-        // Sprite coordinates in VIDEO_BOTTOM_LEFT: x=39, y=9 (relative to sprite)
-        // Window coordinates: Fixed to LEFT section
         Button(action: {
             WindowSnapManager.shared.beginProgrammaticAdjustment()
             sizeState.size = .video2x  // Set to [11,12] = 550×464
+
+            // Sync NSWindow after button press (since onChange removed)
+            if let coordinator = WindowCoordinator.shared {
+                coordinator.updateVideoWindowSize(to: sizeState.pixelSize)
+            }
             WindowSnapManager.shared.endProgrammaticAdjustment()
         }) {
             Color.clear
