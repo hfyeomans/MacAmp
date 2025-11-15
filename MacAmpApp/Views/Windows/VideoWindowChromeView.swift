@@ -15,12 +15,12 @@ private enum VideoWindowLayout {
 struct VideoWindowChromeView<Content: View>: View {
     @ViewBuilder let content: Content
     let sizeState: VideoWindowSizeState
+    @Binding var dragPreviewSize: Size2D?  // Shared with parent for preview overlay
 
     @State private var metadataScrollOffset: CGFloat = 0
     @State private var metadataScrollTimer: Timer?
     @State private var dragStartSize: Size2D?  // Struct-level state for drag
     @State private var isDragging: Bool = false  // Track if currently resizing
-    @State private var dragPreviewSize: Size2D?  // Preview size during drag (not committed)
 
     @Environment(AudioPlayer.self) private var audioPlayer
     @Environment(WindowFocusState.self) private var windowFocusState
@@ -85,17 +85,6 @@ struct VideoWindowChromeView<Content: View>: View {
         }
         .frame(width: pixelSize.width, height: pixelSize.height, alignment: .topLeading)
         .background(Color.black)
-        .overlay(alignment: .topLeading) {
-            // Preview overlay OUTSIDE main ZStack (not clipped)
-            // Shows target size during drag for both shrinking and growing
-            if let previewSize = dragPreviewSize {
-                let previewPixels = previewSize.toVideoPixels()
-                Rectangle()
-                    .strokeBorder(Color.cyan.opacity(0.7), lineWidth: 3)
-                    .fill(Color.cyan.opacity(0.05))
-                    .frame(width: previewPixels.width, height: previewPixels.height)
-            }
-        }
         .onDisappear {
             metadataScrollTimer?.invalidate()
             metadataScrollTimer = nil
