@@ -371,7 +371,7 @@ final class WindowSnapManager: NSObject, NSWindowDelegate {
     private func boxes(in space: VirtualScreenSpace) -> [ObjectIdentifier: Box] {
         var idToBox: [ObjectIdentifier: Box] = [:]
         for (_, tracked) in windows {
-            if let window = tracked.window {
+            if let window = tracked.window, window.isVisible {  // CRITICAL: Skip invisible windows
                 idToBox[ObjectIdentifier(window)] = box(for: window, in: space)
             }
         }
