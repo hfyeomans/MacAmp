@@ -73,16 +73,7 @@ struct AppCommands: Commands {
             }
             .keyboardShortcut("k", modifiers: [.control])
 
-            // NEW: Video Window Size (1x/2x)
-            Button("Video Window 1x") {
-                settings.videoWindowSizeMode = .oneX
-            }
-            .keyboardShortcut("1", modifiers: [.control])
-
-            Button("Video Window 2x") {
-                settings.videoWindowSizeMode = .twoX
-            }
-            .keyboardShortcut("2", modifiers: [.control])
+            // NOTE: Ctrl+1/Ctrl+2 removed - VIDEO window now uses drag resize with 1x/2x button presets
 
             // Vertical stacking - no horizontal movement needed
             // Windows now stack vertically in fixed order: Main -> EQ -> Playlist

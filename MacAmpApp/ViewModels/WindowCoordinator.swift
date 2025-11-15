@@ -212,8 +212,7 @@ final class WindowCoordinator {
         setupMilkdropWindowObserver()
         debugLogWindowPositions(step: "after setupMilkdropWindowObserver")
 
-        // NEW: Observe for video window size changes (1x/2x)
-        setupVideoSizeObserver()
+        // NOTE: setupVideoSizeObserver removed - Size2D managed by VideoWindowSizeState directly
 
         // PHASE 2: Register windows with WindowSnapManager
         // WindowSnapManager provides:
@@ -441,68 +440,10 @@ final class WindowCoordinator {
         // This ensures Milkdrop never appears before Main/EQ/Playlist
     }
 
-    // NEW: Video window size observer (1x/2x buttons)
-    private func setupVideoSizeObserver() {
-        videoSizeTask?.cancel()
-
-        videoSizeTask = Task { @MainActor [weak self] in
-            guard let self else { return }
-
-            withObservationTracking {
-                _ = self.settings.videoWindowSizeMode
-            } onChange: {
-                Task { @MainActor [weak self] in
-                    guard let self else { return }
-                    self.resizeVideoWindow(mode: self.settings.videoWindowSizeMode)
-                    self.setupVideoSizeObserver()
-                }
-            }
-        }
-
-        // Apply initial state
-        resizeVideoWindow(mode: settings.videoWindowSizeMode)
-    }
-
-    private func resizeVideoWindow(mode: AppSettings.VideoWindowSizeMode) {
-        guard let video = videoWindow else {
-            if settings.windowDebugLoggingEnabled {
-                print("⚠️ resizeVideoWindow: videoWindow is nil")
-            }
-            return
-        }
-
-        let newSize: CGSize
-        switch mode {
-        case .oneX:
-            newSize = CGSize(width: 275, height: 232)
-            if settings.windowDebugLoggingEnabled {
-                print("📐 Resizing Video window to 1x: \(newSize)")
-            }
-        case .twoX:
-            newSize = CGSize(width: 550, height: 464)
-            if settings.windowDebugLoggingEnabled {
-                print("📐 Resizing Video window to 2x: \(newSize)")
-            }
-        }
-
-        // Oracle Issue #2: Wrap resize operation with managers
-        beginSuppressingPersistence()
-        WindowSnapManager.shared.beginProgrammaticAdjustment()
-
-        var frame = video.frame
-        if settings.windowDebugLoggingEnabled {
-            print("📐 Current frame: \(frame)")
-        }
-        frame.size = newSize
-        video.setFrame(frame, display: true, animate: true)
-        if settings.windowDebugLoggingEnabled {
-            print("📐 New frame: \(video.frame)")
-        }
-
-        WindowSnapManager.shared.endProgrammaticAdjustment()
-        endSuppressingPersistence()
-        schedulePersistenceFlush()
-    }
+    // NOTE: setupVideoSizeObserver() and resizeVideoWindow() removed
+    // VIDEO window size now managed by VideoWindowSizeState directly
+    // Size changes happen through drag gesture or button clicks in VideoWindowChromeView
+    // NSWindow frame automatically updates based on SwiftUI .frame() modifier
 
     private func resizeMainAndEQWindows(doubled: Bool, animated _: Bool = true, persistResult: Bool = true) {
         guard let main = mainWindow, let eq = eqWindow else { return }
