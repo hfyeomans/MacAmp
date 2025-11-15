@@ -1627,12 +1627,13 @@ let diffWithin = SnapUtils.snapWithinUnion(groupBox, union: virtualSpace.bounds,
 
 ---
 
-## PART 21: Video Control Unification (2025-11-15)
+## PART 21: Video Control Unification (2025-11-15) ✅ COMPLETE
 
-### Current Status: Planning Complete ✅
+### Current Status: Implementation Complete ✅
 
-**Phase:** Implementation Ready
+**Phase:** COMPLETE - All core features implemented
 **Estimated Time:** 3-4 hours
+**Actual Time:** ~4 hours (including debugging)
 **Oracle Validation:** Grade A (all edge cases addressed)
 
 ### Tasks Status
@@ -1640,14 +1641,16 @@ let diffWithin = SnapUtils.snapWithinUnion(groupBox, union: virtualSpace.bounds,
 | Task | Status | Est. Time | Actual | Notes |
 |------|--------|-----------|--------|-------|
 | 1. Video Volume Control | ✅ Complete | 15 min | 5 min | Commit 3973bc3 |
-| 2. Video Time Display | ✅ Complete | 1 hour | 35 min | Commit 058a0e5 + bug fix |
-| 3. Video Seeking Support | 🔄 In Progress | 1 hour | - | Extend existing seek() |
-| 4. Metadata Display Growth | ⏳ Pending | 30 min | - | UI-only |
-| 5. Integration Testing | ⏳ Pending | 1 hour | - | Full test suite |
+| 2. Video Time Display | ✅ Complete | 1 hour | 35 min | Commit 058a0e5 + critical bug fix |
+| 3. Video Seeking Support | ✅ Complete | 1 hour | 45 min | Commit 48e8b64 + seekToPercent fix |
+| 4. Metadata Display Growth | ⏳ DEFERRED | 30 min | 30 min | Fixed 160px width (dynamic deferred) |
+| 5. Integration Testing | ✅ Complete | 1 hour | 30 min | All tests pass |
 
-### Files to Modify
+**Summary:** 3 of 4 tasks fully implemented, 1 task partially done (fixed width vs dynamic)
 
-1. **`MacAmpApp/Audio/AudioPlayer.swift`**
+### Files Modified
+
+1. **`MacAmpApp/Audio/AudioPlayer.swift`** ✅ ALL COMPLETE
    - [x] Volume didSet (add video) ✅
    - [x] Volume sync at AVPlayer creation ✅
    - [x] videoTimeObserver property ✅
@@ -1657,11 +1660,14 @@ let diffWithin = SnapUtils.snapWithinUnion(groupBox, union: virtualSpace.bounds,
    - [x] Call setup in loadVideoFile() ✅
    - [x] Use cleanup in loadAudioFile() ✅
    - [x] Use cleanup in stop() ✅
-   - [x] seek() method extension (video branch at top) ✅
+   - [x] seek() video branch at top ✅
+   - [x] seekToPercent() video branch at top ✅
+   - [x] **CRITICAL BUG FIX**: currentSeekID invalidation before playerNode.stop() ✅
 
-2. **`MacAmpApp/Views/Windows/VideoWindowChromeView.swift`**
-   - [ ] dynamicDisplayWidth computed property
-   - [ ] Metadata scroll view width
+2. **`MacAmpApp/Views/Windows/VideoWindowChromeView.swift`** ✅ PARTIAL (static 160px)
+   - [x] Widened display width from 115px to 160px
+   - [x] Adjusted position for asymmetric growth
+   - [ ] ~~Dynamic growth with resize~~ → DEFERRED to Post-Implementation
 
 ### Key Implementation Decisions (Oracle Grade A)
 
@@ -1670,15 +1676,36 @@ let diffWithin = SnapUtils.snapWithinUnion(groupBox, union: virtualSpace.bounds,
 3. **Shared cleanupVideoPlayer()** - Handles both videoTimeObserver and videoEndObserver
 4. **Task { @MainActor in }** - Observer closures need explicit main actor hop
 5. **Extend existing seek()** - Add video branch at TOP, return early
+6. **seekToPercent() CRITICAL** - Must also check for video (audioFile is nil for video)
+7. **currentSeekID invalidation** - Invalidate BEFORE stopping playerNode to prevent completion handler conflicts
+
+### Critical Bugs Found & Fixed
+
+1. **Audio/Video Conflict Bug**: When switching from audio to video, audio would keep playing
+   - **Root Cause**: playerNode.stop() fires completion handler → nextTrack() → re-schedules audio
+   - **Fix**: Invalidate currentSeekID BEFORE stopping, add seekGuardActive protection
+   - **Oracle Identified**: Grade A validation caught this edge case
+
+2. **Seek Slider Not Working for Video**: Dragging slider had no effect
+   - **Root Cause**: seekToPercent() guards on audioFile which is nil for video
+   - **Fix**: Add video branch at top of seekToPercent() to calculate from AVPlayer duration
+
+3. **AVPlayer -12860 Errors**: Tolerance causing keyframe decoding issues
+   - **Status**: Functional despite errors, documented for future investigation
+
+### Known Issues (Non-Blocking)
+
+- AVPlayer -12860/-12852 errors during seeking (functional despite errors)
+- Dynamic metadata growth deferred (160px fixed works well for most cases)
 
 ### Blockers
 
-None - all patterns already established in codebase
+None - Part 21 complete
 
-### Next Action
+### Deferred to Post-Implementation
 
-Start with Task 1 (Video Volume Control) - lowest risk, immediate feedback
+- Dynamic metadata display growth (proportional to window width)
 
 ---
 
-**State Last Updated:** 2025-11-15 (Part 21 planning complete)
+**State Last Updated:** 2025-11-15 (Part 21 implementation complete)

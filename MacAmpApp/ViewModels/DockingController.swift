@@ -73,8 +73,31 @@ final class DockingController {
     var showEqualizer: Bool { pane(for: .equalizer)?.visible ?? false }
 
     func toggleMain() { toggleVisibility(.main) }
-    func togglePlaylist() { toggleVisibility(.playlist) }
-    func toggleEqualizer() { toggleVisibility(.equalizer) }
+    func togglePlaylist() {
+        toggleVisibility(.playlist)
+        // Sync actual NSWindow to match DockingController state
+        if let coordinator = WindowCoordinator.shared {
+            let shouldBeVisible = showPlaylist
+            if shouldBeVisible {
+                coordinator.showPlaylistWindow()
+            } else {
+                coordinator.hidePlaylistWindow()
+            }
+        }
+    }
+
+    func toggleEqualizer() {
+        toggleVisibility(.equalizer)
+        // Sync actual NSWindow to match DockingController state
+        if let coordinator = WindowCoordinator.shared {
+            let shouldBeVisible = showEqualizer
+            if shouldBeVisible {
+                coordinator.showEQWindow()
+            } else {
+                coordinator.hideEQWindow()
+            }
+        }
+    }
 
     func toggleVisibility(_ type: DockPaneType) {
         guard let idx = panes.firstIndex(where: { $0.type == type }) else { return }

@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 
+@MainActor
 class WinampPlaylistWindowController: NSWindowController {
     convenience init(skinManager: SkinManager, audioPlayer: AudioPlayer, dockingController: DockingController, settings: AppSettings, radioLibrary: RadioStationLibrary, playbackCoordinator: PlaybackCoordinator, windowFocusState: WindowFocusState) {
         // PHASE 4: Playlist window is user-resizable (not double-size)

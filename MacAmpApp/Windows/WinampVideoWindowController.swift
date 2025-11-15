@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 
+@MainActor
 class WinampVideoWindowController: NSWindowController {
     convenience init(skinManager: SkinManager, audioPlayer: AudioPlayer, dockingController: DockingController, settings: AppSettings, radioLibrary: RadioStationLibrary, playbackCoordinator: PlaybackCoordinator, windowFocusState: WindowFocusState) {
         // Create borderless window (follows TASK 1 pattern)

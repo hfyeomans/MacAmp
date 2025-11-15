@@ -133,7 +133,7 @@ struct WinampEqualizerWindow: View {
         Group {
             // Minimize button
             Button(action: {
-                NSApp.keyWindow?.miniaturize(nil)
+                WindowCoordinator.shared?.minimizeKeyWindow()
             }) {
                 SimpleSpriteImage("MAIN_MINIMIZE_BUTTON", width: 9, height: 9)
             }
@@ -153,7 +153,7 @@ struct WinampEqualizerWindow: View {
 
             // Close button
             Button(action: {
-                NSApp.keyWindow?.close()
+                WindowCoordinator.shared?.hideEQWindow()
             }) {
                 SimpleSpriteImage("MAIN_CLOSE_BUTTON", width: 9, height: 9)
             }

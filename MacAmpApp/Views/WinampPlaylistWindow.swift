@@ -600,13 +600,13 @@ struct WinampPlaylistWindow: View {
 
     @ViewBuilder
     private func buildTitleBarButtons() -> some View {
-            Button(action: { NSApp.keyWindow?.miniaturize(nil) }) {
+            Button(action: { WindowCoordinator.shared?.minimizeKeyWindow() }) {
                 SimpleSpriteImage("MAIN_MINIMIZE_BUTTON", width: 9, height: 9)
             }
             .buttonStyle(.plain)
             .focusable(false)
             .position(x: 248.5, y: 7.5)
-            
+
             Button(action: {
                 isShadeMode.toggle()
             }) {
@@ -616,7 +616,7 @@ struct WinampPlaylistWindow: View {
             .focusable(false)
             .position(x: 258.5, y: 7.5)
 
-            Button(action: { NSApp.keyWindow?.close() }) {
+            Button(action: { WindowCoordinator.shared?.hidePlaylistWindow() }) {
                 SimpleSpriteImage("MAIN_CLOSE_BUTTON", width: 9, height: 9)
             }
             .buttonStyle(.plain)

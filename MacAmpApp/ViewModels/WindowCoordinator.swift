@@ -753,6 +753,98 @@ final class WindowCoordinator {
         }
     }
 
+    // MARK: - Window Visibility Control (AppKit Bridge)
+    // These methods encapsulate AppKit calls so SwiftUI views don't directly manipulate NSWindow objects
+
+    /// Minimize the current key window (called from SwiftUI minimize buttons)
+    func minimizeKeyWindow() {
+        NSApp.keyWindow?.miniaturize(nil)
+    }
+
+    /// Close the current key window (called from SwiftUI close buttons)
+    func closeKeyWindow() {
+        NSApp.keyWindow?.close()
+    }
+
+    /// Show the EQ window
+    func showEQWindow() {
+        eqWindow?.orderFront(nil)
+        isEQWindowVisible = true
+    }
+
+    /// Hide the EQ window
+    func hideEQWindow() {
+        eqWindow?.orderOut(nil)
+        isEQWindowVisible = false
+    }
+
+    /// Toggle EQ window visibility, returns new visibility state
+    func toggleEQWindowVisibility() -> Bool {
+        guard let eq = eqWindow else { return false }
+        if eq.isVisible {
+            eq.orderOut(nil)
+            isEQWindowVisible = false
+            return false
+        } else {
+            eq.orderFront(nil)
+            isEQWindowVisible = true
+            return true
+        }
+    }
+
+    /// Show the Playlist window
+    func showPlaylistWindow() {
+        playlistWindow?.orderFront(nil)
+        isPlaylistWindowVisible = true
+    }
+
+    /// Hide the Playlist window
+    func hidePlaylistWindow() {
+        playlistWindow?.orderOut(nil)
+        isPlaylistWindowVisible = false
+    }
+
+    /// Toggle Playlist window visibility, returns new visibility state
+    func togglePlaylistWindowVisibility() -> Bool {
+        guard let playlist = playlistWindow else { return false }
+        if playlist.isVisible {
+            playlist.orderOut(nil)
+            isPlaylistWindowVisible = false
+            return false
+        } else {
+            playlist.orderFront(nil)
+            isPlaylistWindowVisible = true
+            return true
+        }
+    }
+
+    /// Observable EQ window visibility state (source of truth for SwiftUI binding)
+    var isEQWindowVisible: Bool = false
+
+    /// Observable Playlist window visibility state (source of truth for SwiftUI binding)
+    var isPlaylistWindowVisible: Bool = false
+
+    /// Check if EQ window is currently visible (read from NSWindow)
+    var isEQWindowCurrentlyVisible: Bool {
+        eqWindow?.isVisible ?? false
+    }
+
+    /// Check if Playlist window is currently visible (read from NSWindow)
+    var isPlaylistWindowCurrentlyVisible: Bool {
+        playlistWindow?.isVisible ?? false
+    }
+
+    /// Show resize preview overlay for video window (AppKit bridge)
+    func showVideoResizePreview(_ overlay: WindowResizePreviewOverlay, previewSize: CGSize) {
+        guard let window = videoWindow else { return }
+        overlay.show(in: window, previewSize: previewSize)
+    }
+
+    /// Hide resize preview overlay for video window (AppKit bridge)
+    func hideVideoResizePreview(_ overlay: WindowResizePreviewOverlay) {
+        overlay.hide()
+    }
+
     private func movePlaylist(using context: PlaylistDockingContext, targetFrame: NSRect, playlistSize: NSSize, animated: Bool) {
         guard let playlist = playlistWindow else { return }
         let origin = playlistOrigin(for: context.attachment, anchorFrame: targetFrame, playlistSize: playlistSize)
@@ -1109,6 +1201,10 @@ final class WindowCoordinator {
         eqWindow?.orderFront(nil)
         playlistWindow?.orderFront(nil)
 
+        // Update observable visibility state
+        isEQWindowVisible = true
+        isPlaylistWindowVisible = true
+
         // ORACLE FIX: Show VIDEO/Milkdrop if user had them open previously
         // This ensures they appear AFTER Main/EQ/Playlist, not before
         if settings.showVideoWindow {
@@ -1124,10 +1220,22 @@ final class WindowCoordinator {
     // Menu command integration
     func showMain() { mainWindow?.makeKeyAndOrderFront(nil) }
     func hideMain() { mainWindow?.orderOut(nil) }
-    func showEqualizer() { eqWindow?.makeKeyAndOrderFront(nil) }
-    func hideEqualizer() { eqWindow?.orderOut(nil) }
-    func showPlaylist() { playlistWindow?.makeKeyAndOrderFront(nil) }
-    func hidePlaylist() { playlistWindow?.orderOut(nil) }
+    func showEqualizer() {
+        eqWindow?.makeKeyAndOrderFront(nil)
+        isEQWindowVisible = true
+    }
+    func hideEqualizer() {
+        eqWindow?.orderOut(nil)
+        isEQWindowVisible = false
+    }
+    func showPlaylist() {
+        playlistWindow?.makeKeyAndOrderFront(nil)
+        isPlaylistWindowVisible = true
+    }
+    func hidePlaylist() {
+        playlistWindow?.orderOut(nil)
+        isPlaylistWindowVisible = false
+    }
     // NEW: Video and Milkdrop window show/hide
     func showVideo() {
         if settings.windowDebugLoggingEnabled {

@@ -178,7 +178,7 @@ struct VideoWindowChromeView<Content: View>: View {
         // Render video metadata using TEXT.bmp sprites (same pattern as main window)
         let text = audioPlayer.videoMetadataString
         let textWidth = CGFloat(text.count * 5)  // 5px per character
-        let displayWidth: CGFloat = 115  // Constrained to VIDEO_BOTTOM_RIGHT sprite (125px - margins)
+        let displayWidth: CGFloat = 160  // 115 + 27.5px left + 17.5px right
 
         HStack(spacing: 0) {
             ForEach(Array(text.uppercased().enumerated()), id: \.offset) { _, character in
@@ -199,7 +199,7 @@ struct VideoWindowChromeView<Content: View>: View {
         .offset(x: textWidth > displayWidth ? metadataScrollOffset : 0, y: 0)
         .frame(width: displayWidth, height: 6, alignment: .leading)
         .clipped()
-        .position(x: pixelSize.width - 105, y: bottomBarY)  // Dynamic: inside VIDEO_BOTTOM_RIGHT
+        .position(x: pixelSize.width - 110, y: bottomBarY)  // Shifted 5px left for asymmetric growth
         .onAppear {
             if textWidth > displayWidth {
                 startMetadataScrolling(textWidth: textWidth, displayWidth: displayWidth)
@@ -218,13 +218,13 @@ struct VideoWindowChromeView<Content: View>: View {
         metadataScrollOffset = 0
 
         metadataScrollTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { _ in
-            // Timer fires on main thread, directly update @State
-            MainActor.assumeIsolated {
-                self.metadataScrollOffset -= 5  // Move left by one character width
+            // Hop to main actor explicitly (Oracle recommendation)
+            Task { @MainActor in
+                metadataScrollOffset -= 5  // Move left by one character width
 
                 // Reset when scrolled past end
-                if abs(self.metadataScrollOffset) >= textWidth + 20 {
-                    self.metadataScrollOffset = displayWidth
+                if abs(metadataScrollOffset) >= textWidth + 20 {
+                    metadataScrollOffset = displayWidth
                 }
             }
         }
@@ -309,10 +309,10 @@ struct VideoWindowChromeView<Content: View>: View {
                             height: max(0, baseSize.height + heightDelta)
                         )
 
-                        // APPKIT PREVIEW: Update overlay window every tick
-                        if let window = WindowCoordinator.shared?.videoWindow {
+                        // APPKIT PREVIEW: Update overlay window via coordinator bridge
+                        if let coordinator = WindowCoordinator.shared {
                             let previewPixels = candidate.toVideoPixels()
-                            resizePreview.show(in: window, previewSize: previewPixels)
+                            coordinator.showVideoResizePreview(resizePreview, previewSize: previewPixels)
                         }
                     }
                     .onEnded { value in
@@ -330,17 +330,17 @@ struct VideoWindowChromeView<Content: View>: View {
                         // COMMIT: Update actual size
                         sizeState.size = finalSize
 
-                        // Sync NSWindow frame
+                        // Sync NSWindow frame via coordinator bridge
                         if let coordinator = WindowCoordinator.shared {
                             let clampedSize = CGSize(
                                 width: round(finalSize.toVideoPixels().width),
                                 height: round(finalSize.toVideoPixels().height)
                             )
                             coordinator.updateVideoWindowSize(to: clampedSize)
+                            coordinator.hideVideoResizePreview(resizePreview)
                         }
 
                         // Clean up
-                        resizePreview.hide()
                         isDragging = false
                         dragStartSize = nil
                         WindowSnapManager.shared.endProgrammaticAdjustment()

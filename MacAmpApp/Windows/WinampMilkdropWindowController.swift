@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 
+@MainActor
 class WinampMilkdropWindowController: NSWindowController {
     convenience init(skinManager: SkinManager, audioPlayer: AudioPlayer, dockingController: DockingController, settings: AppSettings, radioLibrary: RadioStationLibrary, playbackCoordinator: PlaybackCoordinator, windowFocusState: WindowFocusState) {
         if settings.windowDebugLoggingEnabled {

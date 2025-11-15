@@ -19,10 +19,6 @@ struct WinampMainWindow: View {
     @State private var wasPlayingPreScrub: Bool = false
     @State private var scrubbingProgress: Double = 0.0
 
-    // EQ/PL window visibility tracking (for reactive button lights)
-    @State private var isEQWindowVisible: Bool = true
-    @State private var isPlaylistWindowVisible: Bool = true
-
     // Track info scrolling state
     @State private var scrollOffset: CGFloat = 0
     @State private var scrollTimer: Timer?
@@ -285,7 +281,7 @@ struct WinampMainWindow: View {
         Group {
             // Minimize button
             Button(action: {
-                NSApp.keyWindow?.miniaturize(nil)
+                WindowCoordinator.shared?.minimizeKeyWindow()
             }) {
                 SimpleSpriteImage("MAIN_MINIMIZE_BUTTON", width: 9, height: 9)
             }
@@ -550,23 +546,20 @@ struct WinampMainWindow: View {
     
     @ViewBuilder
     private func buildWindowToggleButtons() -> some View {
+        // Access coordinator's observable properties directly for reactive updates
+        let coordinator = WindowCoordinator.shared
+        let eqVisible = coordinator?.isEQWindowVisible ?? false
+        let playlistVisible = coordinator?.isPlaylistWindowVisible ?? false
+
         Group {
-            // EQ button - lights when EQ window visible (uses @State for reactivity)
-            let eqSprite = isEQWindowVisible
+            // EQ button - lights when EQ window visible (bound to coordinator state)
+            let eqSprite = eqVisible
                 ? "MAIN_EQ_BUTTON_SELECTED"
                 : "MAIN_EQ_BUTTON"
 
             Button(action: {
-                // Toggle actual NSWindow visibility and update @State
-                if let eqWindow = WindowCoordinator.shared?.eqWindow {
-                    if eqWindow.isVisible {
-                        eqWindow.orderOut(nil)
-                        isEQWindowVisible = false
-                    } else {
-                        eqWindow.orderFront(nil)
-                        isEQWindowVisible = true
-                    }
-                }
+                // Toggle via WindowCoordinator (AppKit bridge)
+                _ = coordinator?.toggleEQWindowVisibility()
             }) {
                 SimpleSpriteImage(eqSprite, width: 23, height: 12)
             }
@@ -574,22 +567,14 @@ struct WinampMainWindow: View {
             .focusable(false)
             .at(Coords.eqButton)
 
-            // Playlist button - lights when Playlist window visible (uses @State for reactivity)
-            let playlistSprite = isPlaylistWindowVisible
+            // Playlist button - lights when Playlist window visible (bound to coordinator state)
+            let playlistSprite = playlistVisible
                 ? "MAIN_PLAYLIST_BUTTON_SELECTED"
                 : "MAIN_PLAYLIST_BUTTON"
 
             Button(action: {
-                // Toggle actual NSWindow visibility and update @State
-                if let playlistWindow = WindowCoordinator.shared?.playlistWindow {
-                    if playlistWindow.isVisible {
-                        playlistWindow.orderOut(nil)
-                        isPlaylistWindowVisible = false
-                    } else {
-                        playlistWindow.orderFront(nil)
-                        isPlaylistWindowVisible = true
-                    }
-                }
+                // Toggle via WindowCoordinator (AppKit bridge)
+                _ = coordinator?.togglePlaylistWindowVisibility()
             }) {
                 SimpleSpriteImage(playlistSprite, width: 23, height: 12)
             }
@@ -806,9 +791,8 @@ struct WinampMainWindow: View {
         guard isViewVisible else { return }
 
         scrollTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { [playbackCoordinator] _ in
-            // Access main actor properties synchronously to prevent race conditions
-            // The timer already fires on the main thread, so we can use assumeIsolated
-            MainActor.assumeIsolated {
+            // Hop to main actor explicitly (Oracle recommendation)
+            Task { @MainActor in
                 let trackText = playbackCoordinator.displayTitle.isEmpty ? "MacAmp" : playbackCoordinator.displayTitle
                 let textWidth = CGFloat(trackText.count * 5)
                 let displayWidth = Coords.trackInfo.width

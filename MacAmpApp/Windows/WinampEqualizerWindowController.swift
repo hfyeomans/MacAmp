@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 
+@MainActor
 class WinampEqualizerWindowController: NSWindowController {
     convenience init(skinManager: SkinManager, audioPlayer: AudioPlayer, dockingController: DockingController, settings: AppSettings, radioLibrary: RadioStationLibrary, playbackCoordinator: PlaybackCoordinator, windowFocusState: WindowFocusState) {
         // ORACLE BLOCKING ISSUE #1 FIX: Truly borderless windows
