@@ -18,8 +18,9 @@ struct VideoWindowChromeView<Content: View>: View {
 
     @State private var metadataScrollOffset: CGFloat = 0
     @State private var metadataScrollTimer: Timer?
-    @State private var dragStartSize: Size2D?  // Oracle fix: struct-level state for drag
+    @State private var dragStartSize: Size2D?  // Struct-level state for drag
     @State private var isDragging: Bool = false  // Track if currently resizing
+    @State private var dragPreviewSize: Size2D?  // Preview size during drag (not committed)
 
     @Environment(AudioPlayer.self) private var audioPlayer
     @Environment(WindowFocusState.self) private var windowFocusState
@@ -81,6 +82,15 @@ struct VideoWindowChromeView<Content: View>: View {
 
             // Resize handle (bottom-right corner)
             buildResizeHandle()
+
+            // Preview overlay during drag (shows target size without rebuilding chrome)
+            if let previewSize = dragPreviewSize {
+                let previewPixels = previewSize.toVideoPixels()
+                Rectangle()
+                    .strokeBorder(Color.blue.opacity(0.5), lineWidth: 2)
+                    .frame(width: previewPixels.width, height: previewPixels.height)
+                    .position(x: previewPixels.width / 2, y: previewPixels.height / 2)
+            }
         }
         .frame(width: pixelSize.width, height: pixelSize.height, alignment: .topLeading)
         .background(Color.black)
@@ -238,12 +248,9 @@ struct VideoWindowChromeView<Content: View>: View {
         // 1X button - clickable region over baked-on sprite
         Button(action: {
             WindowSnapManager.shared.beginProgrammaticAdjustment()
+            sizeState.size = .videoDefault  // Set to [0,4] = 275×232
 
-            withAnimation(.none) {
-                sizeState.size = .videoDefault  // Set to [0,4] = 275×232
-            }
-
-            // Sync NSWindow after button press (since onChange removed)
+            // Sync NSWindow after button press
             if let coordinator = WindowCoordinator.shared {
                 coordinator.updateVideoWindowSize(to: sizeState.pixelSize)
             }
@@ -260,12 +267,9 @@ struct VideoWindowChromeView<Content: View>: View {
         // 2X button - clickable region over baked-on sprite
         Button(action: {
             WindowSnapManager.shared.beginProgrammaticAdjustment()
+            sizeState.size = .video2x  // Set to [11,12] = 550×464
 
-            withAnimation(.none) {
-                sizeState.size = .video2x  // Set to [11,12] = 550×464
-            }
-
-            // Sync NSWindow after button press (since onChange removed)
+            // Sync NSWindow after button press
             if let coordinator = WindowCoordinator.shared {
                 coordinator.updateVideoWindowSize(to: sizeState.pixelSize)
             }
@@ -300,37 +304,38 @@ struct VideoWindowChromeView<Content: View>: View {
 
                         guard let baseSize = dragStartSize else { return }
 
-                        // Webamp pattern: Use Math.round() on the delta
+                        // Calculate quantized size from drag delta
                         let widthDelta = Int(round(value.translation.width / 25))
                         let heightDelta = Int(round(value.translation.height / 29))
 
-                        // Calculate new size with minimum constraint
                         let candidate = Size2D(
                             width: max(0, baseSize.width + widthDelta),
                             height: max(0, baseSize.height + heightDelta)
                         )
 
-                        // Update size with explicit animation control
-                        if candidate != sizeState.size {
-                            withAnimation(.none) {
-                                sizeState.size = candidate
-                            }
-                        }
+                        // PREVIEW PATTERN: Only update preview, don't rebuild chrome
+                        dragPreviewSize = candidate
                     }
                     .onEnded { _ in
+                        // COMMIT: Update actual size only at drag end
+                        if let finalSize = dragPreviewSize {
+                            sizeState.size = finalSize
+
+                            // Sync NSWindow frame with final size
+                            if let coordinator = WindowCoordinator.shared {
+                                let clampedSize = CGSize(
+                                    width: round(finalSize.toVideoPixels().width),
+                                    height: round(finalSize.toVideoPixels().height)
+                                )
+                                coordinator.updateVideoWindowSize(to: clampedSize)
+                            }
+                        }
+
                         // Clean up
                         isDragging = false
                         dragStartSize = nil
+                        dragPreviewSize = nil
                         WindowSnapManager.shared.endProgrammaticAdjustment()
-
-                        // Sync NSWindow frame ONCE at drag end (critical for smoothness)
-                        if let coordinator = WindowCoordinator.shared {
-                            let clampedSize = CGSize(
-                                width: round(sizeState.pixelSize.width),
-                                height: round(sizeState.pixelSize.height)
-                            )
-                            coordinator.updateVideoWindowSize(to: clampedSize)
-                        }
                     }
             )
             .position(x: pixelSize.width - 10, y: pixelSize.height - 10)
