@@ -1014,4 +1014,89 @@ xcodebuild -scheme MacAmpApp -destination 'platform=macOS' -enableThreadSanitize
 
 ---
 
-**Next**: Days 7-10 (Milkdrop Window) or additional VIDEO features
+## 🎉 VIDEO Window Full Resize COMPLETE (2025-11-14)
+
+### Implementation Summary
+**Duration:** ~2 hours
+**Commits:** 2 commits (80fcecd, fc337e3)
+**Status:** ✅ Implementation Complete - Ready for User Testing
+**Pattern:** Matches Playlist resize (Oracle-validated)
+
+### Features Implemented ✅
+
+1. **Size2D Segment Model**
+   - Quantized 25×29px resize increments
+   - Minimum: [0,0] = 275×116px (matches Main/EQ)
+   - Default: [0,4] = 275×232px (current size)
+   - 2x Preset: [11,12] = 550×464px
+   - Conversion formula: width=275+w*25, height=116+h*29
+
+2. **VideoWindowSizeState Observable**
+   - Wraps Size2D with persistence
+   - UserDefaults save/load
+   - Computed properties: pixelSize, contentSize, centerWidth, tileCount
+   - Reactive updates throughout chrome
+
+3. **Dynamic Chrome Sizing**
+   - Titlebar stretchy tiles render dynamically based on width
+   - Three-section bottom bar: LEFT (125px) + CENTER (tiled) + RIGHT (125px)
+   - Vertical borders tile based on height segments
+   - All positions calculated from pixelSize (no hardcoded constants)
+
+4. **Resize Handle**
+   - 20×20px invisible drag area in bottom-right corner
+   - Quantized drag gesture (snaps to 25×29px segments)
+   - Updates VideoWindowSizeState.size
+   - Minimum constraint enforced ([0,0] floor)
+
+5. **Button Migration**
+   - 1x button → Sets Size2D.videoDefault ([0,4])
+   - 2x button → Sets Size2D.video2x ([11,12])
+   - Buttons now presets instead of scale multipliers
+
+6. **Cleanup**
+   - Removed VideoWindowSizeMode enum
+   - Removed scaleEffect logic
+   - Removed Ctrl+1/Ctrl+2 keyboard shortcuts
+   - Removed setupVideoSizeObserver() and resizeVideoWindow()
+   - Simplified architecture
+
+### Files Created
+- MacAmpApp/Models/Size2D.swift (+80 lines)
+- MacAmpApp/Models/VideoWindowSizeState.swift (+110 lines)
+
+### Files Modified
+- MacAmpApp/Views/Windows/VideoWindowChromeView.swift (complete refactor)
+- MacAmpApp/Views/WinampVideoWindow.swift (removed scaleEffect)
+- MacAmpApp/Models/AppSettings.swift (removed VideoWindowSizeMode)
+- MacAmpApp/AppCommands.swift (removed Ctrl+1/Ctrl+2)
+- MacAmpApp/ViewModels/WindowCoordinator.swift (removed old resize methods)
+
+### Commits
+1. `80fcecd` - feat: Phases 1-3 (Size2D, dynamic chrome, resize handle)
+2. `fc337e3` - feat: Phase 4 cleanup (remove old size system)
+
+### Testing Needed ⏳
+
+**Critical Tests:**
+- [ ] Drag bottom-right corner to resize window
+- [ ] Window resizes in 25×29px increments (quantized)
+- [ ] Click 1x button → window becomes 275×232
+- [ ] Click 2x button → window becomes 550×464
+- [ ] Chrome tiles correctly at all sizes (no gaps)
+- [ ] Titlebar stretchy tiles appear/disappear with width
+- [ ] Bottom center tiles appear/disappear with width
+- [ ] Vertical borders extend/contract with height
+- [ ] Video content scales properly (aspectFit)
+- [ ] Metadata text stays in correct position
+- [ ] Buttons stay clickable at all sizes
+- [ ] Size persists across app restarts
+- [ ] Minimum size enforced (cannot shrink below 275×116)
+
+**Known Issues:**
+- Window docking may need updates for dynamic sizing
+- WindowCoordinator persistence may need Size2D awareness
+
+---
+
+**Next**: User testing and Phase 5 (WindowCoordinator final integration if needed)
