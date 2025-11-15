@@ -62,17 +62,71 @@
 - [ ] TV/Misc button (deferred to future)
 - [ ] Dropdown button (deferred to future)
 
-#### 6. FUTURE: Video Time Display (Post-MVP)
+#### 6. FUTURE: Video Volume Control (Post-MVP) - 1-2 Hours
+- [ ] Update AudioPlayer.volume didSet to sync with videoPlayer.volume
+- [ ] Update loadVideoFile() to apply initial volume
+- [ ] Update mute functionality to set videoPlayer.isMuted
+- [ ] Test volume slider controls video audio level
+- [ ] Test mute button mutes video audio
+- [ ] Test volume changes apply immediately during playback
+- [ ] Test volume persists when switching audio↔video
+- [ ] Test volume restored on app relaunch
+
+#### 7. FUTURE: Video Time Display (Post-MVP)
 - [ ] Show video elapsed/remaining time in main window timer display
 - [ ] Show video time in playlist window (like audio tracks)
 - [ ] Sync video playback time with main window display
 - [ ] Update as video plays
 
-#### 7. FUTURE: Video Volume Control (Post-MVP)
-- [ ] Main window volume slider should control video volume
-- [ ] AVPlayer.volume = audioPlayer.volume
-- [ ] Sync volume changes during video playback
-- [ ] Mute button affects video
+#### 8. FUTURE: VIDEO Window Full Resize (Post-MVP) - 8 Hours
+
+**Phase 1: Size2D Integration (2 hours)**
+- [ ] Create VideoWindowSizeState.swift observable wrapping Size2D
+- [ ] Define Size2D.videoMinimum = [0,0] → 275×116px (matches Main/EQ)
+- [ ] Define Size2D.videoDefault = [0,4] → 275×232px (current VIDEO size)
+- [ ] Define Size2D.video2x = [11,12] → 550×464px (2x default)
+- [ ] Implement toPixels() formula: width = 275 + w*25, height = 116 + h*29
+- [ ] Add UserDefaults persistence for Size2D
+- [ ] Test size conversions: [0,0]=275×116, [0,4]=275×232, [11,12]=550×464
+
+**Phase 2: Chrome Dynamic Sizing (2 hours)**
+- [ ] Replace VideoWindowLayout constants with Size2D calculations
+- [ ] Implement three-section bottom bar (LEFT 125px + CENTER tiles + RIGHT 125px)
+- [ ] Calculate centerWidth = pixelSize.width - 250
+- [ ] Add ForEach to tile VIDEO_BOTTOM_TILE (25px) in center section
+- [ ] Update titlebar to tile VIDEO_TITLEBAR_STRETCHY based on width
+- [ ] Calculate stretchyTileCount = (pixelSize.width - 150) / 25
+- [ ] Update vertical border tiling based on height segments
+- [ ] Test chrome at sizes [0,0], [0,4], [1,4], [11,12]
+
+**Phase 3: Resize Handle (1 hour)**
+- [ ] Add buildVideoResizeHandle() in VideoWindowChromeView
+- [ ] Create 20×20px invisible drag area in bottom-right corner
+- [ ] Position at (pixelSize.width - 10, pixelSize.height - 10)
+- [ ] Implement quantized DragGesture (25×29 segments)
+- [ ] Wire gesture to VideoWindowSizeState.size
+- [ ] Add .cursor(.resizeNorthWestSouthEast) on hover
+- [ ] Test drag resizing updates window size
+
+**Phase 4: Button Migration (1 hour)**
+- [ ] Update 1x button action: videoSize = .videoDefault ([0,4])
+- [ ] Update 2x button action: videoSize = .video2x ([11,12])
+- [ ] Remove VideoWindowSizeMode enum from AppSettings
+- [ ] Remove scaleEffect logic from WinampVideoWindow
+- [ ] Remove Ctrl+1/Ctrl+2 keyboard shortcuts (or repurpose)
+- [ ] Test buttons set Size2D correctly
+
+**Phase 5: Integration & Testing (2 hours)**
+- [ ] Remove WinampVideoWindow.scaleEffect code
+- [ ] Update WindowCoordinator.resizeVideoWindow() to use Size2D
+- [ ] Update makeVideoDockingContext() for segment-based sizing
+- [ ] Update WindowFrameStore to persist Size2D instead of CGRect
+- [ ] Test docking preserved during resize
+- [ ] Test size persists across app restarts
+- [ ] Test minimum size cannot be violated (274×116)
+- [ ] Test chrome aligns perfectly at [0,0], [0,4], [5,5], [11,12]
+- [ ] Test video content letterboxes/pillarboxes correctly
+- [ ] Verify no regressions in existing VIDEO features
 
 #### 5. Active/Inactive Titlebar (Infrastructure Complete)
 - [x] VIDEO titlebar has ACTIVE/INACTIVE sprite infrastructure ✅

@@ -1147,9 +1147,355 @@ docs/
 
 ---
 
+---
+
+## ADDENDUM: VIDEO Window Full Resize (Post-MVP)
+
+**Date Added**: 2025-11-14
+**Priority**: Post-MVP enhancement
+**Research**: Complete (Oracle + Webamp analysis)
+**Status**: Specification ready, implementation deferred
+
+### Overview
+
+Implement full drag-resize for VIDEO window using the same quantized segment pattern as Playlist window (25×29px grid). This replaces the current 1x/2x scaleEffect approach with true window resizing.
+
+### Oracle Guidance Summary
+
+**Key Decisions (Oracle-validated):**
+1. **Use identical 25×29px segmented resize as Playlist** - keeps windows aligned with docking grid
+2. **Minimum size:** 275×116px (matches Main/EQ windows exactly) - absolute minimum
+3. **Default size:** 275×232px (current VIDEO window size) - [0,4] segments
+4. **Maximum size:** Unbounded, screen-constrained at runtime
+5. **Aspect ratio:** Freeform window resize, video content uses aspectFit internally
+6. **Chrome layout:** Three-section pattern (LEFT 125px + CENTER tiles + RIGHT 125px)
+7. **Resize handle:** 20×20px bottom-right corner (matches Playlist)
+8. **1x/2x buttons:** KEEP as "preset size" shortcuts (1x=[0,4] default, 2x=[11,12] double)
+9. **Resize type:** Quantized to segments (not continuous pixels)
+10. **Base dimensions:** 275×116px matching Main/EQ windows
+
+### Size Model (Reuse Playlist Pattern)
+
+```swift
+// From tasks/playlist-resize-analysis/QUICK_REFERENCE.md
+// Adapted for VIDEO window dimensions
+struct Size2D: Equatable, Codable {
+    var width: Int   // Number of 25px segments (beyond 275px base)
+    var height: Int  // Number of 29px segments (beyond 116px base)
+
+    // VIDEO window base dimensions (matches Main/EQ)
+    static let videoBase = CGSize(width: 275, height: 116)
+
+    func toPixels() -> CGSize {
+        CGSize(
+            width: 275 + width * 25,
+            height: 116 + height * 29
+        )
+    }
+
+    // Video-specific presets
+    static let videoMinimum = Size2D(width: 0, height: 0)   // 275×116 (same as Main/EQ)
+    static let videoDefault = Size2D(width: 0, height: 4)   // 275×232 (current default)
+    static let video2x = Size2D(width: 11, height: 12)      // 550×464 (2x of default)
+}
+```
+
+**Note:**
+- Minimum: 275×116 (identical to Main/EQ windows)
+- Default: 275×232 (current VIDEO window size, [0,4] segments)
+- 2x Default: 550×464 (exactly 2× the default size, [11,12] segments)
+- Base dimensions: 275×116px matching WinampSizes.main and WinampSizes.equalizer
+
+### Chrome Architecture Changes
+
+**Current (scaleEffect-based):**
+```swift
+.frame(width: 275, height: 232)
+.scaleEffect(videoWindowSizeMode == .twoX ? 2.0 : 1.0)
+.frame(width: 275 * scale, height: 232 * scale)
+```
+
+**Target (segment-based):**
+```swift
+let pixelSize = videoSize.toPixels()  // e.g., 275×232 or 300×261 or 550×464
+
+// Chrome components calculate from pixelSize
+let contentWidth = pixelSize.width - 11 - 8   // Minus borders
+let contentHeight = pixelSize.height - 20 - 38  // Minus top/bottom
+
+VideoWindowChromeView(size: videoSize) {
+    AVPlayerView()
+        .frame(width: contentWidth, height: contentHeight)
+}
+.frame(width: pixelSize.width, height: pixelSize.height)
+// NO scaleEffect - true window sizing
+```
+
+### Bottom Bar Three-Section Pattern
+
+**Current:**
+- LEFT (125px) + TILE (25px fixed) + RIGHT (125px)
+- Total: 275px fixed
+
+**Target (resizable):**
+```swift
+HStack(spacing: 0) {
+    // LEFT section (125px fixed) - baked-on buttons (fullscreen, 1x, 2x, TV)
+    SimpleSpriteImage("VIDEO_BOTTOM_LEFT", width: 125, height: 38)
+
+    // CENTER section (dynamic) - tiles VIDEO_BOTTOM_TILE
+    let centerWidth = pixelSize.width - 250  // Can be 0 at minimum
+    if centerWidth > 0 {
+        ForEach(0..<Int(centerWidth / 25), id: \.self) { _ in
+            SimpleSpriteImage("VIDEO_BOTTOM_TILE", width: 25, height: 38)
+        }
+    }
+
+    // RIGHT section (125px fixed) - metadata display area
+    SimpleSpriteImage("VIDEO_BOTTOM_RIGHT", width: 125, height: 38)
+}
+```
+
+### Titlebar Stretchy Tiles
+
+**Oracle Note:** VIDEO.bmp already has VIDEO_TITLEBAR_STRETCHY sprites for width expansion
+
+**Pattern:**
+```swift
+// Base titlebar: LEFT (25px) + CENTER (100px) + RIGHT (25px) = 150px fixed
+// Stretchy section: Tiles VIDEO_TITLEBAR_STRETCHY (25px) to fill gap
+
+let stretchyTileCount = Int((pixelSize.width - 150) / 25)  // Number of stretch tiles
+
+ForEach(0..<stretchyTileCount, id: \.self) { i in
+    SimpleSpriteImage("VIDEO_TITLEBAR_STRETCHY_\(suffix)", width: 25, height: 20)
+        .position(x: 25 + 12.5 + CGFloat(i) * 25, y: 10)
+}
+```
+
+### Resize Handle Implementation
+
+**Location:** Bottom-right corner of VIDEO_BOTTOM_RIGHT sprite
+**Size:** 20×20px (invisible drag area)
+**Pattern:** Reuse Playlist resize gesture (quantized drag)
+
+```swift
+@ViewBuilder
+private func buildVideoResizeHandle() -> some View {
+    Rectangle()
+        .fill(Color.clear)
+        .frame(width: 20, height: 20)
+        .contentShape(Rectangle())
+        .cursor(.resizeNorthWestSouthEast)  // macOS resize cursor
+        .gesture(videoResizeGesture)
+        .position(x: pixelSize.width - 10, y: pixelSize.height - 10)  // Bottom-right
+}
+
+private var videoResizeGesture: some Gesture {
+    DragGesture()
+        .onChanged { value in
+            let deltaW = Int(round(value.translation.width / 25))
+            let deltaH = Int(round(value.translation.height / 29))
+
+            videoSize = Size2D(
+                width: max(0, startSize.width + deltaW),
+                height: max(0, startSize.height + deltaH)
+            )
+        }
+}
+```
+
+### 1x/2x Button Behavior Change
+
+**Current:** Sets scaleEffect multiplier
+**Target:** Sets Size2D segments as presets
+
+```swift
+// 1x button action
+Button(action: {
+    videoSize = .video1x  // [0,0] = 275×232
+}) { /* invisible overlay */ }
+
+// 2x button action
+Button(action: {
+    videoSize = .video2x  // [11,8] = 550×464
+}) { /* invisible overlay */ }
+```
+
+### Implementation Phases
+
+**Phase 1: Size2D Integration** (2 hours)
+- Create VideoWindowSizeState observable wrapping Size2D
+- Replace scaleEffect with segment-based sizing
+- Update chrome layout to calculate from pixelSize
+- Test at sizes [0,0], [1,0], [0,1]
+
+**Phase 2: Chrome Tiling** (2 hours)
+- Implement three-section bottom bar (LEFT + CENTER tiles + RIGHT)
+- Add titlebar stretchy tile rendering
+- Add vertical border tiling for height changes
+- Test chrome aligns perfectly at all sizes
+
+**Phase 3: Resize Handle** (1 hour)
+- Add 20×20px drag area in bottom-right
+- Implement quantized drag gesture
+- Wire to VideoWindowSizeState
+- Test drag resizing works
+
+**Phase 4: Button Migration** (1 hour)
+- Change 1x/2x buttons to set Size2D presets
+- Remove videoWindowSizeMode enum (no longer needed)
+- Remove scaleEffect logic
+- Test buttons set correct sizes
+
+**Phase 5: Integration & Testing** (2 hours)
+- Update WindowCoordinator.resizeVideoWindow()
+- Test docking with resized VIDEO window
+- Test persistence (save/restore Size2D)
+- Verify no regressions
+
+**Total:** ~8 hours
+
+### Files to Modify
+
+1. `MacAmpApp/Models/VideoWindowSizeState.swift` [NEW]
+   - Wraps Size2D for VIDEO window
+   - Persists to UserDefaults
+   - Observable for reactive updates
+
+2. `MacAmpApp/Views/Windows/VideoWindowChromeView.swift`
+   - Accept Size2D parameter
+   - Calculate dimensions from segments
+   - Implement three-section bottom bar
+   - Add titlebar stretchy tiles
+   - Add resize handle
+
+3. `MacAmpApp/Views/WinampVideoWindow.swift`
+   - Remove scaleEffect logic
+   - Pass Size2D to chrome view
+   - Use segment-based frame sizing
+
+4. `MacAmpApp/ViewModels/WindowCoordinator.swift`
+   - Update resizeVideoWindow() to use Size2D
+   - Update docking context for segment-based sizing
+   - Update persistence to save Size2D
+
+5. `MacAmpApp/Models/AppSettings.swift`
+   - Replace videoWindowSizeMode with videoWindowSize: Size2D
+   - Update UserDefaults persistence
+
+### Success Criteria
+
+- [ ] VIDEO window can be drag-resized from bottom-right corner
+- [ ] Resizes in 25×29px increments (quantized)
+- [ ] Minimum size: 275×232px (no smaller)
+- [ ] Maximum size: Screen bounds minus margins
+- [ ] Chrome tiles correctly at all sizes (no gaps or overlaps)
+- [ ] Video content maintains aspect ratio (letterbox/pillarbox)
+- [ ] 1x/2x buttons set preset sizes [0,0] and [11,8]
+- [ ] Docking preserved during resize
+- [ ] Size persists across app restarts
+- [ ] No scaleEffect used (true window sizing)
+
+---
+
+---
+
+## ADDENDUM: Video Volume Control Integration (Post-MVP)
+
+**Date Added**: 2025-11-14
+**Priority**: Post-MVP enhancement
+**Estimated Effort**: 1-2 hours
+**Status**: Specification ready, implementation deferred
+
+### Overview
+
+Sync main window volume control with video playback. Currently, the volume slider only affects audio playback through AVAudioEngine - video played through AVPlayer has independent volume.
+
+### Current Behavior (Bug)
+
+**Audio Playback:**
+- Main window volume slider → `audioPlayer.volume` → AVAudioEngine.mainMixerNode.volume
+- Works correctly ✅
+
+**Video Playback:**
+- Main window volume slider → `audioPlayer.volume` → NO EFFECT on AVPlayer ❌
+- Video plays at system volume (100%)
+- User expectation: Volume slider should control video audio
+
+### Implementation Specification
+
+**Sync Pattern:**
+```swift
+// In AudioPlayer.swift
+var volume: Float = 0.75 {
+    didSet {
+        // Existing: Update audio engine
+        audioEngine.mainMixerNode.volume = volume
+
+        // NEW: Update video player
+        videoPlayer?.volume = volume
+    }
+}
+```
+
+**Initialization:**
+```swift
+// In loadVideoFile()
+func loadVideoFile(url: URL) {
+    videoPlayer = AVPlayer(url: url)
+    videoPlayer?.volume = volume  // Apply current volume immediately
+    videoPlayer?.play()
+}
+```
+
+**Mute Button:**
+```swift
+// In toggleMute() or similar
+func setMuted(_ muted: Bool) {
+    isMuted = muted
+
+    // Existing: Mute audio engine
+    audioEngine.mainMixerNode.volume = muted ? 0.0 : volume
+
+    // NEW: Mute video player
+    videoPlayer?.isMuted = muted
+}
+```
+
+### Files to Modify
+
+1. **MacAmpApp/Audio/AudioPlayer.swift**
+   - Update `volume` didSet to sync with videoPlayer
+   - Update `loadVideoFile()` to apply initial volume
+   - Update mute functionality to affect video
+
+### Success Criteria
+
+- [ ] Main window volume slider controls video audio level
+- [ ] Mute button mutes video audio
+- [ ] Volume changes during video playback apply immediately
+- [ ] Switching from audio to video preserves volume level
+- [ ] Switching from video to audio preserves volume level
+- [ ] Volume persists across app restarts (already working for audio)
+
+### Testing
+
+**Test Cases:**
+1. Load video file, adjust volume slider → video audio changes
+2. Mute button while video playing → video audio mutes
+3. Change volume during video playback → immediate effect
+4. Load audio file, change volume, load video → video uses same volume
+5. Video at 50% volume, quit/relaunch, play video → still 50%
+
+**Estimated Time:** 1-2 hours (simple sync logic)
+
+---
+
 **Plan Created**: 2025-11-08 (Initial two-window architecture)
-**Plan Corrected**: 2025-11-09 (NS WindowController pattern, single audio tap, corrected triggers)
-**Oracle Review**: Awaiting final validation
-**Implementation Start**: Upon Oracle GO approval
-**Target Completion**: Day 8-10
-**Next Review**: End of Day 2 (NSWindowController foundation)
+**Plan Corrected**: 2025-11-09 (NSWindowController pattern, single audio tap, corrected triggers)
+**Plan Updated**: 2025-11-14 (Added VIDEO resize + volume control specs - Oracle validated)
+**Oracle Review**: A- grade (High confidence), Resize spec A grade
+**Implementation Start**: Upon user approval
+**Target Completion**: Days 8-10 + 8 hours resize + 2 hours volume
+**Next Review**: Post VIDEO 2x chrome scaling completion
