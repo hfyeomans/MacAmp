@@ -108,8 +108,7 @@ struct VideoWindowChromeView<Content: View>: View {
                 buildVideoMetadataText()
             }
         }
-        .frame(width: VideoWindowLayout.windowSize.width, height: VideoWindowLayout.windowSize.height, alignment: .topLeading)
-        .fixedSize()
+        .frame(minWidth: VideoWindowLayout.windowSize.width, minHeight: VideoWindowLayout.windowSize.height, alignment: .topLeading)
         .background(Color.black)
         .onDisappear {
             // Clean up timer to prevent leaks

@@ -73,6 +73,7 @@ final class WindowCoordinator {
     @ObservationIgnored private var persistenceTask: Task<Void, Never>?
     @ObservationIgnored private var videoWindowTask: Task<Void, Never>?  // NEW: Video window observer
     @ObservationIgnored private var milkdropWindowTask: Task<Void, Never>?  // NEW: Milkdrop window observer
+    @ObservationIgnored private var videoSizeTask: Task<Void, Never>?  // NEW: Video window size observer
     private var hasPresentedInitialWindows = false
     private var persistenceSuppressionCount = 0
     private var windowKinds: [ObjectIdentifier: WindowKind] = [:]
@@ -209,6 +210,9 @@ final class WindowCoordinator {
         // NEW: Observe for milkdrop window visibility changes (TASK 2 Day 7)
         setupMilkdropWindowObserver()
         debugLogWindowPositions(step: "after setupMilkdropWindowObserver")
+
+        // NEW: Observe for video window size changes (1x/2x)
+        setupVideoSizeObserver()
 
         // PHASE 2: Register windows with WindowSnapManager
         // WindowSnapManager provides:
@@ -411,6 +415,53 @@ final class WindowCoordinator {
         if settings.showMilkdropWindow {
             showMilkdrop()
         }
+    }
+
+    // NEW: Video window size observer (1x/2x buttons)
+    private func setupVideoSizeObserver() {
+        videoSizeTask?.cancel()
+
+        videoSizeTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+
+            withObservationTracking {
+                _ = self.settings.videoWindowSizeMode
+            } onChange: {
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    self.resizeVideoWindow(mode: self.settings.videoWindowSizeMode)
+                    self.setupVideoSizeObserver()
+                }
+            }
+        }
+
+        // Apply initial state
+        resizeVideoWindow(mode: settings.videoWindowSizeMode)
+    }
+
+    private func resizeVideoWindow(mode: AppSettings.VideoWindowSizeMode) {
+        guard let video = videoWindow else {
+            print("⚠️ resizeVideoWindow: videoWindow is nil")
+            return
+        }
+
+        let newSize: CGSize
+        switch mode {
+        case .oneX:
+            newSize = CGSize(width: 275, height: 232)
+            print("📐 Resizing Video window to 1x: \(newSize)")
+        case .twoX:
+            newSize = CGSize(width: 550, height: 464)
+            print("📐 Resizing Video window to 2x: \(newSize)")
+        }
+
+        var frame = video.frame
+        print("📐 Current frame: \(frame)")
+        frame.size = newSize
+        video.setFrame(frame, display: true, animate: true)
+        print("📐 New frame: \(video.frame)")
+
+        schedulePersistenceFlush()
     }
 
     private func resizeMainAndEQWindows(doubled: Bool, animated _: Bool = true, persistResult: Bool = true) {

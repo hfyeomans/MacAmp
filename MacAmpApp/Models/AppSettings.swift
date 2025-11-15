@@ -65,6 +65,14 @@ final class AppSettings {
         self.showVideoWindow = UserDefaults.standard.bool(forKey: "showVideoWindow")
         self.showMilkdropWindow = UserDefaults.standard.bool(forKey: "showMilkdropWindow")
 
+        // Load video window size mode (default to 1x)
+        if let savedMode = UserDefaults.standard.string(forKey: "videoWindowSizeMode"),
+           let mode = VideoWindowSizeMode(rawValue: savedMode) {
+            self.videoWindowSizeMode = mode
+        } else {
+            self.videoWindowSizeMode = .oneX
+        }
+
         // Load persisted time display mode (default to elapsed)
         if let rawTimeMode = UserDefaults.standard.string(forKey: "timeDisplayMode"),
            let mode = TimeDisplayMode(rawValue: rawTimeMode) {
@@ -227,6 +235,18 @@ final class AppSettings {
     var showVideoWindow: Bool = false {
         didSet {
             UserDefaults.standard.set(showVideoWindow, forKey: "showVideoWindow")
+        }
+    }
+
+    /// Video window size mode (1x = 275×232, 2x = 550×464)
+    enum VideoWindowSizeMode: String, Codable {
+        case oneX = "1x"
+        case twoX = "2x"
+    }
+
+    var videoWindowSizeMode: VideoWindowSizeMode = .oneX {
+        didSet {
+            UserDefaults.standard.set(videoWindowSizeMode.rawValue, forKey: "videoWindowSizeMode")
         }
     }
 
