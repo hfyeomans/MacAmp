@@ -2667,3 +2667,184 @@ Cluster moving right has no invisible window in the way.
 - Not at x=0 which blocks left edge
 
 **Recommended:** Option C - proper default positioning
+
+---
+
+## Part 19: AppKit Preview Overlay Solution (2025-11-15)
+
+### Problem
+SwiftUI .overlay() cannot extend beyond parent .frame() bounds.
+Preview only visible when shrinking, not when growing.
+
+### Solution: Separate Floating NSWindow
+
+**File:** `MacAmpApp/Utilities/WindowResizePreviewOverlay.swift`
+
+**Pattern:**
+```swift
+final class WindowResizePreviewOverlay {
+    private var overlayWindow: NSWindow?
+    
+    func show(in window: NSWindow, previewSize: CGSize) {
+        // Create floating borderless window
+        let overlay = NSWindow(styleMask: [.borderless], ...)
+        overlay.level = .floating  // Above target
+        overlay.ignoresMouseEvents = true  // Pass through
+        
+        // Position at target's top-left with preview size
+        var frame = window.frame
+        frame.size = previewSize
+        overlay.setFrame(frame, display: true)
+        
+        // Draw preview rectangle
+        overlay.contentView = PreviewContentView(size: previewSize)
+        overlay.orderFront(nil)
+    }
+}
+```
+
+**Drawing:**
+```swift
+override func draw(_ dirtyRect: NSRect) {
+    // Light cyan fill (15% opacity)
+    NSColor.systemCyan.withAlphaComponent(0.15).setFill()
+    rect.fill()
+    
+    // Visible stroke (80% opacity, 3px)
+    NSColor.systemCyan.withAlphaComponent(0.8).setStroke()
+    path.lineWidth = 3
+    path.stroke()
+}
+```
+
+**Integration:**
+```swift
+// In resize gesture onChanged:
+let previewPixels = candidate.toVideoPixels()
+resizePreview.show(in: targetWindow, previewSize: previewPixels)
+
+// In onEnded:
+resizePreview.hide()
+```
+
+### For Playlist Window
+
+Reuse `WindowResizePreviewOverlay` class:
+1. Create @State property in chrome view
+2. Call show() on every drag tick
+3. Call hide() on drag end
+4. Light colored preview extends beyond window
+5. Works for both shrinking and growing
+
+**Key Files to Reference:**
+- `MacAmpApp/Utilities/WindowResizePreviewOverlay.swift`
+- `MacAmpApp/Views/Windows/VideoWindowChromeView.swift:312-316`
+- `MacAmpApp/Views/Windows/VideoWindowChromeView.swift:349`
+
+---
+
+## Part 20: Complete Resize Solution for Playlist Reuse (2025-11-15)
+
+### Key Components
+
+#### 1. Size2D Model (MacAmpApp/Models/Size2D.swift)
+```swift
+struct Size2D: Equatable, Codable {
+    var width: Int   // Segments beyond base
+    var height: Int  // Segments beyond base
+    
+    func toVideoPixels() -> CGSize {
+        CGSize(width: 275 + width * 25, height: 116 + height * 29)
+    }
+}
+```
+
+#### 2. WindowSizeState Observable (MacAmpApp/Models/VideoWindowSizeState.swift)
+```swift
+@Observable final class VideoWindowSizeState {
+    var size: Size2D = .videoDefault {
+        didSet { saveSize() }
+    }
+    
+    var pixelSize: CGSize { size.toVideoPixels() }
+    var stretchyTilesPerSide: Int {
+        let availableWidth = pixelSize.width - 50 - 100
+        return max(0, Int(ceil(availableWidth / 2 / 25)))
+    }
+}
+```
+
+#### 3. AppKit Preview Overlay (MacAmpApp/Utilities/WindowResizePreviewOverlay.swift)
+```swift
+final class WindowResizePreviewOverlay {
+    private var overlayWindow: NSWindow?
+    
+    func show(in window: NSWindow, previewSize: CGSize) {
+        // Floating borderless window at .floating level
+        // Light cyan fill + stroke
+        // Extends beyond target window bounds
+    }
+}
+```
+
+#### 4. Drag Gesture (MacAmpApp/Views/Windows/VideoWindowChromeView.swift:292-353)
+```swift
+DragGesture(minimumDistance: 0)
+    .onChanged { value in
+        let widthDelta = Int(round(value.translation.width / 25))
+        let heightDelta = Int(round(value.translation.height / 29))
+        let candidate = Size2D(width: max(0, base.width + widthDelta), ...)
+        
+        // Show preview, don't update chrome
+        resizePreview.show(in: targetWindow, previewSize: candidate.toVideoPixels())
+    }
+    .onEnded { value in
+        sizeState.size = finalSize  // Commit once
+        coordinator.updateVideoWindowSize(to: clampedSize)
+        resizePreview.hide()
+    }
+```
+
+#### 5. WindowSnapManager Fix (MacAmpApp/Utilities/WindowSnapManager.swift:111,374)
+```swift
+// TWO locations need isVisible check:
+for (_, tracked) in windows {
+    if let w = tracked.window, w.isVisible {  // Skip invisible
+        idToBox[id] = box(for: w)
+    }
+}
+```
+
+### For Playlist Window Implementation
+
+**1. Reuse Size2D** - Already defined, change toPlaylistPixels() base
+
+**2. Create PlaylistWindowSizeState** - Copy VideoWindowSizeState pattern
+
+**3. Reuse WindowResizePreviewOverlay** - Same class, no changes needed
+
+**4. Implement Drag Gesture** - Copy VIDEO pattern exactly
+
+**5. Dynamic Chrome Sizing** - Calculate tiles from size.toPlaylistPixels()
+
+**6. Test Thoroughly:**
+- Invisible window exclusion already fixed
+- Titlebar tiling pattern proven
+- Preview overlay proven
+- Just adapt dimensions for Playlist
+
+### Critical Lessons
+
+**DO:**
+- Use ceil() for tile counts (ensure full coverage)
+- Exclude invisible windows (w.isVisible in TWO places)
+- Preview pattern (commit size at end only)
+- AppKit overlay for preview extending beyond bounds
+- Call preview.show() on EVERY drag tick
+
+**DON'T:**
+- Update sizeState during drag (causes jitter)
+- Use SwiftUI overlay for preview (gets clipped)
+- Forget to check isVisible in boxes() helper
+- Use scaleEffect for resizing (use true sizing)
+

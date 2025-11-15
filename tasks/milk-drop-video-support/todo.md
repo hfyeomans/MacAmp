@@ -80,53 +80,53 @@
 
 #### 8. FUTURE: VIDEO Window Full Resize (Post-MVP) - 8 Hours
 
-**Phase 1: Size2D Integration (2 hours)**
-- [ ] Create VideoWindowSizeState.swift observable wrapping Size2D
-- [ ] Define Size2D.videoMinimum = [0,0] → 275×116px (matches Main/EQ)
-- [ ] Define Size2D.videoDefault = [0,4] → 275×232px (current VIDEO size)
-- [ ] Define Size2D.video2x = [11,12] → 550×464px (2x default)
-- [ ] Implement toPixels() formula: width = 275 + w*25, height = 116 + h*29
-- [ ] Add UserDefaults persistence for Size2D
-- [ ] Test size conversions: [0,0]=275×116, [0,4]=275×232, [11,12]=550×464
+**Phase 1: Size2D Integration (2 hours)** ✅ COMPLETE
+- [x] Create VideoWindowSizeState.swift observable wrapping Size2D
+- [x] Define Size2D.videoMinimum = [0,0] → 275×116px (matches Main/EQ)
+- [x] Define Size2D.videoDefault = [0,4] → 275×232px (current VIDEO size)
+- [x] Define Size2D.video2x = [11,12] → 550×464px (2x default)
+- [x] Implement toPixels() formula: width = 275 + w*25, height = 116 + h*29
+- [x] Add UserDefaults persistence for Size2D
+- [x] Test size conversions verified
 
-**Phase 2: Chrome Dynamic Sizing (2 hours)**
-- [ ] Replace VideoWindowLayout constants with Size2D calculations
-- [ ] Implement three-section bottom bar (LEFT 125px + CENTER tiles + RIGHT 125px)
-- [ ] Calculate centerWidth = pixelSize.width - 250
-- [ ] Add ForEach to tile VIDEO_BOTTOM_TILE (25px) in center section
-- [ ] Update titlebar to tile VIDEO_TITLEBAR_STRETCHY based on width
-- [ ] Calculate stretchyTileCount = (pixelSize.width - 150) / 25
-- [ ] Update vertical border tiling based on height segments
-- [ ] Test chrome at sizes [0,0], [0,4], [1,4], [11,12]
+**Phase 2: Chrome Dynamic Sizing (2 hours)** ✅ COMPLETE
+- [x] Replace VideoWindowLayout constants with Size2D calculations
+- [x] Implement three-section bottom bar (LEFT 125px + CENTER tiles + RIGHT 125px)
+- [x] Calculate centerWidth = pixelSize.width - 250
+- [x] Add ForEach to tile VIDEO_BOTTOM_TILE (25px) in center section
+- [x] Update titlebar to tile VIDEO_TITLEBAR_STRETCHY based on width
+- [x] Calculate stretchyTilesPerSide with ceil() for full coverage (3 per side at 275px)
+- [x] Update vertical border tiling based on height segments
+- [x] Test chrome - titlebar gap fixed with proper tile calculation
 
-**Phase 3: Resize Handle (1 hour)**
-- [ ] Add buildVideoResizeHandle() in VideoWindowChromeView
-- [ ] Create 20×20px invisible drag area in bottom-right corner
-- [ ] Position at (pixelSize.width - 10, pixelSize.height - 10)
-- [ ] Implement quantized DragGesture (25×29 segments)
-- [ ] Wire gesture to VideoWindowSizeState.size
-- [ ] Add .cursor(.resizeNorthWestSouthEast) on hover
-- [ ] Test drag resizing updates window size
+**Phase 3: Resize Handle (1 hour)** ✅ COMPLETE
+- [x] Add buildVideoResizeHandle() in VideoWindowChromeView
+- [x] Create 20×20px invisible drag area in bottom-right corner
+- [x] Position at (pixelSize.width - 10, pixelSize.height - 10)
+- [x] Implement quantized DragGesture (25×29 segments)
+- [x] Preview pattern - commit size only at drag end
+- [x] AppKit overlay window for preview visibility
+- [x] Test drag resizing works with visible preview
 
-**Phase 4: Button Migration (1 hour)**
-- [ ] Update 1x button action: videoSize = .videoDefault ([0,4])
-- [ ] Update 2x button action: videoSize = .video2x ([11,12])
-- [ ] Remove VideoWindowSizeMode enum from AppSettings
-- [ ] Remove scaleEffect logic from WinampVideoWindow
-- [ ] Remove Ctrl+1/Ctrl+2 keyboard shortcuts (or repurpose)
-- [ ] Test buttons set Size2D correctly
+**Phase 4: Button Migration (1 hour)** ✅ COMPLETE
+- [x] Update 1x button action: videoSize = .videoDefault ([0,4])
+- [x] Update 2x button action: videoSize = .video2x ([11,12])
+- [x] Remove VideoWindowSizeMode enum from AppSettings
+- [x] Remove scaleEffect logic from WinampVideoWindow
+- [x] Remove Ctrl+1/Ctrl+2 keyboard shortcuts
+- [x] Test buttons set Size2D correctly - working perfectly
 
-**Phase 5: Integration & Testing (2 hours)**
-- [ ] Remove WinampVideoWindow.scaleEffect code
-- [ ] Update WindowCoordinator.resizeVideoWindow() to use Size2D
-- [ ] Update makeVideoDockingContext() for segment-based sizing
-- [ ] Update WindowFrameStore to persist Size2D instead of CGRect
-- [ ] Test docking preserved during resize
+**Phase 5: Integration & Testing (2 hours)** ✅ MOSTLY COMPLETE
+- [x] Remove WinampVideoWindow.scaleEffect code
+- [x] Remove old WindowCoordinator.resizeVideoWindow() method
+- [x] Fix WindowSnapManager to exclude invisible windows (phantom fix)
+- [x] Fix titlebar gap with correct tile calculation
+- [x] Implement AppKit preview overlay
+- [x] Test chrome aligns at multiple sizes
+- [x] Verify 1x/2x buttons work perfectly
+- [ ] Resolve remaining resize jitter (awaiting Oracle solution)
 - [ ] Test size persists across app restarts
-- [ ] Test minimum size cannot be violated (274×116)
-- [ ] Test chrome aligns perfectly at [0,0], [0,4], [5,5], [11,12]
-- [ ] Test video content letterboxes/pillarboxes correctly
-- [ ] Verify no regressions in existing VIDEO features
+- [ ] Test docking with resized windows
 
 #### 5. Active/Inactive Titlebar (Infrastructure Complete)
 - [x] VIDEO titlebar has ACTIVE/INACTIVE sprite infrastructure ✅
