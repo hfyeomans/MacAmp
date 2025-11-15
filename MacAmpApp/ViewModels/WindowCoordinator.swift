@@ -378,8 +378,13 @@ final class WindowCoordinator {
                 Task { @MainActor [weak self] in
                     guard let self else { return }
                     // React to showVideoWindow changes
+                    // ORACLE FIX: Only show VIDEO window after initial windows are presented
+                    // This prevents VIDEO from appearing before Main/EQ/Playlist on startup
                     if self.settings.showVideoWindow {
-                        self.showVideo()
+                        if self.hasPresentedInitialWindows {
+                            self.showVideo()
+                        }
+                        // If windows not ready yet, setting will be honored in presentInitialWindows()
                     } else {
                         self.hideVideo()
                     }
@@ -388,10 +393,9 @@ final class WindowCoordinator {
             }
         }
 
-        // Oracle fix: Honor initial state immediately
-        if settings.showVideoWindow {
-            showVideo()
-        }
+        // ORACLE FIX: Do NOT apply initial state here during init
+        // VIDEO window will be shown in presentInitialWindows() if showVideoWindow is true
+        // This ensures VIDEO never appears before Main/EQ/Playlist
     }
 
     // NEW: Milkdrop window visibility observer (TASK 2 Day 7)
@@ -417,8 +421,13 @@ final class WindowCoordinator {
                         print("🔵 WindowCoordinator: showMilkdropWindow changed to \(self.settings.showMilkdropWindow)")
                     }
                     // React to showMilkdropWindow changes
+                    // ORACLE FIX: Only show Milkdrop window after initial windows are presented
+                    // This prevents Milkdrop from appearing before Main/EQ/Playlist on startup
                     if self.settings.showMilkdropWindow {
-                        self.showMilkdrop()
+                        if self.hasPresentedInitialWindows {
+                            self.showMilkdrop()
+                        }
+                        // If windows not ready yet, setting will be honored in presentInitialWindows()
                     } else {
                         self.hideMilkdrop()
                     }
@@ -427,13 +436,9 @@ final class WindowCoordinator {
             }
         }
 
-        // Honor initial state immediately
-        if settings.windowDebugLoggingEnabled {
-            print("🔵 WindowCoordinator: Initial showMilkdropWindow state: \(settings.showMilkdropWindow)")
-        }
-        if settings.showMilkdropWindow {
-            showMilkdrop()
-        }
+        // ORACLE FIX: Do NOT apply initial state here during init
+        // Milkdrop window will be shown in presentInitialWindows() if showMilkdropWindow is true
+        // This ensures Milkdrop never appears before Main/EQ/Playlist
     }
 
     // NEW: Video window size observer (1x/2x buttons)
@@ -1125,6 +1130,16 @@ final class WindowCoordinator {
         mainWindow?.makeKeyAndOrderFront(nil)
         eqWindow?.orderFront(nil)
         playlistWindow?.orderFront(nil)
+
+        // ORACLE FIX: Show VIDEO/Milkdrop if user had them open previously
+        // This ensures they appear AFTER Main/EQ/Playlist, not before
+        if settings.showVideoWindow {
+            videoWindow?.orderFront(nil)
+        }
+        if settings.showMilkdropWindow {
+            milkdropWindow?.orderFront(nil)
+        }
+
         focusAllWindows()
     }
 
