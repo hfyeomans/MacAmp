@@ -1,124 +1,158 @@
 import SwiftUI
 
-/// Layout constants for Video Window (matches Playlist dimensions: 275×232)
+/// Layout constants for Video Window (chrome component sizes)
 private enum VideoWindowLayout {
-    static let windowSize = CGSize(width: 275, height: 232)
-    static let titlebarHeight: CGFloat = 20  // Titlebar sprite height
-    static let bottomBarHeight: CGFloat = 38  // Bottom bar sprite height
+    static let titlebarHeight: CGFloat = 20
+    static let bottomBarHeight: CGFloat = 38
     static let leftBorderWidth: CGFloat = 11
     static let rightBorderWidth: CGFloat = 8
-
-    static let contentX: CGFloat = leftBorderWidth  // 11
-    static let contentY: CGFloat = titlebarHeight   // 20
-    static let contentWidth: CGFloat = windowSize.width - leftBorderWidth - rightBorderWidth  // 256
-    static let contentHeight: CGFloat = windowSize.height - titlebarHeight - bottomBarHeight  // 174
+    static let bottomLeftWidth: CGFloat = 125
+    static let bottomRightWidth: CGFloat = 125
 }
 
-/// Video Window - Pixel-perfect VIDEO.bmp chrome using absolute positioning
-/// Matches Main/EQ/Playlist pattern: ZStack + SimpleSpriteImage + .at()
+/// Video Window - Dynamic sizing with VIDEO.bmp chrome using Size2D segments
+/// Resizable pattern matching Playlist: 25×29px quantized resize
 struct VideoWindowChromeView<Content: View>: View {
     @ViewBuilder let content: Content
+    let sizeState: VideoWindowSizeState
 
     @State private var metadataScrollOffset: CGFloat = 0
     @State private var metadataScrollTimer: Timer?
 
     @Environment(AudioPlayer.self) private var audioPlayer
     @Environment(WindowFocusState.self) private var windowFocusState
-    @Environment(AppSettings.self) private var settings
 
     // Computed: Is this window currently focused?
     private var isWindowActive: Bool {
         windowFocusState.isVideoKey
     }
 
+    // MARK: - Dynamic Layout Calculations
+
+    private var pixelSize: CGSize {
+        sizeState.pixelSize
+    }
+
+    private var contentSize: CGSize {
+        sizeState.contentSize
+    }
+
+    private var contentCenterY: CGFloat {
+        VideoWindowLayout.titlebarHeight + contentSize.height / 2
+    }
+
+    private var bottomBarY: CGFloat {
+        pixelSize.height - VideoWindowLayout.bottomBarHeight / 2
+    }
+
     var body: some View {
         ZStack(alignment: .topLeading) {
             // Background
             Color.black
-                .frame(width: VideoWindowLayout.windowSize.width, height: VideoWindowLayout.windowSize.height)
+                .frame(width: pixelSize.width, height: pixelSize.height)
 
-            // Titlebar - full width drag handle wrapping all sprites
-            WinampTitlebarDragHandle(windowKind: .video, size: CGSize(width: VideoWindowLayout.windowSize.width, height: VideoWindowLayout.titlebarHeight)) {
-                ZStack(alignment: .topLeading) {
-                    let suffix = isWindowActive ? "ACTIVE" : "INACTIVE"
+            // Titlebar - dynamic width drag handle wrapping all sprites
+            buildDynamicTitlebar()
 
-                    // Left cap (25px)
-                    SimpleSpriteImage("VIDEO_TITLEBAR_TOP_LEFT_\(suffix)", width: 25, height: VideoWindowLayout.titlebarHeight)
-                        .position(x: 12.5, y: 10)
-
-                    // Left tiles
-                    ForEach(0..<3, id: \.self) { i in
-                        SimpleSpriteImage("VIDEO_TITLEBAR_STRETCHY_\(suffix)", width: 25, height: VideoWindowLayout.titlebarHeight)
-                            .position(x: 25 + 12.5 + CGFloat(i) * 25, y: 10)
-                    }
-
-                    // Center "WINAMP VIDEO" text
-                    SimpleSpriteImage("VIDEO_TITLEBAR_TOP_CENTER_\(suffix)", width: 100, height: VideoWindowLayout.titlebarHeight)
-                        .position(x: 137.5, y: 10)
-
-                    // Right tiles
-                    ForEach(0..<3, id: \.self) { i in
-                        SimpleSpriteImage("VIDEO_TITLEBAR_STRETCHY_\(suffix)", width: 25, height: VideoWindowLayout.titlebarHeight)
-                            .position(x: 187.5 + 12.5 + CGFloat(i) * 25, y: 10)
-                    }
-
-                    // Right cap
-                    SimpleSpriteImage("VIDEO_TITLEBAR_TOP_RIGHT_\(suffix)", width: 25, height: VideoWindowLayout.titlebarHeight)
-                        .position(x: 262.5, y: 10)
-                }
-            }
-            .position(x: 137.5, y: 10)  // Center the entire drag handle
-
-            // Side borders - tiled vertically like playlist (29px per tile)
-            let sideHeight: CGFloat = 174  // 232 - 20 - 38
-            let sideTileCount = Int(ceil(sideHeight / 29))  // 6 tiles
-            ForEach(0..<sideTileCount, id: \.self) { i in
-                // Left border (11px wide)
-                SimpleSpriteImage("VIDEO_BORDER_LEFT", width: 11, height: 29)
-                    .position(x: 5.5, y: 20 + 14.5 + CGFloat(i) * 29)
-
-                // Right border (8px wide)
-                SimpleSpriteImage("VIDEO_BORDER_RIGHT", width: 8, height: 29)
-                    .position(x: 271, y: 20 + 14.5 + CGFloat(i) * 29)  // 275 - 4 = 271
-            }
+            // Side borders - tiled vertically based on height
+            buildDynamicBorders()
 
             // Content area
             content
-                .frame(width: VideoWindowLayout.contentWidth, height: VideoWindowLayout.contentHeight)
-                .position(x: VideoWindowLayout.windowSize.width / 2, y: 20 + sideHeight / 2)
+                .frame(width: contentSize.width, height: contentSize.height)
+                .position(x: pixelSize.width / 2, y: contentCenterY)
 
-            // Bottom bar - 3 pieces (left + tiled center + right)
-            // Left section (125px) - buttons, align with left border
-            SimpleSpriteImage("VIDEO_BOTTOM_LEFT", width: 125, height: 38)
-                .position(x: 62.5, y: 213)
+            // Bottom bar - three-section layout with dynamic center
+            buildDynamicBottomBar()
 
-            // Center tiles - fill gap between left and right sections
-            let bottomGap = VideoWindowLayout.windowSize.width - 125 - 125  // 25px
-            let bottomTileCount = Int(ceil(bottomGap / 25))  // 1 tile
-            ForEach(0..<bottomTileCount, id: \.self) { i in
-                SimpleSpriteImage("VIDEO_BOTTOM_TILE", width: 25, height: 38)
-                    .position(x: 125 + 12.5 + CGFloat(i) * 25, y: 213)
-            }
-
-            // Right section (125px) - info area, align with right border
-            SimpleSpriteImage("VIDEO_BOTTOM_RIGHT", width: 125, height: 38)
-                .position(x: 212.5, y: 213)
-
-            // Video metadata text overlay (rendered using TEXT.bmp sprites)
+            // Video metadata text overlay
             if !audioPlayer.videoMetadataString.isEmpty {
                 buildVideoMetadataText()
             }
 
-            // Clickable regions over baked-on buttons (follows playlist pattern)
+            // Clickable button regions
             buildVideoWindowButtons()
+
+            // Resize handle (bottom-right corner)
+            buildResizeHandle()
         }
-        .frame(minWidth: VideoWindowLayout.windowSize.width, minHeight: VideoWindowLayout.windowSize.height, alignment: .topLeading)
+        .frame(width: pixelSize.width, height: pixelSize.height, alignment: .topLeading)
         .background(Color.black)
         .onDisappear {
-            // Clean up timer to prevent leaks
             metadataScrollTimer?.invalidate()
             metadataScrollTimer = nil
         }
+    }
+
+    // MARK: - Dynamic Titlebar
+
+    @ViewBuilder
+    private func buildDynamicTitlebar() -> some View {
+        WinampTitlebarDragHandle(windowKind: .video, size: CGSize(width: pixelSize.width, height: VideoWindowLayout.titlebarHeight)) {
+            ZStack(alignment: .topLeading) {
+                let suffix = isWindowActive ? "ACTIVE" : "INACTIVE"
+                let stretchyCount = sizeState.stretchyTitleTileCount
+
+                // Left cap (25px)
+                SimpleSpriteImage("VIDEO_TITLEBAR_TOP_LEFT_\(suffix)", width: 25, height: 20)
+                    .position(x: 12.5, y: 10)
+
+                // Stretchy tiles (dynamic count based on width)
+                ForEach(0..<stretchyCount, id: \.self) { i in
+                    SimpleSpriteImage("VIDEO_TITLEBAR_STRETCHY_\(suffix)", width: 25, height: 20)
+                        .position(x: 25 + 12.5 + CGFloat(i) * 25, y: 10)
+                }
+
+                // Center "WINAMP VIDEO" text (fixed 100px)
+                let centerTextX = 25 + CGFloat(stretchyCount) * 25 + 50  // After stretchy tiles
+                SimpleSpriteImage("VIDEO_TITLEBAR_TOP_CENTER_\(suffix)", width: 100, height: 20)
+                    .position(x: centerTextX, y: 10)
+
+                // Right cap (25px)
+                SimpleSpriteImage("VIDEO_TITLEBAR_TOP_RIGHT_\(suffix)", width: 25, height: 20)
+                    .position(x: pixelSize.width - 12.5, y: 10)
+            }
+        }
+        .position(x: pixelSize.width / 2, y: 10)
+    }
+
+    // MARK: - Dynamic Borders
+
+    @ViewBuilder
+    private func buildDynamicBorders() -> some View {
+        let tileCount = sizeState.verticalBorderTileCount
+
+        ForEach(0..<tileCount, id: \.self) { i in
+            // Left border (11px wide)
+            SimpleSpriteImage("VIDEO_BORDER_LEFT", width: 11, height: 29)
+                .position(x: 5.5, y: 20 + 14.5 + CGFloat(i) * 29)
+
+            // Right border (8px wide)
+            SimpleSpriteImage("VIDEO_BORDER_RIGHT", width: 8, height: 29)
+                .position(x: pixelSize.width - 4, y: 20 + 14.5 + CGFloat(i) * 29)
+        }
+    }
+
+    // MARK: - Dynamic Bottom Bar
+
+    @ViewBuilder
+    private func buildDynamicBottomBar() -> some View {
+        // Three-section layout: LEFT (125px) + CENTER (tiles) + RIGHT (125px)
+
+        // LEFT section (125px fixed) - baked-on buttons
+        SimpleSpriteImage("VIDEO_BOTTOM_LEFT", width: 125, height: 38)
+            .position(x: 62.5, y: bottomBarY)
+
+        // CENTER section (dynamic) - tiles VIDEO_BOTTOM_TILE
+        let centerCount = sizeState.centerTileCount
+        ForEach(0..<centerCount, id: \.self) { i in
+            SimpleSpriteImage("VIDEO_BOTTOM_TILE", width: 25, height: 38)
+                .position(x: 125 + 12.5 + CGFloat(i) * 25, y: bottomBarY)
+        }
+
+        // RIGHT section (125px fixed) - metadata display
+        SimpleSpriteImage("VIDEO_BOTTOM_RIGHT", width: 125, height: 38)
+            .position(x: pixelSize.width - 62.5, y: bottomBarY)
     }
 
     @ViewBuilder
@@ -147,7 +181,7 @@ struct VideoWindowChromeView<Content: View>: View {
         .offset(x: textWidth > displayWidth ? metadataScrollOffset : 0, y: 0)
         .frame(width: displayWidth, height: 6, alignment: .leading)
         .clipped()
-        .position(x: 170, y: 213)  // Centered in VIDEO_BOTTOM_RIGHT section
+        .position(x: pixelSize.width - 105, y: bottomBarY)  // Dynamic: inside VIDEO_BOTTOM_RIGHT
         .onAppear {
             if textWidth > displayWidth {
                 startMetadataScrolling(textWidth: textWidth, displayWidth: displayWidth)
@@ -191,30 +225,70 @@ struct VideoWindowChromeView<Content: View>: View {
     private func buildVideoWindowButtons() -> some View {
         // 1X button - clickable region over baked-on sprite
         // Sprite coordinates in VIDEO_BOTTOM_LEFT: x=24, y=9 (relative to sprite)
-        // Window coordinates: (31.5, 212) - center point
+        // Window coordinates: Fixed to LEFT section
         Button(action: {
-            settings.videoWindowSizeMode = .oneX
+            sizeState.size = .videoDefault  // Set to [0,4] = 275×232
         }) {
             Color.clear
                 .frame(width: 15, height: 18)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .focusable(false)  // Disable focus ring
-        .position(x: 31.5, y: 212)
+        .focusable(false)
+        .position(x: 31.5, y: bottomBarY)  // Dynamic Y position
 
         // 2X button - clickable region over baked-on sprite
         // Sprite coordinates in VIDEO_BOTTOM_LEFT: x=39, y=9 (relative to sprite)
-        // Window coordinates: (46.5, 212) - center point
+        // Window coordinates: Fixed to LEFT section
         Button(action: {
-            settings.videoWindowSizeMode = .twoX
+            sizeState.size = .video2x  // Set to [11,12] = 550×464
         }) {
             Color.clear
                 .frame(width: 15, height: 18)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .focusable(false)  // Disable focus ring
-        .position(x: 46.5, y: 212)
+        .focusable(false)
+        .position(x: 46.5, y: bottomBarY)  // Dynamic Y position
+    }
+
+    // MARK: - Resize Handle
+
+    @ViewBuilder
+    private func buildResizeHandle() -> some View {
+        @State var startSize = Size2D.zero
+
+        Rectangle()
+            .fill(Color.clear)
+            .frame(width: 20, height: 20)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        // Quantize drag to 25×29px segments
+                        let deltaWidth = Int(round(value.translation.width / 25))
+                        let deltaHeight = Int(round(value.translation.height / 29))
+
+                        // Apply with minimum constraint
+                        let newSize = Size2D(
+                            width: max(0, startSize.width + deltaWidth),
+                            height: max(0, startSize.height + deltaHeight)
+                        )
+
+                        sizeState.size = newSize
+                    }
+                    .onEnded { _ in
+                        // Capture final size as new start
+                        startSize = sizeState.size
+                    }
+            )
+            .onAppear {
+                startSize = sizeState.size
+            }
+            .onChange(of: sizeState.size) { _, newSize in
+                // Update start size when size changes externally (e.g., from buttons)
+                startSize = newSize
+            }
+            .position(x: pixelSize.width - 10, y: pixelSize.height - 10)
     }
 }
