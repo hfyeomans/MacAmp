@@ -33,19 +33,22 @@ final class VideoWindowSizeState {
         Int(centerWidth / 25)
     }
 
-    /// Number of stretchy title tiles to render
-    var stretchyTitleTileCount: Int {
-        // Titlebar base: LEFT (25) + CENTER (100) + RIGHT (25) = 150px fixed
-        // Remaining width filled with 25px stretchy tiles
-        max(0, Int((pixelSize.width - 150) / 25))
+    /// Number of stretchy title tiles to render on EACH side
+    /// At 275px: need 3 tiles per side to fill 25→center and center→cap
+    var stretchyTilesPerSide: Int {
+        // Each side needs to fill: cap(25px) to center_edge or center_edge to cap
+        // At 275px: left side = 25 to 87.5 = 62.5px → need 3 tiles (overlap OK)
+        // Calculate: (window_width - caps - center) / 2 / tile_width
+        // (275 - 25 - 25 - 100) / 2 / 25 = 125 / 2 / 25 = 2.5 → round UP to 3
+        let availableWidth = pixelSize.width - 50 - 100  // minus caps and center
+        let perSide = availableWidth / 2  // divide between left and right
+        return max(0, Int(ceil(perSide / 25)))  // round UP to ensure coverage
     }
 
-    /// Distribution of stretchy tiles (left and right of center text)
+    /// Distribution of stretchy tiles (same count on both sides for symmetry)
     var titlebarTileDistribution: (left: Int, right: Int) {
-        let total = stretchyTitleTileCount
-        let left = total / 2
-        let right = total - left  // Handles odd counts (right gets extra tile)
-        return (left, right)
+        let count = stretchyTilesPerSide
+        return (count, count)  // Equal on both sides
     }
 
     /// Number of vertical border tiles needed based on height

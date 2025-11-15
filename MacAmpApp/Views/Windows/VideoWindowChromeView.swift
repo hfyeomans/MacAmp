@@ -101,27 +101,31 @@ struct VideoWindowChromeView<Content: View>: View {
                 let distribution = sizeState.titlebarTileDistribution
                 let centerX = pixelSize.width / 2
 
-                // Left cap (25px)
+                // Left cap (25px) - always at left edge
                 SimpleSpriteImage("VIDEO_TITLEBAR_TOP_LEFT_\(suffix)", width: 25, height: 20)
                     .position(x: 12.5, y: 10)
 
-                // Left stretchy tiles (grow from right to left)
+                // Left stretchy tiles - start RIGHT AFTER cap, grow toward center
+                // OLD pattern: 25 + 12.5 + i*25 (starts at 37.5)
                 ForEach(0..<distribution.left, id: \.self) { i in
                     SimpleSpriteImage("VIDEO_TITLEBAR_STRETCHY_\(suffix)", width: 25, height: 20)
-                        .position(x: centerX - 50 - 12.5 - CGFloat(i) * 25, y: 10)
+                        .position(x: 25 + 12.5 + CGFloat(i) * 25, y: 10)
                 }
 
                 // Center "WINAMP VIDEO" text (100px, always centered)
                 SimpleSpriteImage("VIDEO_TITLEBAR_TOP_CENTER_\(suffix)", width: 100, height: 20)
                     .position(x: centerX, y: 10)
 
-                // Right stretchy tiles (grow from left to right)
+                // Right stretchy tiles - start RIGHT AFTER center, grow toward cap
+                // Position: centerX + 50 + (offset from center edge)
+                // Need to calculate offset so tiles fill from center to cap
+                let rightTileStart = centerX + 50 + 12.5
                 ForEach(0..<distribution.right, id: \.self) { i in
                     SimpleSpriteImage("VIDEO_TITLEBAR_STRETCHY_\(suffix)", width: 25, height: 20)
-                        .position(x: centerX + 50 + 12.5 + CGFloat(i) * 25, y: 10)
+                        .position(x: rightTileStart + CGFloat(i) * 25, y: 10)
                 }
 
-                // Right cap (25px)
+                // Right cap (25px) - always at right edge
                 SimpleSpriteImage("VIDEO_TITLEBAR_TOP_RIGHT_\(suffix)", width: 25, height: 20)
                     .position(x: pixelSize.width - 12.5, y: 10)
             }

@@ -2560,3 +2560,53 @@ open /tmp/M_selected_complete.png /tmp/M_normal_complete.png
 - Archive to tasks/done/
 - Future: Native Metal visualization task (V2.0)
 
+
+---
+
+## Part 17: Left Artifact Root Cause Analysis (2025-11-15)
+
+### Titlebar Gap Discovery
+
+At default size 275x232, there are TWO GAPS in the titlebar:
+
+**Gap 1:** Between left stretchy tiles and center text (12.5px)
+**Gap 2:** Between center text and right stretchy tiles (12.5px)
+
+**Root Cause:**
+```swift
+// Center text: 100px wide, positioned at centerX
+SimpleSpriteImage("VIDEO_TITLEBAR_TOP_CENTER", width: 100, height: 20)
+    .position(x: centerX, y: 10)  // centerX = 137.5
+// Spans from (137.5 - 50) to (137.5 + 50) = 87.5 to 187.5
+
+// Left tiles positioned at:
+centerX - 50 - 12.5 - i*25
+// Rightmost left tile: 137.5 - 50 - 12.5 = 75
+// GAP from 75 to 87.5 = 12.5px ← LEFT GAP!
+
+// Right tiles positioned at:
+centerX + 50 + 12.5 + i*25  
+// Leftmost right tile: 137.5 + 50 + 12.5 = 200
+// GAP from 187.5 to 200 = 12.5px ← RIGHT GAP!
+```
+
+**Why Gaps Exist:**
+- Center text is 100px (spans ±50px from center)
+- Tiles positioned at ±50 ±12.5, which is ±62.5 from center
+- This leaves 12.5px gaps on both sides
+
+**Solution:**
+Tiles should be positioned at centerX ± 50 (touching center edge), not ± 62.5
+
+**Corrected Positions:**
+- Leftmost right tile should be at: centerX + 50 + 12.5 (touching right edge of center)
+- But that's what we have! The issue is the tile itself is 25px with center at that point.
+- Tile at position 200 with width 25 spans 187.5-212.5
+- But center text ends at 187.5, so tile SHOULD start at 187.5
+- Position should be: 187.5 + 12.5 = 200 ✓ (this is correct!)
+
+Wait, let me recalculate...
+
+Actually the math shows we ARE positioning correctly but there may be a missing tile?
+
+Let me check what the OLD code did before we switched to dynamic sizing...
