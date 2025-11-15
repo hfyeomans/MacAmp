@@ -530,157 +530,150 @@
 
 ---
 
-## Day 7: Milkdrop Foundation ⏳
+## Day 7: Milkdrop Foundation ✅ COMPLETE
 
 ### 7.1 MilkdropWindowView Structure
 
 #### Update Stub
-- [ ] Open `MilkdropWindowView.swift`
-- [ ] Add proper titlebar (simple, no skinning)
-- [ ] Create content area for visualization
-- [ ] Add basic window chrome (neutral style)
+- [x] Open `MilkdropWindowView.swift`
+- [x] Add proper titlebar (GEN.bmp letters)
+- [x] Create content area for visualization
+- [x] Add basic window chrome (GEN.bmp sprites)
 
 #### Titlebar
-- [ ] Add "Milkdrop" text label
-- [ ] Add close button
-- [ ] Add minimal controls (preset selector later)
-- [ ] Add drag gesture for window movement
+- [x] Add "MILKDROP" letter sprites (8 letters, two-piece)
+- [x] Add active/inactive focus states
+- [x] Add minimal controls (preset selector deferred)
+- [x] Window draggable via WinampTitlebarDragHandle
 
 #### Content Area
-- [ ] Black background placeholder
-- [ ] Full-size content area
-- [ ] Ready for Butterchurn WebView
+- [x] Black background placeholder (256×198)
+- [x] Full-size content area
+- [x] Ready for visualization (Butterchurn deferred)
 
 ### 7.2 Window Lifecycle
 
 #### Open/Close
-- [ ] Wire to `showMilkdropWindow` toggle
-- [ ] Test window opens/closes independently
-- [ ] Verify Ctrl+Shift+M shortcut works
+- [x] Wire to `showMilkdropWindow` toggle
+- [x] Test window opens/closes independently
+- [x] Verify Ctrl+Shift+K shortcut works (changed from M)
 
 #### Positioning
-- [ ] Load saved frame from AppSettings
-- [ ] Use default position if none saved (x=400, y=0)
-- [ ] Save position on frame change
-- [ ] Test position persists
+- [x] WindowFrameStore persistence integrated
+- [x] Default position handled by WindowCoordinator
+- [x] Save position on frame change
+- [x] Test position persists
 
 ### 7.3 Testing Independence
 
 #### Simultaneous Windows Test
-- [ ] Open video window
-- [ ] Open milkdrop window
-- [ ] Verify both render correctly
-- [ ] Verify both can be dragged independently
-- [ ] Verify both can be closed independently
-- [ ] Test with video playing in video window
-- [ ] Confirm no interference between windows
+- [x] Open video window
+- [x] Open milkdrop window
+- [x] Verify both render correctly
+- [x] Verify both can be dragged independently
+- [x] Verify both can be closed independently
+- [x] Test with video playing in video window
+- [x] Confirm no interference between windows
 
 **Day 7 Complete**: ✅ All above checkboxes checked
 
+### 7.4 Sprite Research (Day 7 Extended)
+
+#### GEN.BMP Letter Discovery
+- [x] Discovered two-piece sprite structure (TOP + BOTTOM)
+- [x] Verified 32 letter sprites (8 letters × 4 variants)
+- [x] Extracted coordinates with ImageMagick
+- [x] Added to SkinSprites.swift
+- [x] Documented in research.md Part 15
+
+#### Window Dimensions
+- [x] Finalized: 275×232 pixels
+- [x] Content cavity: 256×198
+- [x] Chrome overhead documented
+
+**Day 7 Extended**: ✅ Research complete, coordinates verified
+
 ---
 
-## Day 8: Butterchurn Integration ⏳
+## Day 8: Window Focus Architecture ✅ COMPLETE
 
-### 8.1 Butterchurn HTML Bundle
+### 8.1 WindowFocusState Infrastructure
 
-#### Create Resource Directory
-- [ ] Create `MacAmpApp/Resources/Butterchurn/` directory
-- [ ] Add directory to Xcode project
-- [ ] Ensure files bundle with app
+#### Create WindowFocusState.swift
+- [x] Create @Observable singleton class
+- [x] Add activeWindow: WindowKind? property
+- [x] Add setActive() method
+- [x] Add setInactive() method
+- [x] Test state tracking
 
-#### Download Butterchurn Libraries
-- [ ] Download `butterchurn.min.js` from NPM
-- [ ] Download `butterchurn-presets.min.js` from NPM
-- [ ] Verify library versions (3.0.0-beta.4)
-- [ ] Add to Resources/Butterchurn/
+#### Create WindowFocusDelegate.swift
+- [x] Create NSWindowDelegate implementation
+- [x] Handle windowDidBecomeKey notification
+- [x] Handle windowDidResignKey notification
+- [x] Update WindowFocusState singleton
+- [x] Test delegate integration
 
-#### Create index.html
-- [ ] Create `index.html`
-- [ ] Add DOCTYPE and html structure
-- [ ] Create canvas element (id="canvas")
-- [ ] Link to butterchurn.min.js
-- [ ] Link to butterchurn-presets.min.js
-- [ ] Link to bridge.js (to be created)
-- [ ] Add CSS: hide scrollbars, full-size canvas, black background
+### 8.2 WindowCoordinator Integration
 
-#### Create bridge.js
-- [ ] Create `bridge.js`
-- [ ] Initialize Butterchurn visualizer
-- [ ] Create AudioContext
-- [ ] Load 5-8 curated presets:
-  - [ ] Geiss - Spiral Artifact
-  - [ ] Martin - Mandelbox Explorer
-  - [ ] Flexi - Predator-Prey
-  - [ ] Rovastar - Altars of Madness
-  - [ ] Unchained - Lucid Concentration
-  - [ ] (Select 3 more high-quality presets)
-- [ ] Implement `loadPreset(index)` function
-- [ ] Implement `updateAudioData(fftData)` function
-- [ ] Add auto-cycle timer (30s interval)
-- [ ] Expose initialization to Swift via message handler
-- [ ] Add render loop
+#### Add Focus Delegates
+- [x] Create WindowFocusDelegate instances (Video, Milkdrop)
+- [x] Add to delegate multiplexers
+- [x] Test focus events propagate
+- [x] Verify no conflicts with WindowSnapManager
 
-#### Test HTML Bundle
-- [ ] Open index.html in Safari (standalone test)
-- [ ] Verify canvas renders
-- [ ] Verify Butterchurn initializes
-- [ ] Check browser console for errors
+### 8.3 VIDEO Window Focus Sprites
 
-### 8.2 ButterchurnWebView
+#### Add Active/Inactive Sprite Infrastructure
+- [x] Define VIDEO_TITLEBAR_ACTIVE sprites in SkinSprites.swift
+- [x] Define VIDEO_TITLEBAR_INACTIVE sprites in SkinSprites.swift
+- [x] Update VideoWindowChromeView to switch sprites
+- [x] Add @Environment(WindowFocusState.self)
+- [x] Test titlebar changes on focus
 
-#### Create Wrapper
-- [ ] Create `ButterchurnWebView.swift`
-- [ ] Import WebKit
-- [ ] Implement NSViewRepresentable
-- [ ] Add `@Environment(AppSettings.self)`
-- [ ] Add `@Binding var fftData: [Float]`
+### 8.4 Milkdrop Window Focus Sprites
 
-#### WKWebView Configuration
-- [ ] Create WKWebViewConfiguration
-- [ ] Add script message handler for "ready" event
-- [ ] Set userContentController
+#### Add Active/Inactive Letter Rendering
+- [x] Update MilkdropWindowChromeView with focus state
+- [x] Switch between GEN_TEXT_SELECTED_* and GEN_TEXT_*
+- [x] Test letter brightness changes on focus
+- [x] Verify two-piece sprite rendering
 
-#### makeNSView Implementation
-- [ ] Create WKWebView with configuration
-- [ ] Set drawsBackground = false (transparent)
-- [ ] Load index.html from Resources bundle
-- [ ] Grant file access to Butterchurn directory
-- [ ] Return configured web view
+### 8.5 VIDEO Window Enhancements
 
-#### updateNSView Implementation
-- [ ] Send FFT data to JavaScript
-- [ ] Serialize fftData to JSON/string
-- [ ] Call `evaluateJavaScript("updateAudioData(...)")`
-- [ ] Handle errors gracefully
+#### Keyboard Shortcuts
+- [x] Add Ctrl+1 shortcut (normal 1x size)
+- [x] Add Ctrl+2 shortcut (double 2x size)
+- [x] Test shortcuts work
+- [x] Verify state persists
 
-#### Coordinator
-- [ ] Create Coordinator class
-- [ ] Implement WKScriptMessageHandler
-- [ ] Handle "ready" message from JavaScript
-- [ ] Log initialization success
-
-### 8.3 Integration into MilkdropWindowView
-
-#### Update Content Area
-- [ ] Replace placeholder with ButterchurnWebView
-- [ ] Pass fftData binding (empty for now)
-- [ ] Set frame to fill content area
-- [ ] Test WebView loads
-
-### 8.4 Testing
-- [ ] Build and run app
-- [ ] Open milkdrop window
-- [ ] Verify Butterchurn loads in WebView
-- [ ] Check Safari Web Inspector for errors
-- [ ] Verify "ready" message received in Xcode console
-- [ ] Verify canvas renders (static for now, no audio data)
-- [ ] Test with different window sizes
+### 8.6 Testing
+- [x] Build and run app
+- [x] Open VIDEO and Milkdrop windows
+- [x] Click between windows, verify focus changes
+- [x] Verify titlebars switch active/inactive sprites
+- [x] Test keyboard shortcuts
+- [x] Verify no console errors
 
 **Day 8 Complete**: ✅ All above checkboxes checked
 
+### 8.7 Butterchurn Integration DEFERRED
+
+**Decision**: Defer Butterchurn visualization to future task
+
+**Blockers**:
+- [x] WKWebView evaluateJavaScript() failures documented
+- [x] Script message handler issues documented
+- [x] File access sandbox problems documented
+- [x] Blockers documented in BUTTERCHURN_BLOCKERS.md
+
+**Alternative**:
+- [ ] Future: Native Metal visualization (V2.0 enhancement)
+
+**Day 8 Butterchurn**: ⏳ DEFERRED (foundation complete, visualization future)
+
 ---
 
-## Day 9: FFT Audio Bridge ⏳
+## Day 9: FFT Audio Bridge ⏳ DEFERRED (Butterchurn blockers)
 
 ### 9.1 AudioAnalyzer Implementation
 
@@ -773,7 +766,7 @@
 
 ---
 
-## Day 10: Milkdrop Polish & Final Testing ⏳
+## Day 10: Milkdrop Polish & Final Testing ⏳ DEFERRED (Butterchurn blockers)
 
 ### 10.1 Preset Selection
 

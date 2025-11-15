@@ -20,7 +20,8 @@ private enum MilkdropWindowLayout {
 struct MilkdropWindowChromeView<Content: View>: View {
     @ViewBuilder let content: Content
 
-    @State private var isWindowActive = true
+    @Environment(WindowFocusState.self) private var windowFocusState
+    private var isWindowActive: Bool { windowFocusState.isMilkdropKey }
 
     var body: some View {
         ZStack(alignment: .topLeading) {

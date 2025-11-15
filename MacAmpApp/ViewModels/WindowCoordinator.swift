@@ -159,7 +159,8 @@ final class WindowCoordinator {
             dockingController: dockingController,
             settings: settings,
             radioLibrary: radioLibrary,
-            playbackCoordinator: playbackCoordinator
+            playbackCoordinator: playbackCoordinator,
+            windowFocusState: windowFocusState
         )
 
         // Configure windows (borderless, transparent titlebar)
@@ -286,11 +287,21 @@ final class WindowCoordinator {
         videoFocusDelegate = WindowFocusDelegate(kind: .video, focusState: windowFocusState)
         milkdropFocusDelegate = WindowFocusDelegate(kind: .milkdrop, focusState: windowFocusState)
 
-        mainDelegateMultiplexer?.add(delegate: mainFocusDelegate!)
-        eqDelegateMultiplexer?.add(delegate: eqFocusDelegate!)
-        playlistDelegateMultiplexer?.add(delegate: playlistFocusDelegate!)
-        videoDelegateMultiplexer?.add(delegate: videoFocusDelegate!)
-        milkdropDelegateMultiplexer?.add(delegate: milkdropFocusDelegate!)
+        if let mainFocusDelegate {
+            mainDelegateMultiplexer?.add(delegate: mainFocusDelegate)
+        }
+        if let eqFocusDelegate {
+            eqDelegateMultiplexer?.add(delegate: eqFocusDelegate)
+        }
+        if let playlistFocusDelegate {
+            playlistDelegateMultiplexer?.add(delegate: playlistFocusDelegate)
+        }
+        if let videoFocusDelegate {
+            videoDelegateMultiplexer?.add(delegate: videoFocusDelegate)
+        }
+        if let milkdropFocusDelegate {
+            milkdropDelegateMultiplexer?.add(delegate: milkdropFocusDelegate)
+        }
 
         debugLogWindowPositions(step: "after delegate multiplexer setup")
     }
@@ -324,6 +335,8 @@ final class WindowCoordinator {
         doubleSizeTask?.cancel()
         persistenceTask?.cancel()
         videoWindowTask?.cancel()
+        milkdropWindowTask?.cancel()
+        videoSizeTask?.cancel()
     }
 
     // PHASE 4: Double-size observer (Main + EQ only, not Playlist)
@@ -384,7 +397,9 @@ final class WindowCoordinator {
     // NEW: Milkdrop window visibility observer (TASK 2 Day 7)
     // Honors persisted showMilkdropWindow state and keeps window in sync
     private func setupMilkdropWindowObserver() {
-        print("🔵 WindowCoordinator: setupMilkdropWindowObserver() called")
+        if settings.windowDebugLoggingEnabled {
+            print("🔵 WindowCoordinator: setupMilkdropWindowObserver() called")
+        }
         // Cancel any existing observer
         milkdropWindowTask?.cancel()
 
@@ -398,7 +413,9 @@ final class WindowCoordinator {
             } onChange: {
                 Task { @MainActor [weak self] in
                     guard let self else { return }
-                    print("🔵 WindowCoordinator: showMilkdropWindow changed to \(self.settings.showMilkdropWindow)")
+                    if self.settings.windowDebugLoggingEnabled {
+                        print("🔵 WindowCoordinator: showMilkdropWindow changed to \(self.settings.showMilkdropWindow)")
+                    }
                     // React to showMilkdropWindow changes
                     if self.settings.showMilkdropWindow {
                         self.showMilkdrop()
@@ -411,7 +428,9 @@ final class WindowCoordinator {
         }
 
         // Honor initial state immediately
-        print("🔵 WindowCoordinator: Initial showMilkdropWindow state: \(settings.showMilkdropWindow)")
+        if settings.windowDebugLoggingEnabled {
+            print("🔵 WindowCoordinator: Initial showMilkdropWindow state: \(settings.showMilkdropWindow)")
+        }
         if settings.showMilkdropWindow {
             showMilkdrop()
         }
@@ -441,7 +460,9 @@ final class WindowCoordinator {
 
     private func resizeVideoWindow(mode: AppSettings.VideoWindowSizeMode) {
         guard let video = videoWindow else {
-            print("⚠️ resizeVideoWindow: videoWindow is nil")
+            if settings.windowDebugLoggingEnabled {
+                print("⚠️ resizeVideoWindow: videoWindow is nil")
+            }
             return
         }
 
@@ -449,18 +470,32 @@ final class WindowCoordinator {
         switch mode {
         case .oneX:
             newSize = CGSize(width: 275, height: 232)
-            print("📐 Resizing Video window to 1x: \(newSize)")
+            if settings.windowDebugLoggingEnabled {
+                print("📐 Resizing Video window to 1x: \(newSize)")
+            }
         case .twoX:
             newSize = CGSize(width: 550, height: 464)
-            print("📐 Resizing Video window to 2x: \(newSize)")
+            if settings.windowDebugLoggingEnabled {
+                print("📐 Resizing Video window to 2x: \(newSize)")
+            }
         }
 
+        // Oracle Issue #2: Wrap resize operation with managers
+        beginSuppressingPersistence()
+        WindowSnapManager.shared.beginProgrammaticAdjustment()
+
         var frame = video.frame
-        print("📐 Current frame: \(frame)")
+        if settings.windowDebugLoggingEnabled {
+            print("📐 Current frame: \(frame)")
+        }
         frame.size = newSize
         video.setFrame(frame, display: true, animate: true)
-        print("📐 New frame: \(video.frame)")
+        if settings.windowDebugLoggingEnabled {
+            print("📐 New frame: \(video.frame)")
+        }
 
+        WindowSnapManager.shared.endProgrammaticAdjustment()
+        endSuppressingPersistence()
         schedulePersistenceFlush()
     }
 
@@ -1102,20 +1137,30 @@ final class WindowCoordinator {
     func hidePlaylist() { playlistWindow?.orderOut(nil) }
     // NEW: Video and Milkdrop window show/hide
     func showVideo() {
-        print("🔵 WindowCoordinator: showVideo() called")
+        if settings.windowDebugLoggingEnabled {
+            print("🔵 WindowCoordinator: showVideo() called")
+        }
         videoWindow?.makeKeyAndOrderFront(nil)
     }
     func hideVideo() {
-        print("🔵 WindowCoordinator: hideVideo() called")
+        if settings.windowDebugLoggingEnabled {
+            print("🔵 WindowCoordinator: hideVideo() called")
+        }
         videoWindow?.orderOut(nil)
     }
     func showMilkdrop() {
-        print("🔵 WindowCoordinator: showMilkdrop() called, window exists: \(milkdropWindow != nil)")
+        if settings.windowDebugLoggingEnabled {
+            print("🔵 WindowCoordinator: showMilkdrop() called, window exists: \(milkdropWindow != nil)")
+        }
         milkdropWindow?.makeKeyAndOrderFront(nil)
-        print("🔵 WindowCoordinator: milkdropWindow.isVisible: \(milkdropWindow?.isVisible ?? false)")
+        if settings.windowDebugLoggingEnabled {
+            print("🔵 WindowCoordinator: milkdropWindow.isVisible: \(milkdropWindow?.isVisible ?? false)")
+        }
     }
     func hideMilkdrop() {
-        print("🔵 WindowCoordinator: hideMilkdrop() called")
+        if settings.windowDebugLoggingEnabled {
+            print("🔵 WindowCoordinator: hideMilkdrop() called")
+        }
         milkdropWindow?.orderOut(nil)
     }
 

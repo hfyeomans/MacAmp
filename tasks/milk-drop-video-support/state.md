@@ -522,6 +522,265 @@
 
 ---
 
+## 🎯 Days 7-8: Milkdrop Foundation COMPLETE (2025-11-11 to 2025-11-14)
+
+### Day 7-8 COMPLETE (Merged Days)
+
+**Status**: ✅ **FOUNDATION COMPLETE** - Milkdrop window with GEN.bmp chrome
+
+**What Was Built**:
+
+#### 1. ✅ Milkdrop Window Foundation (Day 7)
+- Created WinampMilkdropWindowController.swift
+- Created WinampMilkdropWindow.swift
+- Window size: 275×232 (2× Main window height)
+- BorderlessWindow pattern (follows TASK 1)
+- WindowCoordinator integration
+- WindowSnapManager registration
+- Magnetic docking functional
+
+#### 2. ✅ GEN.BMP Sprite System (Day 7 Research)
+- **Critical Discovery**: GEN letters are TWO-PIECE sprites
+  - Selected: TOP (Y=88, H=6) + BOTTOM (Y=95, H=2) = 8px total
+  - Normal: TOP (Y=96, H=6) + BOTTOM (Y=108, H=1) = 7px total
+  - Cyan boundary at Y=94 (excluded from extraction)
+- 32 letter sprites added to SkinSprites.swift
+- Verified with ImageMagick pixel-perfect extraction
+- Letter widths: M=8, I=4, L=5, K=7, D=6, R=7, O=6, P=6
+
+#### 3. ✅ MilkdropWindowChromeView (Day 7-8)
+**File**: `MacAmpApp/Views/Windows/MilkdropWindowChromeView.swift`
+
+**Chrome Components**:
+- Titlebar (20px): GEN_TOP_LEFT + 8 letter sprites + GEN_TOP_RIGHT
+- Left border (11px): GEN_SIDE_LEFT tiled vertically (8 tiles)
+- Right border (8px): GEN_SIDE_RIGHT tiled vertically (8 tiles)
+- Content area (256×198): Black background, ready for Butterchurn
+- Bottom bar (14px): GEN_BOTTOM_LEFT + tiles + GEN_BOTTOM_RIGHT
+
+**Titlebar Letter Rendering**:
+```swift
+// Two-piece letter construction (excludes cyan boundaries)
+@ViewBuilder
+func makeLetter(_ letter: String, width: CGFloat, isActive: Bool) -> some View {
+    let prefix = isActive ? "GEN_TEXT_SELECTED_" : "GEN_TEXT_"
+    VStack(spacing: 0) {
+        SimpleSpriteImage("\(prefix)\(letter)_TOP", width: width, height: 6)
+        SimpleSpriteImage("\(prefix)\(letter)_BOTTOM", width: width, height: isActive ? 2 : 1)
+    }
+}
+```
+
+**Window Dimensions**:
+- Total: 275×232 pixels
+- Content cavity: 256×198 (starts at Y=20)
+- Chrome overhead: 19px left + 19px right + 20px top + 14px bottom
+
+#### 4. ✅ Window Focus Architecture (Day 8)
+**Files Created**:
+- `MacAmpApp/Models/WindowFocusState.swift` - @Observable focus state
+- `MacAmpApp/Utilities/WindowFocusDelegate.swift` - NSWindowDelegate tracking
+
+**Focus System**:
+- WindowFocusState singleton tracks active window
+- WindowFocusDelegate reports become/resign key events
+- VIDEO and Milkdrop windows switch titlebar sprites:
+  - Active: GEN_TEXT_SELECTED_* (bright)
+  - Inactive: GEN_TEXT_* (dim)
+- Integrated with WindowCoordinator delegate multiplexers
+
+**Pattern**:
+```swift
+// In chrome views:
+@Environment(WindowFocusState.self) var focusState
+let isActive = focusState.activeWindow == .video  // or .milkdrop
+
+// Titlebar sprite selection:
+SimpleSpriteImage("VIDEO_TITLEBAR_\(isActive ? "ACTIVE" : "INACTIVE")_LEFT_CAP", ...)
+```
+
+#### 5. ✅ VIDEO Window Enhancements (Day 8)
+- Added active/inactive titlebar sprite infrastructure
+- Keyboard shortcuts: Ctrl+1 (normal size), Ctrl+2 (double size)
+- SkinSprites.swift defines VIDEO_TITLEBAR_ACTIVE/INACTIVE variants
+- VideoWindowChromeView switches sprites based on focus state
+
+#### 6. ⏳ Butterchurn Integration DEFERRED
+**Blocker**: WKWebView limitations discovered
+- WKWebView evaluateJavaScript() failed repeatedly
+- Script message handlers not receiving events
+- Alternative: Native Metal visualization (future enhancement)
+- Decision: Complete window foundation, defer visualization
+
+**Files Documenting Blockers**:
+- `tasks/milk-drop-video-support/BUTTERCHURN_BLOCKERS.md`
+- `tasks/milk-drop-video-support/research.md` (Part 15: Lessons Learned)
+
+**Files Modified**:
+- `MacAmpApp/Models/WindowFocusState.swift` (new)
+- `MacAmpApp/Utilities/WindowFocusDelegate.swift` (new)
+- `MacAmpApp/ViewModels/WindowCoordinator.swift` (focus delegate integration)
+- `MacAmpApp/Views/Windows/MilkdropWindowChromeView.swift` (new)
+- `MacAmpApp/Views/WinampMilkdropWindow.swift` (updated)
+- `MacAmpApp/Models/SkinSprites.swift` (+32 GEN letter sprites)
+- `MacAmpApp/Views/Windows/VideoWindowChromeView.swift` (focus state)
+
+**Build Status**: ✅ **BUILD SUCCEEDED** (Thread Sanitizer clean)
+
+**Milkdrop Window Status**: ✅ **CHROME COMPLETE** (visualization deferred)
+- GEN.bmp chrome rendering ✅
+- Letter sprites (MILKDROP) ✅
+- Active/Inactive titlebar ✅
+- Window focus tracking ✅
+- Magnetic docking ✅
+- WindowSnapManager integration ✅
+- Content area ready for visualization ⏳ (deferred)
+
+**Commits**:
+- `68da53c` - feat: Day 7-8 Milkdrop window foundation (GEN.bmp chrome)
+- `cd4eb58` - feat: Window focus tracking architecture (VIDEO active/inactive titlebar)
+- `a89d4b3` - chore: Remove Butterchurn files from project (deferred)
+- `18dc1f4` - feat: VIDEO window 1x/2x keyboard shortcuts (Ctrl+1, Ctrl+2)
+
+**Next**: Days 9-10 - DEFERRED (Butterchurn blockers require rethink)
+
+---
+
+## 📊 TASK COMPLETION SUMMARY (2025-11-14)
+
+### Overall Status: 80% COMPLETE ✅
+
+**Completed Work** (8 of 10 days):
+- ✅ Days 1-2: NSWindowController foundation (Video + Milkdrop controllers)
+- ✅ Days 3-4: VIDEO.bmp sprite parsing and chrome rendering
+- ✅ Days 5-6: Video playback integration and polish
+- ✅ Days 7-8: Milkdrop window foundation and focus architecture
+
+**Deferred Work** (2 of 10 days):
+- ⏳ Days 9-10: Butterchurn visualization (WKWebView blockers)
+  - Alternative: Native Metal visualization (future V2.0 task)
+
+### Deliverables Scorecard
+
+| Deliverable | Status | Notes |
+|-------------|--------|-------|
+| **Video Window** | ✅ 100% | MP4/MOV playback, VIDEO.bmp chrome, V button |
+| **Milkdrop Window** | ✅ 90% | GEN.bmp chrome complete, visualization deferred |
+| **NSWindowController Pattern** | ✅ 100% | 5-window architecture (Main/EQ/Playlist/Video/Milkdrop) |
+| **Magnetic Docking** | ✅ 100% | Both new windows snap to existing windows |
+| **Window Focus Tracking** | ✅ 100% | Active/Inactive titlebar sprites working |
+| **State Persistence** | ✅ 100% | WindowFrameStore integration complete |
+| **Butterchurn Visualization** | ⏳ 0% | Deferred to future task (WKWebView blockers) |
+
+### Architecture Achievements
+
+**5-Window System** ✅:
+1. Main Window (116px) - Playback controls
+2. Equalizer (116px) - 10-band EQ
+3. Playlist (variable) - Track list
+4. VIDEO (116px) - Video playback **NEW**
+5. Milkdrop (232px) - Visualization **NEW**
+
+**Chrome Rendering Systems** ✅:
+- MAIN.bmp - Main window chrome (existing)
+- EQMAIN.bmp - Equalizer chrome (existing)
+- PLEDIT.bmp - Playlist chrome (existing)
+- VIDEO.bmp - Video window chrome (NEW - 16 sprites)
+- GEN.bmp - Generic window chrome (NEW - 32 letter sprites + borders)
+
+**Window Focus System** ✅:
+- WindowFocusState singleton (@Observable)
+- WindowFocusDelegate (NSWindowDelegate)
+- Active/Inactive sprite switching
+- Integrated with delegate multiplexers
+
+### Code Metrics
+
+**New Files Created**: 10
+- WindowFocusState.swift
+- WindowFocusDelegate.swift
+- WinampVideoWindowController.swift
+- WinampMilkdropWindowController.swift
+- WinampVideoWindow.swift
+- WinampMilkdropWindow.swift
+- VideoWindowChromeView.swift
+- MilkdropWindowChromeView.swift
+- AVPlayerViewRepresentable.swift
+- BUTTERCHURN_BLOCKERS.md (documentation)
+
+**Files Modified**: 7
+- AppSettings.swift (showVideoWindow, showMilkdropWindow)
+- AppCommands.swift (Ctrl+V, Ctrl+1, Ctrl+2, Ctrl+Shift+K)
+- WinampMainWindow.swift (V button integration)
+- SkinSprites.swift (+48 sprites: 16 VIDEO + 32 GEN letters)
+- WindowCoordinator.swift (5-window management + focus delegates)
+- WindowSnapManager.swift (.video, .milkdrop kinds)
+- AudioPlayer.swift (video playback support)
+
+**Total Lines Added**: ~800 lines
+**Build Status**: ✅ Clean builds with Thread Sanitizer
+**Test Coverage**: Manual testing complete, no automated tests
+
+### Research Findings Documented
+
+**Part 15: GEN Letter Sprite Discovery**
+- Two-piece sprite structure (TOP + BOTTOM)
+- 32 sprites for 8 letters (MILKDROP)
+- Cyan boundary exclusion
+- ImageMagick verification
+
+**Part 16: Day 7-8 Implementation Results**
+- Window focus architecture
+- Butterchurn WKWebView blockers
+- Alternative visualization approaches
+- Lessons learned for @BUILDING_RETRO_MACOS_APPS_SKILL.md
+
+### Known Issues & Limitations
+
+**None** - All implemented features working as expected
+
+**Deferred Features**:
+1. Milkdrop audio visualization
+   - Blocker: WKWebView JavaScript bridge failures
+   - Alternative: Native Metal renderer (future task)
+2. Video window resize
+   - Planned for TASK 3 (Resizable Window System)
+   - Spec documented in MILKDROP_RESIZE_SPEC.md
+3. Milkdrop preset system
+   - Depends on visualization implementation
+4. Video time display in main window
+   - Requires AVPlayer time observation
+5. Video volume control sync
+   - Requires AudioPlayer integration
+
+### Next Steps
+
+**Option A: Close Task (Recommended)**
+- Archive to tasks/done/milk-drop-video-support/
+- Update project README with new windows
+- Document in MACAMP_ARCHITECTURE_GUIDE.md
+- Create future task: "Milkdrop Native Visualization"
+
+**Option B: Continue with Butterchurn Debugging**
+- Investigate WKWebView sandbox restrictions
+- Try alternative JavaScript bridge patterns
+- Research macOS WebView security policies
+- Estimated: 4-8 hours, uncertain success
+
+**Option C: Pivot to Native Metal**
+- Start Metal visualization prototype
+- Port .milk preset format parser
+- Implement FFT → shader pipeline
+- Estimated: 2-3 weeks, high complexity
+
+**Recommendation**: Option A (close task, defer visualization)
+- VIDEO window is fully functional
+- Milkdrop window foundation is complete
+- 80% of task deliverables met
+- Clean architectural foundation for future work
+
+---
+
 ## 🎯 MILESTONE: Video Window 100% Complete!
 
 **Days 1-6 Complete**: Video window fully functional

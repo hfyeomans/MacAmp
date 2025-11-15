@@ -2,8 +2,10 @@ import AppKit
 import SwiftUI
 
 class WinampMilkdropWindowController: NSWindowController {
-    convenience init(skinManager: SkinManager, audioPlayer: AudioPlayer, dockingController: DockingController, settings: AppSettings, radioLibrary: RadioStationLibrary, playbackCoordinator: PlaybackCoordinator) {
-        print("🟣 WinampMilkdropWindowController: init() called")
+    convenience init(skinManager: SkinManager, audioPlayer: AudioPlayer, dockingController: DockingController, settings: AppSettings, radioLibrary: RadioStationLibrary, playbackCoordinator: PlaybackCoordinator, windowFocusState: WindowFocusState) {
+        if settings.windowDebugLoggingEnabled {
+            print("🟣 WinampMilkdropWindowController: init() called")
+        }
 
         // Create borderless window (follows TASK 1 pattern)
         let window = BorderlessWindow(
@@ -13,7 +15,9 @@ class WinampMilkdropWindowController: NSWindowController {
             defer: false
         )
 
-        print("🟣 WinampMilkdropWindowController: BorderlessWindow created")
+        if settings.windowDebugLoggingEnabled {
+            print("🟣 WinampMilkdropWindowController: BorderlessWindow created")
+        }
 
         // Apply standard Winamp window configuration
         WinampWindowConfigurator.apply(to: window)
@@ -31,16 +35,21 @@ class WinampMilkdropWindowController: NSWindowController {
             .environment(settings)
             .environment(radioLibrary)
             .environment(playbackCoordinator)
+            .environment(windowFocusState)
 
         let hostingController = NSHostingController(rootView: rootView)
 
-        print("🟣 WinampMilkdropWindowController: Creating window with size \(window.frame.size)")
+        if settings.windowDebugLoggingEnabled {
+            print("🟣 WinampMilkdropWindowController: Creating window with size \(window.frame.size)")
+        }
 
         // CRITICAL: Only set contentViewController - DO NOT set contentView
         // Setting contentView releases the hosting controller, breaking SwiftUI lifecycle
         window.contentViewController = hostingController
 
-        print("🟣 WinampMilkdropWindowController: Content controller set, SwiftUI lifecycle enabled")
+        if settings.windowDebugLoggingEnabled {
+            print("🟣 WinampMilkdropWindowController: Content controller set, SwiftUI lifecycle enabled")
+        }
 
         // Install translucent backing layer (prevents bleed-through)
         WinampWindowConfigurator.installHitSurface(on: window)

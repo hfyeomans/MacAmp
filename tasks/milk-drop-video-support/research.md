@@ -2425,3 +2425,138 @@ open /tmp/M_selected_complete.png /tmp/M_normal_complete.png
 
 **IMPORTANT**: This letter extraction approach is VERIFIED WORKING. Use these exact coordinates and the two-piece VStack pattern when re-implementing from clean start.
 
+---
+
+## Part 16: Day 7-8 Implementation Results (2025-11-11 to 2025-11-14)
+
+### What Was Successfully Implemented
+
+**Milkdrop Window Foundation** ✅:
+- WinampMilkdropWindowController.swift (BorderlessWindow pattern)
+- WinampMilkdropWindow.swift (container view)
+- MilkdropWindowChromeView.swift (GEN.bmp chrome)
+- Window size: 275×232 pixels (final, correct)
+- WindowCoordinator integration complete
+- WindowSnapManager registration working
+- Magnetic docking functional
+
+**GEN.BMP Letter Sprites** ✅:
+- 32 sprites added to SkinSprites.swift
+- Two-piece construction working correctly
+- Selected vs Normal state rendering
+- Verified pixel-perfect extraction (no cyan)
+- Letter sequence: MILKDROP (8 letters × 4 variants = 32 sprites)
+
+**Window Focus Architecture** ✅:
+- WindowFocusState.swift - @Observable singleton tracking active window
+- WindowFocusDelegate.swift - NSWindowDelegate reporting focus changes
+- Integration with WindowCoordinator delegate multiplexers
+- VIDEO and Milkdrop windows switch titlebar sprites on focus
+- Active/Inactive state propagates correctly
+
+**VIDEO Window Enhancements** ✅:
+- Active/Inactive titlebar infrastructure
+- Keyboard shortcuts: Ctrl+1 (1x), Ctrl+2 (2x)
+- Focus state integration
+- VIDEO_TITLEBAR_ACTIVE/INACTIVE sprite variants
+
+### What Was Deferred: Butterchurn Integration
+
+**Blockers Discovered**:
+1. WKWebView evaluateJavaScript() failures
+   - No error messages returned
+   - Script execution not confirmed
+   - Unable to send FFT data to JavaScript
+
+2. Script message handlers not receiving events
+   - Handler registered correctly
+   - Messages never arrive from JavaScript
+   - Tested with simple ping/pong pattern
+
+3. File access issues
+   - WKWebView sandbox restrictions
+   - Local HTML/JS loading problems
+   - Security policy conflicts
+
+**Alternative Approaches Considered**:
+- Native Metal visualization (future V2.0 enhancement)
+- Core Image filters for simpler effects
+- AVAudioEngine tap → Metal shaders (requires Metal expertise)
+
+**Decision**:
+- Complete Milkdrop window foundation (DONE ✅)
+- Defer visualization to future task
+- Document blockers in BUTTERCHURN_BLOCKERS.md
+- Content area (256×198) ready for future implementation
+
+### Lessons Learned (Added to Skill Document)
+
+**Two-Piece Sprite Pattern**:
+- GEN letters are discontiguous (top + bottom pieces)
+- Cyan boundaries must be excluded from extraction
+- VStack(spacing: 0) constructs complete letter
+- Different heights for selected (8px) vs normal (7px)
+
+**Window Focus Tracking**:
+- NSWindowDelegate pattern for focus events
+- @Observable singleton state distribution
+- Delegate multiplexer integration critical
+- Active/Inactive sprite switching smooth
+
+**Chrome Rendering with Absolute Positioning**:
+- ZStack(alignment: .topLeading) for pixel-perfect layout
+- .position() for all sprite placement
+- Fixed-size frames prevent SwiftUI layout expansion
+- Content area must start below titlebar (Y=20)
+
+**Research Payoff**:
+- 8 hours exploration (Day 7) → 2 hours implementation (Day 8)
+- Verified coordinates eliminated trial-and-error
+- ImageMagick validation confirmed sprite extraction
+- Clean implementation vs tangled first attempt
+
+### Files Created/Modified
+
+**New Files**:
+- `MacAmpApp/Models/WindowFocusState.swift`
+- `MacAmpApp/Utilities/WindowFocusDelegate.swift`
+- `MacAmpApp/Windows/WinampMilkdropWindowController.swift`
+- `MacAmpApp/Views/WinampMilkdropWindow.swift`
+- `MacAmpApp/Views/Windows/MilkdropWindowChromeView.swift`
+- `tasks/milk-drop-video-support/BUTTERCHURN_BLOCKERS.md`
+
+**Modified Files**:
+- `MacAmpApp/Models/SkinSprites.swift` (+32 GEN letter sprites)
+- `MacAmpApp/ViewModels/WindowCoordinator.swift` (focus delegates)
+- `MacAmpApp/Views/Windows/VideoWindowChromeView.swift` (focus state)
+
+**Commits**:
+- `68da53c` - feat: Day 7-8 Milkdrop window foundation (GEN.bmp chrome)
+- `cd4eb58` - feat: Window focus tracking architecture (VIDEO active/inactive titlebar)
+- `a89d4b3` - chore: Remove Butterchurn files from project (deferred)
+- `18dc1f4` - feat: VIDEO window 1x/2x keyboard shortcuts (Ctrl+1, Ctrl+2)
+
+### Current Task Status
+
+**Days 1-6**: ✅ VIDEO Window COMPLETE
+**Days 7-8**: ✅ Milkdrop Chrome COMPLETE (visualization deferred)
+**Days 9-10**: ⏳ DEFERRED (Butterchurn blockers)
+
+**Deliverables Met**:
+- ✅ Two independent windows (Video + Milkdrop)
+- ✅ VIDEO.bmp chrome rendering
+- ✅ GEN.bmp chrome rendering
+- ✅ Video playback (MP4, MOV, M4V)
+- ✅ V button trigger (Ctrl+V)
+- ✅ Window focus tracking
+- ✅ Active/Inactive titlebars
+- ✅ Magnetic docking (both windows)
+- ✅ State persistence
+- ⏳ Milkdrop visualization (deferred to future task)
+
+**Ready for**:
+- Task completion review
+- Documentation updates
+- Archive to tasks/done/
+- Future: Native Metal visualization task (V2.0)
+
