@@ -107,6 +107,9 @@ struct VideoWindowChromeView<Content: View>: View {
             if !audioPlayer.videoMetadataString.isEmpty {
                 buildVideoMetadataText()
             }
+
+            // Clickable regions over baked-on buttons (follows playlist pattern)
+            buildVideoWindowButtons()
         }
         .frame(minWidth: VideoWindowLayout.windowSize.width, minHeight: VideoWindowLayout.windowSize.height, alignment: .topLeading)
         .background(Color.black)
@@ -181,5 +184,36 @@ struct VideoWindowChromeView<Content: View>: View {
         metadataScrollTimer?.invalidate()
         metadataScrollTimer = nil
         metadataScrollOffset = 0
+    }
+
+    @ViewBuilder
+    private func buildVideoWindowButtons() -> some View {
+        @Environment(AppSettings.self) var settings
+
+        // 1X button - clickable region over baked-on sprite
+        // Sprite coordinates in VIDEO_BOTTOM_LEFT: x=24, y=9 (relative to sprite)
+        // Window coordinates: (31.5, 212) - center point
+        Button(action: {
+            settings.videoWindowSizeMode = .oneX
+        }) {
+            Color.clear
+                .frame(width: 15, height: 18)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .position(x: 31.5, y: 212)
+
+        // 2X button - clickable region over baked-on sprite
+        // Sprite coordinates in VIDEO_BOTTOM_LEFT: x=39, y=9 (relative to sprite)
+        // Window coordinates: (46.5, 212) - center point
+        Button(action: {
+            settings.videoWindowSizeMode = .twoX
+        }) {
+            Color.clear
+                .frame(width: 15, height: 18)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .position(x: 46.5, y: 212)
     }
 }
