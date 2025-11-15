@@ -82,18 +82,20 @@ struct VideoWindowChromeView<Content: View>: View {
 
             // Resize handle (bottom-right corner)
             buildResizeHandle()
-
-            // Preview overlay during drag (shows target size without rebuilding chrome)
-            if let previewSize = dragPreviewSize {
-                let previewPixels = previewSize.toVideoPixels()
-                Rectangle()
-                    .strokeBorder(Color.blue.opacity(0.5), lineWidth: 2)
-                    .frame(width: previewPixels.width, height: previewPixels.height)
-                    .position(x: previewPixels.width / 2, y: previewPixels.height / 2)
-            }
         }
         .frame(width: pixelSize.width, height: pixelSize.height, alignment: .topLeading)
         .background(Color.black)
+        .overlay(alignment: .topLeading) {
+            // Preview overlay OUTSIDE main ZStack (not clipped)
+            // Shows target size during drag for both shrinking and growing
+            if let previewSize = dragPreviewSize {
+                let previewPixels = previewSize.toVideoPixels()
+                Rectangle()
+                    .strokeBorder(Color.cyan.opacity(0.7), lineWidth: 3)
+                    .fill(Color.cyan.opacity(0.05))
+                    .frame(width: previewPixels.width, height: previewPixels.height)
+            }
+        }
         .onDisappear {
             metadataScrollTimer?.invalidate()
             metadataScrollTimer = nil
