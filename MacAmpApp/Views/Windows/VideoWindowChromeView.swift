@@ -24,6 +24,7 @@ struct VideoWindowChromeView<Content: View>: View {
 
     @Environment(AudioPlayer.self) private var audioPlayer
     @Environment(WindowFocusState.self) private var windowFocusState
+    @Environment(AppSettings.self) private var settings
 
     // Computed: Is this window currently focused?
     private var isWindowActive: Bool {
@@ -188,8 +189,6 @@ struct VideoWindowChromeView<Content: View>: View {
 
     @ViewBuilder
     private func buildVideoWindowButtons() -> some View {
-        @Environment(AppSettings.self) var settings
-
         // 1X button - clickable region over baked-on sprite
         // Sprite coordinates in VIDEO_BOTTOM_LEFT: x=24, y=9 (relative to sprite)
         // Window coordinates: (31.5, 212) - center point
