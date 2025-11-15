@@ -2610,3 +2610,60 @@ Wait, let me recalculate...
 Actually the math shows we ARE positioning correctly but there may be a missing tile?
 
 Let me check what the OLD code did before we switched to dynamic sizing...
+
+---
+
+## Part 18: Invisible VIDEO Window Phantom Bug (2025-11-15)
+
+### User Discovery
+
+**Symptom:** Cluster can reach right edge but not left edge. Gap on left equals VIDEO window size.
+
+**Brilliant Analysis:**
+> "The gap between the cluster and the left side is whatever size the video window is, 
+> as if the video window is there when it's not."
+
+**Proof:**
+1. Video window docked on left of cluster → cluster reaches edge
+2. Video window NOT in cluster → cluster stops VIDEO-window-sized distance from edge
+3. Gap distance = VIDEO window width (275px or 550px in 2x)
+
+### Root Cause
+
+**WinampVideoWindowController.swift:**
+```swift
+let window = BorderlessWindow(
+    contentRect: NSRect(x: 0, y: 0, width: 275, height: 232),
+    // ... 
+)
+```
+
+VIDEO window is **created at x=0, y=0** (left edge of screen!)
+
+**WindowCoordinator:**
+- VIDEO window registered with WindowSnapManager during init
+- Remains registered even when hidden (orderOut)
+- WindowSnapManager includes it in cluster calculations
+- Hidden window at x=0 acts as invisible obstacle
+- Cluster sees obstacle on left, stops before reaching edge
+
+### Why Right Edge Works
+
+VIDEO window at x=0 blocks left edge but doesn't block right edge.
+Cluster moving right has no invisible window in the way.
+
+### Solution
+
+**Option A:** Create VIDEO window off-screen initially
+- Change contentRect to x=-1000 or similar
+- Move to proper position when shown
+
+**Option B:** Exclude hidden windows from cluster calculations
+- Check window.isVisible before including in snap logic
+- Only register/unregister when showing/hiding
+
+**Option C:** Use proper window positioning
+- Set default position in screen center or below main window
+- Not at x=0 which blocks left edge
+
+**Recommended:** Option C - proper default positioning

@@ -104,11 +104,11 @@ final class WindowSnapManager: NSObject, NSWindowDelegate {
         let lastOrigin = lastOrigins[movedID] ?? currentOrigin
         let userDelta = NSPoint(x: currentOrigin.x - lastOrigin.x, y: currentOrigin.y - lastOrigin.y)
 
-        // Build mapping from window -> box
+        // Build mapping from window -> box (ONLY for visible windows)
         var idToWindow: [ObjectIdentifier: NSWindow] = [:]
         var idToBox: [ObjectIdentifier: Box] = [:]
         for (_, tracked) in windows {
-            if let w = tracked.window {
+            if let w = tracked.window, w.isVisible {  // FIX: Skip invisible windows
                 let id = ObjectIdentifier(w)
                 idToWindow[id] = w
                 idToBox[id] = box(for: w)
