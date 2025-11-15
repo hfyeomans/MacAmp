@@ -7,9 +7,15 @@ struct WinampEqualizerWindow: View {
     @Environment(SkinManager.self) var skinManager
     @Environment(AudioPlayer.self) var audioPlayer
     @Environment(AppSettings.self) var settings
+    @Environment(WindowFocusState.self) var windowFocusState
 
     @State private var isShadeMode: Bool = false
     @State private var showPresetPicker: Bool = false
+
+    // Computed: Is this window currently focused?
+    private var isWindowActive: Bool {
+        windowFocusState.isEqualizerKey
+    }
 
     // Winamp EQ coordinate constants (CORRECTED from webamp reference)
     private struct EQCoords {
@@ -71,7 +77,7 @@ struct WinampEqualizerWindow: View {
                 // Make ONLY the title bar draggable using custom drag (magnetic snapping)
                 // CRITICAL: Apply .at() to drag handle itself, not content inside (Oracle fix)
                 WinampTitlebarDragHandle(windowKind: .equalizer, size: CGSize(width: 275, height: 14)) {
-                    SimpleSpriteImage("EQ_TITLE_BAR_SELECTED",
+                    SimpleSpriteImage(isWindowActive ? "EQ_TITLE_BAR_SELECTED" : "EQ_TITLE_BAR",
                                     width: 275,
                                     height: 14)
                 }
