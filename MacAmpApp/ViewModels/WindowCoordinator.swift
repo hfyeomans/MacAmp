@@ -138,7 +138,8 @@ final class WindowCoordinator {
             dockingController: dockingController,
             settings: settings,
             radioLibrary: radioLibrary,
-            playbackCoordinator: playbackCoordinator
+            playbackCoordinator: playbackCoordinator,
+            windowFocusState: windowFocusState
         )
 
         // NEW: Create Video window with environment injection

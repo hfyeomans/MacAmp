@@ -371,20 +371,22 @@ struct WinampPlaylistWindow: View {
 
     @ViewBuilder
     private func buildCompleteBackground() -> some View {
-            SimpleSpriteImage("PLAYLIST_TOP_LEFT_CORNER", width: 25, height: 20)
+            let suffix = isWindowActive ? "_SELECTED" : ""
+
+            SimpleSpriteImage("PLAYLIST_TOP_LEFT\(isWindowActive ? "_SELECTED" : "_CORNER")", width: 25, height: 20)
                 .position(x: 12.5, y: 10)
-            
+
             ForEach(0..<10, id: \.self) { i in
-                SimpleSpriteImage("PLAYLIST_TOP_TILE", width: 25, height: 20)
+                SimpleSpriteImage("PLAYLIST_TOP_TILE\(suffix)", width: 25, height: 20)
                     .position(x: 25 + 12.5 + CGFloat(i) * 25, y: 10)
             }
-            
+
             WinampTitlebarDragHandle(windowKind: .playlist, size: CGSize(width: 100, height: 20)) {
-                SimpleSpriteImage("PLAYLIST_TITLE_BAR", width: 100, height: 20)
+                SimpleSpriteImage("PLAYLIST_TITLE_BAR\(suffix)", width: 100, height: 20)
             }
             .position(x: 137.5, y: 10)
-            
-            SimpleSpriteImage("PLAYLIST_TOP_RIGHT_CORNER", width: 25, height: 20)
+
+            SimpleSpriteImage("PLAYLIST_TOP_RIGHT_CORNER\(suffix)", width: 25, height: 20)
                 .position(x: 262.5, y: 10)
             
             let sideHeight = 192

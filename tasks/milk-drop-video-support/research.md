@@ -2848,3 +2848,55 @@ for (_, tracked) in windows {
 - Forget to check isVisible in boxes() helper
 - Use scaleEffect for resizing (use true sizing)
 
+
+---
+
+## Part 21: Future Video Window Enhancements (2025-11-15)
+
+### Video Metadata Display Area Growth
+**Current:** Fixed 115px display width at all window sizes
+**Desired:** Grow metadata area as window width increases
+
+**Implementation:**
+- Calculate displayWidth from pixelSize.width
+- At minimum: 115px
+- At larger sizes: pixelSize.width - (left section + margins)
+- Reduces scrolling at larger window sizes
+
+### Video Volume Control
+**Current:** Volume slider controls audio only, not video
+**Desired:** Volume slider affects both audio and video
+
+**Implementation:**
+```swift
+// In AudioPlayer.swift volume didSet
+var volume: Float {
+    didSet {
+        audioEngine.mainMixerNode.volume = volume
+        videoPlayer?.volume = volume  // Add this
+    }
+}
+```
+
+### Video Seeking Support
+**Current:** Position slider only seeks audio files
+**Desired:** Position slider seeks video files too
+
+**Implementation:**
+- Check currentMediaType in position slider drag
+- If video: Use AVPlayer.seek(to: CMTime)
+- Update slider position based on video playback time
+
+### Video Time Display
+**Current:** Main window timer only shows audio track time
+**Desired:** Show video elapsed/remaining time
+
+**Implementation:**
+- Observe AVPlayer.currentTime()
+- Update main window time display when video playing
+- Show in playlist duration column
+- Video is finite like audio (has definite duration)
+
+**Priority:** Post-MVP enhancements
+**Complexity:** Low-Medium (2-4 hours total)
+**Dependencies:** None (independent features)
