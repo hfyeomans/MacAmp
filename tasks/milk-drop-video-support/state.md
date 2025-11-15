@@ -1639,7 +1639,7 @@ let diffWithin = SnapUtils.snapWithinUnion(groupBox, union: virtualSpace.bounds,
 
 | Task | Status | Est. Time | Actual | Notes |
 |------|--------|-----------|--------|-------|
-| 1. Video Volume Control | ⏳ Pending | 15 min | - | Single line change |
+| 1. Video Volume Control | 🧪 Testing | 15 min | 5 min | Volume didSet + creation sync |
 | 2. Video Time Display | ⏳ Pending | 1 hour | - | Observer pattern |
 | 3. Video Seeking Support | ⏳ Pending | 1 hour | - | Extend existing seek() |
 | 4. Metadata Display Growth | ⏳ Pending | 30 min | - | UI-only |
@@ -1648,7 +1648,8 @@ let diffWithin = SnapUtils.snapWithinUnion(groupBox, union: virtualSpace.bounds,
 ### Files to Modify
 
 1. **`MacAmpApp/Audio/AudioPlayer.swift`**
-   - [ ] Volume didSet (add video)
+   - [x] Volume didSet (add video) ✅
+   - [x] Volume sync at AVPlayer creation ✅
    - [ ] videoTimeObserver property
    - [ ] setupVideoTimeObserver()
    - [ ] cleanupVideoTimeObserver()

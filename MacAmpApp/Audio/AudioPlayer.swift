@@ -157,7 +157,12 @@ final class AudioPlayer {
     var playbackProgress: Double = 0.0 // New: 0.0 to 1.0
 
     var volume: Float = 1.0 { // 0.0 to 1.0
-        didSet { playerNode.volume = volume }
+        didSet {
+            playerNode.volume = volume
+            if currentMediaType == .video {
+                videoPlayer?.volume = volume
+            }
+        }
     }
     var balance: Float = 0.0 { // -1.0 (left) to 1.0 (right)
         didSet { playerNode.pan = balance }
@@ -380,6 +385,7 @@ final class AudioPlayer {
 
         // Create video player
         videoPlayer = AVPlayer(url: url)
+        videoPlayer?.volume = volume  // Sync volume at creation time
         currentMediaType = .video
 
         // Observe video completion
