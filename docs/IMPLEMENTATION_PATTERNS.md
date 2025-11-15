@@ -10,7 +10,18 @@
 
 1. [Pattern Overview](#pattern-overview)
 2. [State Management Patterns](#state-management-patterns)
+   - [@Observable with @MainActor](#pattern-observable-with-mainactor)
+   - [Dependency Injection via Environment](#pattern-dependency-injection-via-environment)
+   - [Computed Properties with Dependency Tracking](#pattern-computed-properties-with-dependency-tracking)
+   - [Enum State with Persistence](#pattern-enum-state-with-persistence-repeatmode-pattern)
+   - [Window Focus State Tracking](#pattern-window-focus-state-tracking)
 3. [UI Component Patterns](#ui-component-patterns)
+   - [Sprite-Based Button Component](#pattern-sprite-based-button-component)
+   - [Absolute Positioning Extension](#pattern-absolute-positioning-extension)
+   - [Multi-State Slider](#pattern-multi-state-slider)
+   - [VIDEO.bmp Chrome Composition](#pattern-videobmp-chrome-composition)
+   - [GEN.bmp Chrome & Two-Piece Sprites](#pattern-genbmp-chrome--two-piece-sprites)
+   - [Video Playback Embedding](#pattern-video-playback-embedding)
 4. [Audio Processing Patterns](#audio-processing-patterns)
 5. [Async/Await Patterns](#asyncawait-patterns)
 6. [Error Handling Patterns](#error-handling-patterns)
@@ -233,6 +244,86 @@ var repeatMode: AppSettings.RepeatMode {
 - Remember migration logic for existing users
 - Use CaseIterable for future-proof cycling
 
+### Pattern: Window Focus State Tracking
+
+**When to use**: Tracking which window is focused for active/inactive rendering
+
+**Implementation**:
+```swift
+// File: MacAmpApp/Models/WindowFocusState.swift
+// Purpose: Centralized window focus tracking for titlebar states
+// Pattern: @Observable singleton with delegate bridge
+
+@Observable
+@MainActor
+final class WindowFocusState {
+    // Track each window's focus state
+    var isMainKey: Bool = true
+    var isEqualizerKey: Bool = false
+    var isPlaylistKey: Bool = false
+    var isVideoKey: Bool = false
+    var isMilkdropKey: Bool = false
+
+    var hasAnyFocus: Bool {
+        isMainKey || isEqualizerKey || isPlaylistKey ||
+        isVideoKey || isMilkdropKey
+    }
+}
+
+// Bridge from AppKit to Observable state
+@MainActor
+final class WindowFocusDelegate: NSObject, NSWindowDelegate {
+    private let kind: WindowKind
+    private let focusState: WindowFocusState
+
+    init(kind: WindowKind, focusState: WindowFocusState) {
+        self.kind = kind
+        self.focusState = focusState
+    }
+
+    func windowDidBecomeKey(_ notification: Notification) {
+        // Mutual exclusivity - only one window is key
+        focusState.isMainKey = (kind == .main)
+        focusState.isEqualizerKey = (kind == .equalizer)
+        // ... etc
+    }
+}
+
+// Usage in views - computed property pattern
+struct VideoWindowChromeView: View {
+    @Environment(WindowFocusState.self) private var windowFocusState
+
+    // ALWAYS use computed property for reactive updates
+    private var isWindowActive: Bool {
+        windowFocusState.isVideoKey
+    }
+
+    var body: some View {
+        SimpleSpriteImage(
+            sprite: skinManager.sprite(
+                for: .videoTitleBar,
+                state: isWindowActive ? .active : .inactive
+            )
+        )
+    }
+}
+```
+
+**Real usage**: `VideoWindowChromeView.swift`, `MilkdropWindowChromeView.swift`
+
+**Integration steps**:
+1. Create WindowFocusState instance at app level
+2. Create WindowFocusDelegate for each window
+3. Add delegates to WindowDelegateMultiplexer
+4. Pass WindowFocusState via environment
+5. Read state in views for sprite selection
+
+**Pitfalls**:
+- Must ensure single WindowFocusState instance app-wide
+- Remember to add delegate to multiplexer, not replace window.delegate
+- Use computed properties in views, not @State caching
+- Don't cache isWindowActive in @State - breaks reactivity
+
 ---
 
 ## UI Component Patterns
@@ -410,6 +501,502 @@ struct SkinSlider: View {
 ```
 
 **Real usage**: Volume/balance sliders, EQ sliders
+
+### Pattern: VIDEO.bmp Chrome Composition
+
+**When to use**: Building chrome for video windows with VIDEO.bmp assets
+
+**Implementation**:
+```swift
+// File: MacAmpApp/Views/VideoWindowChromeView.swift
+// Purpose: Composite chrome from VIDEO.bmp sprites for video window
+// Context: Used by skins with dedicated video window assets
+
+struct VideoWindowChromeView: View {
+    @Environment(SkinManager.self) private var skinManager
+    @Environment(WindowFocusState.self) private var windowFocusState
+    @State private var showingTrackInfo = false
+
+    private var isWindowActive: Bool {
+        windowFocusState.isVideoKey
+    }
+
+    var body: some View {
+        ZStack {
+            // Background chrome composition
+            VStack(spacing: 0) {
+                // Titlebar: 3 sections (left, center tiled, right)
+                titleBar
+
+                // Middle: tiled borders
+                middleSection
+
+                // Bottom bar (controls and metadata)
+                bottomBar
+            }
+
+            // Video content area
+            GeometryReader { geometry in
+                Color.black
+                    .frame(
+                        width: geometry.size.width - 16,  // 8px borders each side
+                        height: geometry.size.height - 65  // Top + bottom chrome
+                    )
+                    .offset(x: 8, y: 20)  // Position inside chrome
+            }
+        }
+    }
+
+    private var titleBar: some View {
+        HStack(spacing: 0) {
+            // Left corner (fixed width)
+            SimpleSpriteImage(
+                source: .semantic(isWindowActive ?
+                    .videoTitleBarLeft : .videoTitleBarLeftInactive),
+                width: 11, height: 20
+            )
+
+            // Center (tiled horizontally)
+            SimpleSpriteImage(
+                source: .semantic(isWindowActive ?
+                    .videoTitleBar : .videoTitleBarInactive)
+            )
+            .frame(maxWidth: .infinity)
+            .drawingGroup()  // Optimize tiling performance
+
+            // Right corner with close button
+            ZStack(alignment: .topTrailing) {
+                SimpleSpriteImage(
+                    source: .semantic(isWindowActive ?
+                        .videoTitleBarRight : .videoTitleBarRightInactive),
+                    width: 11, height: 20
+                )
+
+                // Close button overlay
+                SimpleSpriteImage(
+                    source: .semantic(.videoCloseButton),
+                    action: .button(onClick: { closeWindow() })
+                )
+                .offset(x: -2, y: 2)
+            }
+        }
+        .frame(height: 20)
+    }
+
+    private var bottomBar: some View {
+        ZStack {
+            // Background
+            SimpleSpriteImage(source: .semantic(.videoBottomBar))
+                .frame(height: 45)
+
+            // Metadata ticker with TEXT.bmp font
+            HStack {
+                ScrollingTextView(
+                    text: currentMetadata,
+                    font: .winampBitmapFont,
+                    speed: 1.0
+                )
+                .frame(maxWidth: 200)
+                .offset(x: 10)
+
+                Spacer()
+
+                // Control buttons
+                controlButtons
+            }
+        }
+    }
+}
+
+// Sprite discovery helpers
+extension SkinManager {
+    func hasVideoSprites() -> Bool {
+        // Check for VIDEO.bmp or video-specific sprites
+        return currentSkin?.images["VIDEO"] != nil ||
+               currentSkin?.images["videownd"] != nil
+    }
+
+    func videoSprite(for section: VideoSection, active: Bool) -> NSImage? {
+        // Priority order for sprite discovery:
+        // 1. VIDEO.bmp regions (modern skins)
+        // 2. videownd_*.bmp (alternative naming)
+        // 3. Fallback to generated chrome
+
+        let baseName = active ? section.activeSpriteName : section.inactiveSpriteName
+
+        // Try VIDEO.bmp extraction first
+        if let videoBmp = extractFromVideoBmp(section: section, active: active) {
+            return videoBmp
+        }
+
+        // Try direct sprite files
+        if let direct = currentSkin?.images[baseName] {
+            return direct
+        }
+
+        // Generate fallback
+        return generateFallbackChrome(for: section, active: active)
+    }
+}
+```
+
+**Real usage**: `VideoWindowChromeView.swift` for video playback window
+
+**Chrome composition rules**:
+1. **Titlebar**: 3-piece (left corner, tiled center, right corner)
+2. **Borders**: Tiled vertically for left/right edges
+3. **Bottom bar**: Fixed height with embedded controls
+4. **Content area**: Inset by chrome thickness (typically 8px borders)
+
+**Metadata ticker pattern**:
+```swift
+// Use TEXT.bmp for authentic Winamp text rendering
+struct MetadataTicker: View {
+    let text: String
+    @State private var scrollOffset: CGFloat = 0
+
+    var body: some View {
+        WinampTextView(text: text)
+            .offset(x: scrollOffset)
+            .onAppear {
+                withAnimation(.linear(duration: 10).repeatForever(autoreverses: false)) {
+                    scrollOffset = -textWidth
+                }
+            }
+    }
+}
+```
+
+**Pitfalls**:
+- VIDEO.bmp may not exist in all skins - need fallback strategy
+- Focus state sprites have _SELECTED suffix, not _ACTIVE
+- Don't hard-code chrome dimensions - extract from sprites
+- Remember to exclude video content area from chrome hit testing
+- Tiling performance: use drawingGroup() for repeated sprites
+- Some skins use "videownd" prefix instead of "VIDEO"
+
+### Pattern: GEN.bmp Chrome & Two-Piece Sprites
+
+**When to use**: Building general-purpose windows (Milkdrop, Library, etc.) with GEN.bmp
+
+**Implementation**:
+```swift
+// File: MacAmpApp/Views/MilkdropWindowChromeView.swift
+// Purpose: Composite chrome from GEN.bmp sprites with two-piece pattern
+// Context: General windows that use GEN.bmp for chrome elements
+
+struct MilkdropWindowChromeView: View {
+    @Environment(SkinManager.self) private var skinManager
+    @State private var discoveredTwoPiece = false
+    @State private var bottomPieceHeight: CGFloat = 14
+
+    var body: some View {
+        ZStack {
+            // Background chrome
+            VStack(spacing: 0) {
+                // Titlebar: 6-section pattern
+                titleBar
+
+                // Middle content area (black/transparent)
+                Color.black
+                    .frame(maxHeight: .infinity)
+
+                // Bottom bar (if two-piece sprite exists)
+                if discoveredTwoPiece {
+                    bottomBar
+                }
+            }
+
+            // Content overlay
+            contentArea
+        }
+        .onAppear {
+            discoverTwoPieceSprites()
+        }
+    }
+
+    private var titleBar: some View {
+        HStack(spacing: 0) {
+            // 6-section titlebar composition:
+            // 1. Top-left corner (fixed)
+            SimpleSpriteImage(
+                source: .semantic(isWindowActive ?
+                    .genTopLeft : .genTopLeftInactive),
+                width: 25, height: 20
+            )
+
+            // 2. Left-fill (tiled to caption)
+            SimpleSpriteImage(
+                source: .semantic(isWindowActive ?
+                    .genTopLeftFill : .genTopLeftFillInactive)
+            )
+            .frame(width: 50)  // Fixed or calculate based on caption
+
+            // 3. Caption/title area (tiled)
+            SimpleSpriteImage(
+                source: .semantic(isWindowActive ?
+                    .genTopTitle : .genTopTitleInactive)
+            )
+            .frame(maxWidth: .infinity)
+
+            // 4. Right-fill (tiled from caption)
+            SimpleSpriteImage(
+                source: .semantic(isWindowActive ?
+                    .genTopRightFill : .genTopRightFillInactive)
+            )
+            .frame(width: 50)
+
+            // 5. Top-right corner (fixed)
+            SimpleSpriteImage(
+                source: .semantic(isWindowActive ?
+                    .genTopRight : .genTopRightInactive),
+                width: 25, height: 20
+            )
+        }
+        .frame(height: 20)
+    }
+
+    // Two-piece sprite discovery
+    private func discoverTwoPieceSprites() {
+        guard let genBmp = skinManager.currentSkin?.images["GEN"] else { return }
+
+        // Two-piece pattern detection:
+        // Main sprite + 1px cyan delimiter + bottom piece
+        // Example: GEN.bmp might be 400x35 where:
+        // - Rows 0-19: Main titlebar sprites
+        // - Row 20: Cyan delimiter (RGB: 0,255,255)
+        // - Rows 21-34: Bottom bar sprite
+
+        let bitmap = NSBitmapImageRep(data: genBmp.tiffRepresentation!)!
+        let height = bitmap.pixelsHigh
+
+        // Scan for cyan delimiter row
+        for y in 20..<height {
+            if isCyanRow(bitmap, row: y) {
+                // Found delimiter - extract bottom piece
+                let bottomHeight = height - y - 1
+                if bottomHeight > 0 {
+                    discoveredTwoPiece = true
+                    bottomPieceHeight = CGFloat(bottomHeight)
+                    extractBottomPiece(from: bitmap, startY: y + 1)
+                }
+                break
+            }
+        }
+    }
+
+    private func isCyanRow(_ bitmap: NSBitmapImageRep, row: Int) -> Bool {
+        // Check if entire row is cyan (0,255,255)
+        for x in 0..<bitmap.pixelsWide {
+            let color = bitmap.colorAt(x: x, y: row)!
+            if color.redComponent != 0 || color.greenComponent != 1 || color.blueComponent != 1 {
+                return false
+            }
+        }
+        return true
+    }
+
+    private var bottomBar: some View {
+        // Use discovered bottom piece or fallback
+        SimpleSpriteImage(
+            source: .semantic(.genBottom)
+        )
+        .frame(height: bottomPieceHeight)
+    }
+}
+
+// Letter sprite composition for window titles
+struct LetterSpriteText: View {
+    let text: String
+    let isActive: Bool
+    @Environment(SkinManager.self) private var skinManager
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(Array(text.enumerated()), id: \.offset) { _, char in
+                letterSprite(for: char)
+            }
+        }
+    }
+
+    private func letterSprite(for char: Character) -> some View {
+        // Map character to GEN.bmp letter sprite region
+        // Letters are typically in rows with specific offsets
+        let spriteRegion = mapCharToSpriteRegion(char, active: isActive)
+
+        return SimpleSpriteImage(
+            source: .region(sprite: "GEN", rect: spriteRegion),
+            width: 5, height: 7  // Standard Winamp letter size
+        )
+    }
+
+    private func mapCharToSpriteRegion(_ char: Character, active: Bool) -> CGRect {
+        // Character mapping logic
+        // A-Z: rows 88-95 (inactive) or 96-103 (active)
+        // Special chars: specific coordinates
+        let baseY = active ? 96 : 88
+        let charIndex = Int(char.asciiValue ?? 65) - 65  // A=0, B=1, etc.
+        let x = charIndex * 5
+        return CGRect(x: x, y: baseY, width: 5, height: 7)
+    }
+}
+```
+
+**Real usage**: `MilkdropWindowChromeView.swift`, Library window chrome
+
+**Two-piece sprite pattern**:
+1. **Detection**: Scan GEN.bmp for cyan delimiter row (0,255,255)
+2. **Extraction**: Split sprite into main and bottom pieces
+3. **Composition**: Stack pieces with content in between
+4. **Caching**: Store extracted pieces to avoid re-scanning
+
+**Focus state handling**:
+```swift
+// GEN.bmp uses _SELECTED suffix for focused state
+let suffix = isWindowActive ? "_SELECTED" : ""
+let spriteName = "GEN_TOP_LEFT\(suffix)"
+```
+
+**Pitfalls**:
+- Cyan delimiter must be EXACTLY (0,255,255) - no tolerance
+- Not all skins have two-piece sprites - need detection
+- Letter sprites require complex coordinate mapping
+- Some skins use different GEN.bmp layouts - be flexible
+- Don't assume fixed heights - measure from actual sprites
+- _SELECTED suffix varies by skin (some use _ACTIVE)
+- Dynamic extraction needed - can't hard-code regions
+
+### Pattern: Video Playback Embedding
+
+**When to use**: Embedding video playback in SwiftUI views with proper lifecycle
+
+**Implementation**:
+```swift
+// File: MacAmpApp/Views/Components/AVPlayerViewRepresentable.swift
+// Purpose: Bridge AVPlayerView (AppKit) into SwiftUI with proper cleanup
+// Context: Used by VideoWindow for video file playback
+
+struct AVPlayerViewRepresentable: NSViewRepresentable {
+    @Environment(PlaybackCoordinator.self) private var playbackCoordinator
+
+    func makeNSView(context: Context) -> AVPlayerView {
+        let playerView = AVPlayerView()
+        playerView.player = nil  // Start with no player
+        playerView.controlsStyle = .floating
+        playerView.videoGravity = .resizeAspect
+        playerView.showsFullScreenToggleButton = true
+        playerView.showsSharingServiceButton = false
+
+        return playerView
+    }
+
+    func updateNSView(_ playerView: AVPlayerView, context: Context) {
+        // Media type switching logic
+        switch playbackCoordinator.currentMediaType {
+        case .video:
+            // Attach video player if not already attached
+            if playerView.player !== playbackCoordinator.videoPlayer {
+                playerView.player = playbackCoordinator.videoPlayer
+            }
+        case .audio, .none:
+            // Detach player for audio files
+            if playerView.player != nil {
+                playerView.player = nil
+            }
+        }
+
+        // Update control visibility based on playback state
+        playerView.controlsStyle = playbackCoordinator.isPlaying ? .floating : .inline
+    }
+
+    static func dismantleNSView(_ playerView: AVPlayerView, coordinator: ()) {
+        // CRITICAL: Clean up player reference to prevent retain cycles
+        playerView.player = nil
+    }
+}
+
+// Usage in VideoWindow
+struct VideoContentView: View {
+    @Environment(PlaybackCoordinator.self) private var playbackCoordinator
+
+    var body: some View {
+        Group {
+            if playbackCoordinator.currentMediaType == .video {
+                // Video playback
+                AVPlayerViewRepresentable()
+                    .background(Color.black)
+            } else {
+                // Audio visualization or placeholder
+                VisualizerView()
+                    .background(backgroundGradient)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+// Media type detection
+extension PlaybackCoordinator {
+    enum MediaType {
+        case audio
+        case video
+        case none
+    }
+
+    var currentMediaType: MediaType {
+        guard let url = currentTrack?.url else { return .none }
+
+        let videoExtensions = ["mp4", "mov", "m4v", "avi", "mkv"]
+        let audioExtensions = ["mp3", "flac", "wav", "m4a", "ogg"]
+
+        let ext = url.pathExtension.lowercased()
+
+        if videoExtensions.contains(ext) {
+            return .video
+        } else if audioExtensions.contains(ext) {
+            return .audio
+        } else {
+            // Try to detect from AVAsset tracks
+            let asset = AVAsset(url: url)
+            let hasVideo = asset.tracks(withMediaType: .video).count > 0
+            return hasVideo ? .video : .audio
+        }
+    }
+
+    // Separate players for audio and video
+    var videoPlayer: AVPlayer? {
+        // Only return player if playing video
+        currentMediaType == .video ? avPlayer : nil
+    }
+}
+```
+
+**Real usage**: `VideoWindow.swift`, `AVPlayerViewRepresentable.swift`
+
+**Lifecycle management**:
+1. **makeNSView**: Create player view without player attached
+2. **updateNSView**: Attach/detach player based on media type
+3. **dismantleNSView**: MUST clear player reference to prevent leaks
+
+**Format support**:
+```swift
+// Video formats (use AVPlayer)
+let videoFormats = ["mp4", "mov", "m4v", "avi", "mkv", "webm"]
+
+// Audio formats (use AVAudioEngine for local, AVPlayer for streams)
+let audioFormats = ["mp3", "flac", "wav", "m4a", "ogg", "aac"]
+
+// Stream detection
+let isStream = url.scheme?.hasPrefix("http") == true
+```
+
+**Pitfalls**:
+- Must clear player reference in dismantleNSView to prevent memory leaks
+- Don't create new AVPlayer instances on every update
+- Check media type before attaching player
+- AVPlayer doesn't support all audio features (EQ, visualization)
+- Some video files may only have audio tracks - detect properly
+- Controls visibility should reflect playback state
 
 ---
 
@@ -1202,4 +1789,4 @@ When implementing new features, prefer these established patterns. When you disc
 
 ---
 
-*Document Version: 1.0.0 | Last Updated: 2025-11-01 | Lines: 847*
+*Document Version: 1.1.0 | Last Updated: 2025-11-14 | Lines: 1,553*
