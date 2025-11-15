@@ -534,22 +534,32 @@ struct WinampMainWindow: View {
     @ViewBuilder
     private func buildWindowToggleButtons() -> some View {
         Group {
-            // EQ button
+            // EQ button - lights when EQ window visible
+            let eqSprite = dockingController.eqWindow?.isVisible == true
+                ? "MAIN_EQ_BUTTON_SELECTED"
+                : "MAIN_EQ_BUTTON"
+
             Button(action: {
                 dockingController.toggleEqualizer()
             }) {
-                SimpleSpriteImage("MAIN_EQ_BUTTON", width: 23, height: 12)
+                SimpleSpriteImage(eqSprite, width: 23, height: 12)
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .at(Coords.eqButton)
 
-            // Playlist button
+            // Playlist button - lights when Playlist window visible
+            let playlistSprite = dockingController.playlistWindow?.isVisible == true
+                ? "MAIN_PLAYLIST_BUTTON_SELECTED"
+                : "MAIN_PLAYLIST_BUTTON"
+
             Button(action: {
                 dockingController.togglePlaylist()
             }) {
-                SimpleSpriteImage("MAIN_PLAYLIST_BUTTON", width: 23, height: 12)
+                SimpleSpriteImage(playlistSprite, width: 23, height: 12)
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .at(Coords.playlistButton)
         }
     }
