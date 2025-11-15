@@ -15,12 +15,12 @@ private enum VideoWindowLayout {
 struct VideoWindowChromeView<Content: View>: View {
     @ViewBuilder let content: Content
     let sizeState: VideoWindowSizeState
-    @Binding var dragPreviewSize: Size2D?  // Shared with parent for preview overlay
 
     @State private var metadataScrollOffset: CGFloat = 0
     @State private var metadataScrollTimer: Timer?
     @State private var dragStartSize: Size2D?  // Struct-level state for drag
     @State private var isDragging: Bool = false  // Track if currently resizing
+    @State private var resizePreview = WindowResizePreviewOverlay()  // AppKit overlay window
 
     @Environment(AudioPlayer.self) private var audioPlayer
     @Environment(WindowFocusState.self) private var windowFocusState
@@ -309,28 +309,46 @@ struct VideoWindowChromeView<Content: View>: View {
                             height: max(0, baseSize.height + heightDelta)
                         )
 
-                        // PREVIEW PATTERN: Only update preview, don't rebuild chrome
-                        dragPreviewSize = candidate
-                    }
-                    .onEnded { _ in
-                        // COMMIT: Update actual size only at drag end
-                        if let finalSize = dragPreviewSize {
-                            sizeState.size = finalSize
+                        // APPKIT PREVIEW: Show overlay window with target size
+                        let previewPixels = candidate.toVideoPixels()
 
-                            // Sync NSWindow frame with final size
-                            if let coordinator = WindowCoordinator.shared {
-                                let clampedSize = CGSize(
-                                    width: round(finalSize.toVideoPixels().width),
-                                    height: round(finalSize.toVideoPixels().height)
-                                )
-                                coordinator.updateVideoWindowSize(to: clampedSize)
+                        if let window = WindowCoordinator.shared?.videoWindow {
+                            if isDragging && dragStartSize != nil {
+                                // First tick or update
+                                resizePreview.show(in: window, previewSize: previewPixels)
+                            } else {
+                                resizePreview.update(previewSize: previewPixels)
                             }
+                        }
+                    }
+                    .onEnded { value in
+                        // Calculate final size from total drag
+                        guard let baseSize = dragStartSize else { return }
+
+                        let widthDelta = Int(round(value.translation.width / 25))
+                        let heightDelta = Int(round(value.translation.height / 29))
+
+                        let finalSize = Size2D(
+                            width: max(0, baseSize.width + widthDelta),
+                            height: max(0, baseSize.height + heightDelta)
+                        )
+
+                        // COMMIT: Update actual size
+                        sizeState.size = finalSize
+
+                        // Sync NSWindow frame
+                        if let coordinator = WindowCoordinator.shared {
+                            let clampedSize = CGSize(
+                                width: round(finalSize.toVideoPixels().width),
+                                height: round(finalSize.toVideoPixels().height)
+                            )
+                            coordinator.updateVideoWindowSize(to: clampedSize)
                         }
 
                         // Clean up
+                        resizePreview.hide()
                         isDragging = false
                         dragStartSize = nil
-                        dragPreviewSize = nil
                         WindowSnapManager.shared.endProgrammaticAdjustment()
                     }
             )

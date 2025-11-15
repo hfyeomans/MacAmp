@@ -7,7 +7,6 @@ struct WinampVideoWindow: View {
 
     // Video window size state (segment-based resizing)
     @State private var sizeState = VideoWindowSizeState()
-    @State private var dragPreviewSize: Size2D?  // Preview during resize drag
 
     var body: some View {
         let hasVideo = skinManager.currentSkin?.hasVideoSprites ?? false
@@ -31,7 +30,7 @@ struct WinampVideoWindow: View {
                                 .foregroundColor(.gray)
                         }
                     }
-                }, sizeState: sizeState, dragPreviewSize: $dragPreviewSize)
+                }, sizeState: sizeState)
             } else {
                 // Fallback chrome when VIDEO.bmp not available
                 VideoWindowFallbackChrome(content: {
@@ -43,19 +42,6 @@ struct WinampVideoWindow: View {
                             .foregroundColor(.gray)
                     }
                 }, sizeState: sizeState)
-            }
-        }
-        .overlay(alignment: .topLeading) {
-            // Resize preview overlay - BEFORE .frame() so it can extend beyond
-            if let previewSize = dragPreviewSize {
-                let previewPixels = previewSize.toVideoPixels()
-                ZStack(alignment: .topLeading) {
-                    Rectangle()
-                        .strokeBorder(Color.cyan, lineWidth: 3)
-                        .fill(Color.cyan.opacity(0.1))
-                }
-                .frame(width: previewPixels.width, height: previewPixels.height, alignment: .topLeading)
-                .allowsHitTesting(false)
             }
         }
         .frame(
