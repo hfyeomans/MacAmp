@@ -722,10 +722,32 @@ final class WindowCoordinator {
         var frame = video.frame
         guard frame.size != pixelSize else { return }
 
-        let topLeft = NSPoint(x: frame.origin.x, y: frame.origin.y + frame.size.height)
+        // DIAGNOSTIC: Log frame details to investigate left gap
+        if settings.windowDebugLoggingEnabled {
+            print("🔍 [VIDEO RESIZE] Before:")
+            print("   Frame: \(frame)")
+            print("   Origin: (\(frame.origin.x), \(frame.origin.y))")
+            print("   Size: \(frame.size)")
+            print("   ContentView frame: \(video.contentView?.frame ?? .zero)")
+        }
+
+        // Clamp origin to integral coordinates (fixes fractional positioning)
+        let topLeft = NSPoint(
+            x: round(frame.origin.x),
+            y: round(frame.origin.y + frame.size.height)
+        )
         frame.size = pixelSize
         frame.origin = NSPoint(x: topLeft.x, y: topLeft.y - pixelSize.height)
+
         video.setFrame(frame, display: true)
+
+        // DIAGNOSTIC: Log after setFrame
+        if settings.windowDebugLoggingEnabled {
+            print("🔍 [VIDEO RESIZE] After:")
+            print("   Frame: \(video.frame)")
+            print("   Origin: (\(video.frame.origin.x), \(video.frame.origin.y))")
+            print("   Size: \(video.frame.size)")
+        }
     }
 
     private func movePlaylist(using context: PlaylistDockingContext, targetFrame: NSRect, playlistSize: NSSize, animated: Bool) {

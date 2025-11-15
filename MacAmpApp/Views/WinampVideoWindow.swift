@@ -45,6 +45,19 @@ struct WinampVideoWindow: View {
                 }, sizeState: sizeState)
             }
         }
+        .overlay(alignment: .topLeading) {
+            // Resize preview overlay - BEFORE .frame() so it can extend beyond
+            if let previewSize = dragPreviewSize {
+                let previewPixels = previewSize.toVideoPixels()
+                ZStack(alignment: .topLeading) {
+                    Rectangle()
+                        .strokeBorder(Color.cyan, lineWidth: 3)
+                        .fill(Color.cyan.opacity(0.1))
+                }
+                .frame(width: previewPixels.width, height: previewPixels.height, alignment: .topLeading)
+                .allowsHitTesting(false)
+            }
+        }
         .frame(
             width: sizeState.pixelSize.width,
             height: sizeState.pixelSize.height,
@@ -52,17 +65,6 @@ struct WinampVideoWindow: View {
         )
         .fixedSize()
         .background(Color.black)
-        .overlay(alignment: .topLeading) {
-            // Resize preview overlay - extends beyond current window bounds
-            if let previewSize = dragPreviewSize {
-                let previewPixels = previewSize.toVideoPixels()
-                Rectangle()
-                    .strokeBorder(Color.cyan, lineWidth: 3)
-                    .fill(Color.cyan.opacity(0.1))
-                    .frame(width: previewPixels.width, height: previewPixels.height)
-                    .allowsHitTesting(false)  // Don't intercept clicks
-            }
-        }
         .onAppear {
             // Initial NSWindow frame sync with integral coordinates
             if let coordinator = WindowCoordinator.shared {
