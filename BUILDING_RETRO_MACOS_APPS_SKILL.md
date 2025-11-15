@@ -561,6 +561,52 @@ ZStack(alignment: .topLeading) {
 .frame(width: 275, height: 116)
 ```
 
+### Removing Focus Rings from Retro Buttons
+
+**Problem:** macOS SwiftUI buttons have blue focus rings that break retro aesthetics.
+
+**Solution: Global button style and view modifier**
+
+```swift
+// WinampButtonStyle.swift
+struct WinampButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .focusable(false)
+    }
+}
+
+extension View {
+    /// Apply Winamp button styling with no focus ring
+    func winampButton() -> some View {
+        self
+            .buttonStyle(.plain)
+            .focusable(false)
+    }
+}
+```
+
+**Usage for new buttons:**
+```swift
+// Recommended pattern for all retro UI buttons
+Button(action: { ... }) {
+    SimpleSpriteImage("BUTTON_NAME", width: 23, height: 18)
+}
+.winampButton()
+.at(Coords.buttonPosition)
+
+// Alternative: explicit style
+Button(action: { ... }) { ... }
+    .buttonStyle(.plain)
+    .focusable(false)
+```
+
+**Why this matters:**
+- Retro apps use custom sprite buttons, not macOS native controls
+- Focus rings are a modern macOS accessibility feature that clashes with vintage aesthetics
+- Every interactive button needs `.focusable(false)` to maintain pixel-perfect appearance
+- Total buttons in MacAmp: 43 (Main: 23, EQ: 6, Playlist: 14) all require this treatment
+
 ### NSMenu Coordinate System Gotcha (CRITICAL)
 
 **Problem:** NSMenu.popUp() uses a **flipped coordinate system** where Y increases DOWNWARD.
