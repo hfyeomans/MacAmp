@@ -1624,3 +1624,55 @@ let diffWithin = SnapUtils.snapWithinUnion(groupBox, union: virtualSpace.bounds,
 **Status:** Ready for production use
 
 **User Contributions:** Exceptional debugging - found titlebar gap and phantom window issues!
+
+---
+
+## PART 21: Video Control Unification (2025-11-15)
+
+### Current Status: Planning Complete ✅
+
+**Phase:** Implementation Ready
+**Estimated Time:** 3-4 hours
+**Oracle Validation:** Grade B (architecturally sound)
+
+### Tasks Status
+
+| Task | Status | Est. Time | Actual | Notes |
+|------|--------|-----------|--------|-------|
+| 1. Video Volume Control | ⏳ Pending | 15 min | - | Single line change |
+| 2. Video Time Display | ⏳ Pending | 1 hour | - | Observer pattern |
+| 3. Video Seeking Support | ⏳ Pending | 1 hour | - | Extend existing seek() |
+| 4. Metadata Display Growth | ⏳ Pending | 30 min | - | UI-only |
+| 5. Integration Testing | ⏳ Pending | 1 hour | - | Full test suite |
+
+### Files to Modify
+
+1. **`MacAmpApp/Audio/AudioPlayer.swift`**
+   - [ ] Volume didSet (add video)
+   - [ ] videoTimeObserver property
+   - [ ] setupVideoTimeObserver()
+   - [ ] cleanupVideoTimeObserver()
+   - [ ] seek() method extension
+
+2. **`MacAmpApp/Views/Windows/VideoWindowChromeView.swift`**
+   - [ ] dynamicDisplayWidth computed property
+   - [ ] Metadata scroll view width
+
+### Key Implementation Decisions (Oracle Validated)
+
+1. **Extend existing seek() method** - Don't add new API
+2. **Use @ObservationIgnored** - Standard pattern for observers
+3. **Mirror videoEndObserver cleanup** - Established pattern
+4. **Update both currentTime AND currentDuration** - For playbackProgress to work
+
+### Blockers
+
+None - all patterns already established in codebase
+
+### Next Action
+
+Start with Task 1 (Video Volume Control) - lowest risk, immediate feedback
+
+---
+
+**State Last Updated:** 2025-11-15 (Part 21 planning complete)

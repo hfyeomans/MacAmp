@@ -1519,3 +1519,351 @@ For applying to Playlist window later.
 - Dynamic tile calculation
 - Preview during drag, commit at end
 - isVisible filtering critical
+
+---
+
+## PART 21: Video Window Audio/Video Control Unification (2025-11-15)
+
+### Objective
+
+Extend MacAmp's audio controls to also manage video playback. Currently volume, seeking, and time display only affect audio - they must work with video too.
+
+### 4 Enhancement Items
+
+1. **Video Metadata Display Area Growth** - Dynamic width based on window size
+2. **Video Volume Control** - Volume slider affects video playback
+3. **Video Seeking Support** - Position slider seeks video files
+4. **Video Time Display** - Time display shows video elapsed/remaining time
+
+### Current Architecture (Problem)
+
+**AudioPlayer.swift** (Lines 159-161, 173-174):
+```swift
+var volume: Float = 1.0 {
+    didSet { playerNode.volume = volume }  // ❌ Only audio!
+}
+
+var videoPlayer: AVPlayer?
+var currentMediaType: MediaType = .audio
+var currentTime: Double = 0.0  // ❌ Only tracks audio position
+```
+
+**Issue:** Volume didSet only updates audio engine, ignoring videoPlayer. Time tracking doesn't observe video playback.
+
+### Unified Media Control Pattern
+
+All media controls check `currentMediaType` and apply to both backends:
+- **Audio:** `audioEngine.mainMixerNode` / `playerNode`
+- **Video:** `videoPlayer` (AVPlayer)
+
+---
+
+### Implementation Details
+
+#### 1. Video Volume Control (15 min)
+
+**File:** `MacAmpApp/Audio/AudioPlayer.swift`
+
+```swift
+// Change Line ~160
+var volume: Float = 1.0 {
+    didSet {
+        playerNode.volume = volume           // Audio
+        videoPlayer?.volume = volume         // ✅ ADD Video
+    }
+}
+```
+
+**Why:** Single line addition, immediate effect.
+
+---
+
+#### 2. Video Time Display (1 hour)
+
+**File:** `MacAmpApp/Audio/AudioPlayer.swift`
+
+Add video time observation:
+
+```swift
+@ObservationIgnored private var videoTimeObserver: Any?
+
+private func setupVideoTimeObserver() {
+    guard let player = videoPlayer else { return }
+
+    // Cleanup any existing observer
+    if let observer = videoTimeObserver {
+        player.removeTimeObserver(observer)
+        videoTimeObserver = nil
+    }
+
+    // Update time every 0.1 seconds
+    let interval = CMTime(seconds: 0.1, preferredTimescale: 600)
+    videoTimeObserver = player.addPeriodicTimeObserver(
+        forInterval: interval,
+        queue: .main
+    ) { [weak self] time in
+        guard let self = self else { return }
+        self.currentTime = time.seconds
+
+        if let duration = player.currentItem?.duration,
+           duration.isNumeric && !duration.isIndefinite {
+            self.currentDuration = duration.seconds
+        }
+    }
+}
+
+private func cleanupVideoTimeObserver() {
+    if let observer = videoTimeObserver, let player = videoPlayer {
+        player.removeTimeObserver(observer)
+    }
+    videoTimeObserver = nil
+}
+```
+
+**Integration Points:**
+- Call `setupVideoTimeObserver()` in `playVideo(url:)`
+- Call `cleanupVideoTimeObserver()` in video cleanup code
+- Main window time display will auto-update (already bound to currentTime)
+
+---
+
+#### 3. Video Seeking Support (1 hour)
+
+**File:** `MacAmpApp/Audio/AudioPlayer.swift`
+
+Add unified seek method:
+
+```swift
+func seek(to position: Double) {
+    switch currentMediaType {
+    case .audio:
+        // Existing audio seek logic (schedule from position)
+        currentTime = position
+        // ... existing audio engine scheduling
+
+    case .video:
+        let cmTime = CMTime(seconds: position, preferredTimescale: 600)
+        videoPlayer?.seek(
+            to: cmTime,
+            toleranceBefore: .zero,
+            toleranceAfter: .zero
+        ) { [weak self] finished in
+            if finished {
+                self?.currentTime = position
+            }
+        }
+
+    case .stream:
+        // Streams are not seekable
+        break
+    }
+}
+```
+
+**File:** `MacAmpApp/Views/WinampMainWindow.swift`
+
+Wire position slider to new seek method:
+
+```swift
+// In position slider drag gesture
+.onEnded { _ in
+    playbackCoordinator.seek(to: newPosition)
+}
+```
+
+---
+
+#### 4. Metadata Display Growth (30 min)
+
+**File:** `MacAmpApp/Views/Windows/VideoWindowChromeView.swift`
+
+```swift
+// In buildBottomInfoSection()
+private var dynamicDisplayWidth: CGFloat {
+    let minWidth: CGFloat = 115
+    let leftSectionWidth: CGFloat = 58  // Play state + bitrate
+    let margins: CGFloat = 10
+
+    let availableWidth = sizeState.size.width - leftSectionWidth - margins
+    return max(minWidth, availableWidth)
+}
+
+// Usage in the marquee/scroll view
+ScrollView(.horizontal, showsIndicators: false) {
+    Text(metadataString)
+        .frame(width: dynamicDisplayWidth)  // Use dynamic width
+}
+```
+
+---
+
+### Implementation Order (Risk-Based)
+
+1. **Video Volume** (Lowest Risk) - 15 min
+   - Single line change
+   - Immediate testable result
+
+2. **Video Time Display** (Medium Risk) - 1 hour
+   - Needs proper cleanup (memory leaks)
+   - Main window auto-updates
+
+3. **Video Seeking** (Medium Risk) - 1 hour
+   - CMTime precision
+   - Async completion handler
+
+4. **Metadata Width** (Low Risk) - 30 min
+   - UI-only change
+   - No backend impact
+
+---
+
+### Files to Modify
+
+1. **`MacAmpApp/Audio/AudioPlayer.swift`** - Core control logic
+   - Volume didSet (1 line)
+   - Time observer setup/cleanup
+   - Seek method
+
+2. **`MacAmpApp/Views/Windows/VideoWindowChromeView.swift`** - Metadata display
+   - Dynamic width calculation
+
+3. **`MacAmpApp/Views/WinampMainWindow.swift`** - Position slider (if needed)
+   - Wire to unified seek method
+
+---
+
+### Testing Strategy
+
+**Unit Tests:**
+- Volume propagates to both audio and video
+- Time observer updates currentTime
+- Seek method works for both media types
+
+**Manual Integration:**
+- Load video, adjust volume → video sound changes
+- Load video, drag slider → video seeks
+- Main window shows video time
+- Metadata area grows with window
+
+**Edge Cases:**
+- Switch audio→video→audio
+- Video ends → cleanup
+- Seek near end of video
+
+---
+
+### Success Criteria
+
+- [ ] Volume slider affects video playback sound
+- [ ] Position slider seeks within video file
+- [ ] Time display shows video elapsed/remaining time
+- [ ] Metadata area grows proportionally with window width
+- [ ] No memory leaks from video time observer
+- [ ] Smooth seeking without frame drops
+- [ ] Clean switch between audio and video playback
+
+---
+
+### Estimated Time
+
+- Video Volume: 15 minutes
+- Video Time Display: 1 hour
+- Video Seeking: 1 hour
+- Metadata Width: 30 minutes
+- Testing & Polish: 1 hour
+
+**Total: 3-4 hours**
+
+---
+
+### Oracle Validation Request
+
+Before implementation, validate:
+1. Does this pattern align with existing PlaybackCoordinator architecture?
+2. Should seek() live in AudioPlayer or PlaybackCoordinator?
+3. Are there existing patterns for time observation we should follow?
+4. Memory management concerns with AVPlayer observers?
+
+**Status:** ✅ Oracle Reviewed (Grade B - Minor adjustments needed)
+
+---
+
+### Oracle Feedback (2025-11-15)
+
+**Grade: B** - Architecturally sound, but needs tweaks.
+
+**Key Corrections:**
+
+1. **DON'T add new seek() method** - Extend existing `AudioPlayer.seek(to:resume:)` instead
+   - Current location: `AudioPlayer.swift:1177-1243`
+   - Branch on `currentMediaType` inside existing method
+   - Avoid touching every caller
+
+2. **Update BOTH currentTime AND playbackProgress**
+   - Main window slider uses `playbackProgress` computed property
+   - Time observer must feed both values
+   - Use `currentItem.duration` for progress calculation
+
+3. **Follow existing observer patterns:**
+   - Use `@ObservationIgnored` (same as timers/handles)
+   - Mirror `videoEndObserver` cleanup pattern (lines 385-395, 449-458, 603-615)
+   - Remove observer before nil-ing player
+
+4. **Reuse existing switching hooks:**
+   - `loadVideoFile` already stops engine/timer
+   - `loadAudioFile` tears down video player/observers
+   - `stop()` clears video-specific state
+   - Don't duplicate logic in PlaybackCoordinator
+
+**Revised Implementation:**
+
+```swift
+// In AudioPlayer.swift
+
+@ObservationIgnored private var videoTimeObserver: Any?
+
+// Extend existing seek method (line ~1177)
+func seek(to time: Double, resume: Bool = false) {
+    switch currentMediaType {
+    case .video:
+        let cmTime = CMTime(seconds: time, preferredTimescale: 600)
+        videoPlayer?.seek(to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero)
+        currentTime = time
+        // playbackProgress will auto-compute from currentTime/currentDuration
+
+    case .audio:
+        // ... existing audio seek logic
+    }
+}
+
+// Time observer must update both currentTime AND ensure playbackProgress works
+func setupVideoTimeObserver() {
+    guard let player = videoPlayer else { return }
+
+    let interval = CMTime(seconds: 0.1, preferredTimescale: 600)
+    videoTimeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
+        guard let self = self else { return }
+        self.currentTime = time.seconds
+
+        // Also update duration so playbackProgress computes correctly
+        if let duration = player.currentItem?.duration, duration.isNumeric && !duration.isIndefinite {
+            self.currentDuration = duration.seconds
+        }
+    }
+}
+
+// Mirror videoEndObserver cleanup pattern
+func cleanupVideoTimeObserver() {
+    if let observer = videoTimeObserver, let player = videoPlayer {
+        player.removeTimeObserver(observer)
+    }
+    videoTimeObserver = nil
+}
+```
+
+**Integration Points (already exist):**
+- `loadVideoFile()` - Add `setupVideoTimeObserver()` call
+- `loadAudioFile()` - Already tears down video, add `cleanupVideoTimeObserver()`
+- `stop()` - Add `cleanupVideoTimeObserver()` call
+
+**Confidence:** High - patterns already established in codebase

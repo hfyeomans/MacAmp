@@ -993,6 +993,71 @@
 
 ---
 
+## PART 21: Video Control Unification (2025-11-15)
+
+**Goal**: Extend audio controls to also manage video playback
+**Estimated Time**: 3-4 hours
+**Oracle Validation**: Grade B (architecturally sound, minor adjustments applied)
+
+### Task 1: Video Volume Control (15 min) ⏳
+- [ ] Add `videoPlayer?.volume = volume` to AudioPlayer.volume didSet
+- [ ] Test: Load video, adjust volume slider → video sound changes
+- [ ] Test: Mute button mutes video
+- [ ] Test: Volume persists when switching audio↔video
+
+**File:** `MacAmpApp/Audio/AudioPlayer.swift` (Line ~160)
+
+### Task 2: Video Time Display (1 hour) ⏳
+- [ ] Add `@ObservationIgnored private var videoTimeObserver: Any?`
+- [ ] Implement `setupVideoTimeObserver()` using AVPlayer.addPeriodicTimeObserver
+- [ ] Observer updates both `currentTime` AND `currentDuration`
+- [ ] Implement `cleanupVideoTimeObserver()` (mirror videoEndObserver pattern)
+- [ ] Call `setupVideoTimeObserver()` in `loadVideoFile()`
+- [ ] Call `cleanupVideoTimeObserver()` in `loadAudioFile()` and `stop()`
+- [ ] Test: Main window timer shows video elapsed time
+- [ ] Test: No memory leaks from observer (proper cleanup)
+
+**File:** `MacAmpApp/Audio/AudioPlayer.swift`
+
+### Task 3: Video Seeking Support (1 hour) ⏳
+- [ ] Extend existing `seek(to:resume:)` method (Line ~1177)
+- [ ] Add `case .video:` branch using `videoPlayer?.seek(to:)`
+- [ ] Use CMTime with toleranceBefore/toleranceAfter .zero for precision
+- [ ] Test: Drag position slider during video → video seeks
+- [ ] Test: Seek near end of video works correctly
+- [ ] Test: Switching audio↔video doesn't break seeking
+
+**File:** `MacAmpApp/Audio/AudioPlayer.swift`
+
+### Task 4: Metadata Display Growth (30 min) ⏳
+- [ ] Add `dynamicDisplayWidth` computed property
+- [ ] Calculate: max(115, windowWidth - leftSection - margins)
+- [ ] Use dynamic width in metadata scroll view
+- [ ] Test: Resize video window → metadata area grows
+- [ ] Test: Small window → 115px minimum preserved
+
+**File:** `MacAmpApp/Views/Windows/VideoWindowChromeView.swift`
+
+### Task 5: Integration Testing (1 hour) ⏳
+- [ ] Load video, adjust volume → video sound changes
+- [ ] Load video, drag slider → video seeks
+- [ ] Main window shows video time (not stale audio time)
+- [ ] Metadata area grows proportionally with window
+- [ ] Switch audio→video→audio cleanly
+- [ ] Video ends → proper cleanup
+- [ ] No Thread Sanitizer warnings
+
+### Success Criteria
+- [ ] Volume slider affects video playback sound
+- [ ] Position slider seeks within video file
+- [ ] Time display shows video elapsed/remaining time
+- [ ] Metadata area grows proportionally with window width
+- [ ] No memory leaks from video time observer
+- [ ] Smooth seeking without frame drops
+- [ ] Clean switch between audio and video playback
+
+---
+
 ## Blockers / Issues
 
 **Current Blockers**: None
