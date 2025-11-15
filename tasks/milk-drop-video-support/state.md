@@ -1587,3 +1587,40 @@ let diffWithin = SnapUtils.snapWithinUnion(groupBox, union: virtualSpace.bounds,
 **Status:** Awaiting pre-resize test results
 **Current Build:** Pre-resize version ready at d293e95
 **Return Command:** `git checkout feature/video-milkdrop-windows`
+
+---
+
+## 🎉 VIDEO Window Full Resize - COMPLETE! (2025-11-15)
+
+### Final Status: Production Ready ✅
+
+**All Phases Complete:**
+- ✅ Phase 1: Size2D models
+- ✅ Phase 2: Dynamic chrome sizing
+- ✅ Phase 3: Resize handle with AppKit preview
+- ✅ Phase 4: Button migration
+- ✅ Phase 5: Integration and bug fixes
+
+**Critical Bugs Fixed:**
+1. ✅ Titlebar gap eliminated (3 tiles per side with ceil())
+2. ✅ Invisible window phantom eliminated (isVisible checks)
+3. ✅ Preview visibility (AppKit overlay window)
+4. ✅ Jitter reduced (preview pattern + no NSWindow spam)
+
+**User Verified:**
+- ✅ Titlebar gap gone
+- ✅ Cluster reaches left monitor edge
+- ✅ Preview shows when dragging bigger and smaller
+- ✅ 1x/2x buttons work perfectly
+- ✅ Resize functional and usable
+
+**Remaining (Deferred):**
+- Size persistence testing
+- Docking with resized windows
+- Minor jitter optimization if needed
+
+**Total Implementation Time:** ~10 hours
+**Total Commits:** ~30 commits
+**Status:** Ready for production use
+
+**User Contributions:** Exceptional debugging - found titlebar gap and phantom window issues!

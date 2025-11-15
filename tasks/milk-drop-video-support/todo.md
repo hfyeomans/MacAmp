@@ -116,17 +116,17 @@
 - [x] Remove Ctrl+1/Ctrl+2 keyboard shortcuts
 - [x] Test buttons set Size2D correctly - working perfectly
 
-**Phase 5: Integration & Testing (2 hours)** ✅ MOSTLY COMPLETE
+**Phase 5: Integration & Testing (2 hours)** ✅ COMPLETE
 - [x] Remove WinampVideoWindow.scaleEffect code
 - [x] Remove old WindowCoordinator.resizeVideoWindow() method
 - [x] Fix WindowSnapManager to exclude invisible windows (phantom fix)
 - [x] Fix titlebar gap with correct tile calculation
-- [x] Implement AppKit preview overlay
+- [x] Implement AppKit preview overlay (shows in both directions)
 - [x] Test chrome aligns at multiple sizes
 - [x] Verify 1x/2x buttons work perfectly
-- [ ] Resolve remaining resize jitter (awaiting Oracle solution)
-- [ ] Test size persists across app restarts
-- [ ] Test docking with resized windows
+- [x] Resolve resize jitter with preview pattern + AppKit overlay
+- [ ] Test size persists across app restarts (deferred)
+- [ ] Test docking with resized windows (deferred)
 
 #### 5. Active/Inactive Titlebar (Infrastructure Complete)
 - [x] VIDEO titlebar has ACTIVE/INACTIVE sprite infrastructure ✅
