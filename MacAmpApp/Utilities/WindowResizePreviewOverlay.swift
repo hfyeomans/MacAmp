@@ -2,6 +2,7 @@ import AppKit
 
 /// AppKit-based resize preview that can extend beyond window bounds
 /// Creates a separate overlay window that floats above the resizing window
+@MainActor
 final class WindowResizePreviewOverlay {
     private var overlayWindow: NSWindow?
     private weak var targetWindow: NSWindow?
@@ -72,6 +73,7 @@ final class WindowResizePreviewOverlay {
 }
 
 /// Custom NSView that draws the preview rectangle
+@MainActor
 private final class PreviewContentView: NSView {
     var previewSize: CGSize = .zero {
         didSet {
