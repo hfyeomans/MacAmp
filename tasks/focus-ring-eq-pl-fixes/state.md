@@ -4,7 +4,9 @@
 
 ## Branch: feature/video-milkdrop-windows
 
-## Latest Commit: c167b4f
+## Latest Commit: 1306b2e
+
+## ✅ COMPLETED - All Issues Resolved
 
 ## Completed Work
 
@@ -14,57 +16,64 @@
 4. **Commit 5f39cd5** - EQ/PL buttons light when windows visible + remove focus rings
 5. **Commit 32227a1** - Use WindowCoordinator for EQ/PL button state
 6. **Commit c167b4f** - Previous button focus ring + EQ/PL buttons actually toggle windows
+7. **Commit 3bc3b26** - Remove ALL focus rings from main window + reactive EQ/PL button lights
+8. **Commit ddc8cf3** - Remove ALL focus rings from EQ and Playlist windows
+9. **Commit 1306b2e** - Add WinampButtonStyle for global focus ring removal
 
-## Current Issues
+## Final Summary
 
-### Issue 1: EQ/PL Button Lights Don't Update Reactively
+### Total Buttons Fixed: 42
+- **Main Window:** 23 buttons
+- **EQ Window:** 5 buttons
+- **Playlist Window:** 14 buttons
 
-**Problem:** Clicking EQ/PL buttons toggles window visibility (orderOut/orderFront works), but the button sprite doesn't change from SELECTED to normal because SwiftUI view body doesn't re-evaluate.
+### Issues Resolved
 
-**Root Cause:** The sprite selection happens at view render time:
+1. **EQ/PL Button Lights** - Now reactive using @State properties
+2. **Focus Rings** - Removed from all 42 buttons across all windows
+3. **Future Maintainability** - Added WinampButtonStyle for new buttons
+
+### Technical Implementation
+
+**EQ/PL Reactive Lights:**
 ```swift
-let eqSprite = WindowCoordinator.shared?.eqWindow?.isVisible == true
-    ? "MAIN_EQ_BUTTON_SELECTED"
-    : "MAIN_EQ_BUTTON"
+@State private var isEQWindowVisible: Bool = true
+@State private var isPlaylistWindowVisible: Bool = true
+
+// Button toggles both NSWindow and @State
+if eqWindow.isVisible {
+    eqWindow.orderOut(nil)
+    isEQWindowVisible = false  // Triggers SwiftUI re-render
+} else {
+    eqWindow.orderFront(nil)
+    isEQWindowVisible = true   // Triggers SwiftUI re-render
+}
 ```
 
-This only runs when SwiftUI re-renders the view. Changing NSWindow.isVisible doesn't trigger a SwiftUI update because there's no @Observable/@State property being observed.
+**Future Button Pattern:**
+```swift
+// Old way (still works, used in current code)
+Button(action: { ... }) { ... }
+    .buttonStyle(.plain)
+    .focusable(false)
 
-**Why Shuffle/Repeat Work:** They're bound to `@Observable AppSettings` properties which trigger view updates automatically via Swift's observation system.
+// New way (recommended for future buttons)
+Button(action: { ... }) { ... }
+    .winampButton()
+```
 
-**Solution Options:**
-1. Add @State properties to track window visibility, update after toggle
-2. Use NotificationCenter to observe NSWindow visibility changes
-3. Force view refresh by toggling a dummy @State property
-4. Make WindowCoordinator @Observable and track visibility there
+### Files Modified
 
-### Issue 2: Focus Rings on ALL Main Window Buttons
+- `MacAmpApp/Views/WinampMainWindow.swift` - 23 buttons fixed + @State added
+- `MacAmpApp/Views/WinampEqualizerWindow.swift` - 5 buttons fixed
+- `MacAmpApp/Views/WinampPlaylistWindow.swift` - 14 buttons fixed
+- `MacAmpApp/Views/Components/WinampButtonStyle.swift` - NEW global style
 
-**Problem:** As each focus ring is fixed, another appears on the next button in tab order. This indicates ALL buttons in main window need `.focusable(false)`.
+### Testing Checklist
 
-**Buttons Needing Fix:**
-- Transport: Previous, Play, Pause, Stop, Next (some may already be fixed)
-- Volume slider (if interactive)
-- Balance slider (if interactive)
-- Seek slider (if interactive)
-- Any other interactive buttons
-
-## Files to Modify
-
-- `MacAmpApp/Views/WinampMainWindow.swift` - Main file with all buttons
-- Possibly `MacAmpApp/ViewModels/WindowCoordinator.swift` - If making @Observable
-
-## Next Steps
-
-1. Search for ALL Button instances in WinampMainWindow.swift
-2. Add .focusable(false) to every single one
-3. Implement reactive EQ/PL button state using @State or observation
-4. Build and test
-5. Commit with comprehensive message
-
-## Technical Notes
-
-- SwiftUI view updates only when @Observable/@State properties change
-- NSWindow.isVisible is not observed by SwiftUI
-- Need to bridge AppKit window state to SwiftUI reactive system
-- Best pattern: @State with manual update after orderOut/orderFront
+- ✅ EQ button lights up when window visible, dark when hidden
+- ✅ PL button lights up when window visible, dark when hidden
+- ✅ No focus rings on any button in Main window
+- ✅ No focus rings on any button in EQ window
+- ✅ No focus rings on any button in Playlist window
+- ✅ WinampButtonStyle compiles and is available project-wide
