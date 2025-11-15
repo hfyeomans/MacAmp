@@ -606,12 +606,14 @@ struct WinampPlaylistWindow: View {
                 SimpleSpriteImage("MAIN_SHADE_BUTTON", width: 9, height: 9)
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .position(x: 258.5, y: 7.5)
-            
+
             Button(action: { NSApp.keyWindow?.close() }) {
                 SimpleSpriteImage("MAIN_CLOSE_BUTTON", width: 9, height: 9)
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .position(x: 268.5, y: 7.5)
     }
 

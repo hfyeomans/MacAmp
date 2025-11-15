@@ -281,8 +281,9 @@ struct WinampMainWindow: View {
                 SimpleSpriteImage("MAIN_MINIMIZE_BUTTON", width: 9, height: 9)
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .at(Coords.minimizeButton)
-            
+
             // Shade button
             Button(action: {
                 isShadeMode.toggle()
@@ -290,8 +291,9 @@ struct WinampMainWindow: View {
                 SimpleSpriteImage("MAIN_SHADE_BUTTON", width: 9, height: 9)
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .at(Coords.shadeButton)
-            
+
             // Close button
             Button(action: {
                 NSApplication.shared.terminate(nil)
@@ -299,6 +301,7 @@ struct WinampMainWindow: View {
                 SimpleSpriteImage("MAIN_CLOSE_BUTTON", width: 9, height: 9)
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .at(Coords.closeButton)
         }
     }
