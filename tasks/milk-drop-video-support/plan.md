@@ -1499,3 +1499,23 @@ func setMuted(_ muted: Bool) {
 **Implementation Start**: Upon user approval
 **Target Completion**: Days 8-10 + 8 hours resize + 2 hours volume
 **Next Review**: Post VIDEO 2x chrome scaling completion
+
+---
+
+## LESSONS LEARNED: VIDEO Window Resize
+
+For applying to Playlist window later.
+
+**Key Insights:**
+1. Calculate tile counts with ceil() for full coverage
+2. Use OLD positioning formulas that worked
+3. Exclude invisible windows from snap (window.isVisible)
+4. Preview pattern reduces jitter (commit at end only)
+5. Don't sync NSWindow during drag
+6. Preview needs AppKit overlay to extend beyond bounds
+
+**Pattern:**
+- Size2D quantization
+- Dynamic tile calculation
+- Preview during drag, commit at end
+- isVisible filtering critical

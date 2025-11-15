@@ -1100,3 +1100,490 @@ xcodebuild -scheme MacAmpApp -destination 'platform=macOS' -enableThreadSanitize
 ---
 
 **Next**: User testing and Phase 5 (WindowCoordinator final integration if needed)
+# Oracle Prompt: VIDEO Window Resize Jitter & Left Gap
+
+Copy this entire prompt to use with Oracle in another window:
+
+---
+
+@MacAmpApp/Views/Windows/VideoWindowChromeView.swift @MacAmpApp/Views/WinampVideoWindow.swift @MacAmpApp/Models/VideoWindowSizeState.swift @MacAmpApp/Models/Size2D.swift @MacAmpApp/ViewModels/WindowCoordinator.swift @MacAmpApp/Views/Components/SimpleSpriteImage.swift
+
+CRITICAL VIDEO WINDOW RESIZE ISSUES:
+
+**ISSUE 1: Severe Jitter During Drag Resize**
+
+USER INSIGHT: "The snap to 25x29 segments is forcing the jittering as it tries to snap up from a previous segment and size."
+
+Symptom: Incredible jitter when dragging resize handle. Every segment boundary crossing causes visible jitter as SwiftUI re-renders entire complex chrome.
+
+What Works: 1x/2x buttons resize instantly with zero jitter
+What's Broken: Drag resize unusably jittery
+
+**ISSUE 2: Blank Gap on Left Edge**
+
+Screenshot shows persistent blank/gap section on left edge at all sizes. Chrome should be flush with window edge at x=0.
+
+---
+
+**CURRENT IMPLEMENTATION:**
+
+Drag gesture updates sizeState.size on every segment boundary:
+- Triggers full VideoWindowChromeView.body re-evaluation
+- All @ViewBuilder functions re-execute (titlebar, borders, bottom bar)
+- All computed properties recalculate
+- All ForEach loops re-render sprites
+- All SimpleSpriteImage lookups happen
+- Result: Expensive layout recalculation = jitter
+
+NSWindow sync only on drag end (not during drag)
+- Buttons work smoothly
+- Drag is jittery
+
+---
+
+**QUESTIONS:**
+
+1. Should we STOP updating size during drag entirely?
+   - Show visual preview only (overlay/outline)?
+   - Commit size only on drag end?
+   - How to show quantized snapping visually without re-rendering chrome?
+
+2. Is SwiftUI body re-evaluation the jitter source?
+   - Every segment cross = full chrome rebuild
+   - Can we batch/throttle size updates to 60fps?
+   - Use withAnimation(.none) or transaction?
+
+3. Left gap - fractional coordinates or padding?
+   - NSWindow.frame.origin fractional?
+   - NSHostingView adding insets?
+   - ZStack alignment issue?
+
+4. Should we use Canvas for chrome during drag?
+   - Pre-render chrome at current size
+   - During drag: only update Canvas frame (cheap)
+   - After drag: rebuild actual chrome components?
+
+5. What's webamp's actual secret?
+   - CSS updates don't trigger layout recalc?
+   - React batching different from SwiftUI?
+   - Fundamental difference in rendering model?
+
+---
+
+**FILES TO ANALYZE:**
+@MacAmpApp/Views/Windows/VideoWindowChromeView.swift
+@MacAmpApp/Views/WinampVideoWindow.swift
+@MacAmpApp/Models/VideoWindowSizeState.swift
+@MacAmpApp/ViewModels/WindowCoordinator.swift
+
+Provide production-ready solution for smooth quantized resize in SwiftUI with sprite-based chrome.
+# VIDEO Window Resize Investigation - Current Status
+
+**Date:** 2025-11-14
+**Status:** Partial Implementation - Jitter Investigation Ongoing
+
+---
+
+## What's Implemented ✅
+
+### Core Functionality
+- ✅ Size2D segment-based model (25×29px quantization)
+- ✅ VideoWindowSizeState observable with persistence
+- ✅ Dynamic chrome sizing (titlebar, borders, bottom bar)
+- ✅ 20×20px resize handle in bottom-right corner
+- ✅ 1x/2x buttons as Size2D presets
+- ✅ Titlebar "WINAMP VIDEO" perfectly centered
+- ✅ Three-section bottom bar with center tiling
+- ✅ NSWindow frame sync (removed from onChange)
+
+### What Works Perfectly
+- ✅ **1x button click** → Instant, smooth resize to 275×232 (no jitter)
+- ✅ **2x button click** → Instant, smooth resize to 550×464 (no jitter)
+- ✅ **Titlebar centering** → WINAMP VIDEO stays centered at all sizes
+- ✅ **Chrome tiling** → Components render at correct positions
+
+---
+
+## Critical Issues Remaining ❌
+
+### Issue 1: Severe Jitter During Drag Resize
+**Symptom:** Incredible jitter when dragging resize handle
+
+**User Insight:** "The snap to 25×29 segments is forcing the jittering as it tries to snap up from a previous segment and size."
+
+**Root Cause Analysis:**
+Every segment boundary crossing triggers:
+1. `sizeState.size` update
+2. Full `VideoWindowChromeView.body` re-evaluation
+3. All @ViewBuilder functions re-execute
+4. All computed properties recalculate
+5. All ForEach loops re-render
+6. All SimpleSpriteImage sprites re-lookup
+7. Complex ZStack layout recalculation
+
+**Result:** Expensive layout recalculation on every 25px or 29px boundary = jitter
+
+**Why Buttons Work:** Single jump → chrome rebuilds once → smooth
+**Why Drag is Jittery:** Many boundary crosses → many rebuilds → jitter
+
+### Issue 2: Blank Gap on Left Edge
+**Symptom:** Persistent blank/gap visible on left edge at multiple sizes
+
+**Screenshot Evidence:**
+- Visible at [0,4] = 275×232 (default size)
+- Visible at [0,0] = 275×116 (minimum size)
+- Visible at various other sizes
+
+**Theories:**
+1. NSWindow.frame.origin at fractional coordinates (e.g., x=100.5)
+2. NSHostingView adding implicit padding
+3. ZStack alignment issue
+4. Sprite positioning calculation off by 1px
+
+---
+
+## Fixes Attempted
+
+### Attempt 1: Oracle Titlebar Centering ✅ WORKED
+- Split stretchy tiles symmetrically
+- Center text at pixelSize.width / 2
+- **Result:** Titlebar perfectly centered
+
+### Attempt 2: Remove onChange NSWindow Sync ⚠️ PARTIALLY WORKED
+- Removed `.onChange(of: sizeState.size)` calling `syncVideoWindowFrame()`
+- Sync only on drag end and button clicks
+- **Result:** Buttons smooth, drag still jittery
+
+### Attempt 3: Content Positioning for Left Gap ❌ DID NOT FIX
+- Changed content position to `contentCenterX = leftBorderWidth + width/2`
+- **Result:** Gap still visible
+
+### Attempt 4: WindowSnapManager Suppression ⚠️ UNCLEAR
+- Added begin/endProgrammaticAdjustment() during drag
+- **Result:** May have helped slightly, still jittery
+
+### Attempt 5: withAnimation(.none) ⏳ TESTING NOW
+- Wrapped all `sizeState.size` mutations in `withAnimation(.none)`
+- **Theory:** SwiftUI animation system fighting with quantization
+- **Result:** Awaiting user testing
+
+---
+
+## Research Completed
+
+### Webamp Pattern (From ResizeTarget.tsx)
+```typescript
+// Key pattern: Frozen starting size, calculate from total delta
+const handleMove = (ee: MouseEvent) => {
+  const x = Utils.getX(ee) - mouseStart.x;  // Total delta from start
+  const y = Utils.getY(ee) - mouseStart.y;
+  
+  const newWidth = Math.max(0, width + Math.round(x / SEGMENT_WIDTH));
+  const newHeight = Math.max(0, height + Math.round(y / SEGMENT_HEIGHT));
+  
+  props.setWindowSize([newWidth, newHeight]);  // React batches updates
+};
+```
+
+**Why Webamp is Smooth:**
+- CSS updates are cheap (`div.style.width = "300px"`)
+- React batches state updates automatically
+- Browser handles layout efficiently
+- No complex sprite recalculation on every update
+
+**Why MacAmp is Jittery:**
+- SwiftUI body re-evaluation is expensive
+- Complex chrome with many components
+- Every segment cross = full rebuild
+- No automatic batching like React
+
+---
+
+## Next Steps
+
+### Option A: Test Animation Disable (Current Attempt)
+**Commit:** `a3f369c` - withAnimation(.none) on all size updates
+
+**If Works:** Jitter caused by SwiftUI animation interpolation
+**If Still Jittery:** Need different approach
+
+### Option B: Throttle Size Updates to 60fps
+```swift
+@State private var updateTask: Task<Void, Never>?
+
+// In onChanged:
+updateTask?.cancel()
+updateTask = Task {
+    try? await Task.sleep(nanoseconds: 16_666_667)  // ~60fps
+    withAnimation(.none) {
+        sizeState.size = candidate
+    }
+}
+```
+
+### Option C: Preview Pattern (Don't Update Size During Drag)
+```swift
+@State private var dragPreviewSize: Size2D?
+
+// During drag: Show preview overlay only
+// On drag end: Commit to sizeState.size
+// Chrome only rebuilds once at end
+```
+
+### Option D: Canvas Optimization
+- Render chrome to Canvas/NSImage
+- During drag: Only update frame (cheap)
+- After drag: Rebuild sprite components
+
+### Option E: Oracle Consultation
+Use saved prompt at: `tasks/milk-drop-video-support/ORACLE_PROMPT_RESIZE_JITTER.md`
+
+---
+
+## Oracle Prompt Available
+
+**Location:** `tasks/milk-drop-video-support/ORACLE_PROMPT_RESIZE_JITTER.md`
+
+**Usage:** Copy entire file content and paste to Oracle (Codex) in separate session
+
+**Contains:**
+- Complete problem description
+- Current implementation details
+- Screenshot evidence context
+- Specific questions for Oracle
+- All relevant file references
+- Success criteria
+
+---
+
+## Metrics
+
+**Implementation Time:** ~4 hours total
+**Commits:** 12 commits
+**Status:** 80% complete (works for buttons, broken for drag)
+**Blocking:** Jitter makes drag resize unusable
+**Priority:** Critical - needs Oracle consultation or alternative approach
+
+---
+
+**Next Action:** User tests `withAnimation(.none)` fix, then uses Oracle prompt if still jittery
+# VIDEO Window Resize Session Summary - 2025-11-14
+
+## Session Duration
+~6 hours total work
+
+## Commits Today
+**Part 1: 2x Chrome Scaling (7 commits)** - COMPLETE ✅
+- VIDEO window 2x scaling with scaleEffect
+- Clickable 1x/2x buttons  
+- Startup sequence fixes
+- Focus ring removal
+- User verified working
+
+**Part 2: Full Resize Implementation (13+ commits)** - IN PROGRESS ⏳
+- Size2D segment model
+- VideoWindowSizeState observable
+- Dynamic chrome sizing
+- Resize handle with preview pattern
+- Multiple jitter fix attempts
+- Titlebar gap fix
+
+**Total:** ~20+ commits
+
+## What's Working ✅
+- 1x/2x buttons resize perfectly (instant, no jitter)
+- Titlebar centering (WINAMP VIDEO stays centered)
+- Dynamic chrome tiling
+- Preview pattern (no chrome rebuild during drag)
+- Diagnostic logging for gap investigation
+- Titlebar gap fix committed (3 tiles per side)
+
+## Critical Issues Remaining ❌
+1. **Resize jitter** - Preview pattern should help, awaiting test
+2. **Left gap** - Titlebar fix committed, needs testing
+3. **Monitor edge constraint** - Can't reach left edge of screen
+
+## Oracle Consultations
+- Titlebar centering: RESOLVED
+- NSWindow sync timing: RESOLVED  
+- Content positioning: ATTEMPTED
+- Jitter investigation: ONGOING (Gemini + user Oracle session)
+
+## Files Created
+- Size2D.swift
+- VideoWindowSizeState.swift
+
+## Files Modified (Major)
+- VideoWindowChromeView.swift (complete refactor)
+- WinampVideoWindow.swift (preview pattern)
+- WindowCoordinator.swift (diagnostics)
+- AppSettings.swift (cleanup)
+- AppCommands.swift (cleanup)
+
+## Next Steps
+1. User tests titlebar gap fix
+2. User shares Oracle response from other window
+3. Implement Oracle's jitter solution
+4. Investigate monitor edge constraint
+5. Add dynamic metadata area growth
+
+## Research Documentation
+- ORACLE_PROMPT_RESIZE_JITTER.md - Ready for consultation
+- RESIZE_INVESTIGATION_STATUS.md - Complete status
+- research.md Part 17 - Gap analysis
+# Major Wins - 2025-11-14/15
+
+## ✅ SOLVED Issues
+
+### 1. Titlebar Gap (User Discovery)
+**Problem:** Blank 12.5px strip on left side of titlebar
+**Root Cause:** Insufficient tiles (only 2 left vs 3 right), wrong positioning
+**Solution:** Calculate 3 tiles per side using ceil(), use OLD positioning formula
+**Commits:** acbac30, f165a3b
+**Result:** Gap eliminated! ✅
+
+### 2. Invisible Window Phantom (User Detective Work)
+**Problem:** Cluster couldn't reach left monitor edge
+**User's Brilliant Analysis:**
+> "The gap is whatever size the video window is, as if the video window is there when it's not"
+
+**Root Cause:** Hidden VIDEO window at x=0 included in snap calculations
+**Found in 2 locations:**
+1. `windowDidMove()` - building window->box mapping
+2. `boxes(in:)` helper - used by all cluster functions
+
+**Solution:** Add `window.isVisible` check in BOTH places
+**Commits:** da9b042, fa9ab7b
+**Result:** Cluster can now reach left edge! ✅
+
+---
+
+## 🔬 Research Completed
+
+### Webamp Resize Pattern
+- Analyzed ResizeTarget.tsx
+- Found quantization formula
+- Identified CSS vs NSWindow difference
+- Created comprehensive Oracle prompt
+
+### Titlebar Coverage Analysis
+- Mapped every sprite from left to right
+- Calculated exact coverage zones
+- Identified 12.5px gaps
+- Documented in research.md Part 17-18
+
+---
+
+## ⏳ Remaining Work
+
+### Issue 1: Resize Jitter
+- Preview pattern implemented
+- Awaiting Oracle consultation response
+- Multiple approaches tested
+
+### Issue 2: Preview Not Visible When Growing
+- SwiftUI .overlay() clipping
+- Needs AppKit solution or Oracle guidance
+
+### Future: Dynamic Metadata Area
+- Grow with window width
+- Reduce scrolling at larger sizes
+- Spec ready, deferred
+
+---
+
+## Session Stats
+
+**Duration:** ~8 hours
+**Commits:** ~25 commits
+**Major Fixes:** 2 critical bugs solved
+**User Contributions:** Exceptional debugging and insights
+
+**Your detective work was instrumental in finding both issues!** 🎉
+# Cluster Left Edge Constraint Investigation
+
+## Problem Statement
+Window cluster can reach right edge of monitor but NOT left edge.
+
+**Observations:**
+- Individual VIDEO window: Can reach left edge ✅
+- Individual other windows: Can reach left/right edges ✅
+- Cluster: Can reach RIGHT edge ✅
+- Cluster: CANNOT reach LEFT edge ❌ (stops prematurely)
+
+## Test Plan
+
+### Test 1: Pre-Resize Build (Commit d293e95)
+**Built:** Pre-resize version with only 2x scaleEffect
+**Location:** `/Users/hank/Library/Developer/Xcode/DerivedData/.../MacAmp.app`
+
+**Steps:**
+1. Launch pre-resize build
+2. Create cluster (Main + EQ + Playlist + VIDEO all docked)
+3. Drag cluster to LEFT edge
+4. Record: Can it reach x=0? Or does it stop early?
+
+**Result:** ___ (User to test)
+
+### Test 2: Current Build (Commit f165a3b)
+**Built:** Current with full resize implementation
+
+**Steps:**
+1. Launch current build
+2. Create cluster
+3. Drag to left edge
+4. Record: Can it reach x=0?
+
+**Result:** ___ (Known - CANNOT reach left edge)
+
+## Analysis
+
+### If Pre-Resize ALSO Can't Reach Left Edge:
+→ **Pre-existing WindowSnapManager bug**
+→ Not caused by our resize work
+→ Investigate SnapUtils.swift cluster snapping logic
+→ May be related to screen coordinate calculations
+
+### If Pre-Resize CAN Reach Left Edge:
+→ **Regression introduced by resize work**
+→ Check what changed in WindowSnapManager integration
+→ Check if VIDEO window size changes affect cluster bounds
+→ Review makeVideoDockingContext() logic
+
+## Suspect Code
+
+### SnapUtils.snapWithinUnion
+```swift
+static func snapWithinUnion(_ a: Box, union bound: BoundingBox, regions: [Box]) -> Diff {
+    var diff = snapWithin(a, bound)
+    // ... checks if candidate intersects with regions
+    // Might be preventing left edge if VIDEO window size causes intersection
+}
+```
+
+### WindowSnapManager Cluster Movement
+```swift
+// Move cluster by user delta
+for id in clusterIDs where id != movedID {
+    w.setFrameOrigin(NSPoint(x: origin.x + userDelta.x, y: origin.y + userDelta.y))
+}
+
+// Then snap the whole cluster
+let diffWithin = SnapUtils.snapWithinUnion(groupBox, union: virtualSpace.bounds, regions: virtualSpace.screenBoxes)
+```
+
+**Theory:** `screenBoxes` or `snapWithinUnion` may have asymmetric behavior
+
+## Next Steps
+
+1. User tests pre-resize build (d293e95)
+2. Report if cluster reaches left edge: YES/NO
+3. Based on result, investigate appropriate code area
+4. Fix identified issue
+5. Verify fix with cluster movement tests
+
+---
+
+**Status:** Awaiting pre-resize test results
+**Current Build:** Pre-resize version ready at d293e95
+**Return Command:** `git checkout feature/video-milkdrop-windows`
