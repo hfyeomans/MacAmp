@@ -2777,6 +2777,194 @@ let scaledIndex = (1.0 - scale) * linearIndex + scale * logIndex
 
 **Result:** App never crashes, degrades gracefully with invisible fallbacks.
 
+### 9. Hybrid AppKit/SwiftUI Architecture: When NSWindowController is Correct
+
+**The Problem:** SwiftUI WindowGroup has fundamental limitations for multi-window apps requiring:
+- Singleton window guarantees
+- NSWindow delegate control (for magnetic docking)
+- Close-to-hide behavior (not auto-destroy)
+- Menu synchronization without duplicate windows
+
+**Critical Discovery (November 2025):**
+
+After implementing magnetic window docking with WindowSnapManager, an Oracle consultation suggested migrating to SwiftUI Windows for "modern patterns." However, re-consulting the Oracle with full historical context from the magnetic-docking implementation revealed this was an **oversight**.
+
+**WindowGroup Limitations (NOT fixed in macOS 15/26):**
+```swift
+// ❌ WindowGroup creates duplicates, not singletons
+WindowGroup("Main", id: "main") {
+    MainWindowView()
+}
+// User clicks "Window > Show Main Window" → Creates NEW instance!
+// Menu sync broken, snap state lost, position forgotten
+
+// ❌ WindowGroup auto-destroys on close
+// Cannot intercept close to hide instead of destroy
+
+// ❌ WindowGroup doesn't expose NSWindow early enough
+// WindowSnapManager needs delegate access during window creation
+```
+
+**The Correct Pattern:**
+```swift
+// ✅ NSWindowController for singleton windows with delegate control
+@MainActor
+class WindowCoordinator: Observable {
+    private var mainWindowController: NSWindowController
+    private var eqWindowController: NSWindowController
+    private var playlistWindowController: NSWindowController
+
+    init() {
+        // Manual creation guarantees singletons
+        // Direct delegate access for WindowSnapManager
+        // Full lifecycle control (close-to-hide)
+    }
+}
+
+// ✅ Placeholder WindowGroup for SwiftUI App lifecycle
+@main
+struct MacAmpApp: App {
+    var body: some Scene {
+        // Satisfies SwiftUI's requirement for main scene
+        WindowGroup(id: "main-placeholder") {
+            EmptyView()
+                .frame(width: 0, height: 0)
+                .hidden()
+        }
+        .defaultLaunchBehavior(.suppressed)
+        .restorationBehavior(.disabled)
+        .defaultSize(width: 0, height: 0)
+
+        // Only ancillary scenes use WindowGroup
+        WindowGroup("Preferences", id: "preferences") {
+            PreferencesView()
+        }
+        .defaultLaunchBehavior(.suppressed)
+    }
+}
+```
+
+**Key Insight:** This is NOT fighting SwiftUI patterns—it's the **recommended hybrid pattern** for apps requiring AppKit-level window control. Apple's own apps (Xcode, Final Cut Pro) use this approach.
+
+**When to Use NSWindowController:**
+- Magnetic window docking/snapping
+- Singleton window enforcement
+- Custom window delegates
+- Close-to-hide behavior
+- Window clustering
+
+**When to Use SwiftUI WindowGroup:**
+- Standard document-based apps
+- Multi-instance windows (no singleton requirement)
+- Apps without custom window lifecycle needs
+- Simple preferences/settings panels
+
+### 10. Oracle Consultation Methodology: Multi-Turn with Historical Context
+
+**The Problem:** An Oracle (AI assistant like Codex) may make recommendations without full awareness of project-specific constraints discovered during earlier implementation phases.
+
+**Real-World Example:**
+
+1. **November 2025 - Magnetic Docking Implementation:**
+   - 3 independent Oracle reviews
+   - Extensively documented WindowGroup limitations
+   - Chose NSWindowController for singleton guarantees
+   - Risk level: HIGH (8/10), Confidence: 70%
+
+2. **Later - Release Build Assessment:**
+   - Oracle suggested "migrate to SwiftUI Windows for modern patterns"
+   - Rated architecture 6/10 (technical debt)
+   - Recommended @SceneStorage, scene-based lifecycle
+
+3. **Re-consultation with Full Context:**
+   - Presented complete historical documentation
+   - **Oracle completely reversed recommendation**
+   - Acknowledged earlier suggestion was "oversight"
+   - Validated NSWindowController as correct architecture
+
+**Oracle's Key Statement:**
+> "You're absolutely right to call out the contradiction. The later comment that floated 'use SwiftUI Window scenes' was my mistake—not a reflection of new APIs. The earlier warning stands."
+
+**Best Practices for Oracle Consultation:**
+
+```bash
+# ❌ WRONG: Ask Oracle without context
+codex "@CurrentFile.swift Should I migrate to SwiftUI Windows?"
+
+# ✅ RIGHT: Include historical decision context
+codex "@CurrentFile.swift @tasks/magnetic-docking/CODEX_REVIEW.md @tasks/magnetic-docking/state.md
+Review the recommendation to migrate to SwiftUI Windows.
+Historical context shows WindowGroup was rejected for singleton guarantees.
+Did macOS 15/26 fix this? What specific APIs would enable migration?"
+```
+
+**Critical Questions to Ask:**
+1. Did newer APIs fix the original problem?
+2. What specific features enable the new approach?
+3. Does migration provide concrete benefits, or just "modern patterns"?
+4. What would migration break in existing functionality?
+5. Is perceived "technical debt" actually correct architecture for requirements?
+
+**Lesson:** Always challenge architectural recommendations with project-specific constraints. Include historical decision rationale when consulting Oracles. Oracles have limited context and may suggest "improvements" that ignore critical requirements.
+
+### 11. Technical Debt vs Correct Architecture: Validation Framework
+
+**The Problem:** Code that appears to "fight framework patterns" may actually be the correct approach for specific requirements.
+
+**Before Oracle Re-consultation:**
+```
+Assessment: 6/10 - "Architecture accumulates technical debt"
+Issues identified:
+- Placeholder WindowGroup (empty, hidden)
+- Manual NSWindow management
+- No ScenePhase awareness for main UI
+- Custom frame persistence logic
+```
+
+**After Oracle Re-consultation with Full Context:**
+```
+Assessment: 8/10 - "Correct architecture for requirements"
+Validation:
+- Placeholder WindowGroup: NECESSARY for SwiftUI App lifecycle
+- Manual NSWindow: REQUIRED for magnetic docking
+- No ScenePhase: ACCEPTABLE (main UI isn't SwiftUI scene)
+- Custom persistence: APPROPRIATE for NSWindow frames
+```
+
+**Validation Checklist:**
+
+| Perceived Debt | Question | If YES → | If NO → |
+|---------------|----------|----------|---------|
+| Placeholder/empty scene | Does it satisfy framework requirement? | Necessary pattern | Actual debt |
+| Manual lifecycle management | Does feature require it? | Required architecture | Over-engineering |
+| Custom state persistence | Does framework provide equivalent? | Migrate to framework | Keep custom |
+| Non-standard patterns | Do requirements mandate it? | Correct for use case | Technical debt |
+
+**Real Example:**
+```swift
+// This LOOKS like debt:
+WindowGroup(id: "main-placeholder") {
+    EmptyView().hidden()
+}
+.defaultLaunchBehavior(.suppressed)
+
+// But it's NECESSARY because:
+// 1. SwiftUI App requires at least one scene
+// 2. Main windows are NSWindows (magnetic docking requirement)
+// 3. Without placeholder, SwiftUI auto-opens Preferences
+// 4. Modifiers prevent unwanted behavior
+
+// This is NOT debt to eliminate—it's correct hybrid pattern
+```
+
+**Key Insight:** Before labeling code as "technical debt," verify:
+1. What requirement does this pattern satisfy?
+2. Does the framework provide an alternative that meets ALL requirements?
+3. What would break if you "fix" it?
+4. Has the original decision been documented with rationale?
+
+**Action:** When you identify "debt," trace back to the original implementation decision. If requirements haven't changed and the pattern still satisfies them, it's not debt—it's correct architecture.
+
 ---
 
 ## Quick Reference
@@ -2892,9 +3080,19 @@ When building your next retro macOS app:
 **Document Status:** Production Ready
 **Maintenance:** Update when new patterns/pitfalls discovered
 **Owner:** MacAmp Development Team
-**Last Updated:** 2025-11-07
+**Last Updated:** 2025-11-16
 
 **Recent Additions:**
+- **Hybrid AppKit/SwiftUI Architecture & Oracle Consultation Patterns** (Nov 16, 2025) - Critical architectural validation
+  - WindowGroup singleton problem NOT fixed in macOS 15/26 (Oracle confirmed)
+  - NSWindowController is CORRECT for magnetic docking apps (not technical debt)
+  - Placeholder WindowGroup pattern: NECESSARY for SwiftUI App lifecycle compliance
+  - .defaultLaunchBehavior(.suppressed) + .restorationBehavior(.disabled) for hidden scenes
+  - Oracle multi-turn consultation with historical context methodology
+  - Technical debt vs correct architecture validation framework
+  - Oracle oversight detection and challenge patterns
+  - Saved 4-6 weeks of unnecessary migration work through proper validation
+  - Grade change: 6/10 (perceived debt) → 8/10 (correct architecture)
 - **Video/Milkdrop Window Patterns** (Nov 15, 2025) - Complete multi-window video integration
   - Two-piece sprite extraction (GEN.bmp letters split into TOP + BOTTOM)
   - Size2D quantized resize model (25×29px segments)

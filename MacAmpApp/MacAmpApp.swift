@@ -54,7 +54,21 @@ struct MacAmpApp: App {
     var body: some Scene {
         // PHASE 1A: UnifiedDockView replaced by WindowCoordinator
         // 3 independent NSWindows created manually in WindowCoordinator.init()
-        // Keep Settings window for preferences
+        // Main windows are NSWindows, not SwiftUI Windows
+
+        // ARCHITECTURAL FIX: Provide a "main" SwiftUI Window scene
+        // This satisfies SwiftUI's requirement for at least one main scene
+        // The actual UI is in NSWindows created by WindowCoordinator
+        WindowGroup(id: "main-placeholder") {
+            EmptyView()
+                .frame(width: 0, height: 0)
+                .hidden()
+        }
+        .defaultLaunchBehavior(.suppressed)
+        .restorationBehavior(.disabled)
+        .defaultSize(width: 0, height: 0)
+        .windowResizability(.contentSize)
+
         Settings {
             EmptyView()
         }
@@ -66,6 +80,8 @@ struct MacAmpApp: App {
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)
         .defaultPosition(.center)
+        .defaultLaunchBehavior(.suppressed)
+        .restorationBehavior(.disabled)
 
         // Commands are defined once here and apply to all window groups
         .commands {

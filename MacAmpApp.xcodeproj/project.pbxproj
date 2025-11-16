@@ -516,6 +516,7 @@
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = "";
 				"DEVELOPMENT_TEAM[sdk=macosx*]" = AC3LGVEJJ8;
+				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = MacAmpApp/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = MacAmp;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.music";
