@@ -53,7 +53,7 @@ final class StreamPlayer: NSObject, @preconcurrency AVPlayerItemMetadataOutputPu
 
     // MARK: - Playback Control
 
-    /// Play a radio station (for favorites menu - Phase 5+)
+    /// Play a radio station (for favorites menu)
     func play(station: RadioStation) async {
         currentStation = station
         error = nil
@@ -107,7 +107,7 @@ final class StreamPlayer: NSObject, @preconcurrency AVPlayerItemMetadataOutputPu
     // MARK: - Observers
 
     private func setupObservers() {
-        // Observe playback status (Oracle: use RunLoop.main for @MainActor)
+        // Observe playback status (use RunLoop.main for @MainActor safety)
         statusObserver = player.publisher(for: \.timeControlStatus)
             .receive(on: RunLoop.main)
             .sink { [weak self] status in
@@ -131,7 +131,7 @@ final class StreamPlayer: NSObject, @preconcurrency AVPlayerItemMetadataOutputPu
     }
 
     private func setupItemStatusObserver(for item: AVPlayerItem) {
-        // Oracle: Cancel old observer before new one
+        // Cancel old observer before creating new one
         itemStatusObserver?.cancel()
 
         // Observe item status for error detection

@@ -73,9 +73,7 @@ struct WinampEqualizerWindow: View {
                                 width: WinampSizes.equalizer.width,
                                 height: WinampSizes.equalizer.height)
 
-                // Title bar with "Winamp Equalizer" text
-                // Make ONLY the title bar draggable using custom drag (magnetic snapping)
-                // CRITICAL: Apply .at() to drag handle itself, not content inside (Oracle fix)
+                // Title bar - apply .at() to drag handle itself for proper positioning
                 WinampTitlebarDragHandle(windowKind: .equalizer, size: CGSize(width: 275, height: 14)) {
                     SimpleSpriteImage(isWindowActive ? "EQ_TITLE_BAR_SELECTED" : "EQ_TITLE_BAR",
                                     width: 275,

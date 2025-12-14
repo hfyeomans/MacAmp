@@ -95,15 +95,15 @@ extension SkinMetadata {
             bundleURL = Bundle.main.bundleURL
         }
 
-        NSLog("🔍 Bundle path: \(bundleURL.path)")
-        NSLog("🔍 Bundle identifier: \(Bundle.main.bundleIdentifier ?? "unknown")")
-        NSLog("🔍 Resource URL: \(Bundle.main.resourceURL?.path ?? "nil")")
+        AppLog.debug(.skin, "Bundle path: \(bundleURL.path)")
+        AppLog.debug(.skin, "Bundle identifier: \(Bundle.main.bundleIdentifier ?? "unknown")")
+        AppLog.debug(.skin, "Resource URL: \(Bundle.main.resourceURL?.path ?? "nil")")
 
         // SPM places resources directly at bundle root, not in subdirectories
         // Use direct path construction instead of url(forResource:withExtension:)
         func findSkin(named name: String) -> URL? {
             let filename = "\(name).wsz"
-            NSLog("🔍 Searching for bundled skin: \(filename)")
+            AppLog.debug(.skin, "Searching for bundled skin: \(filename)")
 
             func isUsableSkin(at url: URL) -> Bool {
                 var isDirectory: ObjCBool = false
@@ -117,23 +117,23 @@ extension SkinMetadata {
 
             // Construct direct path to bundle root
             let bundleRootURL = bundleURL.appendingPathComponent(filename)
-            NSLog("🔍 Checking path: \(bundleRootURL.path)")
+            AppLog.debug(.skin, "Checking path: \(bundleRootURL.path)")
 
             if isUsableSkin(at: bundleRootURL) {
-                NSLog("✅ Found \(filename) at: \(bundleRootURL.path)")
+                AppLog.info(.skin, "Found \(filename) at: \(bundleRootURL.path)")
                 return bundleRootURL
             }
 
             // Fallback: Try Skins subdirectory (for cases where SPM nests resources)
             let skinsURL = bundleURL.appendingPathComponent("Skins").appendingPathComponent(filename)
-            NSLog("🔍 Checking fallback path: \(skinsURL.path)")
+            AppLog.debug(.skin, "Checking fallback path: \(skinsURL.path)")
 
             if isUsableSkin(at: skinsURL) {
-                NSLog("✅ Found \(filename) in Skins/: \(skinsURL.path)")
+                AppLog.info(.skin, "Found \(filename) in Skins/: \(skinsURL.path)")
                 return skinsURL
             }
 
-            NSLog("❌ Skin not found in bundle: \(filename)")
+            AppLog.error(.skin, "Skin not found in bundle: \(filename)")
             return nil
         }
 
@@ -207,9 +207,9 @@ extension SkinMetadata {
             ))
         }
 
-        NSLog("🎁 Total bundled skins found: \(skins.count)")
+        AppLog.info(.skin, "Total bundled skins found: \(skins.count)")
         for skin in skins {
-            NSLog("  📦 \(skin.name) [\(skin.id)] -> \(skin.url.path)")
+            AppLog.debug(.skin, "  \(skin.name) [\(skin.id)] -> \(skin.url.path)")
         }
 
         return skins

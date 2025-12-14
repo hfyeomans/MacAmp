@@ -261,11 +261,11 @@ final class AudioPlayer {
 
         let duplicateInPlaylist = playlist.contains { $0.url.standardizedFileURL == normalizedURL }
         if duplicateInPlaylist || pendingTrackURLs.contains(normalizedURL) {
-            print("AudioPlayer: Track already pending or in playlist: \(normalizedURL.lastPathComponent)")
+            AppLog.debug(.audio, "Track already pending or in playlist: \(normalizedURL.lastPathComponent)")
             return
         }
 
-        print("AudioPlayer: Adding track from \(normalizedURL.lastPathComponent)")
+        AppLog.debug(.audio, "Adding track from \(normalizedURL.lastPathComponent)")
         pendingTrackURLs.insert(normalizedURL)
 
         let placeholder = Track(
@@ -278,7 +278,7 @@ final class AudioPlayer {
         let shouldAutoplay = currentTrack == nil
 
         playlist.append(placeholder)
-        print("AudioPlayer: Queued placeholder '\(placeholder.title)' (total: \(playlist.count) tracks)")
+        AppLog.debug(.audio, "Queued placeholder '\(placeholder.title)' (total: \(playlist.count) tracks)")
 
         if shouldAutoplay {
             playTrack(track: placeholder)
@@ -288,16 +288,16 @@ final class AudioPlayer {
             guard let self else { return }
             defer { self.pendingTrackURLs.remove(normalizedURL) }
 
-            print("DEBUG AudioPlayer: Loading metadata for \(normalizedURL.lastPathComponent)")
+            AppLog.debug(.audio, "Loading metadata for \(normalizedURL.lastPathComponent)")
             let track = await self.loadTrackMetadata(url: normalizedURL)
-            print("DEBUG AudioPlayer: Metadata loaded - title: '\(track.title)', artist: '\(track.artist)', duration: \(track.duration)s")
+            AppLog.debug(.audio, "Metadata loaded - title: '\(track.title)', artist: '\(track.artist)', duration: \(track.duration)s")
 
             if let index = self.playlist.firstIndex(where: { $0.id == placeholder.id }) {
-                print("DEBUG AudioPlayer: Updating placeholder at index \(index)")
+                AppLog.debug(.audio, "Updating placeholder at index \(index)")
                 self.playlist[index] = track
 
                 if self.currentTrack?.id == placeholder.id {
-                    print("DEBUG AudioPlayer: Updating current track metadata")
+                    AppLog.debug(.audio, "Updating current track metadata")
                     self.currentTrack = track
                     self.currentTitle = "\(track.title) - \(track.artist)"
                     self.currentDuration = track.duration
@@ -307,11 +307,11 @@ final class AudioPlayer {
                     self.externalPlaybackHandler?(track)
                 }
             } else if !self.playlist.contains(where: { $0.url.standardizedFileURL == normalizedURL }) {
-                print("DEBUG AudioPlayer: Appending track to playlist")
+                AppLog.debug(.audio, "Appending track to playlist")
                 self.playlist.append(track)
             }
 
-            print("DEBUG AudioPlayer: Added '\(track.title)' to playlist (total: \(self.playlist.count) tracks)")
+            AppLog.debug(.audio, "Added '\(track.title)' to playlist (total: \(self.playlist.count) tracks)")
         }
     }
 
@@ -320,16 +320,13 @@ final class AudioPlayer {
     func playTrack(track: Track) {
         // Guard against stream URLs - AudioPlayer can only play local files
         guard !track.isStream else {
-            print("ERROR: AudioPlayer cannot play internet radio streams.")
-            print("       Stream URL: \(track.url)")
-            print("       Use PlaybackCoordinator to route streams to StreamPlayer.")
+            AppLog.error(.audio, "Cannot play internet radio streams. Stream URL: \(track.url). Use PlaybackCoordinator to route streams to StreamPlayer.")
             return
         }
 
         updatePlaylistPosition(with: track)
 
-        // CRITICAL FIX (Oracle identified): Invalidate seekID BEFORE stopping
-        // This prevents the completion handler from calling nextTrack() and re-scheduling audio
+        // Invalidate seekID BEFORE stopping to prevent completion handler from re-scheduling audio
         currentSeekID = UUID()  // Invalidate any pending completion handlers
         seekGuardActive = true  // Extra protection
 
@@ -354,7 +351,7 @@ final class AudioPlayer {
         seekGuardActive = false
         trackHasEnded = false  // Reset playlist end flag
 
-        print("AudioPlayer: Playing track '\(track.title)'")
+        AppLog.info(.audio, "Playing track '\(track.title)'")
 
         // Detect media type and route appropriately
         let mediaType = detectMediaType(url: track.url)
@@ -366,7 +363,7 @@ final class AudioPlayer {
                 // Switching FROM video to audio - cleanup video
                 cleanupVideoPlayer()
                 videoMetadataString = ""
-                print("AudioPlayer: Switching from video to audio - cleanup complete")
+                AppLog.debug(.audio, "Switching from video to audio - cleanup complete")
             }
             // Note: Audio cleanup happens in loadVideoFile() via playerNode.stop()
         }
@@ -402,7 +399,7 @@ final class AudioPlayer {
         playerNode.stop()
         progressTimer?.invalidate()
 
-        // Oracle Grade A: Use shared cleanup for old video player
+        // Clean up any existing video player
         cleanupVideoPlayer()
 
         // Create video player
@@ -423,7 +420,7 @@ final class AudioPlayer {
             }
         }
 
-        // Setup time observer BEFORE play (Oracle Grade A requirement)
+        // Setup time observer BEFORE play
         setupVideoTimeObserver()
 
         // Start video playback
@@ -434,7 +431,7 @@ final class AudioPlayer {
         isPlaying = true
         isPaused = false
 
-        NSLog("📺 AudioPlayer: Loading video file: \(url.lastPathComponent)")
+        AppLog.debug(.audio, "Loading video file: \(url.lastPathComponent)")
 
         // Extract and format video metadata for display
         Task { @MainActor in
@@ -463,19 +460,19 @@ final class AudioPlayer {
 
                 // Winamp format: "filename (WMV): Video: 1280x720"
                 videoMetadataString = "\(filename) (\(videoType)): Video: \(width)x\(height)"
-                NSLog("📺 Video metadata: \(videoMetadataString)")
+                AppLog.debug(.audio, "Video metadata: \(videoMetadataString)")
             } else {
                 // No video track found
                 videoMetadataString = "\(filename) (\(videoType)): Video: Unknown"
-                NSLog("📺 Video metadata (no track): \(videoMetadataString)")
+                AppLog.debug(.audio, "Video metadata (no track): \(videoMetadataString)")
             }
         } catch {
             videoMetadataString = "\(filename) (\(videoType)): Video: Unknown"
-            NSLog("⚠️ Failed to load video metadata: \(error)")
+            AppLog.warn(.audio, "Failed to load video metadata: \(error)")
         }
     }
 
-    // MARK: - Video Time Observer (Part 21 - Oracle Grade A)
+    // MARK: - Video Time Observer
 
     /// Setup periodic time observer for video playback
     /// Updates currentTime, currentDuration, AND playbackProgress (all three required)
@@ -503,7 +500,7 @@ final class AudioPlayer {
                 }
             }
         }
-        NSLog("📺 Video time observer setup")
+        AppLog.debug(.audio, "Video time observer setup")
     }
 
     /// Teardown video time observer to prevent memory leaks
@@ -514,7 +511,7 @@ final class AudioPlayer {
         videoTimeObserver = nil
     }
 
-    /// Shared cleanup for all video resources (Oracle recommendation)
+    /// Shared cleanup for all video resources
     private func cleanupVideoPlayer() {
         tearDownVideoTimeObserver()
         if let observer = videoEndObserver {
@@ -523,7 +520,7 @@ final class AudioPlayer {
         }
         videoPlayer?.pause()
         videoPlayer = nil
-        NSLog("📺 Video player cleanup complete")
+        AppLog.debug(.audio, "Video player cleanup complete")
     }
 
     /// Private: Load audio file for playback (does NOT modify playlist)
@@ -542,7 +539,7 @@ final class AudioPlayer {
             // Update audio properties synchronously
             updateAudioProperties(for: url)
         } catch {
-            print("AudioEngine: Failed to open file: \(error)")
+            AppLog.error(.audio, "Failed to open file: \(error)")
         }
     }
 
@@ -562,7 +559,7 @@ final class AudioPlayer {
 
             return Track(url: url, title: title, artist: artist, duration: duration)
         } catch {
-            print("AudioPlayer: Failed to load metadata for \(url.lastPathComponent): \(error)")
+            AppLog.warn(.audio, "Failed to load metadata for \(url.lastPathComponent): \(error)")
             return Track(url: url, title: url.lastPathComponent, artist: "Unknown", duration: 0.0)
         }
     }
@@ -584,27 +581,26 @@ final class AudioPlayer {
                             // Channel count
                             let channelsPerFrame = streamDesc.mChannelsPerFrame
                             self.channelCount = Int(channelsPerFrame)
-                            print("AudioPlayer: Detected \(channelsPerFrame) channel(s) - \(channelsPerFrame == 1 ? "Mono" : "Stereo")")
+                            AppLog.debug(.audio, "Detected \(channelsPerFrame) channel(s) - \(channelsPerFrame == 1 ? "Mono" : "Stereo")")
 
                             // Sample rate
                             let sampleRateHz = Int(streamDesc.mSampleRate)
                             self.sampleRate = sampleRateHz
-                            print("AudioPlayer: Sample rate: \(sampleRateHz) Hz (\(sampleRateHz/1000) kHz)")
+                            AppLog.debug(.audio, "Sample rate: \(sampleRateHz) Hz (\(sampleRateHz/1000) kHz)")
                         }
                     }
 
                     // Bitrate (convert from bits per second to kbps)
                     let bitrateKbps = Int(estimatedDataRate / 1000)
                     self.bitrate = bitrateKbps
-                    print("AudioPlayer: Bitrate: \(bitrateKbps) kbps")
+                    AppLog.debug(.audio, "Bitrate: \(bitrateKbps) kbps")
                 }
             } catch {
-                print("AudioPlayer: Failed to load audio properties: \(error)")
+                AppLog.warn(.audio, "Failed to load audio properties: \(error)")
             }
         }
     }
 
-    // Removed: deprecated loadTrack() - no callers exist, use addTrack() instead (Oracle cleanup)
 
     func play() {
         // If playlist has ended, restart from the beginning
@@ -616,20 +612,20 @@ final class AudioPlayer {
         // Handle video playback
         if currentMediaType == .video {
             guard let player = videoPlayer else {
-                print("AudioPlayer: No video loaded to play.")
+                AppLog.warn(.audio, "No video loaded to play.")
                 return
             }
             player.play()
             transition(to: .playing)
             isPlaying = true
             isPaused = false
-            print("AudioPlayer: Play (Video)")
+            AppLog.debug(.audio, "Play (Video)")
             return
         }
 
         // Audio playback
         guard let file = audioFile else {
-            print("AudioPlayer: No track loaded to play.")
+            AppLog.warn(.audio, "No track loaded to play.")
             return
         }
 
@@ -650,7 +646,7 @@ final class AudioPlayer {
         startProgressTimer()
         transition(to: .playing)
         seekGuardActive = false
-        print("AudioPlayer: Play")
+        AppLog.debug(.audio, "Play")
     }
 
     func pause() {
@@ -660,7 +656,7 @@ final class AudioPlayer {
             transition(to: .paused)
             isPlaying = false
             isPaused = true
-            print("AudioPlayer: Pause (Video)")
+            AppLog.debug(.audio, "Pause (Video)")
             return
         }
 
@@ -669,18 +665,18 @@ final class AudioPlayer {
         playerNode.pause()
         transition(to: .paused)
         seekGuardActive = false
-        print("AudioPlayer: Pause")
+        AppLog.debug(.audio, "Pause")
     }
 
     func stop() {
         transition(to: .stopped(.manual))
 
-        // Handle video playback cleanup (Oracle Grade A: use shared cleanup)
+        // Handle video playback cleanup
         if currentMediaType == .video {
             cleanupVideoPlayer()
             videoMetadataString = ""
             currentMediaType = .audio
-            print("AudioPlayer: Stop (Video) - cleaned up AVPlayer")
+            AppLog.debug(.audio, "Stop (Video) - cleaned up AVPlayer")
         }
 
         // Audio playback cleanup
@@ -688,7 +684,7 @@ final class AudioPlayer {
         currentSeekID = UUID()
         let _ = scheduleFrom(time: 0, seekID: currentSeekID)  // Ignore return - reset to beginning
 
-        // Oracle fix: Clear currentTrack so UI doesn't show stale info during stream playback
+        // Clear currentTrack so UI doesn't show stale info during stream playback
         currentTrack = nil
         currentTitle = "No Track Loaded"
         currentTrackURL = nil
@@ -705,7 +701,7 @@ final class AudioPlayer {
         channelCount = 2
 
         seekGuardActive = false
-        print("AudioPlayer: Stop")
+        AppLog.debug(.audio, "Stop")
     }
 
     
@@ -726,7 +722,7 @@ final class AudioPlayer {
         bitrate = 0
         sampleRate = 0
         channelCount = 2
-        print("AudioPlayer: Eject - cleared playlist and reset playback state")
+        AppLog.info(.audio, "Eject - cleared playlist and reset playback state")
     }
 
     // Equalizer control methods
@@ -737,20 +733,20 @@ final class AudioPlayer {
         if !isEqOn && value != 0 {
             toggleEq(isOn: true)
         }
-        print("Set Preamp to \(value), EQ is \(isEqOn ? "ON" : "OFF")")
+        AppLog.debug(.audio, "Set Preamp to \(value), EQ is \(isEqOn ? "ON" : "OFF")")
     }
 
     func setEqBand(index: Int, value: Float) {
         guard index >= 0 && index < eqBands.count else { return }
         eqBands[index] = value
         eqNode.bands[index].gain = value
-        print("Set EQ Band \(index) to \(value)")
+        AppLog.debug(.audio, "Set EQ Band \(index) to \(value)")
     }
 
     func toggleEq(isOn: Bool) {
         isEqOn = isOn
         eqNode.bypass = !isOn
-        print("EQ is now \(isOn ? "On" : "Off")")
+        AppLog.debug(.audio, "EQ is now \(isOn ? "On" : "Off")")
     }
 
     // Presets
@@ -764,7 +760,7 @@ final class AudioPlayer {
         setPreamp(value: preset.preamp)
         for (i, g) in preset.bands.enumerated() { setEqBand(index: i, value: g) }
         toggleEq(isOn: true)
-        print("Applied EQ preset: \(preset.name)")
+        AppLog.info(.audio, "Applied EQ preset: \(preset.name)")
     }
 
     func getCurrentEQPreset(name: String) -> EQPreset {
@@ -776,14 +772,14 @@ final class AudioPlayer {
         guard !trimmedName.isEmpty else { return }
         let preset = getCurrentEQPreset(name: trimmedName)
         storeUserPreset(preset)
-        print("AudioPlayer: Saved user EQ preset '\(trimmedName)'")
+        AppLog.info(.audio, "Saved user EQ preset '\(trimmedName)'")
     }
 
     func deleteUserPreset(id: UUID) {
         if let index = userPresets.firstIndex(where: { $0.id == id }) {
             let removed = userPresets.remove(at: index)
             persistUserPresets()
-            print("AudioPlayer: Deleted user EQ preset '\(removed.name)'")
+            AppLog.info(.audio, "Deleted user EQ preset '\(removed.name)'")
         }
     }
 
@@ -791,7 +787,7 @@ final class AudioPlayer {
         do {
             let data = try Data(contentsOf: url)
             guard let eqfPreset = EQFCodec.parse(data: data) else {
-                print("AudioPlayer: Failed to parse EQF preset at \(url.lastPathComponent)")
+                AppLog.warn(.audio, "Failed to parse EQF preset at \(url.lastPathComponent)")
                 return
             }
             let suggestedName = eqfPreset.name?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -800,9 +796,9 @@ final class AudioPlayer {
             let preset = EQPreset(name: finalName, preamp: eqfPreset.preampDB, bands: eqfPreset.bandsDB)
             storeUserPreset(preset)
             applyEQPreset(preset)
-            print("AudioPlayer: Imported EQ preset '\(finalName)' from EQF")
+            AppLog.info(.audio, "Imported EQ preset '\(finalName)' from EQF")
         } catch {
-            print("AudioPlayer: Failed to load EQF preset: \(error)")
+            AppLog.error(.audio, "Failed to load EQF preset: \(error)")
         }
     }
 
@@ -810,7 +806,7 @@ final class AudioPlayer {
         guard let t = currentTrack else { return }
         let p = EqfPreset(name: t.title, preampDB: preamp, bandsDB: eqBands)
         perTrackPresets[t.url.absoluteString] = p
-        print("Saved per-track EQ preset for \(t.title)")
+        AppLog.debug(.audio, "Saved per-track EQ preset for \(t.title)")
         savePerTrackPresets()
     }
 
@@ -826,7 +822,7 @@ final class AudioPlayer {
                     self.appliedAutoPresetTrack = nil
                 }
             }
-            print("Applied per-track EQ preset for \(track.title)")
+            AppLog.debug(.audio, "Applied per-track EQ preset for \(track.title)")
         } else {
             generateAutoPreset(for: track)
         }
@@ -847,7 +843,7 @@ final class AudioPlayer {
     private func generateAutoPreset(for track: Track) {
         autoEQTask?.cancel()
         autoEQTask = nil
-        NSLog("AutoEQ: automatic analysis disabled, no preset generated for \(track.title)")
+        AppLog.debug(.audio, "AutoEQ: automatic analysis disabled, no preset generated for \(track.title)")
     }
 
     // MARK: - Preset persistence
@@ -857,7 +853,7 @@ final class AudioPlayer {
         let dir = base.appendingPathComponent("MacAmp", isDirectory: true)
         if !fm.fileExists(atPath: dir.path) {
             do { try fm.createDirectory(at: dir, withIntermediateDirectories: true) } catch {
-                print("Failed to create app support dir: \(error)")
+                AppLog.error(.audio, "Failed to create app support dir: \(error)")
             }
         }
         return dir
@@ -873,9 +869,9 @@ final class AudioPlayer {
             let data = try Data(contentsOf: url)
             let loaded = try JSONDecoder().decode([String: EqfPreset].self, from: data)
             perTrackPresets = loaded
-            print("Loaded \(loaded.count) per-track presets")
+            AppLog.debug(.audio, "Loaded \(loaded.count) per-track presets")
         } catch {
-            print("Failed to load per-track presets: \(error)")
+            AppLog.warn(.audio, "Failed to load per-track presets: \(error)")
         }
     }
 
@@ -885,7 +881,7 @@ final class AudioPlayer {
             let data = try JSONEncoder().encode(perTrackPresets)
             try data.write(to: url, options: .atomic)
         } catch {
-            print("Failed to save per-track presets: \(error)")
+            AppLog.warn(.audio, "Failed to save per-track presets: \(error)")
         }
     }
 
@@ -896,9 +892,9 @@ final class AudioPlayer {
             var decoded = try JSONDecoder().decode([EQPreset].self, from: data)
             decoded.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
             userPresets = decoded
-            print("AudioPlayer: Loaded \(decoded.count) user EQ presets")
+            AppLog.debug(.audio, "Loaded \(decoded.count) user EQ presets")
         } catch {
-            print("AudioPlayer: Failed to decode user EQ presets: \(error)")
+            AppLog.warn(.audio, "Failed to decode user EQ presets: \(error)")
             userPresets = []
         }
     }
@@ -908,7 +904,7 @@ final class AudioPlayer {
             let data = try JSONEncoder().encode(userPresets)
             UserDefaults.standard.set(data, forKey: userPresetDefaultsKey)
         } catch {
-            print("AudioPlayer: Failed to persist user EQ presets: \(error)")
+            AppLog.warn(.audio, "Failed to persist user EQ presets: \(error)")
         }
     }
 
@@ -980,9 +976,7 @@ final class AudioPlayer {
     /// Returns: true if audio was scheduled, false if track ended
     private func scheduleFrom(time: Double, seekID: UUID? = nil) -> Bool {
         guard let file = audioFile else {
-            #if DEBUG
-            NSLog("⚠️ scheduleFrom: No audio file loaded")
-            #endif
+            AppLog.warn(.audio, "scheduleFrom: No audio file loaded")
             return false
         }
 
@@ -1047,7 +1041,7 @@ final class AudioPlayer {
     private func startEngineIfNeeded() {
         if !audioEngine.isRunning {
             audioEngine.prepare()
-            do { try audioEngine.start() } catch { print("AudioEngine: start error: \(error)") }
+            do { try audioEngine.start() } catch { AppLog.error(.audio, "AudioEngine start error: \(error)") }
         }
     }
 
@@ -1072,7 +1066,6 @@ final class AudioPlayer {
         RunLoop.main.add(progressTimer!, forMode: .common)
     }
 
-    // Removed: printSpectrumFrequencyDistribution - unused debug code (Oracle cleanup)
 
     @MainActor
     private func updateVisualizerLevels(rms: [Float], spectrum: [Float], waveform: [Float]) {
@@ -1248,7 +1241,7 @@ final class AudioPlayer {
             guard let player = videoPlayer,
                   let duration = player.currentItem?.duration.seconds,
                   duration.isFinite else {
-                NSLog("⚠️ seekToPercent: No video player or invalid duration")
+                AppLog.warn(.audio, "seekToPercent: No video player or invalid duration")
                 return
             }
             let targetTime = percent * duration
@@ -1258,9 +1251,7 @@ final class AudioPlayer {
 
         // AUDIO SEEKING
         guard let file = audioFile else {
-            #if DEBUG
-            NSLog("⚠️ seekToPercent: No audio file loaded")
-            #endif
+            AppLog.warn(.audio, "seekToPercent: No audio file loaded")
             return
         }
 
@@ -1274,10 +1265,10 @@ final class AudioPlayer {
     }
 
     func seek(to time: Double, resume: Bool? = nil) {
-        // VIDEO SEEKING (Oracle Grade A - Part 21)
+        // VIDEO SEEKING
         if currentMediaType == .video {
             guard let player = videoPlayer else {
-                NSLog("⚠️ seek: Cannot seek - no video player loaded")
+                AppLog.warn(.audio, "seek: Cannot seek - no video player loaded")
                 return
             }
             let shouldPlay = resume ?? isPlaying
@@ -1310,16 +1301,14 @@ final class AudioPlayer {
                     }
                 }
             }
-            NSLog("📺 Video seek to \(time)s")
+            AppLog.debug(.audio, "Video seek to \(time)s")
             return  // Exit early for video
         }
 
         // AUDIO SEEKING
         // Guard: Ensure file is loaded before seeking
         guard let file = audioFile else {
-            #if DEBUG
-            NSLog("⚠️ seek: Cannot seek - no audio file loaded")
-            #endif
+            AppLog.warn(.audio, "seek: Cannot seek - no audio file loaded")
             return
         }
 

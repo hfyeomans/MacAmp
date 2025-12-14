@@ -18,7 +18,7 @@ struct WinampWindowConfigurator {
         window.isReleasedWhenClosed = false
 
         // DO NOT make entire window draggable - causes slider conflicts
-        // We'll use custom DragGesture on title bars only (Phase 1B)
+        // Custom DragGesture on title bars only
         window.isMovableByWindowBackground = false
 
         // Remove title bar appearance completely
@@ -33,7 +33,7 @@ struct WinampWindowConfigurator {
         // Allow window to be in front of other windows (baseline)
         window.level = .normal
 
-        // Allow window to be moved (via custom drag regions in Phase 1B)
+        // Allow window to be moved via custom drag regions
         window.isMovable = true
     }
 

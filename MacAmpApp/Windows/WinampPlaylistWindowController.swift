@@ -4,10 +4,7 @@ import SwiftUI
 @MainActor
 class WinampPlaylistWindowController: NSWindowController {
     convenience init(skinManager: SkinManager, audioPlayer: AudioPlayer, dockingController: DockingController, settings: AppSettings, radioLibrary: RadioStationLibrary, playbackCoordinator: PlaybackCoordinator, windowFocusState: WindowFocusState) {
-        // PHASE 4: Playlist window is user-resizable (not double-size)
-        // Use .resizable style mask to allow corner dragging
-        // Width: Fixed at 275 (Winamp design)
-        // Height: Variable 232-900 (user-controlled)
+        // Playlist window is user-resizable (width fixed at 275, height 232-900)
         let window = BorderlessWindow(
             contentRect: NSRect(x: 0, y: 0, width: 275, height: 232),
             styleMask: [.borderless, .resizable],  // Allow resizing!

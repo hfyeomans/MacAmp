@@ -12,7 +12,7 @@ final class WindowResizePreviewOverlay {
 
         // Create overlay window if needed
         if overlayWindow == nil {
-            print("🔷 Creating overlay window")
+            AppLog.debug(.window, "Creating overlay window")
             let overlay = NSWindow(
                 contentRect: .zero,
                 styleMask: [.borderless],
@@ -48,7 +48,7 @@ final class WindowResizePreviewOverlay {
         }
 
         overlay.orderFront(nil)
-        print("🔷 Preview shown at \(frame), size: \(previewSize)")
+        AppLog.debug(.window, "Preview shown at \(frame), size: \(previewSize)")
     }
 
     func update(previewSize: CGSize) {

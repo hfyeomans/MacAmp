@@ -1,5 +1,5 @@
 import AppKit
-import Observation  // ORACLE CODE QUALITY: Required for @Observable
+import Observation
 
 private struct PlaylistAttachmentSnapshot {
     let anchor: WindowKind
@@ -87,7 +87,7 @@ final class WindowCoordinator {
     private var lastPlaylistAttachment: PlaylistAttachmentSnapshot?
     private var lastVideoAttachment: VideoAttachmentSnapshot?  // NEW: Video attachment memory
 
-    // PHASE 3: Delegate multiplexers (must store as properties - NSWindow.delegate is weak!)
+    // Delegate multiplexers (must store as properties - NSWindow.delegate is weak)
     private var mainDelegateMultiplexer: WindowDelegateMultiplexer?
     private var eqDelegateMultiplexer: WindowDelegateMultiplexer?
     private var playlistDelegateMultiplexer: WindowDelegateMultiplexer?
@@ -170,7 +170,7 @@ final class WindowCoordinator {
         configureWindows()
         mapWindowsToKinds()
 
-        // PHASE 4: Set initial window sizes based on current double-size state
+        // Set initial window sizes based on current double-size state
         resizeMainAndEQWindows(
             doubled: settings.isDoubleSizeMode,
             animated: false,
@@ -203,27 +203,21 @@ final class WindowCoordinator {
         setupAlwaysOnTopObserver()
         debugLogWindowPositions(step: "after setupAlwaysOnTopObserver")
 
-        // PHASE 4: Observe for double-size changes
+        // Observe for double-size changes
         setupDoubleSizeObserver()
         debugLogWindowPositions(step: "after setupDoubleSizeObserver")
 
-        // NEW: Observe for video window visibility changes (Oracle fix)
+        // Observe for video window visibility changes
         setupVideoWindowObserver()
         debugLogWindowPositions(step: "after setupVideoWindowObserver")
 
-        // NEW: Observe for milkdrop window visibility changes (TASK 2 Day 7)
+        // Observe for milkdrop window visibility changes
         setupMilkdropWindowObserver()
         debugLogWindowPositions(step: "after setupMilkdropWindowObserver")
 
         // NOTE: setupVideoSizeObserver removed - Size2D managed by VideoWindowSizeState directly
 
-        // PHASE 2: Register windows with WindowSnapManager
-        // WindowSnapManager provides:
-        // - 15px magnetic snapping
-        // - Cluster detection (group movement)
-        // - Screen edge snapping
-        // - Multi-monitor support
-        // NOTE: register() no longer sets window.delegate (Phase 3 uses multiplexer)
+        // Register windows with WindowSnapManager for magnetic snapping and cluster movement
         if let main = mainWindow {
             WindowSnapManager.shared.register(window: main, kind: .main)
         }
@@ -242,10 +236,7 @@ final class WindowCoordinator {
         }
         debugLogWindowPositions(step: "after WindowSnapManager registration")
 
-        // PHASE 3: Set up delegate multiplexers
-        // Multiplexer pattern allows multiple delegates per window
-        // WindowSnapManager is first delegate, can add more later (resize, close, focus handlers)
-        // CRITICAL: Must store multiplexers as properties - NSWindow.delegate is weak!
+        // Set up delegate multiplexers (allows multiple delegates per window)
 
         // Main window multiplexer
         mainDelegateMultiplexer = WindowDelegateMultiplexer()
@@ -308,8 +299,7 @@ final class WindowCoordinator {
         debugLogWindowPositions(step: "after delegate multiplexer setup")
     }
 
-    // CRITICAL FIX #3: Always-on-top observer (Oracle P1 fix - no memory leak)
-    // Migrated from UnifiedDockView.swift lines 65-68
+    // Always-on-top observer using withObservationTracking for reactive updates
     private func setupAlwaysOnTopObserver() {
         // Cancel any existing observer
         alwaysOnTopTask?.cancel()
@@ -341,7 +331,7 @@ final class WindowCoordinator {
         videoSizeTask?.cancel()
     }
 
-    // PHASE 4: Double-size observer (Main + EQ only, not Playlist)
+    // Double-size observer (Main + EQ only, not Playlist)
     private func setupDoubleSizeObserver() {
         // Cancel any existing observer
         doubleSizeTask?.cancel()
@@ -363,8 +353,7 @@ final class WindowCoordinator {
         }
     }
 
-    // NEW: Video window visibility observer (Oracle fix - TASK 2 Day 6)
-    // Honors persisted showVideoWindow state and keeps window in sync
+    // Video window visibility observer - honors persisted showVideoWindow state
     private func setupVideoWindowObserver() {
         // Cancel any existing observer
         videoWindowTask?.cancel()
@@ -379,9 +368,7 @@ final class WindowCoordinator {
             } onChange: {
                 Task { @MainActor [weak self] in
                     guard let self else { return }
-                    // React to showVideoWindow changes
-                    // ORACLE FIX: Only show VIDEO window after initial windows are presented
-                    // This prevents VIDEO from appearing before Main/EQ/Playlist on startup
+                    // Only show VIDEO window after initial windows are presented
                     if self.settings.showVideoWindow {
                         if self.hasPresentedInitialWindows {
                             self.showVideo()
@@ -394,18 +381,11 @@ final class WindowCoordinator {
                 }
             }
         }
-
-        // ORACLE FIX: Do NOT apply initial state here during init
-        // VIDEO window will be shown in presentInitialWindows() if showVideoWindow is true
-        // This ensures VIDEO never appears before Main/EQ/Playlist
     }
 
-    // NEW: Milkdrop window visibility observer (TASK 2 Day 7)
-    // Honors persisted showMilkdropWindow state and keeps window in sync
+    // Milkdrop window visibility observer - honors persisted showMilkdropWindow state
     private func setupMilkdropWindowObserver() {
-        if settings.windowDebugLoggingEnabled {
-            print("🔵 WindowCoordinator: setupMilkdropWindowObserver() called")
-        }
+        AppLog.debug(.window, "setupMilkdropWindowObserver() called")
         // Cancel any existing observer
         milkdropWindowTask?.cancel()
 
@@ -419,12 +399,8 @@ final class WindowCoordinator {
             } onChange: {
                 Task { @MainActor [weak self] in
                     guard let self else { return }
-                    if self.settings.windowDebugLoggingEnabled {
-                        print("🔵 WindowCoordinator: showMilkdropWindow changed to \(self.settings.showMilkdropWindow)")
-                    }
-                    // React to showMilkdropWindow changes
-                    // ORACLE FIX: Only show Milkdrop window after initial windows are presented
-                    // This prevents Milkdrop from appearing before Main/EQ/Playlist on startup
+                    AppLog.debug(.window, "showMilkdropWindow changed to \(self.settings.showMilkdropWindow)")
+                    // Only show Milkdrop window after initial windows are presented
                     if self.settings.showMilkdropWindow {
                         if self.hasPresentedInitialWindows {
                             self.showMilkdrop()
@@ -437,10 +413,6 @@ final class WindowCoordinator {
                 }
             }
         }
-
-        // ORACLE FIX: Do NOT apply initial state here during init
-        // Milkdrop window will be shown in presentInitialWindows() if showMilkdropWindow is true
-        // This ensures Milkdrop never appears before Main/EQ/Playlist
     }
 
     // NOTE: setupVideoSizeObserver() and resizeVideoWindow() removed
@@ -714,9 +686,7 @@ final class WindowCoordinator {
             video.setFrameOrigin(origin)
         }
 
-        if settings.windowDebugLoggingEnabled {
-            print("[VIDEO DOCKING] anchor=\(context.anchor): targetOrigin=\(origin), actualFrame=\(video.frame)")
-        }
+        AppLog.debug(.window, "[VIDEO DOCKING] anchor=\(context.anchor): targetOrigin=\(origin), actualFrame=\(video.frame)")
     }
 
     func updateVideoWindowSize(to pixelSize: CGSize) {
@@ -726,13 +696,7 @@ final class WindowCoordinator {
         guard frame.size != pixelSize else { return }
 
         // DIAGNOSTIC: Log frame details to investigate left gap
-        if settings.windowDebugLoggingEnabled {
-            print("🔍 [VIDEO RESIZE] Before:")
-            print("   Frame: \(frame)")
-            print("   Origin: (\(frame.origin.x), \(frame.origin.y))")
-            print("   Size: \(frame.size)")
-            print("   ContentView frame: \(video.contentView?.frame ?? .zero)")
-        }
+        AppLog.debug(.window, "[VIDEO RESIZE] Before: Frame: \(frame), Origin: (\(frame.origin.x), \(frame.origin.y)), Size: \(frame.size), ContentView: \(video.contentView?.frame ?? .zero)")
 
         // Clamp origin to integral coordinates (fixes fractional positioning)
         let topLeft = NSPoint(
@@ -745,12 +709,7 @@ final class WindowCoordinator {
         video.setFrame(frame, display: true)
 
         // DIAGNOSTIC: Log after setFrame
-        if settings.windowDebugLoggingEnabled {
-            print("🔍 [VIDEO RESIZE] After:")
-            print("   Frame: \(video.frame)")
-            print("   Origin: (\(video.frame.origin.x), \(video.frame.origin.y))")
-            print("   Size: \(video.frame.size)")
-        }
+        AppLog.debug(.window, "[VIDEO RESIZE] After: Frame: \(video.frame), Origin: (\(video.frame.origin.x), \(video.frame.origin.y)), Size: \(video.frame.size)")
     }
 
     // MARK: - Window Visibility Control (AppKit Bridge)
@@ -854,10 +813,8 @@ final class WindowCoordinator {
             playlist.setFrameOrigin(origin)
         }
 
-        if settings.windowDebugLoggingEnabled {
-            let stage = animated ? "playlist move (animated)" : "playlist move"
-            print("[ORACLE] \(stage) anchor=\(context.anchor): targetOrigin=(x: \(origin.x), y: \(origin.y)), actualFrame=\(playlist.frame)")
-        }
+        let stage = animated ? "playlist move (animated)" : "playlist move"
+        AppLog.debug(.window, "[DOCKING] \(stage) anchor=\(context.anchor): targetOrigin=(x: \(origin.x), y: \(origin.y)), actualFrame=\(playlist.frame)")
     }
 
     private func logDoubleSizeDebug(
@@ -866,18 +823,17 @@ final class WindowCoordinator {
         playlistFrame: NSRect?,
         dockingContext: PlaylistDockingContext?
     ) {
-        guard settings.windowDebugLoggingEnabled else { return }
-        print("=== DOUBLE-SIZE DEBUG ===")
-        print("Main frame: \(mainFrame)")
-        print("EQ frame: \(eqFrame)")
-        print("Playlist frame: \(String(describing: playlistFrame))")
+        AppLog.debug(.window, "=== DOUBLE-SIZE DEBUG ===")
+        AppLog.debug(.window, "Main frame: \(mainFrame)")
+        AppLog.debug(.window, "EQ frame: \(eqFrame)")
+        AppLog.debug(.window, "Playlist frame: \(String(describing: playlistFrame))")
         if let context = dockingContext {
-            print("[ORACLE] Docking source: \(context.source.description), anchor=\(context.anchor), attachment=\(context.attachment.description)")
-            print("Action: Playlist WILL move with EQ (cluster-locked)")
+            AppLog.debug(.window, "[DOCKING] source: \(context.source.description), anchor=\(context.anchor), attachment=\(context.attachment.description)")
+            AppLog.debug(.window, "Action: Playlist WILL move with EQ (cluster-locked)")
         } else if playlistFrame == nil {
-            print("Docking detection: playlist window unavailable")
+            AppLog.debug(.window, "Docking detection: playlist window unavailable")
         } else {
-            print("Action: Playlist stays independent (no docking context)")
+            AppLog.debug(.window, "Action: Playlist stays independent (no docking context)")
         }
     }
 
@@ -887,21 +843,19 @@ final class WindowCoordinator {
         eqFrame: NSRect?,
         playlistFrame: NSRect?
     ) {
-        guard settings.windowDebugLoggingEnabled else { return }
-        print("[ORACLE] \(stage): main=\(String(describing: mainFrame)), eq=\(String(describing: eqFrame)), playlist=\(String(describing: playlistFrame))")
+        AppLog.debug(.window, "[DOCKING] \(stage): main=\(String(describing: mainFrame)), eq=\(String(describing: eqFrame)), playlist=\(String(describing: playlistFrame))")
     }
 
     private func debugLogWindowPositions(step: String) {
-        guard settings.windowDebugLoggingEnabled else { return }
-        print("🔍 \(step)")
+        AppLog.debug(.window, step)
 
         func describe(window: NSWindow?, label: String) {
             guard let window else {
-                print("  \(label): unavailable")
+                AppLog.debug(.window, "  \(label): unavailable")
                 return
             }
             let frame = window.frame
-            print("  \(label): origin=(x: \(frame.origin.x), y: \(frame.origin.y)) size=(w: \(frame.size.width), h: \(frame.size.height))")
+            AppLog.debug(.window, "  \(label): origin=(x: \(frame.origin.x), y: \(frame.origin.y)) size=(w: \(frame.size.width), h: \(frame.size.height))")
         }
 
         describe(window: mainWindow, label: "Main")
@@ -956,11 +910,7 @@ final class WindowCoordinator {
     }
 
     private func configureWindows() {
-        // ORACLE NOTE: Windows already created as borderless in controllers
-        // No additional style mask changes needed here
-        // This method can be removed or used for other window setup
-
-        // Optional: Additional window configuration
+        // Additional window configuration (windows already created as borderless in controllers)
         [mainWindow, eqWindow, playlistWindow, videoWindow, milkdropWindow].forEach { window in
             window?.level = .normal
             window?.collectionBehavior = [.managed, .participatesInCycle]
@@ -1002,14 +952,12 @@ final class WindowCoordinator {
             }
         }
 
-        if settings.windowDebugLoggingEnabled {
-            print("✅ Default positions set (should be touching with 0 spacing):")
-            if let main = mainWindow { print("  Main: \(main.frame)") }
-            if let eq = eqWindow { print("  EQ: \(eq.frame)") }
-            if let playlist = playlistWindow { print("  Playlist: \(playlist.frame)") }
-            if let video = videoWindow { print("  Video: \(video.frame)") }
-            if let milkdrop = milkdropWindow { print("  Milkdrop: \(milkdrop.frame)") }
-        }
+        AppLog.debug(.window, "Default positions set (should be touching with 0 spacing):")
+        if let main = mainWindow { AppLog.debug(.window, "  Main: \(main.frame)") }
+        if let eq = eqWindow { AppLog.debug(.window, "  EQ: \(eq.frame)") }
+        if let playlist = playlistWindow { AppLog.debug(.window, "  Playlist: \(playlist.frame)") }
+        if let video = videoWindow { AppLog.debug(.window, "  Video: \(video.frame)") }
+        if let milkdrop = milkdropWindow { AppLog.debug(.window, "  Milkdrop: \(milkdrop.frame)") }
     }
 
     /// Reset windows to default vertical stack (for testing double-size docking)
@@ -1047,12 +995,10 @@ final class WindowCoordinator {
         endSuppressingPersistence()
         schedulePersistenceFlush()
 
-        if settings.windowDebugLoggingEnabled {
-            print("✅ Windows reset to default vertical stack")
-            print("  Main: \(mainFrame)")
-            print("  EQ: \(eqFrame)")
-            print("  Playlist: \(playlistFrame)")
-        }
+        AppLog.debug(.window, "Windows reset to default vertical stack")
+        AppLog.debug(.window, "  Main: \(mainFrame)")
+        AppLog.debug(.window, "  EQ: \(eqFrame)")
+        AppLog.debug(.window, "  Playlist: \(playlistFrame)")
     }
 
     private func applyInitialWindowLayout() {
@@ -1205,8 +1151,7 @@ final class WindowCoordinator {
         isEQWindowVisible = true
         isPlaylistWindowVisible = true
 
-        // ORACLE FIX: Show VIDEO/Milkdrop if user had them open previously
-        // This ensures they appear AFTER Main/EQ/Playlist, not before
+        // Show VIDEO/Milkdrop if user had them open previously
         if settings.showVideoWindow {
             videoWindow?.orderFront(nil)
         }
@@ -1238,30 +1183,20 @@ final class WindowCoordinator {
     }
     // NEW: Video and Milkdrop window show/hide
     func showVideo() {
-        if settings.windowDebugLoggingEnabled {
-            print("🔵 WindowCoordinator: showVideo() called")
-        }
+        AppLog.debug(.window, "showVideo() called")
         videoWindow?.makeKeyAndOrderFront(nil)
     }
     func hideVideo() {
-        if settings.windowDebugLoggingEnabled {
-            print("🔵 WindowCoordinator: hideVideo() called")
-        }
+        AppLog.debug(.window, "hideVideo() called")
         videoWindow?.orderOut(nil)
     }
     func showMilkdrop() {
-        if settings.windowDebugLoggingEnabled {
-            print("🔵 WindowCoordinator: showMilkdrop() called, window exists: \(milkdropWindow != nil)")
-        }
+        AppLog.debug(.window, "showMilkdrop() called, window exists: \(milkdropWindow != nil)")
         milkdropWindow?.makeKeyAndOrderFront(nil)
-        if settings.windowDebugLoggingEnabled {
-            print("🔵 WindowCoordinator: milkdropWindow.isVisible: \(milkdropWindow?.isVisible ?? false)")
-        }
+        AppLog.debug(.window, "milkdropWindow.isVisible: \(milkdropWindow?.isVisible ?? false)")
     }
     func hideMilkdrop() {
-        if settings.windowDebugLoggingEnabled {
-            print("🔵 WindowCoordinator: hideMilkdrop() called")
-        }
+        AppLog.debug(.window, "hideMilkdrop() called")
         milkdropWindow?.orderOut(nil)
     }
 

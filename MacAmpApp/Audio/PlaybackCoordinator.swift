@@ -121,7 +121,7 @@ final class PlaybackCoordinator {
         }
     }
 
-    /// Play a radio station from favorites menu (Phase 5+)
+    /// Play a radio station from favorites menu
     func play(station: RadioStation) async {
         // Stop local file if playing
         audioPlayer.stop()
@@ -157,7 +157,7 @@ final class PlaybackCoordinator {
         isPaused = false
         currentSource = nil
         currentTitle = nil
-        currentTrack = nil  // Oracle: Clear so playlist highlighting resets
+        currentTrack = nil  // Clear so playlist highlighting resets
     }
 
     func togglePlayPause() {
@@ -186,7 +186,7 @@ final class PlaybackCoordinator {
             audioPlayer.play()
             isPlaying = audioPlayer.isPlaying
         case .radioStation:
-            // Oracle fix: Just resume, don't rebuild stream
+            // Just resume, don't rebuild stream
             streamPlayer.player.play()
             isPlaying = true
         case .none:
@@ -248,7 +248,7 @@ final class PlaybackCoordinator {
         }
     }
 
-    /// Update coordinator state when metadata loads (Oracle fix: don't replay)
+    /// Update coordinator state when metadata loads (don't replay)
     func updateTrackMetadata(_ track: Track) {
         // Check URL match (not ID - metadata loading creates new Track with different ID)
         guard let current = currentTrack, current.url == track.url else { return }

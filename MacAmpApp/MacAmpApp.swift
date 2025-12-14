@@ -38,8 +38,7 @@ struct MacAmpApp: App {
         let windowFocusState = WindowFocusState()
         _windowFocusState = State(initialValue: windowFocusState)
 
-        // PHASE 1A: Initialize WindowCoordinator (creates 3 independent NSWindows)
-        // This replaces UnifiedDockView with separate windows
+        // Initialize WindowCoordinator (creates separate NSWindows for Main, EQ, Playlist, etc.)
         WindowCoordinator.shared = WindowCoordinator(
             skinManager: skinManager,
             audioPlayer: audioPlayer,
@@ -52,9 +51,7 @@ struct MacAmpApp: App {
     }
 
     var body: some Scene {
-        // PHASE 1A: UnifiedDockView replaced by WindowCoordinator
-        // 3 independent NSWindows created manually in WindowCoordinator.init()
-        // Main windows are NSWindows, not SwiftUI Windows
+        // Main windows are NSWindows created by WindowCoordinator
 
         // ARCHITECTURAL FIX: Provide a "main" SwiftUI Window scene
         // This satisfies SwiftUI's requirement for at least one main scene

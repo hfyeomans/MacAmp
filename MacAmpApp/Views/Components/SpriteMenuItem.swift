@@ -2,8 +2,7 @@
 //  SpriteMenuItem.swift
 //  MacAmp
 //
-//  Created for playlist menu system - sprite-based menu items with hover states
-//  Phase 3: Refactored to use NSMenuDelegate pattern for keyboard navigation
+//  Sprite-based menu items with hover states and keyboard navigation via NSMenuDelegate
 //
 
 import SwiftUI

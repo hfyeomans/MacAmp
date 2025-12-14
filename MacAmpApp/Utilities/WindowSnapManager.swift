@@ -29,8 +29,7 @@ final class WindowSnapManager: NSObject, NSWindowDelegate {
     private var lastOrigins: [ObjectIdentifier: NSPoint] = [:]
     private var isAdjusting = false
 
-    // PHASE 4: Public methods to disable snap manager during programmatic resizing
-    // Prevents windowDidMove from triggering during double-size transitions
+    // Public methods to disable snap manager during programmatic resizing
     func beginProgrammaticAdjustment() {
         isAdjusting = true
     }
@@ -51,8 +50,7 @@ final class WindowSnapManager: NSObject, NSWindowDelegate {
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         windows[kind] = TrackedWindow(window: window, kind: kind)
-        // PHASE 3: Delegate is now set via WindowDelegateMultiplexer in WindowCoordinator
-        // This allows multiple delegates to coexist (WindowSnapManager + future custom handlers)
+        // Delegate is set via WindowDelegateMultiplexer in WindowCoordinator
         lastOrigins[ObjectIdentifier(window)] = window.frame.origin
     }
 
@@ -219,7 +217,7 @@ final class WindowSnapManager: NSObject, NSWindowDelegate {
         }
     }
 
-    // MARK: - Custom Drag Support (Oracle's Solution - Phase 2)
+    // MARK: - Custom Drag Support
 
     private struct DragContext {
         let draggedWindowID: ObjectIdentifier
@@ -289,8 +287,7 @@ final class WindowSnapManager: NSObject, NSWindowDelegate {
 
         let topLeftDelta = CGPoint(x: delta.x, y: -delta.y)
 
-        // P0 FIX (Oracle + Gemini): Snap cluster bounding box, not just dragged window
-        // This prevents cluster windows from drifting off-screen
+        // Snap cluster bounding box, not just dragged window (prevents off-screen drift)
         let clusterBaseBox = SnapUtils.boundingBox(Array(context.baseBoxes.values))
         var translatedGroupBox = clusterBaseBox
         translatedGroupBox.x += topLeftDelta.x

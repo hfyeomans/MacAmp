@@ -2,8 +2,7 @@
 //  PlaylistMenuDelegate.swift
 //  MacAmp
 //
-//  Created for Phase 3: NSMenuDelegate pattern implementation
-//  Enables keyboard navigation and VoiceOver support for sprite-based menus
+//  NSMenuDelegate pattern implementation for keyboard navigation and VoiceOver support
 //
 
 import AppKit

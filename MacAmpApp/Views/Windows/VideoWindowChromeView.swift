@@ -218,7 +218,7 @@ struct VideoWindowChromeView<Content: View>: View {
         metadataScrollOffset = 0
 
         metadataScrollTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { _ in
-            // Hop to main actor explicitly (Oracle recommendation)
+            // Hop to main actor explicitly for UI updates
             Task { @MainActor in
                 metadataScrollOffset -= 5  // Move left by one character width
 

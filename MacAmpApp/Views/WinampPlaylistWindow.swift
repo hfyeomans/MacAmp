@@ -73,8 +73,7 @@ final class PlaylistWindowActions: NSObject {
 
             for entry in entries {
                 if entry.isRemoteStream {
-                    // Add to playlist as Track (Winamp behavior)
-                    // RadioStationLibrary is ONLY for favorites menu (Phase 5+)
+                    // Add to playlist as Track (RadioStationLibrary is for favorites menu only)
                     let streamTrack = Track(
                         url: entry.url,
                         title: entry.title ?? "Unknown Station",
@@ -151,8 +150,7 @@ final class PlaylistWindowActions: NSObject {
                 return
             }
 
-            // Add to playlist as Track (Winamp behavior)
-            // RadioStationLibrary is ONLY for favorites menu (Phase 5+)
+            // Add to playlist as Track (RadioStationLibrary is for favorites menu only)
             let stationName = url.host ?? url.lastPathComponent
             let streamTrack = Track(
                 url: url,
@@ -259,7 +257,7 @@ struct WinampPlaylistWindow: View {
     @State private var selectedIndices: Set<Int> = []
     @State private var isShadeMode: Bool = false
     @State private var keyboardMonitor: Any?
-    @State private var menuDelegate = PlaylistMenuDelegate()  // Phase 3: NSMenuDelegate for keyboard nav
+    @State private var menuDelegate = PlaylistMenuDelegate()  // NSMenuDelegate for keyboard navigation
 
     private let windowWidth: CGFloat = 275
     private let windowHeight: CGFloat = 232
@@ -685,8 +683,7 @@ struct WinampPlaylistWindow: View {
         selectedIndices.remove(index)
     }
 
-    // CRITICAL FIX: Menu positioning helper (Oracle solution)
-    // Get playlist window's contentView (not keyWindow which could be Main/EQ)
+    // Menu positioning helper - get playlist window's contentView (not keyWindow)
     private func playlistContentView() -> NSView? {
         // Try to get actual playlist window from WindowCoordinator
         if let view = WindowCoordinator.shared?.playlistWindow?.contentView {
@@ -705,7 +702,7 @@ struct WinampPlaylistWindow: View {
     private func showAddMenu() {
         let menu = NSMenu()
         menu.autoenablesItems = false
-        menu.delegate = menuDelegate  // Phase 3: Enable keyboard navigation
+        menu.delegate = menuDelegate  // Enable keyboard navigation
 
         let addURLItem = SpriteMenuItem(
             normalSprite: "PLAYLIST_ADD_URL",
@@ -746,7 +743,7 @@ struct WinampPlaylistWindow: View {
 
         let menu = NSMenu()
         menu.autoenablesItems = false
-        menu.delegate = menuDelegate  // Phase 3: Enable keyboard navigation
+        menu.delegate = menuDelegate  // Enable keyboard navigation
 
         let remMiscItem = SpriteMenuItem(
             normalSprite: "PLAYLIST_REMOVE_MISC",
@@ -804,7 +801,7 @@ struct WinampPlaylistWindow: View {
     private func showMiscMenu() {
         let menu = NSMenu()
         menu.autoenablesItems = false
-        menu.delegate = menuDelegate  // Phase 3: Enable keyboard navigation
+        menu.delegate = menuDelegate  // Enable keyboard navigation
 
         let sortItem = SpriteMenuItem(
             normalSprite: "PLAYLIST_SORT_LIST",
@@ -843,7 +840,7 @@ struct WinampPlaylistWindow: View {
     private func showListMenu() {
         let menu = NSMenu()
         menu.autoenablesItems = false
-        menu.delegate = menuDelegate  // Phase 3: Enable keyboard navigation
+        menu.delegate = menuDelegate  // Enable keyboard navigation
 
         let newListItem = SpriteMenuItem(
             normalSprite: "PLAYLIST_NEW_LIST",

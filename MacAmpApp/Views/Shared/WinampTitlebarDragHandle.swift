@@ -3,7 +3,7 @@ import SwiftUI
 /// SwiftUI view that wraps titlebar content and makes it draggable using custom drag
 /// This replaces WindowDragGesture() with our custom magnetic snapping drag implementation
 ///
-/// CRITICAL FIX (Oracle): Explicit size parameter prevents layout regression
+/// Explicit size parameter prevents layout regression:
 /// - ZStack must have explicit frame matching sprite size (275×14)
 /// - TitlebarDragCaptureView needs same frame to be hit-testable
 /// - Top-leading alignment preserves .at() positioning from parent
