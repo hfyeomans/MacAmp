@@ -96,9 +96,7 @@ struct WinampMainWindow: View {
                             width: WinampSizes.main.width,
                             height: WinampSizes.main.height)
 
-            // Title bar with "Winamp" text (overlays on background)
-            // Make ONLY the title bar draggable using custom drag (magnetic snapping)
-            // CRITICAL: Apply .at() to drag handle itself, not content inside (Oracle fix)
+            // Title bar - apply .at() to drag handle itself for proper positioning
             WinampTitlebarDragHandle(windowKind: .main, size: CGSize(width: 275, height: 14)) {
                 SimpleSpriteImage(isWindowActive ? "MAIN_TITLE_BAR_SELECTED" : "MAIN_TITLE_BAR",
                                 width: 275,
@@ -645,8 +643,7 @@ struct WinampMainWindow: View {
             .help("Toggle window size")
             .at(Coords.clutterButtonD)
 
-            // V - Video Window (FUNCTIONAL - TASK 2 Day 6)
-            // Oracle fix: Only toggle setting - observer handles show/hide
+            // V - Video Window toggle (setting change triggers observer)
             let vSpriteName = settings.showVideoWindow
                 ? "MAIN_CLUTTER_BAR_BUTTON_V_SELECTED"
                 : "MAIN_CLUTTER_BAR_BUTTON_V"
@@ -791,7 +788,7 @@ struct WinampMainWindow: View {
         guard isViewVisible else { return }
 
         scrollTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { [playbackCoordinator] _ in
-            // Hop to main actor explicitly (Oracle recommendation)
+            // Hop to main actor explicitly for UI updates
             Task { @MainActor in
                 let trackText = playbackCoordinator.displayTitle.isEmpty ? "MacAmp" : playbackCoordinator.displayTitle
                 let textWidth = CGFloat(trackText.count * 5)

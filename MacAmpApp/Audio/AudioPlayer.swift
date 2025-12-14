@@ -328,8 +328,7 @@ final class AudioPlayer {
 
         updatePlaylistPosition(with: track)
 
-        // CRITICAL FIX (Oracle identified): Invalidate seekID BEFORE stopping
-        // This prevents the completion handler from calling nextTrack() and re-scheduling audio
+        // Invalidate seekID BEFORE stopping to prevent completion handler from re-scheduling audio
         currentSeekID = UUID()  // Invalidate any pending completion handlers
         seekGuardActive = true  // Extra protection
 
@@ -402,7 +401,7 @@ final class AudioPlayer {
         playerNode.stop()
         progressTimer?.invalidate()
 
-        // Oracle Grade A: Use shared cleanup for old video player
+        // Clean up any existing video player
         cleanupVideoPlayer()
 
         // Create video player
@@ -423,7 +422,7 @@ final class AudioPlayer {
             }
         }
 
-        // Setup time observer BEFORE play (Oracle Grade A requirement)
+        // Setup time observer BEFORE play
         setupVideoTimeObserver()
 
         // Start video playback
@@ -475,7 +474,7 @@ final class AudioPlayer {
         }
     }
 
-    // MARK: - Video Time Observer (Part 21 - Oracle Grade A)
+    // MARK: - Video Time Observer
 
     /// Setup periodic time observer for video playback
     /// Updates currentTime, currentDuration, AND playbackProgress (all three required)
@@ -514,7 +513,7 @@ final class AudioPlayer {
         videoTimeObserver = nil
     }
 
-    /// Shared cleanup for all video resources (Oracle recommendation)
+    /// Shared cleanup for all video resources
     private func cleanupVideoPlayer() {
         tearDownVideoTimeObserver()
         if let observer = videoEndObserver {
@@ -604,7 +603,6 @@ final class AudioPlayer {
         }
     }
 
-    // Removed: deprecated loadTrack() - no callers exist, use addTrack() instead (Oracle cleanup)
 
     func play() {
         // If playlist has ended, restart from the beginning
@@ -675,7 +673,7 @@ final class AudioPlayer {
     func stop() {
         transition(to: .stopped(.manual))
 
-        // Handle video playback cleanup (Oracle Grade A: use shared cleanup)
+        // Handle video playback cleanup
         if currentMediaType == .video {
             cleanupVideoPlayer()
             videoMetadataString = ""
@@ -688,7 +686,7 @@ final class AudioPlayer {
         currentSeekID = UUID()
         let _ = scheduleFrom(time: 0, seekID: currentSeekID)  // Ignore return - reset to beginning
 
-        // Oracle fix: Clear currentTrack so UI doesn't show stale info during stream playback
+        // Clear currentTrack so UI doesn't show stale info during stream playback
         currentTrack = nil
         currentTitle = "No Track Loaded"
         currentTrackURL = nil
@@ -1072,7 +1070,6 @@ final class AudioPlayer {
         RunLoop.main.add(progressTimer!, forMode: .common)
     }
 
-    // Removed: printSpectrumFrequencyDistribution - unused debug code (Oracle cleanup)
 
     @MainActor
     private func updateVisualizerLevels(rms: [Float], spectrum: [Float], waveform: [Float]) {
@@ -1274,7 +1271,7 @@ final class AudioPlayer {
     }
 
     func seek(to time: Double, resume: Bool? = nil) {
-        // VIDEO SEEKING (Oracle Grade A - Part 21)
+        // VIDEO SEEKING
         if currentMediaType == .video {
             guard let player = videoPlayer else {
                 NSLog("⚠️ seek: Cannot seek - no video player loaded")

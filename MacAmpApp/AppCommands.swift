@@ -59,15 +59,13 @@ struct AppCommands: Commands {
             }
             .keyboardShortcut("r", modifiers: [.control])
 
-            // NEW: Video Window toggle (TASK 2 Day 6)
-            // Oracle fix: Only toggle setting - observer handles show/hide
+            // Video Window toggle - setting change triggers observer
             Button(settings.showVideoWindow ? "Hide Video Window" : "Show Video Window") {
                 settings.showVideoWindow.toggle()
             }
             .keyboardShortcut("v", modifiers: [.control])
 
-            // NEW: Milkdrop Window toggle (TASK 2 Day 7)
-            // Only toggle setting - observer handles show/hide
+            // Milkdrop Window toggle - setting change triggers observer
             Button(settings.showMilkdropWindow ? "Hide Milkdrop" : "Show Milkdrop") {
                 settings.showMilkdropWindow.toggle()
             }
