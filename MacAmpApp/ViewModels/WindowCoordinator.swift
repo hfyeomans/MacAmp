@@ -385,9 +385,7 @@ final class WindowCoordinator {
 
     // Milkdrop window visibility observer - honors persisted showMilkdropWindow state
     private func setupMilkdropWindowObserver() {
-        if settings.windowDebugLoggingEnabled {
-            print("🔵 WindowCoordinator: setupMilkdropWindowObserver() called")
-        }
+        AppLog.debug(.window, "setupMilkdropWindowObserver() called")
         // Cancel any existing observer
         milkdropWindowTask?.cancel()
 
@@ -401,9 +399,7 @@ final class WindowCoordinator {
             } onChange: {
                 Task { @MainActor [weak self] in
                     guard let self else { return }
-                    if self.settings.windowDebugLoggingEnabled {
-                        print("🔵 WindowCoordinator: showMilkdropWindow changed to \(self.settings.showMilkdropWindow)")
-                    }
+                    AppLog.debug(.window, "showMilkdropWindow changed to \(self.settings.showMilkdropWindow)")
                     // Only show Milkdrop window after initial windows are presented
                     if self.settings.showMilkdropWindow {
                         if self.hasPresentedInitialWindows {
@@ -690,9 +686,7 @@ final class WindowCoordinator {
             video.setFrameOrigin(origin)
         }
 
-        if settings.windowDebugLoggingEnabled {
-            print("[VIDEO DOCKING] anchor=\(context.anchor): targetOrigin=\(origin), actualFrame=\(video.frame)")
-        }
+        AppLog.debug(.window, "[VIDEO DOCKING] anchor=\(context.anchor): targetOrigin=\(origin), actualFrame=\(video.frame)")
     }
 
     func updateVideoWindowSize(to pixelSize: CGSize) {
@@ -702,13 +696,7 @@ final class WindowCoordinator {
         guard frame.size != pixelSize else { return }
 
         // DIAGNOSTIC: Log frame details to investigate left gap
-        if settings.windowDebugLoggingEnabled {
-            print("🔍 [VIDEO RESIZE] Before:")
-            print("   Frame: \(frame)")
-            print("   Origin: (\(frame.origin.x), \(frame.origin.y))")
-            print("   Size: \(frame.size)")
-            print("   ContentView frame: \(video.contentView?.frame ?? .zero)")
-        }
+        AppLog.debug(.window, "[VIDEO RESIZE] Before: Frame: \(frame), Origin: (\(frame.origin.x), \(frame.origin.y)), Size: \(frame.size), ContentView: \(video.contentView?.frame ?? .zero)")
 
         // Clamp origin to integral coordinates (fixes fractional positioning)
         let topLeft = NSPoint(
@@ -721,12 +709,7 @@ final class WindowCoordinator {
         video.setFrame(frame, display: true)
 
         // DIAGNOSTIC: Log after setFrame
-        if settings.windowDebugLoggingEnabled {
-            print("🔍 [VIDEO RESIZE] After:")
-            print("   Frame: \(video.frame)")
-            print("   Origin: (\(video.frame.origin.x), \(video.frame.origin.y))")
-            print("   Size: \(video.frame.size)")
-        }
+        AppLog.debug(.window, "[VIDEO RESIZE] After: Frame: \(video.frame), Origin: (\(video.frame.origin.x), \(video.frame.origin.y)), Size: \(video.frame.size)")
     }
 
     // MARK: - Window Visibility Control (AppKit Bridge)
@@ -830,10 +813,8 @@ final class WindowCoordinator {
             playlist.setFrameOrigin(origin)
         }
 
-        if settings.windowDebugLoggingEnabled {
-            let stage = animated ? "playlist move (animated)" : "playlist move"
-            print("[DOCKING] \(stage) anchor=\(context.anchor): targetOrigin=(x: \(origin.x), y: \(origin.y)), actualFrame=\(playlist.frame)")
-        }
+        let stage = animated ? "playlist move (animated)" : "playlist move"
+        AppLog.debug(.window, "[DOCKING] \(stage) anchor=\(context.anchor): targetOrigin=(x: \(origin.x), y: \(origin.y)), actualFrame=\(playlist.frame)")
     }
 
     private func logDoubleSizeDebug(
@@ -842,18 +823,17 @@ final class WindowCoordinator {
         playlistFrame: NSRect?,
         dockingContext: PlaylistDockingContext?
     ) {
-        guard settings.windowDebugLoggingEnabled else { return }
-        print("=== DOUBLE-SIZE DEBUG ===")
-        print("Main frame: \(mainFrame)")
-        print("EQ frame: \(eqFrame)")
-        print("Playlist frame: \(String(describing: playlistFrame))")
+        AppLog.debug(.window, "=== DOUBLE-SIZE DEBUG ===")
+        AppLog.debug(.window, "Main frame: \(mainFrame)")
+        AppLog.debug(.window, "EQ frame: \(eqFrame)")
+        AppLog.debug(.window, "Playlist frame: \(String(describing: playlistFrame))")
         if let context = dockingContext {
-            print("[DOCKING] source: \(context.source.description), anchor=\(context.anchor), attachment=\(context.attachment.description)")
-            print("Action: Playlist WILL move with EQ (cluster-locked)")
+            AppLog.debug(.window, "[DOCKING] source: \(context.source.description), anchor=\(context.anchor), attachment=\(context.attachment.description)")
+            AppLog.debug(.window, "Action: Playlist WILL move with EQ (cluster-locked)")
         } else if playlistFrame == nil {
-            print("Docking detection: playlist window unavailable")
+            AppLog.debug(.window, "Docking detection: playlist window unavailable")
         } else {
-            print("Action: Playlist stays independent (no docking context)")
+            AppLog.debug(.window, "Action: Playlist stays independent (no docking context)")
         }
     }
 
@@ -863,21 +843,19 @@ final class WindowCoordinator {
         eqFrame: NSRect?,
         playlistFrame: NSRect?
     ) {
-        guard settings.windowDebugLoggingEnabled else { return }
-        print("[DOCKING] \(stage): main=\(String(describing: mainFrame)), eq=\(String(describing: eqFrame)), playlist=\(String(describing: playlistFrame))")
+        AppLog.debug(.window, "[DOCKING] \(stage): main=\(String(describing: mainFrame)), eq=\(String(describing: eqFrame)), playlist=\(String(describing: playlistFrame))")
     }
 
     private func debugLogWindowPositions(step: String) {
-        guard settings.windowDebugLoggingEnabled else { return }
-        print("🔍 \(step)")
+        AppLog.debug(.window, step)
 
         func describe(window: NSWindow?, label: String) {
             guard let window else {
-                print("  \(label): unavailable")
+                AppLog.debug(.window, "  \(label): unavailable")
                 return
             }
             let frame = window.frame
-            print("  \(label): origin=(x: \(frame.origin.x), y: \(frame.origin.y)) size=(w: \(frame.size.width), h: \(frame.size.height))")
+            AppLog.debug(.window, "  \(label): origin=(x: \(frame.origin.x), y: \(frame.origin.y)) size=(w: \(frame.size.width), h: \(frame.size.height))")
         }
 
         describe(window: mainWindow, label: "Main")
@@ -974,14 +952,12 @@ final class WindowCoordinator {
             }
         }
 
-        if settings.windowDebugLoggingEnabled {
-            print("✅ Default positions set (should be touching with 0 spacing):")
-            if let main = mainWindow { print("  Main: \(main.frame)") }
-            if let eq = eqWindow { print("  EQ: \(eq.frame)") }
-            if let playlist = playlistWindow { print("  Playlist: \(playlist.frame)") }
-            if let video = videoWindow { print("  Video: \(video.frame)") }
-            if let milkdrop = milkdropWindow { print("  Milkdrop: \(milkdrop.frame)") }
-        }
+        AppLog.debug(.window, "Default positions set (should be touching with 0 spacing):")
+        if let main = mainWindow { AppLog.debug(.window, "  Main: \(main.frame)") }
+        if let eq = eqWindow { AppLog.debug(.window, "  EQ: \(eq.frame)") }
+        if let playlist = playlistWindow { AppLog.debug(.window, "  Playlist: \(playlist.frame)") }
+        if let video = videoWindow { AppLog.debug(.window, "  Video: \(video.frame)") }
+        if let milkdrop = milkdropWindow { AppLog.debug(.window, "  Milkdrop: \(milkdrop.frame)") }
     }
 
     /// Reset windows to default vertical stack (for testing double-size docking)
@@ -1019,12 +995,10 @@ final class WindowCoordinator {
         endSuppressingPersistence()
         schedulePersistenceFlush()
 
-        if settings.windowDebugLoggingEnabled {
-            print("✅ Windows reset to default vertical stack")
-            print("  Main: \(mainFrame)")
-            print("  EQ: \(eqFrame)")
-            print("  Playlist: \(playlistFrame)")
-        }
+        AppLog.debug(.window, "Windows reset to default vertical stack")
+        AppLog.debug(.window, "  Main: \(mainFrame)")
+        AppLog.debug(.window, "  EQ: \(eqFrame)")
+        AppLog.debug(.window, "  Playlist: \(playlistFrame)")
     }
 
     private func applyInitialWindowLayout() {
@@ -1209,30 +1183,20 @@ final class WindowCoordinator {
     }
     // NEW: Video and Milkdrop window show/hide
     func showVideo() {
-        if settings.windowDebugLoggingEnabled {
-            print("🔵 WindowCoordinator: showVideo() called")
-        }
+        AppLog.debug(.window, "showVideo() called")
         videoWindow?.makeKeyAndOrderFront(nil)
     }
     func hideVideo() {
-        if settings.windowDebugLoggingEnabled {
-            print("🔵 WindowCoordinator: hideVideo() called")
-        }
+        AppLog.debug(.window, "hideVideo() called")
         videoWindow?.orderOut(nil)
     }
     func showMilkdrop() {
-        if settings.windowDebugLoggingEnabled {
-            print("🔵 WindowCoordinator: showMilkdrop() called, window exists: \(milkdropWindow != nil)")
-        }
+        AppLog.debug(.window, "showMilkdrop() called, window exists: \(milkdropWindow != nil)")
         milkdropWindow?.makeKeyAndOrderFront(nil)
-        if settings.windowDebugLoggingEnabled {
-            print("🔵 WindowCoordinator: milkdropWindow.isVisible: \(milkdropWindow?.isVisible ?? false)")
-        }
+        AppLog.debug(.window, "milkdropWindow.isVisible: \(milkdropWindow?.isVisible ?? false)")
     }
     func hideMilkdrop() {
-        if settings.windowDebugLoggingEnabled {
-            print("🔵 WindowCoordinator: hideMilkdrop() called")
-        }
+        AppLog.debug(.window, "hideMilkdrop() called")
         milkdropWindow?.orderOut(nil)
     }
 

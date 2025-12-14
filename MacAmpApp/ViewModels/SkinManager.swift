@@ -118,40 +118,37 @@ final class SkinManager {
     /// Load default Winamp skin for fallback sprites
     /// MUST run synchronously before loading other skins
     private func loadDefaultSkinIfNeeded() {
-        NSLog("🔍 ENTRY: loadDefaultSkinIfNeeded() called")
+        AppLog.debug(.skin, "loadDefaultSkinIfNeeded() called")
 
         guard defaultSkin == nil else {
-            NSLog("ℹ️ Default skin already loaded")
+            AppLog.debug(.skin, "Default skin already loaded")
             return
         }
 
-        NSLog("🔍 Looking for bundled Winamp skin for default fallback...")
-        NSLog("🔍 SkinMetadata.bundledSkins count: \(SkinMetadata.bundledSkins.count)")
+        AppLog.debug(.skin, "Looking for bundled Winamp skin for default fallback...")
+        AppLog.debug(.skin, "SkinMetadata.bundledSkins count: \(SkinMetadata.bundledSkins.count)")
 
         // Find bundled Winamp.wsz
         guard let winampSkin = SkinMetadata.bundledSkins.first(where: { $0.id == "bundled:Winamp" }) else {
-            NSLog("⚠️ Default Winamp skin not found in bundle - no fallback available")
-            NSLog("   Available bundled skins: \(SkinMetadata.bundledSkins.map { $0.id })")
+            AppLog.warn(.skin, "Default Winamp skin not found in bundle - no fallback available. Available: \(SkinMetadata.bundledSkins.map { $0.id })")
             return
         }
 
-        NSLog("📦 Loading default skin (Winamp.wsz) for fallback sprites from: \(winampSkin.url.path)")
+        AppLog.debug(.skin, "Loading default skin (Winamp.wsz) for fallback sprites from: \(winampSkin.url.path)")
 
         do {
             let expectedSheets = Set(SkinSprites.defaultSprites.sheets.keys.map { $0.lowercased() })
             let payload = try SkinArchiveLoader.load(from: winampSkin.url, expectedSheets: expectedSheets)
 
-            NSLog("📦 Default skin archive loaded, parsing sprites...")
+            AppLog.debug(.skin, "Default skin archive loaded, parsing sprites...")
 
             // Parse default skin sprites using same pipeline
             let skin = try parseDefaultSkin(payload: payload, sourceURL: winampSkin.url)
             defaultSkin = skin
 
-            NSLog("✅ Default skin loaded successfully!")
-            NSLog("   Sheets available: \(skin.loadedSheets.sorted().joined(separator: ", "))")
-            NSLog("   VIDEO sprites: \(skin.images.keys.filter { $0.hasPrefix("VIDEO_") }.count)")
+            AppLog.info(.skin, "Default skin loaded successfully! Sheets: \(skin.loadedSheets.sorted().joined(separator: ", ")), VIDEO sprites: \(skin.images.keys.filter { $0.hasPrefix("VIDEO_") }.count)")
         } catch {
-            NSLog("❌ Failed to load default skin: \(error)")
+            AppLog.error(.skin, "Failed to load default skin: \(error)")
         }
     }
 
@@ -239,7 +236,7 @@ final class SkinManager {
 
                 // Skip if this skin is already bundled (avoid duplicates)
                 if bundledFilenames.contains(skinFilename) {
-                    NSLog("⏭️  Skipping duplicate: \(skinFilename) (already bundled)")
+                    AppLog.debug(.skin, "Skipping duplicate: \(skinFilename) (already bundled)")
                     continue
                 }
 
@@ -252,16 +249,16 @@ final class SkinManager {
                 ))
             }
         } catch {
-            NSLog("❌ SkinManager: Failed to access user skins directory: \(error.localizedDescription)")
+            AppLog.error(.skin, "Failed to access user skins directory: \(error.localizedDescription)")
             if loadingError == nil {
                 loadingError = "Unable to access user skins directory: \(error.localizedDescription)"
             }
         }
 
         self.availableSkins = skins
-        NSLog("📦 SkinManager: Discovered \(skins.count) skins")
+        AppLog.info(.skin, "Discovered \(skins.count) skins")
         for skin in skins {
-            NSLog("   - \(skin.id): \(skin.name) (\(skin.source))")
+            AppLog.debug(.skin, "  - \(skin.id): \(skin.name) (\(skin.source))")
         }
     }
 
@@ -271,11 +268,11 @@ final class SkinManager {
     func switchToSkin(identifier: String) {
         guard let skinMetadata = availableSkins.first(where: { $0.id == identifier }) else {
             loadingError = "Skin not found: \(identifier)"
-            NSLog("❌ SkinManager: Skin not found: \(identifier)")
+            AppLog.error(.skin, "Skin not found: \(identifier)")
             return
         }
 
-        NSLog("🎨 SkinManager: Switching to skin: \(skinMetadata.name)")
+        AppLog.info(.skin, "Switching to skin: \(skinMetadata.name)")
         loadingError = nil
         loadSkin(from: skinMetadata.url)
 
@@ -292,7 +289,7 @@ final class SkinManager {
         scanAvailableSkins()
 
         let selectedID = AppSettings.instance().selectedSkinIdentifier ?? "bundled:Winamp"
-        NSLog("🔄 SkinManager: Loading initial skin: \(selectedID)")
+        AppLog.info(.skin, "Loading initial skin: \(selectedID)")
         switchToSkin(identifier: selectedID)
     }
 
@@ -329,7 +326,7 @@ final class SkinManager {
                 throw SkinImportError.copyFailed(error.localizedDescription)
             }
 
-            NSLog("✅ Imported skin: \(skinName) to \(destinationURL.path)")
+            AppLog.info(.skin, "Imported skin: \(skinName) to \(destinationURL.path)")
             loadingError = nil
 
             scanAvailableSkins()
@@ -338,7 +335,7 @@ final class SkinManager {
             showNotification(title: "Skin Imported", message: "\(skinName) has been imported successfully.")
         } catch {
             let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-            NSLog("❌ Failed to import skin: \(message)")
+            AppLog.error(.skin, "Failed to import skin: \(message)")
             loadingError = message
             await presentImportFailureAlert(for: fallbackName, message: message)
         }
@@ -418,7 +415,7 @@ final class SkinManager {
         // Check if bundle identifier exists before using UNUserNotificationCenter
         // UNUserNotificationCenter requires a valid bundle identifier and crashes if nil
         guard Bundle.main.bundleIdentifier != nil else {
-            NSLog("⚠️ Bundle identifier is nil, falling back to NSAlert for notification")
+            AppLog.warn(.skin, "Bundle identifier is nil, falling back to NSAlert for notification")
             showNotificationAlert(title: title, message: message)
             return
         }
@@ -436,7 +433,7 @@ final class SkinManager {
 
         UNUserNotificationCenter.current().add(request) { error in
             if let error = error {
-                NSLog("❌ Failed to show notification: \(error.localizedDescription)")
+                AppLog.error(.skin, "Failed to show notification: \(error.localizedDescription)")
                 // Fall back to alert on error
                 Task { @MainActor in
                     self.showNotificationAlert(title: title, message: message)
@@ -508,7 +505,7 @@ final class SkinManager {
 
         processedImage.unlockFocus()
 
-        NSLog("🎨 Preprocessed MAIN_WINDOW_BACKGROUND: 2 blocks (24×14) leaving colon gap at y:\(timeDisplayY)")
+        AppLog.debug(.skin, "Preprocessed MAIN_WINDOW_BACKGROUND: 2 blocks (24×14) leaving colon gap at y:\(timeDisplayY)")
         return processedImage
     }
 
@@ -538,11 +535,11 @@ final class SkinManager {
         let size: CGSize
         if let definedSize = SkinSprites.defaultSprites.dimensions(forSprite: spriteName) {
             size = definedSize
-            NSLog("⚠️ Creating fallback for '\(spriteName)' with defined size: \(definedSize.width)x\(definedSize.height)")
+            AppLog.debug(.skin, "Creating fallback for '\(spriteName)' with defined size: \(definedSize.width)x\(definedSize.height)")
         } else {
             // Use a reasonable default size for unknown sprites
             size = CGSize(width: 16, height: 16)
-            NSLog("⚠️ Creating fallback for '\(spriteName)' with default size: 16x16 (no definition found)")
+            AppLog.debug(.skin, "Creating fallback for '\(spriteName)' with default size: 16x16 (no definition found)")
         }
 
         // Create a transparent image
@@ -566,7 +563,7 @@ final class SkinManager {
     private func createFallbackSprites(forSheet sheetName: String, sprites: [Sprite]) -> [String: NSImage] {
         var fallbacks: [String: NSImage] = [:]
 
-        NSLog("⚠️ Sheet '\(sheetName)' is missing - generating \(sprites.count) fallback sprites")
+        AppLog.debug(.skin, "Sheet '\(sheetName)' is missing - generating \(sprites.count) fallback sprites")
 
         for sprite in sprites {
             let fallbackImage = createFallbackSprite(named: sprite.name)
@@ -579,7 +576,7 @@ final class SkinManager {
     // MARK: - Existing Methods
 
     func loadSkin(from url: URL) {
-        NSLog("Loading skin from \(url.path)")
+        AppLog.info(.skin, "Loading skin from \(url.path)")
         loadingError = nil
         isLoading = true
         let generation = UUID()
@@ -629,20 +626,20 @@ final class SkinManager {
                 Sprite(name: "DIGIT_8_EX", x: 72, y: 0, width: 9, height: 13),
                 Sprite(name: "DIGIT_9_EX", x: 81, y: 0, width: 9, height: 13),
             ]
-            NSLog("✅ OPTIONAL: Found NUMS_EX sprites in archive")
+            AppLog.debug(.skin, "OPTIONAL: Found NUMS_EX sprites in archive")
         } else {
-            NSLog("ℹ️ INFO: NUMS_EX sprites not present in archive")
+            AppLog.debug(.skin, "NUMS_EX sprites not present in archive")
         }
 
-        NSLog("=== PROCESSING \(sheetsToProcess.count) SHEETS ===")
+        AppLog.debug(.skin, "Processing \(sheetsToProcess.count) sheets")
         for (sheetName, sprites) in sheetsToProcess {
-            NSLog("🔍 Processing sheet: \(sheetName)")
+            AppLog.debug(.skin, "Processing sheet: \(sheetName)")
             guard let data = payload.sheets[sheetName.lowercased()] else {
-                NSLog("⚠️ MISSING SHEET DATA: \(sheetName)")
+                AppLog.warn(.skin, "Missing sheet data: \(sheetName)")
 
                 // Try to use default skin sprites first (all BMPs from Winamp.wsz)
                 if let defaultSprites = fallbackSpritesFromDefaultSkin(sheet: sheetName, sprites: sprites) {
-                    NSLog("♻️ Using default Winamp skin sprites for \(sheetName)")
+                    AppLog.debug(.skin, "Using default Winamp skin sprites for \(sheetName)")
                     for (name, image) in defaultSprites {
                         extractedImages[name] = image
                     }
@@ -658,7 +655,7 @@ final class SkinManager {
             }
 
             guard let sheetImage = NSImage(data: data) else {
-                NSLog("❌ FAILED to decode image data for sheet: \(sheetName)")
+                AppLog.error(.skin, "Failed to decode image data for sheet: \(sheetName)")
                 let fallbackSprites = createFallbackSprites(forSheet: sheetName, sprites: sprites)
                 for (name, image) in fallbackSprites {
                     extractedImages[name] = image
@@ -670,10 +667,7 @@ final class SkinManager {
             // Sheet loaded successfully - track it
             loadedSheets.insert(sheetName)
 
-            #if DEBUG
-            print("✅ Sheet \(sheetName) decoded (\(Int(sheetImage.size.width))x\(Int(sheetImage.size.height)))")
-            print("   Extracting \(sprites.count) sprites:")
-            #endif
+            AppLog.debug(.skin, "Sheet \(sheetName) decoded (\(Int(sheetImage.size.width))x\(Int(sheetImage.size.height))), extracting \(sprites.count) sprites")
 
             for sprite in sprites {
                 let rect = sprite.rect
@@ -683,14 +677,11 @@ final class SkinManager {
                         finalImage = preprocessMainBackground(croppedImage)
                     }
                     extractedImages[sprite.name] = finalImage
-                    #if DEBUG
-                    print("     ✅ \(sprite.name) at \(rect)")
-                    #endif
                 } else {
-                    NSLog("     ⚠️ FAILED to crop \(sprite.name) from \(sheetName) at \(rect)")
+                    AppLog.warn(.skin, "Failed to crop \(sprite.name) from \(sheetName) at \(rect)")
                     let fallbackImage = createFallbackSprite(named: sprite.name)
                     extractedImages[sprite.name] = fallbackImage
-                    NSLog("       Generated fallback sprite for '\(sprite.name)'")
+                    AppLog.debug(.skin, "Generated fallback sprite for '\(sprite.name)'")
                 }
             }
         }
@@ -700,33 +691,33 @@ final class SkinManager {
 
         var aliasCount = 0
         if extractedImages["MAIN_VOLUME_THUMB"] == nil, let selected = extractedImages["MAIN_VOLUME_THUMB_SELECTED"] {
-            NSLog("🔄 Creating alias: MAIN_VOLUME_THUMB_SELECTED → MAIN_VOLUME_THUMB")
+            AppLog.debug(.skin, "Creating alias: MAIN_VOLUME_THUMB_SELECTED → MAIN_VOLUME_THUMB")
             extractedImages["MAIN_VOLUME_THUMB"] = selected
             aliasCount += 1
         }
         if extractedImages["MAIN_BALANCE_THUMB"] == nil, let selected = extractedImages["MAIN_BALANCE_THUMB_ACTIVE"] {
-            NSLog("🔄 Creating alias: MAIN_BALANCE_THUMB_ACTIVE → MAIN_BALANCE_THUMB")
+            AppLog.debug(.skin, "Creating alias: MAIN_BALANCE_THUMB_ACTIVE → MAIN_BALANCE_THUMB")
             extractedImages["MAIN_BALANCE_THUMB"] = selected
             aliasCount += 1
         }
         if extractedImages["EQ_SLIDER_THUMB"] == nil, let selected = extractedImages["EQ_SLIDER_THUMB_SELECTED"] {
-            NSLog("🔄 Creating alias: EQ_SLIDER_THUMB_SELECTED → EQ_SLIDER_THUMB")
+            AppLog.debug(.skin, "Creating alias: EQ_SLIDER_THUMB_SELECTED → EQ_SLIDER_THUMB")
             extractedImages["EQ_SLIDER_THUMB"] = selected
             aliasCount += 1
         }
         if aliasCount > 0 {
-            NSLog("✅ Created \(aliasCount) slider sprite aliases")
+            AppLog.info(.skin, "Created \(aliasCount) slider sprite aliases")
         }
 
         let expectedCount = sheetsToProcess.values.flatMap { $0 }.count
         let extractedCount = extractedImages.count
-        NSLog("=== SPRITE EXTRACTION SUMMARY ===")
-        NSLog("Total sprites available: \(extractedCount)")
-        NSLog("Expected sprites: \(expectedCount)")
+        AppLog.debug(.skin, "=== SPRITE EXTRACTION SUMMARY ===")
+        AppLog.debug(.skin, "Total sprites available: \(extractedCount)")
+        AppLog.debug(.skin, "Expected sprites: \(expectedCount)")
         if extractedCount < expectedCount {
-            NSLog("⚠️ Note: Some sprites are using transparent fallbacks due to missing/corrupted sheets")
+            AppLog.warn(.skin, "Some sprites are using transparent fallbacks due to missing/corrupted sheets")
         } else {
-            NSLog("✅ All sprites loaded successfully!")
+            AppLog.info(.skin, "All sprites loaded successfully!")
         }
 
         var playlistStyle = PlaylistStyle(
@@ -756,7 +747,7 @@ final class SkinManager {
         )
 
         currentSkin = newSkin
-        NSLog("Skin loaded successfully from \(sourceURL.lastPathComponent)")
+        AppLog.info(.skin, "Skin loaded successfully from \(sourceURL.lastPathComponent)")
     }
 
     private static func describeLoadError(_ error: Error, url: URL) -> String {

@@ -40,7 +40,7 @@ final class RadioStationLibrary {
             let data = try encoder.encode(stations)
             UserDefaults.standard.set(data, forKey: userDefaultsKey)
         } catch {
-            print("Failed to save radio stations: \(error)")
+            AppLog.error(.audio, "Failed to save radio stations: \(error)")
         }
     }
 
@@ -51,7 +51,7 @@ final class RadioStationLibrary {
             let decoder = JSONDecoder()
             stations = try decoder.decode([RadioStation].self, from: data)
         } catch {
-            print("Failed to load radio stations: \(error)")
+            AppLog.error(.audio, "Failed to load radio stations: \(error)")
             stations = []
         }
     }

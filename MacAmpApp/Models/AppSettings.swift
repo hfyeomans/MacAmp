@@ -41,23 +41,11 @@ final class AppSettings {
         }
     }
 
-    /// Controls whether verbose window layout logs should be emitted (persists to UserDefaults)
-    var windowDebugLoggingEnabled: Bool {
-        didSet {
-            UserDefaults.standard.set(windowDebugLoggingEnabled, forKey: "windowDebugLoggingEnabled")
-        }
-    }
-
     @ObservationIgnored private static let shared = AppSettings()
 
     private init() {
         self.materialIntegration = Self.loadMaterialIntegration()
         self.enableLiquidGlass = Self.loadLiquidGlassSetting()
-        if let storedLoggingFlag = UserDefaults.standard.object(forKey: "windowDebugLoggingEnabled") as? Bool {
-            self.windowDebugLoggingEnabled = storedLoggingFlag
-        } else {
-            self.windowDebugLoggingEnabled = true
-        }
 
         // Load persisted clutter bar states (default to false)
         self.isDoubleSizeMode = UserDefaults.standard.bool(forKey: "isDoubleSizeMode")

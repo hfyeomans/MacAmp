@@ -135,7 +135,7 @@ struct SpriteResolver: Sendable {
         // MARK: - Time Display
         case .digit(let n):
             guard (0...9).contains(n) else {
-                NSLog("SpriteResolver: digit out of range (\(n)). Expected 0-9.")
+                AppLog.warn(.ui, "SpriteResolver: digit out of range (\(n)). Expected 0-9.")
                 return []
             }
             return [

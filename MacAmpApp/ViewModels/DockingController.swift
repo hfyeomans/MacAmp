@@ -135,7 +135,7 @@ final class DockingController {
             let data = try JSONEncoder().encode(panes)
             defaults.set(data, forKey: persistKey)
         } catch {
-            NSLog("DockingController: failed to persist panes: \(error.localizedDescription)")
+            AppLog.error(.window, "DockingController: failed to persist panes: \(error.localizedDescription)")
         }
     }
 }

@@ -4,9 +4,7 @@ import SwiftUI
 @MainActor
 class WinampMilkdropWindowController: NSWindowController {
     convenience init(skinManager: SkinManager, audioPlayer: AudioPlayer, dockingController: DockingController, settings: AppSettings, radioLibrary: RadioStationLibrary, playbackCoordinator: PlaybackCoordinator, windowFocusState: WindowFocusState) {
-        if settings.windowDebugLoggingEnabled {
-            print("🟣 WinampMilkdropWindowController: init() called")
-        }
+        AppLog.debug(.window, "WinampMilkdropWindowController: init() called")
 
         // Create borderless window (follows TASK 1 pattern)
         let window = BorderlessWindow(
@@ -16,9 +14,7 @@ class WinampMilkdropWindowController: NSWindowController {
             defer: false
         )
 
-        if settings.windowDebugLoggingEnabled {
-            print("🟣 WinampMilkdropWindowController: BorderlessWindow created")
-        }
+        AppLog.debug(.window, "WinampMilkdropWindowController: BorderlessWindow created")
 
         // Apply standard Winamp window configuration
         WinampWindowConfigurator.apply(to: window)
@@ -40,17 +36,13 @@ class WinampMilkdropWindowController: NSWindowController {
 
         let hostingController = NSHostingController(rootView: rootView)
 
-        if settings.windowDebugLoggingEnabled {
-            print("🟣 WinampMilkdropWindowController: Creating window with size \(window.frame.size)")
-        }
+        AppLog.debug(.window, "WinampMilkdropWindowController: Creating window with size \(window.frame.size)")
 
         // CRITICAL: Only set contentViewController - DO NOT set contentView
         // Setting contentView releases the hosting controller, breaking SwiftUI lifecycle
         window.contentViewController = hostingController
 
-        if settings.windowDebugLoggingEnabled {
-            print("🟣 WinampMilkdropWindowController: Content controller set, SwiftUI lifecycle enabled")
-        }
+        AppLog.debug(.window, "WinampMilkdropWindowController: Content controller set, SwiftUI lifecycle enabled")
 
         // Install translucent backing layer (prevents bleed-through)
         WinampWindowConfigurator.installHitSurface(on: window)
