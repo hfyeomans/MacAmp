@@ -69,6 +69,7 @@
 		AA399B95993DF8EB2CD3CCA3 /* Winamp.wsz in Resources */ = {isa = PBXBuildFile; fileRef = A5F876BD10A8CBDE81C28D51 /* Winamp.wsz */; };
 		AB123DEF4E567890ABCDEF12 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD234EF56789ABCD01234567 /* AppSettings.swift */; };
 		AC7BAF317F478CEB2F36F3DB /* PlaylistTimeText.swift in Sources */ = {isa = PBXBuildFile; fileRef = CABDEB04D5D23C3DAAAFEEFC /* PlaylistTimeText.swift */; };
+		AC7BAF327F478CEB2F36F3DC /* PlaylistScrollSlider.swift in Sources */ = {isa = PBXBuildFile; fileRef = CABDEB05D5D23C3DAAAFEEFE /* PlaylistScrollSlider.swift */; };
 		ADDBF8E53028E97A7A005307 /* WinampPlaylistWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75C52A558EFD4C84BBA21F92 /* WinampPlaylistWindow.swift */; };
 		B3A2FD6D778A60B9F0D92258 /* AppCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7CCE1500578ECAEED8FAA42 /* AppCommands.swift */; };
 		B95D3BA95DB24E4CBDF9E30B /* TrackInfoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6317A3F050254D92940A7202 /* TrackInfoView.swift */; };
@@ -151,6 +152,7 @@
 		BC98BCD0ED814A6F90A8021D /* RadioStationLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadioStationLibrary.swift; sourceTree = "<group>"; };
 		C32D1ED0603B1A1497664E37 /* MacAmpApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacAmpApp.swift; sourceTree = "<group>"; };
 		CABDEB04D5D23C3DAAAFEEFC /* PlaylistTimeText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaylistTimeText.swift; sourceTree = "<group>"; };
+		CABDEB05D5D23C3DAAAFEEFE /* PlaylistScrollSlider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaylistScrollSlider.swift; sourceTree = "<group>"; };
 		CD234EF56789ABCD01234567 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		D5C4GF8F990H31I0H2G04370 /* SkinsCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkinsCommands.swift; sourceTree = "<group>"; };
 		DE345F678901BCDE12345678 /* PreferencesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesView.swift; sourceTree = "<group>"; };
@@ -180,6 +182,7 @@
 			children = (
 				36B64EDB2EB3023D004274F8 /* PlaylistMenuDelegate.swift */,
 				5B08C7931E5A4A0A8D4F1B27 /* PlaylistBitmapText.swift */,
+				CABDEB05D5D23C3DAAAFEEFE /* PlaylistScrollSlider.swift */,
 				CABDEB04D5D23C3DAAAFEEFC /* PlaylistTimeText.swift */,
 				77A0C7921140C73AB173A5E8 /* SimpleSpriteImage.swift */,
 				F1E2D3C4B5A6978867564534 /* SpriteMenuItem.swift */,
@@ -465,6 +468,7 @@
 				B95D3BA95DB24E4CBDF9E30B /* TrackInfoView.swift in Sources */,
 				A1B2C3D4E5F6789012345678 /* SpriteMenuItem.swift in Sources */,
 				AC7BAF317F478CEB2F36F3DB /* PlaylistTimeText.swift in Sources */,
+				AC7BAF327F478CEB2F36F3DC /* PlaylistScrollSlider.swift in Sources */,
 				CFF2E4B6A5D74592AA2B78CD /* PlaylistBitmapText.swift in Sources */,
 				93E376C1200386F617D37563 /* Skin.swift in Sources */,
 				09ABEB45DA77F1178E0F5317 /* SkinManager.swift in Sources */,

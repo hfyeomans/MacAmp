@@ -804,6 +804,44 @@ final class WindowCoordinator {
         overlay.hide()
     }
 
+    // MARK: - Playlist Resize Coordination (Phase 3)
+
+    /// Show resize preview overlay for playlist window (AppKit bridge)
+    func showPlaylistResizePreview(_ overlay: WindowResizePreviewOverlay, previewSize: CGSize) {
+        guard let window = playlistWindow else { return }
+        overlay.show(in: window, previewSize: previewSize)
+    }
+
+    /// Hide resize preview overlay for playlist window (AppKit bridge)
+    func hidePlaylistResizePreview(_ overlay: WindowResizePreviewOverlay) {
+        overlay.hide()
+    }
+
+    /// Update playlist window frame to match new size (AppKit bridge)
+    /// Handles double-size scaling automatically
+    func updatePlaylistWindowSize(to pixelSize: CGSize) {
+        guard let playlist = playlistWindow else { return }
+
+        var frame = playlist.frame
+        guard frame.size != pixelSize else { return }
+
+        // Apply double-size scaling at the window frame level
+        let scale = settings.isDoubleSizeMode ? 2.0 : 1.0
+        let scaledSize = CGSize(width: pixelSize.width * scale, height: pixelSize.height * scale)
+
+        // Preserve top-left anchor (macOS uses bottom-left origin)
+        let topLeft = NSPoint(
+            x: round(frame.origin.x),
+            y: round(frame.origin.y + frame.size.height)
+        )
+        frame.size = scaledSize
+        frame.origin = NSPoint(x: topLeft.x, y: topLeft.y - scaledSize.height)
+
+        playlist.setFrame(frame, display: true)
+
+        AppLog.debug(.window, "[PLAYLIST RESIZE] size: \(pixelSize), scaled: \(scaledSize), frame: \(frame)")
+    }
+
     private func movePlaylist(using context: PlaylistDockingContext, targetFrame: NSRect, playlistSize: NSSize, animated: Bool) {
         guard let playlist = playlistWindow else { return }
         let origin = playlistOrigin(for: context.attachment, anchorFrame: targetFrame, playlistSize: playlistSize)

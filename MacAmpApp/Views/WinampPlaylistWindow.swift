@@ -260,6 +260,24 @@ struct WinampPlaylistWindow: View {
     @State private var menuDelegate = PlaylistMenuDelegate()  // NSMenuDelegate for keyboard navigation
     @State private var sizeState = PlaylistWindowSizeState()
 
+    // Resize gesture state (Phase 3)
+    @State private var dragStartSize: Size2D?
+    @State private var isDragging: Bool = false
+    @State private var resizePreview = WindowResizePreviewOverlay()
+
+    // Scroll state (Phase 4)
+    @State private var scrollOffset: Int = 0
+
+    /// Maximum valid scroll offset (clamped to prevent out-of-bounds)
+    private var maxScrollOffset: Int {
+        max(0, audioPlayer.playlist.count - sizeState.visibleTrackCount)
+    }
+
+    /// Clamped scroll offset that's always valid
+    private var clampedScrollOffset: Int {
+        min(scrollOffset, maxScrollOffset)
+    }
+
     // Dynamic dimensions from size state
     private var windowWidth: CGFloat { sizeState.windowWidth }
     private var windowHeight: CGFloat { sizeState.windowHeight }
@@ -458,40 +476,69 @@ struct WinampPlaylistWindow: View {
             buildTimeDisplays()
             buildTitleBarButtons()
 
-        // Scroll handle (static position for now, will be functional in Phase 4)
-        SimpleSpriteImage("PLAYLIST_SCROLL_HANDLE", width: 8, height: 18)
-            .position(x: windowWidth - 15, y: PlaylistWindowSizeState.topBarHeight + 10)
+        // Scroll slider (Phase 4 - functional scroll with binding)
+        PlaylistScrollSlider(
+            scrollOffset: $scrollOffset,
+            totalTracks: audioPlayer.playlist.count,
+            visibleTracks: sizeState.visibleTrackCount
+        )
+        .frame(height: sizeState.contentHeight - 4)  // Leave room for top/bottom padding
+        .position(x: windowWidth - 15, y: PlaylistWindowSizeState.topBarHeight + (sizeState.contentHeight / 2))
+        // Clamp scrollOffset when playlist size changes
+        .onChange(of: audioPlayer.playlist.count) { _, _ in
+            if scrollOffset > maxScrollOffset {
+                scrollOffset = maxScrollOffset
+            }
+        }
+        // Clamp scrollOffset when window is resized (visible tracks change)
+        .onChange(of: sizeState.visibleTrackCount) { _, _ in
+            if scrollOffset > maxScrollOffset {
+                scrollOffset = maxScrollOffset
+            }
+        }
+
+        // Resize handle (20×20 hit area at bottom-right corner)
+        buildResizeHandle()
     }
     
     @ViewBuilder
     private func buildTrackList() -> some View {
         let trackWidth = sizeState.contentWidth
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(spacing: 0) {
-                ForEach(Array(audioPlayer.playlist.enumerated()), id: \.element.id) { index, track in
-                    trackRow(track: track, index: index)
-                        .frame(width: trackWidth, height: 13)
-                        .background(trackBackground(track: track, index: index))
-                        .onTapGesture(count: 2) {
-                            // Double-click: Play via PlaybackCoordinator (handles both local + streams)
-                            Task {
-                                await playbackCoordinator.play(track: track)
-                            }
-                        }
-                        .onTapGesture {
-                            // Single-click: Handle selection
-                            let modifiers = NSEvent.modifierFlags
-
-                            if modifiers.contains(.shift) {
-                                if selectedIndices.contains(index) {
-                                    selectedIndices.remove(index)
-                                } else {
-                                    selectedIndices.insert(index)
+        ScrollViewReader { proxy in
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 0) {
+                    ForEach(Array(audioPlayer.playlist.enumerated()), id: \.element.id) { index, track in
+                        trackRow(track: track, index: index)
+                            .frame(width: trackWidth, height: 13)
+                            .background(trackBackground(track: track, index: index))
+                            .id(index)  // Enable scroll-to by index
+                            .onTapGesture(count: 2) {
+                                // Double-click: Play via PlaybackCoordinator (handles both local + streams)
+                                Task {
+                                    await playbackCoordinator.play(track: track)
                                 }
-                            } else {
-                                selectedIndices = [index]
                             }
-                        }
+                            .onTapGesture {
+                                // Single-click: Handle selection
+                                let modifiers = NSEvent.modifierFlags
+
+                                if modifiers.contains(.shift) {
+                                    if selectedIndices.contains(index) {
+                                        selectedIndices.remove(index)
+                                    } else {
+                                        selectedIndices.insert(index)
+                                    }
+                                } else {
+                                    selectedIndices = [index]
+                                }
+                            }
+                    }
+                }
+            }
+            .onChange(of: scrollOffset) { _, newOffset in
+                // Sync: scroll slider → scroll view
+                withAnimation(.easeOut(duration: 0.1)) {
+                    proxy.scrollTo(newOffset, anchor: .top)
                 }
             }
         }
@@ -675,6 +722,79 @@ struct WinampPlaylistWindow: View {
         .buttonStyle(.plain)
         .focusable(false)
         .position(x: windowWidth - 6.5, y: buttonY)
+    }
+
+    // MARK: - Resize Handle (Phase 3)
+
+    @ViewBuilder
+    private func buildResizeHandle() -> some View {
+        Rectangle()
+            .fill(Color.clear)
+            .frame(width: 20, height: 20)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        // Capture start size on first drag tick
+                        if dragStartSize == nil {
+                            dragStartSize = sizeState.size
+                            isDragging = true
+                            // CRITICAL: Prevent magnetic snapping during resize
+                            WindowSnapManager.shared.beginProgrammaticAdjustment()
+                        }
+
+                        guard let baseSize = dragStartSize else { return }
+
+                        // Calculate quantized size from drag delta (25×29px segments)
+                        let widthDelta = Int(round(value.translation.width / PlaylistWindowSizeState.segmentWidth))
+                        let heightDelta = Int(round(value.translation.height / PlaylistWindowSizeState.segmentHeight))
+
+                        let candidate = Size2D(
+                            width: max(0, baseSize.width + widthDelta),
+                            height: max(0, baseSize.height + heightDelta)
+                        )
+
+                        // APPKIT PREVIEW: Update overlay window via coordinator bridge
+                        // Apply double-size scaling to match final window size
+                        if let coordinator = WindowCoordinator.shared {
+                            let previewPixels = candidate.toPlaylistPixels()
+                            let scale = settings.isDoubleSizeMode ? 2.0 : 1.0
+                            let scaledPreview = CGSize(
+                                width: previewPixels.width * scale,
+                                height: previewPixels.height * scale
+                            )
+                            coordinator.showPlaylistResizePreview(resizePreview, previewSize: scaledPreview)
+                        }
+                    }
+                    .onEnded { value in
+                        // Calculate final size from total drag
+                        guard let baseSize = dragStartSize else { return }
+
+                        let widthDelta = Int(round(value.translation.width / PlaylistWindowSizeState.segmentWidth))
+                        let heightDelta = Int(round(value.translation.height / PlaylistWindowSizeState.segmentHeight))
+
+                        let finalSize = Size2D(
+                            width: max(0, baseSize.width + widthDelta),
+                            height: max(0, baseSize.height + heightDelta)
+                        )
+
+                        // COMMIT: Update actual size (triggers persistence via didSet)
+                        sizeState.size = finalSize
+
+                        // Sync NSWindow frame via coordinator bridge
+                        if let coordinator = WindowCoordinator.shared {
+                            coordinator.updatePlaylistWindowSize(to: sizeState.pixelSize)
+                            coordinator.hidePlaylistResizePreview(resizePreview)
+                        }
+
+                        // Clean up
+                        isDragging = false
+                        dragStartSize = nil
+                        // CRITICAL: Re-enable magnetic snapping
+                        WindowSnapManager.shared.endProgrammaticAdjustment()
+                    }
+            )
+            .position(x: windowWidth - 10, y: windowHeight - 10)
     }
 
     @ViewBuilder
