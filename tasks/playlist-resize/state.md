@@ -260,11 +260,34 @@ Only issue is PLAYLIST_BOTTOM_RIGHT_CORNER width.
 
 ---
 
-**Next Action:** Begin Phase 2 implementation (Layout Refactor)
+**Next Action:** Begin Phase 3 implementation (Resize Gesture)
 
-### Session Log - 2025-12-16 (Phase 1 Complete)
+### Session Log - 2025-12-16 (Phase 1 & 2 Complete)
 - Fixed sprite width bug (SkinSprites.swift): 154→150px
 - Added playlist presets to Size2D.swift: playlistMinimum, playlistDefault, playlist2xWidth
 - Created PlaylistWindowSizeState.swift (~200 lines) with all computed properties
 - Added file to Xcode project (PBXBuildFile, PBXFileReference, Models group, Sources phase)
+- Injected PlaylistWindowSizeState via @State in WinampPlaylistWindow
+- Replaced all hard-coded dimensions with dynamic computed values
+- Implemented three-section bottom bar (LEFT 125px + CENTER tiles + RIGHT 150px)
+- Dynamic vertical border tiling based on window height
+- Dynamic top bar tiling based on window width
+- Dynamic content area sizing
+- All button positions now relative to window edges
 - Build verified: **SUCCEEDED**
+- **Commit:** 15f5a24 - feat(playlist): Phase 1 & 2 - Foundation and Dynamic Layout
+
+### Resume Instructions
+To resume Phase 3 implementation:
+1. Read this state.md file
+2. Read VideoWindowChromeView.swift for resize handle pattern
+3. Implement buildResizeHandle() with DragGesture
+4. Add WindowCoordinator methods for playlist resize
+5. Integrate WindowSnapManager to prevent snapping during resize
+
+### Files Modified in Phase 1 & 2
+- MacAmpApp/Models/SkinSprites.swift (sprite width fix)
+- MacAmpApp/Models/Size2D.swift (playlist presets)
+- MacAmpApp/Models/PlaylistWindowSizeState.swift (NEW)
+- MacAmpApp/Views/WinampPlaylistWindow.swift (major refactor)
+- MacAmpApp.xcodeproj/project.pbxproj (new file reference)
