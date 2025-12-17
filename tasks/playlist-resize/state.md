@@ -474,3 +474,122 @@ The PLAYLIST_VISUALIZER_BACKGROUND (75×38px) now renders when window is wide en
 - `webamp_clone/packages/webamp/js/components/PlaylistWindow/index.tsx` - Vis component usage
 - `webamp_clone/packages/webamp/js/components/Vis.tsx` - Visualizer implementation
 - Search MacAmp for existing visualizer/spectrum code
+
+---
+
+## Session Log - 2025-12-16 (Playlist Mini Visualizer)
+
+### Summary
+Implemented functional playlist mini visualizer that activates when main window is shaded.
+
+### Completed This Session
+
+1. **Playlist Visualizer Research** (Gemini verified)
+   - Documented in `tasks/playlist-window-resize/research.md`
+   - Key finding: Same `VisualizerView` component reused, shows when main window is **SHADED**
+   - Corrected terminology: "closed" → "shaded" (closing main window closes the app)
+   - Technical: Render 76px width, clip to 72px (historical accuracy)
+
+2. **Main Window Shade State Migration**
+   - Added `isMainWindowShaded` to `AppSettings` (observable, persisted)
+   - Migrated `WinampMainWindow` from local `@State isShadeMode` to `settings.isMainWindowShaded`
+   - Enables cross-window observation (playlist knows when main is shaded)
+
+3. **Playlist Mini Visualizer Implementation**
+   - Added `VisualizerView` to playlist bottom-right section (inside visualizer area)
+   - Only shows when `settings.isMainWindowShaded == true` AND `sizeState.size.width >= 3`
+   - Position: `x=windowWidth-187, y=windowHeight-18`
+   - Renders 76px, clips to 72px with `.frame().clipped()` pattern
+
+4. **Bug Fixes**
+   - **Menu command**: "Shade/Unshade Main" was toggling `dockingController.panes[].isShaded` but window reads `settings.isMainWindowShaded`. Fixed to use `settings.isMainWindowShaded.toggle()`
+   - **Shade mode ZStack alignment**: `buildShadeMode()` inner ZStack was using default center alignment. When `.offset()` was applied via `.at()`, buttons moved from center to coordinates way outside the visible 14px frame. Fixed by adding `alignment: .topLeading`
+
+### Commits This Session
+```
+6d848b1 fix(main-window): Fix shade mode buttons not clickable
+5c849f2 fix(main-window): Fix shade/unshade menu command
+62c9039 feat(playlist): Add mini visualizer when main window is shaded
+2f9771c docs(playlist): Reconcile visualizer research with Gemini verification
+2da453c docs(playlist): Add playlist visualizer research section
+```
+
+### Files Modified
+- `MacAmpApp/Models/AppSettings.swift` - Added `isMainWindowShaded` property
+- `MacAmpApp/Views/WinampMainWindow.swift` - Shade state migration + ZStack alignment fix
+- `MacAmpApp/Views/WinampPlaylistWindow.swift` - Added mini visualizer
+- `MacAmpApp/AppCommands.swift` - Fixed menu command
+- `tasks/playlist-window-resize/research.md` - Comprehensive visualizer research
+
+### Technical Architecture
+
+**Playlist Visualizer Visibility Logic:**
+```swift
+// Two conditions must be true:
+let showVisualizer = sizeState.size.width >= 3   // Playlist wide enough (≥350px)
+let activateVisualizer = settings.isMainWindowShaded  // Main window shaded
+
+if showVisualizer && activateVisualizer {
+    VisualizerView()
+        .frame(width: 76, height: 16)           // Render full size
+        .frame(width: 72, alignment: .leading)  // Clip to 72px
+        .clipped()
+        .position(x: windowWidth - 187, y: windowHeight - 18)
+}
+```
+
+**Shade State Flow:**
+```
+AppSettings.isMainWindowShaded (source of truth, persisted)
+    ↓
+WinampMainWindow reads → shows full/shade mode
+    ↓
+WinampPlaylistWindow reads → shows/hides mini visualizer
+    ↓
+AppCommands reads → updates menu item text
+```
+
+### Test Instructions
+1. Run MacAmp
+2. Expand playlist window to ≥350px width (see visualizer background)
+3. Click shade button on main window titlebar (or use menu Options → Shade/Unshade Main, or ⌘⌥1)
+4. **Expected:** Main window shades to 14px bar, playlist visualizer activates
+5. Click shade button again (unshade)
+6. **Expected:** Main window returns to full size, playlist visualizer deactivates
+
+---
+
+## Resume Instructions (Updated 2025-12-16)
+
+**Current Status:** Playlist resize + visualizer complete. Ready for final testing.
+
+### What's Complete
+- [x] Phase 1-5: Playlist resize with scroll slider
+- [x] Phase 6: Visualizer background sprite
+- [x] Phase 7: Mini visualizer (activates when main shaded)
+- [x] Main window shade state in AppSettings
+- [x] Menu command fixed
+- [x] Shade mode button positioning fixed
+
+### Remaining
+- [ ] Manual testing with multiple skins
+- [ ] Window shading for EQ/Playlist windows (future work)
+- [ ] Create PR
+
+### Key Files for Context
+- `tasks/playlist-resize/state.md` - This file
+- `tasks/playlist-resize/plan.md` - Architecture decisions
+- `tasks/playlist-window-resize/research.md` - Visualizer research
+- `MacAmpApp/Views/WinampPlaylistWindow.swift` - Main implementation
+- `MacAmpApp/Models/AppSettings.swift` - Shade state
+- `MacAmpApp/Views/WinampMainWindow.swift` - Shade mode rendering
+
+### Build Command
+```bash
+xcodebuild -scheme MacAmpApp -configuration Debug build
+```
+
+---
+
+**Last Updated:** 2025-12-16
+**Next Session:** Manual testing, then create PR
