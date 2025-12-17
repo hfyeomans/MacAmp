@@ -24,6 +24,8 @@ MacAmp is a SwiftUI-based audio player for macOS that recreates the iconic deskt
 - 🎛️ **Advanced Controls** - Volume, balance, position seeking, shuffle, and three-state repeat (Off/All/One)
 - 🔄 **Three-State Repeat** - Winamp 5 Modern fidelity with Off/All/One modes and "1" badge indicator (Ctrl+R to cycle)
 - 🪟 **Multi-Window Interface** - Main player, equalizer, playlist, and video windows with shade modes
+- 📐 **Resizable Playlist** - Drag to resize in 25×29px segments with dynamic tiling and scroll slider
+- 📊 **Playlist Visualizer** - Mini spectrum analyzer in playlist when main window is shaded
 - 📺 **Video Playback** - Native video support (MP4, MOV, M4V) with V button or Ctrl+V
 - 🎬 **Video Window** - Skinnable video window with VIDEO.bmp chrome or classic fallback
 - 🔲 **Full Video Resize** - Drag any size with 25×29px quantized segments (1x/2x preset buttons)
@@ -103,6 +105,39 @@ Available presets: Classical, Club, Dance, Full Bass, Full Bass & Treble, Full T
 6. **Shuffle/Repeat** - Work with mixed playlists
 
 **Note:** Streams show "Connecting..." during buffering, then live metadata. No EQ/visualizer for streams (AVPlayer limitation).
+
+### Playlist Window Resize
+
+1. **Resize Window** - Drag the bottom-right corner to resize
+2. **Quantized Sizing** - Snaps to 25×29px segments (Winamp standard)
+3. **Size Range** - Minimum 275×116px, maximum 2000×900px
+4. **Dynamic Layout:**
+   - **Top Bar** - Title tiles expand/contract with width
+   - **Side Borders** - Vertical tiles adjust to height
+   - **Bottom Bar** - Three sections: LEFT (menus) + CENTER (tiles) + RIGHT (controls)
+5. **Scroll Slider** - Gold thumb appears on right border, drag to scroll playlist
+6. **Persistence** - Window size remembered across app restarts
+
+**Size Examples:**
+| Segments | Pixels | Visible Tracks |
+|----------|--------|----------------|
+| [0,0] | 275×116 | 4 tracks |
+| [0,4] | 275×232 | 13 tracks (default) |
+| [4,8] | 375×348 | 21 tracks |
+
+### Playlist Mini Visualizer
+
+The playlist window includes a mini spectrum analyzer that activates when the main window is **shaded**:
+
+1. **Activation** - Shade the main window (click titlebar shade button or press `Cmd+Option+1`)
+2. **Requirements:**
+   - Playlist window must be **wide enough** (≥350px, or 3+ width segments)
+   - Main window must be in **shade mode** (minimized to 14px bar)
+3. **Behavior:**
+   - Same 19-bar spectrum analyzer as main window
+   - Located in bottom-right visualizer background area
+   - Deactivates automatically when main window unshades
+4. **Usage** - Allows visualizer viewing while main window is minimized
 
 ### Skins
 
@@ -265,6 +300,7 @@ MacAmpApp/
 │   ├── M3UEntry.swift                      # M3U playlist entry structure
 │   ├── M3UParser.swift                     # M3U/M3U8 playlist parser (local + remote)
 │   ├── PLEditParser.swift                  # PLEDIT.txt color parser
+│   ├── PlaylistWindowSizeState.swift       # ⭐ NEW: Playlist resize state with computed properties
 │   ├── RadioStation.swift                  # ⭐ NEW: Radio station model
 │   ├── RadioStationLibrary.swift           # ⭐ NEW: Favorite stations persistence
 │   ├── Size2D.swift                        # ⭐ NEW: Quantized 25×29px resize segments
@@ -294,6 +330,7 @@ MacAmpApp/
 │   ├── Components/                         # Reusable UI Components
 │   │   ├── PlaylistBitmapText.swift            # Bitmap font rendering for playlist
 │   │   ├── PlaylistMenuDelegate.swift          # ⭐ NEW: NSMenuDelegate for keyboard navigation
+│   │   ├── PlaylistScrollSlider.swift          # ⭐ NEW: Gold thumb scroll slider with proportional sizing
 │   │   ├── PlaylistTimeText.swift              # Time display component
 │   │   ├── SimpleSpriteImage.swift             # Pixel-perfect sprite rendering (.interpolation(.none))
 │   │   ├── SpriteMenuItem.swift                # Sprite-based popup menu items
@@ -343,6 +380,14 @@ Package.swift                           # Swift Package Manager Configuration
 ```
 
 ### Recent Architectural Changes (2025)
+
+**Playlist Window Resize** (December 2025):
+- Added **PlaylistWindowSizeState** for observable resize state with computed layout properties
+- Added **PlaylistScrollSlider** component with proportional thumb sizing
+- Added **isMainWindowShaded** to AppSettings for cross-window shade state observation
+- Three-section bottom bar: LEFT (125px) + CENTER (dynamic tiles) + RIGHT (150px)
+- Segment-based resize (25×29px) with UserDefaults persistence
+- Mini visualizer integration when main window is shaded
 
 **Video & Milkdrop Windows** (November 2025):
 - Added **WindowCoordinator** for 5-window lifecycle management and AppKit/SwiftUI bridge
@@ -467,6 +512,46 @@ See [`docs/SpriteResolver-Architecture.md`](docs/SpriteResolver-Architecture.md)
 - **Conditional Logging** - `#if DEBUG` wraps all debug output
 
 ## Recent Updates
+
+### v0.9.1 (December 2025) - Playlist Window Resize + Mini Visualizer 📐
+
+**Major Features:**
+- ✅ **Playlist Window Resize** - Full resize support matching Winamp behavior
+  - Drag bottom-right corner to resize in 25×29px quantized segments
+  - Minimum 275×116px, maximum 2000×900px
+  - Three-section bottom bar: LEFT (125px menus) + CENTER (dynamic tiles) + RIGHT (150px controls)
+  - Dynamic top bar and side border tiling
+  - Size persisted to UserDefaults across restarts
+- ✅ **Playlist Scroll Slider** - Functional gold thumb scroll control
+  - Proportional thumb size based on visible/total tracks
+  - Drag to scroll through playlist
+  - Located in right border area
+- ✅ **Playlist Mini Visualizer** - Spectrum analyzer in playlist window
+  - Activates when main window is **shaded** (minimized to 14px bar)
+  - Requires playlist width ≥350px (3+ width segments)
+  - Same 19-bar spectrum analyzer as main window
+  - Renders 76px, clips to 72px (Winamp historical accuracy)
+
+**Main Window Shade Mode:**
+- ✅ Shade state migrated to AppSettings (observable, persisted)
+- ✅ Cross-window observation enables playlist visualizer activation
+- ✅ Menu command "Shade/Unshade Main" fixed
+
+**Bug Fixes:**
+- Fixed shade mode buttons not clickable (ZStack alignment)
+- Fixed NSWindow constraints (allow dynamic playlist width)
+- Fixed persisted size restoration on launch
+- Fixed PLAYLIST_BOTTOM_RIGHT_CORNER sprite width (154→150px)
+
+**Architecture:**
+- PlaylistWindowSizeState.swift - Observable state with computed layout properties
+- PlaylistScrollSlider.swift - Reusable scroll slider component
+- Three-layer pattern maintained (Mechanism→Bridge→Presentation)
+- Oracle Grade: A- (Architecture Aligned)
+
+**Documentation:**
+- Added docs/PLAYLIST_WINDOW.md (860 lines)
+- Added Part 22 to BUILDING_RETRO_MACOS_APPS_SKILL.md
 
 ### v0.8.9 (November 2025) - Video & Milkdrop Windows 🎬
 
@@ -600,6 +685,7 @@ We welcome contributions! Areas that need work:
 - **Architecture:** [`docs/ARCHITECTURE_REVELATION.md`](docs/ARCHITECTURE_REVELATION.md)
 - **Sprite System:** [`docs/SpriteResolver-Architecture.md`](docs/SpriteResolver-Architecture.md)
 - **Skin Format:** [`docs/winamp-skins-lessons.md`](docs/winamp-skins-lessons.md)
+- **Playlist Window:** [`docs/PLAYLIST_WINDOW.md`](docs/PLAYLIST_WINDOW.md)
 - **Phase 4 Plan:** [`tasks/phase4-polish-and-bugfixes/plan.md`](tasks/phase4-polish-and-bugfixes/plan.md)
 
 ## Credits
