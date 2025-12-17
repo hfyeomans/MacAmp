@@ -50,6 +50,36 @@ MacAmp is a SwiftUI-based audio player for macOS that recreates the iconic deskt
 - **Apple Silicon** (M1/M2/M3/M4) or Intel Mac
 - **Xcode 26.0+** (for building from source)
 
+## Download
+
+### Latest Release: v0.9.1 (December 2025)
+
+[![Download MacAmp](https://img.shields.io/badge/Download-MacAmp%20v0.9.1-blue?style=for-the-badge)](https://github.com/hfyeomans/MacAmp/releases/tag/v0.9.1)
+
+**[Download MacAmp-v0.9.1-Notarized.dmg](https://github.com/hfyeomans/MacAmp/releases/tag/v0.9.1)** (2.3 MB)
+
+| Property | Value |
+|----------|-------|
+| Version | 0.9.1 |
+| Build | 2 |
+| Signed | Developer ID Application |
+| Notarized | Yes (Apple approved) |
+| Architecture | Apple Silicon (arm64) |
+
+**Installation:**
+1. Download the DMG file
+2. Open the DMG
+3. Drag MacAmp to Applications folder
+4. Launch from Applications (no Gatekeeper warnings)
+
+**What's New in v0.9.1:**
+- Playlist window resize (drag bottom-right corner)
+- Playlist scroll slider with proportional thumb
+- Mini visualizer in playlist (when main window shaded)
+- Main window shade state persistence
+
+See [Release Notes](https://github.com/hfyeomans/MacAmp/releases/tag/v0.9.1) for full changelog.
+
 ## Installation
 
 ### Building from Source
