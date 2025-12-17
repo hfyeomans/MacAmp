@@ -389,68 +389,97 @@ struct WinampPlaylistWindow: View {
 
     @ViewBuilder
     private func buildCompleteBackground() -> some View {
-            let suffix = isWindowActive ? "_SELECTED" : ""
+        let suffix = isWindowActive ? "_SELECTED" : ""
 
-            // Top bar: LEFT CORNER (25px) + LEFT TILES + TITLE (100px) + RIGHT TILES + RIGHT CORNER (25px)
-            // Left corner
-            SimpleSpriteImage("PLAYLIST_TOP_LEFT\(isWindowActive ? "_SELECTED" : "_CORNER")", width: 25, height: 20)
-                .position(x: 12.5, y: 10)
+        // === TOP BAR ===
+        // Winamp layout: Tiles as BACKGROUND layer, then title/corners OVERLAY on top
+        // This matches webamp's flex-grow approach: tiles fill entire width, title overlays
 
-            // Left side tiles: Fill space between left corner and title bar
-            let tilesPerSide = sizeState.topBarTilesPerSide
-            ForEach(0..<tilesPerSide, id: \.self) { i in
-                SimpleSpriteImage("PLAYLIST_TOP_TILE\(suffix)", width: 25, height: 20)
-                    .position(x: 25 + 12.5 + CGFloat(i) * 25, y: 10)
+        // 1. Left corner (bottom layer, at left edge)
+        SimpleSpriteImage("PLAYLIST_TOP_LEFT\(isWindowActive ? "_SELECTED" : "_CORNER")", width: 25, height: 20)
+            .position(x: 12.5, y: 10)
+
+        // 2. Background tiles: Fill from left corner (25px) to window edge
+        // Tiles render UNDER the title bar (drawn first in ZStack)
+        ForEach(0..<sizeState.topBarTileCount, id: \.self) { i in
+            SimpleSpriteImage("PLAYLIST_TOP_TILE\(suffix)", width: 25, height: 20)
+                .position(x: 25 + 12.5 + CGFloat(i) * 25, y: 10)
+        }
+
+        // 3. Title bar OVERLAY (centered, drawn on top of tiles)
+        WinampTitlebarDragHandle(windowKind: .playlist, size: CGSize(width: 100, height: 20)) {
+            SimpleSpriteImage("PLAYLIST_TITLE_BAR\(suffix)", width: 100, height: 20)
+        }
+        .position(x: windowWidth / 2, y: 10)
+
+        // 4. Right corner OVERLAY (at right edge, drawn on top of tiles)
+        SimpleSpriteImage("PLAYLIST_TOP_RIGHT_CORNER\(suffix)", width: 25, height: 20)
+            .position(x: windowWidth - 12.5, y: 10)
+
+        // === SIDE BORDERS ===
+        // Dynamic vertical tiling based on window height
+        let borderTileCount = sizeState.verticalBorderTileCount
+        ForEach(0..<borderTileCount, id: \.self) { i in
+            SimpleSpriteImage("PLAYLIST_LEFT_TILE", width: 12, height: 29)
+                .position(x: 6, y: 20 + 14.5 + CGFloat(i) * 29)
+        }
+
+        ForEach(0..<borderTileCount, id: \.self) { i in
+            SimpleSpriteImage("PLAYLIST_RIGHT_TILE", width: 20, height: 29)
+                .position(x: windowWidth - 10, y: 20 + 14.5 + CGFloat(i) * 29)
+        }
+
+        // === BOTTOM BAR ===
+        // Layout: LEFT (125px) + CENTER tiles + [VISUALIZER (75px) when wide] + RIGHT (150px)
+        // Webamp: showVisualizer = playlistSize[0] > 2 (3+ width segments = 350px minimum)
+        // Visualizer positioned at right:150px in CSS = between center and right sections
+
+        let showVisualizer = sizeState.size.width >= 3  // 275 + 75 = 350px minimum
+
+        // Left section (0 to 125px)
+        SimpleSpriteImage("PLAYLIST_BOTTOM_LEFT_CORNER", width: 125, height: 38)
+            .position(x: 62.5, y: windowHeight - 19)
+
+        // Center tiles: fill from 125px to visualizer (or right section if no visualizer)
+        // With visualizer: center ends at windowWidth - 225 (leaving 75px for visualizer)
+        // Without visualizer: center ends at windowWidth - 150
+        let centerEndX: CGFloat = showVisualizer ? (windowWidth - 225) : (windowWidth - 150)
+        let centerAvailableWidth = max(0, centerEndX - 125)
+        let centerTileCount = Int(centerAvailableWidth / 25)
+
+        if centerTileCount > 0 {
+            ForEach(0..<centerTileCount, id: \.self) { i in
+                SimpleSpriteImage("PLAYLIST_BOTTOM_TILE", width: 25, height: 38)
+                    .position(x: 125 + 12.5 + CGFloat(i) * 25, y: windowHeight - 19)
             }
+        }
 
-            // Center title bar (draggable)
-            WinampTitlebarDragHandle(windowKind: .playlist, size: CGSize(width: 100, height: 20)) {
-                SimpleSpriteImage("PLAYLIST_TITLE_BAR\(suffix)", width: 100, height: 20)
+        // Visualizer background (75px, only when window wide enough)
+        // Position: from (windowWidth - 225) to (windowWidth - 150)
+        if showVisualizer {
+            SimpleSpriteImage("PLAYLIST_VISUALIZER_BACKGROUND", width: 75, height: 38)
+                .position(x: windowWidth - 187.5, y: windowHeight - 19)
+
+            // Mini visualizer: Only active when main window is SHADED
+            // When main window is in full mode, its visualizer is visible and this stays empty
+            // Gemini verified: render full 76px width, clip to 72px for historical accuracy
+            if settings.isMainWindowShaded {
+                VisualizerView()
+                    .frame(width: 76, height: 16)           // Render at full size
+                    .frame(width: 72, alignment: .leading)  // Clip to 72px (4px hidden from right)
+                    .clipped()
+                    // Position within the 75×38 visualizer container
+                    // Container spans: x=(windowWidth-225) to (windowWidth-150), y=(windowHeight-38) to windowHeight
+                    // CSS reference: wrapper at top:12px, left:2px within container
+                    // Visualizer center: x = (windowWidth-225) + 2 + 36 = windowWidth-187
+                    //                   y = (windowHeight-38) + 12 + 8 = windowHeight-18
+                    .position(x: windowWidth - 187, y: windowHeight - 18)
             }
-            .position(x: windowWidth / 2, y: 10)
+        }
 
-            // Right side tiles: Fill space between title bar and right corner
-            ForEach(0..<tilesPerSide, id: \.self) { i in
-                SimpleSpriteImage("PLAYLIST_TOP_TILE\(suffix)", width: 25, height: 20)
-                    .position(x: windowWidth - 25 - 12.5 - CGFloat(i) * 25, y: 10)
-            }
-
-            // Right corner
-            SimpleSpriteImage("PLAYLIST_TOP_RIGHT_CORNER\(suffix)", width: 25, height: 20)
-                .position(x: windowWidth - 12.5, y: 10)
-            
-            // Side borders: Dynamic vertical tiling based on window height
-            let borderTileCount = sizeState.verticalBorderTileCount
-            ForEach(0..<borderTileCount, id: \.self) { i in
-                SimpleSpriteImage("PLAYLIST_LEFT_TILE", width: 12, height: 29)
-                    .position(x: 6, y: 20 + 14.5 + CGFloat(i) * 29)
-            }
-
-            ForEach(0..<borderTileCount, id: \.self) { i in
-                SimpleSpriteImage("PLAYLIST_RIGHT_TILE", width: 20, height: 29)
-                    .position(x: windowWidth - 10, y: 20 + 14.5 + CGFloat(i) * 29)
-            }
-            
-            // Three-section bottom bar: LEFT (125px) + CENTER (dynamic tiles) + RIGHT (150px)
-            HStack(spacing: 0) {
-                // LEFT section: Fixed 125px corner with menu buttons
-                SimpleSpriteImage("PLAYLIST_BOTTOM_LEFT_CORNER", width: 125, height: 38)
-                    .frame(width: 125, height: 38)
-
-                // CENTER section: Dynamic tiling (0 or more 25px tiles)
-                if sizeState.centerTileCount > 0 {
-                    ForEach(0..<sizeState.centerTileCount, id: \.self) { _ in
-                        SimpleSpriteImage("PLAYLIST_BOTTOM_TILE", width: 25, height: 38)
-                            .frame(width: 25, height: 38)
-                    }
-                }
-
-                // RIGHT section: Fixed 150px corner with transport, scroll, resize
-                SimpleSpriteImage("PLAYLIST_BOTTOM_RIGHT_CORNER", width: 150, height: 38)
-                    .frame(width: 150, height: 38)
-            }
-            .frame(width: windowWidth, height: 38)
-            .position(x: windowWidth / 2, y: windowHeight - 19)  // Bottom bar at window bottom
+        // Right section (windowWidth - 150 to windowWidth)
+        SimpleSpriteImage("PLAYLIST_BOTTOM_RIGHT_CORNER", width: 150, height: 38)
+            .position(x: windowWidth - 75, y: windowHeight - 19)
     }
     
     @ViewBuilder
@@ -755,15 +784,10 @@ struct WinampPlaylistWindow: View {
                         )
 
                         // APPKIT PREVIEW: Update overlay window via coordinator bridge
-                        // Apply double-size scaling to match final window size
+                        // Note: Playlist window does NOT use double-size mode (unlike main/EQ windows)
                         if let coordinator = WindowCoordinator.shared {
                             let previewPixels = candidate.toPlaylistPixels()
-                            let scale = settings.isDoubleSizeMode ? 2.0 : 1.0
-                            let scaledPreview = CGSize(
-                                width: previewPixels.width * scale,
-                                height: previewPixels.height * scale
-                            )
-                            coordinator.showPlaylistResizePreview(resizePreview, previewSize: scaledPreview)
+                            coordinator.showPlaylistResizePreview(resizePreview, previewSize: previewPixels)
                         }
                     }
                     .onEnded { value in

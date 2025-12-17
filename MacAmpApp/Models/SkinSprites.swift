@@ -308,6 +308,7 @@ struct SkinSprites {
             Sprite(name: "PLAYLIST_LEFT_TILE", x: 0, y: 42, width: 12, height: 29),
             Sprite(name: "PLAYLIST_RIGHT_TILE", x: 31, y: 42, width: 20, height: 29),
             Sprite(name: "PLAYLIST_BOTTOM_TILE", x: 179, y: 0, width: 25, height: 38),
+            Sprite(name: "PLAYLIST_VISUALIZER_BACKGROUND", x: 205, y: 0, width: 75, height: 38),
             Sprite(name: "PLAYLIST_BOTTOM_LEFT_CORNER", x: 0, y: 72, width: 125, height: 38),
             Sprite(name: "PLAYLIST_BOTTOM_RIGHT_CORNER", x: 126, y: 72, width: 150, height: 38),
             Sprite(name: "PLAYLIST_SCROLL_HANDLE", x: 52, y: 53, width: 8, height: 18),

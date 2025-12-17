@@ -50,6 +50,7 @@ final class AppSettings {
         // Load persisted clutter bar states (default to false)
         self.isDoubleSizeMode = UserDefaults.standard.bool(forKey: "isDoubleSizeMode")
         self.isAlwaysOnTop = UserDefaults.standard.bool(forKey: "isAlwaysOnTop")
+        self.isMainWindowShaded = UserDefaults.standard.bool(forKey: "isMainWindowShaded")
         self.showVideoWindow = UserDefaults.standard.bool(forKey: "showVideoWindow")
         self.showMilkdropWindow = UserDefaults.standard.bool(forKey: "showMilkdropWindow")
 
@@ -179,6 +180,17 @@ final class AppSettings {
     var isAlwaysOnTop: Bool = false {
         didSet {
             UserDefaults.standard.set(isAlwaysOnTop, forKey: "isAlwaysOnTop")
+        }
+    }
+
+    // MARK: - Main Window Shade Mode
+
+    /// Tracks whether the main window is in shade mode (14px compact bar)
+    /// Used by playlist window to show mini visualizer when main visualizer is hidden
+    /// Persists across app restarts - defaults to false (full window)
+    var isMainWindowShaded: Bool = false {
+        didSet {
+            UserDefaults.standard.set(isMainWindowShaded, forKey: "isMainWindowShaded")
         }
     }
 

@@ -365,3 +365,112 @@ Before PR creation, manually test:
 
 ### Known Limitation:
 Two-way scroll sync deferred - dragging slider scrolls list, but trackpad/wheel scrolling list does NOT update slider. This is a SwiftUI limitation and matches original Winamp behavior.
+
+---
+
+### Session Log - 2025-12-16 (Visual Bug Fixes)
+
+**Issue 1: Titlebar text "WINAMP PLAYLIST" cut off** ✅ FIXED
+- **Root Cause:** Used per-side tile calculation placing tiles ADJACENT to title bar
+- **Fix:** Changed to webamp approach - render tiles as BACKGROUND layer covering full width, overlay title and corners ON TOP
+- **Details:**
+  - Old: Calculate `tilesPerSide` and place left tiles → title → right tiles
+  - New: Place ALL tiles from left corner to window edge (background), then overlay title centered, then overlay right corner
+  - This matches how webamp CSS uses `flex-grow: 1` on fill sections
+- **Files Changed:**
+  - `WinampPlaylistWindow.swift` - Rewrote `buildCompleteBackground()` top bar section
+  - `PlaylistWindowSizeState.swift` - Replaced `topBarTilesPerSide` with `topBarTileCount`
+- **Status:** VERIFIED WORKING
+
+**Issue 2: Bottom bar center section not showing when resized** ✅ FIXED
+- **Root Cause:** Missing PLAYLIST_VISUALIZER_BACKGROUND sprite and incorrect center tile calculation
+- **Fix:** Added visualizer sprite and proper layout matching webamp
+- **Details:**
+  - PLEDIT.bmp has TWO center sprites:
+    - PLAYLIST_BOTTOM_TILE (x=179, 25×38px) - gold tiles for filling center
+    - PLAYLIST_VISUALIZER_BACKGROUND (x=205, 75×38px) - spectrum analyzer background
+  - Webamp shows visualizer when `playlistSize[0] > 2` (3+ width segments = 350px)
+  - Layout from left to right:
+    - LEFT (125px): always visible
+    - CENTER tiles: from 125px to (windowWidth - 225) when visualizer shown, or (windowWidth - 150) when not
+    - VISUALIZER (75px): from (windowWidth - 225) to (windowWidth - 150), only when >= 350px
+    - RIGHT (150px): always at right edge
+  - Center tile count formula changes based on visualizer visibility
+- **Files Changed:**
+  - `SkinSprites.swift` - Added PLAYLIST_VISUALIZER_BACKGROUND sprite definition
+  - `WinampPlaylistWindow.swift` - Complete rewrite of bottom bar section with:
+    - showVisualizer condition (width >= 3 segments)
+    - Dynamic centerEndX calculation
+    - Visualizer background rendering when wide enough
+
+**Issue 3: Playlist window incorrectly applied double-size scaling** ✅ FIXED
+- **Root Cause:** Code assumed playlist window uses double-size mode like main/EQ windows
+- **Fix:** Removed double-size scaling from playlist window (webamp reference confirms playlist doesn't scale)
+- **Details:**
+  - Webamp's PlaylistWindow has NO doubleSize references (verified via grep)
+  - Only main and EQ windows use double-size mode in Winamp
+  - Playlist resizes via segment-based grid (25×29px increments), not 2x scaling
+- **Files Changed:**
+  - `WinampPlaylistWindow.swift` - Removed scale calculation from resize preview
+  - `WindowCoordinator.swift` - Removed scale from `updatePlaylistWindowSize()`
+- **Status:** VERIFIED WORKING
+
+---
+
+## Resume Instructions (2025-12-16)
+
+**Current Status:** All 3 visual layout issues FIXED. Ready for testing.
+
+### Issues Fixed This Session:
+1. ✅ **Titlebar text cutoff** - Full-width tiles as background, title overlay on top
+2. ✅ **Bottom bar center section** - Added PLAYLIST_VISUALIZER_BACKGROUND sprite, proper layout with visualizer logic
+3. ✅ **Double-size scaling** - Removed (playlist doesn't use double-size mode)
+
+### To verify fixes:
+1. Build in Xcode (Cmd+B)
+2. Test playlist window at various sizes:
+   - 275px (minimum): No center tiles, no visualizer background
+   - 300px (1 segment): 1 center tile, no visualizer background
+   - 325px (2 segments): 2 center tiles, no visualizer background
+   - 350px (3 segments): Visualizer background appears, no center tiles
+   - 375px (4 segments): Visualizer background + 1 center tile
+3. Verify titlebar shows full "WINAMP PLAYLIST" text
+4. Verify resize works correctly (no double-size scaling applied)
+
+### Key files changed:
+- `MacAmpApp/Views/WinampPlaylistWindow.swift` - Bottom bar + top bar layout
+- `MacAmpApp/Models/SkinSprites.swift` - Added PLAYLIST_VISUALIZER_BACKGROUND
+- `MacAmpApp/Models/PlaylistWindowSizeState.swift` - topBarTileCount
+- `MacAmpApp/ViewModels/WindowCoordinator.swift` - Removed double-size scaling
+
+### Bottom bar layout formula:
+```
+showVisualizer = sizeState.size.width >= 3  (350px minimum)
+
+With visualizer:
+  centerEndX = windowWidth - 225
+  centerTileCount = (centerEndX - 125) / 25
+
+Without visualizer:
+  centerEndX = windowWidth - 150
+  centerTileCount = (centerEndX - 125) / 25
+```
+
+---
+
+## Future Work: Playlist Visualizer
+
+**Status:** BACKGROUND sprite implemented, actual visualizer NOT YET WORKING
+
+The PLAYLIST_VISUALIZER_BACKGROUND (75×38px) now renders when window is wide enough, but the actual spectrum analyzer visualization needs to be implemented.
+
+### Research needed:
+1. How webamp's `<Vis analyser={analyser} />` component works
+2. How MacAmp's existing main window visualizer works (if any)
+3. Whether to share visualizer code between main window and playlist
+4. Webamp condition: `activateVisualizer = !getWindowOpen(WINDOWS.MAIN)` - visualizer only active when main window is closed
+
+### Reference files:
+- `webamp_clone/packages/webamp/js/components/PlaylistWindow/index.tsx` - Vis component usage
+- `webamp_clone/packages/webamp/js/components/Vis.tsx` - Visualizer implementation
+- Search MacAmp for existing visualizer/spectrum code

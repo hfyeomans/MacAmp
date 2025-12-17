@@ -818,28 +818,24 @@ final class WindowCoordinator {
     }
 
     /// Update playlist window frame to match new size (AppKit bridge)
-    /// Handles double-size scaling automatically
+    /// Note: Playlist window does NOT use double-size mode (only main/EQ windows scale)
     func updatePlaylistWindowSize(to pixelSize: CGSize) {
         guard let playlist = playlistWindow else { return }
 
         var frame = playlist.frame
         guard frame.size != pixelSize else { return }
 
-        // Apply double-size scaling at the window frame level
-        let scale = settings.isDoubleSizeMode ? 2.0 : 1.0
-        let scaledSize = CGSize(width: pixelSize.width * scale, height: pixelSize.height * scale)
-
         // Preserve top-left anchor (macOS uses bottom-left origin)
         let topLeft = NSPoint(
             x: round(frame.origin.x),
             y: round(frame.origin.y + frame.size.height)
         )
-        frame.size = scaledSize
-        frame.origin = NSPoint(x: topLeft.x, y: topLeft.y - scaledSize.height)
+        frame.size = pixelSize
+        frame.origin = NSPoint(x: topLeft.x, y: topLeft.y - pixelSize.height)
 
         playlist.setFrame(frame, display: true)
 
-        AppLog.debug(.window, "[PLAYLIST RESIZE] size: \(pixelSize), scaled: \(scaledSize), frame: \(frame)")
+        AppLog.debug(.window, "[PLAYLIST RESIZE] size: \(pixelSize), frame: \(frame)")
     }
 
     private func movePlaylist(using context: PlaylistDockingContext, targetFrame: NSRect, playlistSize: NSSize, animated: Bool) {

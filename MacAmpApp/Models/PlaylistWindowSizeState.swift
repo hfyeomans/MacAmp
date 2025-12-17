@@ -83,15 +83,11 @@ final class PlaylistWindowSizeState {
 
     // MARK: - Computed Properties: Top Bar (Titlebar)
 
-    /// Number of 25px stretchy tiles for the top bar on EACH side
-    /// At 275px: fill space between corner caps (25px each) and center title (100px)
-    /// Left side tiles fill: left cap → title start
-    /// Right side tiles fill: title end → right cap
-    var topBarTilesPerSide: Int {
-        // Available = windowWidth - leftCap(25) - title(100) - rightCap(25)
-        let available = windowWidth - 25 - 100 - 25
-        // Split between left and right, round up for coverage
-        return max(0, Int(ceil((available / 2) / Self.segmentWidth)))
+    /// Number of 25px tiles to fill the top bar background (from left corner to window edge)
+    /// Tiles render UNDER the title bar, which overlays them in the center
+    var topBarTileCount: Int {
+        // Tiles fill from left corner (25px) to window edge
+        Int(ceil((windowWidth - 25) / Self.segmentWidth))
     }
 
     /// Whether to show titlebar spacers (Webamp parity: even width segments = show spacers)

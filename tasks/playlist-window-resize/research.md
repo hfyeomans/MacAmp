@@ -364,19 +364,20 @@ The playlist visualizer has **two conditions** that control its display:
 
 ```tsx
 const showVisualizer = playlistSize[0] > 2;           // Width condition
-const activateVisualizer = !getWindowOpen(WINDOWS.MAIN);  // Main window CLOSED
+const activateVisualizer = !getWindowOpen(WINDOWS.MAIN);  // Main window SHADED
 ```
 
 1. **`showVisualizer`**: Only renders the container when playlist width exceeds minimum
    - `playlistSize[0] > 2` means the playlist width unit is > 2 (approx 3× minimum width)
    - This creates space for the visualizer in the bottom-right section
 
-2. **`activateVisualizer`**: Only activates animation when main window is **CLOSED**
-   - **Important:** This is about the Main Window being CLOSED, not just hidden/shaded
-   - If main window is open → visualizer container exists but is empty
-   - If main window is closed → visualizer runs the animation loop
-   - **Purpose:** The playlist visualizer was a fallback feature when main window was closed
-   - **Historical context:** In Winamp, users would close the main window to get a minimal player
+2. **`activateVisualizer`**: Only activates animation when main window is **SHADED**
+   - **Important:** "Closed" in Webamp means the main window is in SHADE MODE (14px compact bar)
+   - In real Winamp, closing the main window closes the app - you can only SHADE it
+   - If main window is in full mode → visualizer container exists but is empty
+   - If main window is shaded → playlist visualizer runs the animation loop
+   - **Purpose:** The playlist visualizer provides visualization when main window's visualizer is hidden
+   - **Historical context:** In Winamp, shading the main window hides the visualizer, so playlist takes over
 
 ### Webamp Documentation Confirms This
 
@@ -549,7 +550,8 @@ Since MacAmp already has `VisualizerView` with the correct 19-bar pattern, we re
 
 ```swift
 // In PlaylistWindow View
-if !windowManager.isMainWindowOpen {
+// Show visualizer only when main window is SHADED (not full mode)
+if settings.isMainWindowShaded {
     VisualizerView()
         .frame(width: 76, height: 16)           // 1. Render at FULL SIZE
         .frame(width: 72, alignment: .leading)  // 2. Clip to 72px (from left)
@@ -561,7 +563,7 @@ if !windowManager.isMainWindowOpen {
 **Key Points:**
 1. **Render full 76px** - Don't scale or reduce bar count
 2. **Clip to 72px** - Use `.frame(width: 72, alignment: .leading).clipped()`
-3. **Check window state** - Only show when `!windowManager.isMainWindowOpen`
+3. **Check window state** - Only show when `settings.isMainWindowShaded == true`
 4. **Position correctly** - `offset(x: 2, y: 12)` matches CSS positioning
 
 **Why Clipping, Not Scaling:**
@@ -618,7 +620,7 @@ The `playlist-visualizer` CSS class in base-skin uses no special background imag
 | Source Component | `<Vis />` | `<Vis />` (Same) |
 | Render Dimensions | 76px × 16px | 76px × 16px (Rendered) |
 | Visible Area | 76px × 16px | 72px × 16px (Clipped) |
-| Visibility | Always (if Main Window visible) | Only when Main Window is **CLOSED** |
+| Visibility | Always (if Main Window in full mode) | Only when Main Window is **SHADED** |
 | Position | Main Window Texture Area | Playlist Bottom Bar (Absolute) |
 | Bar Style | 19 Bars (3px bar + 1px space) | 19 Bars (3px bar + 1px space) |
 | Mode State | Global (shared) | Global (shared) |
