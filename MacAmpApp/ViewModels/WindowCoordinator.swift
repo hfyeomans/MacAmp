@@ -804,6 +804,40 @@ final class WindowCoordinator {
         overlay.hide()
     }
 
+    // MARK: - Playlist Resize Coordination (Phase 3)
+
+    /// Show resize preview overlay for playlist window (AppKit bridge)
+    func showPlaylistResizePreview(_ overlay: WindowResizePreviewOverlay, previewSize: CGSize) {
+        guard let window = playlistWindow else { return }
+        overlay.show(in: window, previewSize: previewSize)
+    }
+
+    /// Hide resize preview overlay for playlist window (AppKit bridge)
+    func hidePlaylistResizePreview(_ overlay: WindowResizePreviewOverlay) {
+        overlay.hide()
+    }
+
+    /// Update playlist window frame to match new size (AppKit bridge)
+    /// Note: Playlist window does NOT use double-size mode (only main/EQ windows scale)
+    func updatePlaylistWindowSize(to pixelSize: CGSize) {
+        guard let playlist = playlistWindow else { return }
+
+        var frame = playlist.frame
+        guard frame.size != pixelSize else { return }
+
+        // Preserve top-left anchor (macOS uses bottom-left origin)
+        let topLeft = NSPoint(
+            x: round(frame.origin.x),
+            y: round(frame.origin.y + frame.size.height)
+        )
+        frame.size = pixelSize
+        frame.origin = NSPoint(x: topLeft.x, y: topLeft.y - pixelSize.height)
+
+        playlist.setFrame(frame, display: true)
+
+        AppLog.debug(.window, "[PLAYLIST RESIZE] size: \(pixelSize), frame: \(frame)")
+    }
+
     private func movePlaylist(using context: PlaylistDockingContext, targetFrame: NSRect, playlistSize: NSSize, animated: Bool) {
         guard let playlist = playlistWindow else { return }
         let origin = playlistOrigin(for: context.attachment, anchorFrame: targetFrame, playlistSize: playlistSize)
@@ -1037,12 +1071,18 @@ final class WindowCoordinator {
 
             if let playlist = playlistWindow,
                var storedPlaylist = windowFrameStore.frame(for: .playlist) {
-                storedPlaylist.size.width = WinampSizes.playlistBase.width
+                // Preserve stored width (segment-based sizing allows horizontal expansion)
+                // Clamp to minimum width but don't force to base width
+                let clampedWidth = max(
+                    PlaylistWindowSizeState.baseWidth,
+                    storedPlaylist.size.width
+                )
+                // Clamp height to valid range using new base height (116px, not 232px)
                 let clampedHeight = max(
-                    WinampSizes.playlistBase.height,
+                    PlaylistWindowSizeState.baseHeight,
                     min(LayoutDefaults.playlistMaxHeight, storedPlaylist.size.height)
                 )
-                storedPlaylist.size.height = clampedHeight
+                storedPlaylist.size = CGSize(width: clampedWidth, height: clampedHeight)
                 playlist.setFrame(storedPlaylist, display: true)
                 applied = true
             }

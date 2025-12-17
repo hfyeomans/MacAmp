@@ -20,6 +20,17 @@ struct Size2D: Equatable, Codable, Hashable {
     /// Video window 2x size: 550×464 (double the default)
     static let video2x = Size2D(width: 11, height: 12)  // 550×464
 
+    // MARK: - Playlist Window Presets
+
+    /// Playlist window minimum size: 275×116 (matches Main/EQ)
+    static let playlistMinimum = Size2D(width: 0, height: 0)  // 275×116
+
+    /// Playlist window default size: 275×232 (current standard, 13 visible tracks)
+    static let playlistDefault = Size2D(width: 0, height: 4)  // 275×232
+
+    /// Playlist window 2x width: 550×232 (double width for long filenames)
+    static let playlist2xWidth = Size2D(width: 11, height: 4)  // 550×232
+
     // MARK: - Conversion Methods
 
     /// Convert segments to pixel dimensions for VIDEO window

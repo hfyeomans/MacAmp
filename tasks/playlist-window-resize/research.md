@@ -329,3 +329,337 @@ Also uses flexbox with side borders:
 - [ ] Screenshot of expanded playlist (center visible)
 - [ ] PLEDIT.BMP sprite sheet with sections labeled
 - [ ] Diagram showing measurement of all fixed dimensions
+
+---
+
+## Playlist Visualizer Research
+
+### Overview
+
+The playlist window in Winamp includes a **mini visualizer** in the bottom-right section. This visualizer is the **same component** as the main window spectrum analyzer, but with different visibility conditions and positioning.
+
+### Key Finding: Same Vis Component, Different Context
+
+**Webamp reuses the exact same `<Vis />` component** in both windows:
+
+```tsx
+// From webamp_clone/packages/webamp/js/components/PlaylistWindow/index.tsx
+<div className="playlist-bottom-right draggable">
+  {showVisualizer && (
+    <div className="playlist-visualizer">
+      {activateVisualizer && (
+        <div className="visualizer-wrapper">
+          <Vis analyser={analyser} />  {/* SAME COMPONENT AS MAIN WINDOW */}
+        </div>
+      )}
+    </div>
+  )}
+  ...
+</div>
+```
+
+### Visibility Conditions
+
+The playlist visualizer has **two conditions** that control its display:
+
+```tsx
+const showVisualizer = playlistSize[0] > 2;           // Width condition
+const activateVisualizer = !getWindowOpen(WINDOWS.MAIN);  // Main window SHADED
+```
+
+1. **`showVisualizer`**: Only renders the container when playlist width exceeds minimum
+   - `playlistSize[0] > 2` means the playlist width unit is > 2 (approx 3× minimum width)
+   - This creates space for the visualizer in the bottom-right section
+
+2. **`activateVisualizer`**: Only activates animation when main window is **SHADED**
+   - **Important:** "Closed" in Webamp means the main window is in SHADE MODE (14px compact bar)
+   - In real Winamp, closing the main window closes the app - you can only SHADE it
+   - If main window is in full mode → visualizer container exists but is empty
+   - If main window is shaded → playlist visualizer runs the animation loop
+   - **Purpose:** The playlist visualizer provides visualization when main window's visualizer is hidden
+   - **Historical context:** In Winamp, shading the main window hides the visualizer, so playlist takes over
+
+### Webamp Documentation Confirms This
+
+From `webamp_clone/packages/webamp-docs/docs/05_features/04_playlist.md`:
+
+> **Mini Visualizer**
+>
+> If the main and Milkdrop windows are both hidden (via the context menu) and the playlist is horizontally expanded, Webamp will display a mini visualizer in the playlist window. If the main window is visible, the mini visualizer will not be active.
+
+### Visual Dimensions Comparison
+
+| Property | Main Window | Playlist Mini |
+|----------|-------------|---------------|
+| Container Width | 76px | 75px |
+| Container Height | 16px | 38px (full bottom section) |
+| Visualizer Wrapper | 76×16 | 72px wide, positioned `top:12px, left:2px` |
+| Render Height | 16px (normal) / 5px (shade) | Uses same render logic |
+| Bar Count | 19 (wide) / 38 (thin) | Same component |
+
+**CSS from `webamp_clone/packages/webamp/css/playlist-window.css`:**
+
+```css
+#webamp #playlist-window .playlist-visualizer {
+  width: 75px;
+  height: 100%;          /* Full 38px height of bottom section */
+  position: absolute;
+  right: 150px;          /* Positioned to the left of the 150px right section */
+}
+
+#webamp #playlist-window .visualizer-wrapper {
+  position: absolute;
+  top: 12px;             /* Vertical offset within container */
+  left: 2px;
+  width: 72px;
+  overflow: hidden;
+}
+```
+
+### Technical Implementation Details
+
+#### Shared AnalyserNode
+
+Both visualizers share the same Web Audio API `AnalyserNode`:
+
+```tsx
+// From Vis.tsx
+type Props = {
+  analyser: AnalyserNode;  // Same audio source for both
+};
+
+export default function Vis({ analyser }: Props) {
+  useLayoutEffect(() => {
+    analyser.fftSize = 1024;  // FFT size for frequency analysis
+  }, [analyser, analyser.fftSize]);
+  ...
+}
+```
+
+#### Rendering Modes
+
+The Vis component supports three modes (same for both windows):
+
+1. **`VISUALIZERS.BAR`** - Spectrum analyzer (bar graph)
+2. **`VISUALIZERS.OSCILLOSCOPE`** - Waveform display
+3. **`VISUALIZERS.NONE`** - Disabled
+
+**IMPORTANT: Global Mode State**
+- The mode is **global state** - changing it in one window changes it in the other
+- Both windows read from `AppSettings.visualizerMode`
+- Click-to-cycle affects both visualizers simultaneously
+
+#### Paint Handlers (from `VisPainter.ts`)
+
+| Handler | Description |
+|---------|-------------|
+| `BarPaintHandler` | Spectrum analyzer with FFT processing, peaks, gradient colors |
+| `WavePaintHandler` | Oscilloscope waveform with multiple styles (dots, solid, lines) |
+| `NoVisualizerHandler` | Empty/disabled state |
+
+#### Bar Rendering Math (Gemini Verified)
+
+The `BarPaintHandler` creates the classic 19-bar pattern:
+
+```
+Iteration: 0 to 75 (76 pixels total)
+Wide Bandwidth (default): averages 4 frequency bins per 4 pixels
+Rendering: paints 3 pixels, skips 4th pixel
+
+Result: 19 bars × 4px = 76px
+- Each bar: 3px wide
+- Spacing: 1px (the skipped 4th pixel)
+```
+
+**This confirms MacAmp's existing `barCount = 19, barWidth = 3, barSpacing = 1` is correct!**
+
+#### Falloff Behavior
+
+| Type | Behavior | Values |
+|------|----------|--------|
+| Bar Falloff | Linear decay | 3, 6, 12 (default), 16, 32 |
+| Peak Falloff | Accelerated decay | 1.05, 1.1 (default), 1.2, 1.4, 1.6 |
+
+#### Color Palette (VISCOLOR.TXT)
+
+Colors are defined by skin's `VISCOLOR.TXT` file:
+
+| Index | Purpose |
+|-------|---------|
+| 0 | Background |
+| 1 | Foreground dots |
+| 2-17 | Spectrum gradient (bottom green → top red) |
+| 18-22 | Oscilloscope colors |
+| 23 | Peak dots |
+
+### MacAmp's Existing Visualizer Infrastructure
+
+MacAmp already has a complete spectrum analyzer implementation:
+
+**File: `MacAmpApp/Views/VisualizerView.swift`**
+
+```swift
+struct VisualizerView: View {
+    @Environment(AudioPlayer.self) var audioPlayer
+    @Environment(SkinManager.self) var skinManager
+    @Environment(AppSettings.self) var settings
+
+    private let barCount = 19
+    private let barWidth: CGFloat = 3
+    private let barSpacing: CGFloat = 1
+    private let maxHeight: CGFloat = 16
+
+    var body: some View {
+        Group {
+            switch settings.visualizerMode {
+            case .none: Rectangle().fill(Color.black)
+            case .oscilloscope: OscilloscopeView()
+            case .spectrum:
+                HStack(spacing: barSpacing) {
+                    ForEach(0..<barCount, id: \.self) { index in
+                        SpectrumBar(...)
+                    }
+                }
+            }
+        }
+        .frame(width: VisualizerLayout.width, height: VisualizerLayout.height)
+    }
+}
+```
+
+**Audio Data Source (`AudioPlayer.swift`):**
+
+```swift
+func getFrequencyData(bands: Int) -> [Float] {
+    // Returns normalized frequency data for spectrum analyzer
+    // Uses AVAudioEngine tap with Goertzel-style frequency binning
+}
+
+func getWaveformSamples(count: Int) -> [Float] {
+    // Returns raw waveform samples for oscilloscope
+}
+```
+
+### Implementation Strategy for MacAmp Playlist Visualizer
+
+#### Recommended: Reuse Existing VisualizerView with Clipping
+
+Since MacAmp already has `VisualizerView` with the correct 19-bar pattern, we reuse it:
+
+**Gemini-Verified Swift Implementation:**
+
+```swift
+// In PlaylistWindow View
+// Show visualizer only when main window is SHADED (not full mode)
+if settings.isMainWindowShaded {
+    VisualizerView()
+        .frame(width: 76, height: 16)           // 1. Render at FULL SIZE
+        .frame(width: 72, alignment: .leading)  // 2. Clip to 72px (from left)
+        .clipped()                              // 3. Apply clipping
+        .offset(x: 2, y: 12)                    // 4. Position within bottom container
+}
+```
+
+**Key Points:**
+1. **Render full 76px** - Don't scale or reduce bar count
+2. **Clip to 72px** - Use `.frame(width: 72, alignment: .leading).clipped()`
+3. **Check window state** - Only show when `settings.isMainWindowShaded == true`
+4. **Position correctly** - `offset(x: 2, y: 12)` matches CSS positioning
+
+**Why Clipping, Not Scaling:**
+- The Webamp CSS uses `overflow: hidden` on a 72px wrapper
+- The actual 76px canvas is clipped, not scaled down
+- This is historically accurate behavior - 4px are simply hidden from view
+
+### Key Implementation Considerations
+
+1. **Performance:** Only run ONE visualizer animation at a time
+   - If main window visible → playlist visualizer static or hidden
+   - If main window hidden → playlist visualizer active
+
+2. **Shared Audio Data:** Use same `AudioPlayer` audio tap
+   - No need to duplicate FFT processing
+   - Both visualizers read from `latestSpectrum` / `latestWaveform`
+
+3. **VISCOLOR.TXT Colors:** Same skin colors apply to both
+   - Reuse existing `SkinManager.currentSkin?.visualizerColors`
+
+4. **Click to Cycle:** Both should cycle modes on click
+   - Toggle `AppSettings.visualizerMode`
+
+5. **CRITICAL: Clipping Behavior** (Verified by Gemini)
+   - The standard Vis component renders at **76px wide**
+   - The playlist wrapper is only **72px wide** with `overflow: hidden`
+   - This means **4px are clipped** from the right side
+   - In MacAmp/SwiftUI, use `.frame(width: 72, alignment: .leading).clipped()`
+   - Do NOT resize/scale the visualizer - clip it to maintain historical accuracy
+
+### Skin Resource Analysis
+
+The playlist visualizer **does NOT** use separate skin resources:
+
+- **No PLEDIT.BMP visualizer sprites** - uses same rendering as main window
+- **VISCOLOR.TXT** - shared color palette
+- **Background:** Black (VISCOLOR index 0)
+
+The `playlist-visualizer` CSS class in base-skin uses no special background image:
+```css
+#webamp #playlist-window .playlist-visualizer {
+  /* No background-image defined */
+  width: 75px;
+  height: 100%;
+  position: absolute;
+  right: 150px;
+}
+```
+
+### Summary: Playlist vs Main Window Visualizer (Gemini Verified)
+
+| Feature | Main Window Visualizer | Playlist Visualizer |
+|---------|------------------------|---------------------|
+| Source Component | `<Vis />` | `<Vis />` (Same) |
+| Render Dimensions | 76px × 16px | 76px × 16px (Rendered) |
+| Visible Area | 76px × 16px | 72px × 16px (Clipped) |
+| Visibility | Always (if Main Window in full mode) | Only when Main Window is **SHADED** |
+| Position | Main Window Texture Area | Playlist Bottom Bar (Absolute) |
+| Bar Style | 19 Bars (3px bar + 1px space) | 19 Bars (3px bar + 1px space) |
+| Mode State | Global (shared) | Global (shared) |
+| Audio Source | `AnalyserNode` / AVAudioEngine tap | Same |
+| Colors | VISCOLOR.TXT | Same |
+| Click Action | Cycle modes (affects both) | Cycle modes (affects both) |
+| Skin Graphics | None (canvas rendered) | None (canvas rendered) |
+
+---
+
+### Important Notes
+
+#### Window Shading (Future Work)
+
+Window shading has **not been tackled yet**. In shade mode:
+- Main window visualizer: 5px height (vs 16px normal)
+- Different rendering dimensions apply
+- This is a separate implementation concern
+
+#### Skin Variations (Classic vs Modern)
+
+**IMPORTANT:** The playlist visualizer described above applies to **Classic Winamp skins only**.
+
+In non-classic skins (Modern skins like Bento, cPro, etc.):
+- The bottom-right area may display **different content** (not a spectrum analyzer)
+- Could show: album art, track info, different visualizations, or custom elements
+- Modern skins have more flexibility in what this area displays
+
+For MacAmp's initial implementation, focus on Classic skin behavior. Modern skin variations can be addressed as a separate feature.
+
+---
+
+### References
+
+- Webamp Vis Component: `webamp_clone/packages/webamp/js/components/Vis.tsx`
+- Webamp VisPainter: `webamp_clone/packages/webamp/js/components/VisPainter.ts`
+- Webamp Playlist: `webamp_clone/packages/webamp/js/components/PlaylistWindow/index.tsx`
+- Webamp Docs: `webamp_clone/packages/webamp-docs/docs/05_features/04_playlist.md`
+- MacAmp Visualizer: `MacAmpApp/Views/VisualizerView.swift`
+- MacAmp Audio: `MacAmpApp/Audio/AudioPlayer.swift` (lines 1071-1204, 1372-1438)
+- Winamp Forums: [Config drawer](https://forums.winamp.com/forum/winamp/winamp-technical-support/180839-config-drawer)
+- Winamp Help: [WinampHeritage.com](https://winampheritage.com/help)

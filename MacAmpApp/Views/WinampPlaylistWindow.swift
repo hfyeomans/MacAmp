@@ -258,9 +258,29 @@ struct WinampPlaylistWindow: View {
     @State private var isShadeMode: Bool = false
     @State private var keyboardMonitor: Any?
     @State private var menuDelegate = PlaylistMenuDelegate()  // NSMenuDelegate for keyboard navigation
+    @State private var sizeState = PlaylistWindowSizeState()
 
-    private let windowWidth: CGFloat = 275
-    private let windowHeight: CGFloat = 232
+    // Resize gesture state (Phase 3)
+    @State private var dragStartSize: Size2D?
+    @State private var isDragging: Bool = false
+    @State private var resizePreview = WindowResizePreviewOverlay()
+
+    // Scroll state (Phase 4)
+    @State private var scrollOffset: Int = 0
+
+    /// Maximum valid scroll offset (clamped to prevent out-of-bounds)
+    private var maxScrollOffset: Int {
+        max(0, audioPlayer.playlist.count - sizeState.visibleTrackCount)
+    }
+
+    /// Clamped scroll offset that's always valid
+    private var clampedScrollOffset: Int {
+        min(scrollOffset, maxScrollOffset)
+    }
+
+    // Dynamic dimensions from size state
+    private var windowWidth: CGFloat { sizeState.windowWidth }
+    private var windowHeight: CGFloat { sizeState.windowHeight }
 
     // Computed: Is this window currently focused?
     private var isWindowActive: Bool {
@@ -343,6 +363,15 @@ struct WinampPlaylistWindow: View {
 
             // Inject radioLibrary into shared actions for ADD URL functionality
             PlaylistWindowActions.shared.radioLibrary = radioLibrary
+
+            // CRITICAL: Sync NSWindow size from persisted PlaylistWindowSizeState
+            // This ensures the AppKit window matches the SwiftUI layout on launch
+            WindowCoordinator.shared?.updatePlaylistWindowSize(to: sizeState.pixelSize)
+        }
+        // Sync NSWindow when sizeState.size changes programmatically (e.g., resetToDefault)
+        .onChange(of: sizeState.size) { _, newSize in
+            let pixelSize = newSize.toPlaylistPixels()
+            WindowCoordinator.shared?.updatePlaylistWindowSize(to: pixelSize)
         }
         .onDisappear {
             // Clean up keyboard monitor
@@ -369,96 +398,185 @@ struct WinampPlaylistWindow: View {
 
     @ViewBuilder
     private func buildCompleteBackground() -> some View {
-            let suffix = isWindowActive ? "_SELECTED" : ""
+        let suffix = isWindowActive ? "_SELECTED" : ""
 
-            SimpleSpriteImage("PLAYLIST_TOP_LEFT\(isWindowActive ? "_SELECTED" : "_CORNER")", width: 25, height: 20)
-                .position(x: 12.5, y: 10)
+        // === TOP BAR ===
+        // Winamp layout: Tiles as BACKGROUND layer, then title/corners OVERLAY on top
+        // This matches webamp's flex-grow approach: tiles fill entire width, title overlays
 
-            ForEach(0..<10, id: \.self) { i in
-                SimpleSpriteImage("PLAYLIST_TOP_TILE\(suffix)", width: 25, height: 20)
-                    .position(x: 25 + 12.5 + CGFloat(i) * 25, y: 10)
-            }
+        // 1. Left corner (bottom layer, at left edge)
+        SimpleSpriteImage("PLAYLIST_TOP_LEFT\(isWindowActive ? "_SELECTED" : "_CORNER")", width: 25, height: 20)
+            .position(x: 12.5, y: 10)
 
-            WinampTitlebarDragHandle(windowKind: .playlist, size: CGSize(width: 100, height: 20)) {
-                SimpleSpriteImage("PLAYLIST_TITLE_BAR\(suffix)", width: 100, height: 20)
-            }
-            .position(x: 137.5, y: 10)
+        // 2. Background tiles: Fill from left corner (25px) to window edge
+        // Tiles render UNDER the title bar (drawn first in ZStack)
+        ForEach(0..<sizeState.topBarTileCount, id: \.self) { i in
+            SimpleSpriteImage("PLAYLIST_TOP_TILE\(suffix)", width: 25, height: 20)
+                .position(x: 25 + 12.5 + CGFloat(i) * 25, y: 10)
+        }
 
-            SimpleSpriteImage("PLAYLIST_TOP_RIGHT_CORNER\(suffix)", width: 25, height: 20)
-                .position(x: 262.5, y: 10)
-            
-            let sideHeight = 192
-            let leftTileCount = Int(ceil(CGFloat(sideHeight) / 29))
-            ForEach(0..<leftTileCount, id: \.self) { i in
-                SimpleSpriteImage("PLAYLIST_LEFT_TILE", width: 12, height: 29)
-                    .position(x: 6, y: 20 + 14.5 + CGFloat(i) * 29)
-            }
-            
-            ForEach(0..<leftTileCount, id: \.self) { i in
-                SimpleSpriteImage("PLAYLIST_RIGHT_TILE", width: 20, height: 29)
-                    .position(x: 265, y: 20 + 14.5 + CGFloat(i) * 29)
-            }
-            
-            HStack(spacing: 0) {
-                SimpleSpriteImage("PLAYLIST_BOTTOM_LEFT_CORNER", width: 125, height: 38)
-                    .frame(width: 125, height: 38)
+        // 3. Title bar OVERLAY (centered, drawn on top of tiles)
+        WinampTitlebarDragHandle(windowKind: .playlist, size: CGSize(width: 100, height: 20)) {
+            SimpleSpriteImage("PLAYLIST_TITLE_BAR\(suffix)", width: 100, height: 20)
+        }
+        .position(x: windowWidth / 2, y: 10)
 
-                SimpleSpriteImage("PLAYLIST_BOTTOM_RIGHT_CORNER", width: 154, height: 38)
-                    .frame(width: 154, height: 38)
+        // 4. Right corner OVERLAY (at right edge, drawn on top of tiles)
+        SimpleSpriteImage("PLAYLIST_TOP_RIGHT_CORNER\(suffix)", width: 25, height: 20)
+            .position(x: windowWidth - 12.5, y: 10)
+
+        // === SIDE BORDERS ===
+        // Dynamic vertical tiling based on window height
+        let borderTileCount = sizeState.verticalBorderTileCount
+        ForEach(0..<borderTileCount, id: \.self) { i in
+            SimpleSpriteImage("PLAYLIST_LEFT_TILE", width: 12, height: 29)
+                .position(x: 6, y: 20 + 14.5 + CGFloat(i) * 29)
+        }
+
+        ForEach(0..<borderTileCount, id: \.self) { i in
+            SimpleSpriteImage("PLAYLIST_RIGHT_TILE", width: 20, height: 29)
+                .position(x: windowWidth - 10, y: 20 + 14.5 + CGFloat(i) * 29)
+        }
+
+        // === BOTTOM BAR ===
+        // Layout: LEFT (125px) + CENTER tiles + [VISUALIZER (75px) when wide] + RIGHT (150px)
+        // Webamp: showVisualizer = playlistSize[0] > 2 (3+ width segments = 350px minimum)
+        // Visualizer positioned at right:150px in CSS = between center and right sections
+
+        let showVisualizer = sizeState.size.width >= 3  // 275 + 75 = 350px minimum
+
+        // Left section (0 to 125px)
+        SimpleSpriteImage("PLAYLIST_BOTTOM_LEFT_CORNER", width: 125, height: 38)
+            .position(x: 62.5, y: windowHeight - 19)
+
+        // Center tiles: fill from 125px to visualizer (or right section if no visualizer)
+        // With visualizer: center ends at windowWidth - 225 (leaving 75px for visualizer)
+        // Without visualizer: center ends at windowWidth - 150
+        let centerEndX: CGFloat = showVisualizer ? (windowWidth - 225) : (windowWidth - 150)
+        let centerAvailableWidth = max(0, centerEndX - 125)
+        let centerTileCount = Int(centerAvailableWidth / 25)
+
+        if centerTileCount > 0 {
+            ForEach(0..<centerTileCount, id: \.self) { i in
+                SimpleSpriteImage("PLAYLIST_BOTTOM_TILE", width: 25, height: 38)
+                    .position(x: 125 + 12.5 + CGFloat(i) * 25, y: windowHeight - 19)
             }
-            .frame(width: windowWidth, height: 38)
-            .position(x: (windowWidth / 2) + 2, y: 213)  // Shift entire HStack 2px right
+        }
+
+        // Visualizer background (75px, only when window wide enough)
+        // Position: from (windowWidth - 225) to (windowWidth - 150)
+        if showVisualizer {
+            SimpleSpriteImage("PLAYLIST_VISUALIZER_BACKGROUND", width: 75, height: 38)
+                .position(x: windowWidth - 187.5, y: windowHeight - 19)
+
+            // Mini visualizer: Only active when main window is SHADED
+            // When main window is in full mode, its visualizer is visible and this stays empty
+            // Gemini verified: render full 76px width, clip to 72px for historical accuracy
+            if settings.isMainWindowShaded {
+                VisualizerView()
+                    .frame(width: 76, height: 16)           // Render at full size
+                    .frame(width: 72, alignment: .leading)  // Clip to 72px (4px hidden from right)
+                    .clipped()
+                    // Position within the 75×38 visualizer container
+                    // Container spans: x=(windowWidth-225) to (windowWidth-150), y=(windowHeight-38) to windowHeight
+                    // CSS reference: wrapper at top:12px, left:2px within container
+                    // Visualizer center: x = (windowWidth-225) + 2 + 36 = windowWidth-187
+                    //                   y = (windowHeight-38) + 12 + 8 = windowHeight-18
+                    .position(x: windowWidth - 187, y: windowHeight - 18)
+            }
+        }
+
+        // Right section (windowWidth - 150 to windowWidth)
+        SimpleSpriteImage("PLAYLIST_BOTTOM_RIGHT_CORNER", width: 150, height: 38)
+            .position(x: windowWidth - 75, y: windowHeight - 19)
     }
     
     @ViewBuilder
     private func buildContentOverlay() -> some View {
+        // Content area: Dynamic sizing based on window dimensions
+        let contentWidth = sizeState.contentWidth
+        let contentHeight = sizeState.contentHeight
+        let contentCenterX = PlaylistWindowSizeState.leftBorderWidth + (contentWidth / 2)
+        let contentCenterY = PlaylistWindowSizeState.topBarHeight + (contentHeight / 2)
+
         ZStack {
             playlistBackgroundColor
 
             buildTrackList()
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
-        .frame(width: 243, height: 174)
-        .position(x: 133.5, y: 107)
+        .frame(width: contentWidth, height: contentHeight)
+        .position(x: contentCenterX, y: contentCenterY)
         .clipped()
-            
+
             buildBottomControls()
             buildPlaylistTransportButtons()
             buildTimeDisplays()
             buildTitleBarButtons()
-            
-        SimpleSpriteImage("PLAYLIST_SCROLL_HANDLE", width: 8, height: 18)
-            .position(x: 260, y: 30)
+
+        // Scroll slider (Phase 4 - functional scroll with binding)
+        PlaylistScrollSlider(
+            scrollOffset: $scrollOffset,
+            totalTracks: audioPlayer.playlist.count,
+            visibleTracks: sizeState.visibleTrackCount
+        )
+        .frame(height: sizeState.contentHeight - 4)  // Leave room for top/bottom padding
+        .position(x: windowWidth - 15, y: PlaylistWindowSizeState.topBarHeight + (sizeState.contentHeight / 2))
+        // Clamp scrollOffset when playlist size changes
+        .onChange(of: audioPlayer.playlist.count) { _, _ in
+            if scrollOffset > maxScrollOffset {
+                scrollOffset = maxScrollOffset
+            }
+        }
+        // Clamp scrollOffset when window is resized (visible tracks change)
+        .onChange(of: sizeState.visibleTrackCount) { _, _ in
+            if scrollOffset > maxScrollOffset {
+                scrollOffset = maxScrollOffset
+            }
+        }
+
+        // Resize handle (20×20 hit area at bottom-right corner)
+        buildResizeHandle()
     }
     
     @ViewBuilder
     private func buildTrackList() -> some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(spacing: 0) {
-                ForEach(Array(audioPlayer.playlist.enumerated()), id: \.element.id) { index, track in
-                    trackRow(track: track, index: index)
-                        .frame(width: 243, height: 13)
-                        .background(trackBackground(track: track, index: index))
-                        .onTapGesture(count: 2) {
-                            // Double-click: Play via PlaybackCoordinator (handles both local + streams)
-                            Task {
-                                await playbackCoordinator.play(track: track)
-                            }
-                        }
-                        .onTapGesture {
-                            // Single-click: Handle selection
-                            let modifiers = NSEvent.modifierFlags
-
-                            if modifiers.contains(.shift) {
-                                if selectedIndices.contains(index) {
-                                    selectedIndices.remove(index)
-                                } else {
-                                    selectedIndices.insert(index)
+        let trackWidth = sizeState.contentWidth
+        ScrollViewReader { proxy in
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 0) {
+                    ForEach(Array(audioPlayer.playlist.enumerated()), id: \.element.id) { index, track in
+                        trackRow(track: track, index: index)
+                            .frame(width: trackWidth, height: 13)
+                            .background(trackBackground(track: track, index: index))
+                            .id(index)  // Enable scroll-to by index
+                            .onTapGesture(count: 2) {
+                                // Double-click: Play via PlaybackCoordinator (handles both local + streams)
+                                Task {
+                                    await playbackCoordinator.play(track: track)
                                 }
-                            } else {
-                                selectedIndices = [index]
                             }
-                        }
+                            .onTapGesture {
+                                // Single-click: Handle selection
+                                let modifiers = NSEvent.modifierFlags
+
+                                if modifiers.contains(.shift) {
+                                    if selectedIndices.contains(index) {
+                                        selectedIndices.remove(index)
+                                    } else {
+                                        selectedIndices.insert(index)
+                                    }
+                                } else {
+                                    selectedIndices = [index]
+                                }
+                            }
+                    }
+                }
+            }
+            .onChange(of: scrollOffset) { _, newOffset in
+                // Sync: scroll slider → scroll view
+                withAnimation(.easeOut(duration: 0.1)) {
+                    proxy.scrollTo(newOffset, anchor: .top)
                 }
             }
         }
@@ -495,152 +613,244 @@ struct WinampPlaylistWindow: View {
     
     @ViewBuilder
     private func buildBottomControls() -> some View {
+        // Bottom menu buttons: Positioned relative to window edges
+        // Y position: 24px from bottom (windowHeight - 24)
+        let buttonY = windowHeight - 24
+
+        // LEFT section buttons (fixed positions from left)
         Button(action: { showAddMenu() }) {
             Color.clear.frame(width: 22, height: 18).contentShape(Rectangle())
-        }.buttonStyle(.plain).focusable(false).position(x: 16, y: 208)
+        }.buttonStyle(.plain).focusable(false).position(x: 16, y: buttonY)
 
         Button(action: { showRemMenu() }) {
             Color.clear.frame(width: 22, height: 18).contentShape(Rectangle())
-        }.buttonStyle(.plain).focusable(false).position(x: 42, y: 208)
+        }.buttonStyle(.plain).focusable(false).position(x: 42, y: buttonY)
 
         Button(action: { showSelNotSupportedAlert() }) {
             Color.clear.frame(width: 18, height: 18).contentShape(Rectangle())
-        }.buttonStyle(.plain).focusable(false).position(x: 78, y: 208)
+        }.buttonStyle(.plain).focusable(false).position(x: 78, y: buttonY)
 
         Button(action: { showMiscMenu() }) {
             Color.clear.frame(width: 18, height: 18).contentShape(Rectangle())
-        }.buttonStyle(.plain).focusable(false).position(x: 105, y: 208)
+        }.buttonStyle(.plain).focusable(false).position(x: 105, y: buttonY)
 
+        // RIGHT section button (fixed position from right edge)
         Button(action: { showListMenu() }) {
             Color.clear.frame(width: 22, height: 18).contentShape(Rectangle())
-        }.buttonStyle(.plain).focusable(false).position(x: 243, y: 208)
+        }.buttonStyle(.plain).focusable(false).position(x: windowWidth - 32, y: buttonY)
     }
 
     @ViewBuilder
     private func buildPlaylistTransportButtons() -> some View {
-            Button(action: {
-                Task { await playbackCoordinator.previous() }
-            }) {
-                Color.clear
-                    .frame(width: 10, height: 9)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .focusable(false)
-            .position(x: 133, y: 220)
+        // Transport buttons: In RIGHT section of bottom bar (150px from right edge)
+        // Y position: 12px from bottom (windowHeight - 12)
+        let transportY = windowHeight - 12
+        // X offset: Center of RIGHT section is at (windowWidth - 75)
+        // Transport buttons start ~8px into the RIGHT section from its center
+        let rightSectionStart = windowWidth - 150
+        let baseX = rightSectionStart + 8  // Start of transport buttons in RIGHT section
 
-            Button(action: {
-                playbackCoordinator.togglePlayPause()
+        Button(action: {
+            Task { await playbackCoordinator.previous() }
         }) {
-                Color.clear
-                    .frame(width: 10, height: 9)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .focusable(false)
-            .position(x: 144, y: 220)
+            Color.clear
+                .frame(width: 10, height: 9)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .focusable(false)
+        .position(x: baseX, y: transportY)
 
-            Button(action: {
-                playbackCoordinator.pause()
-            }) {
-                Color.clear
-                    .frame(width: 10, height: 9)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .focusable(false)
-            .position(x: 155, y: 220)
+        Button(action: {
+            playbackCoordinator.togglePlayPause()
+        }) {
+            Color.clear
+                .frame(width: 10, height: 9)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .focusable(false)
+        .position(x: baseX + 11, y: transportY)
 
-            Button(action: {
-                playbackCoordinator.stop()
-            }) {
-                Color.clear
-                    .frame(width: 10, height: 9)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .focusable(false)
-            .position(x: 166, y: 220)
+        Button(action: {
+            playbackCoordinator.pause()
+        }) {
+            Color.clear
+                .frame(width: 10, height: 9)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .focusable(false)
+        .position(x: baseX + 22, y: transportY)
 
-            Button(action: {
-                Task { await playbackCoordinator.next() }
-            }) {
-                Color.clear
-                    .frame(width: 10, height: 9)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .focusable(false)
-            .position(x: 177, y: 220)
+        Button(action: {
+            playbackCoordinator.stop()
+        }) {
+            Color.clear
+                .frame(width: 10, height: 9)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .focusable(false)
+        .position(x: baseX + 33, y: transportY)
 
-            Button(action: {
-                openFileDialog()
-            }) {
-                Color.clear
-                    .frame(width: 10, height: 9)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .focusable(false)
-            .position(x: 183, y: 220)
+        Button(action: {
+            Task { await playbackCoordinator.next() }
+        }) {
+            Color.clear
+                .frame(width: 10, height: 9)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .focusable(false)
+        .position(x: baseX + 44, y: transportY)
+
+        Button(action: {
+            openFileDialog()
+        }) {
+            Color.clear
+                .frame(width: 10, height: 9)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .focusable(false)
+        .position(x: baseX + 50, y: transportY)
     }
 
     @ViewBuilder
     private func buildTimeDisplays() -> some View {
-            PlaylistTimeText(trackTimeText)
-                .position(x: 176, y: 206)
+        // Time displays: In RIGHT section of bottom bar
+        let rightSectionStart = windowWidth - 150
+        let timeY1 = windowHeight - 26  // First time display (track time)
+        let timeY2 = windowHeight - 13  // Second time display (remaining)
+
+        PlaylistTimeText(trackTimeText)
+            .position(x: rightSectionStart + 51, y: timeY1)
 
         if !remainingTimeText.isEmpty {
             PlaylistTimeText(remainingTimeText)
-                .position(x: 203, y: 219)
+                .position(x: rightSectionStart + 78, y: timeY2)
         }
     }
 
     @ViewBuilder
     private func buildTitleBarButtons() -> some View {
-            Button(action: { WindowCoordinator.shared?.minimizeKeyWindow() }) {
-                SimpleSpriteImage("MAIN_MINIMIZE_BUTTON", width: 9, height: 9)
-            }
-            .buttonStyle(.plain)
-            .focusable(false)
-            .position(x: 248.5, y: 7.5)
+        // Title bar buttons: Positioned relative to right edge
+        let buttonY: CGFloat = 7.5
 
-            Button(action: {
-                isShadeMode.toggle()
-            }) {
-                SimpleSpriteImage("MAIN_SHADE_BUTTON", width: 9, height: 9)
-            }
-            .buttonStyle(.plain)
-            .focusable(false)
-            .position(x: 258.5, y: 7.5)
+        Button(action: { WindowCoordinator.shared?.minimizeKeyWindow() }) {
+            SimpleSpriteImage("MAIN_MINIMIZE_BUTTON", width: 9, height: 9)
+        }
+        .buttonStyle(.plain)
+        .focusable(false)
+        .position(x: windowWidth - 26.5, y: buttonY)
 
-            Button(action: { WindowCoordinator.shared?.hidePlaylistWindow() }) {
-                SimpleSpriteImage("MAIN_CLOSE_BUTTON", width: 9, height: 9)
-            }
-            .buttonStyle(.plain)
-            .focusable(false)
-            .position(x: 268.5, y: 7.5)
+        Button(action: {
+            isShadeMode.toggle()
+        }) {
+            SimpleSpriteImage("MAIN_SHADE_BUTTON", width: 9, height: 9)
+        }
+        .buttonStyle(.plain)
+        .focusable(false)
+        .position(x: windowWidth - 16.5, y: buttonY)
+
+        Button(action: { WindowCoordinator.shared?.hidePlaylistWindow() }) {
+            SimpleSpriteImage("MAIN_CLOSE_BUTTON", width: 9, height: 9)
+        }
+        .buttonStyle(.plain)
+        .focusable(false)
+        .position(x: windowWidth - 6.5, y: buttonY)
+    }
+
+    // MARK: - Resize Handle (Phase 3)
+
+    @ViewBuilder
+    private func buildResizeHandle() -> some View {
+        Rectangle()
+            .fill(Color.clear)
+            .frame(width: 20, height: 20)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        // Capture start size on first drag tick
+                        if dragStartSize == nil {
+                            dragStartSize = sizeState.size
+                            isDragging = true
+                            // CRITICAL: Prevent magnetic snapping during resize
+                            WindowSnapManager.shared.beginProgrammaticAdjustment()
+                        }
+
+                        guard let baseSize = dragStartSize else { return }
+
+                        // Calculate quantized size from drag delta (25×29px segments)
+                        let widthDelta = Int(round(value.translation.width / PlaylistWindowSizeState.segmentWidth))
+                        let heightDelta = Int(round(value.translation.height / PlaylistWindowSizeState.segmentHeight))
+
+                        let candidate = Size2D(
+                            width: max(0, baseSize.width + widthDelta),
+                            height: max(0, baseSize.height + heightDelta)
+                        )
+
+                        // APPKIT PREVIEW: Update overlay window via coordinator bridge
+                        // Note: Playlist window does NOT use double-size mode (unlike main/EQ windows)
+                        if let coordinator = WindowCoordinator.shared {
+                            let previewPixels = candidate.toPlaylistPixels()
+                            coordinator.showPlaylistResizePreview(resizePreview, previewSize: previewPixels)
+                        }
+                    }
+                    .onEnded { value in
+                        // Calculate final size from total drag
+                        guard let baseSize = dragStartSize else { return }
+
+                        let widthDelta = Int(round(value.translation.width / PlaylistWindowSizeState.segmentWidth))
+                        let heightDelta = Int(round(value.translation.height / PlaylistWindowSizeState.segmentHeight))
+
+                        let finalSize = Size2D(
+                            width: max(0, baseSize.width + widthDelta),
+                            height: max(0, baseSize.height + heightDelta)
+                        )
+
+                        // COMMIT: Update actual size (triggers persistence via didSet)
+                        sizeState.size = finalSize
+
+                        // Sync NSWindow frame via coordinator bridge
+                        if let coordinator = WindowCoordinator.shared {
+                            coordinator.updatePlaylistWindowSize(to: sizeState.pixelSize)
+                            coordinator.hidePlaylistResizePreview(resizePreview)
+                        }
+
+                        // Clean up
+                        isDragging = false
+                        dragStartSize = nil
+                        // CRITICAL: Re-enable magnetic snapping
+                        WindowSnapManager.shared.endProgrammaticAdjustment()
+                    }
+            )
+            .position(x: windowWidth - 10, y: windowHeight - 10)
     }
 
     @ViewBuilder
     private func buildShadeMode() -> some View {
         ZStack {
             let suffix = isWindowActive ? "_SELECTED" : ""
+            // Shade mode uses full window width titlebar (at 275 fixed width for sprite)
             SimpleSpriteImage("PLAYLIST_TITLE_BAR\(suffix)", width: 275, height: 14)
-                .position(x: 137.5, y: 7)
+                .frame(width: windowWidth, height: 14)  // Scale to window width
+                .position(x: windowWidth / 2, y: 7)
 
             if let currentTrack = playbackCoordinator.currentTrack {
                 Text("\(currentTrack.title) - \(currentTrack.artist)")
                     .font(.system(size: 8))
                     .foregroundColor(.white)
                     .lineLimit(1)
-                    .frame(width: 200)
-                    .position(x: 100, y: 7)
+                    .frame(width: windowWidth - 75)  // Leave room for buttons
+                    .position(x: (windowWidth - 75) / 2, y: 7)
             } else {
                 Text("Winamp Playlist")
                     .font(.system(size: 8))
                     .foregroundColor(.white)
-                    .position(x: 100, y: 7)
+                    .position(x: (windowWidth - 75) / 2, y: 7)
             }
 
             buildTitleBarButtons()
@@ -735,7 +945,8 @@ struct WinampPlaylistWindow: View {
         menu.addItem(addFileItem)
 
         // Use playlist-specific positioning (not keyWindow)
-        presentPlaylistMenu(menu, at: NSPoint(x: 12, y: 164))
+        // NSPoint uses bottom-left origin, so y = windowHeight - distanceFromTop
+        presentPlaylistMenu(menu, at: NSPoint(x: 12, y: windowHeight - 68))
     }
 
     private func showRemMenu() {
@@ -786,7 +997,8 @@ struct WinampPlaylistWindow: View {
         menu.addItem(remSelItem)
 
         // Use playlist-specific positioning (not first window)
-        presentPlaylistMenu(menu, at: NSPoint(x: 41, y: 145))
+        // REM menu has 4 items, needs more space (87px from top)
+        presentPlaylistMenu(menu, at: NSPoint(x: 41, y: windowHeight - 87))
     }
 
     private func showSelNotSupportedAlert() {
@@ -834,7 +1046,7 @@ struct WinampPlaylistWindow: View {
         menu.addItem(miscOptionsItem)
 
         // Use playlist-specific positioning (not first window)
-        presentPlaylistMenu(menu, at: NSPoint(x: 100, y: 164))
+        presentPlaylistMenu(menu, at: NSPoint(x: 100, y: windowHeight - 68))
     }
 
     private func showListMenu() {
@@ -873,7 +1085,8 @@ struct WinampPlaylistWindow: View {
         menu.addItem(loadListItem)
 
         // Use playlist-specific positioning (not first window)
-        presentPlaylistMenu(menu, at: NSPoint(x: 229, y: 164))
+        // X position relative to right edge for LIST menu
+        presentPlaylistMenu(menu, at: NSPoint(x: windowWidth - 46, y: windowHeight - 68))
     }
 }
 

@@ -14,7 +14,8 @@ struct WinampMainWindow: View {
     // SwiftUI re-evaluates body when ANY @EnvironmentObject publishes changes
     // This was causing 7+ evaluations before old views cleanup, creating visual doubles
 
-    @State private var isShadeMode: Bool = false
+    // NOTE: isShadeMode moved to AppSettings.isMainWindowShaded for cross-window observation
+    // Playlist window needs to know when main window is shaded to show mini visualizer
     @State private var isScrubbing: Bool = false
     @State private var wasPlayingPreScrub: Bool = false
     @State private var scrubbingProgress: Double = 0.0
@@ -104,7 +105,7 @@ struct WinampMainWindow: View {
             }
             .at(CGPoint(x: 0, y: 0))
 
-            if !isShadeMode {
+            if !settings.isMainWindowShaded {
                 // Full window mode
                 buildFullWindow()
             } else {
@@ -115,7 +116,7 @@ struct WinampMainWindow: View {
         }
         .frame(
             width: WinampSizes.main.width,
-            height: isShadeMode ? WinampSizes.mainShade.height : WinampSizes.main.height,
+            height: settings.isMainWindowShaded ? WinampSizes.mainShade.height : WinampSizes.main.height,
             alignment: .topLeading
         )
         .scaleEffect(
@@ -124,7 +125,7 @@ struct WinampMainWindow: View {
         )
         .frame(
             width: settings.isDoubleSizeMode ? WinampSizes.main.width * 2 : WinampSizes.main.width,
-            height: isShadeMode
+            height: settings.isMainWindowShaded
                 ? (settings.isDoubleSizeMode ? WinampSizes.mainShade.height * 2 : WinampSizes.mainShade.height)
                 : (settings.isDoubleSizeMode ? WinampSizes.main.height * 2 : WinampSizes.main.height),
             alignment: .topLeading
@@ -215,7 +216,8 @@ struct WinampMainWindow: View {
     @ViewBuilder
     private func buildShadeMode() -> some View {
         // Shade mode shows a compact 275×14px bar with essential controls
-        ZStack {
+        // CRITICAL: Must use .topLeading alignment for .offset() positioning to work correctly
+        ZStack(alignment: .topLeading) {
             // Shade background
             SimpleSpriteImage("MAIN_SHADE_BACKGROUND", width: 275, height: 14)
                 .at(CGPoint(x: 0, y: 0))
@@ -289,7 +291,7 @@ struct WinampMainWindow: View {
 
             // Shade button
             Button(action: {
-                isShadeMode.toggle()
+                settings.isMainWindowShaded.toggle()
             }) {
                 SimpleSpriteImage("MAIN_SHADE_BUTTON", width: 9, height: 9)
             }

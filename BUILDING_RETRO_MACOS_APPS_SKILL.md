@@ -2096,6 +2096,481 @@ xcodebuild test \
 
 ---
 
+## Playlist Window Resize Patterns (Part 22, December 2025)
+
+**Lesson from:** Playlist Window Resize + Scroll Slider implementation
+**Oracle Grade:** A- (Architecture Aligned)
+**Total Commits:** 7 commits over 8-10 hours
+**Files Created:** 3 new files (PlaylistWindowSizeState.swift, PlaylistScrollSlider.swift, PLAYLIST_WINDOW.md)
+**Files Modified:** 6 files
+
+### Pattern 1: Segment-Based Resize with Different Base Dimensions
+
+**Problem:** Different windows have different minimum sizes but need the same quantized resize behavior (25×29px increments).
+
+**Solution:** Reuse Size2D model with window-specific presets and conversion methods:
+
+```swift
+// Size2D.swift - Playlist-specific presets
+extension Size2D {
+    /// Playlist minimum: 275×116 (matches Main/EQ height when collapsed)
+    static let playlistMinimum = Size2D(width: 0, height: 0)
+
+    /// Playlist default: 275×232 (Winamp standard)
+    static let playlistDefault = Size2D(width: 0, height: 4)
+
+    /// Playlist 2x width: 550×232
+    static let playlist2xWidth = Size2D(width: 11, height: 4)
+
+    /// Convert segments to playlist pixels
+    func toPlaylistPixels() -> CGSize {
+        CGSize(
+            width: 275 + CGFloat(width) * 25,   // 275px base (not 250 like video)
+            height: 116 + CGFloat(height) * 29  // 116px base (not 116 like video)
+        )
+    }
+}
+
+// PlaylistWindowSizeState.swift - Observable with computed properties
+@MainActor
+@Observable
+final class PlaylistWindowSizeState {
+    var size: Size2D = .playlistDefault {
+        didSet { saveSize() }  // UserDefaults persistence
+    }
+
+    var pixelSize: CGSize { size.toPlaylistPixels() }
+    var windowWidth: CGFloat { pixelSize.width }
+    var windowHeight: CGFloat { pixelSize.height }
+
+    /// Center section width = totalWidth - LEFT(125) - RIGHT(150)
+    var centerWidth: CGFloat { max(0, pixelSize.width - 275) }
+
+    /// Number of 25px tiles in center section
+    var centerTileCount: Int { Int(centerWidth / 25) }
+
+    /// Number of vertical 29px border tiles
+    var verticalBorderTileCount: Int {
+        let contentHeight = pixelSize.height - 20 - 38  // Minus top/bottom bars
+        return Int(ceil(contentHeight / 29))
+    }
+
+    /// Visible tracks (13px per row)
+    var visibleTrackCount: Int {
+        let contentHeight = pixelSize.height - 20 - 38
+        return Int(floor(contentHeight / 13))
+    }
+}
+```
+
+**Key Insight:** Each resizable window type has its own `SizeState` class with computed properties specific to its chrome layout. The 25×29px segment grid is universal, but base dimensions and computed metrics differ.
+
+---
+
+### Pattern 2: Three-Section Bottom Bar with Dynamic Center
+
+**Problem:** Playlist bottom bar has three sections (LEFT + CENTER + RIGHT) where CENTER dynamically expands with window width, but must collapse to 0px at minimum size.
+
+**Discovery:** Bug in sprite width (154px vs 150px) broke layout by 4px:
+```swift
+// ❌ WRONG (original code):
+Sprite(name: "PLAYLIST_BOTTOM_RIGHT_CORNER", x: 126, y: 72, width: 154, height: 38)
+
+// ✅ CORRECT (webamp reference):
+Sprite(name: "PLAYLIST_BOTTOM_RIGHT_CORNER", x: 126, y: 72, width: 150, height: 38)
+```
+
+**Solution:** Three-section layout with conditional visualizer area:
+
+```swift
+@ViewBuilder
+private func buildBottomBar() -> some View {
+    let showVisualizer = sizeState.size.width >= 3  // 350px minimum for visualizer
+
+    // LEFT section (125px fixed) - menu buttons
+    SimpleSpriteImage("PLAYLIST_BOTTOM_LEFT_CORNER", width: 125, height: 38)
+        .position(x: 62.5, y: windowHeight - 19)
+
+    // CENTER section (dynamic tiles)
+    let centerEndX: CGFloat = showVisualizer ? (windowWidth - 225) : (windowWidth - 150)
+    let centerAvailableWidth = max(0, centerEndX - 125)
+    let centerTileCount = Int(centerAvailableWidth / 25)
+
+    if centerTileCount > 0 {
+        ForEach(0..<centerTileCount, id: \.self) { i in
+            SimpleSpriteImage("PLAYLIST_BOTTOM_TILE", width: 25, height: 38)
+                .position(x: 125 + 12.5 + CGFloat(i) * 25, y: windowHeight - 19)
+        }
+    }
+
+    // VISUALIZER section (75px, only when width >= 350px)
+    if showVisualizer {
+        SimpleSpriteImage("PLAYLIST_VISUALIZER_BACKGROUND", width: 75, height: 38)
+            .position(x: windowWidth - 187.5, y: windowHeight - 19)
+
+        // Mini visualizer activates when main window is SHADED
+        if settings.isMainWindowShaded {
+            VisualizerView()
+                .frame(width: 76, height: 16)
+                .frame(width: 72, alignment: .leading)
+                .clipped()
+                .position(x: windowWidth - 187, y: windowHeight - 18)
+        }
+    }
+
+    // RIGHT section (150px fixed) - transport, time, scroll buttons
+    SimpleSpriteImage("PLAYLIST_BOTTOM_RIGHT_CORNER", width: 150, height: 38)
+        .position(x: windowWidth - 75, y: windowHeight - 19)
+}
+```
+
+**Layout Calculation:**
+```
+At 275px (minimum):
+  LEFT=125px + CENTER=0px + RIGHT=150px = 275px (no center tiles)
+
+At 300px (+1 segment):
+  LEFT=125px + CENTER=25px + RIGHT=150px = 300px (1 tile, no visualizer)
+
+At 350px (+3 segments):
+  LEFT=125px + CENTER=0px + VIS=75px + RIGHT=150px = 350px (visualizer appears)
+
+At 375px (+4 segments):
+  LEFT=125px + CENTER=25px + VIS=75px + RIGHT=150px = 375px (1 tile + visualizer)
+```
+
+---
+
+### Pattern 3: Background Tiling as Canvas with Overlays
+
+**Problem:** Top bar title text was cut off when using per-side tile calculation.
+
+**Root Cause:** Tiles placed ADJACENT to title left gaps on uneven widths.
+
+**Solution:** Webamp approach - render tiles as BACKGROUND canvas, overlay title and corners ON TOP:
+
+```swift
+// ❌ WRONG: Per-side tile placement (leaves gaps)
+let tilesPerSide = centerTileCount / 2
+// Left tiles → title → right tiles (can't fill odd-width gaps)
+
+// ✅ CORRECT: Full-width tiles as background
+@ViewBuilder
+private func buildTitleBar() -> some View {
+    let suffix = isWindowActive ? "_SELECTED" : ""
+
+    // Layer 1: Background tiles (fill entire top bar width)
+    let totalTileCount = max(0, Int((windowWidth - 50) / 25))  // Minus corners
+    ForEach(0..<totalTileCount, id: \.self) { i in
+        SimpleSpriteImage("PLAYLIST_TOP_TILE\(suffix)", width: 25, height: 20)
+            .position(x: 25 + 12.5 + CGFloat(i) * 25, y: 10)
+    }
+
+    // Layer 2: Left corner overlay
+    SimpleSpriteImage("PLAYLIST_TOP_LEFT\(suffix)", width: 25, height: 20)
+        .position(x: 12.5, y: 10)
+
+    // Layer 3: Title bar overlay (centered)
+    SimpleSpriteImage("PLAYLIST_TITLE_BAR\(suffix)", width: 100, height: 20)
+        .position(x: windowWidth / 2, y: 10)
+
+    // Layer 4: Right corner overlay
+    SimpleSpriteImage("PLAYLIST_TOP_RIGHT_CORNER\(suffix)", width: 25, height: 20)
+        .position(x: windowWidth - 12.5, y: 10)
+}
+```
+
+**Pattern Generalizes To:** Any tiled chrome element (side borders, EQ sliders, video window chrome).
+
+---
+
+### Pattern 4: Scroll Slider Bridge Contract
+
+**Architecture:** Three-layer pattern for scroll state:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Mechanism Layer (AudioPlayer)                               │
+│   playlist.count: Int                                       │
+│   currentTrackIndex: Int                                    │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│ Bridge Layer                                                │
+│   PlaylistWindowSizeState: visibleTrackCount               │
+│   WinampPlaylistWindow: @State scrollOffset: Int           │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│ Presentation Layer (PlaylistScrollSlider)                   │
+│   @Binding scrollOffset: Int                                │
+│   Renders thumb, handles drag gesture                       │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Implementation:**
+
+```swift
+struct PlaylistScrollSlider: View {
+    @Binding var scrollOffset: Int  // First visible track index
+    let totalTracks: Int
+    let visibleTracks: Int
+
+    private let handleHeight: CGFloat = 18
+    @State private var isDragging = false
+
+    private var maxScrollOffset: Int {
+        max(0, totalTracks - visibleTracks)
+    }
+
+    private var scrollPosition: CGFloat {
+        guard maxScrollOffset > 0 else { return 0 }
+        return CGFloat(scrollOffset) / CGFloat(maxScrollOffset)
+    }
+
+    private var isDisabled: Bool {
+        totalTracks <= visibleTracks  // All tracks visible
+    }
+
+    var body: some View {
+        GeometryReader { geometry in
+            let availableHeight = geometry.size.height - handleHeight
+            let handleOffset = scrollPosition * availableHeight
+
+            ZStack(alignment: .top) {
+                Color.clear  // Track is transparent (uses border sprite)
+
+                SimpleSpriteImage(
+                    isDragging ? "PLAYLIST_SCROLL_HANDLE_SELECTED" : "PLAYLIST_SCROLL_HANDLE",
+                    width: 8, height: handleHeight
+                )
+                .offset(y: handleOffset)
+            }
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        isDragging = true
+                        guard !isDisabled else { return }
+                        let position = value.location.y / geometry.size.height
+                        scrollOffset = Int(round(min(1, max(0, position)) * CGFloat(maxScrollOffset)))
+                    }
+                    .onEnded { _ in isDragging = false }
+            )
+            .disabled(isDisabled)
+            .opacity(isDisabled ? 0.5 : 1.0)
+        }
+    }
+}
+
+// Integration with ScrollView
+ScrollViewReader { proxy in
+    ScrollView { /* track rows with .id(index) */ }
+        .onChange(of: scrollOffset) { _, newOffset in
+            proxy.scrollTo(newOffset, anchor: .top)
+        }
+}
+
+// CRITICAL: Clamp scrollOffset when playlist changes
+.onChange(of: audioPlayer.playlist.count) { _, _ in
+    scrollOffset = min(scrollOffset, max(0, totalTracks - visibleTracks))
+}
+```
+
+**Known Limitation:** One-way sync only. Slider → ScrollView works. ScrollView (trackpad scroll) → Slider requires complex GeometryReader/PreferenceKey tracking - deferred as SwiftUI limitation. Original Winamp also had limited scroll sync.
+
+---
+
+### Pattern 5: Cross-Window State Observation (Mini Visualizer)
+
+**Problem:** Playlist visualizer should activate when main window is shaded, requiring cross-window state observation.
+
+**Discovery (Gemini verified):** Winamp shows playlist visualizer when main window is SHADED (not closed - closing main quits the app).
+
+**Solution:** Migrate local @State to AppSettings for cross-window access:
+
+```swift
+// ❌ BEFORE: Local state (invisible to other windows)
+struct WinampMainWindow: View {
+    @State private var isShadeMode: Bool = false  // Can't observe from playlist
+}
+
+// ✅ AFTER: AppSettings with persistence
+@Observable
+@MainActor
+final class AppSettings {
+    var isMainWindowShaded: Bool = false {
+        didSet {
+            UserDefaults.standard.set(isMainWindowShaded, forKey: "isMainWindowShaded")
+        }
+    }
+}
+
+// Main window reads from AppSettings
+struct WinampMainWindow: View {
+    @Environment(AppSettings.self) var settings
+
+    var body: some View {
+        if settings.isMainWindowShaded {
+            buildShadeMode()  // 14px bar
+        } else {
+            buildFullMode()   // Full 116px window
+        }
+    }
+}
+
+// Playlist observes same state
+struct WinampPlaylistWindow: View {
+    @Environment(AppSettings.self) var settings
+
+    var body: some View {
+        if settings.isMainWindowShaded && sizeState.size.width >= 3 {
+            VisualizerView()  // Mini visualizer activates
+        }
+    }
+}
+```
+
+**State Flow:**
+```
+AppSettings.isMainWindowShaded (source of truth, persisted)
+    │
+    ├── WinampMainWindow reads → renders full/shade mode
+    │
+    ├── WinampPlaylistWindow reads → shows/hides mini visualizer
+    │
+    └── AppCommands reads → updates menu item text
+```
+
+---
+
+### Pattern 6: NSWindow/SwiftUI Sync Hooks
+
+**Problem:** NSWindow frame and SwiftUI state can become desynchronized, especially on app launch or programmatic changes.
+
+**Bugs Found:**
+
+1. **NSWindow constraints blocked resize:**
+```swift
+// ❌ BEFORE (WinampPlaylistWindowController):
+window.minSize = NSSize(width: 275, height: 232)  // Fixed height!
+window.maxSize = NSSize(width: 275, height: 900)  // Fixed width!
+
+// ✅ AFTER:
+window.minSize = NSSize(width: 275, height: 116)   // Allows collapse
+window.maxSize = NSSize(width: 2000, height: 900)  // Allows expansion
+```
+
+2. **Persisted size discarded on launch:**
+```swift
+// ❌ BEFORE (WindowCoordinator.applyPersistedWindowPositions):
+storedPlaylist.size.width = 275  // Always forced to minimum!
+
+// ✅ AFTER:
+let clampedWidth = max(PlaylistWindowSizeState.baseWidth, storedPlaylist.size.width)
+// Preserves user's saved width
+```
+
+3. **Missing sync hooks:**
+```swift
+// ✅ ADD to WinampPlaylistWindow:
+.onAppear {
+    // Sync NSWindow from persisted PlaylistWindowSizeState
+    WindowCoordinator.shared?.updatePlaylistWindowSize(to: sizeState.pixelSize)
+}
+.onChange(of: sizeState.size) { _, newSize in
+    // Sync NSWindow on programmatic size changes
+    let pixelSize = newSize.toPlaylistPixels()
+    WindowCoordinator.shared?.updatePlaylistWindowSize(to: pixelSize)
+}
+```
+
+**WindowCoordinator Bridge Method:**
+```swift
+func updatePlaylistWindowSize(to pixelSize: CGSize) {
+    guard let window = playlistWindow else { return }
+    var frame = window.frame
+    let oldHeight = frame.height
+
+    // NOTE: Playlist does NOT use double-size mode (unlike main/EQ)
+    frame.size = pixelSize
+    frame.origin.y += oldHeight - pixelSize.height  // Anchor top-left
+    window.setFrame(frame, display: true)
+}
+```
+
+---
+
+### Pattern 7: Playlist Does NOT Use Double-Size Mode
+
+**Discovery:** After implementing resize, double-size toggle caused incorrect scaling.
+
+**Investigation:** Webamp's PlaylistWindow has NO doubleSize references (verified via grep).
+
+**Conclusion:** Only Main and EQ windows use double-size mode. Playlist resizes via segment grid, not 2x scaling.
+
+```swift
+// ❌ WRONG: Applying double-size to playlist
+func updatePlaylistWindowSize(to pixelSize: CGSize) {
+    let scale = settings.isDoubleSize ? 2.0 : 1.0  // ← WRONG for playlist
+    frame.size = CGSize(width: pixelSize.width * scale, ...)
+}
+
+// ✅ CORRECT: No scaling for playlist
+func updatePlaylistWindowSize(to pixelSize: CGSize) {
+    // Playlist uses segment-based sizing, not 2x scaling
+    frame.size = pixelSize
+}
+```
+
+---
+
+### Pattern 8: ZStack Alignment in Conditional Rendering
+
+**Bug:** Shade mode buttons weren't clickable after shade/unshade toggle.
+
+**Root Cause:** Inner ZStack had default `.center` alignment, but button `.offset()` was applied via `.at()` modifier:
+
+```swift
+// ❌ WRONG: Default center alignment + offset = buttons outside frame
+ZStack {  // Default: alignment: .center
+    buildShadeButtons()
+        .at(x: 10, y: 3)  // Offset from CENTER = way outside 14px frame!
+}
+
+// ✅ CORRECT: topLeading alignment for offset-based positioning
+ZStack(alignment: .topLeading) {
+    buildShadeButtons()
+        .at(x: 10, y: 3)  // Offset from TOP-LEFT = correct position
+}
+```
+
+**Rule:** When using `.at(x:y:)` offset-based positioning, always use `ZStack(alignment: .topLeading)`.
+
+---
+
+### Playlist Resize Pattern Checklist
+
+When implementing similar resizable windows:
+
+- [ ] **Create SizeState class** with window-specific computed properties
+- [ ] **Add Size2D presets** for minimum/default/2x sizes
+- [ ] **Verify sprite widths** against webamp source (don't trust existing code)
+- [ ] **Use background tiling** with overlays (not per-side placement)
+- [ ] **Implement three-section layout** if chrome has expandable center
+- [ ] **Add scroll slider** with bridge contract (binding to offset)
+- [ ] **Clamp scroll offset** when playlist/window size changes
+- [ ] **Fix NSWindow constraints** in WindowController
+- [ ] **Add onAppear/onChange** sync hooks for SwiftUI/AppKit sync
+- [ ] **Verify double-size behavior** (some windows don't scale)
+- [ ] **Test ZStack alignment** when using offset-based positioning
+- [ ] **Cross-window state** via AppSettings for features like visualizer activation
+- [ ] **Thread Sanitizer clean** builds required
+- [ ] **Oracle Grade A-** validation before merge
+
+---
+
 ## Build & Distribution
 
 ### SPM vs Xcode Build Structures
@@ -3049,6 +3524,9 @@ ls -la ~/Library/Developer/Xcode/DerivedData/MacAmpApp-*/Build/Products/Debug/Ma
 8. **Bundle Path Differences** - Handle SPM vs Xcode bundle structures with conditional compilation
 9. **Performance Optimization** - Cache computed values, debounce persistence, minimize body re-evaluations
 10. **Graceful Degradation** - App must work with ANY .wsz file, even incomplete/corrupted ones
+11. **Segment-Based Resize** - Quantize window resizing to 25×29px increments with AppKit preview overlay
+12. **Cross-Window State** - Migrate local @State to AppSettings for features requiring cross-window observation
+13. **NSWindow/SwiftUI Sync** - Use onAppear/onChange hooks to keep NSWindow frame synchronized with SwiftUI state
 
 ### This Skill Enables You To
 
@@ -3062,6 +3540,10 @@ ls -la ~/Library/Developer/Xcode/DerivedData/MacAmpApp-*/Build/Products/Debug/Ma
 - ✅ Implement semantic abstraction layers for flexibility
 - ✅ Debug SwiftUI rendering and z-ordering issues
 - ✅ Optimize rendering performance for real-time updates
+- ✅ Implement quantized segment-based window resizing with AppKit overlay
+- ✅ Build scroll sliders with proper bridge layer architecture
+- ✅ Coordinate cross-window state observation for multi-window features
+- ✅ Synchronize NSWindow and SwiftUI state with proper hooks
 
 ### Next Project Improvements
 
@@ -3080,9 +3562,20 @@ When building your next retro macOS app:
 **Document Status:** Production Ready
 **Maintenance:** Update when new patterns/pitfalls discovered
 **Owner:** MacAmp Development Team
-**Last Updated:** 2025-11-16
+**Last Updated:** 2025-12-16
 
 **Recent Additions:**
+- **Playlist Window Resize Patterns** (Dec 16, 2025) - Complete segment-based resize with scroll slider
+  - Segment-based resize with window-specific base dimensions (275×116 vs 250×116)
+  - Three-section bottom bar layout (LEFT + CENTER + RIGHT) with dynamic tiles
+  - Background tiling as canvas with overlays (webamp CSS flex-grow pattern)
+  - Scroll slider bridge contract with one-way sync (SwiftUI ScrollView limitation documented)
+  - Cross-window state observation via AppSettings (mini visualizer activation)
+  - NSWindow/SwiftUI sync hooks (onAppear/onChange for frame synchronization)
+  - Playlist does NOT use double-size mode (only Main/EQ do)
+  - ZStack alignment bug in conditional rendering (topLeading required for offset positioning)
+  - Sprite width bug discovery (154→150px, verified against webamp)
+  - Oracle Grade A- (Architecture Aligned)
 - **Hybrid AppKit/SwiftUI Architecture & Oracle Consultation Patterns** (Nov 16, 2025) - Critical architectural validation
   - WindowGroup singleton problem NOT fixed in macOS 15/26 (Oracle confirmed)
   - NSWindowController is CORRECT for magnetic docking apps (not technical debt)
@@ -3130,4 +3623,4 @@ When building your next retro macOS app:
 
 **Built with ❤️ for retro computing on modern macOS**
 
-*This skill document captures 6+ months of lessons learned building MacAmp, distilled into actionable patterns for building similar retro-styled macOS applications with modern Swift 6 patterns. Updated with internet radio streaming and complete notarization experience.*
+*This skill document captures 8+ months of lessons learned building MacAmp, distilled into actionable patterns for building similar retro-styled macOS applications with modern Swift 6 patterns. Updated with playlist window resize patterns, scroll slider bridge architecture, and cross-window state observation.*
