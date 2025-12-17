@@ -174,6 +174,24 @@ The MacAmp documentation serves multiple critical functions:
 - **Related Docs**: SPRITE_SYSTEM_COMPLETE.md, WINDOW_FOCUS_ARCHITECTURE.md
 - **Quality**: ⭐⭐⭐⭐⭐ Authoritative
 
+#### **[PLAYLIST_WINDOW.md](PLAYLIST_WINDOW.md)** ⭐ NEW
+- **Size**: 22KB, 650 lines
+- **Last Updated**: 2025-12-16
+- **Status**: ✅ PRODUCTION
+- **Purpose**: Complete playlist window documentation with segment-based resize system
+- **Key Sections**:
+  - Window specifications and segment grid (25×29px)
+  - PlaylistWindowSizeState @Observable model
+  - Three-section bottom bar (LEFT/CENTER/RIGHT)
+  - Resize gesture with AppKit preview overlay
+  - Scroll slider with proportional thumb
+  - Mini visualizer (when main window shaded)
+  - WindowCoordinator bridge methods
+  - Size persistence and NSWindow sync
+- **When to Read**: Working with playlist, implementing resize, debugging layout issues
+- **Related Docs**: VIDEO_WINDOW.md, WINDOW_FOCUS_ARCHITECTURE.md, MULTI_WINDOW_ARCHITECTURE.md
+- **Quality**: ⭐⭐⭐⭐⭐ Authoritative (Oracle Grade A-)
+
 #### **[MILKDROP_WINDOW.md](MILKDROP_WINDOW.md)** ⭐
 - **Size**: 24KB, 767 lines
 - **Last Updated**: 2025-11-14
@@ -472,6 +490,7 @@ docs/
 │   │
 │   ├── 📺 Window Implementations
 │   │   ├── VIDEO_WINDOW.md (Video playback window)
+│   │   ├── PLAYLIST_WINDOW.md (Playlist window with resize) ⭐ NEW
 │   │   └── MILKDROP_WINDOW.md (Visualization window)
 │   │
 │   └── 🎨 Skin System
@@ -630,6 +649,13 @@ Includes:
 | **Window lifecycle** | MULTI_WINDOW_ARCHITECTURE.md | §Lifecycle Management |
 | **Window management** | MACAMP_ARCHITECTURE_GUIDE.md | §WindowSnapManager |
 | **Window ownership** | MULTI_WINDOW_ARCHITECTURE.md | §Window Ownership |
+| **Playlist window** | PLAYLIST_WINDOW.md | Full document |
+| **Playlist resize** | PLAYLIST_WINDOW.md | §Segment-Based Resize System |
+| **PlaylistWindowSizeState** | PLAYLIST_WINDOW.md | §PlaylistWindowSizeState |
+| **Playlist scroll slider** | PLAYLIST_WINDOW.md | §Scroll Slider |
+| **Playlist mini visualizer** | PLAYLIST_WINDOW.md | §Mini Visualizer |
+| **Segment-based resize** | PLAYLIST_WINDOW.md | §Segment-Based Resize System |
+| **25×29px segments** | PLAYLIST_WINDOW.md | §Window Specifications |
 | **WindowAccessor** | MACAMP_ARCHITECTURE_GUIDE.md | §NSWindow Bridge |
 | **WindowDragGesture** | CUSTOM_DRAG_FIX.md | §Problem Analysis |
 | **WindowFocusDelegate** | WINDOW_FOCUS_ARCHITECTURE.md | §WindowFocusDelegate |
@@ -674,6 +700,11 @@ Includes:
 | "How do I add a new window?" | MULTI_WINDOW_QUICK_START.md §Checklist |
 | "Why doesn't WindowDragGesture work?" | CUSTOM_DRAG_FIX.md §Problem Analysis |
 | "How to fix custom window dragging?" | CUSTOM_DRAG_FIX.md §Solution |
+| "How does playlist resize work?" | PLAYLIST_WINDOW.md §Segment-Based Resize System |
+| "How to implement segment-based resize?" | PLAYLIST_WINDOW.md §Resize Handle Implementation |
+| "What is PlaylistWindowSizeState?" | PLAYLIST_WINDOW.md §PlaylistWindowSizeState |
+| "How does playlist scroll slider work?" | PLAYLIST_WINDOW.md §Scroll Slider |
+| "When does playlist mini visualizer appear?" | PLAYLIST_WINDOW.md §Mini Visualizer |
 
 ---
 
@@ -685,28 +716,28 @@ Includes:
 ┌─────────────────────────────────────────────────────────┐
 │ Category               │ Lines  │ Docs │ Coverage      │
 ├───────────────────────┼────────┼──────┼───────────────┤
-│ Architecture & Design  │11,663  │ 11   │ █████████░ 95%│
+│ Architecture & Design  │12,313  │ 12   │ █████████░ 96%│
 │ Build & Distribution   │ 1,310  │  4   │ █████████░ 95%│
 │ Skin System           │   652  │  1   │ █████████░ 90%│
 │ Navigation & Index     │   724  │  1   │ ██████████100%│
-│ TOTAL                 │14,349  │ 17   │ █████████░ 94%│
+│ TOTAL                 │14,999  │ 18   │ █████████░ 95%│
 └─────────────────────────────────────────────────────────┘
 ```
 
 ### Documentation Health
 
 ```
-Total Active Docs:        17
+Total Active Docs:        18
 Total Archived Docs:      23 (local only)
-Total Lines:             13,673
-Average Doc Size:        804 lines
-Last Full Review:        2025-11-14
-Documentation Version:   3.0.0
+Total Lines:             14,323
+Average Doc Size:        796 lines
+Last Full Review:        2025-12-16
+Documentation Version:   3.1.0
 
 Quality Ratings:
-⭐⭐⭐⭐⭐ Authoritative:    9 docs (53%)
-⭐⭐⭐⭐  Reference:        7 docs (41%)
-⭐⭐⭐   Historical:       1 doc  (6%)
+⭐⭐⭐⭐⭐ Authoritative:   10 docs (56%)
+⭐⭐⭐⭐  Reference:        7 docs (39%)
+⭐⭐⭐   Historical:       1 doc  (5%)
 ```
 
 ### Accuracy Assessment
@@ -728,6 +759,7 @@ Quality Ratings:
 | MULTI_WINDOW_ARCHITECTURE | 98% ✅ | Production |
 | VIDEO_WINDOW | 98% ✅ | Production |
 | MILKDROP_WINDOW | 98% ✅ | Production |
+| PLAYLIST_WINDOW | 98% ✅ | Production (Oracle A-) |
 | WINDOW_FOCUS_ARCHITECTURE | 98% ✅ | Production |
 | WINAMP_SKIN_VARIATIONS | 100% ✅ | Verified |
 | Build docs (4) | 95% ✅ | Current |
@@ -833,15 +865,16 @@ The following documents have been **archived to docs/archive/** (local only, not
 ### Current Active Documentation
 
 ```
-17 Core Technical Documents
+18 Core Technical Documents
 ─────────────────────────────
-MACAMP_ARCHITECTURE_GUIDE.md    3,818 lines  (28%)
+MACAMP_ARCHITECTURE_GUIDE.md    3,818 lines  (27%)
 IMPLEMENTATION_PATTERNS.md      1,791 lines  (13%)
-MULTI_WINDOW_ARCHITECTURE.md    1,060 lines  (8%)
-VIDEO_WINDOW.md                   927 lines  (7%)
+MULTI_WINDOW_ARCHITECTURE.md    1,060 lines  (7%)
+VIDEO_WINDOW.md                   927 lines  (6%)
 SPRITE_SYSTEM_COMPLETE.md         814 lines  (6%)
-MILKDROP_WINDOW.md                767 lines  (6%)
-README.md (this file)             724 lines  (5%)
+MILKDROP_WINDOW.md                767 lines  (5%)
+README.md (this file)             750 lines  (5%)
+PLAYLIST_WINDOW.md                650 lines  (5%) ⭐ NEW
 WINAMP_SKIN_VARIATIONS.md         652 lines  (5%)
 WINDOW_FOCUS_ARCHITECTURE.md      599 lines  (4%)
 RELEASE_BUILD_GUIDE.md            447 lines  (3%)
@@ -853,7 +886,7 @@ CUSTOM_DRAG_FIX.md                254 lines  (2%)
 RELEASE_BUILD_COMPARISON.md       230 lines  (2%)
 CODE_SIGNING_FIX.md               200 lines  (1%)
 ─────────────────────────────
-TOTAL:                         13,673 lines
+TOTAL:                         14,349 lines
 ```
 
 ### Documentation by Category
@@ -887,6 +920,7 @@ The MacAmp documentation system provides **comprehensive, accurate, and authorit
 - **Building a release?** Go to RELEASE_BUILD_GUIDE.md
 - **Fixing a bug?** Check MACAMP_ARCHITECTURE_GUIDE.md §14 Quick Reference
 - **Working with windows?** See MULTI_WINDOW_ARCHITECTURE.md
+- **Playlist resize?** Check PLAYLIST_WINDOW.md ⭐ NEW
 - **Video implementation?** Check VIDEO_WINDOW.md
 - **Visualization window?** See MILKDROP_WINDOW.md
 
@@ -894,6 +928,6 @@ For questions or corrections, the documentation was comprehensively reviewed on 
 
 ---
 
-**MacAmp Documentation v3.0.0 | Last Updated: 2025-11-14 | Status: Production Authoritative**
+**MacAmp Documentation v3.1.0 | Last Updated: 2025-12-16 | Status: Production Authoritative**
 
-*Master index for 13,673 lines of verified technical documentation*
+*Master index for 14,349 lines of verified technical documentation (18 active docs)*

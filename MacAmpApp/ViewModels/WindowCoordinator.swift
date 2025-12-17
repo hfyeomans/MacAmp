@@ -1071,12 +1071,18 @@ final class WindowCoordinator {
 
             if let playlist = playlistWindow,
                var storedPlaylist = windowFrameStore.frame(for: .playlist) {
-                storedPlaylist.size.width = WinampSizes.playlistBase.width
+                // Preserve stored width (segment-based sizing allows horizontal expansion)
+                // Clamp to minimum width but don't force to base width
+                let clampedWidth = max(
+                    PlaylistWindowSizeState.baseWidth,
+                    storedPlaylist.size.width
+                )
+                // Clamp height to valid range using new base height (116px, not 232px)
                 let clampedHeight = max(
-                    WinampSizes.playlistBase.height,
+                    PlaylistWindowSizeState.baseHeight,
                     min(LayoutDefaults.playlistMaxHeight, storedPlaylist.size.height)
                 )
-                storedPlaylist.size.height = clampedHeight
+                storedPlaylist.size = CGSize(width: clampedWidth, height: clampedHeight)
                 playlist.setFrame(storedPlaylist, display: true)
                 applied = true
             }

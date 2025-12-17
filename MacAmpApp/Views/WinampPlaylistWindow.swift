@@ -363,6 +363,15 @@ struct WinampPlaylistWindow: View {
 
             // Inject radioLibrary into shared actions for ADD URL functionality
             PlaylistWindowActions.shared.radioLibrary = radioLibrary
+
+            // CRITICAL: Sync NSWindow size from persisted PlaylistWindowSizeState
+            // This ensures the AppKit window matches the SwiftUI layout on launch
+            WindowCoordinator.shared?.updatePlaylistWindowSize(to: sizeState.pixelSize)
+        }
+        // Sync NSWindow when sizeState.size changes programmatically (e.g., resetToDefault)
+        .onChange(of: sizeState.size) { _, newSize in
+            let pixelSize = newSize.toPlaylistPixels()
+            WindowCoordinator.shared?.updatePlaylistWindowSize(to: pixelSize)
         }
         .onDisappear {
             // Clean up keyboard monitor

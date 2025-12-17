@@ -12,9 +12,13 @@ class WinampPlaylistWindowController: NSWindowController {
             defer: false
         )
 
-        // Resize constraints (Winamp behavior: height only, fixed width)
-        window.minSize = NSSize(width: 275, height: 232)  // Minimum size
-        window.maxSize = NSSize(width: 275, height: 900)  // Max height, fixed width
+        // Resize constraints: Allow segment-based resizing (25×29px increments)
+        // Uses PlaylistWindowSizeState.baseWidth/baseHeight as minimum (275×116px)
+        window.minSize = NSSize(
+            width: PlaylistWindowSizeState.baseWidth,
+            height: PlaylistWindowSizeState.baseHeight
+        )
+        window.maxSize = NSSize(width: 2000, height: 900)  // Allow horizontal expansion
 
         // CRITICAL FIX #2: Apply standard Winamp window configuration
         WinampWindowConfigurator.apply(to: window)
