@@ -216,7 +216,8 @@ struct WinampMainWindow: View {
     @ViewBuilder
     private func buildShadeMode() -> some View {
         // Shade mode shows a compact 275×14px bar with essential controls
-        ZStack {
+        // CRITICAL: Must use .topLeading alignment for .offset() positioning to work correctly
+        ZStack(alignment: .topLeading) {
             // Shade background
             SimpleSpriteImage("MAIN_SHADE_BACKGROUND", width: 275, height: 14)
                 .at(CGPoint(x: 0, y: 0))
