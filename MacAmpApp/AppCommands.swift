@@ -19,7 +19,7 @@ struct AppCommands: Commands {
 
             Divider()
 
-            Button("Shade/Unshade Main") { dockingController.toggleShade(.main) }
+            Button("Shade/Unshade Main") { settings.isMainWindowShaded.toggle() }
                 .keyboardShortcut("1", modifiers: [.command, .option])
             Button("Shade/Unshade Playlist") { dockingController.toggleShade(.playlist) }
                 .keyboardShortcut("2", modifiers: [.command, .option])
