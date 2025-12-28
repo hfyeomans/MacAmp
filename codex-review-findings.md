@@ -25,3 +25,7 @@
 - `swift test` failed: SwiftPM build error “multiple producers” when compiling MacAmp.
 - `xcodebuild test -project MacAmpApp.xcodeproj -scheme MacAmpApp -destination platform=macOS -derivedDataPath build/DerivedData` failed: scheme “MacAmpApp” is not configured for the test action.
 - `xcodebuild build -project MacAmpApp.xcodeproj -scheme MacAmpApp -destination platform=macOS -derivedDataPath build/DerivedData` succeeded.
+ - Updated SpriteResolverTests to pass the new `loadedSheets` parameter required by `Skin` init (`Tests/MacAmpTests/SpriteResolverTests.swift`).
+ - `xcodebuild test -project MacAmpApp.xcodeproj -scheme MacAmpApp -destination platform=macOS -testPlan MacAmpApp -only-test-configuration Core -derivedDataPath build/DerivedDataTests` succeeded.
+ - `xcodebuild test -project MacAmpApp.xcodeproj -scheme MacAmpApp -destination platform=macOS -testPlan MacAmpApp -only-test-configuration Concurrency -derivedDataPath build/DerivedDataTests` succeeded.
+ - `xcodebuild test -project MacAmpApp.xcodeproj -scheme MacAmpApp -destination platform=macOS -testPlan MacAmpApp -only-test-configuration All -derivedDataPath build/DerivedDataTests` succeeded.

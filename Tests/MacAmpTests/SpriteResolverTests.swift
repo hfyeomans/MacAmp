@@ -14,7 +14,8 @@ final class SpriteResolverTests: XCTestCase {
                 fontName: nil
             ),
             images: [:],
-            cursors: [:]
+            cursors: [:],
+            loadedSheets: []
         )
     }
 
@@ -30,7 +31,8 @@ final class SpriteResolverTests: XCTestCase {
             visualizerColors: skin.visualizerColors,
             playlistStyle: skin.playlistStyle,
             images: ["DIGIT_3": NSImage(size: NSSize(width: 9, height: 13))],
-            cursors: [:]
+            cursors: [:],
+            loadedSheets: []
         )
         let resolver = SpriteResolver(skin: skin)
         XCTAssertEqual(resolver.resolve(.digit(3)), "DIGIT_3")

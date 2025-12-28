@@ -7,6 +7,14 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A8F1C1A0F5D7413A9A0B0101 /* AppSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8F1C1A0F5D7413A9A0B0001 /* AppSettingsTests.swift */; };
+		A8F1C1A0F5D7413A9A0B0102 /* AudioPlayerStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8F1C1A0F5D7413A9A0B0002 /* AudioPlayerStateTests.swift */; };
+		A8F1C1A0F5D7413A9A0B0103 /* DockingControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8F1C1A0F5D7413A9A0B0003 /* DockingControllerTests.swift */; };
+		A8F1C1A0F5D7413A9A0B0104 /* EQCodecTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8F1C1A0F5D7413A9A0B0004 /* EQCodecTests.swift */; };
+		A8F1C1A0F5D7413A9A0B0105 /* PlaylistNavigationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8F1C1A0F5D7413A9A0B0005 /* PlaylistNavigationTests.swift */; };
+		A8F1C1A0F5D7413A9A0B0106 /* SkinManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8F1C1A0F5D7413A9A0B0006 /* SkinManagerTests.swift */; };
+		A8F1C1A0F5D7413A9A0B0107 /* SpriteResolverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8F1C1A0F5D7413A9A0B0007 /* SpriteResolverTests.swift */; };
+		A8F1C1A0F5D7413A9A0B0110 /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A8F1C1A0F5D7413A9A0B0010 /* XCTest.framework */; };
 		00818CBB70425D395EE2B862 /* SkinnedText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DCDB09162242F5E73FF35F6 /* SkinnedText.swift */; };
 		09ABEB45DA77F1178E0F5317 /* SkinManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97F3E1419E231E886A674A64 /* SkinManager.swift */; };
 		0E00109AB5375E26C755CA89 /* M3UEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31F32D02E5A363D621708145 /* M3UEntry.swift */; };
@@ -85,7 +93,26 @@
 		FF66EE55DD44CC33BB22AA11 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA11BB22CC33DD44EE55FF66 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		A8F1C1A0F5D7413A9A0B0401 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 0D2F82A937F54CAEA17497D5 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = DD89FFD3419B7EF1BC0409DB;
+			remoteInfo = MacAmp;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
+		A8F1C1A0F5D7413A9A0B0001 /* AppSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettingsTests.swift; sourceTree = "<group>"; };
+		A8F1C1A0F5D7413A9A0B0002 /* AudioPlayerStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlayerStateTests.swift; sourceTree = "<group>"; };
+		A8F1C1A0F5D7413A9A0B0003 /* DockingControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DockingControllerTests.swift; sourceTree = "<group>"; };
+		A8F1C1A0F5D7413A9A0B0004 /* EQCodecTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EQCodecTests.swift; sourceTree = "<group>"; };
+		A8F1C1A0F5D7413A9A0B0005 /* PlaylistNavigationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaylistNavigationTests.swift; sourceTree = "<group>"; };
+		A8F1C1A0F5D7413A9A0B0006 /* SkinManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkinManagerTests.swift; sourceTree = "<group>"; };
+		A8F1C1A0F5D7413A9A0B0007 /* SpriteResolverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpriteResolverTests.swift; sourceTree = "<group>"; };
+		A8F1C1A0F5D7413A9A0B0010 /* XCTest.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = XCTest.framework; path = System/Library/Frameworks/XCTest.framework; sourceTree = SDKROOT; };
+		A8F1C1A0F5D7413A9A0B0011 /* MacAmpTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = MacAmpTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		032A0DEAD316CCA0CDA2645D /* EqGraphView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EqGraphView.swift; sourceTree = "<group>"; };
 		0C3495B177A8BA24181B484E /* WinampMainWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WinampMainWindow.swift; sourceTree = "<group>"; };
 		12C0A7D97E8D3B2E715D4EA0 /* SkinnedBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkinnedBanner.swift; sourceTree = "<group>"; };
@@ -166,6 +193,14 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		A8F1C1A0F5D7413A9A0B0202 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A8F1C1A0F5D7413A9A0B0110 /* XCTest.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		744B8AD2A52687019623EAA9 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -177,6 +212,36 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		A8F1C1A0F5D7413A9A0B0020 /* Tests */ = {
+			isa = PBXGroup;
+			children = (
+				A8F1C1A0F5D7413A9A0B0021 /* MacAmpTests */,
+			);
+			path = Tests;
+			sourceTree = "<group>";
+		};
+		A8F1C1A0F5D7413A9A0B0021 /* MacAmpTests */ = {
+			isa = PBXGroup;
+			children = (
+				A8F1C1A0F5D7413A9A0B0001 /* AppSettingsTests.swift */,
+				A8F1C1A0F5D7413A9A0B0002 /* AudioPlayerStateTests.swift */,
+				A8F1C1A0F5D7413A9A0B0003 /* DockingControllerTests.swift */,
+				A8F1C1A0F5D7413A9A0B0004 /* EQCodecTests.swift */,
+				A8F1C1A0F5D7413A9A0B0005 /* PlaylistNavigationTests.swift */,
+				A8F1C1A0F5D7413A9A0B0006 /* SkinManagerTests.swift */,
+				A8F1C1A0F5D7413A9A0B0007 /* SpriteResolverTests.swift */,
+			);
+			path = MacAmpTests;
+			sourceTree = "<group>";
+		};
+		A8F1C1A0F5D7413A9A0B0022 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				A8F1C1A0F5D7413A9A0B0010 /* XCTest.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		0542534C840178895387FEE4 /* Components */ = {
 			isa = PBXGroup;
 			children = (
@@ -235,6 +300,7 @@
 			isa = PBXGroup;
 			children = (
 				B36F1C1954EE4A8EBB993CB6 /* MacAmp.app */,
+				A8F1C1A0F5D7413A9A0B0011 /* MacAmpTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -243,6 +309,8 @@
 			isa = PBXGroup;
 			children = (
 				F3B9E0E999F4022FE2955A62 /* MacAmpApp */,
+				A8F1C1A0F5D7413A9A0B0020 /* Tests */,
+				A8F1C1A0F5D7413A9A0B0022 /* Frameworks */,
 				679D4139BE833A25AB1CBCFA /* Products */,
 			);
 			sourceTree = "<group>";
@@ -367,6 +435,23 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		A8F1C1A0F5D7413A9A0B0301 /* MacAmpTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A8F1C1A0F5D7413A9A0B0601 /* Build configuration list for PBXNativeTarget "MacAmpTests" */;
+			buildPhases = (
+				A8F1C1A0F5D7413A9A0B0201 /* Sources */,
+				A8F1C1A0F5D7413A9A0B0202 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A8F1C1A0F5D7413A9A0B0402 /* PBXTargetDependency */,
+			);
+			name = MacAmpTests;
+			productName = MacAmpTests;
+			productReference = A8F1C1A0F5D7413A9A0B0011 /* MacAmpTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		DD89FFD3419B7EF1BC0409DB /* MacAmp */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 0454F19FCE0902CEF81620EB /* Build configuration list for PBXNativeTarget "MacAmp" */;
@@ -412,6 +497,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
+				A8F1C1A0F5D7413A9A0B0301 /* MacAmpTests */,
 				DD89FFD3419B7EF1BC0409DB /* MacAmp */,
 			);
 		};
@@ -436,6 +522,20 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		A8F1C1A0F5D7413A9A0B0201 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A8F1C1A0F5D7413A9A0B0101 /* AppSettingsTests.swift in Sources */,
+				A8F1C1A0F5D7413A9A0B0102 /* AudioPlayerStateTests.swift in Sources */,
+				A8F1C1A0F5D7413A9A0B0103 /* DockingControllerTests.swift in Sources */,
+				A8F1C1A0F5D7413A9A0B0104 /* EQCodecTests.swift in Sources */,
+				A8F1C1A0F5D7413A9A0B0105 /* PlaylistNavigationTests.swift in Sources */,
+				A8F1C1A0F5D7413A9A0B0106 /* SkinManagerTests.swift in Sources */,
+				A8F1C1A0F5D7413A9A0B0107 /* SpriteResolverTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		2697386ECDD0CA030FD7D5C8 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -512,7 +612,61 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		A8F1C1A0F5D7413A9A0B0402 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = DD89FFD3419B7EF1BC0409DB /* MacAmp */;
+			targetProxy = A8F1C1A0F5D7413A9A0B0401 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		A8F1C1A0F5D7413A9A0B0501 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = AC3LGVEJJ8;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = MacAmpTests;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.hankyeomans.MacAmpTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MacAmp.app/Contents/MacOS/MacAmp";
+			};
+			name = Debug;
+		};
+		A8F1C1A0F5D7413A9A0B0502 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = AC3LGVEJJ8;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = MacAmpTests;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.hankyeomans.MacAmpTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MacAmp.app/Contents/MacOS/MacAmp";
+			};
+			name = Release;
+		};
 		1C70FC63A02D0BF514D3DA6C /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -706,6 +860,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		A8F1C1A0F5D7413A9A0B0601 /* Build configuration list for PBXNativeTarget "MacAmpTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A8F1C1A0F5D7413A9A0B0501 /* Debug */,
+				A8F1C1A0F5D7413A9A0B0502 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		0454F19FCE0902CEF81620EB /* Build configuration list for PBXNativeTarget "MacAmp" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
