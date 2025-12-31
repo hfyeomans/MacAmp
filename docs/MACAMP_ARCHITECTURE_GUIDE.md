@@ -1,7 +1,7 @@
 # MacAmp Complete Architecture Guide
 
 **Version:** 2.1.0
-**Date:** 2025-11-14
+**Date:** 2025-12-28
 **Project State:** Production-Ready (5-Window System, Video Playback, Swift 6, macOS 15+/26+)
 **Purpose:** Deep technical reference for developers joining or maintaining MacAmp
 
@@ -3416,6 +3416,23 @@ enum TimeDisplayMode: String, Codable {
 ---
 
 ## Testing Strategies
+
+### Test Plan & Configurations
+
+**Test target**: `MacAmpTests` (`Tests/MacAmpTests`)
+**Test plan**: `MacAmpApp.xcodeproj/xcshareddata/xctestplans/MacAmpApp.xctestplan`
+
+**Configurations**:
+- Core: AppSettingsTests, EQCodecTests, SpriteResolverTests
+- Concurrency: AudioPlayerStateTests, DockingControllerTests, PlaylistNavigationTests, SkinManagerTests
+- All: full MacAmpTests target
+
+**CLI**:
+```bash
+xcodebuild test -project MacAmpApp.xcodeproj -scheme MacAmpApp -destination 'platform=macOS' -testPlan MacAmpApp -only-test-configuration Core -derivedDataPath build/DerivedDataTests
+```
+
+Swap `Core` for `Concurrency` or `All` as needed.
 
 ### Unit Tests
 

@@ -1,7 +1,7 @@
 # MacAmp Documentation Guide
 
 **Version:** 3.0.0
-**Date:** 2025-11-14
+**Date:** 2025-12-28
 **Purpose:** Master index and navigation guide for all MacAmp documentation
 **Total Documentation:** 13,673 lines across 17 current docs + 23 archived docs
 
@@ -11,15 +11,16 @@
 
 1. [Executive Summary](#executive-summary)
 2. [Quick Start by Audience](#quick-start-by-audience)
-3. [Documentation Philosophy](#documentation-philosophy)
-4. [Complete Documentation Inventory](#complete-documentation-inventory)
-5. [Documentation Categories](#documentation-categories)
-6. [Reading Paths by Audience](#reading-paths-by-audience)
-7. [Documentation Map](#documentation-map)
-8. [Archive Documentation Inventory](#archive-documentation-inventory)
-9. [Search Index](#search-index)
-10. [Quality Metrics](#quality-metrics)
-11. [Maintenance Guidelines](#maintenance-guidelines)
+3. [Test Plan Quick Reference](#test-plan-quick-reference)
+4. [Documentation Philosophy](#documentation-philosophy)
+5. [Complete Documentation Inventory](#complete-documentation-inventory)
+6. [Documentation Categories](#documentation-categories)
+7. [Reading Paths by Audience](#reading-paths-by-audience)
+8. [Documentation Map](#documentation-map)
+9. [Archive Documentation Inventory](#archive-documentation-inventory)
+10. [Search Index](#search-index)
+11. [Quality Metrics](#quality-metrics)
+12. [Maintenance Guidelines](#maintenance-guidelines)
 
 ---
 
@@ -48,6 +49,28 @@ The MacAmp documentation serves multiple critical functions:
 | **Feature Developer** | [IMPLEMENTATION_PATTERNS.md](IMPLEMENTATION_PATTERNS.md) | [SPRITE_SYSTEM_COMPLETE.md](SPRITE_SYSTEM_COMPLETE.md) | 2 hours |
 | **Release Manager** | [RELEASE_BUILD_GUIDE.md](RELEASE_BUILD_GUIDE.md) | [CODE_SIGNING_FIX.md](CODE_SIGNING_FIX.md) | 1-2 hours |
 | **Architectural Reviewer** | [MACAMP_ARCHITECTURE_GUIDE.md](MACAMP_ARCHITECTURE_GUIDE.md) | All docs | 4-6 hours |
+
+---
+
+## Test Plan Quick Reference
+
+MacAmp tests run through the `MacAmpApp` scheme using the shared test plan `MacAmpApp.xctestplan`.
+
+**Locations**:
+- Test target: `Tests/MacAmpTests`
+- Test plan: `MacAmpApp.xcodeproj/xcshareddata/xctestplans/MacAmpApp.xctestplan`
+
+**Configurations**:
+- Core: AppSettingsTests, EQCodecTests, SpriteResolverTests
+- Concurrency: AudioPlayerStateTests, DockingControllerTests, PlaylistNavigationTests, SkinManagerTests
+- All: full MacAmpTests target
+
+**CLI**:
+```bash
+xcodebuild test -project MacAmpApp.xcodeproj -scheme MacAmpApp -destination 'platform=macOS' -testPlan MacAmpApp -only-test-configuration Core -derivedDataPath build/DerivedDataTests
+```
+
+Swap `Core` for `Concurrency` or `All` as needed.
 
 ---
 
@@ -90,7 +113,7 @@ The MacAmp documentation serves multiple critical functions:
 
 #### **[MACAMP_ARCHITECTURE_GUIDE.md](MACAMP_ARCHITECTURE_GUIDE.md)** ⭐
 - **Size**: 120KB, 3,818 lines
-- **Last Updated**: 2025-11-01
+- **Last Updated**: 2025-12-28
 - **Status**: ✅ AUTHORITATIVE
 - **Purpose**: Complete architectural reference for MacAmp
 - **Key Sections**:
@@ -108,7 +131,7 @@ The MacAmp documentation serves multiple critical functions:
 
 #### **[IMPLEMENTATION_PATTERNS.md](IMPLEMENTATION_PATTERNS.md)** ⭐
 - **Size**: 56KB, 1,791 lines
-- **Last Updated**: 2025-11-01
+- **Last Updated**: 2025-12-28
 - **Status**: ✅ AUTHORITATIVE
 - **Purpose**: Practical code patterns and best practices
 - **Key Sections**:
@@ -117,7 +140,7 @@ The MacAmp documentation serves multiple critical functions:
   - Audio processing patterns (dual backend, streaming)
   - Async/await patterns with Swift concurrency
   - Error handling with Result builders
-  - Testing patterns (mocks, async tests)
+  - Testing patterns (mocks, async tests, test plan commands)
   - Migration guides (ObservableObject → @Observable)
   - Anti-patterns to avoid
 - **When to Read**: Before implementing features, code reviews, refactoring
@@ -393,6 +416,7 @@ The MacAmp documentation serves multiple critical functions:
 
 4. **Build & Test** (30 min):
    - RELEASE_BUILD_GUIDE.md - Local development builds
+   - README.md §Test Plan Quick Reference - Running MacAmpApp tests
 
 ### 🐛 Bug Fixer
 
@@ -409,6 +433,7 @@ The MacAmp documentation serves multiple critical functions:
    - IMPLEMENTATION_PATTERNS.md §9 - Anti-patterns
 
 3. **Fix & Test** (varies):
+   - README.md §Test Plan Quick Reference - Core/Concurrency configs
    - IMPLEMENTATION_PATTERNS.md §7 - Testing patterns
    - MACAMP_ARCHITECTURE_GUIDE.md §13 - Common pitfalls
 
@@ -614,6 +639,7 @@ Includes:
 | **Swift 6 patterns** | MACAMP_ARCHITECTURE_GUIDE.md | §10 Swift 6 |
 | **SwiftUI techniques** | MACAMP_ARCHITECTURE_GUIDE.md | §7 SwiftUI |
 | **Testing patterns** | IMPLEMENTATION_PATTERNS.md | §7 Testing |
+| **Test plan configurations** | README.md | Test Plan Quick Reference |
 | **Three-layer architecture** | MACAMP_ARCHITECTURE_GUIDE.md | §3 Three-Layer |
 | **Thread safety** | IMPLEMENTATION_PATTERNS.md | §5 Async/Await |
 | **Time display system** | MACAMP_ARCHITECTURE_GUIDE.md | §UI Controls & Features |
@@ -675,7 +701,7 @@ Includes:
 | "What patterns should I follow?" | IMPLEMENTATION_PATTERNS.md |
 | "How accurate is the documentation?" | All corrections applied (post-Nov 1 review) |
 | "What's the app architecture?" | MACAMP_ARCHITECTURE_GUIDE.md §3 |
-| "How do I test my changes?" | IMPLEMENTATION_PATTERNS.md §7 |
+| "How do I test my changes?" | README.md Test Plan Quick Reference + IMPLEMENTATION_PATTERNS.md §7 |
 | "What Swift 6 features are used?" | MACAMP_ARCHITECTURE_GUIDE.md §10 |
 | "How does window snapping work?" | MACAMP_ARCHITECTURE_GUIDE.md §WindowSnapManager |
 | "What's the spectrum analyzer algorithm?" | MACAMP_ARCHITECTURE_GUIDE.md §8.4 (19-bar Goertzel) |
