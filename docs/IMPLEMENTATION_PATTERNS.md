@@ -1,7 +1,7 @@
 # MacAmp Implementation Patterns
 
 **Version:** 1.0.0
-**Date:** 2025-11-01
+**Date:** 2025-12-28
 **Purpose:** Practical code patterns and best practices for MacAmp development
 
 ---
@@ -1310,6 +1310,23 @@ struct VisualizationView: View {
 ---
 
 ## Testing Patterns
+
+### Test Plan Quick Reference
+
+**Test target**: `MacAmpTests` (`Tests/MacAmpTests`)
+**Test plan**: `MacAmpApp.xcodeproj/xcshareddata/xctestplans/MacAmpApp.xctestplan`
+
+**Configurations**:
+- Core: AppSettingsTests, EQCodecTests, SpriteResolverTests
+- Concurrency: AudioPlayerStateTests, DockingControllerTests, PlaylistNavigationTests, SkinManagerTests
+- All: full MacAmpTests target
+
+**CLI**:
+```bash
+xcodebuild test -project MacAmpApp.xcodeproj -scheme MacAmpApp -destination 'platform=macOS' -testPlan MacAmpApp -only-test-configuration Core -derivedDataPath build/DerivedDataTests
+```
+
+Swap `Core` for `Concurrency` or `All` as needed.
 
 ### Pattern: Mock Injection for Testing
 
