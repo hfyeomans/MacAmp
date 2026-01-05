@@ -11,18 +11,20 @@ struct WinampMilkdropWindow: View {
 
     var body: some View {
         MilkdropWindowChromeView {
-            Group {
-                if bridge.isReady {
-                    // Butterchurn visualization (local playback only)
-                    ButterchurnWebView(bridge: bridge)
-                } else if let error = bridge.errorMessage {
-                    // Initialization failed
-                    fallbackView(message: error)
-                } else {
-                    // Loading state
-                    fallbackView(message: "Loading...")
+            ZStack {
+                // ALWAYS create WebView - it must exist to send 'ready' message
+                ButterchurnWebView(bridge: bridge)
+
+                // Overlay loading/error state (fades when ready)
+                if !bridge.isReady {
+                    if let error = bridge.errorMessage {
+                        fallbackView(message: error)
+                    } else {
+                        fallbackView(message: "Loading...")
+                    }
                 }
             }
+            .animation(.easeInOut(duration: 0.3), value: bridge.isReady)
         }
     }
 
