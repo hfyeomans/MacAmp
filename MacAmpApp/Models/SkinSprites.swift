@@ -260,6 +260,8 @@ struct SkinSprites {
             Sprite(name: "GEN_TEXT_SELECTED_R_TOP", x: 124, y: 88, width: 7, height: 6),
             Sprite(name: "GEN_TEXT_SELECTED_O_TOP", x: 102, y: 88, width: 6, height: 6),
             Sprite(name: "GEN_TEXT_SELECTED_P_TOP", x: 109, y: 88, width: 6, height: 6),
+            Sprite(name: "GEN_TEXT_SELECTED_H_TOP", x: 53, y: 88, width: 6, height: 6),
+            Sprite(name: "GEN_TEXT_SELECTED_V_TOP", x: 152, y: 88, width: 6, height: 6),
 
             // Selected (focused) letter BOTTOMS - Y=95, H=2
             Sprite(name: "GEN_TEXT_SELECTED_M_BOTTOM", x: 86, y: 95, width: 8, height: 2),
@@ -270,6 +272,8 @@ struct SkinSprites {
             Sprite(name: "GEN_TEXT_SELECTED_R_BOTTOM", x: 124, y: 95, width: 7, height: 2),
             Sprite(name: "GEN_TEXT_SELECTED_O_BOTTOM", x: 102, y: 95, width: 6, height: 2),
             Sprite(name: "GEN_TEXT_SELECTED_P_BOTTOM", x: 109, y: 95, width: 6, height: 2),
+            Sprite(name: "GEN_TEXT_SELECTED_H_BOTTOM", x: 53, y: 95, width: 6, height: 2),
+            Sprite(name: "GEN_TEXT_SELECTED_V_BOTTOM", x: 152, y: 95, width: 6, height: 2),
 
             // Normal (unfocused) letter TOPS - Y=96, H=6
             Sprite(name: "GEN_TEXT_M_TOP", x: 86, y: 96, width: 8, height: 6),
@@ -280,6 +284,8 @@ struct SkinSprites {
             Sprite(name: "GEN_TEXT_R_TOP", x: 124, y: 96, width: 7, height: 6),
             Sprite(name: "GEN_TEXT_O_TOP", x: 102, y: 96, width: 6, height: 6),
             Sprite(name: "GEN_TEXT_P_TOP", x: 109, y: 96, width: 6, height: 6),
+            Sprite(name: "GEN_TEXT_H_TOP", x: 53, y: 96, width: 6, height: 6),
+            Sprite(name: "GEN_TEXT_V_TOP", x: 152, y: 96, width: 6, height: 6),
 
             // Normal (unfocused) letter BOTTOMS - Y=108, H=1
             Sprite(name: "GEN_TEXT_M_BOTTOM", x: 86, y: 108, width: 8, height: 1),
@@ -290,6 +296,8 @@ struct SkinSprites {
             Sprite(name: "GEN_TEXT_R_BOTTOM", x: 124, y: 108, width: 7, height: 1),
             Sprite(name: "GEN_TEXT_O_BOTTOM", x: 102, y: 108, width: 6, height: 1),
             Sprite(name: "GEN_TEXT_P_BOTTOM", x: 109, y: 108, width: 6, height: 1),
+            Sprite(name: "GEN_TEXT_H_BOTTOM", x: 53, y: 108, width: 6, height: 1),
+            Sprite(name: "GEN_TEXT_V_BOTTOM", x: 152, y: 108, width: 6, height: 1),
         ],
 
         // PLEDIT.bmp (Playlist window chrome/buttons)

@@ -70,9 +70,10 @@ struct MilkdropWindowChromeView<Content: View>: View {
                     SimpleSpriteImage("GEN_TOP_RIGHT\(suffix)", width: 25, height: MilkdropWindowLayout.titlebarHeight)
                         .position(x: 262.5, y: 10)
 
-                    // MILKDROP letters - centered in 75px grey section (total width: 49px)
+                    // MILKDROP HD letters - centered in 75px grey section (total width: 66px)
                     // Each letter uses two-piece sprites (TOP + BOTTOM) stacked vertically
                     // Center section spans x: 100-175, center at x: 137.5
+                    // Gap: (75px - 66px) / 2 = 4.5px each side
                     milkdropLetters
                         .position(x: 137.5, y: 8)
                 }
@@ -121,10 +122,13 @@ struct MilkdropWindowChromeView<Content: View>: View {
         .background(Color.black)
     }
 
-    /// MILKDROP letters HStack - renders all 8 letters as two-piece sprites
-    /// Letter widths from SkinSprites.swift: M=8, I=4, L=5, K=7, D=6, R=7, O=6, P=6 (total: 49px)
+    /// MILKDROP HD letters HStack - renders text as two-piece sprites with space
+    /// Letter widths: M=8, I=4, L=5, K=7, D=6, R=7, O=6, P=6, space=5, H=6, gap=1, D=6
+    /// Total: 49 (MILKDROP) + 5 (space) + 6 (H) + 1 (gap) + 6 (D) = 67px
+    /// Gap: (75px center - 67px text) / 2 = 4px each side
     private var milkdropLetters: some View {
         HStack(spacing: 0) {
+            // MILKDROP
             makeLetter("M", width: 8)
             makeLetter("I", width: 4)
             makeLetter("L", width: 5)
@@ -133,6 +137,12 @@ struct MilkdropWindowChromeView<Content: View>: View {
             makeLetter("R", width: 7)
             makeLetter("O", width: 6)
             makeLetter("P", width: 6)
+            // Space (5px gap between words)
+            Color.clear.frame(width: 5, height: 8)
+            // HD (1px spacer between H and D to prevent touching)
+            makeLetter("H", width: 6)
+            Color.clear.frame(width: 1, height: 8)
+            makeLetter("D", width: 6)
         }
     }
 

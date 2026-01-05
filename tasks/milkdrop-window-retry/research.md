@@ -717,3 +717,139 @@ Committed current MILKDROP implementation before adding HD. If visual result is 
 ```bash
 git revert HEAD  # or git checkout HEAD~1 -- MacAmpApp/Views/Windows/MilkdropWindowChromeView.swift
 ```
+
+---
+
+## H Letter Sprite Debugging (2026-01-04)
+
+### Problem Description
+
+When implementing "MILKDROP HD", the H letter has rendering issues:
+
+**Attempt 1: x=52, width=7**
+- Result: Green (cyan) 1px vertical line on LEFT of H
+- H appeared lighter/brighter than other letters
+- Diagnosis: Starting 1px too early, including G-H delimiter
+
+**Attempt 2: x=53, width=7**
+- Result: Green 1px vertical line on RIGHT of H
+- H still brighter than other letters
+- H touching D (no gap)
+- Diagnosis: Width too large, including H-I delimiter on right
+
+### Analysis
+
+The cyan delimiter is 1px wide between each letter in GEN.bmp.
+
+**Known letter positions for reference:**
+- D: x=24, width=6 → spans x=24-29, delimiter at x=30
+- I: x=60, width=4 → spans x=60-63, delimiter at x=64
+- K: x=72, width=7 → spans x=72-78, delimiter at x=79
+- L: x=80, width=5 → spans x=80-84, delimiter at x=85
+
+**Calculating H position:**
+Between D (4th letter, ends ~x=30) and I (9th letter, starts x=60):
+- E, F, G, H span approximately 30px (x=31 to x=59)
+- 4 letters + 4 delimiters = ~7.5px average per letter+delimiter
+
+**If H has green on RIGHT at x=53, width=7:**
+- H spans x=53-59
+- The green at x=59 suggests the actual H ends at x=58
+- H should be width=6 (like D), not width=7
+
+### Proposed Fix
+
+Change H from:
+- x=53, width=7 (current, wrong)
+
+To:
+- x=53, width=6 (proposed fix)
+
+This would make H span x=53-58, leaving x=59 as the delimiter before I (which starts at x=60).
+
+### Letter Width Pattern
+
+Looking at existing letters:
+- M=8 (widest, has serifs)
+- K=7, R=7 (medium-wide with diagonal strokes)
+- D=6, O=6, P=6 (round letters)
+- L=5 (narrow)
+- I=4 (narrowest)
+
+H is similar to D structurally (two verticals with horizontal bar), so width=6 makes sense.
+
+---
+
+## "MILKDROP V2" Implementation (2026-01-04)
+
+### Change from "HD" to "V2"
+
+User requested changing "MILKDROP HD" to "MILKDROP V2".
+
+### V Letter Sprite Coordinates
+
+Based on ultrathink analysis of GEN.bmp letter positions:
+
+| Letter | X Position | Width | Notes |
+|--------|------------|-------|-------|
+| V | 152 | 6 | 22nd letter, after U |
+
+**Sprite definitions added:**
+```swift
+Sprite(name: "GEN_TEXT_SELECTED_V_TOP", x: 152, y: 88, width: 6, height: 6),
+Sprite(name: "GEN_TEXT_SELECTED_V_BOTTOM", x: 152, y: 95, width: 6, height: 2),
+Sprite(name: "GEN_TEXT_V_TOP", x: 152, y: 96, width: 6, height: 6),
+Sprite(name: "GEN_TEXT_V_BOTTOM", x: 152, y: 108, width: 6, height: 1),
+```
+
+### Number "2" - Critical Finding
+
+**GEN.bmp does NOT contain number sprites (0-9)**. The GEN.bmp text rows only contain letters A-Z.
+
+**Solution:** Use TEXT.bmp for number "2".
+
+| Source | Character | Sprite Name | Dimensions |
+|--------|-----------|-------------|------------|
+| TEXT.bmp | "2" | CHARACTER_50 | 5×6 pixels |
+
+**Height comparison:**
+- GEN letters: 7-8px (6px TOP + 1-2px BOTTOM)
+- TEXT digits: 6px (single piece)
+
+**Alignment solution:** Added 1-2px top padding to align digit baseline with GEN letter baselines.
+
+### Implementation Details
+
+**New `makeDigit` function:**
+```swift
+@ViewBuilder
+private func makeDigit(_ digit: String, width: CGFloat) -> some View {
+    let charCode = digit.utf16.first ?? 48
+    let spriteName = "CHARACTER_\(charCode)"
+    let totalHeight: CGFloat = isWindowActive ? 8 : 7
+
+    VStack(spacing: 0) {
+        Color.clear.frame(width: width, height: isWindowActive ? 2 : 1)
+        SimpleSpriteImage(spriteName, width: width, height: 6)
+    }
+    .frame(height: totalHeight)
+}
+```
+
+### Total Text Width Calculation
+
+| Component | Width |
+|-----------|-------|
+| MILKDROP | 49px |
+| Space | 5px |
+| V | 6px |
+| 2 | 5px |
+| **Total** | **65px** |
+
+**Gap calculation:** (75px center - 65px text) / 2 = **5px each side**
+
+This is slightly better than HD (66px, 4.5px gaps) and much better than original MILKDROP (49px, 13px gaps).
+
+### Known Limitation
+
+The "2" character is from TEXT.bmp (5x6) while letters are from GEN.bmp (variable width, 7-8px tall). There may be a slight visual difference in font style. The height is matched via padding, but the rendering style may differ.
