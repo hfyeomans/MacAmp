@@ -3,8 +3,14 @@ import SwiftUI
 
 @MainActor
 class WinampMilkdropWindowController: NSWindowController {
+    /// Butterchurn bridge instance (owned by controller, shared with view)
+    let butterchurnBridge: ButterchurnBridge
+
     convenience init(skinManager: SkinManager, audioPlayer: AudioPlayer, dockingController: DockingController, settings: AppSettings, radioLibrary: RadioStationLibrary, playbackCoordinator: PlaybackCoordinator, windowFocusState: WindowFocusState) {
         AppLog.debug(.window, "WinampMilkdropWindowController: init() called")
+
+        // Create Butterchurn bridge (owned by controller for lifecycle management)
+        let bridge = ButterchurnBridge()
 
         // Create borderless window (follows TASK 1 pattern)
         let window = BorderlessWindow(
@@ -24,7 +30,7 @@ class WinampMilkdropWindowController: NSWindowController {
         window.hasShadow = true
         window.backgroundColor = .clear
 
-        // Create view with environment injection
+        // Create view with environment injection (including Butterchurn bridge)
         let rootView = WinampMilkdropWindow()
             .environment(skinManager)
             .environment(audioPlayer)
@@ -33,6 +39,7 @@ class WinampMilkdropWindowController: NSWindowController {
             .environment(radioLibrary)
             .environment(playbackCoordinator)
             .environment(windowFocusState)
+            .environment(bridge)
 
         let hostingController = NSHostingController(rootView: rootView)
 
@@ -47,6 +54,15 @@ class WinampMilkdropWindowController: NSWindowController {
         // Install translucent backing layer (prevents bleed-through)
         WinampWindowConfigurator.installHitSurface(on: window)
 
-        self.init(window: window)
+        self.init(window: window, bridge: bridge)
+    }
+
+    init(window: NSWindow, bridge: ButterchurnBridge) {
+        self.butterchurnBridge = bridge
+        super.init(window: window)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
     }
 }

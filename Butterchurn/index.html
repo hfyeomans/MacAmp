@@ -1,72 +1,23 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' file: data: blob:">
-    <title>Butterchurn Visualization</title>
+    <meta charset="utf-8">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            overflow: hidden;
-        }
-        body {
-            background: #006400;  /* Dark green to verify HTML loads */
-            width: 100vw;
-            height: 100vh;
-        }
-        #canvas {
-            display: block;
-            width: 100%;
-            height: 100%;
-        }
-        #debug {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            color: white;
+        * { margin: 0; padding: 0; }
+        body { background: #000; overflow: hidden; }
+        canvas { display: block; width: 100%; height: 100%; }
+        #fallback {
+            display: none;
+            color: #0f0;
             font-family: monospace;
+            text-align: center;
+            padding-top: 40%;
             font-size: 12px;
-            background: rgba(0,0,0,0.5);
-            padding: 10px;
         }
     </style>
 </head>
 <body>
-    <div id="debug">
-        <div>HTML Loaded ✓</div>
-        <div id="js-status">JavaScript: Pending...</div>
-        <div id="butterchurn-status">Butterchurn: Not loaded</div>
-    </div>
     <canvas id="canvas"></canvas>
-    <script>
-        document.getElementById('js-status').textContent = 'JavaScript: Running ✓';
-        console.log('🟡 index.html JavaScript executing');
-
-        // Check if butterchurn loaded
-        function checkButterchurn() {
-            const status = document.getElementById('butterchurn-status');
-            if (typeof butterchurn !== 'undefined') {
-                status.textContent = 'Butterchurn: Loaded ✓';
-                console.log('🟡 butterchurn global found');
-            } else {
-                status.textContent = 'Butterchurn: Failed to load';
-                console.error('❌ butterchurn global not found');
-            }
-
-            if (typeof butterchurnPresets !== 'undefined') {
-                console.log('🟡 butterchurnPresets global found');
-            } else {
-                console.error('❌ butterchurnPresets global not found');
-            }
-        }
-    </script>
-    <script src="butterchurn.min.js" onerror="console.error('❌ Failed to load butterchurn.min.js'); document.getElementById('butterchurn-status').textContent = 'ERROR: butterchurn.min.js not found'"></script>
-    <script src="butterchurnPresets.min.js" onerror="console.error('❌ Failed to load butterchurnPresets.min.js'); document.getElementById('butterchurn-status').textContent = 'ERROR: butterchurnPresets.min.js not found'"></script>
-    <script src="bridge.js" onerror="console.error('❌ Failed to load bridge.js'); document.getElementById('butterchurn-status').textContent = 'ERROR: bridge.js not found'"></script>
-    <script>
-        checkButterchurn();
-    </script>
+    <div id="fallback">Butterchurn unavailable</div>
 </body>
 </html>

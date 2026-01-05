@@ -1709,3 +1709,125 @@ None - Part 21 complete
 ---
 
 **State Last Updated:** 2025-11-15 (Part 21 implementation complete)
+
+---
+
+## PART 22: Butterchurn Integration Phase 1 (2026-01-05) ✅ COMPLETE
+
+### Current Status: Phase 1 Complete - Static Frame Rendering
+
+**Branch:** `feature/butterchurn-integration`
+**Previous Blocker:** WKWebView evaluateJavaScript() failures (RESOLVED via script injection pattern)
+
+### Solution Architecture
+
+**Problem:** WKWebView file:// script loading restrictions prevented Butterchurn libraries from loading.
+
+**Solution:** WKUserScript injection pattern:
+1. Load butterchurn.min.js and butterchurnPresets.min.js from bundle as strings
+2. Inject at `.atDocumentStart` via WKUserScript
+3. Inject bridge.js at `.atDocumentEnd` (after libraries loaded)
+4. Use `WKScriptMessageHandler` for JS→Swift communication
+
+### Files Created
+
+1. **`MacAmpApp/ViewModels/ButterchurnBridge.swift`** (NEW)
+   - @Observable bridge between Swift and JavaScript
+   - WKScriptMessageHandler for 'butterchurn' message channel
+   - Handles 'ready' and 'loadFailed' messages from JS
+   - Methods: pauseRendering(), resumeRendering(), cleanup()
+   - Properties: isReady, presetCount, presetNames, errorMessage
+
+2. **`MacAmpApp/Views/Windows/ButterchurnWebView.swift`** (NEW)
+   - NSViewRepresentable wrapper for WKWebView
+   - Coordinator pattern for proper cleanup in dismantleNSView
+   - Script injection via WKUserContentController:
+     - butterchurn.min.js (documentStart)
+     - butterchurnPresets.min.js (documentStart)
+     - bridge.js (documentEnd)
+   - Message handler registration for 'butterchurn' channel
+
+### Files Modified
+
+1. **`Butterchurn/index.html`** (SIMPLIFIED)
+   - Removed all `<script>` tags (scripts injected via WKUserScript)
+   - Only contains canvas and fallback div now
+
+2. **`Butterchurn/bridge.js`** (REWRITTEN)
+   - IIFE pattern with 'use strict'
+   - Checks for `butterchurn` and `butterchurnPresets` globals
+   - Creates visualizer with 60 FPS requestAnimationFrame loop
+   - Exposes `window.macampButterchurn` API:
+     - setAudioData(spectrum, waveform) - Phase 3
+     - loadPreset(index, transition)
+     - showTrackTitle(title)
+     - setSize(width, height)
+     - start() / stop()
+     - getState()
+   - Posts 'ready' or 'loadFailed' to Swift via webkit.messageHandlers
+
+3. **`MacAmpApp/Views/WinampMilkdropWindow.swift`** (UPDATED)
+   - Now uses `@Environment(ButterchurnBridge.self)`
+   - Shows ButterchurnWebView when bridge.isReady
+   - Shows fallback with error message if bridge.errorMessage set
+   - Shows "Loading..." placeholder during initialization
+
+4. **`MacAmpApp/Windows/WinampMilkdropWindowController.swift`** (UPDATED)
+   - Creates ButterchurnBridge as instance property
+   - Injects bridge into SwiftUI environment
+   - Uses designated init pattern to avoid self-access before init
+
+5. **`MacAmpApp.xcodeproj/project.pbxproj`** (MODIFIED)
+   - Added ButterchurnBridge.swift to ViewModels group
+   - Added ButterchurnWebView.swift to Views/Windows group
+
+### Build Status
+
+✅ **BUILD SUCCEEDED** (2026-01-05)
+- All files compile cleanly
+- Swift 6 language mode compatible
+- No warnings or errors
+
+### Architecture Pattern (Webamp-Inspired)
+
+```
+Swift (ButterchurnBridge)                 JavaScript (bridge.js)
+           │                                        │
+           ▼                                        ▼
+    isReady = false     ──WKUserScript──▶    butterchurn.createVisualizer()
+           │                                        │
+           │            ◀──'ready' msg──    window.macampButterchurn.start()
+           ▼                                        │
+    isReady = true                           60 FPS render loop
+           │                                        │
+   [Phase 3: Timer]    ──evaluateJS───▶    setAudioData(spectrum, waveform)
+    30 FPS audio data                              │
+           │                                        ▼
+           └────────── synchronized ──────────▶ visualization
+```
+
+### Phase Breakdown
+
+| Phase | Status | Description |
+|-------|--------|-------------|
+| Phase 1 | ✅ COMPLETE | Script injection, basic rendering, static visualization |
+| Phase 2 | ⏳ PENDING | Preset loading and cycling |
+| Phase 3 | ⏳ PENDING | Audio data pipeline (30 FPS Swift → JS) |
+| Phase 4 | ⏳ PENDING | Track title animation |
+| Phase 5 | ⏳ PENDING | Window resize support |
+| Phase 6 | ⏳ PENDING | Performance optimization |
+
+### Next Steps
+
+1. **Test Phase 1** - Verify Butterchurn loads and renders static frames
+2. **Phase 2** - Implement preset loading via loadPreset() API
+3. **Phase 3** - Connect AudioPlayer FFT data to visualization
+
+### Commits (Phase 1)
+
+⏳ Pending initial commit for Phase 1 implementation
+
+---
+
+**Task Status:** Butterchurn Integration Phase 1 COMPLETE
+**Next Phase:** Test and commit, then Phase 2 (presets)
