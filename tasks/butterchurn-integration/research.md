@@ -387,7 +387,94 @@ The Milkdrop window uses GEN.bmp chrome (same as Video window):
 3. Proven pattern in iOS/macOS apps
 4. Can iterate to native Metal later if needed
 
-**Phase 1:** Get Butterchurn rendering with static audio data
-**Phase 2:** Connect real audio tap data
-**Phase 3:** Implement preset management
-**Phase 4:** Polish (track titles, hotkeys, cycling)
+---
+
+## Oracle Review Findings (2026-01-05)
+
+### Critical Architecture Constraints
+
+#### AVAudioEngine Tap Limitation
+**AVAudioEngine allows only ONE tap per bus.** Adding a separate Butterchurn tap would replace or break the existing 19-bar analyzer.
+
+**Solution:** Merge Butterchurn processing into the existing visualizer tap. Compute both 19-bar and 2048-FFT data in the same buffer pass.
+
+#### Stream Playback Has No PCM Data
+`StreamPlayer` (AVPlayer) provides no raw PCM access. Butterchurn visualization is **impossible** for internet radio streams without system-level audio capture.
+
+**Solution:** Scope Butterchurn to local playback only initially. Design for future `SystemAudioCapture` via a protocol abstraction.
+
+### Script Injection Timing
+
+**Race condition risk:** `WKUserScript` at `.atDocumentStart` with bridge code that touches DOM elements can race the HTML parser.
+
+**Solution:**
+- Inject `butterchurn.min.js` at `.atDocumentStart`
+- Inject `butterchurnPresets.min.js` at `.atDocumentStart`
+- Inject `bridge.js` at `.atDocumentEnd` (or gate on `DOMContentLoaded`)
+
+### Preset API Correction
+
+**Incorrect assumption:** Plan assumed a global `presets` array.
+
+**Correct API:** Use `butterchurnPresets.getPresets()` to retrieve preset list.
+
+### Performance Architecture
+
+**Problem:** 60 FPS `evaluateJavaScript()` with two 1024-element arrays creates significant overhead.
+
+**Solution:** Hybrid 30/60 FPS approach:
+- Swift → JS: Push audio data at **30 FPS**
+- JS render loop: `requestAnimationFrame` at **60 FPS**
+- JS pulls from last-known buffer, reducing Swift→JS call frequency by 50%
+
+### Memory Management Requirements
+
+1. **WKScriptMessageHandler cleanup:** `WKUserContentController` retains handlers. Must call `removeScriptMessageHandler` in `dismantleNSView`.
+2. **Timer cleanup:** Stop all cycling/update timers when view tears down.
+3. **Graceful fallback:** If JS injection fails, show placeholder UI instead of crash.
+
+### Layer Placement (Three-Layer Pattern)
+
+| Component | Layer | Location | Rationale |
+|-----------|-------|----------|-----------|
+| ButterchurnWebView | Presentation | Views/Windows/ | SwiftUI NSViewRepresentable |
+| ButterchurnBridge | Bridge | ViewModels/ | Owns JS communication, UI-coupled |
+| ButterchurnPresetManager | Bridge | ViewModels/ | Manages UI state (cycling, transitions) |
+| Audio tap extension | Mechanism | Audio/ | Core audio processing |
+| AppSettings additions | Mechanism | Models/ | Persistence only |
+
+**Why preset manager is Bridge layer:** It's tightly coupled to the WebView/JS API, manages UI-driven state (cycling, randomization, transitions), and owns timers. Mechanism layer should remain focused on audio/persistence and be independent of visualization implementation.
+
+### Pattern Corrections
+
+| Incorrect | Correct |
+|-----------|---------|
+| `@Published var` | `var` (with `@Observable` class) |
+| `class ButterchurnWebView: NSViewRepresentable` | `struct ButterchurnWebView: NSViewRepresentable` |
+| Timer as property | `@ObservationIgnored` timer |
+| AppSettings `didSet` only | Load from UserDefaults in `init` + `didSet` |
+
+### Future Stream Support Design
+
+Define `ButterchurnAudioSource` protocol in Mechanism layer:
+```swift
+protocol ButterchurnAudioSource {
+    var isActive: Bool { get }
+    func snapshotButterchurnFrame() -> ButterchurnFrame?
+}
+```
+
+- `AudioPlayer` conforms immediately
+- Future `SystemAudioCapture` (virtual device / AudioUnit) can conform later
+- Bridge depends only on protocol, not concrete source
+
+---
+
+## Implementation Phases (Revised)
+
+**Phase 1:** WebView + JS injection (static frame, no audio)
+**Phase 2:** Audio tap merge (single tap, both FFT sizes)
+**Phase 3:** Swift→JS bridge (30 FPS updates)
+**Phase 4:** Preset manager (cycling, randomization, persistence)
+**Phase 5:** UI integration (shortcuts, track titles, lifecycle)
+**Phase 6:** Verification (local-only validation, stream fallback)
