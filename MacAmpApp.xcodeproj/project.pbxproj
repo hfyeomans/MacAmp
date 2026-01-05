@@ -93,6 +93,7 @@
 		FF66EE55DD44CC33BB22AA11 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA11BB22CC33DD44EE55FF66 /* Assets.xcassets */; };
 		8DDDC53B861A22B0AFB1C250 /* ButterchurnBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0E380FCAD3E1BD185A02129 /* ButterchurnBridge.swift */; };
 		73A21EA6B7FEBC3B30A7943C /* ButterchurnWebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CA47CA1D0A47895A7A37802 /* ButterchurnWebView.swift */; };
+		621529D54AB0A234E08CA9C4 /* Butterchurn in Resources */ = {isa = PBXBuildFile; fileRef = 91B0DA409EE80A209B655740 /* Butterchurn */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -194,6 +195,7 @@
 		b220e925d4d54168a0d0f84b /* SpriteResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpriteResolver.swift; sourceTree = "<group>"; };
 		E0E380FCAD3E1BD185A02129 /* ButterchurnBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ButterchurnBridge.swift; sourceTree = "<group>"; };
 		8CA47CA1D0A47895A7A37802 /* ButterchurnWebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ButterchurnWebView.swift; sourceTree = "<group>"; };
+		91B0DA409EE80A209B655740 /* Butterchurn */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Butterchurn; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -314,6 +316,7 @@
 			isa = PBXGroup;
 			children = (
 				F3B9E0E999F4022FE2955A62 /* MacAmpApp */,
+				91B0DA409EE80A209B655740 /* Butterchurn */,
 				A8F1C1A0F5D7413A9A0B0020 /* Tests */,
 				A8F1C1A0F5D7413A9A0B0022 /* Frameworks */,
 				679D4139BE833A25AB1CBCFA /* Products */,
@@ -514,6 +517,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				621529D54AB0A234E08CA9C4 /* Butterchurn in Resources */,
 				FF66EE55DD44CC33BB22AA11 /* Assets.xcassets in Resources */,
 				BB499C96994EF9FC3DE4DDB4 /* Internet-Archive.wsz in Resources */,
 				36C0FFE22EB512A300916917 /* Mac_OS-X_skin.wsz in Resources */,
