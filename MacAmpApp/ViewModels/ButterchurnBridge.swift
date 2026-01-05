@@ -8,6 +8,7 @@ import Observation
 ///
 /// Phase 1: Handles ready/loadFailed messages from bridge.js
 /// Phase 3: 30 FPS audio data updates with pause/resume on playback state
+/// Phase 4: Preset management via ButterchurnPresetManager
 @MainActor
 @Observable
 final class ButterchurnBridge: NSObject, WKScriptMessageHandler {
@@ -25,6 +26,9 @@ final class ButterchurnBridge: NSObject, WKScriptMessageHandler {
 
     /// Error message if initialization failed
     var errorMessage: String?
+
+    /// Callback when presets are loaded (for ButterchurnPresetManager)
+    var onPresetsLoaded: (([String]) -> Void)?
 
     // MARK: - Phase 3 Properties
 
@@ -61,6 +65,8 @@ final class ButterchurnBridge: NSObject, WKScriptMessageHandler {
             presetNames = dict["presetNames"] as? [String] ?? []
             AppLog.info(.general, "[ButterchurnBridge] Ready! \(presetCount) presets available")
             startAudioUpdates()
+            // Notify preset manager
+            onPresetsLoaded?(presetNames)
 
         case "loadFailed":
             isReady = false
@@ -138,9 +144,23 @@ final class ButterchurnBridge: NSObject, WKScriptMessageHandler {
         webView.evaluateJavaScript(js, completionHandler: nil)
     }
 
-    // MARK: - Phase 5: Track Title (stubbed)
+    // MARK: - Phase 4: Preset Control
 
-    /// Show track title animation in Butterchurn (Phase 5)
+    /// Load preset at index with transition
+    /// - Parameters:
+    ///   - index: Preset index (0-based)
+    ///   - transition: Transition duration in seconds (default: 2.7)
+    func loadPreset(at index: Int, transition: Double = 2.7) {
+        guard isReady, let webView = webView else { return }
+        guard index >= 0, index < presetCount else { return }
+
+        let js = "window.macampButterchurn?.loadPreset(\(index), \(transition));"
+        webView.evaluateJavaScript(js, completionHandler: nil)
+    }
+
+    // MARK: - Phase 5: Track Title
+
+    /// Show track title animation in Butterchurn
     func showTrackTitle(_ title: String) {
         guard isReady, let webView = webView else { return }
 

@@ -9,7 +9,7 @@
 
 ## Current State
 
-**Phase:** ✅ PHASE 3 COMPLETE - Swift→JS Bridge Working
+**Phase:** ✅ PHASE 4 COMPLETE - Preset Manager Integrated
 
 **Oracle Review:** ✅ Complete (2026-01-05) - 2 Oracle debugging sessions with gpt-5.2-codex
 
@@ -82,7 +82,7 @@ All debug logging has been removed. Only meaningful logs remain:
 | WKWebView integration | ✅ Phase 1 | WKUserScript injection approach |
 | Audio data bridge | ✅ Phase 2 | FFT merged into existing tap |
 | Swift→JS bridge | ✅ Phase 3 | 30 FPS waveform push, pause/resume |
-| Preset management | ⏳ Phase 4 | Cycling, randomize, history |
+| Preset management | ✅ Phase 4 | Cycling, randomize, history |
 | UI integration | ⏳ Phase 5 | Shortcuts, track titles |
 | Verification | ⏳ Phase 6 | Local-only validation |
 
@@ -151,18 +151,13 @@ All debug logging has been removed. Only meaningful logs remain:
 | WinampMilkdropWindowController.swift | 52 | ✅ NSWindowController |
 | MilkdropWindowChromeView.swift | 162 | ✅ GEN.bmp chrome |
 
-### Created (Phase 1)
+### Created (Phase 1-4)
 
 | File | Layer | Lines | Status |
 |------|-------|-------|--------|
 | ButterchurnWebView.swift | Presentation | ~280 | ✅ Complete |
-| ButterchurnBridge.swift | Bridge | ~100 | ✅ Complete |
-
-### To Be Created (Phase 4+)
-
-| File | Layer | Est. Lines |
-|------|-------|------------|
-| ButterchurnPresetManager.swift | Bridge | ~120 |
+| ButterchurnBridge.swift | Bridge | ~187 | ✅ Complete |
+| ButterchurnPresetManager.swift | Bridge | ~219 | ✅ Complete |
 
 ### To Be Modified
 
@@ -248,6 +243,10 @@ All debug logging has been removed. Only meaningful logs remain:
 | 2026-01-05 | Phase 3 initial test | Visualization responds to music - verification in progress |
 | 2026-01-05 | Phase 3 pause/resume | Added isVisualizationActive flag, freezes when stopped |
 | 2026-01-05 | **PHASE 3 COMPLETE** | Visualization responds to music and freezes when stopped |
+| 2026-01-05 | Phase 4 implementation | Created ButterchurnPresetManager.swift |
+| 2026-01-05 | Phase 4 integration | Added butterchurn settings to AppSettings.swift |
+| 2026-01-05 | Phase 4 wiring | Wired preset manager into WinampMilkdropWindowController |
+| 2026-01-05 | **PHASE 4 COMPLETE** | Preset management with cycling, randomize, history |
 
 ---
 
@@ -437,4 +436,27 @@ Commits:
 
 ---
 
-**Next Phase:** Phase 4 - Preset Management (cycling, randomize, history)
+**✅ PHASE 4 COMPLETE - Preset Management Integrated**
+
+**Phase 4 Implementation (2026-01-05):**
+1. ✅ Created ButterchurnPresetManager.swift with webamp-inspired patterns:
+   - Observable state: presets[], currentPresetIndex, currentPresetName
+   - Randomize/cycling flags with AppSettings persistence
+   - History stack for previous/next navigation (webamp pattern)
+   - Configurable cycle interval (15s default) and transition (2.7s default)
+2. ✅ Added Butterchurn settings to AppSettings.swift:
+   - butterchurnRandomize: Bool (default true)
+   - butterchurnCycling: Bool (default true)
+   - butterchurnCycleInterval: Double (default 15.0)
+3. ✅ Updated ButterchurnBridge.swift:
+   - Added onPresetsLoaded callback
+   - Added loadPreset(at:transition:) method
+4. ✅ Wired into WinampMilkdropWindowController:
+   - Creates and owns ButterchurnPresetManager
+   - Configures with bridge and appSettings
+   - Wires onPresetsLoaded → presetManager.loadPresets
+   - Injects presetManager into environment
+
+---
+
+**Next Phase:** Phase 5 - UI Integration (shortcuts, track titles, window lifecycle)

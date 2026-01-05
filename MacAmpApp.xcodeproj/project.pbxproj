@@ -94,6 +94,7 @@
 		8DDDC53B861A22B0AFB1C250 /* ButterchurnBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0E380FCAD3E1BD185A02129 /* ButterchurnBridge.swift */; };
 		73A21EA6B7FEBC3B30A7943C /* ButterchurnWebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CA47CA1D0A47895A7A37802 /* ButterchurnWebView.swift */; };
 		621529D54AB0A234E08CA9C4 /* Butterchurn in Resources */ = {isa = PBXBuildFile; fileRef = 91B0DA409EE80A209B655740 /* Butterchurn */; };
+		B4C5D6E7F8091A2B3C4D5E6F /* ButterchurnPresetManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B4C5D6E7F8091A2B3C4D5E /* ButterchurnPresetManager.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -194,6 +195,7 @@
 		FDF85EA8990A038079FC0CC3 /* EQF.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EQF.swift; sourceTree = "<group>"; };
 		b220e925d4d54168a0d0f84b /* SpriteResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpriteResolver.swift; sourceTree = "<group>"; };
 		E0E380FCAD3E1BD185A02129 /* ButterchurnBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ButterchurnBridge.swift; sourceTree = "<group>"; };
+		A3B4C5D6E7F8091A2B3C4D5E /* ButterchurnPresetManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ButterchurnPresetManager.swift; sourceTree = "<group>"; };
 		8CA47CA1D0A47895A7A37802 /* ButterchurnWebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ButterchurnWebView.swift; sourceTree = "<group>"; };
 		91B0DA409EE80A209B655740 /* Butterchurn */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Butterchurn; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -437,6 +439,7 @@
 				74EDF33D12E79F86166AF268 /* DockingController.swift */,
 				97F3E1419E231E886A674A64 /* SkinManager.swift */,
 				E0E380FCAD3E1BD185A02129 /* ButterchurnBridge.swift */,
+				A3B4C5D6E7F8091A2B3C4D5E /* ButterchurnPresetManager.swift */,
 			);
 			path = ViewModels;
 			sourceTree = "<group>";
@@ -618,6 +621,7 @@
 				36CAB6272EC13E3D00902330 /* TitlebarDragCaptureView.swift in Sources */,
 				47C40C273D4B4CD3804B3224 /* WindowSpec.swift in Sources */,
 				8DDDC53B861A22B0AFB1C250 /* ButterchurnBridge.swift in Sources */,
+				B4C5D6E7F8091A2B3C4D5E6F /* ButterchurnPresetManager.swift in Sources */,
 				73A21EA6B7FEBC3B30A7943C /* ButterchurnWebView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

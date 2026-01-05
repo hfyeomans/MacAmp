@@ -77,6 +77,12 @@ final class AppSettings {
             let oldRepeat = UserDefaults.standard.bool(forKey: "audioPlayerRepeatEnabled")
             self.repeatMode = oldRepeat ? .all : .off
         }
+
+        // Load Butterchurn settings (with sensible defaults)
+        self.butterchurnRandomize = UserDefaults.standard.object(forKey: "butterchurnRandomize") as? Bool ?? true
+        self.butterchurnCycling = UserDefaults.standard.object(forKey: "butterchurnCycling") as? Bool ?? true
+        let savedInterval = UserDefaults.standard.double(forKey: "butterchurnCycleInterval")
+        self.butterchurnCycleInterval = savedInterval > 0 ? savedInterval : 15.0
     }
     
     static func instance() -> AppSettings {
@@ -257,6 +263,29 @@ final class AppSettings {
     var visualizerMode: VisualizerMode = .spectrum {
         didSet {
             UserDefaults.standard.set(visualizerMode.rawValue, forKey: "visualizerMode")
+        }
+    }
+
+    // MARK: - Butterchurn/Milkdrop Settings
+
+    /// Whether to randomize preset selection (default: true, matches Winamp)
+    var butterchurnRandomize: Bool = true {
+        didSet {
+            UserDefaults.standard.set(butterchurnRandomize, forKey: "butterchurnRandomize")
+        }
+    }
+
+    /// Whether automatic preset cycling is enabled (default: true)
+    var butterchurnCycling: Bool = true {
+        didSet {
+            UserDefaults.standard.set(butterchurnCycling, forKey: "butterchurnCycling")
+        }
+    }
+
+    /// Preset cycle interval in seconds (default: 15s, Milkdrop standard)
+    var butterchurnCycleInterval: Double = 15.0 {
+        didSet {
+            UserDefaults.standard.set(butterchurnCycleInterval, forKey: "butterchurnCycleInterval")
         }
     }
 
