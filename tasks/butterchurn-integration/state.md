@@ -9,7 +9,7 @@
 
 ## Current State
 
-**Phase:** ✅ PHASE 1 COMPLETE - Visualization Rendering Successfully
+**Phase:** ✅ PHASE 2 COMPLETE - Audio Data Bridge Implemented
 
 **Oracle Review:** ✅ Complete (2026-01-05) - 2 Oracle debugging sessions with gpt-5.2-codex
 
@@ -79,8 +79,8 @@ All debug logging has been removed. Only meaningful logs remain:
 | Todo | ✅ Revised | 85 checkboxes, phase-aligned |
 | Milkdrop window chrome | ✅ Complete | GEN.bmp sprites, focus states |
 | Butterchurn assets | ✅ Bundled | .js files in Butterchurn/ folder |
-| WKWebView integration | ⏳ Phase 1 | WKUserScript injection approach |
-| Audio data bridge | ⏳ Phase 2-3 | Merge into existing tap, 30 FPS |
+| WKWebView integration | ✅ Phase 1 | WKUserScript injection approach |
+| Audio data bridge | ✅ Phase 2 | FFT merged into existing tap |
 | Preset management | ⏳ Phase 4 | Cycling, randomize, history |
 | UI integration | ⏳ Phase 5 | Shortcuts, track titles |
 | Verification | ⏳ Phase 6 | Local-only validation |
@@ -240,6 +240,8 @@ All debug logging has been removed. Only meaningful logs remain:
 | 2026-01-05 | Debug: WebGL context fix | Removed premature getContext() that blocked butterchurn |
 | 2026-01-05 | **PHASE 1 COMPLETE** | Visualization rendering successfully! |
 | 2026-01-05 | Documentation | Updated research.md and state.md with Implementation Findings |
+| 2026-01-05 | Phase 2 implementation | ButterchurnFrame, vDSP FFT, merged tap, snapshotButterchurnFrame() |
+| 2026-01-05 | **PHASE 2 COMPLETE** | Audio data bridge ready (commit 8e33d71) |
 
 ---
 
@@ -382,17 +384,38 @@ All bug fixes applied and verified:
 
 ---
 
-**NEXT: Phase 2 - Audio Data Bridge**
+**✅ PHASE 2 COMPLETE** - Audio Data Bridge Ready
 
-Phase 1 is complete and committed:
-- Commit `eef4b04`: Phase 1 complete - Butterchurn rendering working
-- Debug cleanup complete (verified 2026-01-05)
+Commits:
+- `eef4b04`: Phase 1 complete - Butterchurn rendering working
+- `7795217`: Debug cleanup
+- `8e33d71`: Phase 2 complete - Audio data bridge implementation
 
-**Phase 2 Tasks:**
-1. Define `ButterchurnFrame` struct in AudioPlayer.swift
-2. Add Butterchurn FFT buffers (1024-point spectrum, 1024-point waveform)
-3. Merge Butterchurn processing into existing AVAudioEngine tap (single tap only!)
-4. Expose `snapshotButterchurnFrame()` API for 30 FPS polling
-5. Replace 440Hz oscillator with real audio data from Swift → JS
+**Phase 2 Implementation:**
+1. ✅ `ButterchurnFrame` struct defined (spectrum, waveform, timestamp)
+2. ✅ `@ObservationIgnored` butterchurnSpectrum/Waveform buffers
+3. ✅ vDSP_DFT 2048-point FFT with Hann window
+4. ✅ Merged into existing single tap (no second tap!)
+5. ✅ Buffer size increased to 2048 for proper FFT
+6. ✅ `snapshotButterchurnFrame()` API (returns nil for streams/video)
 
-**Current State:** 440Hz oscillator placeholder producing static visualization pattern
+**Phase 2 Verification (2026-01-05):**
+- Tested with local audio playback, debug logging at 1 Hz
+- Spectrum: max 0.04-0.46, nonzero bins 110-615/1024 ✅
+- Waveform: range -0.32 to +0.30, RMS 0.02-0.13 ✅
+- All values in expected ranges, varies with music dynamics
+- Logs stop when playback stops (tap inactive) ✅
+- Debug logging removed after verification
+
+---
+
+**NEXT: Phase 3 - Swift→JS Bridge**
+
+**Phase 3 Tasks (from todo.md):**
+1. Add 30 FPS Timer to ButterchurnBridge
+2. Wire audioPlayer reference to bridge
+3. Implement updateAudioData() method (JS call)
+4. Start timer when isReady, stop on cleanup
+5. Phase 3 Verification
+
+**Current State:** AudioPlayer produces FFT data, ready for 30 FPS bridge to JS
