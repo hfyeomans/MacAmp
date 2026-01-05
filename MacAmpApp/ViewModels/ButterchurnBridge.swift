@@ -44,16 +44,11 @@ final class ButterchurnBridge: NSObject, WKScriptMessageHandler {
     }
 
     private func handleMessage(_ message: WKScriptMessage) {
-        // DEBUG: Log all received messages
-        AppLog.debug(.general, "[ButterchurnBridge] Received message: \(message.body)")
-
         guard let dict = message.body as? [String: Any],
               let type = dict["type"] as? String else {
             AppLog.warn(.general, "[ButterchurnBridge] Invalid message format")
             return
         }
-
-        AppLog.debug(.general, "[ButterchurnBridge] Message type: \(type)")
 
         switch type {
         case "ready":

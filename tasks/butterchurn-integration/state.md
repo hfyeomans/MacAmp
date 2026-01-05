@@ -43,51 +43,17 @@
 
 **Testing:** Awaiting build and test to verify visualization loads
 
-### Debug Logging Added (TO REMOVE AFTER FIX)
+### Debug Logging Status: ✅ CLEANED (2026-01-05)
 
-The following debug logging was added for troubleshooting. **Remove after issue is resolved:**
+All debug logging has been removed. Only meaningful logs remain:
+- `AppLog.info` for ready state confirmation
+- `AppLog.error` for load failures
+- `AppLog.warn` for invalid/unknown messages
 
-1. **Butterchurn/bridge.js** (extensive debugging)
-   - `console.log('[MacAmp Bridge] bridge.js executing...')`
-   - Logs typeof butterchurn, butterchurnPresets, window.butterchurn, window.butterchurnPresets, window.minimal
-   - Canvas clientWidth/clientHeight and width/height logging
-   - WebGL context availability check with version logging
-   - Canvas pixel dimensions logging
-   - Visualizer creation success/failure logging
-   - Preset loading success/failure logging with error stack
-   - Render loop try/catch with error counting and stack traces
-   - `onlyUseWASM: false` (DEBUG - was `true`, changed to test sandbox issues)
-
-2. **MacAmpApp/Views/Windows/ButterchurnWebView.swift** (loadBundleJS function)
-   - `AppLog.debug` for bundle URL and file loading
-   - `AppLog.debug` for wrapped JS size
-   - `console.log` injected into butterchurnPresets alias
-
-3. **MacAmpApp/Views/Windows/ButterchurnWebView.swift** (wrapESModuleAsGlobal function)
-   - `AppLog.debug` for found export statement
-   - `AppLog.debug` for extracted identifier
-   - `AppLog.debug` for replacement string
-   - `AppLog.warning` if pattern not found
-   - `console.log` injected into replacement and fallback
-
-4. **MacAmpApp/ViewModels/ButterchurnBridge.swift** (handleMessage function)
-   - `AppLog.debug` for all received messages
-   - `AppLog.debug` for message type
-   - `AppLog.info` for ready state
-   - `AppLog.error` for load failures
-   - `AppLog.warn` for unknown message types
-
-5. **MacAmpApp/Views/Windows/ButterchurnWebView.swift** (console override)
-   - Added `consoleLog` WKScriptMessageHandler in Coordinator
-   - Console override script injected at documentStart
-   - Captures console.log, console.error, console.warn
-   - Captures uncaught errors via window.onerror
-   - Removes handler in dismantleNSView
-
-6. **Butterchurn/index.html** (CSS fixes)
-   - Added `html, body { width: 100%; height: 100%; }`
-   - Added `box-sizing: border-box` to all elements
-   - Added `position: absolute; top: 0; left: 0;` to canvas
+**CSS fixes retained** in index.html (required for proper rendering):
+- `html, body { width: 100%; height: 100%; }`
+- `box-sizing: border-box` to all elements
+- `position: absolute; top: 0; left: 0;` to canvas
 
 ---
 
@@ -416,17 +382,17 @@ All bug fixes applied and verified:
 
 ---
 
-**NEXT: Cleanup & Phase 2 Prep**
+**NEXT: Phase 2 - Audio Data Bridge**
 
-1. **Remove debug logging** (documented in "Debug Logging Added" section above)
-   - Frame counting in bridge.js
-   - Console override in ButterchurnWebView.swift
-   - Extensive console.log statements in bridge.js
-   - AppLog.debug statements in Swift files
+Phase 1 is complete and committed:
+- Commit `eef4b04`: Phase 1 complete - Butterchurn rendering working
+- Debug cleanup complete (verified 2026-01-05)
 
-2. **Commit Phase 1** with clean code
+**Phase 2 Tasks:**
+1. Define `ButterchurnFrame` struct in AudioPlayer.swift
+2. Add Butterchurn FFT buffers (1024-point spectrum, 1024-point waveform)
+3. Merge Butterchurn processing into existing AVAudioEngine tap (single tap only!)
+4. Expose `snapshotButterchurnFrame()` API for 30 FPS polling
+5. Replace 440Hz oscillator with real audio data from Swift → JS
 
-3. **Begin Phase 2: Audio Data Bridge**
-   - Merge Butterchurn FFT into existing AVAudioEngine tap
-   - Send real audio data from Swift → JS at 30 FPS
-   - Currently using 440Hz oscillator placeholder
+**Current State:** 440Hz oscillator placeholder producing static visualization pattern
