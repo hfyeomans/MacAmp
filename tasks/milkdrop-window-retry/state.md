@@ -8,7 +8,7 @@
 
 ## Current State
 
-**Phase:** COMPLETE - "MILKDROP HD" Letters Implemented and Committed
+**Phase:** PR CREATED - Awaiting GitHub Review and Merge
 
 ---
 
@@ -109,4 +109,11 @@
 
 ## Next Action
 
-Ready for Oracle code review, PR creation, and merge.
+PR created - awaiting user review on GitHub, then merge to main.
+
+## Deferred Items
+
+- Butterchurn visualization engine (separate task: `butterchurn-integration`)
+- Multi-skin testing (base skin works, other skins untested)
+- Dynamic letter extraction algorithm (hardcoded positions for now)
+- Resize functionality (not in scope for this task)

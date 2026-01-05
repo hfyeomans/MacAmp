@@ -41,9 +41,9 @@
 - [x] Verify letters render in titlebar (DONE - centered at x:137.5, y:8)
 - [x] Test active state (click Milkdrop window) - User confirmed working
 - [x] Test inactive state (click another window) - Sprite switching works
-- [ ] Test with 3+ different skins (deferred)
-- [ ] Test skin hot-swap while window open (deferred)
-- [ ] Verify graceful fallback if sprites missing (deferred)
+- [~] Test with 3+ different skins (DEFERRED - base skin priority)
+- [~] Test skin hot-swap while window open (DEFERRED - future enhancement)
+- [~] Verify graceful fallback if sprites missing (DEFERRED - future enhancement)
 
 ---
 
@@ -53,8 +53,8 @@
 - [x] Document findings in research.md
 - [x] Create feature branch (feature/milkdrop-titlebar-letters)
 - [x] Commit changes (fe12e6d - MILKDROP HD with H and V sprites)
-- [ ] Run Oracle code review
-- [ ] Create PR
+- [~] Run Oracle code review (SKIPPED - user will review on GitHub)
+- [x] Create PR
 - [ ] Merge after approval
 
 ---
