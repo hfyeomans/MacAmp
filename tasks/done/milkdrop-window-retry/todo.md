@@ -54,8 +54,8 @@
 - [x] Create feature branch (feature/milkdrop-titlebar-letters)
 - [x] Commit changes (fe12e6d - MILKDROP HD with H and V sprites)
 - [~] Run Oracle code review (SKIPPED - user will review on GitHub)
-- [x] Create PR
-- [ ] Merge after approval
+- [x] Create PR (PR #36)
+- [x] Merge after approval ✅ Merged to main
 
 ---
 
