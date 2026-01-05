@@ -48,7 +48,9 @@ struct MilkdropWindowChromeView<Content: View>: View {
                     SimpleSpriteImage("GEN_TOP_LEFT_END\(suffix)", width: 25, height: MilkdropWindowLayout.titlebarHeight)
                         .position(x: 87.5, y: 10)
 
-                    // Section 4: Center grey tiles - columns 4-6 (3 tiles)
+                    // Section 4: Center grey tiles - columns 4-6 (3 tiles = 75px)
+                    // Symmetric layout: only odd tile counts allow equal gold fills
+                    // Center spans x:100-175, midpoint at x:137.5 = window center
                     ForEach(0..<3, id: \.self) { i in
                         SimpleSpriteImage("GEN_TOP_CENTER_FILL\(suffix)", width: 25, height: 20)
                             .position(x: 100 + 12.5 + CGFloat(i) * 25, y: 10)
@@ -58,7 +60,7 @@ struct MilkdropWindowChromeView<Content: View>: View {
                     SimpleSpriteImage("GEN_TOP_RIGHT_END\(suffix)", width: 25, height: MilkdropWindowLayout.titlebarHeight)
                         .position(x: 187.5, y: 10)
 
-                    // Section 6: Right gold bar tiles - columns 8-9 (2 tiles)
+                    // Section 6: Right gold bar tiles - columns 8-9 (2 tiles = 50px, symmetric with left)
                     ForEach(0..<2, id: \.self) { i in
                         SimpleSpriteImage("GEN_TOP_LEFT_RIGHT_FILL\(suffix)", width: 25, height: MilkdropWindowLayout.titlebarHeight)
                             .position(x: 200 + 12.5 + CGFloat(i) * 25, y: 10)
@@ -67,17 +69,15 @@ struct MilkdropWindowChromeView<Content: View>: View {
                     // Section 7: Right cap with close button (25px) - column 10
                     SimpleSpriteImage("GEN_TOP_RIGHT\(suffix)", width: 25, height: MilkdropWindowLayout.titlebarHeight)
                         .position(x: 262.5, y: 10)
+
+                    // MILKDROP letters - centered in 75px grey section (total width: 49px)
+                    // Each letter uses two-piece sprites (TOP + BOTTOM) stacked vertically
+                    // Center section spans x: 100-175, center at x: 137.5
+                    milkdropLetters
+                        .position(x: 137.5, y: 8)
                 }
             }
             .position(x: 137.5, y: 10)
-
-            // TODO FUTURE: "MILKDROP" text using GEN.bmp dynamic letter extraction
-            // ISSUE: GEN letter X positions vary by skin (not hardcodable like Part 17)
-            // SOLUTION: Implement webamp's pixel-scanning algorithm to detect letter
-            // boundaries dynamically (see webamp_clone/js/skinParser.js genGenTextSprites)
-            // DEFERRED: Complex feature, needs dedicated implementation time
-
-            // Side borders - tiled vertically (29px per tile)
 
             // Side borders - tiled vertically (29px per tile)
             let sideHeight: CGFloat = 198  // 232 - 20 - 14
@@ -119,5 +119,34 @@ struct MilkdropWindowChromeView<Content: View>: View {
         .frame(width: MilkdropWindowLayout.windowSize.width, height: MilkdropWindowLayout.windowSize.height, alignment: .topLeading)
         .fixedSize()
         .background(Color.black)
+    }
+
+    /// MILKDROP letters HStack - renders all 8 letters as two-piece sprites
+    /// Letter widths from SkinSprites.swift: M=8, I=4, L=5, K=7, D=6, R=7, O=6, P=6 (total: 49px)
+    private var milkdropLetters: some View {
+        HStack(spacing: 0) {
+            makeLetter("M", width: 8)
+            makeLetter("I", width: 4)
+            makeLetter("L", width: 5)
+            makeLetter("K", width: 7)
+            makeLetter("D", width: 6)
+            makeLetter("R", width: 7)
+            makeLetter("O", width: 6)
+            makeLetter("P", width: 6)
+        }
+    }
+
+    /// Renders a single GEN letter as two vertically-stacked sprites (TOP + BOTTOM)
+    /// Selected state: TOP height=6, BOTTOM height=2
+    /// Normal state: TOP height=6, BOTTOM height=1
+    @ViewBuilder
+    private func makeLetter(_ letter: String, width: CGFloat) -> some View {
+        let prefix = isWindowActive ? "GEN_TEXT_SELECTED_" : "GEN_TEXT_"
+        let bottomHeight: CGFloat = isWindowActive ? 2 : 1
+
+        VStack(spacing: 0) {
+            SimpleSpriteImage("\(prefix)\(letter)_TOP", width: width, height: 6)
+            SimpleSpriteImage("\(prefix)\(letter)_BOTTOM", width: width, height: bottomHeight)
+        }
     }
 }

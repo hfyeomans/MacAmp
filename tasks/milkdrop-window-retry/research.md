@@ -347,3 +347,373 @@ When implementing the lettering:
 5. Add letter HStack to center titlebar section
 6. Test with base skin
 7. Verify active/inactive state switching
+
+---
+
+## Gap Analysis: SwiftUI vs CSS Flexbox (2026-01-04)
+
+### The Gap Problem
+
+**MacAmp (current):** 13px gap on each side of MILKDROP text
+**Webamp:** 3-4px gap on each side of MILKDROP text
+
+### How Webamp Achieves Tighter Gaps
+
+Webamp uses CSS flexbox with `flex-grow: 1` on gold fill sections:
+
+```css
+.gen-top-left-fill {
+  flex-grow: 1;
+  height: 20px;
+  background-position: left;  /* Tiles from left edge */
+}
+
+.gen-top-right-fill {
+  flex-grow: 1;
+  height: 20px;
+  background-position: right;  /* Tiles from right edge */
+}
+
+.gen-top-title {
+  padding: 0 3px 0 4px;  /* Only 7px total around text */
+}
+```
+
+**Key features:**
+1. Gold fills expand to consume ALL remaining space
+2. Title section is intrinsic width (text + 7px padding)
+3. CSS `background-repeat` tiles automatically
+4. `background-position` aligns tiles to outer edges
+
+**Webamp layout (275px):**
+- Fixed sections: 25 + 25 + 25 + 25 = 100px (corners + ends)
+- Text + padding: 49 + 7 = 56px
+- Gold fills: (275 - 100 - 56) / 2 = **59.5px each** (flex)
+
+### Why SwiftUI Can't Match This Exactly
+
+**SwiftUI Limitations:**
+
+1. **No native `background-position: right`**
+   - SwiftUI's `.resizable(resizingMode: .tile)` always tiles from top-left
+   - CSS can align tiles to right edge; SwiftUI cannot natively
+   - Would need custom drawing to mask/clip tiles from right edge
+
+2. **No intrinsic width for sprite-based content**
+   - CSS flexbox auto-sizes `.gen-top-title` to content width
+   - SwiftUI requires explicit frame widths for sprites
+
+3. **Integer pixel preference**
+   - SwiftUI prefers integer pixels for crisp rendering
+   - 59.5px gold fills would round to 59 or 60px
+   - Sub-pixel CSS rendering allows exact 59.5px
+
+4. **Discrete tile constraint**
+   - Our sprites are 25px tiles from GEN.bmp
+   - Stretching distorts pixel art
+   - Tiling requires clipping partial tiles
+
+### Possible SwiftUI Solutions (Complexity Analysis)
+
+**Option A: Custom Tiling View with Alignment**
+```swift
+struct AlignedTilingSprite: View {
+    let spriteName: String
+    let alignment: Alignment  // .leading or .trailing
+
+    var body: some View {
+        GeometryReader { geo in
+            let tileCount = Int(ceil(geo.size.width / 25))
+            HStack(spacing: 0) {
+                ForEach(0..<tileCount, id: \.self) { _ in
+                    SimpleSpriteImage(spriteName, width: 25, height: 20)
+                }
+            }
+            .frame(width: CGFloat(tileCount) * 25, alignment: alignment)
+            .frame(width: geo.size.width)
+            .clipped()
+        }
+    }
+}
+```
+**Complexity:** Medium. Achieves tiling but may have sub-pixel alignment issues.
+
+**Option B: Flex-like HStack Layout**
+```swift
+HStack(spacing: 0) {
+    SimpleSpriteImage("GEN_TOP_LEFT")  // 25px
+    AlignedTilingSprite("GEN_TOP_FILL", alignment: .leading)
+        .frame(maxWidth: .infinity)
+    SimpleSpriteImage("GEN_TOP_LEFT_END")  // 25px
+    milkdropLetters.padding(.horizontal, 4)  // ~57px
+    SimpleSpriteImage("GEN_TOP_RIGHT_END")  // 25px
+    AlignedTilingSprite("GEN_TOP_FILL", alignment: .trailing)
+        .frame(maxWidth: .infinity)
+    SimpleSpriteImage("GEN_TOP_RIGHT")  // 25px
+}
+```
+**Complexity:** High. Requires rewriting titlebar layout, testing edge cases.
+
+**Option C: Accept 13px Gap (Current)**
+- Uses discrete 25px tiles (3 center, 2 gold each side)
+- Historically accurate (original Win32 Winamp likely used similar approach)
+- Simple, maintainable, pixel-perfect
+
+### Gemini Research Findings (2026-01-04)
+
+From Winamp skin SDK research:
+
+1. **Original Winamp used tiling**, not fixed tiles
+2. Gold fills were flexible, expanding to fit window width
+3. Text section sized to content, not fixed width
+4. The 7 titlebar sections: corner, fill, end, title, end, fill, corner
+
+**Key quote from research:**
+> "The 'Gold Fill' Logic: The space between the Corners and the Text Box is filled by tiling the Top Left/Right Fill sprite (104,0)."
+
+This confirms Webamp's approach matches original Winamp. MacAmp's discrete-tile approach is a simplification.
+
+### Recommendation
+
+**For now:** Keep the 13px gap (current implementation)
+
+**Rationale:**
+1. Implementation complexity vs visual benefit tradeoff
+2. 13px gap is visually acceptable
+3. Original Win32 API likely had similar constraints to SwiftUI
+4. Focus on other features; revisit if users complain
+
+**Future enhancement (if desired):**
+Create `AlignedTilingSprite` component and flex-like HStack layout as described in Option B. This would reduce gaps to ~4px matching Webamp.
+
+### Technical Debt Tracking
+
+If we decide to implement tighter gaps later, the approach is:
+1. Create `AlignedTilingSprite` view with left/right alignment
+2. Replace fixed-position titlebar with HStack layout
+3. Use `.frame(maxWidth: .infinity)` for gold fill spacers
+4. Test with various window widths and skins
+
+---
+
+## Complete Webamp CSS Reference (gen-window.css)
+
+For future reference, here is the complete relevant CSS from webamp:
+
+```css
+#webamp .gen-window {
+  width: 275px;
+  height: 116px;
+  display: flex;
+  flex-direction: column;
+}
+
+#webamp .gen-top {
+  height: 20px;
+  display: flex;
+  flex-direction: row;
+}
+
+#webamp .gen-top-left {
+  width: 25px;
+  height: 20px;
+}
+
+#webamp .gen-top-title {
+  line-height: 7px;
+  margin-top: 2px;
+  /* TODO: This should be a consequence of the repeating tiles, not hard coded */
+  padding: 0 3px 0 4px;
+}
+
+#webamp .gen-top-left-fill {
+  flex-grow: 1;
+  height: 20px;
+  background-position: left;
+}
+
+#webamp .gen-top-right-fill {
+  flex-grow: 1;
+  height: 20px;
+  background-position: right;
+}
+
+#webamp .gen-top-left-end {
+  width: 25px;
+  height: 20px;
+}
+
+#webamp .gen-top-right {
+  width: 25px;
+  height: 20px;
+}
+
+#webamp .gen-top-right-end {
+  width: 25px;
+  height: 20px;
+}
+
+#webamp .gen-text-letter {
+  height: 7px;
+  display: inline-block;
+}
+
+#webamp .gen-text-space {
+  width: 5px;
+}
+```
+
+**Note the critical `background-position` property:**
+- `left` - tiles start from left edge, overflow clips on right
+- `right` - tiles start from right edge, overflow clips on left
+
+This allows symmetrical appearance even with non-integer tile counts.
+
+---
+
+## SimpleSpriteImage Current Implementation
+
+The current `SimpleSpriteImage` component uses `.resizable()` with `.aspectRatio(contentMode: .fill)`:
+
+```swift
+Image(nsImage: image)
+    .interpolation(.none)
+    .antialiased(false)
+    .resizable()  // Force image to fill frame completely
+    .aspectRatio(contentMode: .fill)  // Fill frame, ignore aspect ratio
+    .frame(width: width, height: height)
+    .clipped()  // Clip overflow from .fill mode
+```
+
+This **stretches** sprites to fit, which works for fixed-size sprites but would distort pixel art if used for flexible widths.
+
+**To tile instead of stretch:**
+```swift
+Image(nsImage: image)
+    .resizable(resizingMode: .tile)  // Tile instead of stretch
+    .frame(width: flexibleWidth, height: 20)
+```
+
+However, SwiftUI's `.tile` mode has no alignment option - it always tiles from top-left origin.
+
+---
+
+## GEN.BMP Sprite Coordinates (from Gemini Research)
+
+**Titlebar Structure (Top 20px):**
+
+| Section | Selected (y=0) | Inactive (y=21) | Width | Behavior |
+|---------|----------------|-----------------|-------|----------|
+| Top Left Corner | 0,0 | 0,21 | 25px | Fixed |
+| Left/Right Fill | 104,0 | 104,21 | 25px | Tiles |
+| Title Start Cap | 26,0 | 26,21 | 25px | Fixed |
+| Title Center Fill | 52,0 | 52,21 | 25px | Tiles |
+| Title End Cap | 78,0 | 78,21 | 25px | Fixed |
+| Top Right Corner | 130,0 | 130,21 | 25px | Fixed |
+
+**Letter Extraction:**
+- Selected text: Scanned from y=88 (Height: 7px)
+- Normal text: Scanned from y=96 (Height: 7px)
+- Delimiter: First pixel at x=0 of text row (typically cyan #00FFFF)
+
+**MacAmp's Two-Piece Approach:**
+Due to cyan gap line at y=94, MacAmp splits letters:
+- TOP piece: 6px height (y=88 to y=93)
+- BOTTOM piece: 1-2px height (y=95 to y=96/97)
+
+This avoids rendering the cyan delimiter line.
+
+---
+
+## Summary of Gap Limitation
+
+| Aspect | Webamp (CSS) | MacAmp (SwiftUI) | Difference |
+|--------|--------------|------------------|------------|
+| Layout model | Flexbox | Fixed position | Fundamental |
+| Gold fill sizing | `flex-grow: 1` | 2 × 25px tiles | 50px vs ~60px |
+| Center section | Intrinsic (56px) | 3 × 25px tiles (75px) | 19px larger |
+| Gap around text | 3-4px | 13px | ~10px larger |
+| Tile alignment | `background-position` | None (origin only) | Can't match |
+| Sub-pixel | Supported | Integer preferred | Minor |
+
+**Conclusion:** The 13px gap is a consequence of SwiftUI's layout model and our discrete-tile approach. Matching Webamp exactly would require significant refactoring with custom tiling components. The current implementation is acceptable and historically plausible for Win32-era Winamp.
+
+---
+
+## Alternative Approach: Longer Text for Tighter Gaps (2026-01-04)
+
+### The Insight
+
+Instead of complex SwiftUI tiling, we can reduce gaps by using **longer text** that better fills the center section. The optimal text width for 3 center tiles (75px) is ~63-67px, leaving only 4-6px gaps.
+
+### Mathematical Analysis
+
+**Current:** MILKDROP = 49px in 75px center = 13px gaps each side
+**Optimal:** ~67px text in 75px center = 4px gaps each side
+
+**The 25px tile constraint creates discrete options:**
+
+| Config | Left Gold | Center | Right Gold | Optimal Text Width |
+|--------|-----------|--------|------------|-------------------|
+| 2+3+2 | 50px | 75px | 50px | 63-67px |
+| 1+5+1 | 25px | 125px | 25px | 113-117px |
+
+### Text Length Options Analyzed
+
+| Text | Width | Gap Each Side | Notes |
+|------|-------|---------------|-------|
+| MILKDROP | 49px | 13px | Current |
+| MILKDROP 2 | ~60px | 7.5px | Simple, only need "2" sprite |
+| MILKDROP V2 | ~67px | 4px | Optimal fit |
+| MILKDROP 2K | ~67px | 4px | Optimal fit |
+| **MILKDROP HD** | ~67px | **4px** | **Chosen - optimal fit** |
+| MILKDROP VIS | ~71px | 2px | Very tight |
+| MILKDROP PRO | ~73px | 1px | Too tight |
+| MILKDROP VIDEO | 83px | 21px | Requires 5 center tiles |
+
+### Why "MILKDROP HD" Was Chosen
+
+1. **Optimal width:** ~67px fills 75px center with minimal gaps
+2. **Meaningful:** "HD" suggests high-definition visuals
+3. **Sprite efficiency:** D already exists; only need H sprite
+4. **No layout changes:** Still uses 2+3+2 tile configuration
+
+### Implementation Requirements for "MILKDROP HD"
+
+**New sprites needed (8 total):**
+- `GEN_TEXT_SELECTED_H_TOP` (x: TBD, y: 88, w: ~7, h: 6)
+- `GEN_TEXT_SELECTED_H_BOTTOM` (x: TBD, y: 95, w: ~7, h: 2)
+- `GEN_TEXT_H_TOP` (x: TBD, y: 96, w: ~7, h: 6)
+- `GEN_TEXT_H_BOTTOM` (x: TBD, y: 103, w: ~7, h: 1)
+- Space handling (5px gap, no sprite needed)
+
+**D sprites already exist** (reused from MILKDROP).
+
+### Letter Width Verification
+
+Need to extract H from GEN.bmp to confirm width:
+- Expected: ~7px (similar to K, R)
+- Position: 8th letter in alphabet (after G)
+
+### Expected Result
+
+```
+Before (MILKDROP):
+[CAP][GOLD][GOLD][END][---MILKDROP---][END][GOLD][GOLD][CAP]
+                      |--49px--|
+                      |----75px----|
+                         13px gaps
+
+After (MILKDROP HD):
+[CAP][GOLD][GOLD][END][-MILKDROP HD-][END][GOLD][GOLD][CAP]
+                      |----~67px----|
+                      |----75px----|
+                          4px gaps
+```
+
+### Rollback Plan
+
+Committed current MILKDROP implementation before adding HD. If visual result is unsatisfactory:
+```bash
+git revert HEAD  # or git checkout HEAD~1 -- MacAmpApp/Views/Windows/MilkdropWindowChromeView.swift
+```

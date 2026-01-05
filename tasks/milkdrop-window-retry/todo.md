@@ -7,51 +7,52 @@
 
 ## Phase 1: Coordinate Verification
 
-- [ ] Extract GEN.bmp from base Winamp skin
-- [ ] Get GEN.bmp dimensions (expected: 194×109)
-- [ ] Use ImageMagick to extract M letter at documented coords
-- [ ] Verify TOP piece (8×6 at x:86, y:88)
-- [ ] Verify BOTTOM piece (8×2 at x:86, y:95)
-- [ ] Compare extracted sprites with SkinSprites.swift definitions
-- [ ] Document any coordinate corrections needed
+- [x] Extract GEN.bmp from base Winamp skin
+- [x] Get GEN.bmp dimensions (expected: 194×109) ✅ Confirmed
+- [x] Use ImageMagick to extract M letter at documented coords
+- [x] Verify TOP piece (8×6 at x:86, y:88) ✅ Correct
+- [x] Verify BOTTOM piece (8×2 at x:86, y:95) ✅ Correct
+- [x] Compare extracted sprites with SkinSprites.swift definitions ✅ Match
+- [x] Document any coordinate corrections needed (none required)
 
 ---
 
 ## Phase 2: Implementation
 
-- [ ] Read current MilkdropWindowChromeView.swift
-- [ ] Add `makeLetter(_ letter:width:isActive:)` helper method
-- [ ] Add `milkdropLetters` computed property with HStack
-- [ ] Position letters in center titlebar section (x: 137.5, y: 10)
-- [ ] Wire `isWindowActive` to letter rendering
+- [x] Read current MilkdropWindowChromeView.swift
+- [x] Add `makeLetter(_ letter:width:)` helper method (uses isWindowActive property)
+- [x] Add `milkdropLetters` computed property with HStack
+- [x] Position letters in center titlebar section (x: 137.5, y: 10)
+- [x] Wire `isWindowActive` to letter rendering (via prefix selection)
 
 ---
 
 ## Phase 3: Coordinate Fix (If Needed)
 
-- [ ] Apply Y-flip formula if verification fails
-- [ ] Update SkinSprites.swift with corrected coordinates
-- [ ] Re-verify with ImageMagick extraction
+- [x] Apply Y-flip formula if verification fails → NOT NEEDED
+- [x] Coordinates already correct in SkinSprites.swift
+- [x] GEN.bmp uses top-down coords that work correctly
 
 ---
 
 ## Phase 4: Testing
 
-- [ ] Build with Thread Sanitizer enabled
-- [ ] Verify letters render in titlebar
-- [ ] Test active state (click Milkdrop window)
-- [ ] Test inactive state (click another window)
-- [ ] Test with 3+ different skins
-- [ ] Test skin hot-swap while window open
-- [ ] Verify graceful fallback if sprites missing
+- [x] Build with Thread Sanitizer enabled (BUILD SUCCEEDED)
+- [x] Verify letters render in titlebar (DONE - centered at x:137.5, y:8)
+- [x] Test active state (click Milkdrop window) - User confirmed working
+- [x] Test inactive state (click another window) - Sprite switching works
+- [ ] Test with 3+ different skins (deferred)
+- [ ] Test skin hot-swap while window open (deferred)
+- [ ] Verify graceful fallback if sprites missing (deferred)
 
 ---
 
 ## Phase 5: Review & Merge
 
+- [x] Research gap limitation (SwiftUI vs CSS flexbox)
+- [x] Document findings in research.md
+- [x] Create feature branch (feature/milkdrop-titlebar-letters)
 - [ ] Run Oracle code review
-- [ ] Address any review findings
-- [ ] Create feature branch
 - [ ] Commit changes
 - [ ] Create PR
 - [ ] Merge after approval
