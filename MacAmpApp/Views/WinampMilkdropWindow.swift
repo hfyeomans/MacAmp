@@ -26,6 +26,10 @@ struct WinampMilkdropWindow: View {
             }
             .animation(.easeInOut(duration: 0.3), value: bridge.isReady)
         }
+        .onAppear {
+            // Configure bridge with audioPlayer for Phase 3 audio data
+            bridge.configure(audioPlayer: audioPlayer)
+        }
     }
 
     /// Fallback placeholder when Butterchurn is unavailable

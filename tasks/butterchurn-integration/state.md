@@ -9,7 +9,7 @@
 
 ## Current State
 
-**Phase:** ✅ PHASE 2 COMPLETE - Audio Data Bridge Implemented
+**Phase:** ✅ PHASE 3 COMPLETE - Swift→JS Bridge Working
 
 **Oracle Review:** ✅ Complete (2026-01-05) - 2 Oracle debugging sessions with gpt-5.2-codex
 
@@ -81,6 +81,7 @@ All debug logging has been removed. Only meaningful logs remain:
 | Butterchurn assets | ✅ Bundled | .js files in Butterchurn/ folder |
 | WKWebView integration | ✅ Phase 1 | WKUserScript injection approach |
 | Audio data bridge | ✅ Phase 2 | FFT merged into existing tap |
+| Swift→JS bridge | ✅ Phase 3 | 30 FPS waveform push, pause/resume |
 | Preset management | ⏳ Phase 4 | Cycling, randomize, history |
 | UI integration | ⏳ Phase 5 | Shortcuts, track titles |
 | Verification | ⏳ Phase 6 | Local-only validation |
@@ -242,6 +243,11 @@ All debug logging has been removed. Only meaningful logs remain:
 | 2026-01-05 | Documentation | Updated research.md and state.md with Implementation Findings |
 | 2026-01-05 | Phase 2 implementation | ButterchurnFrame, vDSP FFT, merged tap, snapshotButterchurnFrame() |
 | 2026-01-05 | **PHASE 2 COMPLETE** | Audio data bridge ready (commit 8e33d71) |
+| 2026-01-05 | Phase 2 verification | Debug logging confirmed FFT values in expected ranges |
+| 2026-01-05 | Phase 3 implementation | 30 FPS timer, ScriptProcessorNode, audioPlayer wiring |
+| 2026-01-05 | Phase 3 initial test | Visualization responds to music - verification in progress |
+| 2026-01-05 | Phase 3 pause/resume | Added isVisualizationActive flag, freezes when stopped |
+| 2026-01-05 | **PHASE 3 COMPLETE** | Visualization responds to music and freezes when stopped |
 
 ---
 
@@ -409,13 +415,26 @@ Commits:
 
 ---
 
-**NEXT: Phase 3 - Swift→JS Bridge**
+**✅ PHASE 3 COMPLETE - Swift→JS Bridge Working**
 
-**Phase 3 Tasks (from todo.md):**
-1. Add 30 FPS Timer to ButterchurnBridge
-2. Wire audioPlayer reference to bridge
-3. Implement updateAudioData() method (JS call)
-4. Start timer when isReady, stop on cleanup
-5. Phase 3 Verification
+**Phase 3 Implementation (2026-01-05):**
+1. ✅ Updated ButterchurnBridge.configure() to take AudioPlayer type
+2. ✅ Implemented startAudioUpdates() with 30 FPS Timer
+3. ✅ Implemented sendAudioFrame() to call snapshotButterchurnFrame() and evaluateJavaScript
+4. ✅ Timer starts automatically when JS sends 'ready' message
+5. ✅ Updated bridge.js to use ScriptProcessorNode instead of 440Hz oscillator
+6. ✅ ScriptProcessorNode outputs latestWaveform buffer (populated by Swift)
+7. ✅ Wired audioPlayer to bridge in WinampMilkdropWindow.onAppear
+8. ✅ Added visualization pause/resume based on playback state
+9. ✅ User verified: visualization responds to music and freezes when stopped
 
-**Current State:** AudioPlayer produces FFT data, ready for 30 FPS bridge to JS
+**Phase 3 Verification (2026-01-05):**
+- Spectrum max 0.04-0.53, nonzero 53-629/1024 ✅
+- Waveform RMS 0.02-0.13, tracking music dynamics ✅
+- Visualization animates during playback ✅
+- Visualization freezes when paused/stopped ✅
+- Debug logging removed after verification ✅
+
+---
+
+**Next Phase:** Phase 4 - Preset Management (cycling, randomize, history)

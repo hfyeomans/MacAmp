@@ -7,7 +7,7 @@ import Observation
 /// evaluateJavaScript for Swift→JS communication
 ///
 /// Phase 1: Handles ready/loadFailed messages from bridge.js
-/// Phase 3: Will add 30 FPS audio data updates
+/// Phase 3: 30 FPS audio data updates with pause/resume on playback state
 @MainActor
 @Observable
 final class ButterchurnBridge: NSObject, WKScriptMessageHandler {
@@ -26,10 +26,13 @@ final class ButterchurnBridge: NSObject, WKScriptMessageHandler {
     /// Error message if initialization failed
     var errorMessage: String?
 
-    // MARK: - Phase 3 Properties (stubbed for now)
+    // MARK: - Phase 3 Properties
 
     @ObservationIgnored private var updateTimer: Timer?
-    @ObservationIgnored private weak var audioPlayer: AnyObject?  // Will be AudioPlayer
+    @ObservationIgnored private weak var audioPlayer: AudioPlayer?
+
+    /// Tracks whether the JS render loop is active (pause when no audio)
+    @ObservationIgnored private var isVisualizationActive: Bool = true
 
     // MARK: - WKScriptMessageHandler
 
@@ -57,7 +60,7 @@ final class ButterchurnBridge: NSObject, WKScriptMessageHandler {
             presetCount = dict["presetCount"] as? Int ?? 0
             presetNames = dict["presetNames"] as? [String] ?? []
             AppLog.info(.general, "[ButterchurnBridge] Ready! \(presetCount) presets available")
-            // Phase 3: Will start audio updates here
+            startAudioUpdates()
 
         case "loadFailed":
             isReady = false
@@ -85,16 +88,54 @@ final class ButterchurnBridge: NSObject, WKScriptMessageHandler {
         updateTimer = nil
     }
 
-    // MARK: - Phase 3: Audio Updates (stubbed)
+    // MARK: - Phase 3: Audio Updates
 
-    /// Configure with AudioPlayer for audio data (Phase 3)
-    func configure(audioPlayer: AnyObject) {
+    /// Configure with AudioPlayer for audio data
+    func configure(audioPlayer: AudioPlayer) {
         self.audioPlayer = audioPlayer
     }
 
-    /// Start sending audio data at 30 FPS (Phase 3)
-    func startAudioUpdates() {
-        // Will be implemented in Phase 3
+    /// Start sending audio data at 30 FPS
+    private func startAudioUpdates() {
+        // Don't start if already running
+        guard updateTimer == nil else { return }
+
+        // 30 FPS = 1/30 second interval (~33ms)
+        updateTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.sendAudioFrame()
+            }
+        }
+        AppLog.info(.general, "[ButterchurnBridge] Started 30 FPS audio updates")
+    }
+
+    /// Push current audio frame to JavaScript
+    private func sendAudioFrame() {
+        guard let webView = webView else { return }
+
+        // Get audio data from AudioPlayer (nil if not playing local audio)
+        guard let frame = audioPlayer?.snapshotButterchurnFrame() else {
+            // Not playing - pause visualization to freeze the display
+            if isVisualizationActive {
+                isVisualizationActive = false
+                webView.evaluateJavaScript("window.macampButterchurn?.stop();", completionHandler: nil)
+            }
+            return
+        }
+
+        // Resume visualization if it was paused
+        if !isVisualizationActive {
+            isVisualizationActive = true
+            webView.evaluateJavaScript("window.macampButterchurn?.start();", completionHandler: nil)
+        }
+
+        // Convert spectrum from Float (0-1) to Int (0-255) for JS Uint8Array compatibility
+        // Waveform stays as Float (-1 to 1) for JS Float32Array
+        let spectrumInts = frame.spectrum.map { Int(min(255, max(0, $0 * 255))) }
+
+        // Build JavaScript call - use JSON encoding for arrays
+        let js = "window.macampButterchurn?.setAudioData(\(spectrumInts), \(frame.waveform));"
+        webView.evaluateJavaScript(js, completionHandler: nil)
     }
 
     // MARK: - Phase 5: Track Title (stubbed)

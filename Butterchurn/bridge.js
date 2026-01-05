@@ -4,24 +4,22 @@
  * Communication layer between Swift (WKWebView) and Butterchurn visualization.
  * Injected at document end after butterchurn.min.js and butterchurnPresets.min.js.
  *
- * Phase 1: Placeholder audio (440Hz oscillator)
- * Phase 2-3: Real audio data from Swift at 30 FPS
+ * Phase 3: Real audio data from Swift at 30 FPS via ScriptProcessorNode
  */
 (function() {
     'use strict';
 
     // State
-    let visualizer = null;
-    let presets = null;
-    let presetKeys = [];
-    let currentPresetIndex = 0;
-    let isRunning = false;
+    var visualizer = null;
+    var presets = null;
+    var presetKeys = [];
+    var currentPresetIndex = 0;
+    var isRunning = false;
 
-    // Audio data buffers (Phase 3: populated by Swift at 30 FPS)
-    let audioData = {
-        spectrum: new Uint8Array(1024),
-        waveform: new Float32Array(1024)
-    };
+    // Audio data buffer - populated by Swift at 30 FPS, output by ScriptProcessorNode
+    // Using 1024 samples to match butterchurn's expected buffer size
+    var latestWaveform = new Float32Array(1024);
+    var waveformWriteIndex = 0;  // Tracks where we are in the waveform for continuous output
 
     // Check for required libraries (injected at documentStart)
     // Try both direct reference and window global
@@ -83,35 +81,47 @@
     canvas.width = canvas.clientWidth || 256;
     canvas.height = canvas.clientHeight || 198;
 
-    // Create AudioContext with audio graph that enables flow to butterchurn's analyser
+    // Create AudioContext with ScriptProcessorNode to output Swift audio data
     //
     // Web Audio is "pull-based" - audio only flows if there's a path to destination.
-    // We create: oscillator -> signalGain -> [muteGain -> destination] (enables flow)
-    //                                    \-> butterchurn.analyser (for visualization)
+    // We use ScriptProcessorNode to generate audio from latestWaveform (pushed by Swift).
+    // The processor outputs our waveform data, butterchurn's analyser analyzes it.
     //
-    // Phase 2-3: Replace oscillator with real audio data from Swift
+    // Architecture:
+    //   ScriptProcessorNode (outputs latestWaveform) → muteGain(0) → destination
+    //                                                ↘ butterchurn.analyser
     var audioContext = null;
     var audioSourceNode = null;
+    var scriptProcessor = null;
     try {
         audioContext = new (window.AudioContext || window.webkitAudioContext)();
 
-        // Create oscillator with audible frequency (gives analyser frequency content)
-        var oscillator = audioContext.createOscillator();
-        oscillator.frequency.value = 440;  // A4 note - placeholder for Phase 1
+        // ScriptProcessorNode: 0 inputs, 1 output, buffer size 1024
+        // Deprecated but still works in all browsers; AudioWorklet is more complex
+        scriptProcessor = audioContext.createScriptProcessor(1024, 0, 1);
 
-        // Signal gain - MUST be non-zero so analyser sees the signal
-        var signalGain = audioContext.createGain();
-        signalGain.gain.value = 1;
-        oscillator.connect(signalGain);
+        // Fill output buffer with latestWaveform data from Swift
+        scriptProcessor.onaudioprocess = function(e) {
+            var output = e.outputBuffer.getChannelData(0);
+            var waveformLen = latestWaveform.length;
 
-        // Mute gain - connected to destination to enable audio flow, but silenced
+            // Copy waveform data to output, looping if needed
+            for (var i = 0; i < output.length; i++) {
+                output[i] = latestWaveform[waveformWriteIndex];
+                waveformWriteIndex = (waveformWriteIndex + 1) % waveformLen;
+            }
+        };
+
+        // Mute gain - enables audio flow but silences output (we don't want to hear it)
         var muteGain = audioContext.createGain();
-        muteGain.gain.value = 0;  // Muted - no sound output
-        signalGain.connect(muteGain);
-        muteGain.connect(audioContext.destination);  // Enables audio flow
+        muteGain.gain.value = 0;
 
-        audioSourceNode = signalGain;
-        oscillator.start();
+        // Connect: processor → muteGain → destination (enables pull-based flow)
+        scriptProcessor.connect(muteGain);
+        muteGain.connect(audioContext.destination);
+
+        // audioSourceNode is what we connect to butterchurn
+        audioSourceNode = scriptProcessor;
 
         // Resume AudioContext if suspended (autoplay policy)
         if (audioContext.state === 'suspended') {
@@ -224,16 +234,21 @@
     // Public API for Swift bridge
     window.macampButterchurn = {
         /**
-         * Update audio data from Swift (Phase 3: called at 30 FPS)
-         * @param {number[]} spectrum - Frequency data (0-255), 1024 bins
+         * Update audio data from Swift (called at 30 FPS)
+         * The waveform data is output by ScriptProcessorNode for butterchurn to analyze.
+         * @param {number[]} spectrum - Frequency data (0-255), 1024 bins (currently unused, derived by analyser)
          * @param {number[]} waveform - Waveform data (-1 to 1), 1024 samples
          */
         setAudioData: function(spectrum, waveform) {
-            if (spectrum && spectrum.length) {
-                audioData.spectrum.set(spectrum.slice(0, 1024));
-            }
+            // Update the waveform buffer that ScriptProcessorNode outputs
+            // The spectrum is derived by butterchurn's internal analyser from the waveform
             if (waveform && waveform.length) {
-                audioData.waveform.set(waveform.slice(0, 1024));
+                var len = Math.min(waveform.length, latestWaveform.length);
+                for (var i = 0; i < len; i++) {
+                    latestWaveform[i] = waveform[i];
+                }
+                // Reset write index so next onaudioprocess starts from beginning
+                waveformWriteIndex = 0;
             }
         },
 
