@@ -9,7 +9,7 @@
 
 ## Current State
 
-**Phase:** ✅ PHASE 4 COMPLETE - Preset Manager Integrated
+**Phase:** ✅ PHASE 5 COMPLETE - UI Integration (Context Menu)
 
 **Oracle Review:** ✅ Complete (2026-01-05) - 2 Oracle debugging sessions with gpt-5.2-codex
 
@@ -83,7 +83,7 @@ All debug logging has been removed. Only meaningful logs remain:
 | Audio data bridge | ✅ Phase 2 | FFT merged into existing tap |
 | Swift→JS bridge | ✅ Phase 3 | 30 FPS waveform push, pause/resume |
 | Preset management | ✅ Phase 4 | Cycling, randomize, history |
-| UI integration | ⏳ Phase 5 | Shortcuts, track titles |
+| UI integration | ✅ Phase 5 | Context menu, shortcuts, track titles |
 | Verification | ⏳ Phase 6 | Local-only validation |
 
 ---
@@ -247,6 +247,10 @@ All debug logging has been removed. Only meaningful logs remain:
 | 2026-01-05 | Phase 4 integration | Added butterchurn settings to AppSettings.swift |
 | 2026-01-05 | Phase 4 wiring | Wired preset manager into WinampMilkdropWindowController |
 | 2026-01-05 | **PHASE 4 COMPLETE** | Preset management with cycling, randomize, history |
+| 2026-01-05 | Phase 5 implementation | Added context menu to WinampMilkdropWindow |
+| 2026-01-05 | Phase 5 menu items | Randomize, Cycling, Cycle Interval, Next/Previous, Preset list |
+| 2026-01-05 | Phase 5 right-click | Created RightClickCaptureView NSViewRepresentable |
+| 2026-01-05 | **PHASE 5 COMPLETE** | Context menu with full preset control |
 
 ---
 
@@ -459,4 +463,27 @@ Commits:
 
 ---
 
-**Next Phase:** Phase 5 - UI Integration (shortcuts, track titles, window lifecycle)
+**✅ PHASE 5 COMPLETE - UI Integration**
+
+**Phase 5 Implementation (2026-01-05):**
+1. ✅ Added context menu to WinampMilkdropWindow (right-click):
+   - Current preset name header (non-selectable)
+   - Next Preset (Space key)
+   - Previous Preset (Backspace key)
+   - Randomize toggle (R key)
+   - Auto-Cycle Presets toggle (C key)
+   - Cycle Interval submenu (5s, 10s, 15s, 30s, 60s)
+   - Show Track Title (T key)
+   - Presets submenu (up to 100 presets with checkmark on current)
+2. ✅ Created RightClickCaptureView (NSViewRepresentable):
+   - Captures right-click events in visualization area
+   - Converts to screen coordinates for NSMenu.popUp
+   - Passes through other mouse events
+3. ✅ Created MilkdropMenuTarget helper class:
+   - Bridges closures to NSMenuItem actions
+   - Same pattern as main window Options menu
+4. ✅ Added PlaybackCoordinator environment for displayTitle access
+
+---
+
+**Next Phase:** Phase 6 - Verification (local-only validation, Thread Sanitizer)
