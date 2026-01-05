@@ -52,8 +52,8 @@
 - [x] Research gap limitation (SwiftUI vs CSS flexbox)
 - [x] Document findings in research.md
 - [x] Create feature branch (feature/milkdrop-titlebar-letters)
+- [x] Commit changes (fe12e6d - MILKDROP HD with H and V sprites)
 - [ ] Run Oracle code review
-- [ ] Commit changes
 - [ ] Create PR
 - [ ] Merge after approval
 
@@ -67,9 +67,11 @@ None currently.
 
 ## Notes
 
-- Letters are 8 total: M, I, L, K, D, R, O, P
+- Final text: "MILKDROP HD" (10 letters + space + gap)
+- Letters: M, I, L, K, D, R, O, P, H, D (H and V sprites added)
 - Each letter = 2 sprites (TOP + BOTTOM)
-- Total sprites: 32 (8 letters × 2 pieces × 2 states)
-- Letter widths: M=8, I=5, L=6, K=7, D=7, R=7, O=7, P=7
-- Total text width: 54px
-- Centered in 75px center section
+- Total sprites: 40 (10 letters × 2 pieces × 2 states)
+- Letter widths: M=8, I=4, L=5, K=7, D=6, R=7, O=6, P=6, space=5, H=6, gap=1, D=6
+- Total text width: 67px (vs original MILKDROP at 49px)
+- Gap each side: 4px (vs original 13px)
+- Centered in 75px center section at x:137.5, y:8

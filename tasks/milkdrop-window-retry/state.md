@@ -2,13 +2,13 @@
 
 **Task ID:** milkdrop-window-retry
 **Created:** 2026-01-04
-**Last Updated:** 2026-01-04
+**Last Updated:** 2026-01-05
 
 ---
 
 ## Current State
 
-**Phase:** COMPLETE - Letters Centered, Gap Limitation Documented
+**Phase:** COMPLETE - "MILKDROP HD" Letters Implemented and Committed
 
 ---
 
@@ -21,7 +21,7 @@
 | Magnetic Docking | ✅ Working | Integrated with WindowSnapManager |
 | Position Persistence | ✅ Working | Saves/restores via UserDefaults |
 | Menu Toggle | ✅ Working | View → Show Milkdrop |
-| **MILKDROP Letters** | ✅ Implemented | Two-piece sprites (TOP+BOTTOM) rendered |
+| **MILKDROP HD Letters** | ✅ Implemented | Two-piece sprites, H+D with 1px gap |
 | Butterchurn Viz | ⏸️ Deferred | Resource bundled, engine not connected |
 
 ---
@@ -33,49 +33,41 @@
 | Titlebar chrome | ✅ 14 | ✅ Yes | All sections rendering |
 | Side borders | ✅ 4 | ✅ Yes | Left/right, active/inactive |
 | Bottom bar | ✅ 6 | ✅ Yes | Left, fill, right pieces |
-| Letter sprites | ✅ 32 | ✅ Yes | Rendered with makeLetter helper |
+| Letter sprites | ✅ 40 | ✅ Yes | M,I,L,K,D,R,O,P,H,V × 2 pieces × 2 states |
 
 ---
 
 ## Files Modified This Session
 
+- `MacAmpApp/Models/SkinSprites.swift`
+  - Added H letter sprites (x=53, width=6) - 4 sprites (selected/normal × TOP/BOTTOM)
+  - Added V letter sprites (x=152, width=6) - 4 sprites (for potential future use)
+
 - `MacAmpApp/Views/Windows/MilkdropWindowChromeView.swift`
-  - Added `milkdropLetters` computed property (HStack of 8 letters)
-  - Added `makeLetter(_:width:)` helper function (two-piece sprite stacking)
-  - Positioned letters in titlebar ZStack at x: 137.5, y: 10
-  - Letter widths from SkinSprites.swift: M=8, I=4, L=5, K=7, D=6, R=7, O=6, P=6 (total: 49px)
+  - Updated `milkdropLetters` to render "MILKDROP HD"
+  - Added 1px Color.clear spacer between H and D
+  - Total width: 67px (MILKDROP:49 + space:5 + H:6 + gap:1 + D:6)
+
+- `tasks/milkdrop-window-retry/research.md`
+  - Documented H sprite debugging process
+  - Added "MILKDROP V2" failed attempt (GEN.bmp lacks numbers)
+  - Final "MILKDROP HD" implementation details
 
 ---
 
-## Blocking Issues
+## Commit History
 
-1. ~~**Coordinate Verification Needed**~~ ✅ RESOLVED
-   - Verified SkinSprites.swift coordinates match GEN.bmp (194×109)
-   - Extracted M letter with sips+ImageMagick at x:86, y:88 - correct
-
-2. ~~**Letter Sprite Rendering**~~ ✅ RESOLVED
-   - Added makeLetter helper with VStack(spacing: 0) for TOP+BOTTOM pieces
-   - Added milkdropLetters HStack inside titlebar ZStack
-   - Active/inactive states use GEN_TEXT_SELECTED_ vs GEN_TEXT_ prefixes
-
----
-
-## Dependencies
-
-| Dependency | Status |
-|------------|--------|
-| SimpleSpriteImage | ✅ Available |
-| SkinManager | ✅ Available |
-| WindowFocusState | ✅ Available |
-| GEN.bmp in base skin | ✅ Available |
+| Commit | Description |
+|--------|-------------|
+| fe12e6d | feat: Add MILKDROP HD titlebar letters with H and V sprites |
 
 ---
 
 ## Branch Status
 
-- **Current branch:** main
-- **Task branch:** Not created yet
-- **Base commit:** dc27293 (Add Xcode test target and documentation updates)
+- **Current branch:** feature/milkdrop-titlebar-letters
+- **Base commit:** 181c1cd (chore: Remove review files from repo)
+- **Latest commit:** fe12e6d (feat: Add MILKDROP HD titlebar letters)
 
 ---
 
@@ -85,36 +77,36 @@
 2. Use hardcoded positions for base skin initially
 3. Dynamic pixel-scanning algorithm deferred
 4. Two-piece sprite pattern confirmed
+5. Changed from "MILKDROP" to "MILKDROP HD" for tighter gaps (4px vs 13px)
+6. GEN.bmp lacks numbers - "MILKDROP V2" not possible without TEXT.bmp mixing
+7. H and D need 1px explicit spacer (no built-in margin in H sprite)
 
 ---
 
-## Open Questions
+## Gap Analysis Summary
 
-1. ~~Are the letter sprite coordinates in SkinSprites.swift already flipped?~~ ✅ Yes, coords are correct
-2. ~~What are the exact Y positions for TOP and BOTTOM pieces?~~ ✅ Selected: Y=88 (TOP), Y=95 (BOTTOM)
-3. ~~Are letter heights consistent (6px TOP, 2px BOTTOM for selected)?~~ ✅ Yes, confirmed
+| Text | Width | Gap Each Side |
+|------|-------|---------------|
+| MILKDROP | 49px | 13px |
+| MILKDROP HD | 67px | 4px |
+
+**Solution:** Extended text to "MILKDROP HD" fills center section better than complex SwiftUI flexbox workarounds.
 
 ---
 
-## Gap Analysis Summary (2026-01-04)
+## H Sprite Debugging Summary
 
-**Current MacAmp:** 13px gap on each side of MILKDROP text
-**Webamp reference:** 3-4px gap on each side
+| Attempt | X Coord | Issue | Fix |
+|---------|---------|-------|-----|
+| Initial | x=52 | Green line on LEFT | Move right |
+| Fix 1 | x=53, w=7 | Green line on RIGHT | Reduce width |
+| Fix 2 | x=53, w=6 | Working | ✅ Final |
+| Normal offset | x=52 | Green line on LEFT | Back to x=53 |
 
-**Root Cause:** SwiftUI uses fixed-position discrete 25px tiles, while CSS flexbox allows:
-- `flex-grow: 1` for flexible gold fills
-- `background-position: right` for right-aligned tiling
-- Intrinsic sizing for text container
-
-**Decision:** Keep current 13px gap. Matching Webamp exactly would require:
-1. Custom `AlignedTilingSprite` component
-2. Complete titlebar layout rewrite to HStack with flexbox-like behavior
-3. Significant testing across skins
-
-See `research.md` for complete analysis and future implementation path.
+**Final H coordinates:** x=53, width=6 (both selected and normal)
 
 ---
 
 ## Next Action
 
-Task complete. Ready for commit and PR.
+Ready for Oracle code review, PR creation, and merge.
