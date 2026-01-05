@@ -10,6 +10,14 @@
 (function() {
     'use strict';
 
+    // DEBUG: Log bridge execution start
+    console.log('[MacAmp Bridge] bridge.js executing...');
+    console.log('[MacAmp Bridge] typeof butterchurn:', typeof butterchurn);
+    console.log('[MacAmp Bridge] typeof butterchurnPresets:', typeof butterchurnPresets);
+    console.log('[MacAmp Bridge] typeof window.butterchurn:', typeof window.butterchurn);
+    console.log('[MacAmp Bridge] typeof window.butterchurnPresets:', typeof window.butterchurnPresets);
+    console.log('[MacAmp Bridge] typeof window.minimal:', typeof window.minimal);
+
     // State
     let visualizer = null;
     let presets = null;
@@ -24,17 +32,30 @@
     };
 
     // Check for required libraries (injected at documentStart)
-    if (typeof butterchurn === 'undefined') {
+    // Try both direct reference and window global
+    var butterchurnLib = (typeof butterchurn !== 'undefined') ? butterchurn : window.butterchurn;
+    var butterchurnPresetsLib = (typeof butterchurnPresets !== 'undefined') ? butterchurnPresets : window.butterchurnPresets;
+
+    console.log('[MacAmp Bridge] butterchurnLib:', butterchurnLib);
+    console.log('[MacAmp Bridge] butterchurnPresetsLib:', butterchurnPresetsLib);
+
+    if (!butterchurnLib) {
+        console.error('[MacAmp Bridge] butterchurn library not loaded!');
         showFallback('butterchurn library not loaded');
         notifyFailed('butterchurn library not loaded');
         return;
     }
 
-    if (typeof butterchurnPresets === 'undefined') {
+    if (!butterchurnPresetsLib) {
+        console.error('[MacAmp Bridge] butterchurnPresets library not loaded!');
         showFallback('butterchurnPresets library not loaded');
         notifyFailed('butterchurnPresets library not loaded');
         return;
     }
+
+    // Use the resolved libraries
+    var butterchurn = butterchurnLib;
+    var butterchurnPresets = butterchurnPresetsLib;
 
     // Get canvas element
     const canvas = document.getElementById('canvas');
@@ -44,8 +65,34 @@
         return;
     }
 
+    // DEBUG: Log canvas dimensions
+    console.log('[MacAmp Bridge] Canvas clientWidth:', canvas.clientWidth, 'clientHeight:', canvas.clientHeight);
+    console.log('[MacAmp Bridge] Canvas width:', canvas.width, 'height:', canvas.height);
+
+    // NOTE: Do NOT create WebGL context here!
+    // canvas.getContext('webgl') would create a context with default attributes.
+    // Butterchurn needs to create its own context with specific attributes.
+    // Once a context is created, you can't create another on the same canvas.
+    // Let butterchurn handle context creation in createVisualizer().
+
     // Get presets from library
-    presets = butterchurnPresets.getPresets();
+    // UMD bundle exports {default: {presetName: preset}} structure
+    // ES module via getPresets() returns {presetName: preset} directly
+    if (typeof butterchurnPresets.getPresets === 'function') {
+        // ES module pattern (webamp-modern style)
+        presets = butterchurnPresets.getPresets();
+    } else if (butterchurnPresets.default && typeof butterchurnPresets.default === 'object') {
+        // UMD bundle pattern - presets are at .default
+        presets = butterchurnPresets.default;
+    } else if (typeof butterchurnPresets === 'object') {
+        // Direct object (already unwrapped)
+        presets = butterchurnPresets;
+    } else {
+        showFallback('butterchurnPresets has unexpected format');
+        notifyFailed('butterchurnPresets has unexpected format: ' + typeof butterchurnPresets);
+        return;
+    }
+    console.log('[MacAmp Bridge] Loaded presets object, keys sample:', Object.keys(presets).slice(0, 3));
     presetKeys = Object.keys(presets);
 
     if (presetKeys.length === 0) {
@@ -54,37 +101,131 @@
         return;
     }
 
-    // Set canvas size to match container
+    // Ensure canvas has actual pixel dimensions (not just CSS)
+    // Use clientWidth/Height if available, fallback to Milkdrop default size
     canvas.width = canvas.clientWidth || 256;
     canvas.height = canvas.clientHeight || 198;
+    console.log('[MacAmp Bridge] Canvas pixel dimensions:', canvas.width, 'x', canvas.height);
 
-    // Create Butterchurn visualizer
-    // Note: Passing null for audioContext since we'll manually provide audio data
+    // Create AudioContext with audio graph that enables flow to butterchurn's analyser
+    //
+    // Web Audio is "pull-based" - audio only flows if there's a path to destination.
+    // We create: oscillator -> signalGain -> [muteGain -> destination] (enables flow)
+    //                                    \-> butterchurn.analyser (for visualization)
+    //
+    var audioContext = null
+    var audioSourceNode = null
     try {
-        visualizer = butterchurn.createVisualizer(null, canvas, {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)()
+
+        // Create oscillator with audible frequency (gives analyser frequency content)
+        var oscillator = audioContext.createOscillator()
+        oscillator.frequency.value = 440  // A4 note - gives us frequency content to visualize
+
+        // Signal gain - MUST be non-zero so analyser sees the signal
+        var signalGain = audioContext.createGain()
+        signalGain.gain.value = 1  // Full signal for analyser
+        oscillator.connect(signalGain)
+
+        // Mute gain - connected to destination to enable audio flow, but silenced
+        var muteGain = audioContext.createGain()
+        muteGain.gain.value = 0  // Muted - no sound output
+        signalGain.connect(muteGain)
+        muteGain.connect(audioContext.destination)  // CRITICAL: enables audio flow
+
+        // This is what butterchurn.connectAudio() will use
+        audioSourceNode = signalGain
+
+        oscillator.start()
+        console.log('[MacAmp Bridge] AudioContext created with audio flow enabled, state:', audioContext.state)
+
+        // Resume AudioContext if suspended (autoplay policy)
+        if (audioContext.state === 'suspended') {
+            audioContext.resume().then(function() {
+                console.log('[MacAmp Bridge] AudioContext resumed, state:', audioContext.state)
+            }).catch(function(err) {
+                console.warn('[MacAmp Bridge] AudioContext resume failed:', err.message)
+            })
+        }
+    } catch (audioError) {
+        console.warn('[MacAmp Bridge] AudioContext creation failed:', audioError.message)
+        // Continue without audio - will show static visualization
+    }
+
+    try {
+        console.log('[MacAmp Bridge] Creating visualizer with dimensions:', canvas.width, 'x', canvas.height);
+        visualizer = butterchurn.createVisualizer(audioContext, canvas, {
             width: canvas.width,
             height: canvas.height,
             pixelRatio: window.devicePixelRatio || 1,
             textureRatio: 1,
-            // Security: Don't eval untrusted preset code
-            onlyUseWASM: true
+            // DEBUG: Try without WASM-only to test if WASM is blocked by sandbox
+            onlyUseWASM: false
         });
+        console.log('[MacAmp Bridge] Visualizer created successfully')
+
+        // DEBUG: Check WebGL context after butterchurn creates it
+        var glContext = canvas.getContext('webgl2') || canvas.getContext('webgl');
+        if (glContext) {
+            console.log('[MacAmp Bridge] WebGL context:', glContext.getParameter(glContext.VERSION));
+            console.log('[MacAmp Bridge] WebGL viewport:', glContext.getParameter(glContext.VIEWPORT));
+        } else {
+            console.error('[MacAmp Bridge] No WebGL context available after visualizer creation!');
+        }
     } catch (error) {
-        showFallback('visualizer creation failed: ' + error.message);
-        notifyFailed('visualizer creation failed: ' + error.message);
+        showFallback('visualizer creation failed: ' + error.message)
+        notifyFailed('visualizer creation failed: ' + error.message)
         return;
+    }
+
+    if (audioSourceNode) {
+        visualizer.connectAudio(audioSourceNode)
+        console.log('[MacAmp Bridge] Connected audio source to visualizer (audio flow enabled)')
+    } else {
+        console.warn('[MacAmp Bridge] No audio source available - visualization may not animate')
     }
 
     // Load initial preset (no transition)
     if (presetKeys.length > 0) {
-        visualizer.loadPreset(presets[presetKeys[0]], 0);
-        currentPresetIndex = 0;
+        try {
+            console.log('[MacAmp Bridge] Loading initial preset:', presetKeys[0]);
+            visualizer.loadPreset(presets[presetKeys[0]], 0);
+            currentPresetIndex = 0;
+            console.log('[MacAmp Bridge] Preset loaded successfully');
+        } catch (error) {
+            console.error('[MacAmp Bridge] Failed to load preset:', error.message, error.stack);
+            showFallback('preset load failed: ' + error.message);
+            notifyFailed('preset load failed: ' + error.message);
+            return;
+        }
     }
 
-    // 60 FPS render loop
+    // DEBUG: Track render errors and frame count
+    var renderErrorCount = 0;
+    var maxRenderErrors = 3;
+    var frameCount = 0;
+
+    // 60 FPS render loop with error handling
     function renderLoop() {
         if (!isRunning) return;
-        visualizer.render();
+        try {
+            visualizer.render();
+            frameCount++;
+            // Log every 60 frames (~1 second at 60fps)
+            if (frameCount === 1 || frameCount % 60 === 0) {
+                console.log('[MacAmp Bridge] Rendered ' + frameCount + ' frames');
+            }
+        } catch (error) {
+            renderErrorCount++;
+            console.error('[MacAmp Bridge] Render error #' + renderErrorCount + ':', error.message, error.stack);
+            if (renderErrorCount >= maxRenderErrors) {
+                console.error('[MacAmp Bridge] Too many render errors, stopping');
+                isRunning = false;
+                showFallback('render failed: ' + error.message);
+                notifyFailed('render failed: ' + error.message);
+                return;
+            }
+        }
         requestAnimationFrame(renderLoop);
     }
 

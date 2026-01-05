@@ -9,9 +9,85 @@
 
 ## Current State
 
-**Phase:** PLAN REVISED - Ready for Phase 1 Implementation
+**Phase:** ✅ PHASE 1 COMPLETE - Visualization Rendering Successfully
 
-**Oracle Review:** ✅ Complete (2026-01-05)
+**Oracle Review:** ✅ Complete (2026-01-05) - 2 Oracle debugging sessions with gpt-5.2-codex
+
+### Implementation Progress (2026-01-05)
+
+**Completed:**
+1. ✅ Created ButterchurnBridge.swift (WKScriptMessageHandler)
+2. ✅ Created ButterchurnWebView.swift (NSViewRepresentable)
+3. ✅ Rewrote bridge.js for new architecture
+4. ✅ Simplified index.html (no script tags)
+5. ✅ Added Butterchurn folder to Xcode project resources
+6. ✅ Fixed chicken-and-egg bug (WebView must exist to send 'ready')
+7. ✅ Fixed ES module export issue (butterchurn.min.js uses `export{qt as default}`)
+8. ✅ Fixed butterchurnPresets alias (exports as 'minimal' → aliased to 'butterchurnPresets')
+
+**Bugs Fixed:**
+1. ✅ butterchurn.min.js uses ES module export which doesn't work with WKUserScript
+   - Added `wrapESModuleAsGlobal()` to convert `export{qt as default}` → `window.butterchurn = qt`
+
+2. ✅ butterchurnPresets.min.js exports as `window.minimal` → added alias to `window.butterchurnPresets`
+
+3. ✅ **ROOT CAUSE FIXED (Oracle confirmed):** `butterchurnPresets.getPresets()` doesn't exist in UMD bundle
+   - UMD exports `{default: {presetName: preset}}` structure, not ES module with getPresets()
+   - Fixed bridge.js to handle both ES module and UMD patterns:
+     - Try `butterchurnPresets.getPresets()` first (ES module)
+     - Fall back to `butterchurnPresets.default` (UMD bundle)
+     - Fall back to direct object if already unwrapped
+4. ✅ Butterchurn visualizer was not receiving audio input from bridge
+   - Added `visualizer.connectAudio(audioSourceNode)` after createVisualizer
+   - Removed custom analyser connection in bridge.js to rely on butterchurn internal analyser
+
+**Testing:** Awaiting build and test to verify visualization loads
+
+### Debug Logging Added (TO REMOVE AFTER FIX)
+
+The following debug logging was added for troubleshooting. **Remove after issue is resolved:**
+
+1. **Butterchurn/bridge.js** (extensive debugging)
+   - `console.log('[MacAmp Bridge] bridge.js executing...')`
+   - Logs typeof butterchurn, butterchurnPresets, window.butterchurn, window.butterchurnPresets, window.minimal
+   - Canvas clientWidth/clientHeight and width/height logging
+   - WebGL context availability check with version logging
+   - Canvas pixel dimensions logging
+   - Visualizer creation success/failure logging
+   - Preset loading success/failure logging with error stack
+   - Render loop try/catch with error counting and stack traces
+   - `onlyUseWASM: false` (DEBUG - was `true`, changed to test sandbox issues)
+
+2. **MacAmpApp/Views/Windows/ButterchurnWebView.swift** (loadBundleJS function)
+   - `AppLog.debug` for bundle URL and file loading
+   - `AppLog.debug` for wrapped JS size
+   - `console.log` injected into butterchurnPresets alias
+
+3. **MacAmpApp/Views/Windows/ButterchurnWebView.swift** (wrapESModuleAsGlobal function)
+   - `AppLog.debug` for found export statement
+   - `AppLog.debug` for extracted identifier
+   - `AppLog.debug` for replacement string
+   - `AppLog.warning` if pattern not found
+   - `console.log` injected into replacement and fallback
+
+4. **MacAmpApp/ViewModels/ButterchurnBridge.swift** (handleMessage function)
+   - `AppLog.debug` for all received messages
+   - `AppLog.debug` for message type
+   - `AppLog.info` for ready state
+   - `AppLog.error` for load failures
+   - `AppLog.warn` for unknown message types
+
+5. **MacAmpApp/Views/Windows/ButterchurnWebView.swift** (console override)
+   - Added `consoleLog` WKScriptMessageHandler in Coordinator
+   - Console override script injected at documentStart
+   - Captures console.log, console.error, console.warn
+   - Captures uncaught errors via window.onerror
+   - Removes handler in dismantleNSView
+
+6. **Butterchurn/index.html** (CSS fixes)
+   - Added `html, body { width: 100%; height: 100%; }`
+   - Added `box-sizing: border-box` to all elements
+   - Added `position: absolute; top: 0; left: 0;` to canvas
 
 ---
 
@@ -108,12 +184,17 @@
 | WinampMilkdropWindowController.swift | 52 | ✅ NSWindowController |
 | MilkdropWindowChromeView.swift | 162 | ✅ GEN.bmp chrome |
 
-### To Be Created
+### Created (Phase 1)
+
+| File | Layer | Lines | Status |
+|------|-------|-------|--------|
+| ButterchurnWebView.swift | Presentation | ~280 | ✅ Complete |
+| ButterchurnBridge.swift | Bridge | ~100 | ✅ Complete |
+
+### To Be Created (Phase 4+)
 
 | File | Layer | Est. Lines |
 |------|-------|------------|
-| ButterchurnWebView.swift | Presentation | ~80 |
-| ButterchurnBridge.swift | Bridge | ~100 |
 | ButterchurnPresetManager.swift | Bridge | ~120 |
 
 ### To Be Modified
@@ -180,13 +261,172 @@
 | 2026-01-05 | Task files created | research.md, state.md, plan.md, todo.md |
 | 2026-01-05 | Oracle review | 12 findings, all addressed in revised plan |
 | 2026-01-05 | Plan revised | 6-phase architecture with Oracle corrections |
+| 2026-01-05 | Phase 1 implementation | Created ButterchurnBridge.swift, ButterchurnWebView.swift |
+| 2026-01-05 | Debug: ES module fix | wrapESModuleAsGlobal() for butterchurn.min.js |
+| 2026-01-05 | Debug: UMD presets fix | getPresets() fallback to .default for UMD bundle |
+| 2026-01-05 | Debug: Render error | analyser.getByteTimeDomainData undefined → need AudioContext |
+| 2026-01-05 | Debug: AudioContext added | Silent oscillator + gainNode for audio graph |
+| 2026-01-05 | Debug: Blank screen | Missing connectAudio() call - Oracle identified |
+| 2026-01-05 | Debug: connectAudio fix | Added visualizer.connectAudio(audioSourceNode) |
+| 2026-01-05 | Debug: Still blank | Web Audio pull-based architecture issue identified |
+| 2026-01-05 | Debug: Audio flow fix | oscillator(440Hz) → signalGain(1) → muteGain(0) → destination |
+| 2026-01-05 | Debug: Still blank | Render loop running (1440+ frames) but canvas black |
+| 2026-01-05 | Debug: WebGL context fix | Removed premature getContext() that blocked butterchurn |
+| 2026-01-05 | **PHASE 1 COMPLETE** | Visualization rendering successfully! |
+| 2026-01-05 | Documentation | Updated research.md and state.md with Implementation Findings |
+
+---
+
+## Lessons Learned
+
+### Critical Discovery: Butterchurn Requires Audio Graph Connection
+
+**Original Plan Assumption:** Phase 1 would render "static frames" without audio data, deferring audio connection to Phase 2-3.
+
+**Reality:** Butterchurn's `createVisualizer()` and `render()` methods require a valid Web Audio API graph:
+
+1. **AudioContext is mandatory** - Cannot pass `null` to createVisualizer()
+2. **Internal AnalyserNode** - Butterchurn creates its OWN analyser internally
+3. **connectAudio() required** - Must call `visualizer.connectAudio(audioSourceNode)` to connect to butterchurn's internal analyser
+4. **Autoplay policy** - AudioContext may start suspended; call `resume()` after user interaction or programmatically
+
+### Critical Discovery #2: Web Audio is Pull-Based
+
+**The Bug:** Even with AudioContext and connectAudio(), screen was still blank.
+
+**Root Cause:** Web Audio uses a **pull-based architecture**. Audio only flows through the graph if there's a path to `audioContext.destination`. A dead-end analyser receives no data.
+
+**Broken Architecture:**
+```
+oscillator(0Hz) → gainNode(gain=0) → analyser (DEAD END)
+                                      ↑
+                            No audio flows here!
+```
+
+**Three problems with original approach:**
+1. **Dead-end graph** - No path to destination = no audio flow
+2. **Zero gain** - `gain=0` multiplies signal to silence before analyser sees it
+3. **Zero frequency** - Oscillator at 0Hz produces DC, not visualizable content
+
+**Working Architecture:**
+```
+                                      ┌─→ butterchurn.analyser (visualization)
+oscillator(440Hz) → signalGain(1) ───┤
+                                      └─→ muteGain(0) → destination (enables flow)
+```
+
+**Solution for Phase 1:**
+```javascript
+var audioContext = new AudioContext();
+
+// Oscillator with audible frequency (content for analyser)
+var oscillator = audioContext.createOscillator();
+oscillator.frequency.value = 440;  // A4 note
+
+// Signal gain - MUST be non-zero so analyser sees the signal
+var signalGain = audioContext.createGain();
+signalGain.gain.value = 1;  // Full signal
+oscillator.connect(signalGain);
+
+// Mute gain - enables flow but silences output
+var muteGain = audioContext.createGain();
+muteGain.gain.value = 0;  // Muted
+signalGain.connect(muteGain);
+muteGain.connect(audioContext.destination);  // CRITICAL: enables audio flow
+
+audioSourceNode = signalGain;
+oscillator.start();
+
+// Now butterchurn's analyser receives real audio data
+visualizer = butterchurn.createVisualizer(audioContext, canvas, options);
+visualizer.connectAudio(audioSourceNode);
+```
+
+**Implications for Phase 2-3:**
+- When real audio data is available, replace the silent oscillator with actual audio source
+- Can disconnect silent source and connect real PCM stream from Swift
+- The audio graph architecture is already in place
+
+### ES Module vs UMD Bundle Differences
+
+**butterchurn.min.js:** Uses ES module export (`export{qt as default}`)
+- Fixed with `wrapESModuleAsGlobal()` in ButterchurnWebView.swift
+- Converts to `window.butterchurn = qt`
+
+**butterchurnPresets.min.js:** Uses UMD export (`window.minimal`)
+- Aliased to `window.butterchurnPresets = window.minimal`
+- Presets accessed via `.default` property, NOT `.getPresets()`
+
+### Canvas Sizing in WKWebView
+
+WKWebView canvas requires explicit CSS sizing:
+```css
+html, body { width: 100%; height: 100%; }
+canvas {
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+```
+
+Without this, canvas has 0×0 dimensions and WebGL context creation fails.
+
+### Critical Discovery #3: WebGL Context Creation is Exclusive
+
+**The Bug:** Render loop running (1440+ frames), but canvas shows solid black.
+
+**Root Cause:** Calling `canvas.getContext('webgl')` creates a WebGL context with default attributes. Once created, you **cannot create another context** on the same canvas. Butterchurn needs to create its own context with specific attributes (like `preserveDrawingBuffer`).
+
+**Broken Code:**
+```javascript
+// DEBUG check that blocks butterchurn:
+var gl = canvas.getContext('webgl');  // Creates context with default attributes
+// ... later ...
+butterchurn.createVisualizer(audioContext, canvas, ...);  // Gets blocked or gets wrong context
+```
+
+**Fixed Code:**
+```javascript
+// Do NOT call getContext() before butterchurn!
+// Let butterchurn handle WebGL context creation.
+butterchurn.createVisualizer(audioContext, canvas, ...);  // Creates its own context
+
+// AFTER visualizer creation, you can inspect the context:
+var gl = canvas.getContext('webgl');  // Now returns butterchurn's context
+```
+
+**Key Lesson:** Never call `canvas.getContext()` on a canvas that will be used by a third-party WebGL library. Let the library create its own context first.
 
 ---
 
 ## Next Action
 
-Begin **Phase 1: WebView + JS Injection**
-- Create ButterchurnWebView.swift
-- Configure script injection
-- Rewrite bridge.js
-- Verify static frame renders
+**✅ PHASE 1 COMPLETE** - Visualization working!
+
+All bug fixes applied and verified:
+1. ✅ ES module wrapper for butterchurn.min.js
+2. ✅ UMD preset handling (getPresets fallback)
+3. ✅ AudioContext with silent oscillator
+4. ✅ visualizer.connectAudio() call
+5. ✅ Canvas CSS sizing
+6. ✅ Web Audio pull-based architecture fix
+7. ✅ WebGL context exclusivity fix
+
+---
+
+**NEXT: Cleanup & Phase 2 Prep**
+
+1. **Remove debug logging** (documented in "Debug Logging Added" section above)
+   - Frame counting in bridge.js
+   - Console override in ButterchurnWebView.swift
+   - Extensive console.log statements in bridge.js
+   - AppLog.debug statements in Swift files
+
+2. **Commit Phase 1** with clean code
+
+3. **Begin Phase 2: Audio Data Bridge**
+   - Merge Butterchurn FFT into existing AVAudioEngine tap
+   - Send real audio data from Swift → JS at 30 FPS
+   - Currently using 440Hz oscillator placeholder

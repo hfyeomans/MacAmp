@@ -44,10 +44,16 @@ final class ButterchurnBridge: NSObject, WKScriptMessageHandler {
     }
 
     private func handleMessage(_ message: WKScriptMessage) {
+        // DEBUG: Log all received messages
+        AppLog.debug(.general, "[ButterchurnBridge] Received message: \(message.body)")
+
         guard let dict = message.body as? [String: Any],
               let type = dict["type"] as? String else {
+            AppLog.warn(.general, "[ButterchurnBridge] Invalid message format")
             return
         }
+
+        AppLog.debug(.general, "[ButterchurnBridge] Message type: \(type)")
 
         switch type {
         case "ready":
@@ -55,6 +61,7 @@ final class ButterchurnBridge: NSObject, WKScriptMessageHandler {
             errorMessage = nil
             presetCount = dict["presetCount"] as? Int ?? 0
             presetNames = dict["presetNames"] as? [String] ?? []
+            AppLog.info(.general, "[ButterchurnBridge] Ready! \(presetCount) presets available")
             // Phase 3: Will start audio updates here
 
         case "loadFailed":
@@ -62,8 +69,10 @@ final class ButterchurnBridge: NSObject, WKScriptMessageHandler {
             errorMessage = dict["error"] as? String ?? "Unknown error"
             presetCount = 0
             presetNames = []
+            AppLog.error(.general, "[ButterchurnBridge] Load failed: \(errorMessage ?? "unknown")")
 
         default:
+            AppLog.warn(.general, "[ButterchurnBridge] Unknown message type: \(type)")
             break
         }
     }

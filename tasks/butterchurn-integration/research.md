@@ -478,3 +478,84 @@ protocol ButterchurnAudioSource {
 **Phase 4:** Preset manager (cycling, randomization, persistence)
 **Phase 5:** UI integration (shortcuts, track titles, lifecycle)
 **Phase 6:** Verification (local-only validation, stream fallback)
+
+---
+
+## Implementation Findings (2026-01-05)
+
+### Critical Discovery: Butterchurn Requires Audio Graph Connection
+
+**Original Assumption:** Phase 1 could render "static frames" without any audio data.
+
+**Reality:** Butterchurn's `render()` method internally calls `this.analyser.getByteTimeDomainData()` and `this.analyser.getByteFrequencyData()` on every frame. Without an audio source connected to its internal AnalyserNode, the buffers are empty/zeros and the canvas renders blank.
+
+**Root Cause Chain:**
+1. `butterchurn.createVisualizer(audioContext, canvas, options)` creates an internal `AnalyserNode`
+2. `render()` reads audio data from this internal analyser every frame
+3. If nothing is connected to the analyser, it reads zeros → blank visualization
+4. Even for "static" time-based preset animations, the audio graph must be wired
+
+**Solution:** Use `visualizer.connectAudio(audioSourceNode)` to connect an audio source to butterchurn's internal analyser. For Phase 1 (no real audio), connect a silent oscillator:
+
+```javascript
+var audioContext = new AudioContext();
+var oscillator = audioContext.createOscillator();
+oscillator.frequency.value = 0;  // Silent
+var gainNode = audioContext.createGain();
+gainNode.gain.value = 0;  // Muted
+oscillator.connect(gainNode);
+oscillator.start();
+
+visualizer = butterchurn.createVisualizer(audioContext, canvas, options);
+visualizer.connectAudio(gainNode);  // CRITICAL: Connect to butterchurn's analyser
+```
+
+**Lesson Learned:** Butterchurn is not a "render preset to canvas" library - it's an audio-reactive visualization engine that requires a connected audio graph even for basic rendering. The plan's Phase 1 "no audio" scope was correct in intent (no real music data), but incorrect in implementation (still needs audio graph wiring).
+
+### ES Module vs UMD Bundle Differences
+
+**Problem:** butterchurn.min.js uses ES module syntax (`export{qt as default}`) which doesn't work with WKUserScript injection.
+
+**Solution:** Regex replacement to convert ES module export to window global:
+```swift
+// Convert: export{qt as default}
+// To: window.butterchurn = qt;
+```
+
+**Problem:** butterchurnPresets.min.js UMD bundle exports differently than ES module:
+- ES Module: `butterchurnPresets.getPresets()` returns preset map
+- UMD Bundle: `window.minimal.default` contains preset map directly (no `getPresets()` method)
+
+**Solution:** Handle both patterns in bridge.js:
+```javascript
+if (typeof butterchurnPresets.getPresets === 'function') {
+    presets = butterchurnPresets.getPresets();  // ES module
+} else if (butterchurnPresets.default) {
+    presets = butterchurnPresets.default;  // UMD bundle
+}
+```
+
+### WebGL Context Verification
+
+Always verify WebGL availability before creating visualizer:
+```javascript
+var gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+if (!gl) {
+    showFallback('WebGL not available');
+    return;
+}
+```
+
+### Canvas Sizing for WKWebView
+
+CSS `width: 100%; height: 100%` is not sufficient. Must also set:
+```css
+html, body { width: 100%; height: 100%; }
+canvas { position: absolute; top: 0; left: 0; }
+```
+
+And verify pixel dimensions in JS:
+```javascript
+canvas.width = canvas.clientWidth || 256;
+canvas.height = canvas.clientHeight || 198;
+```
