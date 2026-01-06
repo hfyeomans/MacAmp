@@ -69,10 +69,11 @@ final class MilkdropWindowSizeState {
 
     /// Gold filler tiles per side (symmetric)
     /// At 275px: (275 - 100 - 75) / 2 / 25 = 2 tiles per side (matches current fixed layout)
+    /// Uses ceil() to ensure tiles fully cover the space at all widths (Pattern 9)
     var goldFillerTilesPerSide: Int {
         let goldSpace = pixelSize.width - 100 - 75  // Fixed caps/ends (100) + center grey (75)
-        let perSide = goldSpace / 2
-        return max(0, Int(perSide / 25))
+        let perSide = goldSpace / 2.0
+        return max(0, Int(ceil(perSide / 25.0)))
     }
 
     /// Center grey tiles (fixed at 3 - expand gold fillers instead)
