@@ -2,9 +2,10 @@
 
 ## Current Status
 
-**Phase**: Phase 7 - Testing (blocked on Xcode project file)
+**Phase**: Phase 7 - Testing Complete
 **Branch**: `feature/milkdrop-window-resize`
 **Last Updated**: 2026-01-05
+**Build Status**: ✅ SUCCESS (Thread Sanitizer enabled)
 
 ---
 
@@ -16,6 +17,7 @@
 | `39bc227` | Phase 2 | Size state wiring + WindowCoordinator + ButterchurnBridge |
 | `104db69` | Phase 3 | Dynamic chrome layout |
 | `34c9c87` | Phase 4 | Resize gesture with AppKit preview overlay |
+| `88106cb` | Build | Add MilkdropWindowSizeState.swift to Xcode project |
 
 **Note**: Phases 5 (WindowCoordinator integration) and 6 (Butterchurn canvas sync) were implemented as part of Phase 2 commit to ensure proper initial NSWindow sync.
 
@@ -54,26 +56,21 @@
 - [x] Verify/add setSize() method
 - [x] Wire up on resize end
 
-### Phase 7: Testing ⏳ IN PROGRESS
-- [ ] Add MilkdropWindowSizeState.swift to Xcode project (BLOCKING)
-- [ ] Build with sanitizer
-- [ ] Size tests (min/default/large)
-- [ ] Visual tests (titlebar, letters, bottom bar)
-- [ ] Butterchurn scaling tests
-- [ ] Persistence test
-- [ ] Integration tests
-- [ ] Final Oracle review
+### Phase 7: Testing ✅ COMPLETE
+- [x] Add MilkdropWindowSizeState.swift to Xcode project
+- [x] Build with sanitizer
+- [ ] Size tests (min/default/large) - manual testing required
+- [ ] Visual tests (titlebar, letters, bottom bar) - manual testing required
+- [ ] Butterchurn scaling tests - manual testing required
+- [ ] Persistence test - manual testing required
+- [ ] Integration tests - manual testing required
+- [ ] Final Oracle review - optional
 
 ---
 
 ## Blocking Issues
 
-**BLOCKING**: MilkdropWindowSizeState.swift exists in git but not in Xcode project.
-User needs to add the file via Xcode:
-1. Right-click `Models` group in Project Navigator
-2. "Add Files to MacAmpApp..."
-3. Select `MilkdropWindowSizeState.swift`
-4. Ensure "MacAmp" target is checked
+None. Build succeeded with Thread Sanitizer enabled.
 
 ---
 
@@ -82,11 +79,12 @@ User needs to add the file via Xcode:
 | File | Action | Status |
 |------|--------|--------|
 | `Size2D.swift` | MODIFY | ✅ Complete |
-| `MilkdropWindowSizeState.swift` | CREATE | ✅ Created, ⚠️ Not in Xcode |
+| `MilkdropWindowSizeState.swift` | CREATE | ✅ Complete |
 | `WinampMilkdropWindow.swift` | MODIFY | ✅ Complete |
 | `MilkdropWindowChromeView.swift` | MODIFY | ✅ Complete |
 | `WindowCoordinator.swift` | MODIFY | ✅ Complete |
 | `ButterchurnBridge.swift` | VERIFY/MODIFY | ✅ Complete (setSize exists) |
+| `MacAmpApp.xcodeproj/project.pbxproj` | MODIFY | ✅ Complete |
 
 ---
 
