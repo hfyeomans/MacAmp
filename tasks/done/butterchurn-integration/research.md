@@ -812,13 +812,24 @@ presets = Object.assign({}, basePresets, extraPresets);
 
 **Final result:** 245 presets working in MacAmp
 
+**Oracle code review: 9.5/10** (improved from initial 7.5/10)
+
+**All improvements implemented:**
+1. ✅ try/catch isolation for extra pack loading (graceful degradation)
+2. ✅ Only use `getPresets()` or `.default` paths (no raw object fallback)
+3. ✅ Swift parses `extraPackLoaded`, `basePresetCount`, `extraPresetCount` from JS ready message
+4. ✅ Fixed `'en'` locale sorting for deterministic preset order across locales
+5. ✅ `dispose()` function cleans up AudioContext, nodes, and resize listener
+6. ✅ `ButterchurnBridge.cleanup()` calls JS `dispose()` on teardown
+
 **Key findings during implementation:**
 1. UMD bundles export directly as `butterchurnPresets` and `butterchurnPresetsExtra` - no aliasing needed
-2. Oracle code review (7.5/10) recommended try/catch isolation for extra pack loading
-3. Actual preset count is ~245 (98 base + 147 extra), not advertised 300
+2. npm advertised 300 presets but actual unique count is ~245 (98 base + 147 extra)
+3. Minimal pack exported as `window.minimal`, but Base/Extra export correctly as their global names
 
 **Files changed:**
 - `Butterchurn/butterchurnPresets.min.js` - Replaced with Base pack (638KB)
 - `Butterchurn/butterchurnPresetsExtra.min.js` - Added Extra pack (825KB)
-- `Butterchurn/bridge.js` - Merge logic with graceful degradation
+- `Butterchurn/bridge.js` - Merge logic, sorted keys, dispose() cleanup
 - `MacAmpApp/Views/Windows/ButterchurnWebView.swift` - Inject both scripts
+- `MacAmpApp/ViewModels/ButterchurnBridge.swift` - Parse extra pack status, call JS dispose()
