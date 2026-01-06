@@ -31,6 +31,14 @@ struct Size2D: Equatable, Codable, Hashable {
     /// Playlist window 2x width: 550×232 (double width for long filenames)
     static let playlist2xWidth = Size2D(width: 11, height: 4)  // 550×232
 
+    // MARK: - MILKDROP Window Presets
+
+    /// MILKDROP window minimum size: 275×116 (matches Main/EQ/Video/Playlist)
+    static let milkdropMinimum = Size2D(width: 0, height: 0)  // 275×116
+
+    /// MILKDROP window default size: 275×232 (current standard)
+    static let milkdropDefault = Size2D(width: 0, height: 4)  // 275×232
+
     // MARK: - Conversion Methods
 
     /// Convert segments to pixel dimensions for VIDEO window
@@ -45,6 +53,16 @@ struct Size2D: Equatable, Codable, Hashable {
     /// Convert segments to pixel dimensions for PLAYLIST window
     /// Formula: baseWidth + (segments × segmentSize)
     func toPlaylistPixels() -> CGSize {
+        CGSize(
+            width: 275 + width * 25,
+            height: 116 + height * 29
+        )
+    }
+
+    /// Convert segments to pixel dimensions for MILKDROP window
+    /// Formula: baseWidth + (segments × segmentSize)
+    /// Same as VIDEO/Playlist - base 275×116, segments 25×29
+    func toMilkdropPixels() -> CGSize {
         CGSize(
             width: 275 + width * 25,
             height: 116 + height * 29

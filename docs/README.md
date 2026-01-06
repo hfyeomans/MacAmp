@@ -1,7 +1,7 @@
 # MacAmp Documentation Guide
 
-**Version:** 3.2.0
-**Date:** 2026-01-05
+**Version:** 3.2.1
+**Date:** 2026-01-06
 **Purpose:** Master index and navigation guide for all MacAmp documentation
 **Total Documentation:** 14,695 lines across 18 current docs + 23 archived docs
 
@@ -217,8 +217,8 @@ Swap `Core` for `Concurrency` or `All` as needed.
 
 #### **[MILKDROP_WINDOW.md](MILKDROP_WINDOW.md)** ⭐
 - **Size**: 38KB, 1,113 lines
-- **Last Updated**: 2026-01-05
-- **Status**: ✅ PRODUCTION - Complete with Butterchurn visualization
+- **Last Updated**: 2026-01-06
+- **Status**: ✅ PRODUCTION - Complete with Butterchurn visualization and resize
 - **Purpose**: Milkdrop visualization window with Butterchurn.js integration
 - **Key Sections**:
   - Window specification and GEN.bmp sprite system
@@ -228,11 +228,16 @@ Swap `Core` for `Concurrency` or `All` as needed.
     - ButterchurnPresetManager (cycling, randomization, history)
     - Context menu with NSMenu closure-to-selector bridge
     - Track title interval display (Phase 7)
+  - **Window Resizing** (§12.3) - Segment-based resize with dynamic titlebar
+    - MilkdropWindowSizeState @Observable model
+    - Dynamic gold filler expansion for titlebars
+    - AppKit preview overlay during resize
+    - Butterchurn canvas sync on resize
   - Two-piece sprite system for titlebars and letters
   - Chrome rendering with active/inactive states
   - 5 Oracle A-grade bug fixes
-- **When to Read**: Implementing visualizations, WKWebView JavaScript integration, audio bridging
-- **Related Docs**: SPRITE_SYSTEM_COMPLETE.md, VIDEO_WINDOW.md, WINDOW_FOCUS_ARCHITECTURE.md
+- **When to Read**: Implementing visualizations, WKWebView JavaScript integration, audio bridging, window resize
+- **Related Docs**: SPRITE_SYSTEM_COMPLETE.md, VIDEO_WINDOW.md, WINDOW_FOCUS_ARCHITECTURE.md, PLAYLIST_WINDOW.md
 - **Quality**: ⭐⭐⭐⭐⭐ Authoritative
 
 #### **[WINDOW_FOCUS_ARCHITECTURE.md](WINDOW_FOCUS_ARCHITECTURE.md)** ⭐
@@ -648,9 +653,13 @@ Includes:
 | **Time display system** | MACAMP_ARCHITECTURE_GUIDE.md | §UI Controls & Features |
 | **Track information (I button)** | MACAMP_ARCHITECTURE_GUIDE.md | §UI Controls & Features |
 | **Custom window dragging** | CUSTOM_DRAG_FIX.md | Full document |
+| **Dynamic titlebar expansion** | MILKDROP_WINDOW.md | §12.3 Window Resizing |
 | **GEN.bmp sprites** | MILKDROP_WINDOW.md | §GEN.bmp Sprite Atlas |
 | **GenWindow** | MILKDROP_WINDOW.md | §GenWindow Implementation |
+| **goldFillerTilesPerSide** | MILKDROP_WINDOW.md | §12.3 Window Resizing |
 | **Milkdrop visualization** | MILKDROP_WINDOW.md | Full document |
+| **MILKDROP window resize** | MILKDROP_WINDOW.md | §12.3 Window Resizing |
+| **MilkdropWindowSizeState** | MILKDROP_WINDOW.md | §12.3 Window Resizing |
 | **Butterchurn integration** | MILKDROP_WINDOW.md | §9 Butterchurn Integration |
 | **WKUserScript injection** | MILKDROP_WINDOW.md | §9.3 WKUserScript Injection |
 | **Swift→JS audio bridge** | MILKDROP_WINDOW.md | §9.4 Audio Data Pipeline |
@@ -693,6 +702,7 @@ Includes:
 | **Playlist scroll slider** | PLAYLIST_WINDOW.md | §Scroll Slider |
 | **Playlist mini visualizer** | PLAYLIST_WINDOW.md | §Mini Visualizer |
 | **Segment-based resize** | PLAYLIST_WINDOW.md | §Segment-Based Resize System |
+| **Segment-based resize (MILKDROP)** | MILKDROP_WINDOW.md | §12.3 Window Resizing |
 | **25×29px segments** | PLAYLIST_WINDOW.md | §Window Specifications |
 | **WindowAccessor** | MACAMP_ARCHITECTURE_GUIDE.md | §NSWindow Bridge |
 | **WindowDragGesture** | CUSTOM_DRAG_FIX.md | §Problem Analysis |
@@ -748,6 +758,9 @@ Includes:
 | "How to stream audio to JavaScript?" | MILKDROP_WINDOW.md §9.4 Audio Data Pipeline |
 | "How to use NSMenu with closures?" | MILKDROP_WINDOW.md §9.6 Context Menu Implementation |
 | "How to manage timers in @Observable?" | MILKDROP_WINDOW.md §9.7 Bug 5 (Timer Thread Safety) |
+| "How does MILKDROP resize work?" | MILKDROP_WINDOW.md §12.3 Window Resizing |
+| "What is MilkdropWindowSizeState?" | MILKDROP_WINDOW.md §12.3 Window Resizing |
+| "How does dynamic titlebar expansion work?" | MILKDROP_WINDOW.md §12.3 Window Resizing (goldFillerTilesPerSide) |
 
 ---
 
@@ -971,6 +984,6 @@ For questions or corrections, the documentation was comprehensively reviewed on 
 
 ---
 
-**MacAmp Documentation v3.2.0 | Last Updated: 2026-01-05 | Status: Production Authoritative**
+**MacAmp Documentation v3.2.1 | Last Updated: 2026-01-06 | Status: Production Authoritative**
 
 *Master index for 14,695 lines of verified technical documentation (18 active docs)*

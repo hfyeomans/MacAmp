@@ -712,6 +712,35 @@ final class WindowCoordinator {
         AppLog.debug(.window, "[VIDEO RESIZE] After: Frame: \(video.frame), Origin: (\(video.frame.origin.x), \(video.frame.origin.y)), Size: \(video.frame.size)")
     }
 
+    // MARK: - MILKDROP Window Resize
+
+    /// Update MILKDROP window frame to match new size (top-left anchoring)
+    func updateMilkdropWindowSize(to pixelSize: CGSize) {
+        guard let milkdrop = milkdropWindow else { return }
+
+        var frame = milkdrop.frame
+        guard frame.size != pixelSize else { return }
+
+        // Use integer coordinates to prevent blurry rendering
+        let roundedSize = CGSize(
+            width: round(pixelSize.width),
+            height: round(pixelSize.height)
+        )
+
+        // Top-left anchoring: preserve top-left corner position
+        // macOS uses bottom-left origin, so calculate new origin from top-left
+        let topLeft = NSPoint(
+            x: round(frame.origin.x),
+            y: round(frame.origin.y + frame.size.height)
+        )
+        frame.size = roundedSize
+        frame.origin = NSPoint(x: topLeft.x, y: topLeft.y - roundedSize.height)
+
+        milkdrop.setFrame(frame, display: true)
+
+        AppLog.debug(.window, "[MILKDROP RESIZE] size: \(roundedSize), frame: \(frame)")
+    }
+
     // MARK: - Window Visibility Control (AppKit Bridge)
     // These methods encapsulate AppKit calls so SwiftUI views don't directly manipulate NSWindow objects
 

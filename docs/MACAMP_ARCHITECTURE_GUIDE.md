@@ -2821,6 +2821,7 @@ Butterchurn.js provides real-time audio visualization via WKWebView with Swift a
 │  WebGL Canvas (60 FPS)                                       │
 │    • Butterchurn visualizer instance                        │
 │    • 100+ presets from butterchurnPresets library           │
+│    • Hybrid WASM mode (see MILKDROP_WINDOW.md §9.10)        │
 └─────────────────────────────────────────────────────────────┘
           │                              ▲
           │ postMessage("ready")         │ audioData[1024]
