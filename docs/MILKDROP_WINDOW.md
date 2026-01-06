@@ -1,9 +1,9 @@
 # Milkdrop Window Implementation Guide
 
-**Document Version**: 2.0.0
-**Last Updated**: 2026-01-05
-**Implementation**: Days 7-8 of TASK 2 (milk-drop-video-support) + Butterchurn Integration
-**Status**: ✅ PRODUCTION - Complete with Butterchurn visualization
+**Document Version**: 2.1.0
+**Last Updated**: 2026-01-06
+**Implementation**: Days 7-8 of TASK 2 (milk-drop-video-support) + Butterchurn Integration + Window Resize
+**Status**: ✅ PRODUCTION - Complete with Butterchurn visualization and resizable window
 
 ---
 
@@ -23,6 +23,8 @@ The Milkdrop window provides audio visualization capabilities in MacAmp, faithfu
 - **Open/Close**: Ctrl+K keyboard shortcut (matches Winamp)
 - **Focus**: Click to focus, shows selected chrome state
 - **Position**: Persisted across sessions in UserDefaults
+- **Resize**: Drag bottom-right corner (25x29px segment grid)
+- **Size**: Persisted across sessions (minimum 275x116, default 275x232)
 - **Docking**: Magnetic snapping to other MacAmp windows and screen edges
 - **Context Menu** (right-click):
   - Current preset display (header)
@@ -47,6 +49,14 @@ The Milkdrop window provides audio visualization capabilities in MacAmp, faithfu
   - Phase 5: ButterchurnPresetManager (cycling, randomization, history)
   - Phase 6: Oracle A-grade fixes (error handling, thread safety)
   - Phase 7: Track title interval display feature
+- **Window Resize** (7 phases, branch `feature/milkdrop-window-resize`):
+  - Phase 1: Size2D presets + MilkdropWindowSizeState foundation
+  - Phase 2: Size state wiring + WindowCoordinator + ButterchurnBridge sync
+  - Phase 3: Dynamic chrome layout (7-section titlebar)
+  - Phase 4: Resize gesture with AppKit preview overlay
+  - Phase 5: WindowCoordinator.updateMilkdropWindowSize() (bundled in Phase 2)
+  - Phase 6: ButterchurnBridge.setSize() canvas sync (bundled in Phase 2)
+  - Phase 7: Titlebar tile gap fix using ceil() (Pattern 9)
 
 ---
 
@@ -54,21 +64,38 @@ The Milkdrop window provides audio visualization capabilities in MacAmp, faithfu
 
 ### 2.1 Dimensions
 
-```swift
-// Fixed size (matches Video/Playlist windows)
-static let windowSize = CGSize(width: 275, height: 232)
+The MILKDROP window is **resizable** using Winamp's 25x29px segment grid system:
 
-// Component dimensions
+```swift
+// Size constraints (segment-based resizing)
+static let minimumSize = CGSize(width: 275, height: 116)  // Size2D[0,0]
+static let defaultSize = CGSize(width: 275, height: 232)  // Size2D[0,4]
+
+// Segment dimensions (matches Video/Playlist)
+static let widthSegment: CGFloat = 25   // Horizontal resize increment
+static let heightSegment: CGFloat = 29  // Vertical resize increment
+
+// Component dimensions (fixed chrome)
 static let titlebarHeight: CGFloat = 20   // GEN titlebar sprites
 static let bottomBarHeight: CGFloat = 14  // GEN bottom bar sprites
 static let leftBorderWidth: CGFloat = 11  // GEN_MIDDLE_LEFT width
 static let rightBorderWidth: CGFloat = 8  // GEN_MIDDLE_RIGHT width
+static let totalChrome: CGFloat = 34      // titlebar + bottom bar
+static let totalBorders: CGFloat = 19     // left + right borders
 
-// Content area (for visualization)
-static let contentX: CGFloat = 11         // Left border width
-static let contentY: CGFloat = 20         // Titlebar height
-static let contentWidth: CGFloat = 256    // 275 - 11 - 8
-static let contentHeight: CGFloat = 198   // 232 - 20 - 14
+// Content area (dynamic based on window size)
+// contentWidth = pixelSize.width - 19 (borders)
+// contentHeight = pixelSize.height - 34 (chrome)
+
+// Example: At default 275x232
+static let contentWidth: CGFloat = 256    // 275 - 19
+static let contentHeight: CGFloat = 198   // 232 - 34
+```
+
+**Size Formula:**
+```
+pixelWidth = 275 + (widthSegments * 25)
+pixelHeight = 116 + (heightSegments * 29)
 ```
 
 ### 2.2 Sprite Source
@@ -200,22 +227,36 @@ All dependencies are injected via SwiftUI environment:
 
 ## 4. GEN.bmp Chrome Implementation
 
-### 4.1 Titlebar Composition (6 Sections)
+### 4.1 Titlebar Composition (7 Sections - Dynamic)
 
-The titlebar uses a sophisticated 6-section layout with both decorative and functional elements:
+The titlebar uses a sophisticated **7-section dynamic layout** that expands via gold filler tiles. This enables window resizing while maintaining visual consistency.
 
-```swift
-// Section layout for 275px width (11 columns of 25px each)
-Section 1: LEFT cap         (col 0)    - Close button
-Section 2: LEFT_RIGHT_FILL  (cols 1-2) - Gold decorative
-Section 3: LEFT_END         (col 3)    - Transition piece
-Section 4: CENTER_FILL      (cols 4-6) - Grey text area
-Section 5: RIGHT_END        (col 7)    - Transition piece
-Section 6: LEFT_RIGHT_FILL  (cols 8-9) - Gold decorative
-Section 7: RIGHT cap        (col 10)   - End piece
+**Static Layout (fixed 275px - legacy reference):**
+```
+Section 1: LEFT_CAP         (25px)  - Close button
+Section 2: LEFT_GOLD        (2×25)  - Gold decorative (dynamic)
+Section 3: LEFT_END         (25px)  - Transition piece
+Section 4: CENTER_FILL      (3×25)  - Grey text area (fixed)
+Section 5: RIGHT_END        (25px)  - Transition piece
+Section 6: RIGHT_GOLD       (2×25)  - Gold decorative (dynamic)
+Section 7: RIGHT_CAP        (25px)  - End piece
 ```
 
-Implementation in `MilkdropWindowChromeView.swift`:
+**Dynamic Layout (resizable - current implementation):**
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│ LEFT_CAP │ LEFT_GOLD(n) │ LEFT_END │ CENTER(3) │ RIGHT_END │ RIGHT_GOLD(n) │ RIGHT_CAP │
+│   25px   │    n×25px    │   25px   │   75px    │   25px    │     n×25px    │   25px    │
+└─────────────────────────────────────────────────────────────────────────┘
+
+Fixed: LEFT_CAP + LEFT_END + RIGHT_END + RIGHT_CAP = 100px
+Center: 3 grey tiles = 75px (fixed)
+Variable: LEFT_GOLD + RIGHT_GOLD expand symmetrically (n = goldFillerTilesPerSide)
+```
+
+**See Section 12.3 for complete dynamic titlebar implementation with code examples.**
+
+Legacy fixed-width implementation (275px only):
 
 ```swift
 ZStack(alignment: .topLeading) {
@@ -225,7 +266,7 @@ ZStack(alignment: .topLeading) {
     SimpleSpriteImage("GEN_TOP_LEFT\(suffix)", width: 25, height: 20)
         .position(x: 12.5, y: 10)
 
-    // Section 2: Left gold bar tiles
+    // Section 2: Left gold bar tiles (fixed at 2 for 275px)
     ForEach(0..<2, id: \.self) { i in
         SimpleSpriteImage("GEN_TOP_LEFT_RIGHT_FILL\(suffix)", width: 25, height: 20)
             .position(x: 25 + 12.5 + CGFloat(i) * 25, y: 10)
@@ -905,6 +946,48 @@ window.showTrackTitle = function(title) {
 };
 ```
 
+### 9.10 WASM Rendering Mode Configuration
+
+Butterchurn.js supports two rendering modes:
+
+**Hybrid Mode (Current Implementation):**
+```javascript
+// bridge.js - Current configuration (default behavior)
+visualizer = butterchurn.createVisualizer(audioContext, canvas, {
+    width: canvas.width,
+    height: canvas.height,
+    pixelRatio: window.devicePixelRatio || 1,
+    textureRatio: 1
+    // onlyUseWASM not specified - uses WASM with JavaScript fallback
+});
+```
+
+**WASM-Only Mode (Recommended for Security):**
+```javascript
+// bridge.js - Hardened security configuration
+visualizer = butterchurn.createVisualizer(audioContext, canvas, {
+    width: canvas.width,
+    height: canvas.height,
+    pixelRatio: window.devicePixelRatio || 1,
+    textureRatio: 1,
+    onlyUseWASM: true  // Force WASM-only rendering
+});
+```
+
+**Trade-offs:**
+
+| Mode | Security | Compatibility | Notes |
+|------|----------|---------------|-------|
+| Hybrid (default) | ⚠️ JS fallback less sandboxed | ✅ Works everywhere | Acceptable with WKWebView sandboxing |
+| WASM-only | ✅ Memory-sandboxed | ⚠️ Fails without WASM | Recommended for production |
+
+**Note:** MacAmp uses hybrid mode because:
+1. WKWebView already provides sandboxing
+2. All modern macOS (15+) support WASM
+3. Hybrid mode ensures graceful degradation
+
+**Implementation Note:** The `butterchurn.min.js` file includes WASM code built-in (no separate `.wasm` file required). The library auto-detects WASM support and uses it when available.
+
 ---
 
 ## 10. Persistence & Docking
@@ -1043,14 +1126,372 @@ Implement GEN letter extraction for titlebar text:
 - **Future:** Pixel-scanning for variable-width letters
 - **Future:** Support for preset names in titlebar
 
-### 12.3 Window Resizing
+### 12.3 Window Resizing - ✅ COMPLETE
 
-Current: Fixed 275×232 size
-Future: User-resizable with constraints
-- Minimum: 275×116 (matches Main/EQ)
-- Maximum: Screen size
-- Maintain aspect ratio option
-- Scale WebGL canvas accordingly
+**Implementation Status**: Complete (branch `feature/milkdrop-window-resize`)
+**Commits**: `655c5d3` through `099705f` (7 phases)
+
+The MILKDROP window now supports full segment-based resizing, matching the VIDEO window pattern.
+
+#### 12.3.1 Architecture Overview
+
+**Size Model (Size2D):**
+```swift
+// MacAmpApp/Models/Size2D.swift
+struct Size2D: Equatable, Codable, Hashable {
+    var width: Int   // Number of 25px segments beyond base width
+    var height: Int  // Number of 29px segments beyond base height
+
+    // MILKDROP presets
+    static let milkdropMinimum = Size2D(width: 0, height: 0)  // 275×116
+    static let milkdropDefault = Size2D(width: 0, height: 4)  // 275×232
+
+    /// Convert segments to pixel dimensions for MILKDROP window
+    func toMilkdropPixels() -> CGSize {
+        CGSize(
+            width: 275 + width * 25,
+            height: 116 + height * 29
+        )
+    }
+}
+```
+
+**Observable State (MilkdropWindowSizeState):**
+```swift
+// MacAmpApp/Models/MilkdropWindowSizeState.swift
+@MainActor
+@Observable
+final class MilkdropWindowSizeState {
+    /// Current size in segments (persisted via didSet)
+    var size: Size2D = .milkdropDefault {
+        didSet { saveSize() }
+    }
+
+    /// Pixel dimensions calculated from segments
+    var pixelSize: CGSize { size.toMilkdropPixels() }
+
+    /// Content dimensions (for Butterchurn canvas)
+    var contentWidth: CGFloat { pixelSize.width - 19 }   // Minus borders
+    var contentHeight: CGFloat { pixelSize.height - 34 } // Minus chrome
+    var contentSize: CGSize { CGSize(width: contentWidth, height: contentHeight) }
+
+    // Titlebar layout computed properties
+    var goldFillerTilesPerSide: Int    // Dynamic gold expansion
+    var centerSectionStartX: CGFloat   // After left gold + left end
+    var milkdropLettersCenterX: CGFloat // Center of 75px grey section
+}
+```
+
+#### 12.3.2 Specifications
+
+| Property | Value | Notes |
+|----------|-------|-------|
+| Minimum Size | 275×116 | Size2D[0,0], matches Main/EQ |
+| Default Size | 275×232 | Size2D[0,4], 4 height segments |
+| Width Segment | 25px | Horizontal resize increment |
+| Height Segment | 29px | Vertical resize increment |
+| Titlebar Height | 20px | Fixed chrome |
+| Bottom Bar Height | 14px | Fixed chrome |
+| Left Border | 11px | GEN_MIDDLE_LEFT |
+| Right Border | 8px | GEN_MIDDLE_RIGHT |
+
+#### 12.3.3 Dynamic Chrome System (7-Section Titlebar)
+
+The titlebar dynamically expands via gold filler tiles:
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│ LEFT_CAP │ LEFT_GOLD(n) │ LEFT_END │ CENTER(3) │ RIGHT_END │ RIGHT_GOLD(n) │ RIGHT_CAP │
+│   25px   │    n×25px    │   25px   │   75px    │   25px    │     n×25px    │   25px    │
+└─────────────────────────────────────────────────────────────────────────┘
+
+Fixed sections: LEFT_CAP(25) + LEFT_END(25) + RIGHT_END(25) + RIGHT_CAP(25) = 100px
+Center section: 3 grey tiles = 75px (fixed)
+Variable sections: LEFT_GOLD + RIGHT_GOLD expand symmetrically
+```
+
+**Implementation in MilkdropWindowChromeView.swift:**
+
+```swift
+@ViewBuilder
+private func buildDynamicTitlebar() -> some View {
+    let suffix = isWindowActive ? "_SELECTED" : ""
+    let goldTiles = sizeState.goldFillerTilesPerSide
+    let centerStart = sizeState.centerSectionStartX
+
+    ZStack(alignment: .topLeading) {
+        // Section 1: Left cap (25px)
+        SimpleSpriteImage("GEN_TOP_LEFT\(suffix)", width: 25, height: 20)
+            .position(x: 12.5, y: 10)
+
+        // Section 2: Left gold bar tiles (dynamic count)
+        ForEach(0..<goldTiles, id: \.self) { i in
+            SimpleSpriteImage("GEN_TOP_LEFT_RIGHT_FILL\(suffix)", width: 25, height: 20)
+                .position(x: 25 + 12.5 + CGFloat(i) * 25, y: 10)
+        }
+
+        // Section 3: Left end (25px)
+        SimpleSpriteImage("GEN_TOP_LEFT_END\(suffix)", width: 25, height: 20)
+            .position(x: centerStart - 12.5, y: 10)
+
+        // Section 4: Center grey tiles (fixed 3 tiles = 75px)
+        ForEach(0..<sizeState.centerGreyTileCount, id: \.self) { i in
+            SimpleSpriteImage("GEN_TOP_CENTER_FILL\(suffix)", width: 25, height: 20)
+                .position(x: centerStart + 12.5 + CGFloat(i) * 25, y: 10)
+        }
+
+        // Section 5: Right end (25px)
+        SimpleSpriteImage("GEN_TOP_RIGHT_END\(suffix)", width: 25, height: 20)
+            .position(x: centerStart + 75 + 12.5, y: 10)
+
+        // Section 6: Right gold bar tiles (symmetric with left)
+        ForEach(0..<goldTiles, id: \.self) { i in
+            SimpleSpriteImage("GEN_TOP_LEFT_RIGHT_FILL\(suffix)", width: 25, height: 20)
+                .position(x: centerStart + 75 + 25 + 12.5 + CGFloat(i) * 25, y: 10)
+        }
+
+        // Section 7: Right cap with close button (25px)
+        SimpleSpriteImage("GEN_TOP_RIGHT\(suffix)", width: 25, height: 20)
+            .position(x: pixelSize.width - 12.5, y: 10)
+
+        // MILKDROP HD letters - centered in 75px center section
+        milkdropLetters
+            .position(x: sizeState.milkdropLettersCenterX, y: 8)
+    }
+}
+```
+
+#### 12.3.4 Computed Properties
+
+**Gold Filler Tiles (with ceil() pattern):**
+```swift
+// MilkdropWindowSizeState.swift
+/// Gold filler tiles per side (symmetric)
+/// Uses ceil() to ensure tiles fully cover the space at all widths (Pattern 9)
+var goldFillerTilesPerSide: Int {
+    let goldSpace = pixelSize.width - 100 - 75  // Fixed caps/ends (100) + center grey (75)
+    let perSide = goldSpace / 2.0
+    return max(0, Int(ceil(perSide / 25.0)))
+}
+
+/// X position for center section start (after LEFT_CAP + LEFT_GOLD + LEFT_END)
+var centerSectionStartX: CGFloat {
+    25 + CGFloat(goldFillerTilesPerSide) * 25 + 25
+}
+
+/// X position for MILKDROP HD letters (centered in 75px center section)
+var milkdropLettersCenterX: CGFloat {
+    centerSectionStartX + 37.5  // Center of 75px center section
+}
+```
+
+**CRITICAL: ceil() Pattern (Pattern 9 from BUILDING_RETRO_MACOS_APPS_SKILL.md)**
+
+The `ceil()` function ensures full tile coverage at all widths:
+
+| Width | goldSpace | perSide | floor() | ceil() | Result |
+|-------|-----------|---------|---------|--------|--------|
+| 275px | 100px | 50px | 2 tiles | 2 tiles | OK |
+| 300px | 125px | 62.5px | 2 tiles | 3 tiles | ceil() prevents gap |
+| 325px | 150px | 75px | 3 tiles | 3 tiles | OK |
+
+Without `ceil()`, widths like 300px would have a visible gap between the gold tiles and the center section.
+
+#### 12.3.5 Resize Gesture
+
+**DragGesture with Quantization:**
+```swift
+// MilkdropWindowChromeView.swift
+@ViewBuilder
+private func buildResizeHandle() -> some View {
+    Rectangle()
+        .fill(Color.clear)
+        .frame(width: 20, height: 20)
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { value in
+                    // Capture start size on first drag tick
+                    if dragStartSize == nil {
+                        dragStartSize = sizeState.size
+                        isDragging = true
+                        WindowSnapManager.shared.beginProgrammaticAdjustment()
+                    }
+
+                    guard let baseSize = dragStartSize else { return }
+
+                    // Calculate quantized size from drag delta (25px width, 29px height)
+                    let widthDelta = Int(round(value.translation.width / 25))
+                    let heightDelta = Int(round(value.translation.height / 29))
+
+                    let candidate = Size2D(
+                        width: max(0, baseSize.width + widthDelta),
+                        height: max(0, baseSize.height + heightDelta)
+                    )
+
+                    // Show AppKit preview overlay
+                    if let coordinator = WindowCoordinator.shared,
+                       let window = coordinator.milkdropWindow {
+                        resizePreview.show(in: window, previewSize: candidate.toMilkdropPixels())
+                    }
+                }
+                .onEnded { value in
+                    guard let baseSize = dragStartSize else { return }
+
+                    // Calculate final quantized size
+                    let widthDelta = Int(round(value.translation.width / 25))
+                    let heightDelta = Int(round(value.translation.height / 29))
+
+                    let finalSize = Size2D(
+                        width: max(0, baseSize.width + widthDelta),
+                        height: max(0, baseSize.height + heightDelta)
+                    )
+
+                    // Commit size change (triggers persistence via didSet)
+                    sizeState.size = finalSize
+
+                    // Sync NSWindow with top-left anchoring
+                    if let coordinator = WindowCoordinator.shared {
+                        coordinator.updateMilkdropWindowSize(to: sizeState.pixelSize)
+                    }
+
+                    // Hide preview overlay
+                    resizePreview.hide()
+
+                    // Notify Butterchurn of canvas resize
+                    bridge.setSize(width: contentSize.width, height: contentSize.height)
+
+                    // Cleanup
+                    isDragging = false
+                    dragStartSize = nil
+                    WindowSnapManager.shared.endProgrammaticAdjustment()
+                }
+        )
+        .position(x: pixelSize.width - 10, y: pixelSize.height - 10)
+}
+```
+
+**AppKit Preview Overlay:**
+
+During drag, a translucent overlay shows the target size:
+```swift
+// WindowResizePreviewOverlay (shared with VIDEO window)
+resizePreview.show(in: window, previewSize: candidate.toMilkdropPixels())
+resizePreview.hide()
+```
+
+#### 12.3.6 Integration Points
+
+**WindowCoordinator.updateMilkdropWindowSize():**
+```swift
+// MacAmpApp/ViewModels/WindowCoordinator.swift
+/// Update MILKDROP window frame to match new size (top-left anchoring)
+func updateMilkdropWindowSize(to pixelSize: CGSize) {
+    guard let milkdrop = milkdropWindow else { return }
+
+    var frame = milkdrop.frame
+    guard frame.size != pixelSize else { return }
+
+    // Use integer coordinates to prevent blurry rendering
+    let roundedSize = CGSize(
+        width: round(pixelSize.width),
+        height: round(pixelSize.height)
+    )
+
+    // Top-left anchoring: preserve top-left corner position
+    // macOS uses bottom-left origin, so calculate new origin from top-left
+    let topLeft = NSPoint(
+        x: round(frame.origin.x),
+        y: round(frame.origin.y + frame.size.height)
+    )
+    frame.size = roundedSize
+    frame.origin = NSPoint(x: topLeft.x, y: topLeft.y - roundedSize.height)
+
+    milkdrop.setFrame(frame, display: true)
+}
+```
+
+**ButterchurnBridge.setSize():**
+```swift
+// MacAmpApp/ViewModels/ButterchurnBridge.swift
+/// Resize the Butterchurn canvas to match window content area
+func setSize(width: CGFloat, height: CGFloat) {
+    guard isReady, let webView = webView else { return }
+    let js = "window.macampButterchurn?.setSize(\(Int(width)), \(Int(height)));"
+    webView.evaluateJavaScript(js, completionHandler: nil)
+}
+```
+
+#### 12.3.7 Persistence
+
+**UserDefaults with didSet Pattern:**
+```swift
+// MilkdropWindowSizeState.swift
+private static let sizeKey = "milkdropWindowSize"
+
+private func saveSize() {
+    let data = ["width": size.width, "height": size.height]
+    UserDefaults.standard.set(data, forKey: Self.sizeKey)
+}
+
+func loadSize() {
+    guard let data = UserDefaults.standard.dictionary(forKey: Self.sizeKey),
+          let width = data["width"] as? Int,
+          let height = data["height"] as? Int else {
+        size = .milkdropDefault
+        return
+    }
+    size = Size2D(width: width, height: height).clamped(min: .milkdropMinimum)
+}
+```
+
+#### 12.3.8 Bug Fix: Titlebar Tile Gap (commit `099705f`)
+
+**Problem:** At certain window widths (e.g., 300px), a visible gap appeared between the gold tiles and center section.
+
+**Root Cause:** The `goldFillerTilesPerSide` calculation used floor division:
+```swift
+// WRONG: Floor division leaves gaps
+Int(perSide / 25)  // At 62.5px, returns 2 tiles (gap!)
+```
+
+**Solution:** Apply Pattern 9 from BUILDING_RETRO_MACOS_APPS_SKILL.md - use `ceil()`:
+```swift
+// CORRECT: Ceiling ensures full coverage
+Int(ceil(perSide / 25.0))  // At 62.5px, returns 3 tiles (full coverage)
+```
+
+**Visual Example:**
+```
+Width 300px, goldSpace = 125px, perSide = 62.5px
+
+With floor (Int(62.5/25) = 2):
+[CAP][GOLD][GOLD][END] ← 100px   [CENTER 75px]   [END][GOLD][GOLD][CAP] ← 100px
+                         ↑ GAP! (275px total, 25px missing)
+
+With ceil (Int(ceil(62.5/25)) = 3):
+[CAP][GOLD][GOLD][GOLD][END][CENTER 75px][END][GOLD][GOLD][GOLD][CAP]
+                         ↑ Full coverage (tiles overlap slightly, no gap)
+```
+
+#### 12.3.9 Implementation Summary
+
+| Phase | Commit | Description |
+|-------|--------|-------------|
+| 1 | `655c5d3` | Foundation: Size2D presets + MilkdropWindowSizeState |
+| 2 | `39bc227` | Size state wiring + WindowCoordinator + ButterchurnBridge |
+| 3 | `104db69` | Dynamic chrome layout (7-section titlebar) |
+| 4 | `34c9c87` | Resize gesture with AppKit preview overlay |
+| 5 | (bundled) | WindowCoordinator.updateMilkdropWindowSize() |
+| 6 | (bundled) | ButterchurnBridge.setSize() initial sync |
+| 7 | `099705f` | Fix titlebar tile gap using ceil() (Pattern 9) |
+
+**Files Changed:**
+- `MacAmpApp/Models/Size2D.swift` - MILKDROP presets
+- `MacAmpApp/Models/MilkdropWindowSizeState.swift` - NEW: Observable size state
+- `MacAmpApp/Views/Windows/MilkdropWindowChromeView.swift` - Dynamic layout + resize gesture
+- `MacAmpApp/ViewModels/WindowCoordinator.swift` - updateMilkdropWindowSize()
+- `MacAmpApp/ViewModels/ButterchurnBridge.swift` - setSize() canvas sync
 
 ### 12.4 Advanced Audio Analysis
 
@@ -1074,8 +1515,14 @@ MacAmpApp/Windows/WinampMilkdropWindowController.swift
 // Main View
 MacAmpApp/Views/WinampMilkdropWindow.swift
 
-// Chrome Implementation
+// Chrome Implementation (dynamic titlebar + resize gesture)
 MacAmpApp/Views/Windows/MilkdropWindowChromeView.swift
+
+// Size State (quantized segments + titlebar computed properties)
+MacAmpApp/Models/MilkdropWindowSizeState.swift
+
+// Size Model (MILKDROP presets + pixel conversion)
+MacAmpApp/Models/Size2D.swift
 
 // Sprite Definitions
 MacAmpApp/Models/SkinSprites.swift (GEN section)
@@ -1085,6 +1532,12 @@ MacAmpApp/Models/WindowFocusState.swift
 
 // Settings Persistence
 MacAmpApp/Models/AppSettings.swift
+
+// Window Coordination (updateMilkdropWindowSize)
+MacAmpApp/ViewModels/WindowCoordinator.swift
+
+// Butterchurn Canvas Resize (setSize)
+MacAmpApp/ViewModels/ButterchurnBridge.swift
 ```
 
 ### Research & Documentation
@@ -1126,7 +1579,7 @@ The Milkdrop window implementation demonstrates several key MacAmp patterns:
 
 1. **Pixel-perfect sprite rendering** using GEN.bmp chrome
 2. **Two-piece sprite discovery** for BOTTOM_FILL and letter components
-3. **Six-section titlebar** composition for visual variety
+3. **Seven-section dynamic titlebar** with gold filler expansion
 4. **Focus state integration** with _SELECTED sprite switching
 5. **NSWindowController pattern** with environment injection
 6. **WKUserScript injection** for JavaScript library loading
@@ -1134,28 +1587,37 @@ The Milkdrop window implementation demonstrates several key MacAmp patterns:
 8. **Preset management** with cycling, randomization, and history
 9. **Context menu** using NSMenu with closure-to-selector bridge
 10. **Track title overlay** with configurable interval display
+11. **WASM rendering mode** - Hybrid mode with security option (`onlyUseWASM: true`)
+12. **Segment-based resizing** with Size2D quantized model
+13. **ceil() pattern** for titlebar tile coverage (Pattern 9)
 
-The Milkdrop window is complete with Butterchurn.js visualization, providing real-time audio-reactive psychedelic visuals. The implementation follows MacAmp's three-layer architecture, maintains Winamp compatibility, and integrates seamlessly with the existing window management system.
+The Milkdrop window is complete with Butterchurn.js visualization and full resize support, providing real-time audio-reactive psychedelic visuals. The implementation follows MacAmp's three-layer architecture, maintains Winamp compatibility, and integrates seamlessly with the existing window management system.
 
 ### Implementation Metrics
 
-- **7 Phases** of Butterchurn integration
-- **5 Oracle A-grade bug fixes** for production stability
+- **7 Phases** of Butterchurn integration + **7 Phases** of resize implementation
+- **6 Oracle A-grade bug fixes** for production stability (including ceil() pattern)
 - **30 FPS** Swift→JS audio data pipeline
 - **60 FPS** WebGL render loop
 - **100+ presets** from butterchurnPresets library
-- **4 persisted settings** (randomize, cycling, cycle interval, title interval)
+- **5 persisted settings** (randomize, cycling, cycle interval, title interval, window size)
+- **Hybrid WASM mode** (WASM with JS fallback, `onlyUseWASM: true` available)
+- **275×116** minimum size to **unlimited** maximum (segment-based)
+- **25×29px** resize segments matching Winamp behavior
 
 ### Key Files
 
 | File | Purpose |
 |------|---------|
-| `ButterchurnBridge.swift` | Swift↔JS communication bridge |
+| `ButterchurnBridge.swift` | Swift→JS communication bridge + canvas resize |
 | `ButterchurnPresetManager.swift` | Preset cycling, history, persistence |
 | `ButterchurnWebView.swift` | WKWebView wrapper with script injection |
 | `WinampMilkdropWindow.swift` | Main view with context menu |
 | `WinampMilkdropWindowController.swift` | NSWindowController owning bridge + manager |
-| `MilkdropWindowChromeView.swift` | GEN.bmp chrome rendering |
+| `MilkdropWindowChromeView.swift` | GEN.bmp chrome + dynamic titlebar + resize gesture |
+| `MilkdropWindowSizeState.swift` | Observable size state with titlebar computed properties |
+| `Size2D.swift` | Quantized segment model with MILKDROP presets |
+| `WindowCoordinator.swift` | updateMilkdropWindowSize() for NSWindow sync |
 
 ---
 
