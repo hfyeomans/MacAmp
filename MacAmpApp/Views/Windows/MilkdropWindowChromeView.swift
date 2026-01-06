@@ -10,7 +10,15 @@ struct MilkdropWindowChromeView<Content: View>: View {
     let sizeState: MilkdropWindowSizeState
     @ViewBuilder let content: Content
 
+    // MARK: - Resize Gesture State
+    @State private var dragStartSize: Size2D?
+    @State private var isDragging: Bool = false
+    @State private var resizePreview = WindowResizePreviewOverlay()
+
+    // MARK: - Environment
     @Environment(WindowFocusState.self) private var windowFocusState
+    @Environment(ButterchurnBridge.self) private var bridge
+
     private var isWindowActive: Bool { windowFocusState.isMilkdropKey }
 
     /// Pixel dimensions from sizeState
@@ -38,6 +46,9 @@ struct MilkdropWindowChromeView<Content: View>: View {
 
             // Dynamic bottom bar
             buildDynamicBottomBar()
+
+            // Resize handle (bottom-right corner)
+            buildResizeHandle()
         }
         .frame(width: pixelSize.width, height: pixelSize.height, alignment: .topLeading)
         .fixedSize()
@@ -136,6 +147,75 @@ struct MilkdropWindowChromeView<Content: View>: View {
         // RIGHT section (125px fixed) - contains resize corner
         SimpleSpriteImage("GEN_BOTTOM_RIGHT", width: 125, height: 14)
             .position(x: pixelSize.width - 62.5, y: bottomBarY)
+    }
+
+    // MARK: - Resize Handle
+
+    @ViewBuilder
+    private func buildResizeHandle() -> some View {
+        Rectangle()
+            .fill(Color.clear)
+            .frame(width: 20, height: 20)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        // Capture start size on first drag tick
+                        if dragStartSize == nil {
+                            dragStartSize = sizeState.size
+                            isDragging = true
+                            WindowSnapManager.shared.beginProgrammaticAdjustment()
+                        }
+
+                        guard let baseSize = dragStartSize else { return }
+
+                        // Calculate quantized size from drag delta (25px width, 29px height segments)
+                        let widthDelta = Int(round(value.translation.width / 25))
+                        let heightDelta = Int(round(value.translation.height / 29))
+
+                        let candidate = Size2D(
+                            width: max(0, baseSize.width + widthDelta),
+                            height: max(0, baseSize.height + heightDelta)
+                        )
+
+                        // Show AppKit preview overlay
+                        if let coordinator = WindowCoordinator.shared,
+                           let window = coordinator.milkdropWindow {
+                            resizePreview.show(in: window, previewSize: candidate.toMilkdropPixels())
+                        }
+                    }
+                    .onEnded { value in
+                        guard let baseSize = dragStartSize else { return }
+
+                        let widthDelta = Int(round(value.translation.width / 25))
+                        let heightDelta = Int(round(value.translation.height / 29))
+
+                        let finalSize = Size2D(
+                            width: max(0, baseSize.width + widthDelta),
+                            height: max(0, baseSize.height + heightDelta)
+                        )
+
+                        // Commit size change
+                        sizeState.size = finalSize
+
+                        // Sync NSWindow with top-left anchoring
+                        if let coordinator = WindowCoordinator.shared {
+                            coordinator.updateMilkdropWindowSize(to: sizeState.pixelSize)
+                        }
+
+                        // Hide preview
+                        resizePreview.hide()
+
+                        // Notify Butterchurn of canvas resize
+                        bridge.setSize(width: contentSize.width, height: contentSize.height)
+
+                        // Cleanup
+                        isDragging = false
+                        dragStartSize = nil
+                        WindowSnapManager.shared.endProgrammaticAdjustment()
+                    }
+            )
+            .position(x: pixelSize.width - 10, y: pixelSize.height - 10)
     }
 
     /// MILKDROP HD letters HStack - renders text as two-piece sprites with space
