@@ -1594,6 +1594,301 @@ When implementing similar multi-window features:
 
 ---
 
+## Butterchurn/WKWebView Integration Patterns (January 2026)
+
+**Lesson from:** Butterchurn.js visualization integration in Milkdrop window
+**Oracle Grade:** A (7 phases, 5 critical bug fixes)
+**Total Implementation:** 7 phases over multiple sessions
+**Files Created:** 6 new files, 5 modified
+
+### Pattern 1: WKUserScript Injection for JavaScript Libraries
+
+**Problem:** WKWebView's `<script src="...">` tags fail silently for local bundle files.
+
+**Root Cause:** WKWebView security restrictions prevent file:// URL script loading even for bundled resources.
+
+**Solution:** Load JavaScript as strings and inject via WKUserScript:
+
+```swift
+// ButterchurnWebView.swift - Inject JS libraries at document start
+private func createUserScripts() -> [WKUserScript] {
+    var scripts: [WKUserScript] = []
+
+    // Load library from bundle and inject BEFORE DOM parsing
+    if let url = Bundle.main.url(forResource: "butterchurn.min", withExtension: "js"),
+       let content = try? String(contentsOf: url) {
+        let script = WKUserScript(
+            source: content,
+            injectionTime: .atDocumentStart,  // Before any HTML parsed
+            forMainFrameOnly: true
+        )
+        scripts.append(script)
+    }
+
+    // Bridge script goes AFTER DOM ready
+    if let url = Bundle.main.url(forResource: "bridge", withExtension: "js"),
+       let content = try? String(contentsOf: url) {
+        let script = WKUserScript(
+            source: content,
+            injectionTime: .atDocumentEnd,  // After DOM ready
+            forMainFrameOnly: true
+        )
+        scripts.append(script)
+    }
+
+    return scripts
+}
+```
+
+**Key Insight:**
+- Libraries: `.atDocumentStart` (available before any code runs)
+- Bridge/App code: `.atDocumentEnd` (DOM elements exist)
+- Order matters: dependencies first, then consumers
+
+---
+
+### Pattern 2: Swift→JavaScript Audio Bridge
+
+**Problem:** Need to stream 1024 audio samples at 30 FPS from Swift to JavaScript.
+
+**Solution:** Timer + callAsyncJavaScript for reliable delivery:
+
+```swift
+// ButterchurnBridge.swift
+private func startAudioTimer() {
+    audioTimer = Timer.scheduledTimer(withTimeInterval: 1.0/30.0, repeats: true) { [weak self] _ in
+        Task { @MainActor in  // CRITICAL: MainActor for thread safety
+            self?.sendAudioData()
+        }
+    }
+}
+
+private func sendAudioData() {
+    guard isReady, let audioPlayer = audioPlayer else { return }  // Guard ready state
+
+    let samples = audioPlayer.getVisualizationSamples(count: 1024)
+    let jsArray = samples.map { String(format: "%.4f", $0) }.joined(separator: ",")
+
+    // callAsyncJavaScript is more reliable than evaluateJavaScript
+    webView?.callAsyncJavaScript(
+        "if (window.receiveAudioData) window.receiveAudioData([\(jsArray)]);",
+        in: nil, in: .page
+    ) { _ in }
+}
+```
+
+**JavaScript Receiver:**
+```javascript
+// bridge.js
+let audioData = new Float32Array(1024);
+
+window.receiveAudioData = function(data) {
+    audioData.set(data);
+};
+
+function render() {
+    if (visualizer && isPlaying) {
+        visualizer.render(audioData);
+    }
+    requestAnimationFrame(render);
+}
+```
+
+**Key Insight:** Use `callAsyncJavaScript` over `evaluateJavaScript` for:
+- Better timing guarantees
+- No race conditions with page load
+- Proper error handling via completion
+
+---
+
+### Pattern 3: NSMenu Closure-to-Selector Bridge
+
+**Problem:** SwiftUI context menus don't work in borderless windows with WKWebView content.
+
+**Solution:** Use NSMenu with a target class to bridge Swift closures:
+
+```swift
+// Menu target class bridges closures to Objective-C selectors
+@MainActor
+private class MilkdropMenuTarget: NSObject {
+    let action: () -> Void
+    init(action: @escaping () -> Void) { self.action = action }
+    @objc func execute() { action() }
+}
+
+// Create menu items with closures
+private func createMenuItem(
+    title: String,
+    keyEquivalent: String = "",
+    action: @escaping () -> Void
+) -> NSMenuItem {
+    let item = NSMenuItem(title: title, action: nil, keyEquivalent: keyEquivalent)
+    let target = MilkdropMenuTarget(action: action)
+    item.target = target
+    item.action = #selector(MilkdropMenuTarget.execute)
+    item.representedObject = target  // CRITICAL: Keep target alive!
+    return item
+}
+
+// Keep strong reference to menu during display
+@State private var activeContextMenu: NSMenu?
+
+private func showContextMenu(at location: NSPoint) {
+    let menu = NSMenu()
+    activeContextMenu = menu  // Prevent deallocation!
+
+    menu.addItem(createMenuItem(title: "Next", action: {
+        [weak presetManager] in presetManager?.nextPreset()
+    }))
+
+    menu.popUp(positioning: nil, at: location, in: nil)
+}
+```
+
+**Key Insight:**
+- Store menu in @State to prevent deallocation during display
+- Use representedObject to keep action target alive
+- Always use [weak reference] in action closures
+
+---
+
+### Pattern 4: Observable State with Timer Management
+
+**Problem:** Preset cycling timers need proper lifecycle management with @Observable.
+
+**Solution:** Use @ObservationIgnored for timers, cleanup on state change:
+
+```swift
+@MainActor
+@Observable
+final class ButterchurnPresetManager {
+    // Observable state (triggers view updates)
+    var isRandomize: Bool = true {
+        didSet { appSettings?.butterchurnRandomize = isRandomize }
+    }
+    var isCycling: Bool = true {
+        didSet {
+            appSettings?.butterchurnCycling = isCycling
+            if isCycling { startCycling() } else { stopCycling() }
+        }
+    }
+    var cycleInterval: TimeInterval = 15.0 {
+        didSet {
+            appSettings?.butterchurnCycleInterval = cycleInterval
+            if isCycling { restartCycling() }
+        }
+    }
+
+    // Non-observable implementation details
+    @ObservationIgnored private var cycleTimer: Timer?
+    @ObservationIgnored private var presetHistory: [Int] = []
+    @ObservationIgnored private weak var bridge: ButterchurnBridge?
+
+    func startCycling() {
+        stopCycling()  // Always stop before starting
+        cycleTimer = Timer.scheduledTimer(withTimeInterval: cycleInterval, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.nextPreset() }
+        }
+    }
+
+    func cleanup() {
+        cycleTimer?.invalidate()
+        cycleTimer = nil
+    }
+}
+```
+
+**Key Insight:**
+- Use @ObservationIgnored for timers, caches, implementation details
+- Always invalidate old timer before creating new one
+- Wrap timer callbacks in `Task { @MainActor in }` for thread safety
+
+---
+
+### Pattern 5: WKNavigationDelegate Lifecycle
+
+**Problem:** Need to know when WKWebView page and scripts are fully loaded.
+
+**Solution:** Implement WKNavigationDelegate for lifecycle events:
+
+```swift
+extension ButterchurnWebView.Coordinator: WKNavigationDelegate {
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        // Page loaded, all WKUserScripts injected
+        // Now safe to call JavaScript functions
+    }
+
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        parent.bridge.markLoadFailed(error.localizedDescription)
+    }
+
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        parent.bridge.markLoadFailed(error.localizedDescription)
+    }
+}
+```
+
+**Key Insight:** Handle both `didFail` and `didFailProvisionalNavigation` - they cover different failure modes.
+
+---
+
+### Pattern 6: Right-Click Capture Overlay
+
+**Problem:** Need to capture right-clicks on WKWebView content for context menu.
+
+**Solution:** Transparent NSView overlay that intercepts only right-clicks:
+
+```swift
+struct RightClickCaptureView: NSViewRepresentable {
+    let onRightClick: (NSPoint) -> Void
+
+    class RightClickNSView: NSView {
+        var onRightClick: ((NSPoint) -> Void)?
+
+        override func rightMouseDown(with event: NSEvent) {
+            let screenPoint = event.locationInWindow
+            if let window = self.window {
+                let globalPoint = window.convertPoint(toScreen: screenPoint)
+                onRightClick?(globalPoint)
+            }
+        }
+
+        override func hitTest(_ point: NSPoint) -> NSView? {
+            // Only handle right-click, pass through other events
+            if NSEvent.pressedMouseButtons == 2 {
+                return super.hitTest(point)
+            }
+            return nil  // Allow events to pass through
+        }
+    }
+}
+```
+
+**Key Insight:** Override `hitTest` to selectively intercept events while letting others pass through.
+
+---
+
+### Butterchurn Integration Checklist
+
+When implementing similar WKWebView JavaScript integrations:
+
+- [ ] **Use WKUserScript** for JS library loading (not `<script src>` tags)
+- [ ] **Inject libraries at .atDocumentStart** before DOM parsing
+- [ ] **Inject bridge/app code at .atDocumentEnd** after DOM ready
+- [ ] **Use callAsyncJavaScript** over evaluateJavaScript for reliability
+- [ ] **Guard isReady state** before any JavaScript calls
+- [ ] **Task { @MainActor in }** in ALL timer callbacks
+- [ ] **Keep NSMenu in @State** to prevent deallocation
+- [ ] **Store target in representedObject** for menu item actions
+- [ ] **@ObservationIgnored** for timers and implementation details
+- [ ] **Implement WKNavigationDelegate** for lifecycle events
+- [ ] **Handle both didFail variants** (navigation and provisional)
+- [ ] **Weak references** in timer/callback closures
+- [ ] **Cleanup timers** in didSet and explicit cleanup()
+- [ ] **Oracle Grade A** validation before merge
+
+---
+
 ## Modern Swift Patterns & Observable Migration
 
 ### Migrating from ObservableObject to @Observable (macOS 15+)
@@ -3527,6 +3822,9 @@ ls -la ~/Library/Developer/Xcode/DerivedData/MacAmpApp-*/Build/Products/Debug/Ma
 11. **Segment-Based Resize** - Quantize window resizing to 25×29px increments with AppKit preview overlay
 12. **Cross-Window State** - Migrate local @State to AppSettings for features requiring cross-window observation
 13. **NSWindow/SwiftUI Sync** - Use onAppear/onChange hooks to keep NSWindow frame synchronized with SwiftUI state
+14. **WKUserScript Injection** - Load JavaScript libraries via WKUserScript (not `<script>` tags) for WKWebView
+15. **Swift→JS Audio Bridge** - Use callAsyncJavaScript at 30 FPS with Timer + MainActor for reliable delivery
+16. **NSMenu Closure Bridge** - Store menu in @State, use representedObject to keep target classes alive
 
 ### This Skill Enables You To
 
@@ -3544,6 +3842,9 @@ ls -la ~/Library/Developer/Xcode/DerivedData/MacAmpApp-*/Build/Products/Debug/Ma
 - ✅ Build scroll sliders with proper bridge layer architecture
 - ✅ Coordinate cross-window state observation for multi-window features
 - ✅ Synchronize NSWindow and SwiftUI state with proper hooks
+- ✅ Integrate JavaScript visualization libraries via WKWebView with audio bridge
+- ✅ Build context menus with NSMenu closure-to-selector bridge pattern
+- ✅ Manage timer lifecycles in @Observable classes with proper cleanup
 
 ### Next Project Improvements
 
@@ -3562,9 +3863,18 @@ When building your next retro macOS app:
 **Document Status:** Production Ready
 **Maintenance:** Update when new patterns/pitfalls discovered
 **Owner:** MacAmp Development Team
-**Last Updated:** 2025-12-16
+**Last Updated:** 2026-01-05
 
 **Recent Additions:**
+- **Butterchurn/WKWebView Integration** (Jan 5, 2026) - Complete audio visualization with JavaScript bridge
+  - WKUserScript injection for JavaScript libraries (not `<script>` tags - they fail silently)
+  - Swift→JS audio bridge at 30 FPS with callAsyncJavaScript for reliable delivery
+  - NSMenu closure-to-selector bridge pattern (representedObject + @State menu retention)
+  - @Observable timer management with @ObservationIgnored and proper cleanup
+  - WKNavigationDelegate lifecycle for page load detection (didFinish + both didFail variants)
+  - Right-click capture overlay using hitTest selective interception
+  - Track title interval display with configurable timer
+  - 7 phases, 5 Oracle A-grade bug fixes, 100+ presets
 - **Playlist Window Resize Patterns** (Dec 16, 2025) - Complete segment-based resize with scroll slider
   - Segment-based resize with window-specific base dimensions (275×116 vs 250×116)
   - Three-section bottom bar layout (LEFT + CENTER + RIGHT) with dynamic tiles

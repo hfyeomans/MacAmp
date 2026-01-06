@@ -216,19 +216,22 @@ Swap `Core` for `Concurrency` or `All` as needed.
 - **Quality**: ⭐⭐⭐⭐⭐ Authoritative (Oracle Grade A-)
 
 #### **[MILKDROP_WINDOW.md](MILKDROP_WINDOW.md)** ⭐
-- **Size**: 24KB, 767 lines
-- **Last Updated**: 2025-11-14
-- **Status**: ✅ PRODUCTION
-- **Purpose**: Milkdrop visualization window specification and GEN.bmp sprite system
+- **Size**: 38KB, 1,113 lines
+- **Last Updated**: 2026-01-05
+- **Status**: ✅ PRODUCTION - Complete with Butterchurn visualization
+- **Purpose**: Milkdrop visualization window with Butterchurn.js integration
 - **Key Sections**:
-  - Window specification and modes (skinned/bare)
-  - GEN.bmp sprite atlas (107×186 pixels)
-  - Two-piece sprite system for titlebars
+  - Window specification and GEN.bmp sprite system
+  - **Butterchurn.js Integration** (7 phases, complete)
+    - WKUserScript injection for JavaScript libraries
+    - Swift→JS audio bridge at 30 FPS
+    - ButterchurnPresetManager (cycling, randomization, history)
+    - Context menu with NSMenu closure-to-selector bridge
+    - Track title interval display (Phase 7)
+  - Two-piece sprite system for titlebars and letters
   - Chrome rendering with active/inactive states
-  - 1x/2x size support
-  - OpenGL/WebGL placeholder for visualization
-  - GenWindow implementation details
-- **When to Read**: Implementing Milkdrop window, working with GEN.bmp sprites, adding visualizations
+  - 5 Oracle A-grade bug fixes
+- **When to Read**: Implementing visualizations, WKWebView JavaScript integration, audio bridging
 - **Related Docs**: SPRITE_SYSTEM_COMPLETE.md, VIDEO_WINDOW.md, WINDOW_FOCUS_ARCHITECTURE.md
 - **Quality**: ⭐⭐⭐⭐⭐ Authoritative
 
@@ -648,6 +651,15 @@ Includes:
 | **GEN.bmp sprites** | MILKDROP_WINDOW.md | §GEN.bmp Sprite Atlas |
 | **GenWindow** | MILKDROP_WINDOW.md | §GenWindow Implementation |
 | **Milkdrop visualization** | MILKDROP_WINDOW.md | Full document |
+| **Butterchurn integration** | MILKDROP_WINDOW.md | §9 Butterchurn Integration |
+| **WKUserScript injection** | MILKDROP_WINDOW.md | §9.3 WKUserScript Injection |
+| **Swift→JS audio bridge** | MILKDROP_WINDOW.md | §9.4 Audio Data Pipeline |
+| **ButterchurnBridge** | MILKDROP_WINDOW.md | §9.2 Key Implementation Files |
+| **ButterchurnPresetManager** | MILKDROP_WINDOW.md | §9.5 ButterchurnPresetManager |
+| **NSMenu closure bridge** | MILKDROP_WINDOW.md | §9.6 Context Menu Implementation |
+| **callAsyncJavaScript** | MILKDROP_WINDOW.md | §9.7 Bug 4 |
+| **Track title display** | MILKDROP_WINDOW.md | §9.9 Track Title Display |
+| **Preset cycling** | MILKDROP_WINDOW.md | §9.5 ButterchurnPresetManager |
 | **Multi-window architecture** | MULTI_WINDOW_ARCHITECTURE.md | Full document |
 | **Multi-window quick start** | MULTI_WINDOW_QUICK_START.md | Full document |
 | **performDrag API** | CUSTOM_DRAG_FIX.md | §Solution |
@@ -731,6 +743,11 @@ Includes:
 | "What is PlaylistWindowSizeState?" | PLAYLIST_WINDOW.md §PlaylistWindowSizeState |
 | "How does playlist scroll slider work?" | PLAYLIST_WINDOW.md §Scroll Slider |
 | "When does playlist mini visualizer appear?" | PLAYLIST_WINDOW.md §Mini Visualizer |
+| "How does Butterchurn integration work?" | MILKDROP_WINDOW.md §9 Butterchurn Integration |
+| "How to load JavaScript in WKWebView?" | MILKDROP_WINDOW.md §9.3 WKUserScript Injection |
+| "How to stream audio to JavaScript?" | MILKDROP_WINDOW.md §9.4 Audio Data Pipeline |
+| "How to use NSMenu with closures?" | MILKDROP_WINDOW.md §9.6 Context Menu Implementation |
+| "How to manage timers in @Observable?" | MILKDROP_WINDOW.md §9.7 Bug 5 (Timer Thread Safety) |
 
 ---
 
@@ -898,7 +915,7 @@ IMPLEMENTATION_PATTERNS.md      1,791 lines  (13%)
 MULTI_WINDOW_ARCHITECTURE.md    1,060 lines  (7%)
 VIDEO_WINDOW.md                   927 lines  (6%)
 SPRITE_SYSTEM_COMPLETE.md         814 lines  (6%)
-MILKDROP_WINDOW.md                767 lines  (5%)
+MILKDROP_WINDOW.md              1,113 lines  (7%)
 README.md (this file)             750 lines  (5%)
 PLAYLIST_WINDOW.md                650 lines  (5%) ⭐ NEW
 WINAMP_SKIN_VARIATIONS.md         652 lines  (5%)
@@ -954,6 +971,6 @@ For questions or corrections, the documentation was comprehensively reviewed on 
 
 ---
 
-**MacAmp Documentation v3.1.0 | Last Updated: 2025-12-16 | Status: Production Authoritative**
+**MacAmp Documentation v3.2.0 | Last Updated: 2026-01-05 | Status: Production Authoritative**
 
-*Master index for 14,349 lines of verified technical documentation (18 active docs)*
+*Master index for 14,695 lines of verified technical documentation (18 active docs)*

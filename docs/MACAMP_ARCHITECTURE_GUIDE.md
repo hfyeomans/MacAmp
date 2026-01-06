@@ -2673,7 +2673,7 @@ For complete documentation, see: `docs/VIDEO_WINDOW.md`
 
 ## Milkdrop Window Architecture
 
-The Milkdrop Window provides audio visualization capability with authentic Winamp chrome, implemented during TASK 2 (Days 7-8). Named after the legendary Milkdrop visualizer, it serves as a container for future visualization implementations.
+The Milkdrop Window provides audio visualization via Butterchurn.js - a WebGL port of the legendary Milkdrop 2 visualizer. Implemented during TASK 2 (Days 7-8) for window chrome, with Butterchurn integration completed in January 2026 (7 phases, Oracle Grade A).
 
 ### Window Controller Implementation
 
@@ -2803,57 +2803,73 @@ struct MilkdropWindowChromeView: View {
 }
 ```
 
-### Placeholder Visualization Content
+### Butterchurn Integration Architecture
 
-Currently displays placeholder content pending Butterchurn.js integration:
+Butterchurn.js provides real-time audio visualization via WKWebView with Swift audio bridge:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    WKWebView Container                       │
+├─────────────────────────────────────────────────────────────┤
+│  WKUserScript Injection (atDocumentStart):                  │
+│    1. butterchurn.min.js      (270KB - ES module bundled)   │
+│    2. butterchurnPresets.min.js (187KB - preset library)    │
+│                                                              │
+│  WKUserScript Injection (atDocumentEnd):                    │
+│    3. bridge.js               (Swift↔JS communication)      │
+├─────────────────────────────────────────────────────────────┤
+│  WebGL Canvas (60 FPS)                                       │
+│    • Butterchurn visualizer instance                        │
+│    • 100+ presets from butterchurnPresets library           │
+└─────────────────────────────────────────────────────────────┘
+          │                              ▲
+          │ postMessage("ready")         │ audioData[1024]
+          │ postMessage("presetsLoaded") │ loadPreset(index)
+          ▼                              │ showTrackTitle(text)
+┌─────────────────────────────────────────────────────────────┐
+│                    ButterchurnBridge                         │
+│  @Observable @MainActor                                      │
+│    • Timer: 30 FPS audio updates to JS                      │
+│    • callAsyncJavaScript for reliable execution             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Key Components:**
 
 ```swift
-struct VisualizationContent: View {
-    @State private var animationPhase = 0.0
+// ButterchurnBridge.swift - Swift→JS communication
+@Observable @MainActor
+final class ButterchurnBridge {
+    var isReady: Bool = false
+    var errorMessage: String?
+    var onPresetsLoaded: (([String]) -> Void)?
 
-    var body: some View {
-        GeometryReader { geometry in
-            ZStack {
-                // Black background
-                Color.black
+    private weak var audioPlayer: AudioPlayer?
+    private var audioTimer: Timer?
+    @ObservationIgnored private weak var webView: WKWebView?
 
-                // Placeholder visualization
-                Canvas { context, size in
-                    // Draw frequency bars placeholder
-                    let barCount = 19  // Match spectrum analyzer
-                    let barWidth = size.width / CGFloat(barCount + 1)
-
-                    for i in 0..<barCount {
-                        let height = sin(animationPhase + Double(i) * 0.3) * 0.5 + 0.5
-                        let barHeight = height * size.height * 0.7
-
-                        let rect = CGRect(
-                            x: CGFloat(i) * barWidth + barWidth * 0.5,
-                            y: size.height - barHeight,
-                            width: barWidth * 0.8,
-                            height: barHeight
-                        )
-
-                        context.fill(
-                            Path(roundedRect: rect, cornerRadius: 2),
-                            with: .color(.green.opacity(0.8))
-                        )
-                    }
-                }
-                .onAppear {
-                    // Simple animation timer
-                    Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { _ in
-                        animationPhase += 0.1
-                    }
-                }
-
-                // "Visualization" text overlay
-                Text("Visualization Placeholder")
-                    .font(.system(size: 11))
-                    .foregroundColor(.white.opacity(0.5))
-            }
-        }
+    func sendAudioData() {
+        guard isReady, let audioPlayer = audioPlayer else { return }
+        let samples = audioPlayer.getVisualizationSamples(count: 1024)
+        webView?.callAsyncJavaScript(
+            "if (window.receiveAudioData) window.receiveAudioData([\(samples)]);",
+            in: nil, in: .page
+        ) { _ in }
     }
+}
+
+// ButterchurnPresetManager.swift - Preset lifecycle
+@Observable @MainActor
+final class ButterchurnPresetManager {
+    var presets: [String] = []
+    var currentPresetIndex: Int = -1
+    var isRandomize: Bool = true      // Persisted
+    var isCycling: Bool = true        // Persisted
+    var cycleInterval: TimeInterval = 15.0
+    var trackTitleInterval: TimeInterval = 0  // 0 = manual only
+
+    @ObservationIgnored private var presetHistory: [Int] = []
+    @ObservationIgnored private var cycleTimer: Timer?
 }
 ```
 
@@ -2899,9 +2915,13 @@ func generateFallbackGenChrome() -> GenChromeSet {
 1. **Activation**: Ctrl+K keyboard shortcut (matches Winamp)
 2. **Chrome Source**: GEN.bmp sprites with two-piece pattern
 3. **Focus States**: Normal/selected sprite pairs for all elements
-4. **Content Area**: 253x178 pixels for visualization
-5. **Future Integration**: Butterchurn.js WebView or native Metal visualizer
-6. **Position Persistence**: Window frame saved to UserDefaults
+4. **Content Area**: 256×198 pixels for WebGL canvas
+5. **Visualization**: Butterchurn.js via WKWebView with WKUserScript injection
+6. **Audio Bridge**: 30 FPS Swift→JS using callAsyncJavaScript
+7. **Preset Management**: Cycling, randomization, history, 100+ presets
+8. **Track Title**: Manual or interval-based display (5s/10s/15s/30s/60s)
+9. **Context Menu**: Right-click for preset navigation and settings
+10. **Persistence**: All settings saved to UserDefaults via AppSettings
 
 ### Sprite Discovery Process
 
@@ -3260,7 +3280,7 @@ Spectrum  Points
    ┌────┴────────────┐
    ▼                 ▼
 Main Window      Milkdrop Window
-Spectrum Viz     (Future: Butterchurn.js)
+Spectrum Viz     Butterchurn.js (100+ presets)
 (60 FPS)         Placeholder Animation
 ```
 
