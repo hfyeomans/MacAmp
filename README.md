@@ -31,7 +31,9 @@ MacAmp is a SwiftUI-based audio player for macOS that recreates the iconic deskt
 - 🔲 **Full Video Resize** - Drag any size with 25×29px quantized segments (1x/2x preset buttons)
 - 🎚️ **Unified Video Controls** - Volume slider, seek bar, and time display work for both audio and video
 - 📝 **Video Metadata Ticker** - Auto-scrolling display showing filename, codec, and resolution
-- 🎨 **Milkdrop Window** - Visualization window with GEN.bmp chrome and two-piece letter sprites (Ctrl+K)
+- 🎨 **Butterchurn Visualizations** - 245 Milkdrop 2 presets with 60 FPS audio-reactive WebGL rendering
+- 🌀 **Preset Controls** - Cycle (Space/Backspace), randomize (R), auto-cycle intervals, context menu selection
+- 🖼️ **Milkdrop Window Resize** - Drag corner with 25×29px segment grid and dynamic titlebar expansion
 - 🖼️ **5-Window Architecture** - Main, Equalizer, Playlist, VIDEO, and Milkdrop windows with unified focus tracking
 - 🧲 **Magnetic Docking** - Windows snap together and stay docked when resizing (Ctrl+D compatible)
 - 🔍 **Double-Size Mode** - Toggle 200% scaling with D button or Ctrl+D for better visibility on high-res displays
@@ -282,13 +284,29 @@ MacAmp supports three repeat modes matching Winamp 5 Modern skins (Modern, Bento
 7. **Docking** - Video window snaps to other MacAmp windows magnetically
 8. **Persistence** - Window position and size remembered across restarts
 
-### Milkdrop Window (Visualization)
+### Milkdrop Visualizations
 
-1. **Open Milkdrop** - Press **Ctrl+K** (Ctrl+Shift+K in some configurations)
-2. **Window Chrome** - GEN.bmp sprites with "MILKDROP" two-piece letters
-3. **Visualization** - Placeholder (Butterchurn integration deferred)
-4. **Focus States** - Active/Inactive titlebar sprites
-5. **Docking** - Snaps to other windows magnetically
+1. **Open Window** - Press **Ctrl+K** to toggle Milkdrop window
+2. **Visualizations** - 245 authentic Milkdrop 2 presets with WebGL rendering at 60 FPS
+3. **Preset Navigation:**
+   - **Space** - Next preset (or random if randomize enabled)
+   - **Backspace** - Previous preset (history-based)
+   - **R** - Toggle randomize mode
+   - **C** - Toggle auto-cycle (configurable intervals: 5s/10s/15s/30s/60s)
+   - **T** - Toggle track title display (configurable intervals or manual)
+4. **Context Menu** - Right-click for:
+   - Current preset display
+   - Direct preset selection (up to 100 shown in menu)
+   - Cycle and randomize toggles
+   - Track title interval configuration
+5. **Window Features:**
+   - GEN.bmp skinnable chrome with MILKDROP HD letterforms
+   - Active/Inactive titlebar states (focus tracking)
+   - Drag-to-resize with 25×29px segments (minimum 275×116, default 275×232)
+   - Dynamic titlebar expansion using gold filler tiles
+   - Magnetic docking to other MacAmp windows and screen edges
+   - Size and position persisted across app restarts
+6. **Audio Sync** - Real-time FFT audio from AVAudioEngine (30 FPS data → 60 FPS WebGL rendering)
 
 ## Architecture
 
@@ -542,6 +560,49 @@ See [`docs/SpriteResolver-Architecture.md`](docs/SpriteResolver-Architecture.md)
 - **Conditional Logging** - `#if DEBUG` wraps all debug output
 
 ## Recent Updates
+
+### v0.10.0 (January 2026) - Butterchurn Visualizations + Milkdrop Resize 🌀
+
+**Major Features:**
+- ✅ **Butterchurn Visualization Engine** - Authentic Milkdrop 2 experience via WebGL
+  - 245 presets from Milkdrop 2 library (expanded from original 29)
+  - 60 FPS audio-reactive rendering with real-time FFT from AVAudioEngine
+  - WKUserScript injection for butterchurn.min.js and butterchurnPresets.min.js
+  - 30 FPS Swift→JS audio bridge via callAsyncJavaScript
+- ✅ **Preset Management System** - Full Winamp-compatible preset controls
+  - Space/Backspace for next/previous (history-based navigation)
+  - R key toggles randomize mode
+  - C key toggles auto-cycle with intervals (5s/10s/15s/30s/60s)
+  - T key shows track title overlay with configurable intervals
+  - Context menu with direct preset selection (up to 100 shown)
+  - Preset state persisted across restarts (randomize, cycle, intervals)
+- ✅ **Milkdrop Window Resize** - Segment-based resizing with dynamic chrome
+  - Drag bottom-right corner with 25×29px quantized segments
+  - Minimum 275×116px (Size2D[0,0]), default 275×232px (Size2D[0,4])
+  - Dynamic titlebar expansion using gold filler tiles (symmetrical left/right)
+  - 7-section titlebar layout: LEFT_CAP + LEFT_GOLD(n) + LEFT_END + CENTER(3) + RIGHT_END + RIGHT_GOLD(n) + RIGHT_CAP
+  - MilkdropWindowSizeState @Observable with computed layout properties
+  - Size persistence via UserDefaults
+  - Butterchurn canvas sync on resize via ButterchurnBridge.setSize()
+- ✅ **GEN.bmp Sprite System** - Complete chrome implementation
+  - MILKDROP HD titlebar letterforms (two-piece sprites for selected/inactive)
+  - Active/Inactive titlebar states with WindowFocusState integration
+  - Two-piece bottom bar sprites (TOP + BOTTOM for pixel-perfect alignment)
+
+**Technical Achievements:**
+- WKWebView integration with WebGL for visualization
+- ButterchurnPresetManager with cycling, randomization, and history
+- NSMenu closure-to-selector bridge pattern (MilkdropMenuTarget)
+- AppKit resize preview overlay during drag (WindowResizePreviewOverlay)
+- Oracle Grade A validation (5 critical bug fixes for thread safety and lifecycle)
+- Thread Sanitizer clean (Timer cleanup, @MainActor annotations)
+
+**Implementation:**
+- PR #36: Milkdrop window foundation with GEN.bmp chrome
+- PR #37: Butterchurn.js visualization integration
+- PR #38: Preset library expansion (29→245 presets)
+- PR #39: Window resize with dynamic titlebar system
+- 7 phases completed (WKUserScript injection → preset management → window resize)
 
 ### v0.9.1 (December 2025) - Playlist Window Resize + Mini Visualizer 📐
 
