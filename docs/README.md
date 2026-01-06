@@ -1,9 +1,9 @@
 # MacAmp Documentation Guide
 
-**Version:** 3.0.0
-**Date:** 2025-12-28
+**Version:** 3.2.0
+**Date:** 2026-01-05
 **Purpose:** Master index and navigation guide for all MacAmp documentation
-**Total Documentation:** 13,673 lines across 17 current docs + 23 archived docs
+**Total Documentation:** 14,695 lines across 18 current docs + 23 archived docs
 
 ---
 
