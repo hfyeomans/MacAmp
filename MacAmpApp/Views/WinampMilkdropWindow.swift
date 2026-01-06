@@ -19,11 +19,14 @@ struct WinampMilkdropWindow: View {
     @Environment(ButterchurnPresetManager.self) var presetManager
     @Environment(PlaybackCoordinator.self) var playbackCoordinator
 
+    /// MILKDROP window size state (segment-based resizing)
+    @State private var sizeState = MilkdropWindowSizeState()
+
     // Menu state - keep strong reference to prevent premature deallocation
     @State private var activeContextMenu: NSMenu?
 
     var body: some View {
-        MilkdropWindowChromeView {
+        MilkdropWindowChromeView(sizeState: sizeState) {
             ZStack {
                 // ALWAYS create WebView - it must exist to send 'ready' message
                 ButterchurnWebView(bridge: bridge)
@@ -44,9 +47,28 @@ struct WinampMilkdropWindow: View {
             }
             .animation(.easeInOut(duration: 0.3), value: bridge.isReady)
         }
+        .frame(
+            width: sizeState.pixelSize.width,
+            height: sizeState.pixelSize.height,
+            alignment: .topLeading
+        )
+        .fixedSize()
+        .background(Color.black)
         .onAppear {
             // Configure bridge with audioPlayer for audio visualization
             bridge.configure(audioPlayer: audioPlayer)
+
+            // Initial NSWindow frame sync with integral coordinates
+            if let coordinator = WindowCoordinator.shared {
+                let clampedSize = CGSize(
+                    width: round(sizeState.pixelSize.width),
+                    height: round(sizeState.pixelSize.height)
+                )
+                coordinator.updateMilkdropWindowSize(to: clampedSize)
+
+                // Sync Butterchurn canvas to initial size
+                bridge.setSize(width: sizeState.contentSize.width, height: sizeState.contentSize.height)
+            }
         }
     }
 

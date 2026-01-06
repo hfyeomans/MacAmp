@@ -234,4 +234,14 @@ final class ButterchurnBridge: NSObject, WKScriptMessageHandler {
         guard isReady, let webView = webView else { return }
         webView.evaluateJavaScript("window.macampButterchurn?.start();", completionHandler: nil)
     }
+
+    // MARK: - Canvas Resize
+
+    /// Resize the Butterchurn canvas to match window content area
+    /// Called after window resize completes or on initial appearance
+    func setSize(width: CGFloat, height: CGFloat) {
+        guard isReady, let webView = webView else { return }
+        let js = "window.macampButterchurn?.setSize(\(Int(width)), \(Int(height)));"
+        webView.evaluateJavaScript(js, completionHandler: nil)
+    }
 }

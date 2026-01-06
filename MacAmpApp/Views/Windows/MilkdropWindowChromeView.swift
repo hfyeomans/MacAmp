@@ -18,10 +18,18 @@ private enum MilkdropWindowLayout {
 /// Milkdrop Window - Pixel-perfect GEN.bmp chrome using absolute positioning
 /// Matches Main/EQ/Playlist/Video pattern: ZStack + SimpleSpriteImage + .at()
 struct MilkdropWindowChromeView<Content: View>: View {
+    /// Size state for dynamic layout (segment-based resizing)
+    let sizeState: MilkdropWindowSizeState
     @ViewBuilder let content: Content
 
     @Environment(WindowFocusState.self) private var windowFocusState
     private var isWindowActive: Bool { windowFocusState.isMilkdropKey }
+
+    /// Pixel dimensions from sizeState
+    private var pixelSize: CGSize { sizeState.pixelSize }
+
+    /// Content area dimensions for WKWebView
+    private var contentSize: CGSize { sizeState.contentSize }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
