@@ -1,150 +1,165 @@
 # MILKDROP Window Resize - TODO
 
-## Phase 1: Foundation (Size2D + MilkdropWindowSizeState)
+**Last Updated**: 2026-01-05
+
+## Commit History
+- `655c5d3` - Phase 1: Foundation
+- `39bc227` - Phase 2: Size state wiring (includes Phase 5 & 6)
+- `104db69` - Phase 3: Dynamic chrome layout
+- `34c9c87` - Phase 4: Resize gesture
+
+**Note**: Phases 5 & 6 were implemented as part of Phase 2 for proper initialization.
+
+---
+
+## Phase 1: Foundation (Size2D + MilkdropWindowSizeState) ✅ COMPLETE
 
 ### 1.1 Size2D Presets
-- [ ] Add `milkdropMinimum` preset to Size2D.swift (0,0 = 275×116)
-- [ ] Add `milkdropDefault` preset to Size2D.swift (0,4 = 275×232)
-- [ ] Add `toMilkdropPixels()` method to Size2D.swift
+- [x] Add `milkdropMinimum` preset to Size2D.swift (0,0 = 275×116)
+- [x] Add `milkdropDefault` preset to Size2D.swift (0,4 = 275×232)
+- [x] Add `toMilkdropPixels()` method to Size2D.swift
 
 ### 1.2 MilkdropWindowSizeState.swift (NEW FILE)
-- [ ] Create `MacAmpApp/Models/MilkdropWindowSizeState.swift`
-- [ ] Add `@MainActor @Observable` class declaration
-- [ ] Implement `size: Size2D` property with `didSet { saveSize() }`
-- [ ] Implement `pixelSize` computed property
-- [ ] Implement `centerWidth` (window - 250)
-- [ ] Implement `centerTileCount` (centerWidth / 25)
-- [ ] Implement `contentHeight` (window - 34)
-- [ ] Implement `contentWidth` (window - 19)
-- [ ] Implement `verticalBorderTileCount` (ceil(contentHeight / 29))
-- [ ] Implement `contentSize` (CGSize)
-- [ ] Implement `goldFillerTilesPerSide` (titlebar gold tiles)
-- [ ] Implement `centerGreyTileCount` (fixed at 3)
-- [ ] Implement `centerSectionStartX` (after left gold + left end)
-- [ ] Implement `milkdropLettersCenterX` (centerSectionStartX + 37.5)
-- [ ] Implement `saveSize()` with UserDefaults key "milkdropWindowSize"
-- [ ] Implement `loadSize()` with default fallback
-- [ ] Implement `resetToDefault()` convenience method
-- [ ] Implement `setToMinimum()` convenience method
-- [ ] Add `init()` that calls `loadSize()`
+- [x] Create `MacAmpApp/Models/MilkdropWindowSizeState.swift`
+- [x] Add `@MainActor @Observable` class declaration
+- [x] Implement `size: Size2D` property with `didSet { saveSize() }`
+- [x] Implement `pixelSize` computed property
+- [x] Implement `centerWidth` (window - 250)
+- [x] Implement `centerTileCount` (centerWidth / 25)
+- [x] Implement `contentHeight` (window - 34)
+- [x] Implement `contentWidth` (window - 19)
+- [x] Implement `verticalBorderTileCount` (ceil(contentHeight / 29))
+- [x] Implement `contentSize` (CGSize)
+- [x] Implement `goldFillerTilesPerSide` (titlebar gold tiles)
+- [x] Implement `centerGreyTileCount` (fixed at 3)
+- [x] Implement `centerSectionStartX` (after left gold + left end)
+- [x] Implement `milkdropLettersCenterX` (centerSectionStartX + 37.5)
+- [x] Implement `saveSize()` with UserDefaults key "milkdropWindowSize"
+- [x] Implement `loadSize()` with default fallback
+- [x] Implement `resetToDefault()` convenience method
+- [x] Implement `setToMinimum()` convenience method
+- [x] Add `init()` that calls `loadSize()`
+- [x] **⚠️ ADD TO XCODE PROJECT** (added manually by user)
 
 ---
 
-## Phase 2: Size State Wiring (WinampMilkdropWindow)
+## Phase 2: Size State Wiring (WinampMilkdropWindow) ✅ COMPLETE
 
 ### 2.1 Add State Property
-- [ ] Add `@State private var sizeState = MilkdropWindowSizeState()`
+- [x] Add `@State private var sizeState = MilkdropWindowSizeState()`
 
 ### 2.2 Wire to Chrome View
-- [ ] Update `MilkdropWindowChromeView` call to pass `sizeState`
-- [ ] Add `.frame(width: sizeState.pixelSize.width, height: sizeState.pixelSize.height)`
-- [ ] Add `.fixedSize()`
+- [x] Update `MilkdropWindowChromeView` call to pass `sizeState`
+- [x] Add `.frame(width: sizeState.pixelSize.width, height: sizeState.pixelSize.height)`
+- [x] Add `.fixedSize()`
 
 ### 2.3 Initial NSWindow Sync
-- [ ] In `.onAppear`, call `coordinator.updateMilkdropWindowSize(to: clampedSize)`
-- [ ] Use `round()` for integral coordinates
+- [x] In `.onAppear`, call `coordinator.updateMilkdropWindowSize(to: clampedSize)`
+- [x] Use `round()` for integral coordinates
+
+**Note**: Phase 5 (WindowCoordinator) and Phase 6 (Butterchurn) were also implemented here.
 
 ---
 
-## Phase 3: Dynamic Chrome Layout (MilkdropWindowChromeView)
+## Phase 3: Dynamic Chrome Layout (MilkdropWindowChromeView) ✅ COMPLETE
 
 ### 3.1 Update View Signature
-- [ ] Add `sizeState: MilkdropWindowSizeState` parameter
-- [ ] Add `@Environment(ButterchurnBridge.self) private var bridge`
-- [ ] Add computed `pixelSize` and `contentSize` properties
+- [x] Add `sizeState: MilkdropWindowSizeState` parameter
+- [x] Add `@Environment(ButterchurnBridge.self) private var bridge`
+- [x] Add computed `pixelSize` and `contentSize` properties
 
 ### 3.2 Remove Fixed Layout
-- [ ] Delete `MilkdropWindowLayout` enum entirely
+- [x] Delete `MilkdropWindowLayout` enum entirely
 
 ### 3.3 Dynamic Titlebar (7 sections)
-- [ ] Extract to `buildDynamicTitlebar()` method
-- [ ] Section 1: Left cap at x: 12.5
-- [ ] Section 2: Left gold tiles (dynamic count)
-- [ ] Section 3: Left end at x: centerStart - 12.5
-- [ ] Section 4: Center grey tiles (fixed 3)
-- [ ] Section 5: Right end at x: centerStart + 75 + 12.5
-- [ ] Section 6: Right gold tiles (symmetric)
-- [ ] Section 7: Right cap at x: pixelSize.width - 12.5
-- [ ] Position milkdropLetters at sizeState.milkdropLettersCenterX
+- [x] Extract to `buildDynamicTitlebar()` method
+- [x] Section 1: Left cap at x: 12.5
+- [x] Section 2: Left gold tiles (dynamic count)
+- [x] Section 3: Left end at x: centerStart - 12.5
+- [x] Section 4: Center grey tiles (fixed 3)
+- [x] Section 5: Right end at x: centerStart + 75 + 12.5
+- [x] Section 6: Right gold tiles (symmetric)
+- [x] Section 7: Right cap at x: pixelSize.width - 12.5
+- [x] Position milkdropLetters at sizeState.milkdropLettersCenterX
 
 ### 3.4 Dynamic Vertical Borders
-- [ ] Extract to `buildDynamicBorders()` method
-- [ ] Use `sizeState.verticalBorderTileCount` for loop
-- [ ] Position left border at x: 5.5
-- [ ] Position right border at x: pixelSize.width - 4
+- [x] Extract to `buildDynamicBorders()` method
+- [x] Use `sizeState.verticalBorderTileCount` for loop
+- [x] Position left border at x: 5.5
+- [x] Position right border at x: pixelSize.width - 4
 
 ### 3.5 Dynamic Bottom Bar
-- [ ] Extract to `buildDynamicBottomBar()` method
-- [ ] Calculate bottomBarY = pixelSize.height - 7
-- [ ] LEFT section at x: 62.5
-- [ ] CENTER tiles using `sizeState.centerTileCount`
-- [ ] TWO-PIECE: GEN_BOTTOM_FILL_TOP (13px) + GEN_BOTTOM_FILL_BOTTOM (1px)
-- [ ] RIGHT section at x: pixelSize.width - 62.5
+- [x] Extract to `buildDynamicBottomBar()` method
+- [x] Calculate bottomBarY = pixelSize.height - 7
+- [x] LEFT section at x: 62.5
+- [x] CENTER tiles using `sizeState.centerTileCount`
+- [x] TWO-PIECE: GEN_BOTTOM_FILL_TOP (13px) + GEN_BOTTOM_FILL_BOTTOM (1px)
+- [x] RIGHT section at x: pixelSize.width - 62.5
 
 ### 3.6 Dynamic Content Area
-- [ ] Update content frame to use `contentSize`
-- [ ] Update position to x: pixelSize.width / 2, y: 20 + contentSize.height / 2
+- [x] Update content frame to use `contentSize`
+- [x] Update position to x: pixelSize.width / 2, y: 20 + contentSize.height / 2
 
 ### 3.7 Outer Frame
-- [ ] Update .frame to use `pixelSize`
+- [x] Update .frame to use `pixelSize`
 
 ---
 
-## Phase 4: Resize Gesture
+## Phase 4: Resize Gesture ✅ COMPLETE
 
 ### 4.1 State Properties
-- [ ] Add `@State private var dragStartSize: Size2D?`
-- [ ] Add `@State private var isDragging: Bool = false`
-- [ ] Add `@State private var resizePreview = WindowResizePreviewOverlay()`
+- [x] Add `@State private var dragStartSize: Size2D?`
+- [x] Add `@State private var isDragging: Bool = false`
+- [x] Add `@State private var resizePreview = WindowResizePreviewOverlay()`
 
 ### 4.2 Resize Handle View
-- [ ] Create `buildResizeHandle()` method
-- [ ] Rectangle with clear fill, 20×20 frame
-- [ ] `contentShape(Rectangle())` for hit testing
-- [ ] Position at (pixelSize.width - 10, pixelSize.height - 10)
+- [x] Create `buildResizeHandle()` method
+- [x] Rectangle with clear fill, 20×20 frame
+- [x] `contentShape(Rectangle())` for hit testing
+- [x] Position at (pixelSize.width - 10, pixelSize.height - 10)
 
 ### 4.3 Drag Gesture - onChanged
-- [ ] Initialize `dragStartSize` on first tick
-- [ ] Set `isDragging = true`
-- [ ] Call `WindowSnapManager.shared.beginProgrammaticAdjustment()`
-- [ ] Calculate widthDelta = round(translation.width / 25)
-- [ ] Calculate heightDelta = round(translation.height / 29)
-- [ ] Create candidate Size2D with max(0, ...) clamping
-- [ ] Get window via `coordinator.milkdropWindow`
-- [ ] Call `resizePreview.show(in: window, previewSize:)` (CORRECT API)
+- [x] Initialize `dragStartSize` on first tick
+- [x] Set `isDragging = true`
+- [x] Call `WindowSnapManager.shared.beginProgrammaticAdjustment()`
+- [x] Calculate widthDelta = round(translation.width / 25)
+- [x] Calculate heightDelta = round(translation.height / 29)
+- [x] Create candidate Size2D with max(0, ...) clamping
+- [x] Get window via `coordinator.milkdropWindow`
+- [x] Call `resizePreview.show(in: window, previewSize:)` (CORRECT API)
 
 ### 4.4 Drag Gesture - onEnded
-- [ ] Calculate final Size2D from total translation
-- [ ] Set `sizeState.size = finalSize`
-- [ ] Call `coordinator.updateMilkdropWindowSize(to: sizeState.pixelSize)`
-- [ ] Call `resizePreview.hide()`
-- [ ] Call `bridge.setSize(width: contentSize.width, height: contentSize.height)`
-- [ ] Call `WindowSnapManager.shared.endProgrammaticAdjustment()`
-- [ ] Reset: `isDragging = false`, `dragStartSize = nil`
+- [x] Calculate final Size2D from total translation
+- [x] Set `sizeState.size = finalSize`
+- [x] Call `coordinator.updateMilkdropWindowSize(to: sizeState.pixelSize)`
+- [x] Call `resizePreview.hide()`
+- [x] Call `bridge.setSize(width: contentSize.width, height: contentSize.height)`
+- [x] Call `WindowSnapManager.shared.endProgrammaticAdjustment()`
+- [x] Reset: `isDragging = false`, `dragStartSize = nil`
 
 ---
 
-## Phase 5: WindowCoordinator Integration
+## Phase 5: WindowCoordinator Integration ✅ COMPLETE (bundled in Phase 2)
 
 ### 5.1 Add Resize Method
-- [ ] Add `updateMilkdropWindowSize(to size: CGSize)` to WindowCoordinator
-- [ ] Use `round()` for integer coordinates
-- [ ] Calculate top-left anchor point
-- [ ] Update frame.origin for top-left anchoring (y = topLeft.y - roundedSize.height)
-- [ ] Call `window.setFrame(frame, display: true)`
+- [x] Add `updateMilkdropWindowSize(to size: CGSize)` to WindowCoordinator
+- [x] Use `round()` for integer coordinates
+- [x] Calculate top-left anchor point
+- [x] Update frame.origin for top-left anchoring (y = topLeft.y - roundedSize.height)
+- [x] Call `window.setFrame(frame, display: true)`
 
 ---
 
-## Phase 6: Butterchurn Canvas Sync
+## Phase 6: Butterchurn Canvas Sync ✅ COMPLETE (bundled in Phase 2)
 
 ### 6.1 ButterchurnBridge
-- [ ] Check if `setSize(width:height:)` exists
-- [ ] If missing, add method calling `window.macampButterchurn?.setSize()`
-- [ ] Guard on `isReady` and `webView`
+- [x] Check if `setSize(width:height:)` exists
+- [x] If missing, add method calling `window.macampButterchurn?.setSize()`
+- [x] Guard on `isReady` and `webView`
 
 ### 6.2 Wire Up
-- [ ] Call `setSize()` in resize gesture `.onEnded` (already in Phase 4.4)
-- [ ] Optionally call in WinampMilkdropWindow `.onAppear` for initial sync
+- [x] Call `setSize()` in resize gesture `.onEnded` (already in Phase 4.4)
+- [x] Optionally call in WinampMilkdropWindow `.onAppear` for initial sync
 
 ---
 

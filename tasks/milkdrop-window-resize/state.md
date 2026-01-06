@@ -2,89 +2,60 @@
 
 ## Current Status
 
-**Phase**: Plan Oracle-Reviewed and Corrected, Ready for Implementation
+**Phase**: Phase 7 - Testing (blocked on Xcode project file)
 **Branch**: `feature/milkdrop-window-resize`
 **Last Updated**: 2026-01-05
 
 ---
 
-## Oracle Review Summary
+## Commit History
 
-**Initial Review**: Needs Changes
-**Issues Identified**: 5 (2 High, 3 Medium)
-**Status**: All issues addressed in updated plan
+| Commit | Phase | Description |
+|--------|-------|-------------|
+| `655c5d3` | Phase 1 | Foundation: Size2D presets + MilkdropWindowSizeState |
+| `39bc227` | Phase 2 | Size state wiring + WindowCoordinator + ButterchurnBridge |
+| `104db69` | Phase 3 | Dynamic chrome layout |
+| `34c9c87` | Phase 4 | Resize gesture with AppKit preview overlay |
 
-### Issues Fixed:
-1. ✅ **[High] Size-state wiring** - Added Phase 2 for WinampMilkdropWindow wiring + initial NSWindow sync
-2. ✅ **[High] Titlebar math** - Created MILKDROP-specific formula with goldFillerTilesPerSide computed property
-3. ✅ **[Medium] WindowCoordinator anchoring** - Changed to proper top-left anchoring pattern
-4. ✅ **[Medium] Overlay API** - Corrected to `show(in:previewSize:)` instead of `show(for:targetSize:)`
-5. ✅ **[Medium] Bridge access** - Added `@Environment(ButterchurnBridge.self)` to MilkdropWindowChromeView
-
-### Titlebar Strategy Decision:
-**Expand gold fillers symmetrically, keep center grey at 3 tiles (75px fixed)**
+**Note**: Phases 5 (WindowCoordinator integration) and 6 (Butterchurn canvas sync) were implemented as part of Phase 2 commit to ensure proper initial NSWindow sync.
 
 ---
 
-## Implementation Approach
+## Implementation Progress
 
-Following the **exact same pattern** as VIDEO and Playlist window resize:
+### Phase 1: Foundation ✅ COMPLETE
+- [x] Size2D presets (milkdropMinimum, milkdropDefault, toMilkdropPixels)
+- [x] MilkdropWindowSizeState class with titlebar computed properties
 
-1. **Size2D Model** - Add MILKDROP presets (same 25×29 segment quantization)
-2. **MilkdropWindowSizeState** - Copy VideoWindowSizeState pattern + titlebar computed properties
-3. **Size State Wiring** - Add to WinampMilkdropWindow with initial NSWindow sync
-4. **Dynamic Chrome** - Tile sprites based on sizeState computed properties
-5. **Resize Gesture** - DragGesture with quantized delta, AppKit preview overlay
-6. **WindowCoordinator** - Add updateMilkdropWindowSize with top-left anchoring
-7. **Butterchurn Sync** - Call setSize() on canvas when resize completes
+### Phase 2: Size State Wiring ✅ COMPLETE
+- [x] Add sizeState to WinampMilkdropWindow
+- [x] Pass to MilkdropWindowChromeView
+- [x] Initial NSWindow sync in onAppear
+- [x] WindowCoordinator.updateMilkdropWindowSize() (Phase 5 bundled here)
+- [x] ButterchurnBridge.setSize() initial sync (Phase 6 bundled here)
 
----
+### Phase 3: Dynamic Chrome ✅ COMPLETE
+- [x] Remove fixed layout enum
+- [x] Dynamic titlebar (7 sections, gold expansion)
+- [x] Dynamic borders
+- [x] Dynamic bottom bar (two-piece tiles)
+- [x] Dynamic content area
 
-## Files to Change
+### Phase 4: Resize Gesture ✅ COMPLETE
+- [x] Drag state properties
+- [x] Resize handle view builder
+- [x] onChanged handler with preview
+- [x] onEnded handler with commit
 
-| File | Action | Status |
-|------|--------|--------|
-| `Size2D.swift` | MODIFY | Pending |
-| `MilkdropWindowSizeState.swift` | CREATE | Pending |
-| `WinampMilkdropWindow.swift` | MODIFY | Pending |
-| `MilkdropWindowChromeView.swift` | MODIFY | Pending |
-| `WindowCoordinator.swift` | MODIFY | Pending |
-| `ButterchurnBridge.swift` | VERIFY/MODIFY | Pending |
+### Phase 5: WindowCoordinator ✅ COMPLETE (bundled in Phase 2)
+- [x] updateMilkdropWindowSize() with top-left anchoring
 
----
+### Phase 6: Butterchurn ✅ COMPLETE (bundled in Phase 2)
+- [x] Verify/add setSize() method
+- [x] Wire up on resize end
 
-## Progress Tracking
-
-### Phase 1: Foundation
-- [ ] Size2D presets (milkdropMinimum, milkdropDefault, toMilkdropPixels)
-- [ ] MilkdropWindowSizeState class with titlebar computed properties
-
-### Phase 2: Size State Wiring
-- [ ] Add sizeState to WinampMilkdropWindow
-- [ ] Pass to MilkdropWindowChromeView
-- [ ] Initial NSWindow sync in onAppear
-
-### Phase 3: Dynamic Chrome
-- [ ] Remove fixed layout enum
-- [ ] Dynamic titlebar (7 sections, gold expansion)
-- [ ] Dynamic borders
-- [ ] Dynamic bottom bar (two-piece tiles)
-- [ ] Dynamic content area
-
-### Phase 4: Resize Gesture
-- [ ] Drag state properties
-- [ ] Resize handle view builder
-- [ ] onChanged handler with preview
-- [ ] onEnded handler with commit
-
-### Phase 5: WindowCoordinator
-- [ ] updateMilkdropWindowSize() with top-left anchoring
-
-### Phase 6: Butterchurn
-- [ ] Verify/add setSize() method
-- [ ] Wire up on resize end
-
-### Phase 7: Testing
+### Phase 7: Testing ⏳ IN PROGRESS
+- [ ] Add MilkdropWindowSizeState.swift to Xcode project (BLOCKING)
 - [ ] Build with sanitizer
 - [ ] Size tests (min/default/large)
 - [ ] Visual tests (titlebar, letters, bottom bar)
@@ -97,7 +68,25 @@ Following the **exact same pattern** as VIDEO and Playlist window resize:
 
 ## Blocking Issues
 
-None currently.
+**BLOCKING**: MilkdropWindowSizeState.swift exists in git but not in Xcode project.
+User needs to add the file via Xcode:
+1. Right-click `Models` group in Project Navigator
+2. "Add Files to MacAmpApp..."
+3. Select `MilkdropWindowSizeState.swift`
+4. Ensure "MacAmp" target is checked
+
+---
+
+## Files Changed
+
+| File | Action | Status |
+|------|--------|--------|
+| `Size2D.swift` | MODIFY | ✅ Complete |
+| `MilkdropWindowSizeState.swift` | CREATE | ✅ Created, ⚠️ Not in Xcode |
+| `WinampMilkdropWindow.swift` | MODIFY | ✅ Complete |
+| `MilkdropWindowChromeView.swift` | MODIFY | ✅ Complete |
+| `WindowCoordinator.swift` | MODIFY | ✅ Complete |
+| `ButterchurnBridge.swift` | VERIFY/MODIFY | ✅ Complete (setSize exists) |
 
 ---
 
