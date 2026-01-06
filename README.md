@@ -54,19 +54,19 @@ MacAmp is a SwiftUI-based audio player for macOS that recreates the iconic deskt
 
 ## Download
 
-### Latest Release: v0.9.1 (December 2025)
+### Latest Release: v1.0.1 (January 2026)
 
-[![Download MacAmp](https://img.shields.io/badge/Download-MacAmp%20v0.9.1-blue?style=for-the-badge)](https://github.com/hfyeomans/MacAmp/releases/tag/v0.9.1)
+[![Download MacAmp](https://img.shields.io/badge/Download-MacAmp%20v1.0.1-blue?style=for-the-badge)](https://github.com/hfyeomans/MacAmp/releases/tag/v1.0.1)
 
-**[Download MacAmp-v0.9.1-Notarized.dmg](https://github.com/hfyeomans/MacAmp/releases/tag/v0.9.1)** (2.3 MB)
+**[Download MacAmp-v1.0.1.dmg](https://github.com/hfyeomans/MacAmp/releases/tag/v1.0.1)** (3.4 MB)
 
 | Property | Value |
 |----------|-------|
-| Version | 0.9.1 |
-| Build | 2 |
+| Version | 1.0.1 |
+| Build | 3 |
 | Signed | Developer ID Application |
 | Notarized | Yes (Apple approved) |
-| Architecture | Apple Silicon (arm64) |
+| Architecture | Universal (arm64 + x86_64) |
 
 **Installation:**
 1. Download the DMG file
@@ -74,13 +74,14 @@ MacAmp is a SwiftUI-based audio player for macOS that recreates the iconic deskt
 3. Drag MacAmp to Applications folder
 4. Launch from Applications (no Gatekeeper warnings)
 
-**What's New in v0.9.1:**
-- Playlist window resize (drag bottom-right corner)
-- Playlist scroll slider with proportional thumb
-- Mini visualizer in playlist (when main window shaded)
-- Main window shade state persistence
+**What's New in v1.0.1:**
+- **Resizable Milkdrop Window** - Drag corner to resize with 25×29px quantized segments
+- **Butterchurn Visualization Packs** - 245 authentic Milkdrop 2 presets with WebGL rendering
+- **Dynamic Titlebar Expansion** - Gold filler tiles expand symmetrically as window grows
+- **Preset Controls** - Space/Backspace navigation, R for randomize, C for auto-cycle
+- **Context Menu** - Right-click for direct preset selection from full library
 
-See [Release Notes](https://github.com/hfyeomans/MacAmp/releases/tag/v0.9.1) for full changelog.
+See [Release Notes](https://github.com/hfyeomans/MacAmp/releases/tag/v1.0.1) for full changelog.
 
 ## Installation
 
@@ -560,6 +561,30 @@ See [`docs/SpriteResolver-Architecture.md`](docs/SpriteResolver-Architecture.md)
 - **Conditional Logging** - `#if DEBUG` wraps all debug output
 
 ## Recent Updates
+
+### v1.0.1 (January 2026) - Resizable Milkdrop + Butterchurn Packs 🎆
+
+**The first stable release of MacAmp!**
+
+**Major Features:**
+- ✅ **Resizable Milkdrop Window** - Full drag-to-resize support
+  - Drag bottom-right corner with 25×29px quantized segments
+  - Dynamic titlebar expansion using gold filler tiles (symmetrical left/right)
+  - 7-section titlebar: LEFT_CAP + LEFT_GOLD(n) + LEFT_END + CENTER(3) + RIGHT_END + RIGHT_GOLD(n) + RIGHT_CAP
+  - MILKDROP HD letterforms stay centered at all widths
+  - Size persistence via UserDefaults
+- ✅ **Butterchurn Visualization Packs** - 245 authentic Milkdrop 2 presets
+  - WebGL rendering at 60 FPS with real-time FFT audio from AVAudioEngine
+  - Preset navigation: Space/Backspace (next/previous), R (randomize), C (auto-cycle)
+  - Context menu with direct preset selection from full library
+  - Configurable auto-cycle intervals (5s/10s/15s/30s/60s)
+  - Track title overlay with T key toggle
+
+**Technical:**
+- MilkdropWindowSizeState @Observable with computed layout properties
+- ButterchurnBridge.setSize() syncs WebGL canvas on resize
+- Oracle Grade A validation (Thread Sanitizer clean)
+- Developer ID signed and Apple notarized
 
 ### v0.10.0 (January 2026) - Butterchurn Visualizations + Milkdrop Resize 🌀
 
