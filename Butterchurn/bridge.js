@@ -5,6 +5,19 @@
  * Injected at document end after butterchurn.min.js and butterchurnPresets.min.js.
  *
  * Phase 3: Real audio data from Swift at 30 FPS via ScriptProcessorNode
+ *
+ * Preset Loading:
+ * - Base pack (butterchurnPresets): ~98 presets
+ * - Extra pack (butterchurnPresetsExtra): ~147 presets (optional)
+ * - Total: ~245 presets when both loaded
+ *
+ * Preset Sources (butterchurn-presets@2.4.7 via jsDelivr CDN):
+ * - Base: https://cdn.jsdelivr.net/npm/butterchurn-presets@2.4.7/lib/butterchurnPresets.min.js
+ * - Extra: https://cdn.jsdelivr.net/npm/butterchurn-presets@2.4.7/lib/butterchurnPresetsExtra.min.js
+ *
+ * Local files (Butterchurn/ folder):
+ * - butterchurnPresets.min.js (638KB, Base pack)
+ * - butterchurnPresetsExtra.min.js (825KB, Extra pack)
  */
 (function() {
     'use strict';
@@ -55,21 +68,55 @@
     // Butterchurn needs to create its own context with specific attributes.
     // Once a context is created, you can't create another on the same canvas.
 
-    // Get presets from library
-    // UMD bundle exports {default: {presetName: preset}} structure
-    // ES module via getPresets() returns {presetName: preset} directly
+    // Load presets from Base pack (required)
+    // Only use getPresets() or .default paths to avoid non-preset keys from raw object
+    var basePresets = {};
     if (typeof butterchurnPresets.getPresets === 'function') {
-        presets = butterchurnPresets.getPresets();
+        basePresets = butterchurnPresets.getPresets();
     } else if (butterchurnPresets.default && typeof butterchurnPresets.default === 'object') {
-        presets = butterchurnPresets.default;
-    } else if (typeof butterchurnPresets === 'object') {
-        presets = butterchurnPresets;
+        basePresets = butterchurnPresets.default;
     } else {
-        showFallback('butterchurnPresets has unexpected format');
+        showFallback('butterchurnPresets has unexpected format (expected getPresets or default)');
         notifyFailed('butterchurnPresets has unexpected format');
         return;
     }
-    presetKeys = Object.keys(presets);
+
+    // Load presets from Extra pack (optional, ~147 additional presets)
+    // Wrapped in try/catch for graceful degradation - base presets still work if extra fails
+    var extraPresets = {};
+    var extraPackLoaded = false;
+    try {
+        var butterchurnPresetsExtraLib = (typeof butterchurnPresetsExtra !== 'undefined') ? butterchurnPresetsExtra : window.butterchurnPresetsExtra;
+        if (butterchurnPresetsExtraLib) {
+            // Only use getPresets() or .default paths to avoid non-preset keys
+            if (typeof butterchurnPresetsExtraLib.getPresets === 'function') {
+                extraPresets = butterchurnPresetsExtraLib.getPresets();
+                extraPackLoaded = true;
+            } else if (butterchurnPresetsExtraLib.default && typeof butterchurnPresetsExtraLib.default === 'object') {
+                extraPresets = butterchurnPresetsExtraLib.default;
+                extraPackLoaded = true;
+            }
+            // Validate extraPresets is a plain object
+            if (typeof extraPresets !== 'object' || extraPresets === null) {
+                extraPresets = {};
+                extraPackLoaded = false;
+            }
+        }
+    } catch (extraError) {
+        // Extra pack failed to load - continue with base presets only
+        console.warn('[MacAmp] Extra presets failed to load:', extraError.message);
+        extraPresets = {};
+        extraPackLoaded = false;
+    }
+
+    // Merge Base + Extra presets (Extra overwrites on conflict, but names shouldn't overlap)
+    presets = Object.assign({}, basePresets, extraPresets);
+
+    // Sort preset keys alphabetically for deterministic order across sessions
+    // Use fixed 'en' locale to ensure consistent ordering regardless of user locale
+    presetKeys = Object.keys(presets).sort(function(a, b) {
+        return a.localeCompare(b, 'en', { sensitivity: 'base' });
+    });
 
     if (presetKeys.length === 0) {
         showFallback('no presets available');
@@ -212,7 +259,10 @@
             window.webkit.messageHandlers.butterchurn.postMessage({
                 type: 'ready',
                 presetCount: presetKeys.length,
-                presetNames: presetKeys
+                presetNames: presetKeys,
+                extraPackLoaded: extraPackLoaded,
+                basePresetCount: Object.keys(basePresets).length,
+                extraPresetCount: Object.keys(extraPresets).length
             });
         }
     }
@@ -311,6 +361,35 @@
                 currentPresetIndex: currentPresetIndex,
                 currentPresetName: presetKeys[currentPresetIndex] || null
             };
+        },
+
+        /**
+         * Dispose resources to prevent memory leaks
+         * Call from Swift when web view is dismissed
+         */
+        dispose: function() {
+            // Stop render loop
+            isRunning = false;
+
+            // Remove resize listener
+            window.removeEventListener('resize', handleResize);
+
+            // Disconnect and close audio nodes
+            if (scriptProcessor) {
+                scriptProcessor.disconnect();
+                scriptProcessor.onaudioprocess = null;
+            }
+            if (audioContext && audioContext.state !== 'closed') {
+                audioContext.close().catch(function() {});
+            }
+
+            // Clear references
+            visualizer = null;
+            presets = null;
+            presetKeys = [];
+            audioContext = null;
+            audioSourceNode = null;
+            scriptProcessor = null;
         }
     };
 

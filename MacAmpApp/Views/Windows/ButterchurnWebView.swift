@@ -5,8 +5,9 @@ import WebKit
 ///
 /// Script Injection Strategy:
 /// 1. butterchurn.min.js at .atDocumentStart (defines butterchurn global)
-/// 2. butterchurnPresets.min.js at .atDocumentStart (defines butterchurnPresets global)
-/// 3. bridge.js at .atDocumentEnd (after DOM ready, initializes visualization)
+/// 2. butterchurnPresets.min.js at .atDocumentStart (defines butterchurnPresets global - Base pack, ~100 presets)
+/// 3. butterchurnPresetsExtra.min.js at .atDocumentStart (defines butterchurnPresetsExtra global - Extra pack, ~200 presets)
+/// 4. bridge.js at .atDocumentEnd (after DOM ready, initializes visualization, merges presets)
 ///
 /// This bypasses WKWebView's file:// script loading restriction by injecting
 /// JavaScript as strings via WKUserScript.
@@ -54,6 +55,7 @@ struct ButterchurnWebView: NSViewRepresentable {
         // Load JS from bundle as strings
         let butterchurnJS = loadBundleJS("butterchurn.min")
         let presetsJS = loadBundleJS("butterchurnPresets.min")
+        let presetsExtraJS = loadBundleJS("butterchurnPresetsExtra.min")
         let bridgeJS = loadBundleJS("bridge")
 
         // Inject libraries at document start (before HTML parses)
@@ -64,6 +66,11 @@ struct ButterchurnWebView: NSViewRepresentable {
         ))
         userContentController.addUserScript(WKUserScript(
             source: presetsJS,
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: true
+        ))
+        userContentController.addUserScript(WKUserScript(
+            source: presetsExtraJS,
             injectionTime: .atDocumentStart,
             forMainFrameOnly: true
         ))
@@ -167,9 +174,14 @@ struct ButterchurnWebView: NSViewRepresentable {
             return wrapESModuleAsGlobal(js, globalName: "butterchurn")
 
         case "butterchurnPresets.min":
-            // butterchurnPresets.min.js uses UMD but exports as 'minimal'
-            // Alias window.minimal → window.butterchurnPresets
-            return js + "\nwindow.butterchurnPresets = window.minimal;\n"
+            // butterchurnPresets.min.js (Base pack) uses UMD, exports directly as 'butterchurnPresets'
+            // No aliasing needed - exports correctly
+            return js
+
+        case "butterchurnPresetsExtra.min":
+            // butterchurnPresetsExtra.min.js (Extra pack) uses UMD, exports directly as 'butterchurnPresetsExtra'
+            // No aliasing needed - exports correctly
+            return js
 
         default:
             return js
