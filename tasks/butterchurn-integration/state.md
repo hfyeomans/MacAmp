@@ -9,9 +9,10 @@
 
 ## Current State
 
-**Phase:** ✅ PHASE 5 COMPLETE - UI Integration (Context Menu)
+**Phase:** ✅ ALL PHASES COMPLETE - Ready for Merge
 
 **Oracle Review:** ✅ Complete (2026-01-05) - 2 Oracle debugging sessions with gpt-5.2-codex
+**Final Review:** ✅ Complete - Grade B → A (all 4 findings fixed)
 
 ### Implementation Progress (2026-01-05)
 
@@ -84,7 +85,7 @@ All debug logging has been removed. Only meaningful logs remain:
 | Swift→JS bridge | ✅ Phase 3 | 30 FPS waveform push, pause/resume |
 | Preset management | ✅ Phase 4 | Cycling, randomize, history |
 | UI integration | ✅ Phase 5 | Context menu, shortcuts, track titles |
-| Verification | ⏳ Phase 6 | Local-only validation |
+| Verification | ✅ Phase 6 | Thread Sanitizer clean, all tests passed |
 
 ---
 
@@ -251,6 +252,21 @@ All debug logging has been removed. Only meaningful logs remain:
 | 2026-01-05 | Phase 5 menu items | Randomize, Cycling, Cycle Interval, Next/Previous, Preset list |
 | 2026-01-05 | Phase 5 right-click | Created RightClickCaptureView NSViewRepresentable |
 | 2026-01-05 | **PHASE 5 COMPLETE** | Context menu with full preset control |
+| 2026-01-05 | Phase 6 verification | Thread Sanitizer clean, all tests passed |
+| 2026-01-05 | Code de-slop | Removed "Phase N" comments from all Butterchurn files |
+| 2026-01-05 | **PHASE 6 COMPLETE** | Verification passed, ready for merge |
+| 2026-01-05 | Oracle final review | Grade B - 4 findings (cleanup, Sendable, ObservationIgnored, JSON) |
+| 2026-01-05 | Oracle fixes applied | Fixed cleanup wiring, ParsedMessage Sendable, @ObservationIgnored, JSON encoding |
+| 2026-01-05 | Swift 6 concurrency fix | MainActor.assumeIsolated for WKScriptMessageHandler |
+| 2026-01-05 | Oracle A-Grade review | Requested full A-grade upgrade review |
+| 2026-01-05 | A-Grade fixes applied | 5 fixes: markLoadFailed(), isReady guard, WKNavigationDelegate, callAsyncJavaScript, async Task loop |
+| 2026-01-05 | Build fix | Corrected callAsyncJavaScript API: `in: nil, in: .page` |
+| 2026-01-05 | Build fix | Added `@MainActor` to Task closure (fixes "No async operations" warning) |
+| 2026-01-05 | Oracle Final Review | Grade A confirmed - all 6 fixes verified at correct line numbers |
+| 2026-01-05 | **GRADE A COMPLETE** | All Oracle A-grade improvements applied and verified |
+| 2026-01-05 | User retest complete | All functionality confirmed working |
+| 2026-01-05 | Phase 7 requested | Track title interval display feature |
+| 2026-01-05 | Phase 7 implemented | AppSettings, PresetManager, context menu updated |
 
 ---
 
@@ -486,4 +502,89 @@ Commits:
 
 ---
 
-**Next Phase:** Phase 6 - Verification (local-only validation, Thread Sanitizer)
+---
+
+## Oracle A-Grade Fixes Applied (2026-01-05)
+
+All 5 Oracle-recommended improvements implemented to upgrade from B+ to A:
+
+| Fix | Priority | Description | File |
+|-----|----------|-------------|------|
+| 1. markLoadFailed() | Critical | Centralized failure handler that stops audio task | ButterchurnBridge.swift |
+| 2. isReady guard | Critical | Guard both isReady AND webView in sendAudioFrame() | ButterchurnBridge.swift |
+| 3. WKNavigationDelegate | Critical | Surface WebView load/process errors to bridge | ButterchurnWebView.swift |
+| 4. callAsyncJavaScript | Important | Typed arguments, no per-frame string interpolation | ButterchurnBridge.swift |
+| 5. Async Task loop | Nice-to-have | Replace Timer+Task with clean async Task loop | ButterchurnBridge.swift |
+
+**Additional Swift 6 Fixes:**
+- `MainActor.assumeIsolated` for WKScriptMessageHandler delegate method
+- `@MainActor` on Task closure for audio update loop (fixes "No async operations" warning)
+- Correct `callAsyncJavaScript` API syntax: `in: nil, in: .page`
+
+**Known Warnings (Non-issues):**
+- `Duplicate -rpath '@executable_path' ignored` - Build settings duplication, harmless
+- `IconRendering.framework/binary.metallib invalid format` - macOS system Metal shader issue, unrelated to MacAmp
+
+---
+
+## Oracle Final Review (2026-01-05)
+
+**Grade: A** ✅
+
+All 6 fixes verified correctly implemented by Oracle (gpt-5.2-codex, high reasoning):
+
+| Fix | Line | Verification |
+|-----|------|--------------|
+| 1. `markLoadFailed()` | 101 | ✅ Centralizes failure + stops updates |
+| 2. `isReady` guard | 150 | ✅ Guards both `isReady` AND `webView` |
+| 3. `WKNavigationDelegate` | 31 | ✅ Surfaces WebView errors |
+| 4. `callAsyncJavaScript` | 175 | ✅ `in: nil, in: .page` syntax |
+| 5. Async Task `@MainActor` | 133 | ✅ Replaces Timer+Task |
+| 6. `MainActor.assumeIsolated` | 56 | ✅ Swift 6 compliant |
+
+**Quality Checks Passed:**
+- Swift 6 strict concurrency: ✅ All state changes MainActor-isolated
+- Memory management: ✅ Weak references, no retain cycles
+- Thread safety: ✅ Audio loop and WebView on main actor
+
+---
+
+---
+
+## Phase 7: Track Title Interval Display (2026-01-05)
+
+**Goal:** Add interval-based track title display option (like preset cycle interval).
+
+**Implementation:**
+
+1. ✅ Added `butterchurnTrackTitleInterval` to AppSettings.swift
+   - Default: 0 (once/manual only)
+   - Persists via UserDefaults
+
+2. ✅ Extended ButterchurnPresetManager.swift:
+   - `trackTitleInterval` property with didSet persistence
+   - `trackTitleTimer` for automatic display
+   - `playbackCoordinator` weak reference for display title
+   - `startTrackTitleTimer()`, `stopTrackTitleTimer()`, `showCurrentTrackTitle()`
+   - Timer starts on loadPresets() if interval > 0
+   - Timer cleaned up in cleanup()
+
+3. ✅ Updated WinampMilkdropWindowController.swift:
+   - Pass playbackCoordinator to presetManager.configure()
+
+4. ✅ Updated WinampMilkdropWindow.swift context menu:
+   - Added "Track Title Interval" submenu after "Show Track Title"
+   - Options: Once (on request), Every 5s, 10s, 15s, 30s, 60s
+   - Checkmark shows current selection
+
+**Files Modified:**
+- AppSettings.swift (+9 lines)
+- ButterchurnPresetManager.swift (+50 lines)
+- WinampMilkdropWindowController.swift (+1 line)
+- WinampMilkdropWindow.swift (+25 lines)
+
+**Status:** ✅ Build verified - Ready for user testing
+
+---
+
+**Next Step:** User testing of track title interval feature

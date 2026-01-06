@@ -15,10 +15,37 @@ struct ButterchurnWebView: NSViewRepresentable {
     let bridge: ButterchurnBridge
 
     func makeCoordinator() -> Coordinator {
-        Coordinator()
+        Coordinator(bridge: bridge)
     }
 
-    class Coordinator: NSObject {}
+    /// Coordinator handles WKNavigationDelegate to surface WebView errors to bridge
+    class Coordinator: NSObject, WKNavigationDelegate {
+        weak var bridge: ButterchurnBridge?
+
+        init(bridge: ButterchurnBridge) {
+            self.bridge = bridge
+        }
+
+        // MARK: - WKNavigationDelegate
+
+        func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+            Task { @MainActor in
+                bridge?.markLoadFailed("WebView navigation failed: \(error.localizedDescription)")
+            }
+        }
+
+        func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+            Task { @MainActor in
+                bridge?.markLoadFailed("WebView provisional navigation failed: \(error.localizedDescription)")
+            }
+        }
+
+        func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+            Task { @MainActor in
+                bridge?.markLoadFailed("WebView content process terminated")
+            }
+        }
+    }
 
     func makeNSView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
@@ -65,6 +92,7 @@ struct ButterchurnWebView: NSViewRepresentable {
         config.preferences = wkPrefs
 
         let webView = WKWebView(frame: .zero, configuration: config)
+        webView.navigationDelegate = context.coordinator  // Surface load errors to bridge
         webView.setValue(false, forKey: "drawsBackground")  // Transparent background
 
         // Enable Web Inspector for debugging (macOS 13.3+)
@@ -113,6 +141,9 @@ struct ButterchurnWebView: NSViewRepresentable {
     static func dismantleNSView(_ nsView: WKWebView, coordinator: Coordinator) {
         // CRITICAL: Remove handler to prevent retain cycle
         nsView.configuration.userContentController.removeScriptMessageHandler(forName: "butterchurn")
+
+        // Stop timers and clear references
+        coordinator.bridge?.cleanup()
     }
 
     /// Load JavaScript file from bundle as String

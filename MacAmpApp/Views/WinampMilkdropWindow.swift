@@ -45,7 +45,7 @@ struct WinampMilkdropWindow: View {
             .animation(.easeInOut(duration: 0.3), value: bridge.isReady)
         }
         .onAppear {
-            // Configure bridge with audioPlayer for Phase 3 audio data
+            // Configure bridge with audioPlayer for audio visualization
             bridge.configure(audioPlayer: audioPlayer)
         }
     }
@@ -160,6 +160,32 @@ struct WinampMilkdropWindow: View {
                 bridge?.showTrackTitle(currentDisplayTitle)
             }
         ))
+
+        // MARK: Track Title Interval Submenu
+        let titleIntervalSubmenu = NSMenu()
+        let titleIntervals: [(String, TimeInterval)] = [
+            ("Once (on request)", 0),
+            ("Every 5 seconds", 5),
+            ("Every 10 seconds", 10),
+            ("Every 15 seconds", 15),
+            ("Every 30 seconds", 30),
+            ("Every 60 seconds", 60),
+        ]
+
+        for (title, interval) in titleIntervals {
+            let item = createMenuItem(
+                title: title,
+                isChecked: abs(presetManager.trackTitleInterval - interval) < 0.1,
+                action: { [weak presetManager] in
+                    presetManager?.trackTitleInterval = interval
+                }
+            )
+            titleIntervalSubmenu.addItem(item)
+        }
+
+        let titleIntervalItem = NSMenuItem(title: "Track Title Interval", action: nil, keyEquivalent: "")
+        titleIntervalItem.submenu = titleIntervalSubmenu
+        menu.addItem(titleIntervalItem)
 
         menu.addItem(.separator())
 

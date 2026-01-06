@@ -24,7 +24,7 @@ private final class VisualizerScratchBuffers: @unchecked Sendable {
     private(set) var rms: [Float] = []
     private(set) var spectrum: [Float] = []
 
-    // Butterchurn FFT buffers (Phase 2)
+    // Butterchurn FFT buffers
     private static let butterchurnFFTSize: Int = 2048
     private static let butterchurnBins: Int = 1024
 
@@ -176,7 +176,7 @@ private extension Float {
 // MARK: - Butterchurn Audio Frame
 
 /// Snapshot of audio data for Butterchurn visualization
-/// Phase 2: Produced by AudioPlayer tap, consumed by ButterchurnBridge at 30 FPS
+/// Produced by AudioPlayer tap, consumed by ButterchurnBridge at 30 FPS
 struct ButterchurnFrame {
     let spectrum: [Float]       // 1024 frequency bins (from 2048-point FFT)
     let waveform: [Float]       // 1024 mono samples (time-domain)
@@ -248,7 +248,7 @@ final class AudioPlayer {
     @ObservationIgnored private var latestSpectrum: [Float] = []
     @ObservationIgnored private var latestWaveform: [Float] = []
 
-    // Butterchurn audio data (Phase 2) - populated by tap, consumed at 30 FPS
+    // Butterchurn audio data - populated by tap, consumed at 30 FPS
     @ObservationIgnored private var butterchurnSpectrum: [Float] = Array(repeating: 0, count: 1024)
     @ObservationIgnored private var butterchurnWaveform: [Float] = Array(repeating: 0, count: 1024)
     @ObservationIgnored private var lastButterchurnUpdate: TimeInterval = 0
@@ -1192,7 +1192,7 @@ final class AudioPlayer {
         self.latestSpectrum = spectrum
         self.latestWaveform = waveform
 
-        // Store Butterchurn data (Phase 2)
+        // Store Butterchurn data
         self.butterchurnSpectrum = butterchurnSpectrum
         self.butterchurnWaveform = butterchurnWaveform
         self.lastButterchurnUpdate = CACurrentMediaTime()
@@ -1322,7 +1322,7 @@ final class AudioPlayer {
                     .map { mono[$0] }
             }
 
-            // Phase 2: Process Butterchurn FFT (2048-point for 1024 bins)
+            // Process Butterchurn FFT (2048-point for 1024 bins)
             scratch.withMonoReadOnly { mono in
                 scratch.processButterchurnFFT(samples: mono)
             }
@@ -1357,7 +1357,7 @@ final class AudioPlayer {
             scratch: scratch
         )
 
-        // Buffer size 2048 for Butterchurn FFT (Phase 2) - provides 1024 frequency bins
+        // Buffer size 2048 for Butterchurn FFT - provides 1024 frequency bins
         mixer.installTap(onBus: 0, bufferSize: 2048, format: nil, block: handler)
         visualizerTapInstalled = true
     }
@@ -1587,7 +1587,7 @@ final class AudioPlayer {
         return result
     }
 
-    // MARK: - Butterchurn Audio Data (Phase 2)
+    // MARK: - Butterchurn Audio Data
 
     /// Thread-safe snapshot of current Butterchurn audio data
     /// Returns nil if not playing local audio (video or stream playback)

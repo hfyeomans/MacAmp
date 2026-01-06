@@ -83,6 +83,7 @@ final class AppSettings {
         self.butterchurnCycling = UserDefaults.standard.object(forKey: "butterchurnCycling") as? Bool ?? true
         let savedInterval = UserDefaults.standard.double(forKey: "butterchurnCycleInterval")
         self.butterchurnCycleInterval = savedInterval > 0 ? savedInterval : 15.0
+        self.butterchurnTrackTitleInterval = UserDefaults.standard.double(forKey: "butterchurnTrackTitleInterval")
     }
     
     static func instance() -> AppSettings {
@@ -286,6 +287,14 @@ final class AppSettings {
     var butterchurnCycleInterval: Double = 15.0 {
         didSet {
             UserDefaults.standard.set(butterchurnCycleInterval, forKey: "butterchurnCycleInterval")
+        }
+    }
+
+    /// Track title display interval in seconds (default: 0 = once/manual only)
+    /// When > 0, track title is displayed at this interval automatically
+    var butterchurnTrackTitleInterval: Double = 0 {
+        didSet {
+            UserDefaults.standard.set(butterchurnTrackTitleInterval, forKey: "butterchurnTrackTitleInterval")
         }
     }
 

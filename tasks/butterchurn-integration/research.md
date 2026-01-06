@@ -559,3 +559,168 @@ And verify pixel dimensions in JS:
 canvas.width = canvas.clientWidth || 256;
 canvas.height = canvas.clientHeight || 198;
 ```
+
+---
+
+## Oracle A-Grade Fixes (2026-01-05)
+
+After initial implementation, Oracle (Codex gpt-5.2-codex with high reasoning) reviewed the code and identified improvements to upgrade from Grade B+ to Grade A.
+
+### Fix 1: Centralized Failure Handling (Critical)
+
+**Problem:** Load failures didn't stop the audio update timer, causing zombie updates to a dead WebView.
+
+**Solution:** Added `markLoadFailed(_ message: String)` helper method that:
+- Sets `isReady = false`
+- Clears state (presetCount, presetNames)
+- **Stops audio update task**
+- Logs error
+
+```swift
+func markLoadFailed(_ message: String) {
+    isReady = false
+    errorMessage = message
+    presetCount = 0
+    presetNames = []
+    stopAudioUpdates()  // CRITICAL: Stop timer on failure
+    AppLog.error(.general, "[ButterchurnBridge] Load failed: \(message)")
+}
+```
+
+**Lesson:** Always pair "start" operations with corresponding "stop" in error paths.
+
+### Fix 2: Guard Both `isReady` and `webView` (Critical)
+
+**Problem:** `sendAudioFrame()` only checked `webView != nil`, not `isReady`. Could send JS calls to failed/dead WebView.
+
+**Solution:** Combined guard:
+```swift
+// Before
+guard let webView = webView else { return }
+
+// After
+guard isReady, let webView = webView else { return }
+```
+
+**Lesson:** Guard all preconditions, not just the obvious one.
+
+### Fix 3: WKNavigationDelegate for WebView Errors (Critical)
+
+**Problem:** WebView load failures (network, process termination) went undetected. Bridge thought WebView was healthy.
+
+**Solution:** Made Coordinator conform to WKNavigationDelegate:
+```swift
+class Coordinator: NSObject, WKNavigationDelegate {
+    weak var bridge: ButterchurnBridge?
+
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        bridge?.markLoadFailed("WebView navigation failed: \(error.localizedDescription)")
+    }
+
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        bridge?.markLoadFailed("WebView provisional navigation failed: \(error.localizedDescription)")
+    }
+
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        bridge?.markLoadFailed("WebView content process terminated")
+    }
+}
+```
+
+**Lesson:** Always monitor external process health (WebView, audio engine, etc.).
+
+### Fix 4: callAsyncJavaScript with Typed Arguments (Important)
+
+**Problem:** Per-frame string interpolation overhead:
+```swift
+// Bad: String interpolation every frame (30 FPS = 30 string builds/sec)
+let js = "window.macampButterchurn?.setAudioData(\(spectrumInts), \(frame.waveform));"
+webView.evaluateJavaScript(js, completionHandler: nil)
+```
+
+**Solution:** Use typed arguments via `callAsyncJavaScript`:
+```swift
+// Good: Typed arguments, no string building
+webView.callAsyncJavaScript(
+    "window.macampButterchurn?.setAudioData(spectrum, waveform);",
+    arguments: ["spectrum": spectrumInts, "waveform": frame.waveform],
+    in: nil,
+    contentWorld: .page,
+    completionHandler: nil
+)
+```
+
+**Lesson:** Avoid string interpolation in hot paths. Use typed APIs when available.
+
+### Fix 5: Async Task Loop Instead of Timer+Task (Nice-to-have)
+
+**Problem:** Timer + Task hop pattern creates timing jitter and harder cancellation:
+```swift
+// Timer fires → creates Task → Task awaits MainActor → executes
+updateTimer = Timer.scheduledTimer(withTimeInterval: 1.0/30.0, repeats: true) { _ in
+    Task { @MainActor in
+        self?.sendAudioFrame()
+    }
+}
+```
+
+**Solution:** Pure async Task loop with clean cancellation:
+```swift
+audioUpdateTask = Task { [weak self] in
+    while !Task.isCancelled {
+        await self?.sendAudioFrame()
+        try? await Task.sleep(nanoseconds: 33_333_333)  // ~30 FPS
+    }
+}
+```
+
+**Benefits:**
+- Cleaner cancellation (`task.cancel()` vs `timer.invalidate()`)
+- No Timer→Task hop (less jitter)
+- Respects structured concurrency
+
+### Fix 6: Swift 6 Strict Concurrency (MainActor.assumeIsolated)
+
+**Problem:** `WKScriptMessageHandler.userContentController(_:didReceive:)` is `nonisolated`, but the class is `@MainActor`. Accessing `message.body` triggered Swift 6 error:
+```
+Main actor-isolated property 'body' can not be referenced from a nonisolated context
+```
+
+**Solution:** Use `MainActor.assumeIsolated` since WebKit guarantees main thread:
+```swift
+nonisolated func userContentController(
+    _ userContentController: WKUserContentController,
+    didReceive message: WKScriptMessage
+) {
+    // WebKit guarantees this delegate is called on main thread
+    MainActor.assumeIsolated {
+        // Safe to access message.body and self.handleMessage here
+        guard let dict = message.body as? [String: Any],
+              let type = dict["type"] as? String else { ... }
+        self.handleMessage(...)
+    }
+}
+```
+
+**Lesson:** Use `MainActor.assumeIsolated` for delegate methods that are guaranteed to be called on main thread but protocol requires `nonisolated`.
+
+### Linker Warning (Non-Issue)
+
+**Warning:** `Duplicate -rpath '@executable_path' ignored`
+
+**Cause:** `LD_RUNPATH_SEARCH_PATHS` contains same entry at project and target level.
+
+**Impact:** None. Linker ignores duplicates.
+
+**Fix:** Deduplicate in Xcode Build Settings (optional cleanup).
+
+---
+
+## Architecture Lessons Learned
+
+1. **Failure States Must Cascade:** When component A fails, stop all dependent components (B, C, D)
+2. **Guard All Preconditions:** Check both state (`isReady`) and resources (`webView != nil`)
+3. **Monitor External Processes:** WebView, audio engine, network can fail independently
+4. **Hot Path Optimization:** Avoid allocations/string-building in per-frame code
+5. **Swift 6 Actor Boundaries:** Use `MainActor.assumeIsolated` when caller guarantees main thread
+6. **Structured Concurrency:** Prefer async Task loops over Timer+Task patterns

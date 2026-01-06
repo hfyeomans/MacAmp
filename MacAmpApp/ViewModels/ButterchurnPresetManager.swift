@@ -54,6 +54,18 @@ final class ButterchurnPresetManager {
     /// Transition duration in seconds (default: 2.7s, Milkdrop standard)
     var transitionDuration: Double = 2.7
 
+    /// Track title display interval in seconds (0 = once/manual only)
+    var trackTitleInterval: TimeInterval = 0 {
+        didSet {
+            appSettings?.butterchurnTrackTitleInterval = trackTitleInterval
+            if trackTitleInterval > 0 {
+                restartTrackTitleTimer()
+            } else {
+                stopTrackTitleTimer()
+            }
+        }
+    }
+
     // MARK: - Private State
 
     /// History stack for previous preset navigation (webamp pattern)
@@ -62,26 +74,35 @@ final class ButterchurnPresetManager {
     /// Cycling timer
     @ObservationIgnored private var cycleTimer: Timer?
 
+    /// Track title display timer
+    @ObservationIgnored private var trackTitleTimer: Timer?
+
     /// Weak reference to bridge for JS calls
     @ObservationIgnored private weak var bridge: ButterchurnBridge?
 
     /// Weak reference to AppSettings for persistence
     @ObservationIgnored private weak var appSettings: AppSettings?
 
+    /// Weak reference to PlaybackCoordinator for track title display
+    @ObservationIgnored private weak var playbackCoordinator: PlaybackCoordinator?
+
     // MARK: - Configuration
 
-    /// Configure with bridge and settings
+    /// Configure with bridge, settings, and playback coordinator
     /// - Parameters:
     ///   - bridge: ButterchurnBridge for JS communication
     ///   - appSettings: AppSettings for persistence
-    func configure(bridge: ButterchurnBridge, appSettings: AppSettings) {
+    ///   - playbackCoordinator: PlaybackCoordinator for track title display
+    func configure(bridge: ButterchurnBridge, appSettings: AppSettings, playbackCoordinator: PlaybackCoordinator? = nil) {
         self.bridge = bridge
         self.appSettings = appSettings
+        self.playbackCoordinator = playbackCoordinator
 
         // Load persisted settings
         isRandomize = appSettings.butterchurnRandomize
         isCycling = appSettings.butterchurnCycling
         cycleInterval = appSettings.butterchurnCycleInterval
+        trackTitleInterval = appSettings.butterchurnTrackTitleInterval
     }
 
     /// Load presets from JS bridge ready callback
@@ -102,6 +123,11 @@ final class ButterchurnPresetManager {
         // Start cycling if enabled
         if isCycling {
             startCycling()
+        }
+
+        // Start track title timer if interval is set
+        if trackTitleInterval > 0 {
+            startTrackTitleTimer()
         }
     }
 
@@ -209,10 +235,48 @@ final class ButterchurnPresetManager {
         }
     }
 
+    // MARK: - Track Title Timer
+
+    /// Start automatic track title display
+    func startTrackTitleTimer() {
+        guard trackTitleInterval > 0 else { return }
+        stopTrackTitleTimer()
+
+        // Show title immediately on start
+        showCurrentTrackTitle()
+
+        trackTitleTimer = Timer.scheduledTimer(withTimeInterval: trackTitleInterval, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.showCurrentTrackTitle()
+            }
+        }
+    }
+
+    /// Stop automatic track title display
+    func stopTrackTitleTimer() {
+        trackTitleTimer?.invalidate()
+        trackTitleTimer = nil
+    }
+
+    /// Restart track title timer (after interval change)
+    private func restartTrackTitleTimer() {
+        stopTrackTitleTimer()
+        if trackTitleInterval > 0 {
+            startTrackTitleTimer()
+        }
+    }
+
+    /// Show current track title via bridge
+    func showCurrentTrackTitle() {
+        guard let displayTitle = playbackCoordinator?.displayTitle else { return }
+        bridge?.showTrackTitle(displayTitle)
+    }
+
     // MARK: - Cleanup
 
     /// Clean up timers
     func cleanup() {
         stopCycling()
+        stopTrackTitleTimer()
     }
 }

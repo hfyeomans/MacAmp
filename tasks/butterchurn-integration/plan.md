@@ -545,23 +545,112 @@ var butterchurnCycleInterval: Double = 15.0 {
 
 **Commit scope:** Phase 5 complete when shortcuts work and track titles display.
 
-### 5.1 Track Title Updates
+### 5.1 Context Menu Architecture
+
+**Pattern:** Same NSMenu pattern as WinampMainWindow Options menu.
+
+```
+┌─────────────────────────────────────────┐
+│ ▶ [Current Preset Name]    (header)     │
+├─────────────────────────────────────────┤
+│ Next Preset                      Space  │
+│ Previous Preset              Backspace  │
+├─────────────────────────────────────────┤
+│ ✓ Randomize                          R  │
+│ ✓ Auto-Cycle Presets                 C  │
+│ Cycle Interval                  ▶       │
+│   ├─ 5 seconds                          │
+│   ├─ ✓ 10 seconds                       │
+│   ├─ 15 seconds                         │
+│   ├─ 30 seconds                         │
+│   └─ 60 seconds                         │
+├─────────────────────────────────────────┤
+│ Show Track Title                     T  │
+├─────────────────────────────────────────┤
+│ Presets (217)                   ▶       │
+│   ├─ ✓ flexi - bouncing balls           │
+│   ├─ flexi - don't want to study        │
+│   ├─ ... (up to 100 items)              │
+│   └─ ... and 117 more                   │
+└─────────────────────────────────────────┘
+```
+
+**Implementation Components:**
+
+1. **RightClickCaptureView** (NSViewRepresentable)
+   - Transparent overlay captures right-click events
+   - Converts window coordinates to screen coordinates
+   - Passes through all other mouse events
+   - Allows WebView underneath to handle left-clicks
+
+2. **MilkdropMenuTarget** (NSObject)
+   - Bridges Swift closures to NSMenuItem @objc actions
+   - Same pattern as MenuItemTarget in WinampMainWindow
+   - Stored in menuItem.representedObject to prevent deallocation
+
+3. **Menu Lifecycle**
+   - `@State private var activeContextMenu: NSMenu?` keeps menu alive
+   - Menu created fresh each time (reflects current state)
+   - Uses `menu.popUp(positioning:at:in:)` at click location
 
 ```swift
-// In PlaybackCoordinator or appropriate location
-func onTrackChange(newTrack: Track) {
-    butterchurnBridge?.showTrackTitle(newTrack.title)
-}
+// Key implementation pattern
+struct WinampMilkdropWindow: View {
+    @Environment(ButterchurnPresetManager.self) var presetManager
+    @Environment(PlaybackCoordinator.self) var playbackCoordinator
+    @State private var activeContextMenu: NSMenu?
 
-// ButterchurnBridge addition
-func showTrackTitle(_ title: String) {
-    let escaped = title.replacingOccurrences(of: "'", with: "\\'")
-    let js = "window.macampButterchurn.showTrackTitle('\(escaped)');"
-    webView?.evaluateJavaScript(js, completionHandler: nil)
+    var body: some View {
+        MilkdropWindowChromeView {
+            ZStack {
+                ButterchurnWebView(bridge: bridge)
+
+                // Transparent overlay for right-click capture
+                RightClickCaptureView { location in
+                    showContextMenu(at: location)
+                }
+            }
+        }
+    }
+
+    private func showContextMenu(at location: NSPoint) {
+        let menu = NSMenu()
+        activeContextMenu = menu  // Retain!
+
+        // Build menu items with weak captures
+        menu.addItem(createMenuItem(
+            title: "Next Preset",
+            keyEquivalent: " ",
+            action: { [weak presetManager] in
+                presetManager?.nextPreset()
+            }
+        ))
+        // ... more items
+
+        menu.popUp(positioning: nil, at: location, in: nil)
+    }
 }
 ```
 
-### 5.2 Keyboard Shortcuts
+### 5.2 Track Title Updates
+
+```swift
+// In ButterchurnBridge
+func showTrackTitle(_ title: String) {
+    guard isReady, let webView = webView else { return }
+
+    let escaped = title
+        .replacingOccurrences(of: "\\", with: "\\\\")
+        .replacingOccurrences(of: "'", with: "\\'")
+    let js = "window.macampButterchurn?.showTrackTitle('\(escaped)');"
+    webView.evaluateJavaScript(js, completionHandler: nil)
+}
+
+// Triggered via context menu "Show Track Title" item
+// Uses playbackCoordinator.displayTitle for current track/stream
+```
+
+### 5.3 Keyboard Shortcuts
 
 | Key | Action | Implementation |
 |-----|--------|----------------|
@@ -671,6 +760,79 @@ class SystemAudioCapture: ButterchurnAudioSource {
 ```
 
 Bridge will depend only on protocol, allowing seamless switch to system capture.
+
+---
+
+## Phase 7: Track Title Interval Display
+
+**Goal:** Add interval-based track title display option (like preset cycle interval).
+
+**Current behavior:** "Show Track Title" displays once when clicked (or pressed T).
+
+**New behavior:** Options for automatic interval-based display:
+- Once (current default)
+- 5 seconds
+- 10 seconds
+- 15 seconds
+- 30 seconds
+- 60 seconds
+
+### 7.1 AppSettings Addition
+
+```swift
+// butterchurnTrackTitleInterval: 0 = Off (manual/once), >0 = interval in seconds
+var butterchurnTrackTitleInterval: Double = 0 {
+    didSet { UserDefaults.standard.set(butterchurnTrackTitleInterval, forKey: "butterchurnTrackTitleInterval") }
+}
+```
+
+### 7.2 ButterchurnPresetManager Extension
+
+```swift
+// Track title interval timer (0 = disabled, >0 = interval)
+var trackTitleInterval: TimeInterval = 0 {
+    didSet {
+        appSettings?.butterchurnTrackTitleInterval = trackTitleInterval
+        if trackTitleInterval > 0 {
+            startTrackTitleTimer()
+        } else {
+            stopTrackTitleTimer()
+        }
+    }
+}
+
+@ObservationIgnored private var trackTitleTimer: Timer?
+@ObservationIgnored private weak var playbackCoordinator: PlaybackCoordinator?
+
+func configure(..., playbackCoordinator: PlaybackCoordinator) {
+    self.playbackCoordinator = playbackCoordinator
+    trackTitleInterval = appSettings.butterchurnTrackTitleInterval
+}
+
+private func startTrackTitleTimer() { ... }
+private func stopTrackTitleTimer() { ... }
+```
+
+### 7.3 Context Menu Update
+
+```
+┌─────────────────────────────────────────┐
+│ Show Track Title                     T  │
+│ Track Title Interval            ▶       │
+│   ├─ ✓ Once (on request)               │
+│   ├─ Every 5 seconds                    │
+│   ├─ Every 10 seconds                   │
+│   ├─ Every 15 seconds                   │
+│   ├─ Every 30 seconds                   │
+│   └─ Every 60 seconds                   │
+└─────────────────────────────────────────┘
+```
+
+**Success Criteria (Phase 7):**
+- [ ] "Once" mode works (current behavior preserved)
+- [ ] Interval modes display track title repeatedly
+- [ ] Setting persists across restarts
+- [ ] Timer starts/stops properly with cycling
 
 ---
 

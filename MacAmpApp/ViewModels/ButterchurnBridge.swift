@@ -6,14 +6,15 @@ import Observation
 /// Handles WKScriptMessageHandler for JS→Swift communication and
 /// evaluateJavaScript for Swift→JS communication
 ///
-/// Phase 1: Handles ready/loadFailed messages from bridge.js
-/// Phase 3: 30 FPS audio data updates with pause/resume on playback state
-/// Phase 4: Preset management via ButterchurnPresetManager
+/// Responsibilities:
+/// - Handles ready/loadFailed messages from bridge.js
+/// - 30 FPS audio data updates with pause/resume on playback state
+/// - Preset management via ButterchurnPresetManager
 @MainActor
 @Observable
 final class ButterchurnBridge: NSObject, WKScriptMessageHandler {
     /// WebView reference (weak to prevent retain cycle)
-    weak var webView: WKWebView?
+    @ObservationIgnored weak var webView: WKWebView?
 
     /// Whether Butterchurn has initialized successfully
     var isReady: Bool = false
@@ -28,11 +29,15 @@ final class ButterchurnBridge: NSObject, WKScriptMessageHandler {
     var errorMessage: String?
 
     /// Callback when presets are loaded (for ButterchurnPresetManager)
-    var onPresetsLoaded: (([String]) -> Void)?
+    @ObservationIgnored var onPresetsLoaded: (([String]) -> Void)?
 
-    // MARK: - Phase 3 Properties
+    /// Weak reference to preset manager for cleanup coordination
+    @ObservationIgnored weak var presetManager: ButterchurnPresetManager?
 
-    @ObservationIgnored private var updateTimer: Timer?
+    // MARK: - Audio Update Properties
+
+    /// Async task for 30 FPS audio updates (replaces Timer for cleaner cancellation)
+    @ObservationIgnored private var audioUpdateTask: Task<Void, Never>?
     @ObservationIgnored private weak var audioPlayer: AudioPlayer?
 
     /// Tracks whether the JS render loop is active (pause when no audio)
@@ -40,45 +45,67 @@ final class ButterchurnBridge: NSObject, WKScriptMessageHandler {
 
     // MARK: - WKScriptMessageHandler
 
+    /// Sendable struct for parsing WKScriptMessage before crossing actor boundary
+    private struct ParsedMessage: Sendable {
+        let type: String
+        let presetCount: Int
+        let presetNames: [String]
+        let error: String?
+    }
+
     nonisolated func userContentController(
         _ userContentController: WKUserContentController,
         didReceive message: WKScriptMessage
     ) {
-        // Dispatch to main actor for @Observable state updates
-        Task { @MainActor in
-            self.handleMessage(message)
+        // WebKit guarantees this delegate is called on main thread
+        // Use assumeIsolated to satisfy Swift 6 strict concurrency
+        MainActor.assumeIsolated {
+            guard let dict = message.body as? [String: Any],
+                  let type = dict["type"] as? String else {
+                AppLog.warn(.general, "[ButterchurnBridge] Invalid message format")
+                return
+            }
+
+            self.handleMessage(ParsedMessage(
+                type: type,
+                presetCount: dict["presetCount"] as? Int ?? 0,
+                presetNames: dict["presetNames"] as? [String] ?? [],
+                error: dict["error"] as? String
+            ))
         }
     }
 
-    private func handleMessage(_ message: WKScriptMessage) {
-        guard let dict = message.body as? [String: Any],
-              let type = dict["type"] as? String else {
-            AppLog.warn(.general, "[ButterchurnBridge] Invalid message format")
-            return
-        }
-
-        switch type {
+    private func handleMessage(_ message: ParsedMessage) {
+        switch message.type {
         case "ready":
             isReady = true
             errorMessage = nil
-            presetCount = dict["presetCount"] as? Int ?? 0
-            presetNames = dict["presetNames"] as? [String] ?? []
+            presetCount = message.presetCount
+            presetNames = message.presetNames
             AppLog.info(.general, "[ButterchurnBridge] Ready! \(presetCount) presets available")
             startAudioUpdates()
             // Notify preset manager
             onPresetsLoaded?(presetNames)
 
         case "loadFailed":
-            isReady = false
-            errorMessage = dict["error"] as? String ?? "Unknown error"
-            presetCount = 0
-            presetNames = []
-            AppLog.error(.general, "[ButterchurnBridge] Load failed: \(errorMessage ?? "unknown")")
+            markLoadFailed(message.error ?? "Unknown error")
 
         default:
-            AppLog.warn(.general, "[ButterchurnBridge] Unknown message type: \(type)")
+            AppLog.warn(.general, "[ButterchurnBridge] Unknown message type: \(message.type)")
             break
         }
+    }
+
+    // MARK: - Failure Handling
+
+    /// Centralized failure handler - stops updates and sets error state
+    func markLoadFailed(_ message: String) {
+        isReady = false
+        errorMessage = message
+        presetCount = 0
+        presetNames = []
+        stopAudioUpdates()
+        AppLog.error(.general, "[ButterchurnBridge] Load failed: \(message)")
     }
 
     // MARK: - Cleanup
@@ -86,38 +113,43 @@ final class ButterchurnBridge: NSObject, WKScriptMessageHandler {
     /// Called from ButterchurnWebView.dismantleNSView
     func cleanup() {
         stopAudioUpdates()
+        presetManager?.cleanup()
         webView = nil
     }
 
     private func stopAudioUpdates() {
-        updateTimer?.invalidate()
-        updateTimer = nil
+        audioUpdateTask?.cancel()
+        audioUpdateTask = nil
     }
 
-    // MARK: - Phase 3: Audio Updates
+    // MARK: - Audio Updates
 
     /// Configure with AudioPlayer for audio data
     func configure(audioPlayer: AudioPlayer) {
         self.audioPlayer = audioPlayer
     }
 
-    /// Start sending audio data at 30 FPS
+    /// Start sending audio data at 30 FPS using async Task loop
     private func startAudioUpdates() {
         // Don't start if already running
-        guard updateTimer == nil else { return }
+        guard audioUpdateTask == nil else { return }
 
-        // 30 FPS = 1/30 second interval (~33ms)
-        updateTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
-            Task { @MainActor in
+        // 30 FPS = ~33ms interval using async Task (cleaner cancellation, less jitter)
+        // Task runs on MainActor since sendAudioFrame() is MainActor-isolated
+        audioUpdateTask = Task { @MainActor [weak self] in
+            AppLog.info(.general, "[ButterchurnBridge] Started 30 FPS audio updates")
+            while !Task.isCancelled {
                 self?.sendAudioFrame()
+                try? await Task.sleep(nanoseconds: 33_333_333) // ~30 FPS
             }
+            AppLog.info(.general, "[ButterchurnBridge] Stopped audio updates")
         }
-        AppLog.info(.general, "[ButterchurnBridge] Started 30 FPS audio updates")
     }
 
     /// Push current audio frame to JavaScript
     private func sendAudioFrame() {
-        guard let webView = webView else { return }
+        // Guard both isReady and webView to prevent calls to dead/failed WebView
+        guard isReady, let webView = webView else { return }
 
         // Get audio data from AudioPlayer (nil if not playing local audio)
         guard let frame = audioPlayer?.snapshotButterchurnFrame() else {
@@ -139,12 +171,17 @@ final class ButterchurnBridge: NSObject, WKScriptMessageHandler {
         // Waveform stays as Float (-1 to 1) for JS Float32Array
         let spectrumInts = frame.spectrum.map { Int(min(255, max(0, $0 * 255))) }
 
-        // Build JavaScript call - use JSON encoding for arrays
-        let js = "window.macampButterchurn?.setAudioData(\(spectrumInts), \(frame.waveform));"
-        webView.evaluateJavaScript(js, completionHandler: nil)
+        // Use callAsyncJavaScript with typed arguments (avoids per-frame string interpolation)
+        webView.callAsyncJavaScript(
+            "window.macampButterchurn?.setAudioData(spectrum, waveform);",
+            arguments: ["spectrum": spectrumInts, "waveform": frame.waveform],
+            in: nil,
+            in: .page,
+            completionHandler: nil
+        )
     }
 
-    // MARK: - Phase 4: Preset Control
+    // MARK: - Preset Control
 
     /// Load preset at index with transition
     /// - Parameters:
@@ -158,16 +195,18 @@ final class ButterchurnBridge: NSObject, WKScriptMessageHandler {
         webView.evaluateJavaScript(js, completionHandler: nil)
     }
 
-    // MARK: - Phase 5: Track Title
+    // MARK: - Track Title
 
     /// Show track title animation in Butterchurn
     func showTrackTitle(_ title: String) {
         guard isReady, let webView = webView else { return }
 
-        let escaped = title
-            .replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "'", with: "\\'")
-        let js = "window.macampButterchurn?.showTrackTitle('\(escaped)');"
+        // Use JSON encoding to safely escape all special characters (newlines, quotes, Unicode)
+        guard let jsonData = try? JSONEncoder().encode(title),
+              let jsonString = String(data: jsonData, encoding: .utf8) else {
+            return
+        }
+        let js = "window.macampButterchurn?.showTrackTitle(\(jsonString));"
         webView.evaluateJavaScript(js, completionHandler: nil)
     }
 

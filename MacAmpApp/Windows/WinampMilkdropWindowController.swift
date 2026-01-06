@@ -15,14 +15,17 @@ class WinampMilkdropWindowController: NSWindowController {
         // Create Butterchurn bridge (owned by controller for lifecycle management)
         let bridge = ButterchurnBridge()
 
-        // Create preset manager and configure with bridge + settings
+        // Create preset manager and configure with bridge + settings + playback coordinator
         let presetMgr = ButterchurnPresetManager()
-        presetMgr.configure(bridge: bridge, appSettings: settings)
+        presetMgr.configure(bridge: bridge, appSettings: settings, playbackCoordinator: playbackCoordinator)
 
         // Wire bridge's onPresetsLoaded callback to preset manager
         bridge.onPresetsLoaded = { [weak presetMgr] presetNames in
             presetMgr?.loadPresets(presetNames)
         }
+
+        // Wire preset manager reference for cleanup coordination
+        bridge.presetManager = presetMgr
 
         // Create borderless window (follows TASK 1 pattern)
         let window = BorderlessWindow(
