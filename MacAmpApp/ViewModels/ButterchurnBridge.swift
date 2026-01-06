@@ -51,6 +51,9 @@ final class ButterchurnBridge: NSObject, WKScriptMessageHandler {
         let presetCount: Int
         let presetNames: [String]
         let error: String?
+        let extraPackLoaded: Bool
+        let basePresetCount: Int
+        let extraPresetCount: Int
     }
 
     nonisolated func userContentController(
@@ -70,7 +73,10 @@ final class ButterchurnBridge: NSObject, WKScriptMessageHandler {
                 type: type,
                 presetCount: dict["presetCount"] as? Int ?? 0,
                 presetNames: dict["presetNames"] as? [String] ?? [],
-                error: dict["error"] as? String
+                error: dict["error"] as? String,
+                extraPackLoaded: dict["extraPackLoaded"] as? Bool ?? false,
+                basePresetCount: dict["basePresetCount"] as? Int ?? 0,
+                extraPresetCount: dict["extraPresetCount"] as? Int ?? 0
             ))
         }
     }
@@ -82,7 +88,8 @@ final class ButterchurnBridge: NSObject, WKScriptMessageHandler {
             errorMessage = nil
             presetCount = message.presetCount
             presetNames = message.presetNames
-            AppLog.info(.general, "[ButterchurnBridge] Ready! \(presetCount) presets available")
+            let extraStatus = message.extraPackLoaded ? "loaded" : "not loaded"
+            AppLog.info(.general, "[ButterchurnBridge] Ready! \(presetCount) presets (base: \(message.basePresetCount), extra: \(message.extraPresetCount) [\(extraStatus)])")
             startAudioUpdates()
             // Notify preset manager
             onPresetsLoaded?(presetNames)
@@ -114,6 +121,10 @@ final class ButterchurnBridge: NSObject, WKScriptMessageHandler {
     func cleanup() {
         stopAudioUpdates()
         presetManager?.cleanup()
+
+        // Call JavaScript dispose() to cleanup AudioContext, listeners, and references
+        webView?.evaluateJavaScript("window.macampButterchurn?.dispose?.()") { _, _ in }
+
         webView = nil
     }
 

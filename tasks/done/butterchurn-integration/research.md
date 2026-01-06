@@ -724,3 +724,101 @@ nonisolated func userContentController(
 4. **Hot Path Optimization:** Avoid allocations/string-building in per-frame code
 5. **Swift 6 Actor Boundaries:** Use `MainActor.assumeIsolated` when caller guarantees main thread
 6. **Structured Concurrency:** Prefer async Task loops over Timer+Task patterns
+
+---
+
+## Butterchurn Preset Packs Research (2026-01-05)
+
+### Available Preset Packs
+
+Research from [butterchurn-presets](https://github.com/jberg/butterchurn-presets) repository and [npm package](https://www.npmjs.com/package/butterchurn-presets):
+
+| Pack | Presets | File Size | Description |
+|------|---------|-----------|-------------|
+| **Minimal** | 28 | ~230KB | Curated subset, lightweight |
+| **Non-Minimal** | 72 | ~400KB | Remaining base presets |
+| **Base** | 100 | ~638KB | Minimal + Non-Minimal combined |
+| **Extra** | 200 | ~825KB | Additional high-quality presets |
+| **Image** | 200 | ~varies | Presets with image dependencies |
+| **MD1** | 95 | ~varies | Milkdrop 1.x era presets |
+| **All** | 595 | ~2MB+ | Complete collection |
+
+### Initial MacAmp Implementation
+
+**Bundled:** `butterchurnPresets.min.js` (230KB, ~28 presets from Minimal pack)
+
+**User observation:** Menu showed 29 presets (close to Minimal pack count)
+
+### CDN Source
+
+Files available from jsDelivr CDN:
+```
+https://cdn.jsdelivr.net/npm/butterchurn-presets@2.4.7/lib/butterchurnPresets.min.js      (Base: 638KB)
+https://cdn.jsdelivr.net/npm/butterchurn-presets@2.4.7/lib/butterchurnPresetsExtra.min.js (Extra: 825KB)
+```
+
+### Recommended Upgrade Path
+
+**Option chosen:** Base (~98) + Extra (~147) = **~245 presets** (actual count)
+
+Note: npm advertised 100+200=300, but actual unique presets totals ~245.
+
+**Implementation:**
+1. Replace `butterchurnPresets.min.js` with Base pack from npm (638KB)
+2. Add `butterchurnPresetsExtra.min.js` (825KB)
+3. Update `ButterchurnWebView.swift` to inject both scripts
+4. Update `bridge.js` to merge both preset objects with try/catch
+
+**Total bundle size increase:** ~1.2MB additional JavaScript
+
+### UMD Bundle Loading Pattern
+
+Both preset packs use UMD format and export directly as global variables:
+- Base: `window.butterchurnPresets` (no aliasing needed - exports correctly)
+- Extra: `window.butterchurnPresetsExtra` (no aliasing needed - exports correctly)
+
+**Merge pattern in bridge.js:**
+```javascript
+// Load base presets
+var basePresets = {};
+if (butterchurnPresets.default) {
+    basePresets = butterchurnPresets.default;
+} else if (typeof butterchurnPresets === 'object') {
+    basePresets = butterchurnPresets;
+}
+
+// Load extra presets
+var extraPresets = {};
+if (typeof butterchurnPresetsExtra !== 'undefined') {
+    if (butterchurnPresetsExtra.default) {
+        extraPresets = butterchurnPresetsExtra.default;
+    } else if (typeof butterchurnPresetsExtra === 'object') {
+        extraPresets = butterchurnPresetsExtra;
+    }
+}
+
+// Merge both sets
+presets = Object.assign({}, basePresets, extraPresets);
+```
+
+### Why Not "All" Pack?
+
+- Includes broken/incomplete presets
+- Image pack requires external image assets
+- 2MB+ bundle size excessive for initial load
+- Base + Extra provides best quality/size ratio
+
+### Implementation Complete (2026-01-05)
+
+**Final result:** 245 presets working in MacAmp
+
+**Key findings during implementation:**
+1. UMD bundles export directly as `butterchurnPresets` and `butterchurnPresetsExtra` - no aliasing needed
+2. Oracle code review (7.5/10) recommended try/catch isolation for extra pack loading
+3. Actual preset count is ~245 (98 base + 147 extra), not advertised 300
+
+**Files changed:**
+- `Butterchurn/butterchurnPresets.min.js` - Replaced with Base pack (638KB)
+- `Butterchurn/butterchurnPresetsExtra.min.js` - Added Extra pack (825KB)
+- `Butterchurn/bridge.js` - Merge logic with graceful degradation
+- `MacAmpApp/Views/Windows/ButterchurnWebView.swift` - Inject both scripts
