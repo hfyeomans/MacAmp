@@ -1,22 +1,10 @@
 import SwiftUI
 
-/// Layout constants for Milkdrop Window (general purpose window using GEN.bmp)
-/// Default size matches video window: 275×232
-private enum MilkdropWindowLayout {
-    static let windowSize = CGSize(width: 275, height: 232)
-    static let titlebarHeight: CGFloat = 20  // GEN titlebar sprite height
-    static let bottomBarHeight: CGFloat = 14  // GEN bottom bar sprite height
-    static let leftBorderWidth: CGFloat = 11  // GEN_MIDDLE_LEFT width
-    static let rightBorderWidth: CGFloat = 8   // GEN_MIDDLE_RIGHT width
-
-    static let contentX: CGFloat = leftBorderWidth  // 11
-    static let contentY: CGFloat = titlebarHeight   // 20
-    static let contentWidth: CGFloat = windowSize.width - leftBorderWidth - rightBorderWidth  // 256
-    static let contentHeight: CGFloat = windowSize.height - titlebarHeight - bottomBarHeight  // 198
-}
-
-/// Milkdrop Window - Pixel-perfect GEN.bmp chrome using absolute positioning
+/// Milkdrop Window - Pixel-perfect GEN.bmp chrome using dynamic layout
 /// Matches Main/EQ/Playlist/Video pattern: ZStack + SimpleSpriteImage + .at()
+///
+/// Titlebar has 7 sections with gold fillers that expand symmetrically:
+/// LEFT_CAP(25) + LEFT_GOLD(n×25) + LEFT_END(25) + CENTER(3×25=75) + RIGHT_END(25) + RIGHT_GOLD(n×25) + RIGHT_CAP(25)
 struct MilkdropWindowChromeView<Content: View>: View {
     /// Size state for dynamic layout (segment-based resizing)
     let sizeState: MilkdropWindowSizeState
@@ -35,99 +23,119 @@ struct MilkdropWindowChromeView<Content: View>: View {
         ZStack(alignment: .topLeading) {
             // Background
             Color.black
-                .frame(width: MilkdropWindowLayout.windowSize.width, height: MilkdropWindowLayout.windowSize.height)
+                .frame(width: pixelSize.width, height: pixelSize.height)
 
-            // Titlebar - full width drag handle wrapping all sprites
-            WinampTitlebarDragHandle(windowKind: .milkdrop, size: CGSize(width: MilkdropWindowLayout.windowSize.width, height: MilkdropWindowLayout.titlebarHeight)) {
-                ZStack(alignment: .topLeading) {
-                    let suffix = isWindowActive ? "_SELECTED" : ""
+            // Dynamic titlebar
+            buildDynamicTitlebar()
 
-                    // Section 1: Left cap (25px) - column 0
-                    SimpleSpriteImage("GEN_TOP_LEFT\(suffix)", width: 25, height: MilkdropWindowLayout.titlebarHeight)
-                        .position(x: 12.5, y: 10)
+            // Dynamic side borders
+            buildDynamicBorders()
 
-                    // Section 2: Left gold bar tiles - columns 1-2 (2 tiles)
-                    ForEach(0..<2, id: \.self) { i in
-                        SimpleSpriteImage("GEN_TOP_LEFT_RIGHT_FILL\(suffix)", width: 25, height: MilkdropWindowLayout.titlebarHeight)
-                            .position(x: 25 + 12.5 + CGFloat(i) * 25, y: 10)
-                    }
-
-                    // Section 3: Left fixed (25px) - column 3
-                    SimpleSpriteImage("GEN_TOP_LEFT_END\(suffix)", width: 25, height: MilkdropWindowLayout.titlebarHeight)
-                        .position(x: 87.5, y: 10)
-
-                    // Section 4: Center grey tiles - columns 4-6 (3 tiles = 75px)
-                    // Symmetric layout: only odd tile counts allow equal gold fills
-                    // Center spans x:100-175, midpoint at x:137.5 = window center
-                    ForEach(0..<3, id: \.self) { i in
-                        SimpleSpriteImage("GEN_TOP_CENTER_FILL\(suffix)", width: 25, height: 20)
-                            .position(x: 100 + 12.5 + CGFloat(i) * 25, y: 10)
-                    }
-
-                    // Section 5: Right fixed (25px) - column 7
-                    SimpleSpriteImage("GEN_TOP_RIGHT_END\(suffix)", width: 25, height: MilkdropWindowLayout.titlebarHeight)
-                        .position(x: 187.5, y: 10)
-
-                    // Section 6: Right gold bar tiles - columns 8-9 (2 tiles = 50px, symmetric with left)
-                    ForEach(0..<2, id: \.self) { i in
-                        SimpleSpriteImage("GEN_TOP_LEFT_RIGHT_FILL\(suffix)", width: 25, height: MilkdropWindowLayout.titlebarHeight)
-                            .position(x: 200 + 12.5 + CGFloat(i) * 25, y: 10)
-                    }
-
-                    // Section 7: Right cap with close button (25px) - column 10
-                    SimpleSpriteImage("GEN_TOP_RIGHT\(suffix)", width: 25, height: MilkdropWindowLayout.titlebarHeight)
-                        .position(x: 262.5, y: 10)
-
-                    // MILKDROP HD letters - centered in 75px grey section (total width: 66px)
-                    // Each letter uses two-piece sprites (TOP + BOTTOM) stacked vertically
-                    // Center section spans x: 100-175, center at x: 137.5
-                    // Gap: (75px - 66px) / 2 = 4.5px each side
-                    milkdropLetters
-                        .position(x: 137.5, y: 8)
-                }
-            }
-            .position(x: 137.5, y: 10)
-
-            // Side borders - tiled vertically (29px per tile)
-            let sideHeight: CGFloat = 198  // 232 - 20 - 14
-            let sideTileCount = Int(ceil(sideHeight / 29))  // 7 tiles
-            ForEach(0..<sideTileCount, id: \.self) { i in
-                // Left border (11px wide)
-                SimpleSpriteImage("GEN_MIDDLE_LEFT", width: 11, height: 29)
-                    .position(x: 5.5, y: 20 + 14.5 + CGFloat(i) * 29)
-
-                // Right border (8px wide)
-                SimpleSpriteImage("GEN_MIDDLE_RIGHT", width: 8, height: 29)
-                    .position(x: 271, y: 20 + 14.5 + CGFloat(i) * 29)  // 275 - 4 = 271
-            }
-
-            // Content area
+            // Content area (WKWebView for Butterchurn)
             content
-                .frame(width: MilkdropWindowLayout.contentWidth, height: MilkdropWindowLayout.contentHeight)
-                .position(x: MilkdropWindowLayout.windowSize.width / 2, y: 20 + sideHeight / 2)
+                .frame(width: contentSize.width, height: contentSize.height)
+                .position(x: pixelSize.width / 2, y: 20 + contentSize.height / 2)
 
-            // Bottom bar - 3 pieces (left corner + tiled center + right corner with resizer)
-            SimpleSpriteImage("GEN_BOTTOM_LEFT", width: 125, height: 14)
-                .position(x: 62.5, y: 225)
-
-            // Center tiles - TWO-PIECE sprite (13px + 1px, excludes cyan)
-            ForEach(0..<1, id: \.self) { i in
-                VStack(spacing: 0) {
-                    SimpleSpriteImage("GEN_BOTTOM_FILL_TOP", width: 25, height: 13)
-                    SimpleSpriteImage("GEN_BOTTOM_FILL_BOTTOM", width: 25, height: 1)
-                }
-                .position(x: 125 + 12.5 + CGFloat(i) * 25, y: 225)
-            }
-
-            // Right corner with resize button (125px)
-            SimpleSpriteImage("GEN_BOTTOM_RIGHT", width: 125, height: 14)
-                .position(x: 212.5, y: 225)
-
-            // Close button is baked into GEN_TOP_RIGHT; no additional sprite needed here
+            // Dynamic bottom bar
+            buildDynamicBottomBar()
         }
-        .frame(width: MilkdropWindowLayout.windowSize.width, height: MilkdropWindowLayout.windowSize.height, alignment: .topLeading)
+        .frame(width: pixelSize.width, height: pixelSize.height, alignment: .topLeading)
         .fixedSize()
         .background(Color.black)
+    }
+
+    // MARK: - Dynamic Titlebar (7 sections)
+
+    @ViewBuilder
+    private func buildDynamicTitlebar() -> some View {
+        let suffix = isWindowActive ? "_SELECTED" : ""
+        let goldTiles = sizeState.goldFillerTilesPerSide
+        let centerStart = sizeState.centerSectionStartX
+
+        WinampTitlebarDragHandle(windowKind: .milkdrop, size: CGSize(width: pixelSize.width, height: 20)) {
+            ZStack(alignment: .topLeading) {
+                // Section 1: Left cap (25px)
+                SimpleSpriteImage("GEN_TOP_LEFT\(suffix)", width: 25, height: 20)
+                    .position(x: 12.5, y: 10)
+
+                // Section 2: Left gold bar tiles (dynamic count)
+                ForEach(0..<goldTiles, id: \.self) { i in
+                    SimpleSpriteImage("GEN_TOP_LEFT_RIGHT_FILL\(suffix)", width: 25, height: 20)
+                        .position(x: 25 + 12.5 + CGFloat(i) * 25, y: 10)
+                }
+
+                // Section 3: Left end (25px)
+                SimpleSpriteImage("GEN_TOP_LEFT_END\(suffix)", width: 25, height: 20)
+                    .position(x: centerStart - 12.5, y: 10)
+
+                // Section 4: Center grey tiles (fixed 3 tiles = 75px)
+                ForEach(0..<sizeState.centerGreyTileCount, id: \.self) { i in
+                    SimpleSpriteImage("GEN_TOP_CENTER_FILL\(suffix)", width: 25, height: 20)
+                        .position(x: centerStart + 12.5 + CGFloat(i) * 25, y: 10)
+                }
+
+                // Section 5: Right end (25px)
+                SimpleSpriteImage("GEN_TOP_RIGHT_END\(suffix)", width: 25, height: 20)
+                    .position(x: centerStart + 75 + 12.5, y: 10)
+
+                // Section 6: Right gold bar tiles (symmetric with left)
+                ForEach(0..<goldTiles, id: \.self) { i in
+                    SimpleSpriteImage("GEN_TOP_LEFT_RIGHT_FILL\(suffix)", width: 25, height: 20)
+                        .position(x: centerStart + 75 + 25 + 12.5 + CGFloat(i) * 25, y: 10)
+                }
+
+                // Section 7: Right cap with close button (25px)
+                SimpleSpriteImage("GEN_TOP_RIGHT\(suffix)", width: 25, height: 20)
+                    .position(x: pixelSize.width - 12.5, y: 10)
+
+                // MILKDROP HD letters - centered in 75px center section
+                milkdropLetters
+                    .position(x: sizeState.milkdropLettersCenterX, y: 8)
+            }
+        }
+        .position(x: pixelSize.width / 2, y: 10)
+    }
+
+    // MARK: - Dynamic Borders
+
+    @ViewBuilder
+    private func buildDynamicBorders() -> some View {
+        let tileCount = sizeState.verticalBorderTileCount
+
+        ForEach(0..<tileCount, id: \.self) { i in
+            // Left border (11px wide)
+            SimpleSpriteImage("GEN_MIDDLE_LEFT", width: 11, height: 29)
+                .position(x: 5.5, y: 20 + 14.5 + CGFloat(i) * 29)
+
+            // Right border (8px wide)
+            SimpleSpriteImage("GEN_MIDDLE_RIGHT", width: 8, height: 29)
+                .position(x: pixelSize.width - 4, y: 20 + 14.5 + CGFloat(i) * 29)
+        }
+    }
+
+    // MARK: - Dynamic Bottom Bar
+
+    @ViewBuilder
+    private func buildDynamicBottomBar() -> some View {
+        let bottomBarY = pixelSize.height - 7  // 14px bar, center at 7
+
+        // LEFT section (125px fixed)
+        SimpleSpriteImage("GEN_BOTTOM_LEFT", width: 125, height: 14)
+            .position(x: 62.5, y: bottomBarY)
+
+        // CENTER section (dynamic tiles) - TWO-PIECE sprites (13px + 1px = 14px)
+        let centerCount = sizeState.centerTileCount
+        ForEach(0..<centerCount, id: \.self) { i in
+            VStack(spacing: 0) {
+                SimpleSpriteImage("GEN_BOTTOM_FILL_TOP", width: 25, height: 13)
+                SimpleSpriteImage("GEN_BOTTOM_FILL_BOTTOM", width: 25, height: 1)
+            }
+            .position(x: 125 + 12.5 + CGFloat(i) * 25, y: bottomBarY)
+        }
+
+        // RIGHT section (125px fixed) - contains resize corner
+        SimpleSpriteImage("GEN_BOTTOM_RIGHT", width: 125, height: 14)
+            .position(x: pixelSize.width - 62.5, y: bottomBarY)
     }
 
     /// MILKDROP HD letters HStack - renders text as two-piece sprites with space
