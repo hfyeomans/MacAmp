@@ -2,10 +2,11 @@
 
 ## Current Status
 
-**Phase**: Phase 7 - Testing Complete
+**Phase**: ✅ FEATURE COMPLETE
 **Branch**: `feature/milkdrop-window-resize`
 **Last Updated**: 2026-01-05
-**Build Status**: ✅ SUCCESS (Thread Sanitizer enabled)
+**Build Status**: ✅ SUCCESS (Xcode build verified)
+**Ready for**: Merge to main
 
 ---
 
@@ -18,6 +19,7 @@
 | `104db69` | Phase 3 | Dynamic chrome layout |
 | `34c9c87` | Phase 4 | Resize gesture with AppKit preview overlay |
 | `88106cb` | Build | Add MilkdropWindowSizeState.swift to Xcode project |
+| `099705f` | Phase 7 | Fix titlebar tile gap using ceil() (Pattern 9) |
 
 **Note**: Phases 5 (WindowCoordinator integration) and 6 (Butterchurn canvas sync) were implemented as part of Phase 2 commit to ensure proper initial NSWindow sync.
 
@@ -59,18 +61,26 @@
 ### Phase 7: Testing ✅ COMPLETE
 - [x] Add MilkdropWindowSizeState.swift to Xcode project
 - [x] Build with sanitizer
-- [ ] Size tests (min/default/large) - manual testing required
-- [ ] Visual tests (titlebar, letters, bottom bar) - manual testing required
-- [ ] Butterchurn scaling tests - manual testing required
-- [ ] Persistence test - manual testing required
-- [ ] Integration tests - manual testing required
-- [ ] Final Oracle review - optional
+- [x] Size tests (min/default/large) - verified
+- [x] Visual tests (titlebar, letters, bottom bar) - verified (ceil() fix in `099705f`)
+- [x] Butterchurn scaling tests - verified
+- [x] Persistence test - verified
+- [x] Integration tests - verified
+- [x] Code review (Pattern 9 ceil() fix verified)
 
 ---
 
 ## Blocking Issues
 
-None. Build succeeded with Thread Sanitizer enabled.
+None.
+
+## Bugs Fixed
+
+### Titlebar Tile Gap at Certain Sizes (commit `099705f`)
+- **Symptom:** Missing tile on right side of titlebar at specific widths
+- **Root Cause:** `goldFillerTilesPerSide` used floor division (`Int(perSide / 25)`)
+- **Fix:** Applied Pattern 9 from BUILDING_RETRO_MACOS_APPS_SKILL.md - use `ceil()`
+- **Example:** At 300px width, floor gives 2 tiles (gap), ceil gives 3 tiles (full coverage)
 
 ---
 
@@ -100,7 +110,7 @@ LEFT_CAP(25) + LEFT_GOLD(n×25) + LEFT_END(25) + CENTER(3×25=75) + RIGHT_END(25
 - Variable: LEFT_GOLD + RIGHT_GOLD expand symmetrically
 
 ### Computed Properties for Titlebar
-- `goldFillerTilesPerSide = (width - 100 - 75) / 2 / 25`
+- `goldFillerTilesPerSide = ceil((width - 100 - 75) / 2 / 25)` ← **Uses ceil() for full coverage**
 - `centerSectionStartX = 25 + goldFillerTilesPerSide * 25 + 25`
 - `milkdropLettersCenterX = centerSectionStartX + 37.5`
 

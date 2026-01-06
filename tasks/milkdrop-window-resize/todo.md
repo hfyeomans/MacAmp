@@ -7,6 +7,8 @@
 - `39bc227` - Phase 2: Size state wiring (includes Phase 5 & 6)
 - `104db69` - Phase 3: Dynamic chrome layout
 - `34c9c87` - Phase 4: Resize gesture
+- `88106cb` - Build: Add MilkdropWindowSizeState.swift to Xcode project
+- `099705f` - Phase 7: Fix titlebar tile gap using ceil() (Pattern 9)
 
 **Note**: Phases 5 & 6 were implemented as part of Phase 2 for proper initialization.
 
@@ -163,55 +165,55 @@
 
 ---
 
-## Phase 7: Testing & Polish
+## Phase 7: Testing & Polish ✅ COMPLETE
 
 ### 7.1 Build
-- [ ] Build with Thread Sanitizer enabled
-- [ ] Verify no data race warnings
-- [ ] Verify no compiler warnings
+- [x] Build with Thread Sanitizer enabled
+- [x] Verify no data race warnings
+- [x] Verify no compiler warnings
 
 ### 7.2 Size Tests
-- [ ] Test minimum size (275×116)
-- [ ] Test default size (275×232)
-- [ ] Test medium size (400×350)
-- [ ] Test large size (600×500)
-- [ ] Test extra large (800×700)
+- [x] Test minimum size (275×116)
+- [x] Test default size (275×232)
+- [x] Test medium size (400×350)
+- [x] Test large size (600×500)
+- [x] Test extra large (800×700)
 
 ### 7.3 Visual Tests
-- [ ] **Titlebar tiles correctly at wider widths**
-- [ ] **MILKDROP HD letters stay centered at all widths**
-- [ ] Bottom bar tiles correctly
-- [ ] Side borders tile correctly
-- [ ] No gaps or overlaps
+- [x] **Titlebar tiles correctly at wider widths** (fixed with ceil() in commit `099705f`)
+- [x] **MILKDROP HD letters stay centered at all widths**
+- [x] Bottom bar tiles correctly
+- [x] Side borders tile correctly
+- [x] No gaps or overlaps
 
 ### 7.4 Butterchurn Tests
-- [ ] Canvas scales correctly at all sizes
-- [ ] Visualization continues during/after resize
-- [ ] No black bars or clipping
+- [x] Canvas scales correctly at all sizes
+- [x] Visualization continues during/after resize
+- [x] No black bars or clipping
 
 ### 7.5 Resize Behavior
-- [ ] Drag handle appears in correct position
-- [ ] Resize snaps to 25×29 segments
-- [ ] AppKit preview overlay shows during drag
-- [ ] Preview hides after drag ends
-- [ ] Window frame updates correctly
-- [ ] Top-left corner stays anchored
+- [x] Drag handle appears in correct position
+- [x] Resize snaps to 25×29 segments
+- [x] AppKit preview overlay shows during drag
+- [x] Preview hides after drag ends
+- [x] Window frame updates correctly
+- [x] Top-left corner stays anchored
 
 ### 7.6 Persistence
-- [ ] Resize to custom size
-- [ ] Quit app
-- [ ] Relaunch app
-- [ ] Window restores to saved size
+- [x] Resize to custom size
+- [x] Quit app
+- [x] Relaunch app
+- [x] Window restores to saved size
 
 ### 7.7 Integration
-- [ ] Test resize with magnetic docking enabled
-- [ ] Test resize while audio is playing
-- [ ] Test resize while visualization is paused
-- [ ] Test rapid resize gestures
+- [x] Test resize with magnetic docking enabled
+- [x] Test resize while audio is playing
+- [x] Test resize while visualization is paused
+- [x] Test rapid resize gestures
 
 ### 7.8 Code Review
-- [ ] Oracle review of all changes
-- [ ] Verify pattern compliance with VIDEO
+- [x] Oracle review of all changes (Pattern 9 ceil() fix verified)
+- [x] Verify pattern compliance with VIDEO
 
 ---
 
