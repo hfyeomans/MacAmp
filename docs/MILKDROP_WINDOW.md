@@ -594,6 +594,55 @@ private func createUserScripts() -> [WKUserScript] {
 
 ### 9.4 Audio Data Pipeline
 
+**End-to-End Audio Flow (Local Playback Only):**
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                        BUTTERCHURN AUDIO DATA FLOW                            │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                               │
+│  ┌─────────────┐    ┌─────────────────┐    ┌─────────────────────────────┐   │
+│  │ Audio File  │───▶│ AVAudioEngine   │───▶│ installTap(2048 samples)   │   │
+│  │ (.mp3/flac) │    │ (48kHz stereo)  │    │ Mono downsample + FFT      │   │
+│  └─────────────┘    └─────────────────┘    └─────────────────────────────┘   │
+│                                                       │                       │
+│                                                       ▼                       │
+│                           ┌───────────────────────────────────────────────┐   │
+│                           │        AudioPlayer.swift                       │   │
+│                           │  @ObservationIgnored butterchurnSpectrum[1024] │   │
+│                           │  @ObservationIgnored butterchurnWaveform[1024] │   │
+│                           │  snapshotButterchurnFrame() → ButterchurnFrame │   │
+│                           └───────────────────────────────────────────────┘   │
+│                                                       │                       │
+│                                                       ▼ (30 FPS Timer)        │
+│                           ┌───────────────────────────────────────────────┐   │
+│                           │        ButterchurnBridge.swift                 │   │
+│                           │  sendAudioData() → callAsyncJavaScript         │   │
+│                           │  "window.receiveAudioData([...samples])"       │   │
+│                           └───────────────────────────────────────────────┘   │
+│                                                       │                       │
+│                                                       ▼ (WKWebView)           │
+│                           ┌───────────────────────────────────────────────┐   │
+│                           │        bridge.js (JavaScript)                  │   │
+│                           │  receiveAudioData(data) → audioBuffer.set()    │   │
+│                           │  ScriptProcessorNode → Butterchurn analyser    │   │
+│                           └───────────────────────────────────────────────┘   │
+│                                                       │                       │
+│                                                       ▼ (60 FPS RAF)          │
+│                           ┌───────────────────────────────────────────────┐   │
+│                           │        butterchurn.min.js                      │   │
+│                           │  visualizer.render() → WebGL Canvas            │   │
+│                           │  100+ presets with audio-reactive shaders      │   │
+│                           └───────────────────────────────────────────────┘   │
+│                                                                               │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Frame Rates:**
+- **AVAudioEngine tap:** 48kHz continuous (2048 samples per buffer)
+- **Swift→JS updates:** 30 FPS (33ms interval)
+- **WebGL rendering:** 60 FPS (requestAnimationFrame)
+
 **30 FPS Swift→JS Audio Updates:**
 
 ```swift

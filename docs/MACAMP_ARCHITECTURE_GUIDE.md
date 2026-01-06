@@ -2910,6 +2910,47 @@ func generateFallbackGenChrome() -> GenChromeSet {
 }
 ```
 
+### Butterchurn Audio Data Flow
+
+Complete path from audio file to WebGL visualization:
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│                     BUTTERCHURN AUDIO DATA FLOW                          │
+├──────────────────────────────────────────────────────────────────────────┤
+│                                                                           │
+│   Audio File (.mp3/flac)                                                  │
+│        │                                                                  │
+│        ▼                                                                  │
+│   AVAudioEngine (48kHz stereo)                                            │
+│        │                                                                  │
+│        ▼                                                                  │
+│   installTap(2048 samples) ─────▶ Mono downsample + vDSP FFT              │
+│        │                                                                  │
+│        ▼                                                                  │
+│   AudioPlayer.swift                                                       │
+│   ├── @ObservationIgnored butterchurnSpectrum[1024]                      │
+│   ├── @ObservationIgnored butterchurnWaveform[1024]                      │
+│   └── snapshotButterchurnFrame() → ButterchurnFrame                      │
+│        │                                                                  │
+│        ▼ (30 FPS Timer)                                                   │
+│   ButterchurnBridge.swift                                                 │
+│   └── callAsyncJavaScript("receiveAudioData([...])")                      │
+│        │                                                                  │
+│        ▼ (WKWebView)                                                      │
+│   bridge.js                                                               │
+│   └── ScriptProcessorNode → Butterchurn analyser                          │
+│        │                                                                  │
+│        ▼ (60 FPS requestAnimationFrame)                                   │
+│   butterchurn.min.js                                                      │
+│   └── visualizer.render() → WebGL Canvas                                  │
+│                                                                           │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+**Note:** Butterchurn visualization only available for local file playback.
+Internet radio streams (AVPlayer backend) cannot provide PCM audio data.
+
 ### Key Implementation Details
 
 1. **Activation**: Ctrl+K keyboard shortcut (matches Winamp)
