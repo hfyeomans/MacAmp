@@ -387,7 +387,340 @@ The Milkdrop window uses GEN.bmp chrome (same as Video window):
 3. Proven pattern in iOS/macOS apps
 4. Can iterate to native Metal later if needed
 
-**Phase 1:** Get Butterchurn rendering with static audio data
-**Phase 2:** Connect real audio tap data
-**Phase 3:** Implement preset management
-**Phase 4:** Polish (track titles, hotkeys, cycling)
+---
+
+## Oracle Review Findings (2026-01-05)
+
+### Critical Architecture Constraints
+
+#### AVAudioEngine Tap Limitation
+**AVAudioEngine allows only ONE tap per bus.** Adding a separate Butterchurn tap would replace or break the existing 19-bar analyzer.
+
+**Solution:** Merge Butterchurn processing into the existing visualizer tap. Compute both 19-bar and 2048-FFT data in the same buffer pass.
+
+#### Stream Playback Has No PCM Data
+`StreamPlayer` (AVPlayer) provides no raw PCM access. Butterchurn visualization is **impossible** for internet radio streams without system-level audio capture.
+
+**Solution:** Scope Butterchurn to local playback only initially. Design for future `SystemAudioCapture` via a protocol abstraction.
+
+### Script Injection Timing
+
+**Race condition risk:** `WKUserScript` at `.atDocumentStart` with bridge code that touches DOM elements can race the HTML parser.
+
+**Solution:**
+- Inject `butterchurn.min.js` at `.atDocumentStart`
+- Inject `butterchurnPresets.min.js` at `.atDocumentStart`
+- Inject `bridge.js` at `.atDocumentEnd` (or gate on `DOMContentLoaded`)
+
+### Preset API Correction
+
+**Incorrect assumption:** Plan assumed a global `presets` array.
+
+**Correct API:** Use `butterchurnPresets.getPresets()` to retrieve preset list.
+
+### Performance Architecture
+
+**Problem:** 60 FPS `evaluateJavaScript()` with two 1024-element arrays creates significant overhead.
+
+**Solution:** Hybrid 30/60 FPS approach:
+- Swift → JS: Push audio data at **30 FPS**
+- JS render loop: `requestAnimationFrame` at **60 FPS**
+- JS pulls from last-known buffer, reducing Swift→JS call frequency by 50%
+
+### Memory Management Requirements
+
+1. **WKScriptMessageHandler cleanup:** `WKUserContentController` retains handlers. Must call `removeScriptMessageHandler` in `dismantleNSView`.
+2. **Timer cleanup:** Stop all cycling/update timers when view tears down.
+3. **Graceful fallback:** If JS injection fails, show placeholder UI instead of crash.
+
+### Layer Placement (Three-Layer Pattern)
+
+| Component | Layer | Location | Rationale |
+|-----------|-------|----------|-----------|
+| ButterchurnWebView | Presentation | Views/Windows/ | SwiftUI NSViewRepresentable |
+| ButterchurnBridge | Bridge | ViewModels/ | Owns JS communication, UI-coupled |
+| ButterchurnPresetManager | Bridge | ViewModels/ | Manages UI state (cycling, transitions) |
+| Audio tap extension | Mechanism | Audio/ | Core audio processing |
+| AppSettings additions | Mechanism | Models/ | Persistence only |
+
+**Why preset manager is Bridge layer:** It's tightly coupled to the WebView/JS API, manages UI-driven state (cycling, randomization, transitions), and owns timers. Mechanism layer should remain focused on audio/persistence and be independent of visualization implementation.
+
+### Pattern Corrections
+
+| Incorrect | Correct |
+|-----------|---------|
+| `@Published var` | `var` (with `@Observable` class) |
+| `class ButterchurnWebView: NSViewRepresentable` | `struct ButterchurnWebView: NSViewRepresentable` |
+| Timer as property | `@ObservationIgnored` timer |
+| AppSettings `didSet` only | Load from UserDefaults in `init` + `didSet` |
+
+### Future Stream Support Design
+
+Define `ButterchurnAudioSource` protocol in Mechanism layer:
+```swift
+protocol ButterchurnAudioSource {
+    var isActive: Bool { get }
+    func snapshotButterchurnFrame() -> ButterchurnFrame?
+}
+```
+
+- `AudioPlayer` conforms immediately
+- Future `SystemAudioCapture` (virtual device / AudioUnit) can conform later
+- Bridge depends only on protocol, not concrete source
+
+---
+
+## Implementation Phases (Revised)
+
+**Phase 1:** WebView + JS injection (static frame, no audio)
+**Phase 2:** Audio tap merge (single tap, both FFT sizes)
+**Phase 3:** Swift→JS bridge (30 FPS updates)
+**Phase 4:** Preset manager (cycling, randomization, persistence)
+**Phase 5:** UI integration (shortcuts, track titles, lifecycle)
+**Phase 6:** Verification (local-only validation, stream fallback)
+
+---
+
+## Implementation Findings (2026-01-05)
+
+### Critical Discovery: Butterchurn Requires Audio Graph Connection
+
+**Original Assumption:** Phase 1 could render "static frames" without any audio data.
+
+**Reality:** Butterchurn's `render()` method internally calls `this.analyser.getByteTimeDomainData()` and `this.analyser.getByteFrequencyData()` on every frame. Without an audio source connected to its internal AnalyserNode, the buffers are empty/zeros and the canvas renders blank.
+
+**Root Cause Chain:**
+1. `butterchurn.createVisualizer(audioContext, canvas, options)` creates an internal `AnalyserNode`
+2. `render()` reads audio data from this internal analyser every frame
+3. If nothing is connected to the analyser, it reads zeros → blank visualization
+4. Even for "static" time-based preset animations, the audio graph must be wired
+
+**Solution:** Use `visualizer.connectAudio(audioSourceNode)` to connect an audio source to butterchurn's internal analyser. For Phase 1 (no real audio), connect a silent oscillator:
+
+```javascript
+var audioContext = new AudioContext();
+var oscillator = audioContext.createOscillator();
+oscillator.frequency.value = 0;  // Silent
+var gainNode = audioContext.createGain();
+gainNode.gain.value = 0;  // Muted
+oscillator.connect(gainNode);
+oscillator.start();
+
+visualizer = butterchurn.createVisualizer(audioContext, canvas, options);
+visualizer.connectAudio(gainNode);  // CRITICAL: Connect to butterchurn's analyser
+```
+
+**Lesson Learned:** Butterchurn is not a "render preset to canvas" library - it's an audio-reactive visualization engine that requires a connected audio graph even for basic rendering. The plan's Phase 1 "no audio" scope was correct in intent (no real music data), but incorrect in implementation (still needs audio graph wiring).
+
+### ES Module vs UMD Bundle Differences
+
+**Problem:** butterchurn.min.js uses ES module syntax (`export{qt as default}`) which doesn't work with WKUserScript injection.
+
+**Solution:** Regex replacement to convert ES module export to window global:
+```swift
+// Convert: export{qt as default}
+// To: window.butterchurn = qt;
+```
+
+**Problem:** butterchurnPresets.min.js UMD bundle exports differently than ES module:
+- ES Module: `butterchurnPresets.getPresets()` returns preset map
+- UMD Bundle: `window.minimal.default` contains preset map directly (no `getPresets()` method)
+
+**Solution:** Handle both patterns in bridge.js:
+```javascript
+if (typeof butterchurnPresets.getPresets === 'function') {
+    presets = butterchurnPresets.getPresets();  // ES module
+} else if (butterchurnPresets.default) {
+    presets = butterchurnPresets.default;  // UMD bundle
+}
+```
+
+### WebGL Context Verification
+
+Always verify WebGL availability before creating visualizer:
+```javascript
+var gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+if (!gl) {
+    showFallback('WebGL not available');
+    return;
+}
+```
+
+### Canvas Sizing for WKWebView
+
+CSS `width: 100%; height: 100%` is not sufficient. Must also set:
+```css
+html, body { width: 100%; height: 100%; }
+canvas { position: absolute; top: 0; left: 0; }
+```
+
+And verify pixel dimensions in JS:
+```javascript
+canvas.width = canvas.clientWidth || 256;
+canvas.height = canvas.clientHeight || 198;
+```
+
+---
+
+## Oracle A-Grade Fixes (2026-01-05)
+
+After initial implementation, Oracle (Codex gpt-5.2-codex with high reasoning) reviewed the code and identified improvements to upgrade from Grade B+ to Grade A.
+
+### Fix 1: Centralized Failure Handling (Critical)
+
+**Problem:** Load failures didn't stop the audio update timer, causing zombie updates to a dead WebView.
+
+**Solution:** Added `markLoadFailed(_ message: String)` helper method that:
+- Sets `isReady = false`
+- Clears state (presetCount, presetNames)
+- **Stops audio update task**
+- Logs error
+
+```swift
+func markLoadFailed(_ message: String) {
+    isReady = false
+    errorMessage = message
+    presetCount = 0
+    presetNames = []
+    stopAudioUpdates()  // CRITICAL: Stop timer on failure
+    AppLog.error(.general, "[ButterchurnBridge] Load failed: \(message)")
+}
+```
+
+**Lesson:** Always pair "start" operations with corresponding "stop" in error paths.
+
+### Fix 2: Guard Both `isReady` and `webView` (Critical)
+
+**Problem:** `sendAudioFrame()` only checked `webView != nil`, not `isReady`. Could send JS calls to failed/dead WebView.
+
+**Solution:** Combined guard:
+```swift
+// Before
+guard let webView = webView else { return }
+
+// After
+guard isReady, let webView = webView else { return }
+```
+
+**Lesson:** Guard all preconditions, not just the obvious one.
+
+### Fix 3: WKNavigationDelegate for WebView Errors (Critical)
+
+**Problem:** WebView load failures (network, process termination) went undetected. Bridge thought WebView was healthy.
+
+**Solution:** Made Coordinator conform to WKNavigationDelegate:
+```swift
+class Coordinator: NSObject, WKNavigationDelegate {
+    weak var bridge: ButterchurnBridge?
+
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        bridge?.markLoadFailed("WebView navigation failed: \(error.localizedDescription)")
+    }
+
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        bridge?.markLoadFailed("WebView provisional navigation failed: \(error.localizedDescription)")
+    }
+
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        bridge?.markLoadFailed("WebView content process terminated")
+    }
+}
+```
+
+**Lesson:** Always monitor external process health (WebView, audio engine, etc.).
+
+### Fix 4: callAsyncJavaScript with Typed Arguments (Important)
+
+**Problem:** Per-frame string interpolation overhead:
+```swift
+// Bad: String interpolation every frame (30 FPS = 30 string builds/sec)
+let js = "window.macampButterchurn?.setAudioData(\(spectrumInts), \(frame.waveform));"
+webView.evaluateJavaScript(js, completionHandler: nil)
+```
+
+**Solution:** Use typed arguments via `callAsyncJavaScript`:
+```swift
+// Good: Typed arguments, no string building
+webView.callAsyncJavaScript(
+    "window.macampButterchurn?.setAudioData(spectrum, waveform);",
+    arguments: ["spectrum": spectrumInts, "waveform": frame.waveform],
+    in: nil,
+    contentWorld: .page,
+    completionHandler: nil
+)
+```
+
+**Lesson:** Avoid string interpolation in hot paths. Use typed APIs when available.
+
+### Fix 5: Async Task Loop Instead of Timer+Task (Nice-to-have)
+
+**Problem:** Timer + Task hop pattern creates timing jitter and harder cancellation:
+```swift
+// Timer fires → creates Task → Task awaits MainActor → executes
+updateTimer = Timer.scheduledTimer(withTimeInterval: 1.0/30.0, repeats: true) { _ in
+    Task { @MainActor in
+        self?.sendAudioFrame()
+    }
+}
+```
+
+**Solution:** Pure async Task loop with clean cancellation:
+```swift
+audioUpdateTask = Task { [weak self] in
+    while !Task.isCancelled {
+        await self?.sendAudioFrame()
+        try? await Task.sleep(nanoseconds: 33_333_333)  // ~30 FPS
+    }
+}
+```
+
+**Benefits:**
+- Cleaner cancellation (`task.cancel()` vs `timer.invalidate()`)
+- No Timer→Task hop (less jitter)
+- Respects structured concurrency
+
+### Fix 6: Swift 6 Strict Concurrency (MainActor.assumeIsolated)
+
+**Problem:** `WKScriptMessageHandler.userContentController(_:didReceive:)` is `nonisolated`, but the class is `@MainActor`. Accessing `message.body` triggered Swift 6 error:
+```
+Main actor-isolated property 'body' can not be referenced from a nonisolated context
+```
+
+**Solution:** Use `MainActor.assumeIsolated` since WebKit guarantees main thread:
+```swift
+nonisolated func userContentController(
+    _ userContentController: WKUserContentController,
+    didReceive message: WKScriptMessage
+) {
+    // WebKit guarantees this delegate is called on main thread
+    MainActor.assumeIsolated {
+        // Safe to access message.body and self.handleMessage here
+        guard let dict = message.body as? [String: Any],
+              let type = dict["type"] as? String else { ... }
+        self.handleMessage(...)
+    }
+}
+```
+
+**Lesson:** Use `MainActor.assumeIsolated` for delegate methods that are guaranteed to be called on main thread but protocol requires `nonisolated`.
+
+### Linker Warning (Non-Issue)
+
+**Warning:** `Duplicate -rpath '@executable_path' ignored`
+
+**Cause:** `LD_RUNPATH_SEARCH_PATHS` contains same entry at project and target level.
+
+**Impact:** None. Linker ignores duplicates.
+
+**Fix:** Deduplicate in Xcode Build Settings (optional cleanup).
+
+---
+
+## Architecture Lessons Learned
+
+1. **Failure States Must Cascade:** When component A fails, stop all dependent components (B, C, D)
+2. **Guard All Preconditions:** Check both state (`isReady`) and resources (`webView != nil`)
+3. **Monitor External Processes:** WebView, audio engine, network can fail independently
+4. **Hot Path Optimization:** Avoid allocations/string-building in per-frame code
+5. **Swift 6 Actor Boundaries:** Use `MainActor.assumeIsolated` when caller guarantees main thread
+6. **Structured Concurrency:** Prefer async Task loops over Timer+Task patterns

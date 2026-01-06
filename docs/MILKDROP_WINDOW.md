@@ -1,21 +1,22 @@
 # Milkdrop Window Implementation Guide
 
-**Document Version**: 1.0.0
-**Last Updated**: 2025-11-14
-**Implementation**: Days 7-8 of TASK 2 (milk-drop-video-support)
-**Status**: Core window chrome complete, visualization deferred
+**Document Version**: 2.0.0
+**Last Updated**: 2026-01-05
+**Implementation**: Days 7-8 of TASK 2 (milk-drop-video-support) + Butterchurn Integration
+**Status**: ✅ PRODUCTION - Complete with Butterchurn visualization
 
 ---
 
 ## 1. Introduction
 
-The Milkdrop window provides audio visualization capabilities in MacAmp, faithfully recreating the Winamp visualization window using GEN.bmp sprites. Originally designed for the legendary Milkdrop visualizer (psychedelic music visualization), this window serves as a container for future visualization implementations.
+The Milkdrop window provides audio visualization capabilities in MacAmp, faithfully recreating the Winamp visualization window using GEN.bmp sprites. This window hosts the legendary Milkdrop visualizer via Butterchurn.js - a WebGL port of the original Milkdrop 2 visualization engine.
 
 ### 1.1 Purpose
 
-- **Primary**: Display audio visualizations synchronized with music playback
-- **Secondary**: Future integration point for Butterchurn.js, projectM, or native Metal visualizers
-- **Current State**: Window chrome complete with placeholder content
+- **Primary**: Display Butterchurn audio visualizations synchronized with music playback
+- **Secondary**: Preset cycling, randomization, and history navigation (matches Winamp behavior)
+- **Tertiary**: Track title overlay display with configurable intervals
+- **Current State**: ✅ Complete with Butterchurn.js integration (7 phases)
 
 ### 1.2 User Interaction
 
@@ -23,13 +24,29 @@ The Milkdrop window provides audio visualization capabilities in MacAmp, faithfu
 - **Focus**: Click to focus, shows selected chrome state
 - **Position**: Persisted across sessions in UserDefaults
 - **Docking**: Magnetic snapping to other MacAmp windows and screen edges
+- **Context Menu** (right-click):
+  - Current preset display (header)
+  - Next/Previous preset navigation (Space/Backspace)
+  - Randomize toggle (R key)
+  - Auto-Cycle Presets toggle (C key)
+  - Cycle Interval submenu (5s/10s/15s/30s/60s)
+  - Show Track Title (T key)
+  - Track Title Interval submenu (Once/5s/10s/15s/30s/60s)
+  - Presets submenu (up to 100 shown)
 
 ### 1.3 Implementation Timeline
 
 - **Days 1-6**: Video window implementation (complete)
 - **Day 7**: GEN sprite research and two-piece discovery
 - **Day 8**: Milkdrop window chrome implementation
-- **Future**: Visualization engine integration (deferred)
+- **Butterchurn Integration** (7 phases):
+  - Phase 1: WKWebView lifecycle and Butterchurn setup
+  - Phase 2: ButterchurnBridge Swift→JS audio pipeline
+  - Phase 3: Preset loading from butterchurnPresets.min.js
+  - Phase 4: Context menu with preset navigation
+  - Phase 5: ButterchurnPresetManager (cycling, randomization, history)
+  - Phase 6: Oracle A-grade fixes (error handling, thread safety)
+  - Phase 7: Track title interval display feature
 
 ---
 
@@ -469,64 +486,424 @@ The 256×198px content area will host:
 
 ---
 
-## 9. Butterchurn Deferral
+## 9. Butterchurn Integration ✅ COMPLETE
 
-### 9.1 Initial Attempt
+### 9.1 Solution Architecture
 
-Days 7-8 included an attempt to integrate Butterchurn.js for Milkdrop visualization:
+The Butterchurn integration uses WKUserScript injection to load JavaScript libraries:
 
 ```
-Attempt: Embed Butterchurn in WKWebView
-Result: External JavaScript files wouldn't load
-Issue: WKWebView security restrictions on file:// URLs
+┌─────────────────────────────────────────────────────────────┐
+│                    WKWebView Container                       │
+├─────────────────────────────────────────────────────────────┤
+│  WKUserScript Injection (atDocumentStart):                  │
+│    1. butterchurn.min.js      (270KB - ES module bundled)   │
+│    2. butterchurnPresets.min.js (187KB - preset library)    │
+│                                                              │
+│  WKUserScript Injection (atDocumentEnd):                    │
+│    3. bridge.js               (Swift↔JS communication)      │
+├─────────────────────────────────────────────────────────────┤
+│  HTML Canvas + WebGL Context                                 │
+│    • 60 FPS render loop (requestAnimationFrame)             │
+│    • Butterchurn visualizer instance                        │
+│    • Audio data receiver (from Swift)                       │
+└─────────────────────────────────────────────────────────────┘
+          │                              ▲
+          │ postMessage("ready")         │ audioData[1024]
+          │ postMessage("presetsLoaded") │ loadPreset(index)
+          ▼                              │ showTrackTitle(text)
+┌─────────────────────────────────────────────────────────────┐
+│                    ButterchurnBridge                         │
+│  @Observable @MainActor                                      │
+│    • isReady: Bool                                           │
+│    • errorMessage: String?                                   │
+│    • onPresetsLoaded: ([String]) -> Void                    │
+│    • Timer: 30 FPS audio updates to JS                      │
+│    • callAsyncJavaScript for reliable execution             │
+└─────────────────────────────────────────────────────────────┘
+          │                              ▲
+          │ audioSamples[1024]           │ loadPreset()
+          │ (Accelerate vDSP FFT)        │ showTrackTitle()
+          ▼                              │
+┌─────────────────────────────────────────────────────────────┐
+│                    AVAudioEngine                             │
+│    • installTap(1024 samples, 48kHz)                        │
+│    • Goertzel-like 19-band spectrum analysis                │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-### 9.2 Technical Blockers
+### 9.2 Key Implementation Files
 
-From `BUTTERCHURN_BLOCKERS.md`:
-
-**What Worked**:
-- WKWebView lifecycle fixed
-- HTML loads successfully
-- Inline JavaScript executes
-- JIT entitlements enabled
-
-**What Failed**:
-- External .js files don't load (`butterchurn.min.js`, `butterchurnPresets.min.js`)
-- `<script src="...">` tags fail silently
-- Files ARE in bundle but WKWebView won't load them
-
-### 9.3 Alternative Approaches
-
-**Option A: Inline All JavaScript**
-- Embed 470KB of JavaScript directly in HTML
-- Avoids external file loading
-- Might work but inelegant
-
-**Option B: Bundle Injection**
 ```swift
-// Load JS as string from bundle
-let jsContent = Bundle.main.url(forResource: "butterchurn.min",
-                                withExtension: "js")
-    .flatMap { try? String(contentsOf: $0) }
+// Bridge (Swift→JS communication)
+MacAmpApp/ViewModels/ButterchurnBridge.swift
 
-// Inject before loading HTML
-webView.evaluateJavaScript(jsContent)
+// Preset Manager (cycling, history, persistence)
+MacAmpApp/ViewModels/ButterchurnPresetManager.swift
+
+// WKWebView wrapper
+MacAmpApp/Views/Components/ButterchurnWebView.swift
+
+// Window controller (owns bridge + preset manager)
+MacAmpApp/Windows/WinampMilkdropWindowController.swift
+
+// Main view with context menu
+MacAmpApp/Views/WinampMilkdropWindow.swift
+
+// JavaScript resources
+MacAmpApp/Resources/butterchurn/
+├── butterchurn.min.js       # ES module bundle
+├── butterchurnPresets.min.js # Preset library
+├── bridge.js                 # Swift↔JS interface
+└── index.html                # Canvas + initialization
 ```
 
-**Option C: Native Metal Renderer**
-- Best performance
-- Most work (4-8 weeks)
-- Would need to port preset system
+### 9.3 WKUserScript Injection Strategy
 
-**Option D: Use projectM**
-- Open-source C++ Milkdrop clone
-- Can compile for macOS
-- Bridge via Objective-C++
+**Critical Discovery:** WKWebView's `<script src="...">` fails for local files, but WKUserScript works:
 
-### 9.4 Decision
+```swift
+// ButterchurnWebView.swift - Load JS from bundle and inject
+private func createUserScripts() -> [WKUserScript] {
+    var scripts: [WKUserScript] = []
 
-Visualization deferred to future session. Window chrome complete and ready for any visualization approach.
+    // 1. Butterchurn library (atDocumentStart - before any rendering)
+    if let url = Bundle.main.url(forResource: "butterchurn.min", withExtension: "js"),
+       let content = try? String(contentsOf: url) {
+        let script = WKUserScript(source: content, injectionTime: .atDocumentStart, forMainFrameOnly: true)
+        scripts.append(script)
+    }
+
+    // 2. Presets library (atDocumentStart)
+    if let url = Bundle.main.url(forResource: "butterchurnPresets.min", withExtension: "js"),
+       let content = try? String(contentsOf: url) {
+        let script = WKUserScript(source: content, injectionTime: .atDocumentStart, forMainFrameOnly: true)
+        scripts.append(script)
+    }
+
+    // 3. Bridge script (atDocumentEnd - after DOM ready)
+    if let url = Bundle.main.url(forResource: "bridge", withExtension: "js"),
+       let content = try? String(contentsOf: url) {
+        let script = WKUserScript(source: content, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
+        scripts.append(script)
+    }
+
+    return scripts
+}
+```
+
+### 9.4 Audio Data Pipeline
+
+**End-to-End Audio Flow (Local Playback Only):**
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                        BUTTERCHURN AUDIO DATA FLOW                            │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                               │
+│  ┌─────────────┐    ┌─────────────────┐    ┌─────────────────────────────┐   │
+│  │ Audio File  │───▶│ AVAudioEngine   │───▶│ installTap(2048 samples)   │   │
+│  │ (.mp3/flac) │    │ (48kHz stereo)  │    │ Mono downsample + FFT      │   │
+│  └─────────────┘    └─────────────────┘    └─────────────────────────────┘   │
+│                                                       │                       │
+│                                                       ▼                       │
+│                           ┌───────────────────────────────────────────────┐   │
+│                           │        AudioPlayer.swift                       │   │
+│                           │  @ObservationIgnored butterchurnSpectrum[1024] │   │
+│                           │  @ObservationIgnored butterchurnWaveform[1024] │   │
+│                           │  snapshotButterchurnFrame() → ButterchurnFrame │   │
+│                           └───────────────────────────────────────────────┘   │
+│                                                       │                       │
+│                                                       ▼ (30 FPS Timer)        │
+│                           ┌───────────────────────────────────────────────┐   │
+│                           │        ButterchurnBridge.swift                 │   │
+│                           │  sendAudioData() → callAsyncJavaScript         │   │
+│                           │  "window.receiveAudioData([...samples])"       │   │
+│                           └───────────────────────────────────────────────┘   │
+│                                                       │                       │
+│                                                       ▼ (WKWebView)           │
+│                           ┌───────────────────────────────────────────────┐   │
+│                           │        bridge.js (JavaScript)                  │   │
+│                           │  receiveAudioData(data) → audioBuffer.set()    │   │
+│                           │  ScriptProcessorNode → Butterchurn analyser    │   │
+│                           └───────────────────────────────────────────────┘   │
+│                                                       │                       │
+│                                                       ▼ (60 FPS RAF)          │
+│                           ┌───────────────────────────────────────────────┐   │
+│                           │        butterchurn.min.js                      │   │
+│                           │  visualizer.render() → WebGL Canvas            │   │
+│                           │  100+ presets with audio-reactive shaders      │   │
+│                           └───────────────────────────────────────────────┘   │
+│                                                                               │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Frame Rates:**
+- **AVAudioEngine tap:** 48kHz continuous (2048 samples per buffer)
+- **Swift→JS updates:** 30 FPS (33ms interval)
+- **WebGL rendering:** 60 FPS (requestAnimationFrame)
+
+**30 FPS Swift→JS Audio Updates:**
+
+```swift
+// ButterchurnBridge.swift - Timer-based audio streaming
+private func startAudioTimer() {
+    audioTimer = Timer.scheduledTimer(withTimeInterval: 1.0/30.0, repeats: true) { [weak self] _ in
+        Task { @MainActor in
+            self?.sendAudioData()
+        }
+    }
+}
+
+private func sendAudioData() {
+    guard isReady, let audioPlayer = audioPlayer else { return }
+
+    // Get FFT samples from AVAudioEngine tap
+    let samples = audioPlayer.getVisualizationSamples(count: 1024)
+
+    // Convert to JSON array for JS
+    let jsArray = samples.map { String(format: "%.4f", $0) }.joined(separator: ",")
+
+    // Use callAsyncJavaScript for reliable delivery
+    webView?.callAsyncJavaScript(
+        "if (window.receiveAudioData) window.receiveAudioData([\(jsArray)]);",
+        in: nil, in: .page
+    ) { _ in }
+}
+```
+
+**60 FPS JS Render Loop:**
+
+```javascript
+// bridge.js - Render loop with audio data
+let audioData = new Float32Array(1024);
+
+window.receiveAudioData = function(data) {
+    audioData.set(data);
+};
+
+function render() {
+    if (visualizer && isPlaying) {
+        visualizer.render(audioData);
+    }
+    requestAnimationFrame(render);
+}
+requestAnimationFrame(render);
+```
+
+### 9.5 ButterchurnPresetManager
+
+Manages preset cycling, randomization, and history:
+
+```swift
+// ButterchurnPresetManager.swift
+@MainActor
+@Observable
+final class ButterchurnPresetManager {
+    // Observable state
+    var presets: [String] = []
+    var currentPresetIndex: Int = -1
+    var isRandomize: Bool = true      // Persisted
+    var isCycling: Bool = true        // Persisted
+    var cycleInterval: TimeInterval = 15.0  // Persisted
+    var trackTitleInterval: TimeInterval = 0  // 0 = manual only
+
+    // History for previous/next navigation
+    @ObservationIgnored private var presetHistory: [Int] = []
+
+    // Timer management
+    @ObservationIgnored private var cycleTimer: Timer?
+    @ObservationIgnored private var trackTitleTimer: Timer?
+
+    func nextPreset() {
+        if isRandomize {
+            selectRandomPreset()
+        } else {
+            selectPreset(at: (currentPresetIndex + 1) % presets.count)
+        }
+    }
+
+    func previousPreset() {
+        guard presetHistory.count >= 2 else { return }
+        presetHistory.removeLast()  // Pop current
+        if let prev = presetHistory.last {
+            selectPreset(at: prev, addToHistory: false)
+        }
+    }
+}
+```
+
+### 9.6 Context Menu Implementation
+
+Uses NSMenu with closure-to-selector bridge pattern:
+
+```swift
+// WinampMilkdropWindow.swift - Context menu via right-click overlay
+private func showContextMenu(at location: NSPoint) {
+    let menu = NSMenu()
+    activeContextMenu = menu  // Keep strong reference!
+
+    // Header: Current preset
+    if let name = presetManager.currentPresetName {
+        let item = NSMenuItem(title: "▶ \(name)", action: nil, keyEquivalent: "")
+        item.isEnabled = false
+        menu.addItem(item)
+        menu.addItem(.separator())
+    }
+
+    // Navigation
+    menu.addItem(createMenuItem(title: "Next Preset", keyEquivalent: " ", action: {
+        [weak presetManager] in presetManager?.nextPreset()
+    }))
+
+    // Show at click location
+    menu.popUp(positioning: nil, at: location, in: nil)
+}
+
+// Helper: Bridge Swift closure to NSMenuItem action
+@MainActor
+private class MilkdropMenuTarget: NSObject {
+    let action: () -> Void
+    init(action: @escaping () -> Void) { self.action = action }
+    @objc func execute() { action() }
+}
+
+private func createMenuItem(title: String, action: @escaping () -> Void) -> NSMenuItem {
+    let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+    let target = MilkdropMenuTarget(action: action)
+    item.target = target
+    item.action = #selector(MilkdropMenuTarget.execute)
+    item.representedObject = target  // Keep alive!
+    return item
+}
+```
+
+### 9.7 Critical Bug Fixes (Oracle A-Grade)
+
+**Bug 1: markLoadFailed Called Before Setup**
+```swift
+// WRONG: Direct call before bridge configured
+if !isReady { markLoadFailed("Setup incomplete") }
+
+// CORRECT: Guard + async delay for initialization
+func markLoadFailed(_ message: String) {
+    guard isReady else { return }  // Only fail if was previously ready
+    errorMessage = message
+}
+```
+
+**Bug 2: isReady Guard in sendAudioData**
+```swift
+// WRONG: Send data without checking ready state
+private func sendAudioData() {
+    let samples = audioPlayer?.getVisualizationSamples(count: 1024) ?? []
+    webView?.evaluateJavaScript(...)  // May execute before bridge ready
+}
+
+// CORRECT: Guard all JS calls
+private func sendAudioData() {
+    guard isReady, let audioPlayer = audioPlayer else { return }
+    // Now safe to send
+}
+```
+
+**Bug 3: WKNavigationDelegate Lifecycle**
+```swift
+// CRITICAL: Implement didFinish to know when page ready
+extension ButterchurnWebView.Coordinator: WKNavigationDelegate {
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        // Page loaded, scripts injected, now can receive messages
+    }
+
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        parent.bridge.markLoadFailed(error.localizedDescription)
+    }
+}
+```
+
+**Bug 4: callAsyncJavaScript vs evaluateJavaScript**
+```swift
+// WRONG: evaluateJavaScript can race with page load
+webView.evaluateJavaScript("loadPreset(5)")
+
+// CORRECT: callAsyncJavaScript waits for context
+webView.callAsyncJavaScript(
+    "loadPreset(\(index), \(transition))",
+    in: nil,
+    in: .page
+) { result in
+    // Handle completion
+}
+```
+
+**Bug 5: Timer Thread Safety**
+```swift
+// WRONG: Timer callback not on main actor
+cycleTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+    self?.nextPreset()  // ⚠️ May be on wrong thread
+}
+
+// CORRECT: Dispatch to MainActor
+cycleTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+    Task { @MainActor in
+        self?.nextPreset()
+    }
+}
+```
+
+### 9.8 Persistence Pattern
+
+All settings use AppSettings with didSet persistence:
+
+```swift
+// AppSettings.swift
+@Observable @MainActor
+final class AppSettings {
+    var butterchurnRandomize: Bool = true {
+        didSet { UserDefaults.standard.set(butterchurnRandomize, forKey: "butterchurnRandomize") }
+    }
+    var butterchurnCycling: Bool = true {
+        didSet { UserDefaults.standard.set(butterchurnCycling, forKey: "butterchurnCycling") }
+    }
+    var butterchurnCycleInterval: Double = 15.0 {
+        didSet { UserDefaults.standard.set(butterchurnCycleInterval, forKey: "butterchurnCycleInterval") }
+    }
+    var butterchurnTrackTitleInterval: Double = 0 {
+        didSet { UserDefaults.standard.set(butterchurnTrackTitleInterval, forKey: "butterchurnTrackTitleInterval") }
+    }
+}
+```
+
+### 9.9 Track Title Display (Phase 7)
+
+Automatic or manual track title overlay on visualization:
+
+```swift
+// ButterchurnPresetManager.swift
+var trackTitleInterval: TimeInterval = 0 {  // 0 = manual only
+    didSet {
+        appSettings?.butterchurnTrackTitleInterval = trackTitleInterval
+        if trackTitleInterval > 0 {
+            restartTrackTitleTimer()
+        } else {
+            stopTrackTitleTimer()
+        }
+    }
+}
+
+func showCurrentTrackTitle() {
+    guard let displayTitle = playbackCoordinator?.displayTitle else { return }
+    bridge?.showTrackTitle(displayTitle)
+}
+
+// bridge.js - Display with fade animation
+window.showTrackTitle = function(title) {
+    const overlay = document.getElementById('trackTitle');
+    overlay.textContent = title;
+    overlay.style.opacity = 1;
+    setTimeout(() => { overlay.style.opacity = 0; }, 3000);
+};
+```
 
 ---
 
@@ -646,21 +1023,25 @@ Test with various skins to ensure GEN sprite compatibility:
 
 ## 12. Future Work
 
-### 12.1 Visualization Implementation
+### 12.1 Visualization Enhancements
 
-**Priority Order**:
-1. **Simple waveform/spectrum** - Quick win, native implementation
-2. **Butterchurn.js** - If Bundle injection works (Option B)
-3. **projectM** - Most compatible with existing presets
-4. **Native Metal** - Best performance, most work
+**Completed:**
+- ✅ Butterchurn.js integration via WKWebView
+- ✅ Preset cycling with randomization and history
+- ✅ Track title overlay display
+
+**Future:**
+1. **Native Metal Renderer** - Best performance, port from WebGL
+2. **projectM Integration** - Load native .milk presets
+3. **Custom Preset Editor** - Create/modify presets
 
 ### 12.2 Dynamic Text Rendering
 
 Implement GEN letter extraction for titlebar text:
-- Pixel-scanning algorithm for letter boundaries
-- Runtime coordinate map generation
-- Support for "MILKDROP" and preset names
-- Variable-width letter support
+- ✅ Two-piece sprite system implemented
+- ✅ Static "MILKDROP" letters rendered
+- **Future:** Pixel-scanning for variable-width letters
+- **Future:** Support for preset names in titlebar
 
 ### 12.3 Window Resizing
 
@@ -669,25 +1050,16 @@ Future: User-resizable with constraints
 - Minimum: 275×116 (matches Main/EQ)
 - Maximum: Screen size
 - Maintain aspect ratio option
-- Scale visualization accordingly
+- Scale WebGL canvas accordingly
 
-### 12.4 Preset Management
+### 12.4 Advanced Audio Analysis
 
-- Load .milk preset files
-- Preset browser/selector
-- Auto-cycle timer
-- Transition effects between presets
-- User preset creation
-
-### 12.5 Audio Analysis Enhancement
-
-Current: Basic FFT via AVAudioEngine tap
-Future: Advanced analysis for visualization
+Current: 1024-sample FFT via AVAudioEngine tap
+Future: Enhanced visualization features
+- Beat detection (BPM)
 - Multi-band frequency analysis
-- Beat detection
-- Peak/RMS tracking
-- Configurable FFT size
-- Windowing functions
+- Smooth transitions between presets
+- Audio-reactive preset selection
 
 ---
 
@@ -753,15 +1125,37 @@ docs/IMPLEMENTATION_PATTERNS.md
 The Milkdrop window implementation demonstrates several key MacAmp patterns:
 
 1. **Pixel-perfect sprite rendering** using GEN.bmp chrome
-2. **Two-piece sprite discovery** for BOTTOM_FILL components
+2. **Two-piece sprite discovery** for BOTTOM_FILL and letter components
 3. **Six-section titlebar** composition for visual variety
 4. **Focus state integration** with _SELECTED sprite switching
 5. **NSWindowController pattern** with environment injection
-6. **Deferred complexity** - window ready, visualization pending
+6. **WKUserScript injection** for JavaScript library loading
+7. **Swift→JS audio bridge** at 30 FPS with callAsyncJavaScript
+8. **Preset management** with cycling, randomization, and history
+9. **Context menu** using NSMenu with closure-to-selector bridge
+10. **Track title overlay** with configurable interval display
 
-The window chrome is complete and production-ready, providing a solid foundation for future visualization implementations. Whether using Butterchurn.js, projectM, or native Metal rendering, the 256×198px content area is ready to display stunning audio visualizations.
+The Milkdrop window is complete with Butterchurn.js visualization, providing real-time audio-reactive psychedelic visuals. The implementation follows MacAmp's three-layer architecture, maintains Winamp compatibility, and integrates seamlessly with the existing window management system.
 
-The implementation follows MacAmp's three-layer architecture, maintains Winamp compatibility, and integrates seamlessly with the existing window management system. While dynamic text rendering and visualization are deferred, the core window functionality matches the quality and attention to detail of the Main, Equalizer, Playlist, and Video windows.
+### Implementation Metrics
+
+- **7 Phases** of Butterchurn integration
+- **5 Oracle A-grade bug fixes** for production stability
+- **30 FPS** Swift→JS audio data pipeline
+- **60 FPS** WebGL render loop
+- **100+ presets** from butterchurnPresets library
+- **4 persisted settings** (randomize, cycling, cycle interval, title interval)
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `ButterchurnBridge.swift` | Swift↔JS communication bridge |
+| `ButterchurnPresetManager.swift` | Preset cycling, history, persistence |
+| `ButterchurnWebView.swift` | WKWebView wrapper with script injection |
+| `WinampMilkdropWindow.swift` | Main view with context menu |
+| `WinampMilkdropWindowController.swift` | NSWindowController owning bridge + manager |
+| `MilkdropWindowChromeView.swift` | GEN.bmp chrome rendering |
 
 ---
 

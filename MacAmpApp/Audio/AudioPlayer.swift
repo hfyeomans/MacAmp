@@ -24,6 +24,33 @@ private final class VisualizerScratchBuffers: @unchecked Sendable {
     private(set) var rms: [Float] = []
     private(set) var spectrum: [Float] = []
 
+    // Butterchurn FFT buffers
+    private static let butterchurnFFTSize: Int = 2048
+    private static let butterchurnBins: Int = 1024
+
+    private var butterchurnReal: [Float] = Array(repeating: 0, count: butterchurnFFTSize)
+    private var butterchurnImag: [Float] = Array(repeating: 0, count: butterchurnFFTSize)
+    private(set) var butterchurnSpectrum: [Float] = Array(repeating: 0, count: butterchurnBins)
+    private(set) var butterchurnWaveform: [Float] = Array(repeating: 0, count: butterchurnBins)
+
+    // vDSP FFT setup (log2(2048) = 11)
+    private let fftSetup: vDSP_DFT_Setup?
+
+    init() {
+        // Create FFT setup for 2048-point real-to-complex transform
+        fftSetup = vDSP_DFT_zrop_CreateSetup(
+            nil,
+            vDSP_Length(Self.butterchurnFFTSize),
+            .FORWARD
+        )
+    }
+
+    deinit {
+        if let setup = fftSetup {
+            vDSP_DFT_DestroySetup(setup)
+        }
+    }
+
     func prepare(frameCount: Int, bars: Int) {
         if mono.count != frameCount {
             mono = Array(repeating: 0, count: frameCount)
@@ -66,6 +93,74 @@ private final class VisualizerScratchBuffers: @unchecked Sendable {
     func snapshotSpectrum() -> [Float] {
         spectrum
     }
+
+    // MARK: - Butterchurn FFT Processing
+
+    /// Process audio samples for Butterchurn visualization
+    /// - Parameter samples: Mono audio samples (at least 2048 for full FFT)
+    func processButterchurnFFT(samples: [Float]) {
+        guard let setup = fftSetup else { return }
+
+        let sampleCount = min(samples.count, Self.butterchurnFFTSize)
+
+        // Copy input samples and zero-pad if needed
+        for i in 0..<sampleCount {
+            butterchurnReal[i] = samples[i]
+        }
+        for i in sampleCount..<Self.butterchurnFFTSize {
+            butterchurnReal[i] = 0
+        }
+
+        // Apply Hann window to reduce spectral leakage
+        var window = [Float](repeating: 0, count: Self.butterchurnFFTSize)
+        vDSP_hann_window(&window, vDSP_Length(Self.butterchurnFFTSize), Int32(vDSP_HANN_NORM))
+        vDSP_vmul(butterchurnReal, 1, window, 1, &butterchurnReal, 1, vDSP_Length(Self.butterchurnFFTSize))
+
+        // Prepare split complex for FFT
+        // For real-to-complex DFT, input is interleaved as even/odd
+        var inputReal = [Float](repeating: 0, count: Self.butterchurnFFTSize / 2)
+        var inputImag = [Float](repeating: 0, count: Self.butterchurnFFTSize / 2)
+
+        for i in 0..<(Self.butterchurnFFTSize / 2) {
+            inputReal[i] = butterchurnReal[i * 2]
+            inputImag[i] = butterchurnReal[i * 2 + 1]
+        }
+
+        var outputReal = [Float](repeating: 0, count: Self.butterchurnFFTSize / 2)
+        var outputImag = [Float](repeating: 0, count: Self.butterchurnFFTSize / 2)
+
+        // Execute FFT
+        vDSP_DFT_Execute(setup, inputReal, inputImag, &outputReal, &outputImag)
+
+        // Compute magnitude spectrum (first 1024 bins)
+        // Magnitude = sqrt(real² + imag²)
+        for i in 0..<Self.butterchurnBins {
+            let real = outputReal[i % outputReal.count]
+            let imag = outputImag[i % outputImag.count]
+            var magnitude = sqrt(real * real + imag * imag)
+
+            // Normalize and scale for visualization (0-1 range)
+            magnitude = magnitude / Float(Self.butterchurnFFTSize)
+            magnitude = min(1.0, magnitude * 4.0)  // Boost for visibility
+
+            butterchurnSpectrum[i] = magnitude
+        }
+
+        // Capture waveform: downsample to 1024 samples
+        let step = max(1, sampleCount / Self.butterchurnBins)
+        for i in 0..<Self.butterchurnBins {
+            let sampleIndex = min(i * step, sampleCount - 1)
+            butterchurnWaveform[i] = samples[sampleIndex]
+        }
+    }
+
+    func snapshotButterchurnSpectrum() -> [Float] {
+        butterchurnSpectrum
+    }
+
+    func snapshotButterchurnWaveform() -> [Float] {
+        butterchurnWaveform
+    }
 }
 
 private struct VisualizerTapContext: @unchecked Sendable {
@@ -77,6 +172,18 @@ private extension Float {
         return min(max(self, range.lowerBound), range.upperBound)
     }
 }
+
+// MARK: - Butterchurn Audio Frame
+
+/// Snapshot of audio data for Butterchurn visualization
+/// Produced by AudioPlayer tap, consumed by ButterchurnBridge at 30 FPS
+struct ButterchurnFrame {
+    let spectrum: [Float]       // 1024 frequency bins (from 2048-point FFT)
+    let waveform: [Float]       // 1024 mono samples (time-domain)
+    let timestamp: TimeInterval // CACurrentMediaTime() when captured
+}
+
+// MARK: - Track
 
 struct Track: Identifiable, Equatable {
     let id = UUID()
@@ -140,6 +247,11 @@ final class AudioPlayer {
     @ObservationIgnored private var latestRMS: [Float] = []
     @ObservationIgnored private var latestSpectrum: [Float] = []
     @ObservationIgnored private var latestWaveform: [Float] = []
+
+    // Butterchurn audio data - populated by tap, consumed at 30 FPS
+    @ObservationIgnored private var butterchurnSpectrum: [Float] = Array(repeating: 0, count: 1024)
+    @ObservationIgnored private var butterchurnWaveform: [Float] = Array(repeating: 0, count: 1024)
+    @ObservationIgnored private var lastButterchurnUpdate: TimeInterval = 0
 
     private(set) var playbackState: PlaybackState = .idle
     private(set) var isPlaying: Bool = false
@@ -1068,11 +1180,22 @@ final class AudioPlayer {
 
 
     @MainActor
-    private func updateVisualizerLevels(rms: [Float], spectrum: [Float], waveform: [Float]) {
+    private func updateVisualizerLevels(
+        rms: [Float],
+        spectrum: [Float],
+        waveform: [Float],
+        butterchurnSpectrum: [Float],
+        butterchurnWaveform: [Float]
+    ) {
         // Store all visualizer datasets
         self.latestRMS = rms
         self.latestSpectrum = spectrum
         self.latestWaveform = waveform
+
+        // Store Butterchurn data
+        self.butterchurnSpectrum = butterchurnSpectrum
+        self.butterchurnWaveform = butterchurnWaveform
+        self.lastButterchurnUpdate = CACurrentMediaTime()
 
         // Apply smoothing to active mode
         let used = self.useSpectrumVisualizer ? spectrum : rms
@@ -1199,9 +1322,22 @@ final class AudioPlayer {
                     .map { mono[$0] }
             }
 
-            Task { @MainActor [context, rmsSnapshot, spectrumSnapshot, waveformSnapshot] in
+            // Process Butterchurn FFT (2048-point for 1024 bins)
+            scratch.withMonoReadOnly { mono in
+                scratch.processButterchurnFFT(samples: mono)
+            }
+            let butterchurnSpectrumSnapshot = scratch.snapshotButterchurnSpectrum()
+            let butterchurnWaveformSnapshot = scratch.snapshotButterchurnWaveform()
+
+            Task { @MainActor [context, rmsSnapshot, spectrumSnapshot, waveformSnapshot, butterchurnSpectrumSnapshot, butterchurnWaveformSnapshot] in
                 let player = Unmanaged<AudioPlayer>.fromOpaque(context.playerPointer).takeUnretainedValue()
-                player.updateVisualizerLevels(rms: rmsSnapshot, spectrum: spectrumSnapshot, waveform: waveformSnapshot)
+                player.updateVisualizerLevels(
+                    rms: rmsSnapshot,
+                    spectrum: spectrumSnapshot,
+                    waveform: waveformSnapshot,
+                    butterchurnSpectrum: butterchurnSpectrumSnapshot,
+                    butterchurnWaveform: butterchurnWaveformSnapshot
+                )
             }
         }
     }
@@ -1221,7 +1357,8 @@ final class AudioPlayer {
             scratch: scratch
         )
 
-        mixer.installTap(onBus: 0, bufferSize: 1024, format: nil, block: handler)
+        // Buffer size 2048 for Butterchurn FFT - provides 1024 frequency bins
+        mixer.installTap(onBus: 0, bufferSize: 2048, format: nil, block: handler)
         visualizerTapInstalled = true
     }
 
@@ -1448,6 +1585,23 @@ final class AudioPlayer {
         }
 
         return result
+    }
+
+    // MARK: - Butterchurn Audio Data
+
+    /// Thread-safe snapshot of current Butterchurn audio data
+    /// Returns nil if not playing local audio (video or stream playback)
+    /// Called by ButterchurnBridge at 30 FPS to push data to JavaScript
+    func snapshotButterchurnFrame() -> ButterchurnFrame? {
+        // Only return data for local audio playback via AVAudioEngine
+        // Video uses AVPlayer (no tap), streams use StreamPlayer (no PCM access)
+        guard currentMediaType == .audio && isPlaying else { return nil }
+
+        return ButterchurnFrame(
+            spectrum: butterchurnSpectrum,
+            waveform: butterchurnWaveform,
+            timestamp: lastButterchurnUpdate
+        )
     }
 
     private func onPlaybackEnded(fromSeekID: UUID? = nil) {
