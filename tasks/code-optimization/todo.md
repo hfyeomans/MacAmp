@@ -204,12 +204,90 @@ codex "@file1.swift @file2.swift Review these changes..."
 | Phase 4: Pre-commit | ✅ Complete | 6/6 |
 | Phase 5: Verification | ✅ Complete | 10/10 |
 | Phase 6: Commit | ✅ Complete | 5/5 |
-| **Total** | **✅ COMPLETE** | **60/60** |
+| Phase 7: Swift 6 Modernization | ✅ Complete | 12/12 |
+| Phase 8: AudioPlayer Refactor | ⏳ Deferred | 0/25 |
+| **Total (1-7)** | **✅ COMPLETE** | **72/72** |
 
-### All Tasks Complete ✅
+### All Tasks Complete (Phases 1-7) ✅
 - [x] Git hooks configured
 - [x] Manual smoke test passed
 - [x] Changes committed
+- [x] EqGraphView bug fixed
+- [x] Background file I/O implemented
+- [x] UserDefaults keys consolidated
+- [x] Redundant enum values removed
+
+---
+
+## Phase 7: Swift 6 Modernization ✅ COMPLETE
+
+### 7.1 Bug Fix
+- [x] Fix `EqGraphView.swift:25` - `min(0, width-1)` bug → `let x = 0`
+
+### 7.2 Background File I/O
+- [x] Refactor `importEqfPreset` to use `Task.detached`
+- [x] Add `applyImportedPreset` helper for MainActor state updates
+- [x] Build verified
+
+### 7.3 UserDefaults Keys
+- [x] Add `Keys` enum to `AppSettings`
+- [x] Replace all 15 string literal keys with `Keys.*`
+- [x] Build verified
+
+### 7.4 Redundant Enum Values
+- [x] `MaterialIntegrationLevel` - removed 3 redundant values
+- [x] `TimeDisplayMode` - removed 2 redundant values
+- [x] `RepeatMode` - removed 3 redundant values
+- [x] Build verified
+
+### 7.5 Timer Modernization
+- [x] Evaluated `ContinuousClock` replacement
+- [x] Decision: Keep `Timer` (correct tool for .common RunLoop mode)
+
+---
+
+## Phase 8: AudioPlayer Refactoring (DEFERRED)
+
+### 8.1 Pre-requisites
+- [ ] Complete Phase 7 and verify stability ✅
+- [ ] Document current AudioPlayer architecture
+- [ ] Identify all dependencies on AudioPlayer class
+
+### 8.2 Extract AudioEngineController
+- [ ] Create `AudioEngineController.swift`
+- [ ] Move engine initialization logic
+- [ ] Move node configuration
+- [ ] Expose public interface
+- [ ] Update AudioPlayer to use extracted class
+
+### 8.3 Extract EQPresetStore
+- [ ] Create `EQPresetStore.swift`
+- [ ] Move preset loading/saving logic
+- [ ] Move per-track preset management
+- [ ] Update AudioPlayer to delegate
+
+### 8.4 Extract VisualizerPipeline
+- [ ] Create `VisualizerPipeline.swift`
+- [ ] Move audio tap configuration
+- [ ] Move FFT/smoothing logic
+- [ ] Expose observable visualization data
+
+### 8.5 Quick Fixes (AudioPlayer.swift)
+- [ ] Fix leading whitespace (line 1)
+- [ ] Fix shorthand operator (line 143)
+- [ ] Fix implicit optional initialization (line 319)
+- [ ] Fix redundant discardable let (lines 647, 797)
+- [ ] Fix unused optional binding (line 1073)
+- [ ] Fix vertical whitespace (lines 716, 819, 1182)
+
+### 8.6 Statement Position Fixes (SnapUtils.swift)
+- [ ] Move `else` to same line as `}` (8 locations)
+
+### 8.7 Verification
+- [ ] Build succeeds
+- [ ] All tests pass
+- [ ] SwiftLint violations < 10
+- [ ] Manual smoke test
 
 ---
 

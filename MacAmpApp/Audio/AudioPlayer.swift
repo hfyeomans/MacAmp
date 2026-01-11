@@ -896,22 +896,31 @@ final class AudioPlayer {
     }
 
     func importEqfPreset(from url: URL) {
-        do {
-            let data = try Data(contentsOf: url)
-            guard let eqfPreset = EQFCodec.parse(data: data) else {
-                AppLog.warn(.audio, "Failed to parse EQF preset at \(url.lastPathComponent)")
-                return
+        // Move file I/O off main thread to avoid UI stalls
+        Task.detached(priority: .userInitiated) { [weak self] in
+            do {
+                let data = try Data(contentsOf: url)
+                guard let eqfPreset = EQFCodec.parse(data: data) else {
+                    AppLog.warn(.audio, "Failed to parse EQF preset at \(url.lastPathComponent)")
+                    return
+                }
+                let suggestedName = eqfPreset.name?.trimmingCharacters(in: .whitespacesAndNewlines)
+                let fallbackName = url.deletingPathExtension().lastPathComponent
+                let finalName = suggestedName.flatMap { $0.isEmpty ? nil : $0 } ?? fallbackName
+                let preset = EQPreset(name: finalName, preamp: eqfPreset.preampDB, bands: eqfPreset.bandsDB)
+                // Return to MainActor for state updates
+                await self?.applyImportedPreset(preset, name: finalName)
+            } catch {
+                AppLog.error(.audio, "Failed to load EQF preset: \(error)")
             }
-            let suggestedName = eqfPreset.name?.trimmingCharacters(in: .whitespacesAndNewlines)
-            let fallbackName = url.deletingPathExtension().lastPathComponent
-            let finalName = suggestedName.flatMap { $0.isEmpty ? nil : $0 } ?? fallbackName
-            let preset = EQPreset(name: finalName, preamp: eqfPreset.preampDB, bands: eqfPreset.bandsDB)
-            storeUserPreset(preset)
-            applyEQPreset(preset)
-            AppLog.info(.audio, "Imported EQ preset '\(finalName)' from EQF")
-        } catch {
-            AppLog.error(.audio, "Failed to load EQF preset: \(error)")
         }
+    }
+
+    @MainActor
+    private func applyImportedPreset(_ preset: EQPreset, name: String) {
+        storeUserPreset(preset)
+        applyEQPreset(preset)
+        AppLog.info(.audio, "Imported EQ preset '\(name)' from EQF")
     }
 
     func savePresetForCurrentTrack() {

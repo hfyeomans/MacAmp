@@ -366,3 +366,117 @@ rg --type swift '\{ [^}]*\bself\.' MacAmpApp/ | grep -v '\[weak self\]'
 - [ast-grep Swift Patterns](https://ast-grep.github.io/catalog/swift/)
 - Project docs: `docs/IMPLEMENTATION_PATTERNS.md`
 - Project docs: `docs/MACAMP_ARCHITECTURE_GUIDE.md`
+
+---
+
+## 11. SwiftLint Pre-Existing Violations
+
+**Discovered:** 2026-01-10
+**Source:** Pre-commit hook on initial commit
+**Original Total:** 40 violations (in 4 staged files)
+**After Phase 7 Fixes:** ~22 remaining (deferred architectural)
+
+### Summary by File
+
+| File | Original | Fixed | Remaining |
+|------|----------|-------|-----------|
+| `AudioPlayer.swift` | 21 | 0 | 21 (architectural) |
+| `AppSettings.swift` | 10 | 9 | 1 (whitespace) |
+| `SnapUtils.swift` | 8 | 0 | 8 (statement position) |
+| `EqGraphView.swift` | 1 | 0 | 1 (closure length) |
+
+### AudioPlayer.swift (21 violations - Deferred)
+
+#### Critical / High Priority (Deferred to Phase 8)
+
+| Line | Rule | Description | Status |
+|------|------|-------------|--------|
+| 1:1 | `leading_whitespace` | File contains leading whitespace | Deferred |
+| 223:7 | `type_body_length` | Class spans 1178 lines (limit: 600) | Deferred |
+| 1:1 | `file_length` | File contains 1801 lines (limit: 1000) | Deferred |
+| 1219:32 | `function_body_length` | Function spans 107 lines (limit: 100) | Deferred |
+| 1405:5 | `function_body_length` | Function spans 61 lines (limit: 60) | Deferred |
+
+#### Closure Body Length (3) - Deferred
+
+| Line | Description |
+|------|-------------|
+| 1223:9 | Closure spans 105 lines (limit: 50) |
+| 1243:38 | Closure spans 62 lines (limit: 50) |
+| 1268:38 | Closure spans 37 lines (limit: 30) |
+
+#### Code Style (10) - Deferred
+
+| Line | Rule | Description |
+|------|------|-------------|
+| 143:13 | `shorthand_operator` | Use `+=` instead of `x = x + y` |
+| 319:9 | `implicit_optional_initialization` | Optional initialized with `= nil` |
+| 647:13 | `redundant_discardable_let` | Use `_ = foo()` not `let _ = foo()` |
+| 797:9 | `redundant_discardable_let` | Use `_ = foo()` not `let _ = foo()` |
+| 1073:19 | `unused_optional_binding` | Use `!= nil` over `let _ =` |
+| 716:1 | `vertical_whitespace` | Extra blank line (2 lines, limit 1) |
+| 819:5 | `vertical_whitespace` | Extra blank lines (3 lines, limit 1) |
+| 1182:1 | `vertical_whitespace` | Extra blank line (2 lines, limit 1) |
+
+### AppSettings.swift (10 violations)
+
+#### Redundant String Enum Values (9) - ✅ FIXED
+
+All enums had explicit string values matching case names. Fixed by removing redundant values.
+
+#### Whitespace (1) - Remaining
+
+| Line | Rule | Description |
+|------|------|-------------|
+| 345:1 | `vertical_whitespace_closing_braces` | Empty line before closing `}` |
+
+### SnapUtils.swift (8 violations) - Pending
+
+#### Statement Position (8)
+
+All violations: `else` should be on same line as closing `}`:
+
+```swift
+// Current (violations)
+}
+else { ... }
+
+// Should be
+} else { ... }
+```
+
+| Lines |
+|-------|
+| 53:64, 54:81, 55:67 |
+| 60:65, 61:81, 62:64 |
+| 104:44, 106:44 |
+
+### EqGraphView.swift (1 violation) - Acceptable
+
+| Line | Rule | Description |
+|------|------|-------------|
+| 46:40 | `closure_body_length` | Canvas closure spans 43 lines (limit: 30) |
+
+**Note:** This is a SwiftUI Canvas closure with drawing code. Extracting would reduce readability. Consider raising threshold or disabling for Canvas closures.
+
+---
+
+## 12. Swift 6 Modernization Opportunities
+
+### Implemented ✅
+
+1. **File I/O off main thread** - `importEqfPreset` now uses `Task.detached`
+2. **UserDefaults keys consolidation** - Added `Keys` enum to prevent typos
+3. **Redundant enum values** - Removed from 3 enums
+
+### Evaluated and Deferred
+
+1. **ContinuousClock for timer** - Evaluated, Timer with .common RunLoop mode is appropriate for progress updates during scroll/drag. Not a clear win.
+
+### Future Opportunities (Phase 8)
+
+1. **AudioPlayer.swift refactoring** - Split into:
+   - `AudioEngineController` (AVAudioEngine + nodes)
+   - `EQPresetStore` (persistence)
+   - `VisualizerPipeline` (tap + smoothing)
+   - `PlaybackState` (observable state)

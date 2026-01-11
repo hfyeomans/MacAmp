@@ -22,7 +22,8 @@ struct EqGraphView: View {
               let rep = NSBitmapImageRep(data: tiffData) else { return [] }
         var colors: [Color] = []
         let h = Int(rep.pixelsHigh)
-        let x = min(0, Int(rep.pixelsWide - 1))
+        // Extract colors from leftmost column (x=0) for vertical gradient strip
+        let x = 0
         for y in 0..<h {
             if let nsColor = rep.colorAt(x: x, y: y) {
                 colors.append(Color(nsColor: nsColor))
