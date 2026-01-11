@@ -283,6 +283,7 @@ Commits ahead: 0
   - Medium priority: Audio-thread allocations in processButterchurnFFT
   - Low priority: AppSettings per-frame lookup hidden dependency
   - **Deferred to Phase 9:** All Oracle findings (quality gate phase)
+  - Commit: `9489d76`
 
 ### 2026-01-10
 - Created `code-simplification` branch from `main`

@@ -346,7 +346,10 @@ codex "@file1.swift @file2.swift Review these changes..."
 - [x] Move tap installation/removal logic
 - [x] **CRITICAL:** Ensure `Unmanaged` pointer lifetime preserved ✅
 - [x] Build verification: SUCCEEDED
+- [x] Oracle review: gpt-5.2-codex (high) - Score 7.5/10
+- [x] Oracle fixes deferred to Phase 9 (quality gate)
 - [ ] Test: Spectrum analyzer, oscilloscope, Butterchurn (pending user verification)
+- [x] Commit: `9489d76` "refactor: Extract VisualizerPipeline from AudioPlayer (Phase 8.5)"
 
 ### 8.6 Phase 8f: AudioEngineController (DEFER DECISION)
 
