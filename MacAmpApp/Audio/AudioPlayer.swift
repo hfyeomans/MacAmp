@@ -1,4 +1,3 @@
-
 import Foundation
 import Combine
 import AVFoundation
@@ -18,205 +17,10 @@ extension String {
     }
 }
 
-// Scratch buffers are confined to the audio tap queue, so @unchecked Sendable is safe.
-private final class VisualizerScratchBuffers: @unchecked Sendable {
-    private(set) var mono: [Float] = []
-    private(set) var rms: [Float] = []
-    private(set) var spectrum: [Float] = []
+// VisualizerScratchBuffers, VisualizerTapContext, and ButterchurnFrame
+// have been extracted to VisualizerPipeline.swift
 
-    // Butterchurn FFT buffers
-    private static let butterchurnFFTSize: Int = 2048
-    private static let butterchurnBins: Int = 1024
-
-    private var butterchurnReal: [Float] = Array(repeating: 0, count: butterchurnFFTSize)
-    private var butterchurnImag: [Float] = Array(repeating: 0, count: butterchurnFFTSize)
-    private(set) var butterchurnSpectrum: [Float] = Array(repeating: 0, count: butterchurnBins)
-    private(set) var butterchurnWaveform: [Float] = Array(repeating: 0, count: butterchurnBins)
-
-    // vDSP FFT setup (log2(2048) = 11)
-    private let fftSetup: vDSP_DFT_Setup?
-
-    init() {
-        // Create FFT setup for 2048-point real-to-complex transform
-        fftSetup = vDSP_DFT_zrop_CreateSetup(
-            nil,
-            vDSP_Length(Self.butterchurnFFTSize),
-            .FORWARD
-        )
-    }
-
-    deinit {
-        if let setup = fftSetup {
-            vDSP_DFT_DestroySetup(setup)
-        }
-    }
-
-    func prepare(frameCount: Int, bars: Int) {
-        if mono.count != frameCount {
-            mono = Array(repeating: 0, count: frameCount)
-        } else {
-            mono.withUnsafeMutableBufferPointer { pointer in
-                guard let baseAddress = pointer.baseAddress else { return }
-                vDSP_vclr(baseAddress, 1, vDSP_Length(frameCount))
-            }
-        }
-
-        if rms.count != bars {
-            rms = Array(repeating: 0, count: bars)
-        }
-
-        if spectrum.count != bars {
-            spectrum = Array(repeating: 0, count: bars)
-        }
-    }
-
-    func withMono<R>(_ body: (inout [Float]) -> R) -> R {
-        body(&mono)
-    }
-
-    func withMonoReadOnly<R>(_ body: ([Float]) -> R) -> R {
-        body(mono)
-    }
-
-    func withRms<R>(_ body: (inout [Float]) -> R) -> R {
-        body(&rms)
-    }
-
-    func withSpectrum<R>(_ body: (inout [Float]) -> R) -> R {
-        body(&spectrum)
-    }
-
-    func snapshotRms() -> [Float] {
-        rms
-    }
-
-    func snapshotSpectrum() -> [Float] {
-        spectrum
-    }
-
-    // MARK: - Butterchurn FFT Processing
-
-    /// Process audio samples for Butterchurn visualization
-    /// - Parameter samples: Mono audio samples (at least 2048 for full FFT)
-    func processButterchurnFFT(samples: [Float]) {
-        guard let setup = fftSetup else { return }
-
-        let sampleCount = min(samples.count, Self.butterchurnFFTSize)
-
-        // Copy input samples and zero-pad if needed
-        for i in 0..<sampleCount {
-            butterchurnReal[i] = samples[i]
-        }
-        for i in sampleCount..<Self.butterchurnFFTSize {
-            butterchurnReal[i] = 0
-        }
-
-        // Apply Hann window to reduce spectral leakage
-        var window = [Float](repeating: 0, count: Self.butterchurnFFTSize)
-        vDSP_hann_window(&window, vDSP_Length(Self.butterchurnFFTSize), Int32(vDSP_HANN_NORM))
-        vDSP_vmul(butterchurnReal, 1, window, 1, &butterchurnReal, 1, vDSP_Length(Self.butterchurnFFTSize))
-
-        // Prepare split complex for FFT
-        // For real-to-complex DFT, input is interleaved as even/odd
-        var inputReal = [Float](repeating: 0, count: Self.butterchurnFFTSize / 2)
-        var inputImag = [Float](repeating: 0, count: Self.butterchurnFFTSize / 2)
-
-        for i in 0..<(Self.butterchurnFFTSize / 2) {
-            inputReal[i] = butterchurnReal[i * 2]
-            inputImag[i] = butterchurnReal[i * 2 + 1]
-        }
-
-        var outputReal = [Float](repeating: 0, count: Self.butterchurnFFTSize / 2)
-        var outputImag = [Float](repeating: 0, count: Self.butterchurnFFTSize / 2)
-
-        // Execute FFT
-        vDSP_DFT_Execute(setup, inputReal, inputImag, &outputReal, &outputImag)
-
-        // Compute magnitude spectrum (first 1024 bins)
-        // Magnitude = sqrt(real² + imag²)
-        for i in 0..<Self.butterchurnBins {
-            let real = outputReal[i % outputReal.count]
-            let imag = outputImag[i % outputImag.count]
-            var magnitude = sqrt(real * real + imag * imag)
-
-            // Normalize and scale for visualization (0-1 range)
-            magnitude = magnitude / Float(Self.butterchurnFFTSize)
-            magnitude = min(1.0, magnitude * 4.0)  // Boost for visibility
-
-            butterchurnSpectrum[i] = magnitude
-        }
-
-        // Capture waveform: downsample to 1024 samples
-        let step = max(1, sampleCount / Self.butterchurnBins)
-        for i in 0..<Self.butterchurnBins {
-            let sampleIndex = min(i * step, sampleCount - 1)
-            butterchurnWaveform[i] = samples[sampleIndex]
-        }
-    }
-
-    func snapshotButterchurnSpectrum() -> [Float] {
-        butterchurnSpectrum
-    }
-
-    func snapshotButterchurnWaveform() -> [Float] {
-        butterchurnWaveform
-    }
-}
-
-private struct VisualizerTapContext: @unchecked Sendable {
-    let playerPointer: UnsafeMutableRawPointer
-}
-
-private extension Float {
-    func clamped(to range: ClosedRange<Float>) -> Float {
-        return min(max(self, range.lowerBound), range.upperBound)
-    }
-}
-
-// MARK: - Butterchurn Audio Frame
-
-/// Snapshot of audio data for Butterchurn visualization
-/// Produced by AudioPlayer tap, consumed by ButterchurnBridge at 30 FPS
-struct ButterchurnFrame {
-    let spectrum: [Float]       // 1024 frequency bins (from 2048-point FFT)
-    let waveform: [Float]       // 1024 mono samples (time-domain)
-    let timestamp: TimeInterval // CACurrentMediaTime() when captured
-}
-
-// MARK: - Track
-
-struct Track: Identifiable, Equatable {
-    let id = UUID()
-    let url: URL
-    var title: String
-    var artist: String
-    var duration: Double
-
-    /// Returns true if this track is an internet radio stream (HTTP/HTTPS URL)
-    /// Streams cannot be played via AudioPlayer (which uses AVAudioFile for local files only)
-    /// and must be routed through PlaybackCoordinator → StreamPlayer instead.
-    var isStream: Bool {
-        !url.isFileURL && (url.scheme == "http" || url.scheme == "https")
-    }
-
-    static func == (lhs: Track, rhs: Track) -> Bool {
-        lhs.id == rhs.id
-    }
-}
-
-enum PlaybackStopReason: Equatable {
-    case manual
-    case completed
-    case ejected
-}
-
-enum PlaybackState: Equatable {
-    case idle
-    case preparing
-    case playing
-    case paused
-    case stopped(PlaybackStopReason)
-}
+// Track, PlaybackStopReason, and PlaybackState have been extracted to Models/Track.swift
 
 @Observable
 @MainActor
@@ -226,42 +30,40 @@ final class AudioPlayer {
     @ObservationIgnored private let playerNode = AVAudioPlayerNode()
     @ObservationIgnored private let eqNode = AVAudioUnitEQ(numberOfBands: 10)
     @ObservationIgnored private var audioFile: AVAudioFile?
-    @ObservationIgnored private var progressTimer: Timer?
+    @ObservationIgnored nonisolated(unsafe) private var progressTimer: Timer?  // nonisolated(unsafe) for deinit access
     @ObservationIgnored private var playheadOffset: Double = 0 // seconds offset for current scheduled segment
-    @ObservationIgnored private var visualizerTapInstalled = false
-    @ObservationIgnored private var visualizerPeaks: [Float] = Array(repeating: 0.0, count: 20)
-    @ObservationIgnored private var lastUpdateTime: CFAbsoluteTime = CFAbsoluteTimeGetCurrent()
 
-    /// Legacy toggle - derives from AppSettings.visualizerMode
+    // MARK: - Extracted Controllers
+    let visualizerPipeline = VisualizerPipeline()
+
+    /// Legacy toggle - derives from AppSettings.visualizerMode (forwarded to pipeline)
     var useSpectrumVisualizer: Bool {
         get { AppSettings.instance().visualizerMode == .spectrum }
         set {
             AppSettings.instance().visualizerMode = newValue ? .spectrum : .none
+            visualizerPipeline.useSpectrum = newValue  // Sync cached value to avoid per-frame lookup
         }
     }
 
-    var visualizerSmoothing: Float = 0.6 // 0..1 (higher = smoother)
-    var visualizerPeakFalloff: Float = 1.2 // units per second
+    /// Visualizer smoothing (forwarded to pipeline)
+    var visualizerSmoothing: Float {
+        get { visualizerPipeline.smoothing }
+        set { visualizerPipeline.smoothing = newValue }
+    }
 
-    // Visualizer data storage
-    @ObservationIgnored private var latestRMS: [Float] = []
-    @ObservationIgnored private var latestSpectrum: [Float] = []
-    @ObservationIgnored private var latestWaveform: [Float] = []
-
-    // Butterchurn audio data - populated by tap, consumed at 30 FPS
-    @ObservationIgnored private var butterchurnSpectrum: [Float] = Array(repeating: 0, count: 1024)
-    @ObservationIgnored private var butterchurnWaveform: [Float] = Array(repeating: 0, count: 1024)
-    @ObservationIgnored private var lastButterchurnUpdate: TimeInterval = 0
+    /// Visualizer peak falloff (forwarded to pipeline)
+    var visualizerPeakFalloff: Float {
+        get { visualizerPipeline.peakFalloff }
+        set { visualizerPipeline.peakFalloff = newValue }
+    }
 
     private(set) var playbackState: PlaybackState = .idle
     private(set) var isPlaying: Bool = false
     private(set) var isPaused: Bool = false
     @ObservationIgnored private var currentSeekID: UUID = UUID() // Identifies which seek operation scheduled the current audio
     @ObservationIgnored private var isHandlingCompletion = false // Prevents re-entrant onPlaybackEnded calls
-    @ObservationIgnored private var trackHasEnded = false // Tracks when playlist has finished
     @ObservationIgnored private var seekGuardActive = false
     @ObservationIgnored private var autoEQTask: Task<Void, Never>?
-    @ObservationIgnored private var pendingTrackURLs = Set<URL>()
     var currentTrackURL: URL? // Placeholder for the currently playing track
     var currentTitle: String = "No Track Loaded"
     var currentDuration: Double = 0.0
@@ -271,27 +73,32 @@ final class AudioPlayer {
     var volume: Float = 1.0 { // 0.0 to 1.0
         didSet {
             playerNode.volume = volume
-            if currentMediaType == .video {
-                videoPlayer?.volume = volume
-            }
+            videoPlaybackController.volume = volume
         }
     }
     var balance: Float = 0.0 { // -1.0 (left) to 1.0 (right)
         didSet { playerNode.pan = balance }
     }
 
-    var playlist: [Track] = [] // New: List of tracks
-    var currentTrack: Track? // New: Currently playing track
-    @ObservationIgnored private var currentPlaylistIndex: Int?
-    var externalPlaybackHandler: ((Track) -> Void)?
-    var shuffleEnabled: Bool = false
+    // Playlist management (extracted to separate controller)
+    let playlistController = PlaylistController()
 
-    // Video playback support
-    var videoPlayer: AVPlayer?
+    // Computed forwarding for backwards compatibility
+    var playlist: [Track] { playlistController.playlist }
+    var currentTrack: Track? // Currently playing track (owned by AudioPlayer for playback state)
+    var externalPlaybackHandler: ((Track) -> Void)?
+    var shuffleEnabled: Bool {
+        get { playlistController.shuffleEnabled }
+        set { playlistController.shuffleEnabled = newValue }
+    }
+
+    // Video playback support (extracted to VideoPlaybackController)
+    let videoPlaybackController = VideoPlaybackController()
     var currentMediaType: MediaType = .audio
-    var videoMetadataString: String = ""
-    @ObservationIgnored private var videoEndObserver: NSObjectProtocol?
-    @ObservationIgnored private var videoTimeObserver: Any?
+
+    // Computed forwarding for backwards compatibility
+    var videoPlayer: AVPlayer? { videoPlaybackController.player }
+    var videoMetadataString: String { videoPlaybackController.metadataString }
 
     enum MediaType {
         case audio  // MP3, FLAC, WAV, etc.
@@ -311,12 +118,13 @@ final class AudioPlayer {
     var isEqOn: Bool = false // New: EQ On/Off state
     var eqAutoEnabled: Bool = false
     var useLogScaleBands: Bool = true
-    @ObservationIgnored var perTrackPresets: [String: EqfPreset] = [:]
-    @ObservationIgnored private let presetsFileName = "perTrackPresets.json"
-    private(set) var userPresets: [EQPreset] = []
-    @ObservationIgnored private let userPresetDefaultsKey = "MacAmp.UserEQPresets.v1"
-    var visualizerLevels: [Float] = Array(repeating: 0.0, count: 20)
-    var appliedAutoPresetTrack: String? = nil
+    // EQ preset persistence (extracted to separate store)
+    let eqPresetStore = EQPresetStore()
+
+    // Computed forwarding for backwards compatibility
+    var userPresets: [EQPreset] { eqPresetStore.userPresets }
+    var visualizerLevels: [Float] { visualizerPipeline.levels }
+    var appliedAutoPresetTrack: String?
     var channelCount: Int = 2 // 1 = mono, 2 = stereo
     var bitrate: Int = 0 // in kbps
     var sampleRate: Int = 0 // in Hz (will display as kHz)
@@ -324,11 +132,37 @@ final class AudioPlayer {
     init() {
         setupEngine()
         configureEQ()
-        loadPerTrackPresets()
-        loadUserPresets()
+        // Note: eqPresetStore loads presets in its own init
+
+        // Sync initial visualizer mode to pipeline (avoids per-frame AppSettings lookup)
+        visualizerPipeline.useSpectrum = AppSettings.instance().visualizerMode == .spectrum
+
+        // Setup video playback callbacks
+        videoPlaybackController.onPlaybackEnded = { [weak self] in
+            Task { @MainActor in
+                self?.onPlaybackEnded()
+            }
+        }
+        videoPlaybackController.onTimeUpdate = { [weak self] time, duration, progress in
+            guard let self else { return }
+            // Sync UI-bound properties during video playback
+            self.currentTime = time
+            self.currentDuration = duration
+            self.playbackProgress = progress
+        }
+        videoPlaybackController.volume = volume
     }
 
-    deinit {}
+    deinit {
+        // Ensure visualizer tap is removed to prevent use-after-free
+        // The tap handler holds an Unmanaged pointer to VisualizerPipeline
+        visualizerPipeline.removeTap()
+
+        // Invalidate progress timer if running
+        progressTimer?.invalidate()
+
+        // Video controller has its own deinit that calls cleanup()
+    }
 
     private func transition(to newState: PlaybackState) {
         guard playbackState != newState else { return }
@@ -371,14 +205,14 @@ final class AudioPlayer {
     func addTrack(url: URL) {
         let normalizedURL = url.standardizedFileURL
 
-        let duplicateInPlaylist = playlist.contains { $0.url.standardizedFileURL == normalizedURL }
-        if duplicateInPlaylist || pendingTrackURLs.contains(normalizedURL) {
+        // Check for duplicates using playlistController
+        if playlistController.containsTrack(url: normalizedURL) {
             AppLog.debug(.audio, "Track already pending or in playlist: \(normalizedURL.lastPathComponent)")
             return
         }
 
         AppLog.debug(.audio, "Adding track from \(normalizedURL.lastPathComponent)")
-        pendingTrackURLs.insert(normalizedURL)
+        playlistController.addPendingURL(normalizedURL)
 
         let placeholder = Track(
             url: normalizedURL,
@@ -389,8 +223,7 @@ final class AudioPlayer {
 
         let shouldAutoplay = currentTrack == nil
 
-        playlist.append(placeholder)
-        AppLog.debug(.audio, "Queued placeholder '\(placeholder.title)' (total: \(playlist.count) tracks)")
+        playlistController.addPlaceholder(placeholder)
 
         if shouldAutoplay {
             playTrack(track: placeholder)
@@ -398,16 +231,14 @@ final class AudioPlayer {
 
         Task { @MainActor [weak self] in
             guard let self else { return }
-            defer { self.pendingTrackURLs.remove(normalizedURL) }
+            defer { self.playlistController.removePendingURL(normalizedURL) }
 
             AppLog.debug(.audio, "Loading metadata for \(normalizedURL.lastPathComponent)")
-            let track = await self.loadTrackMetadata(url: normalizedURL)
+            let metadata = await MetadataLoader.loadTrackMetadata(from: normalizedURL)
+            let track = Track(url: normalizedURL, title: metadata.title, artist: metadata.artist, duration: metadata.duration)
             AppLog.debug(.audio, "Metadata loaded - title: '\(track.title)', artist: '\(track.artist)', duration: \(track.duration)s")
 
-            if let index = self.playlist.firstIndex(where: { $0.id == placeholder.id }) {
-                AppLog.debug(.audio, "Updating placeholder at index \(index)")
-                self.playlist[index] = track
-
+            if self.playlistController.replacePlaceholder(id: placeholder.id, with: track) {
                 if self.currentTrack?.id == placeholder.id {
                     AppLog.debug(.audio, "Updating current track metadata")
                     self.currentTrack = track
@@ -418,13 +249,34 @@ final class AudioPlayer {
                     // Notify coordinator that metadata updated
                     self.externalPlaybackHandler?(track)
                 }
-            } else if !self.playlist.contains(where: { $0.url.standardizedFileURL == normalizedURL }) {
-                AppLog.debug(.audio, "Appending track to playlist")
-                self.playlist.append(track)
+            } else if !self.playlistController.containsTrack(url: normalizedURL) {
+                self.playlistController.addTrack(track)
             }
-
-            AppLog.debug(.audio, "Added '\(track.title)' to playlist (total: \(self.playlist.count) tracks)")
         }
+    }
+
+    /// Add a stream track directly to the playlist (no metadata loading)
+    func addStreamTrack(_ track: Track) {
+        playlistController.addTrack(track)
+    }
+
+    /// Remove a track at the specified index
+    func removeTrack(at index: Int) {
+        playlistController.removeTrack(at: index)
+    }
+
+    /// Replace the entire playlist with the specified tracks
+    func replacePlaylist(with tracks: [Track]) {
+        playlistController.clear()
+        for track in tracks {
+            playlistController.addTrack(track)
+        }
+        AppLog.debug(.audio, "Replaced playlist with \(tracks.count) tracks")
+    }
+
+    /// Clear all tracks from the playlist
+    func clearPlaylist() {
+        playlistController.clear()
     }
 
     /// Play an EXISTING track from the playlist
@@ -461,7 +313,7 @@ final class AudioPlayer {
         playbackProgress = 0
         transition(to: .preparing)
         seekGuardActive = false
-        trackHasEnded = false  // Reset playlist end flag
+        playlistController.resetEnded()  // Reset playlist end flag
 
         AppLog.info(.audio, "Playing track '\(track.title)'")
 
@@ -473,11 +325,10 @@ final class AudioPlayer {
         if currentMediaType != mediaType {
             if currentMediaType == .video {
                 // Switching FROM video to audio - cleanup video
-                cleanupVideoPlayer()
-                videoMetadataString = ""
+                videoPlaybackController.cleanup()
                 AppLog.debug(.audio, "Switching from video to audio - cleanup complete")
             }
-            // Note: Audio cleanup happens in loadVideoFile() via playerNode.stop()
+            // Note: Audio cleanup happens in loadAudioFile() via playerNode.stop()
         }
 
         currentMediaType = mediaType
@@ -486,7 +337,9 @@ final class AudioPlayer {
         case .audio:
             loadAudioFile(url: track.url)
         case .video:
-            loadVideoFile(url: track.url)
+            // Delegate to VideoPlaybackController - don't auto-play yet, we call play() below
+            videoPlaybackController.loadVideo(url: track.url, autoPlay: false)
+            transition(to: .playing)
         }
 
         // Apply EQ auto preset if enabled
@@ -505,136 +358,6 @@ final class AudioPlayer {
         return videoExtensions.contains(ext) ? .video : .audio
     }
 
-    // Load video file for playback
-    private func loadVideoFile(url: URL) {
-        // Stop any existing audio playback
-        playerNode.stop()
-        progressTimer?.invalidate()
-
-        // Clean up any existing video player
-        cleanupVideoPlayer()
-
-        // Create video player
-        videoPlayer = AVPlayer(url: url)
-        videoPlayer?.volume = volume  // Sync volume at creation time
-        currentMediaType = .video
-
-        // Observe video completion
-        if let playerItem = videoPlayer?.currentItem {
-            videoEndObserver = NotificationCenter.default.addObserver(
-                forName: .AVPlayerItemDidPlayToEndTime,
-                object: playerItem,
-                queue: .main
-            ) { [weak self] _ in
-                Task { @MainActor in
-                    self?.onPlaybackEnded()
-                }
-            }
-        }
-
-        // Setup time observer BEFORE play
-        setupVideoTimeObserver()
-
-        // Start video playback
-        videoPlayer?.play()
-
-        // Update state
-        transition(to: .playing)
-        isPlaying = true
-        isPaused = false
-
-        AppLog.debug(.audio, "Loading video file: \(url.lastPathComponent)")
-
-        // Extract and format video metadata for display
-        Task { @MainActor in
-            await self.loadVideoMetadata(url: url)
-        }
-    }
-
-    /// Extract video metadata for display in video window
-    /// Format: "filename M4V 1280x720" (simple, matches Winamp classic)
-    private func loadVideoMetadata(url: URL) async {
-        // Get filename (without extension)
-        let filename = url.deletingPathExtension().lastPathComponent
-
-        // Get file extension as video type
-        let videoType = url.pathExtension.uppercased()
-
-        do {
-            let asset = AVURLAsset(url: url)
-            let tracks = try await asset.load(.tracks)
-
-            // Get video resolution
-            if let videoTrack = tracks.first(where: { $0.mediaType == .video }) {
-                let naturalSize = try await videoTrack.load(.naturalSize)
-                let width = Int(naturalSize.width)
-                let height = Int(naturalSize.height)
-
-                // Winamp format: "filename (WMV): Video: 1280x720"
-                videoMetadataString = "\(filename) (\(videoType)): Video: \(width)x\(height)"
-                AppLog.debug(.audio, "Video metadata: \(videoMetadataString)")
-            } else {
-                // No video track found
-                videoMetadataString = "\(filename) (\(videoType)): Video: Unknown"
-                AppLog.debug(.audio, "Video metadata (no track): \(videoMetadataString)")
-            }
-        } catch {
-            videoMetadataString = "\(filename) (\(videoType)): Video: Unknown"
-            AppLog.warn(.audio, "Failed to load video metadata: \(error)")
-        }
-    }
-
-    // MARK: - Video Time Observer
-
-    /// Setup periodic time observer for video playback
-    /// Updates currentTime, currentDuration, AND playbackProgress (all three required)
-    private func setupVideoTimeObserver() {
-        tearDownVideoTimeObserver()  // Clean first
-        guard let player = videoPlayer else { return }
-
-        let interval = CMTime(seconds: 0.1, preferredTimescale: 600)
-        videoTimeObserver = player.addPeriodicTimeObserver(
-            forInterval: interval,
-            queue: .main
-        ) { [weak self] time in
-            Task { @MainActor in  // Explicit main actor hop
-                guard let self else { return }
-                let seconds = time.seconds
-                self.currentTime = seconds
-
-                if let item = player.currentItem {
-                    let duration = item.duration.seconds
-                    if duration.isFinite {
-                        self.currentDuration = duration
-                        // CRITICAL: playbackProgress is STORED, must assign explicitly
-                        self.playbackProgress = duration > 0 ? seconds / duration : 0
-                    }
-                }
-            }
-        }
-        AppLog.debug(.audio, "Video time observer setup")
-    }
-
-    /// Teardown video time observer to prevent memory leaks
-    private func tearDownVideoTimeObserver() {
-        if let observer = videoTimeObserver, let player = videoPlayer {
-            player.removeTimeObserver(observer)
-        }
-        videoTimeObserver = nil
-    }
-
-    /// Shared cleanup for all video resources
-    private func cleanupVideoPlayer() {
-        tearDownVideoTimeObserver()
-        if let observer = videoEndObserver {
-            NotificationCenter.default.removeObserver(observer)
-            videoEndObserver = nil
-        }
-        videoPlayer?.pause()
-        videoPlayer = nil
-        AppLog.debug(.audio, "Video player cleanup complete")
-    }
-
     /// Private: Load audio file for playback (does NOT modify playlist)
     private func loadAudioFile(url: URL) {
         // Video cleanup now happens in playTrack() BEFORE calling this
@@ -644,93 +367,34 @@ final class AudioPlayer {
             audioFile = try AVAudioFile(forReading: url)
             rewireForCurrentFile()
             currentSeekID = UUID()
-            let _ = scheduleFrom(time: 0, seekID: currentSeekID)
+            _ = scheduleFrom(time: 0, seekID: currentSeekID)
             playerNode.volume = volume
             playerNode.pan = balance
 
-            // Update audio properties synchronously
-            updateAudioProperties(for: url)
+            // Update audio properties asynchronously
+            Task { @MainActor [weak self] in
+                if let props = await MetadataLoader.loadAudioProperties(from: url) {
+                    self?.channelCount = props.channelCount
+                    self?.bitrate = props.bitrate
+                    self?.sampleRate = props.sampleRate
+                }
+            }
         } catch {
             AppLog.error(.audio, "Failed to open file: \(error)")
         }
     }
 
-    /// Private: Load track metadata asynchronously
-    private func loadTrackMetadata(url: URL) async -> Track {
-        let asset = AVURLAsset(url: url)
-
-        do {
-            let metadata = try await asset.load(.commonMetadata)
-            let durationCM = try await asset.load(.duration)
-
-            let titleItem = AVMetadataItem.metadataItems(from: metadata, filteredByIdentifier: .commonIdentifierTitle).first
-            let artistItem = AVMetadataItem.metadataItems(from: metadata, filteredByIdentifier: .commonIdentifierArtist).first
-            let title = (try? await titleItem?.load(.stringValue)) ?? url.lastPathComponent
-            let artist = (try? await artistItem?.load(.stringValue)) ?? "Unknown Artist"
-            let duration = durationCM.seconds
-
-            return Track(url: url, title: title, artist: artist, duration: duration)
-        } catch {
-            AppLog.warn(.audio, "Failed to load metadata for \(url.lastPathComponent): \(error)")
-            return Track(url: url, title: url.lastPathComponent, artist: "Unknown", duration: 0.0)
-        }
-    }
-
-    /// Private: Update audio properties (channel count, bitrate, sample rate)
-    private func updateAudioProperties(for url: URL) {
-        let asset = AVURLAsset(url: url)
-        Task { @MainActor in
-            do {
-                let audioTracks = try await asset.load(.tracks)
-
-                if let firstAudioTrack = audioTracks.first(where: { $0.mediaType == .audio }) {
-                    let audioDesc = try await firstAudioTrack.load(.formatDescriptions)
-                    let estimatedDataRate = try await firstAudioTrack.load(.estimatedDataRate)
-
-                    if let desc = audioDesc.first {
-                        let audioStreamBasicDescription = CMAudioFormatDescriptionGetStreamBasicDescription(desc)
-                        if let streamDesc = audioStreamBasicDescription?.pointee {
-                            // Channel count
-                            let channelsPerFrame = streamDesc.mChannelsPerFrame
-                            self.channelCount = Int(channelsPerFrame)
-                            AppLog.debug(.audio, "Detected \(channelsPerFrame) channel(s) - \(channelsPerFrame == 1 ? "Mono" : "Stereo")")
-
-                            // Sample rate
-                            let sampleRateHz = Int(streamDesc.mSampleRate)
-                            self.sampleRate = sampleRateHz
-                            AppLog.debug(.audio, "Sample rate: \(sampleRateHz) Hz (\(sampleRateHz/1000) kHz)")
-                        }
-                    }
-
-                    // Bitrate (convert from bits per second to kbps)
-                    let bitrateKbps = Int(estimatedDataRate / 1000)
-                    self.bitrate = bitrateKbps
-                    AppLog.debug(.audio, "Bitrate: \(bitrateKbps) kbps")
-                }
-            } catch {
-                AppLog.warn(.audio, "Failed to load audio properties: \(error)")
-            }
-        }
-    }
-
-
     func play() {
         // If playlist has ended, restart from the beginning
-        if trackHasEnded && !playlist.isEmpty {
+        if playlistController.hasEnded && !playlist.isEmpty {
             playTrack(track: playlist[0])
             return
         }
 
         // Handle video playback
         if currentMediaType == .video {
-            guard let player = videoPlayer else {
-                AppLog.warn(.audio, "No video loaded to play.")
-                return
-            }
-            player.play()
+            videoPlaybackController.play()
             transition(to: .playing)
-            isPlaying = true
-            isPaused = false
             AppLog.debug(.audio, "Play (Video)")
             return
         }
@@ -764,10 +428,8 @@ final class AudioPlayer {
     func pause() {
         // Handle video playback
         if currentMediaType == .video {
-            videoPlayer?.pause()
+            videoPlaybackController.pause()
             transition(to: .paused)
-            isPlaying = false
-            isPaused = true
             AppLog.debug(.audio, "Pause (Video)")
             return
         }
@@ -785,8 +447,7 @@ final class AudioPlayer {
 
         // Handle video playback cleanup
         if currentMediaType == .video {
-            cleanupVideoPlayer()
-            videoMetadataString = ""
+            videoPlaybackController.stop()
             currentMediaType = .audio
             AppLog.debug(.audio, "Stop (Video) - cleaned up AVPlayer")
         }
@@ -794,7 +455,7 @@ final class AudioPlayer {
         // Audio playback cleanup
         playerNode.stop()
         currentSeekID = UUID()
-        let _ = scheduleFrom(time: 0, seekID: currentSeekID)  // Ignore return - reset to beginning
+        _ = scheduleFrom(time: 0, seekID: currentSeekID)  // Ignore return - reset to beginning
 
         // Clear currentTrack so UI doesn't show stale info during stream playback
         currentTrack = nil
@@ -816,19 +477,16 @@ final class AudioPlayer {
         AppLog.debug(.audio, "Stop")
     }
 
-    
-
     func eject() {
         stop()
         transition(to: .stopped(.ejected))
-        playlist.removeAll()
+        playlistController.clear()
         currentTrack = nil
         currentTrackURL = nil
         currentTitle = "No Track Loaded"
         currentDuration = 0.0
         currentTime = 0.0
         playbackProgress = 0.0
-        trackHasEnded = false
         appliedAutoPresetTrack = nil
         audioFile = nil
         bitrate = 0
@@ -883,57 +541,33 @@ final class AudioPlayer {
         let trimmedName = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else { return }
         let preset = getCurrentEQPreset(name: trimmedName)
-        storeUserPreset(preset)
+        eqPresetStore.storeUserPreset(preset)
         AppLog.info(.audio, "Saved user EQ preset '\(trimmedName)'")
     }
 
     func deleteUserPreset(id: UUID) {
-        if let index = userPresets.firstIndex(where: { $0.id == id }) {
-            let removed = userPresets.remove(at: index)
-            persistUserPresets()
-            AppLog.info(.audio, "Deleted user EQ preset '\(removed.name)'")
-        }
+        eqPresetStore.deleteUserPreset(id: id)
     }
 
     func importEqfPreset(from url: URL) {
-        // Move file I/O off main thread to avoid UI stalls
-        Task.detached(priority: .userInitiated) { [weak self] in
-            do {
-                let data = try Data(contentsOf: url)
-                guard let eqfPreset = EQFCodec.parse(data: data) else {
-                    AppLog.warn(.audio, "Failed to parse EQF preset at \(url.lastPathComponent)")
-                    return
-                }
-                let suggestedName = eqfPreset.name?.trimmingCharacters(in: .whitespacesAndNewlines)
-                let fallbackName = url.deletingPathExtension().lastPathComponent
-                let finalName = suggestedName.flatMap { $0.isEmpty ? nil : $0 } ?? fallbackName
-                let preset = EQPreset(name: finalName, preamp: eqfPreset.preampDB, bands: eqfPreset.bandsDB)
-                // Return to MainActor for state updates
-                await self?.applyImportedPreset(preset, name: finalName)
-            } catch {
-                AppLog.error(.audio, "Failed to load EQF preset: \(error)")
+        Task { [weak self] in
+            guard let self = self else { return }
+            if let preset = await self.eqPresetStore.importEqfPreset(from: url) {
+                self.applyEQPreset(preset)
             }
         }
-    }
-
-    @MainActor
-    private func applyImportedPreset(_ preset: EQPreset, name: String) {
-        storeUserPreset(preset)
-        applyEQPreset(preset)
-        AppLog.info(.audio, "Imported EQ preset '\(name)' from EQF")
     }
 
     func savePresetForCurrentTrack() {
         guard let t = currentTrack else { return }
         let p = EqfPreset(name: t.title, preampDB: preamp, bandsDB: eqBands)
-        perTrackPresets[t.url.absoluteString] = p
+        eqPresetStore.savePreset(p, forTrackURL: t.url.absoluteString)
         AppLog.debug(.audio, "Saved per-track EQ preset for \(t.title)")
-        savePerTrackPresets()
     }
 
     private func applyAutoPreset(for track: Track) {
         guard eqAutoEnabled else { return }
-        if let preset = perTrackPresets[track.url.absoluteString] {
+        if let preset = eqPresetStore.preset(forTrackURL: track.url.absoluteString) {
             applyPreset(preset)
             appliedAutoPresetTrack = track.title
             Task { @MainActor [weak self] in
@@ -965,78 +599,6 @@ final class AudioPlayer {
         autoEQTask?.cancel()
         autoEQTask = nil
         AppLog.debug(.audio, "AutoEQ: automatic analysis disabled, no preset generated for \(track.title)")
-    }
-
-    // MARK: - Preset persistence
-    private func appSupportDirectory() -> URL? {
-        let fm = FileManager.default
-        guard let base = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return nil }
-        let dir = base.appendingPathComponent("MacAmp", isDirectory: true)
-        if !fm.fileExists(atPath: dir.path) {
-            do { try fm.createDirectory(at: dir, withIntermediateDirectories: true) } catch {
-                AppLog.error(.audio, "Failed to create app support dir: \(error)")
-            }
-        }
-        return dir
-    }
-
-    private func presetsFileURL() -> URL? {
-        appSupportDirectory()?.appendingPathComponent(presetsFileName)
-    }
-
-    private func loadPerTrackPresets() {
-        guard let url = presetsFileURL(), FileManager.default.fileExists(atPath: url.path) else { return }
-        do {
-            let data = try Data(contentsOf: url)
-            let loaded = try JSONDecoder().decode([String: EqfPreset].self, from: data)
-            perTrackPresets = loaded
-            AppLog.debug(.audio, "Loaded \(loaded.count) per-track presets")
-        } catch {
-            AppLog.warn(.audio, "Failed to load per-track presets: \(error)")
-        }
-    }
-
-    private func savePerTrackPresets() {
-        guard let url = presetsFileURL() else { return }
-        do {
-            let data = try JSONEncoder().encode(perTrackPresets)
-            try data.write(to: url, options: .atomic)
-        } catch {
-            AppLog.warn(.audio, "Failed to save per-track presets: \(error)")
-        }
-    }
-
-    private func loadUserPresets() {
-        let defaults = UserDefaults.standard
-        guard let data = defaults.data(forKey: userPresetDefaultsKey) else { return }
-        do {
-            var decoded = try JSONDecoder().decode([EQPreset].self, from: data)
-            decoded.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-            userPresets = decoded
-            AppLog.debug(.audio, "Loaded \(decoded.count) user EQ presets")
-        } catch {
-            AppLog.warn(.audio, "Failed to decode user EQ presets: \(error)")
-            userPresets = []
-        }
-    }
-
-    private func persistUserPresets() {
-        do {
-            let data = try JSONEncoder().encode(userPresets)
-            UserDefaults.standard.set(data, forKey: userPresetDefaultsKey)
-        } catch {
-            AppLog.warn(.audio, "Failed to persist user EQ presets: \(error)")
-        }
-    }
-
-    private func storeUserPreset(_ preset: EQPreset) {
-        if let index = userPresets.firstIndex(where: { $0.name.caseInsensitiveCompare(preset.name) == .orderedSame }) {
-            userPresets[index] = preset
-        } else {
-            userPresets.append(preset)
-        }
-        userPresets.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-        persistUserPresets()
     }
 
     // MARK: - Engine Wiring
@@ -1079,7 +641,7 @@ final class AudioPlayer {
         audioEngine.disconnectNodeOutput(playerNode)
         audioEngine.disconnectNodeOutput(eqNode)
         
-        guard let _ = audioFile else { return }
+        guard audioFile != nil else { return }
         
         // Connect with the new format - use nil format to let the engine determine the best format
         audioEngine.connect(playerNode, to: eqNode, format: nil)
@@ -1188,194 +750,15 @@ final class AudioPlayer {
         RunLoop.main.add(timer, forMode: .common)
     }
 
-
-    @MainActor
-    private func updateVisualizerLevels(
-        rms: [Float],
-        spectrum: [Float],
-        waveform: [Float],
-        butterchurnSpectrum: [Float],
-        butterchurnWaveform: [Float]
-    ) {
-        // Store all visualizer datasets
-        self.latestRMS = rms
-        self.latestSpectrum = spectrum
-        self.latestWaveform = waveform
-
-        // Store Butterchurn data
-        self.butterchurnSpectrum = butterchurnSpectrum
-        self.butterchurnWaveform = butterchurnWaveform
-        self.lastButterchurnUpdate = CACurrentMediaTime()
-
-        // Apply smoothing to active mode
-        let used = self.useSpectrumVisualizer ? spectrum : rms
-        let now = CFAbsoluteTimeGetCurrent()
-        let dt = max(0, Float(now - self.lastUpdateTime))
-        self.lastUpdateTime = now
-        let alpha = max(0, min(1, self.visualizerSmoothing))
-        var smoothed = [Float](repeating: 0, count: used.count)
-        for b in 0..<used.count {
-            let prev = (b < self.visualizerLevels.count) ? self.visualizerLevels[b] : 0
-            smoothed[b] = alpha * prev + (1 - alpha) * used[b]
-            let fall = self.visualizerPeakFalloff * dt
-            let dropped = max(0, self.visualizerPeaks[b] - fall)
-            self.visualizerPeaks[b] = max(dropped, smoothed[b])
-        }
-        self.visualizerLevels = smoothed
-    }
-
-    /// Build the tap handler in a nonisolated context so AVAudioEngine can call it on its realtime queue.
-    private nonisolated static func makeVisualizerTapHandler(
-        context: VisualizerTapContext,
-        scratch: VisualizerScratchBuffers
-    ) -> @Sendable (AVAudioPCMBuffer, AVAudioTime?) -> Void {
-        { buffer, _ in
-            let channelCount = Int(buffer.format.channelCount)
-            guard channelCount > 0, let ptr = buffer.floatChannelData else { return }
-            let frameCount = Int(buffer.frameLength)
-            if frameCount == 0 { return }
-
-            let bars = 20
-            scratch.prepare(frameCount: frameCount, bars: bars)
-
-            scratch.withMono { mono in
-                let invCount = 1.0 / Float(channelCount)
-                for frame in 0..<frameCount {
-                    var sum: Float = 0
-                    for channel in 0..<channelCount {
-                        sum += ptr[channel][frame]
-                    }
-                    mono[frame] = sum * invCount
-                }
-            }
-
-            scratch.withMonoReadOnly { mono in
-                scratch.withRms { rms in
-                    let bucketSize = max(1, frameCount / bars)
-                    var cursor = 0
-                    for b in 0..<bars {
-                        let start = cursor
-                        let end = min(frameCount, start + bucketSize)
-                        if end > start {
-                            var sumSq: Float = 0
-                            var index = start
-                            while index < end {
-                                let sample = mono[index]
-                                sumSq += sample * sample
-                                index += 1
-                            }
-                            var value = sqrt(sumSq / Float(end - start))
-                            value = min(1.0, value * 4.0)
-                            rms[b] = value
-                        } else {
-                            rms[b] = 0
-                        }
-                        cursor = end
-                    }
-                }
-
-                scratch.withSpectrum { spectrum in
-                    let sampleRate = Float(buffer.format.sampleRate)
-                    let sampleCount = min(1024, frameCount)
-                    if sampleCount > 0 {
-                        let minimumFrequency: Float = 50
-                        let maximumFrequency: Float = min(16000, sampleRate * 0.45)
-
-                        for b in 0..<bars {
-                            let normalized = Float(b) / Float(max(1, bars - 1))
-                            let logScale = minimumFrequency * pow(maximumFrequency / minimumFrequency, normalized)
-                            let linScale = minimumFrequency + normalized * (maximumFrequency - minimumFrequency)
-                            let centerFrequency = 0.91 * logScale + 0.09 * linScale
-
-                            let omega = 2 * Float.pi * centerFrequency / sampleRate
-                            let coefficient = 2 * cos(omega)
-                            var s0: Float = 0
-                            var s1: Float = 0
-                            var s2: Float = 0
-                            var index = 0
-                            while index < sampleCount {
-                                let sample = mono[index]
-                                s0 = sample + coefficient * s1 - s2
-                                s2 = s1
-                                s1 = s0
-                                index += 1
-                            }
-                            let power = s1 * s1 + s2 * s2 - coefficient * s1 * s2
-                            var value = sqrt(max(0, power)) / Float(sampleCount)
-
-                            let normalizedFreq = (centerFrequency - minimumFrequency) / (maximumFrequency - minimumFrequency)
-                            let dbAdjustment = -8.0 + 16.0 * normalizedFreq
-                            let equalizationGain = pow(10.0, dbAdjustment / 20.0)
-
-                            value *= equalizationGain
-                            value = min(1.0, value * 15.0)
-                            spectrum[b] = value
-                        }
-                    } else {
-                        for b in 0..<bars {
-                            spectrum[b] = 0
-                        }
-                    }
-                }
-            }
-
-            let rmsSnapshot = scratch.snapshotRms()
-            let spectrumSnapshot = scratch.snapshotSpectrum()
-
-            // Capture waveform samples for oscilloscope
-            let oscilloscopeSamples = 76  // Match VisualizerLayout.oscilloscopeSampleCount
-            var waveformSnapshot: [Float] = []
-            scratch.withMonoReadOnly { mono in
-                let step = max(1, mono.count / oscilloscopeSamples)
-                waveformSnapshot = stride(from: 0, to: mono.count, by: step)
-                    .prefix(oscilloscopeSamples)
-                    .map { mono[$0] }
-            }
-
-            // Process Butterchurn FFT (2048-point for 1024 bins)
-            scratch.withMonoReadOnly { mono in
-                scratch.processButterchurnFFT(samples: mono)
-            }
-            let butterchurnSpectrumSnapshot = scratch.snapshotButterchurnSpectrum()
-            let butterchurnWaveformSnapshot = scratch.snapshotButterchurnWaveform()
-
-            Task { @MainActor [context, rmsSnapshot, spectrumSnapshot, waveformSnapshot, butterchurnSpectrumSnapshot, butterchurnWaveformSnapshot] in
-                let player = Unmanaged<AudioPlayer>.fromOpaque(context.playerPointer).takeUnretainedValue()
-                player.updateVisualizerLevels(
-                    rms: rmsSnapshot,
-                    spectrum: spectrumSnapshot,
-                    waveform: waveformSnapshot,
-                    butterchurnSpectrum: butterchurnSpectrumSnapshot,
-                    butterchurnWaveform: butterchurnWaveformSnapshot
-                )
-            }
-        }
-    }
+    // MARK: - Visualizer Tap (delegated to VisualizerPipeline)
 
     private func installVisualizerTapIfNeeded() {
-        guard !visualizerTapInstalled else { return }
-        let mixer = audioEngine.mainMixerNode
-        mixer.removeTap(onBus: 0)
-        visualizerTapInstalled = false
-        let scratch = VisualizerScratchBuffers()
-
-        let context = VisualizerTapContext(
-            playerPointer: Unmanaged.passUnretained(self).toOpaque()
-        )
-        let handler = AudioPlayer.makeVisualizerTapHandler(
-            context: context,
-            scratch: scratch
-        )
-
-        // Buffer size 2048 for Butterchurn FFT - provides 1024 frequency bins
-        mixer.installTap(onBus: 0, bufferSize: 2048, format: nil, block: handler)
-        visualizerTapInstalled = true
+        guard !visualizerPipeline.isTapInstalled else { return }
+        visualizerPipeline.installTap(on: audioEngine.mainMixerNode)
     }
 
     private func removeVisualizerTapIfNeeded() {
-        guard visualizerTapInstalled else { return }
-        audioEngine.mainMixerNode.removeTap(onBus: 0)
-        visualizerTapInstalled = false
+        visualizerPipeline.removeTap()
     }
 
     // MARK: - Seeking / Scrubbing
@@ -1383,16 +766,17 @@ final class AudioPlayer {
     /// Seek to a percentage of the track (0.0 to 1.0)
     /// This method calculates time using file.length directly, avoiding race conditions
     func seekToPercent(_ percent: Double, resume: Bool? = nil) {
-        // VIDEO SEEKING (Part 21)
+        // VIDEO SEEKING - delegate to VideoPlaybackController
         if currentMediaType == .video {
-            guard let player = videoPlayer,
-                  let duration = player.currentItem?.duration.seconds,
-                  duration.isFinite else {
-                AppLog.warn(.audio, "seekToPercent: No video player or invalid duration")
-                return
+            videoPlaybackController.seekToPercent(percent, resume: resume) { [weak self] (actualTime: Double) in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.currentTime = actualTime
+                    self.playbackProgress = self.videoPlaybackController.progress
+                    self.currentDuration = self.videoPlaybackController.duration
+                    self.transition(to: self.videoPlaybackController.isPlaying ? .playing : .paused)
+                }
             }
-            let targetTime = percent * duration
-            seek(to: targetTime, resume: resume)
             return
         }
 
@@ -1412,44 +796,18 @@ final class AudioPlayer {
     }
 
     func seek(to time: Double, resume: Bool? = nil) {
-        // VIDEO SEEKING
+        // VIDEO SEEKING - delegate to VideoPlaybackController
         if currentMediaType == .video {
-            guard let player = videoPlayer else {
-                AppLog.warn(.audio, "seek: Cannot seek - no video player loaded")
-                return
-            }
-            let shouldPlay = resume ?? isPlaying
-
-            let timescale = player.currentItem?.duration.timescale ?? CMTimeScale(NSEC_PER_SEC)
-            let targetTime = CMTime(seconds: max(0, time), preferredTimescale: timescale)
-
-            // Use default tolerance (not .zero) to allow seeking to nearest keyframe
-            // This is MUCH faster and avoids -12860 errors from trying to decode exact frames
-            // AVPlayer will seek to the nearest keyframe, which is typically within 0.5s
-            player.seek(to: targetTime) { [weak self] finished in
+            videoPlaybackController.seek(to: time, resume: resume) { [weak self] (actualTime: Double) in
                 Task { @MainActor in
-                    guard let self, finished else { return }
-
-                    // Update to actual seek position (may differ slightly from requested)
-                    let actualTime = player.currentTime().seconds
+                    guard let self else { return }
                     self.currentTime = actualTime
-
-                    if let duration = player.currentItem?.duration.seconds, duration.isFinite {
-                        self.currentDuration = duration
-                        self.playbackProgress = duration > 0 ? actualTime / duration : 0
-                    }
-
-                    if shouldPlay {
-                        player.play()
-                        self.transition(to: .playing)
-                    } else {
-                        player.pause()
-                        self.transition(to: .paused)
-                    }
+                    self.playbackProgress = self.videoPlaybackController.progress
+                    self.currentDuration = self.videoPlaybackController.duration
+                    self.transition(to: self.videoPlaybackController.isPlaying ? .playing : .paused)
                 }
             }
-            AppLog.debug(.audio, "Video seek to \(time)s")
-            return  // Exit early for video
+            return
         }
 
         // AUDIO SEEKING
@@ -1557,44 +915,14 @@ final class AudioPlayer {
         return result
     }
 
+    /// Get RMS data mapped to requested number of bands (forwarded to VisualizerPipeline)
     func getRMSData(bands: Int) -> [Float] {
-        guard bands > 0 else { return [] }
-
-        // Return raw RMS data (already has correct band count)
-        if latestRMS.count == bands {
-            return latestRMS
-        }
-
-        // Or map if different band count requested
-        var result = [Float](repeating: 0, count: bands)
-        if !latestRMS.isEmpty {
-            for i in 0..<bands {
-                let sourceIndex = (i * latestRMS.count) / bands
-                result[i] = latestRMS[min(sourceIndex, latestRMS.count - 1)]
-            }
-        }
-
-        return result
+        visualizerPipeline.getRMSData(bands: bands)
     }
 
+    /// Get waveform samples resampled to requested count (forwarded to VisualizerPipeline)
     func getWaveformSamples(count: Int) -> [Float] {
-        guard count > 0 else { return [] }
-
-        // Return waveform samples captured from mono buffer
-        if latestWaveform.count == count {
-            return latestWaveform
-        }
-
-        // Resample if different count requested
-        var result = [Float](repeating: 0, count: count)
-        if !latestWaveform.isEmpty {
-            for i in 0..<count {
-                let sourceIndex = (i * latestWaveform.count) / count
-                result[i] = latestWaveform[min(sourceIndex, latestWaveform.count - 1)]
-            }
-        }
-
-        return result
+        visualizerPipeline.getWaveformSamples(count: count)
     }
 
     // MARK: - Butterchurn Audio Data
@@ -1607,11 +935,7 @@ final class AudioPlayer {
         // Video uses AVPlayer (no tap), streams use StreamPlayer (no PCM access)
         guard currentMediaType == .audio && isPlaying else { return nil }
 
-        return ButterchurnFrame(
-            spectrum: butterchurnSpectrum,
-            waveform: butterchurnWaveform,
-            timestamp: lastButterchurnUpdate
-        )
+        return visualizerPipeline.snapshotButterchurnFrame()
     }
 
     private func onPlaybackEnded(fromSeekID: UUID? = nil) {
@@ -1656,6 +980,8 @@ final class AudioPlayer {
     }
 
     // MARK: - Playlist navigation
+
+    /// Action types returned by playlist navigation (for PlaybackCoordinator)
     enum PlaylistAdvanceAction {
         case none
         case restartCurrent
@@ -1663,148 +989,55 @@ final class AudioPlayer {
         case requestCoordinatorPlayback(Track)
     }
 
+    /// Update playlist position after playing a track
     func updatePlaylistPosition(with track: Track?) {
-        guard let track else {
-            currentPlaylistIndex = nil
-            return
-        }
-
-        if let index = playlist.firstIndex(of: track) {
-            currentPlaylistIndex = index
-            trackHasEnded = false
-        } else {
-            currentPlaylistIndex = nil
-        }
+        playlistController.updatePosition(with: track)
     }
 
+    /// Advance to next track in playlist
+    /// - Parameter isManualSkip: Whether this is a user-initiated skip (affects repeat-one behavior)
+    /// - Returns: Action for PlaybackCoordinator to handle
     @discardableResult
     func nextTrack(isManualSkip: Bool = false) -> PlaylistAdvanceAction {
-        guard !playlist.isEmpty else { return .none }
+        // Sync current track with playlistController before navigation
+        playlistController.updatePosition(with: currentTrack)
 
-        trackHasEnded = false
-
-        // ──────────────────────────────────────
-        // WINAMP 5 REPEAT MODE LOGIC
-        // ──────────────────────────────────────
-        // Repeat-one: Only auto-restart on track end, allow manual skips
-        if repeatMode == .one && !isManualSkip {
-            // Auto-advance (track ended naturally): restart current track
-            guard let current = currentTrack else { return .none }
-
-            if current.isStream {
-                // Internet radio: reload via coordinator
-                return .requestCoordinatorPlayback(current)
-            } else {
-                // Local file: seek to beginning and resume
-                seek(to: 0, resume: true)
-                return .playLocally(current)
-            }
-        }
-        // Manual skip OR modes .off/.all: continue with normal advancement logic below
-
-        if shuffleEnabled {
-            guard let randomTrack = playlist.randomElement(),
-                  let randomIndex = playlist.firstIndex(of: randomTrack) else {
-                return .none
-            }
-
-            currentPlaylistIndex = randomIndex
-            trackHasEnded = false
-            if randomTrack.isStream {
-                return .requestCoordinatorPlayback(randomTrack)
-            }
-
-            playTrack(track: randomTrack)
-            return .playLocally(randomTrack)
-        }
-
-        let activeIndex: Int
-        if let index = currentPlaylistIndex {
-            activeIndex = index
-        } else if let current = currentTrack, let index = playlist.firstIndex(of: current) {
-            activeIndex = index
-            currentPlaylistIndex = index
-        } else {
-            activeIndex = -1
-        }
-
-        let nextIndex = activeIndex + 1
-        if nextIndex < playlist.count {
-            let track = playlist[nextIndex]
-            currentPlaylistIndex = nextIndex
-            trackHasEnded = false
-            if track.isStream {
-                return .requestCoordinatorPlayback(track)
-            }
-
-            playTrack(track: track)
-            return .playLocally(track)
-        }
-
-        // End of playlist reached - handle based on repeat mode
-        if repeatMode == .all {
-            // Winamp 5 repeat-all: wrap to first track
-            let track = playlist[0]
-            currentPlaylistIndex = 0
-            trackHasEnded = false
-            if track.isStream {
-                return .requestCoordinatorPlayback(track)
-            }
-
-            playTrack(track: track)
-            return .playLocally(track)
-        }
-
-        // Repeat mode .off: stop at playlist end
-        trackHasEnded = true
-        currentPlaylistIndex = nil
-        return .none
+        let action = playlistController.nextTrack(isManualSkip: isManualSkip)
+        return handlePlaylistAction(action)
     }
 
+    /// Go to previous track in playlist
+    /// - Returns: Action for PlaybackCoordinator to handle
     @discardableResult
     func previousTrack() -> PlaylistAdvanceAction {
-        guard !playlist.isEmpty else { return .none }
+        // Sync current track with playlistController before navigation
+        playlistController.updatePosition(with: currentTrack)
 
-        if shuffleEnabled {
-            guard let track = playlist.randomElement(),
-                  let index = playlist.firstIndex(of: track) else {
-                return .none
-            }
+        let action = playlistController.previousTrack()
+        return handlePlaylistAction(action)
+    }
 
-            currentPlaylistIndex = index
-            trackHasEnded = false
-            if track.isStream {
-                return .requestCoordinatorPlayback(track)
-            }
+    /// Handle action returned from PlaylistController
+    private func handlePlaylistAction(_ action: PlaylistController.AdvanceAction) -> PlaylistAdvanceAction {
+        switch action {
+        case .none:
+            return .none
 
+        case .restartCurrent:
+            // Always resume: repeat-one at end-of-track means "restart and play"
+            // (isPlaying is already false after onPlaybackEnded transition)
+            seek(to: 0, resume: true)
+            return .restartCurrent
+
+        case .playTrack(let track):
             playTrack(track: track)
             return .playLocally(track)
-        }
 
-        let activeIndex: Int
-        if let index = currentPlaylistIndex {
-            activeIndex = index
-        } else if let current = currentTrack, let index = playlist.firstIndex(of: current) {
-            activeIndex = index
-            currentPlaylistIndex = index
-        } else {
+        case .requestCoordinatorPlayback(let track):
+            return .requestCoordinatorPlayback(track)
+
+        case .endOfPlaylist:
             return .none
         }
-
-        if activeIndex > 0 {
-            let previousIndex = playlist.index(before: activeIndex)
-            let track = playlist[previousIndex]
-            currentPlaylistIndex = previousIndex
-            trackHasEnded = false
-            if track.isStream {
-                return .requestCoordinatorPlayback(track)
-            }
-
-            playTrack(track: track)
-            return .playLocally(track)
-        }
-
-        seek(to: 0, resume: isPlaying)
-        return .restartCurrent
     }
 }

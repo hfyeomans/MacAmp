@@ -692,3 +692,401 @@ After each extraction phase:
 - [ ] SwiftLint violations reduced to < 10
 - [ ] All tests pass after refactor
 - [ ] API surface maintained for existing callers
+
+---
+
+## Phase 9: Quality Gate Remediation (10/10 Score)
+
+**Status:** Planning Complete
+**Oracle Review:** gpt-5.2-codex (xhigh reasoning)
+**Current Score:** 8/10 → **Target: 10/10**
+**Prerequisite:** Phase 8.3 Complete
+
+### Overview
+
+The Oracle Phase 8.0-8.3 Quality Gate review identified three remaining issues preventing a 10/10 score. Fixing all three should achieve 10/10 (contingent on no new findings in fresh review).
+
+| Priority | Issue | Risk | Effort |
+|----------|-------|------|--------|
+| 9.1 | Track struct coupling | Lowest | ~15 min |
+| 9.2 | pendingTrackURLs encapsulation | Medium | ~20 min |
+| 9.3 | EQPresetStore async I/O | Highest | ~45 min |
+
+**Recommended Order:** Risk-ascending (9.1 → 9.2 → 9.3)
+
+---
+
+### 9.1 Extract Track Struct (Lowest Risk)
+
+**Problem:** `Track` struct is defined inside `AudioPlayer.swift`, creating coupling between `PlaylistController` and `AudioPlayer.swift`.
+
+**Location:** `MacAmpApp/Audio/AudioPlayer.swift:185`
+
+**Solution:** Extract to shared models directory
+
+#### Implementation
+
+1. Create `MacAmpApp/Models/Track.swift`:
+
+```swift
+import Foundation
+import AVFoundation
+
+/// Represents a playable track in the playlist.
+/// Extracted from AudioPlayer for shared access by PlaylistController and other components.
+struct Track: Identifiable, Equatable, Hashable {
+    let id: UUID
+    let url: URL
+    var title: String
+    var artist: String?
+    var album: String?
+    var duration: TimeInterval?
+    var isStream: Bool
+
+    // Equatable conformance (exclude non-hashable AVFoundation types)
+    static func == (lhs: Track, rhs: Track) -> Bool {
+        lhs.id == rhs.id
+    }
+
+    // Hashable conformance
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
+}
+```
+
+2. Remove `Track` definition from `AudioPlayer.swift`
+
+3. Add import to files that use `Track`:
+   - `AudioPlayer.swift`
+   - `PlaylistController.swift`
+   - Any views using Track
+
+4. Add file to Xcode project
+
+#### Gotchas (Oracle Warnings)
+
+- **Equatable/Hashable:** Avoid non-hashable members (like `AVAsset`, `AVPlayerItem`). Keep those outside the model or as computed properties.
+- **Codable:** If persistence needed, keep model purely data-centric. `URL` is fine; anything AVFoundation isn't.
+- **Sendable:** Swift 6 may require `Sendable` when crossing actors or using `Task.detached`. Add `Sendable` conformance if all properties are value types.
+
+#### Verification
+- [ ] Build succeeds
+- [ ] No import errors
+- [ ] Playlist operations work
+- [ ] Commit: "refactor: Extract Track struct to Models/ (Phase 9.1)"
+
+---
+
+### 9.2 Encapsulate pendingTrackURLs (Medium Risk)
+
+**Problem:** `pendingTrackURLs` is marked `@ObservationIgnored` but accessed directly from `AudioPlayer`. This leaks internal state and makes future changes (validation, deduping, ordering) harder.
+
+**Location:** `MacAmpApp/Audio/PlaylistController.swift:45`
+
+**Current Code:**
+```swift
+@ObservationIgnored var pendingTrackURLs: Set<URL> = []
+```
+
+**Solution:** Make private with explicit accessor methods
+
+#### Implementation
+
+1. Update `PlaylistController.swift`:
+
+```swift
+// MARK: - Pending Tracks (Internal State)
+
+/// URLs of tracks currently being loaded (to prevent duplicates)
+/// Private with accessor methods for controlled access.
+@ObservationIgnored
+private var pendingTrackURLs: Set<URL> = []
+
+/// Mark URLs as pending loading
+func markPending(_ urls: [URL]) {
+    for url in urls {
+        pendingTrackURLs.insert(url.standardizedFileURL)
+    }
+}
+
+/// Mark a single URL as pending
+func markPending(_ url: URL) {
+    pendingTrackURLs.insert(url.standardizedFileURL)
+}
+
+/// Remove URL from pending set (loading complete or failed)
+func clearPending(_ url: URL) {
+    pendingTrackURLs.remove(url.standardizedFileURL)
+}
+
+/// Clear all pending URLs
+func clearAllPending() {
+    pendingTrackURLs.removeAll()
+}
+
+/// Check if URL is pending
+func isPending(_ url: URL) -> Bool {
+    pendingTrackURLs.contains(url.standardizedFileURL)
+}
+
+/// Number of pending track loads
+var pendingCount: Int {
+    pendingTrackURLs.count
+}
+```
+
+2. Update `AudioPlayer.swift` to use new API:
+
+```swift
+// BEFORE: Direct access
+playlistController.pendingTrackURLs.insert(url)
+playlistController.pendingTrackURLs.remove(url)
+playlistController.pendingTrackURLs.contains(url)
+
+// AFTER: Through accessor methods
+playlistController.markPending(url)
+playlistController.clearPending(url)
+playlistController.isPending(url)
+```
+
+3. Update `clear()` method in PlaylistController (already calls `pendingTrackURLs.removeAll()`)
+
+#### Verification
+- [ ] Build succeeds
+- [ ] Find all `pendingTrackURLs` accesses in AudioPlayer and update
+- [ ] Track loading still works correctly
+- [ ] Duplicate prevention still works
+- [ ] Commit: "refactor: Encapsulate pendingTrackURLs in PlaylistController (Phase 9.2)"
+
+---
+
+### 9.3 Background I/O for EQPresetStore (Highest Risk)
+
+**Problem:** `EQPresetStore` init and save methods perform file I/O synchronously on the main actor. This conflicts with Option C guidance about background I/O and risks UI hitches for large preset files.
+
+**Locations:**
+- `MacAmpApp/Audio/EQPresetStore.swift:26` (init load)
+- `MacAmpApp/Audio/EQPresetStore.swift:94` (persist user presets)
+- `MacAmpApp/Audio/EQPresetStore.swift:106` (save per-track presets)
+
+**Current Impact:** Low (preset files are typically < 1KB)
+**Future Impact:** High if implementing larger preset libraries
+
+#### Option A: Task.detached Pattern (Simpler)
+
+```swift
+@MainActor
+@Observable
+final class EQPresetStore {
+    private(set) var userPresets: [EQPreset] = []
+    private(set) var perTrackPresets: [String: EqfPreset] = [:]
+
+    private let fileURL: URL
+    private let perTrackURL: URL
+
+    init() {
+        self.fileURL = Self.presetsFileURL()
+        self.perTrackURL = Self.perTrackPresetsFileURL()
+        // Note: Don't load in init - call loadPresets() after init
+    }
+
+    /// Load presets asynchronously (call after init)
+    func loadPresets() async {
+        let fileURL = self.fileURL
+        let perTrackURL = self.perTrackURL
+
+        // Background I/O
+        let (user, perTrack) = await Task.detached(priority: .utility) {
+            let userPresets = Self.readUserPresets(from: fileURL)
+            let perTrackPresets = Self.readPerTrackPresets(from: perTrackURL)
+            return (userPresets, perTrackPresets)
+        }.value
+
+        // MainActor state update
+        self.userPresets = user
+        self.perTrackPresets = perTrack
+    }
+
+    /// Save user presets to disk (fire-and-forget)
+    func persistUserPresets() {
+        let snapshot = userPresets
+        let fileURL = self.fileURL
+
+        Task.detached(priority: .utility) {
+            Self.writeUserPresets(snapshot, to: fileURL)
+        }
+    }
+
+    /// Save per-track presets to disk (fire-and-forget)
+    func savePerTrackPresets() {
+        let snapshot = perTrackPresets
+        let perTrackURL = self.perTrackURL
+
+        Task.detached(priority: .utility) {
+            Self.writePerTrackPresets(snapshot, to: perTrackURL)
+        }
+    }
+
+    // MARK: - Nonisolated Static I/O (Swift 6 Sendable-safe)
+
+    nonisolated private static func readUserPresets(from url: URL) -> [EQPreset] {
+        guard let data = try? Data(contentsOf: url),
+              let presets = try? JSONDecoder().decode([EQPreset].self, from: data) else {
+            return []
+        }
+        return presets
+    }
+
+    nonisolated private static func writeUserPresets(_ presets: [EQPreset], to url: URL) {
+        guard let data = try? JSONEncoder().encode(presets) else { return }
+        try? data.write(to: url, options: .atomic)
+    }
+
+    nonisolated private static func readPerTrackPresets(from url: URL) -> [String: EqfPreset] {
+        guard let data = try? Data(contentsOf: url),
+              let presets = try? JSONDecoder().decode([String: EqfPreset].self, from: data) else {
+            return [:]
+        }
+        return presets
+    }
+
+    nonisolated private static func writePerTrackPresets(_ presets: [String: EqfPreset], to url: URL) {
+        guard let data = try? JSONEncoder().encode(presets) else { return }
+        try? data.write(to: url, options: .atomic)
+    }
+}
+```
+
+#### Option B: Actor-Based I/O (Swift 6 Idiomatic)
+
+```swift
+/// Dedicated actor for disk I/O operations
+actor EQPresetDiskStore {
+    func readUserPresets(from url: URL) -> [EQPreset] {
+        guard let data = try? Data(contentsOf: url),
+              let presets = try? JSONDecoder().decode([EQPreset].self, from: data) else {
+            return []
+        }
+        return presets
+    }
+
+    func writeUserPresets(_ presets: [EQPreset], to url: URL) {
+        guard let data = try? JSONEncoder().encode(presets) else { return }
+        try? data.write(to: url, options: .atomic)
+    }
+
+    func readPerTrackPresets(from url: URL) -> [String: EqfPreset] {
+        guard let data = try? Data(contentsOf: url),
+              let presets = try? JSONDecoder().decode([String: EqfPreset].self, from: data) else {
+            return [:]
+        }
+        return presets
+    }
+
+    func writePerTrackPresets(_ presets: [String: EqfPreset], to url: URL) {
+        guard let data = try? JSONEncoder().encode(presets) else { return }
+        try? data.write(to: url, options: .atomic)
+    }
+}
+
+@MainActor
+@Observable
+final class EQPresetStore {
+    private let diskStore = EQPresetDiskStore()
+    // ... rest uses await diskStore.readUserPresets(...)
+}
+```
+
+#### AudioPlayer Integration
+
+Update AudioPlayer to call async load:
+
+```swift
+init() {
+    // ... other init
+    Task {
+        await eqPresetStore.loadPresets()
+    }
+}
+```
+
+Or use factory pattern:
+
+```swift
+@MainActor
+static func create() async -> AudioPlayer {
+    let player = AudioPlayer()
+    await player.eqPresetStore.loadPresets()
+    return player
+}
+```
+
+#### Sendable Requirements
+
+Oracle warning: `Task.detached` closures are `@Sendable`, so captured values must be `Sendable`.
+
+Ensure these types are Sendable:
+- `EQPreset` - Should be struct with value types only
+- `EqfPreset` - Should be struct with value types only
+
+If not already Sendable, add conformance:
+```swift
+extension EQPreset: Sendable {}
+extension EqfPreset: Sendable {}
+```
+
+#### Verification
+- [ ] Build succeeds
+- [ ] EQ presets load on app launch
+- [ ] Preset save doesn't block UI
+- [ ] Import EQF file works
+- [ ] Per-track presets recalled correctly
+- [ ] Commit: "refactor: Background I/O for EQPresetStore (Phase 9.3)"
+
+---
+
+### 9.4 Final Oracle Review
+
+After completing 9.1-9.3:
+
+```bash
+codex "@MacAmpApp/Audio/AudioPlayer.swift @MacAmpApp/Audio/EQPresetStore.swift
+@MacAmpApp/Audio/PlaylistController.swift @MacAmpApp/Models/Track.swift
+@docs/MACAMP_ARCHITECTURE_GUIDE.md
+
+ORACLE FINAL REVIEW - Phase 9 Completion
+
+Verify all Phase 8.0-8.3 findings are resolved:
+1. Track struct extracted to Models/ ✓
+2. pendingTrackURLs properly encapsulated ✓
+3. EQPresetStore uses background I/O ✓
+
+Confirm score is now 10/10 or identify any remaining issues."
+```
+
+---
+
+### 9.5 Phase 9 Verification Checklist
+
+- [ ] All three issues resolved
+- [ ] Build succeeds with Thread Sanitizer
+- [ ] No new SwiftLint violations introduced
+- [ ] Manual smoke test:
+  - [ ] Playlist add/remove works
+  - [ ] EQ presets save/load
+  - [ ] Per-track presets recalled
+  - [ ] Import EQF file works
+  - [ ] No UI hitches during preset operations
+- [ ] Oracle review confirms 10/10
+
+---
+
+### 9.6 Phase 9 Decision Log
+
+| Decision | Options | Chosen | Rationale |
+|----------|---------|--------|-----------|
+| Order | Risk-ascending / Risk-descending | **Ascending** | Oracle: Low risk first catches compile errors early |
+| EQPresetStore I/O | Task.detached / Actor | **Task.detached (Option A)** | Simpler, less architectural change |
+| Track location | Models/ / Audio/ | **Models/** | Shared by multiple Audio components |
+| pendingTrackURLs API | Minimal / Full | **Full** | Future-proofs for validation/deduping |

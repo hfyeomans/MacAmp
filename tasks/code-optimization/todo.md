@@ -2,7 +2,7 @@
 
 **Task ID:** code-optimization
 **Branch:** code-simplification
-**Last Updated:** 2026-01-10
+**Last Updated:** 2026-01-11
 **Oracle Review:** Complete (see `oracle-review.md`)
 
 ---
@@ -205,8 +205,15 @@ codex "@file1.swift @file2.swift Review these changes..."
 | Phase 5: Verification | ✅ Complete | 10/10 |
 | Phase 6: Commit | ✅ Complete | 5/5 |
 | Phase 7: Swift 6 Modernization | ✅ Complete | 12/12 |
-| Phase 8: AudioPlayer Refactor | ⏳ Deferred | 0/25 |
-| **Total (1-7)** | **✅ COMPLETE** | **72/72** |
+| Phase 8.0: Quick Fixes | ✅ Complete | 9/9 |
+| Phase 8.1: EQPresetStore | ✅ Complete | 9/9 |
+| Phase 8.2: MetadataLoader | ✅ Complete | 8/8 |
+| Phase 8.3: PlaylistController | ✅ Complete | 14/14 |
+| Phase 8.4: VideoPlaybackController | ✅ Complete | 15/15 |
+| Phase 8.5: VisualizerPipeline | ✅ Complete | 7/7 |
+| Phase 8.6: AudioEngineController | ⏳ Deferred | 0/2 |
+| Phase 9: Quality Gate (10/10) | ⏳ Planned | 0/26 |
+| **Total (1-8.5)** | **✅ COMPLETE** | **133/172** |
 
 ### All Tasks Complete (Phases 1-7) ✅
 - [x] Git hooks configured
@@ -249,52 +256,219 @@ codex "@file1.swift @file2.swift Review these changes..."
 ## Phase 8: AudioPlayer Refactoring (REVISED 2026-01-11)
 
 **Oracle Review:** Complete (see research.md §13)
-**Recommended Approach:** Option B (EQPresetStore extraction) with incremental follow-up
+**Recommended Approach:** Option C (Incremental Full Extraction)
 
-### 8.0 Pre-requisites: Quick Fixes (Separate Commits)
+### 8.0 Pre-requisites: Quick Fixes (Separate Commits) ✅ COMPLETE
 
-#### 8.0.1 AudioPlayer.swift Quick Fixes
-- [ ] Remove leading whitespace (line 1)
-- [ ] Use shorthand operator `+=` (line 143)
-- [ ] Remove implicit `= nil` initialization (line 319)
-- [ ] Replace `let _ =` with `_ =` (lines 647, 797)
-- [ ] Replace unused optional binding with `!= nil` (line 1073)
-- [ ] Remove extra blank lines (lines 716, 819, 1182)
+#### 8.0.1 AudioPlayer.swift Quick Fixes ✅
+- [x] Remove leading whitespace (line 1)
+- [x] Use shorthand operator `/=` (line 143)
+- [x] Remove implicit `= nil` initialization (line 319)
+- [x] Replace `let _ =` with `_ =` (lines 647, 797)
+- [x] Replace unused optional binding with `!= nil` (line 1082)
+- [x] Remove extra blank lines (lines 716, 819, 1191)
+- [x] Build verification
+- [x] Commit: `8661bbd` "style: Fix SwiftLint violations in AudioPlayer"
+
+#### 8.0.2 SnapUtils.swift Verification ✅
+- [x] Run `swiftlint lint MacAmpApp/Models/SnapUtils.swift` → 0 violations
+- [x] Verify Phase 7 fixes are complete
+- [x] No remaining violations
+
+### 8.1 Phase 8a: Extract EQPresetStore (Low Risk) ✅ COMPLETE
+
+- [x] Create `MacAmpApp/Audio/EQPresetStore.swift`
+- [x] Add `@MainActor @Observable final class EQPresetStore`
+- [x] Move properties: `userPresets`, `perTrackPresets`, `presetsFileName`, `userPresetDefaultsKey`
+- [x] Move methods: `loadUserPresets()`, `persistUserPresets()`, `loadPerTrackPresets()`, `savePerTrackPresets()`, `storeUserPreset(_:)`, `importEqfPreset(from:)`, `appSupportDirectory()`, `presetsFileURL()`
+- [x] Add `eqPresetStore` property to AudioPlayer
+- [x] Update AudioPlayer methods to delegate to store
+- [x] Build verification: SUCCEEDED
+- [x] Test: Save/load presets, import EQF, per-track presets ✅
+- [x] Commit: `eb7f501` "refactor: Extract EQPresetStore from AudioPlayer"
+
+**Note:** Auto EQ "automatic analysis" is a pre-existing stub (`generateAutoPreset`). Per-track preset recall works correctly. Full audio analysis implementation deferred to future task.
+
+### 8.2 Phase 8b: Extract MetadataLoader (Low Risk) ✅ COMPLETE
+
+- [x] Create `MacAmpApp/Audio/MetadataLoader.swift`
+- [x] Add `nonisolated struct MetadataLoader` with static async methods
+- [x] Extract: `loadTrackMetadata`, `loadAudioProperties`, `loadVideoMetadata`
+- [x] Define result types: `TrackMetadata`, `AudioProperties`, `VideoMetadata`
+- [x] Update AudioPlayer call sites to use MetadataLoader
+- [x] Remove old private functions from AudioPlayer
+- [x] Build verification: SUCCEEDED
+- [x] Test: PASSED - metadata display, bitrate/sample rate info verified
+- [x] Commit: `306f960` "refactor: Extract MetadataLoader from AudioPlayer (Phase 8.2)"
+
+### 8.3 Phase 8c: Extract PlaylistController (Low Risk) ✅ COMPLETE
+
+- [x] Create `MacAmpApp/Audio/PlaylistController.swift`
+- [x] Add `@MainActor @Observable final class PlaylistController`
+- [x] Extract state: `playlist`, `currentIndex`, `shuffleEnabled`, `hasEnded`, `pendingTrackURLs`
+- [x] Extract operations: `addTrack`, `addPlaceholder`, `replacePlaceholder`, `removeTrack`, `clear`
+- [x] Extract navigation: `nextTrack`, `previousTrack`, `updatePosition`, `selectTrack`
+- [x] Define `AdvanceAction` enum (pure logic, no side effects)
+- [x] Add forwarding methods to AudioPlayer: `addStreamTrack`, `removeTrack`, `replacePlaylist`, `clearPlaylist`
+- [x] Update AudioPlayer to use `handlePlaylistAction(_:)` bridge
+- [x] Update `WinampPlaylistWindow.swift` to use new API
+- [x] Build verification: SUCCEEDED
+- [x] Test: **PASSED** - playlist add/remove, navigation, shuffle, repeat modes ✅
+- [x] Commit: `42bfb33` "refactor: Extract PlaylistController from AudioPlayer (Phase 8.3)"
+- [x] Oracle review: gpt-5.2-codex (xhigh reasoning) - Score 8/10
+- [x] Fix: Repeat-one regression (commit `d621902`)
+
+### 8.4 Phase 8d: Extract VideoPlaybackController (Medium Risk) ✅ COMPLETE
+
+- [x] Create `MacAmpApp/Audio/VideoPlaybackController.swift`
+- [x] Move video playback state: player, isPlaying, isPaused, currentTime, duration, progress, volume
+- [x] Move video methods: loadVideo, play, pause, stop, seek, seekToPercent
+- [x] Move observer management: setupTimeObserver, tearDownTimeObserver, endObserver
+- [x] Add callback pattern: onPlaybackEnded, onTimeUpdate
+- [x] Add computed forwarding in AudioPlayer: videoPlayer, videoMetadataString
+- [x] Wire volume sync in AudioPlayer didSet
+- [x] Setup callbacks in AudioPlayer init
+- [x] Update play/pause/stop/seek to delegate to videoPlaybackController
+- [x] Remove old video methods from AudioPlayer
+- [x] Add to Xcode project (manually edited project.pbxproj)
+- [x] Build verification: SUCCEEDED
+- [x] Test: Video playback, seeking, controls, metadata, volume, time display ✅
+- [x] Bug fix: Time display not updating (added onTimeUpdate callback)
+- [x] Oracle review: gpt-5.2-codex (xhigh) - Score 7.5/10
+- [x] Oracle fixes deferred to Phase 9 (quality gate)
+- [x] Commit: `e8b5772` "refactor: Extract VideoPlaybackController from AudioPlayer (Phase 8.4)"
+
+### 8.5 Phase 8e: Extract VisualizerPipeline (HIGH RISK - LAST) ✅ COMPLETE
+
+- [x] Document current tap lifecycle
+- [x] Create `MacAmpApp/Audio/VisualizerPipeline.swift`
+- [x] Move `VisualizerScratchBuffers`, `VisualizerTapContext`, `ButterchurnFrame`
+- [x] Move tap installation/removal logic
+- [x] **CRITICAL:** Ensure `Unmanaged` pointer lifetime preserved ✅
+- [x] Build verification: SUCCEEDED
+- [x] Oracle review: gpt-5.2-codex (high) - Score 7.5/10
+- [x] Oracle fixes deferred to Phase 9 (quality gate)
+- [x] Test: Spectrum analyzer, oscilloscope, Butterchurn ✅ (user verified)
+- [x] Commit: `9489d76` "refactor: Extract VisualizerPipeline from AudioPlayer (Phase 8.5)"
+
+### 8.6 Phase 8f: AudioEngineController (DEFERRED - Evaluate After Phase 9)
+
+**Oracle Analysis:** gpt-5.2-codex (high reasoning) - 2026-01-11
+**Risk Level:** ★★★★★ (HIGHEST)
+**Recommendation:** Do NOT proceed until Phase 9 complete
+
+#### What Would Move (~450-500 lines)
+- Engine objects: audioEngine, playerNode, eqNode, audioFile
+- Engine wiring: setupEngine, rewireForCurrentFile, configureEQ
+- Scheduling: scheduleFrom, startEngineIfNeeded
+- Seek guards: currentSeekID, seekGuardActive, isHandlingCompletion
+- Progress timer lifecycle
+
+#### Key Risks
+- **Seek guards crossing class boundaries** - "old segment completion fires after stop" bug protection
+- **Engine graph lifecycle** - rewireForCurrentFile uses specific order to avoid assertions
+- **Tap installation timing** - must install after engine starts, before playback
+- **Audio/Video branching** - play/pause/seek interwoven with media type routing
+
+#### Limited Benefits
+- Testability: Limited - AVAudioEngine is hardware-bound
+- Swift 6.2: Minimal - still @MainActor, no @concurrent opportunity
+- Maintainability: Mixed - smaller class, but more delegation overhead
+
+#### Decision Checklist
+- [x] Oracle analysis complete
+- [x] Risk/benefit evaluated: unfavorable
+- [x] Decision: Complete Phase 9 first
+- [ ] Re-evaluate after Phase 9 (may be unnecessary)
+- [ ] If proceeding: add integration tests for seek/stop/track-advance FIRST
+
+---
+
+## Phase 9: Quality Gate Remediation (10/10 Score)
+
+**Oracle Review:** gpt-5.2-codex (xhigh reasoning)
+**Current Score:** 7.5/10 → **Target: 10/10**
+
+### 9.0 VideoPlaybackController Oracle Fixes (Medium Priority)
+
+**Findings from Phase 8.4 Oracle Review:**
+
+#### 9.0.1 Lifecycle: cleanup() not called in deinit
+- [ ] Add `deinit` to VideoPlaybackController
+- [ ] Call `cleanup()` in deinit
+- [ ] Verify no retain cycles prevent deinit
+
+#### 9.0.2 Lifecycle: cleanup() leaves stale state
+- [ ] Reset `currentTime`, `currentDuration`, `playbackProgress` in cleanup()
+- [ ] Consider resetting `isPlaying`, `isPaused` flags
+
+#### 9.0.3 Metadata Race Condition (Low Priority)
+- [ ] Ensure video metadata extraction doesn't race with playback state
+- [ ] Consider using Task with cancellation
+
+#### 9.0.4 Bridge Layer Label Inconsistency (Low Priority)
+- [ ] Review MARK comments for consistent labeling pattern
+- [ ] Align with other extracted controllers
+
+### 9.0.5 VisualizerPipeline Oracle Fixes (Phase 8.5)
+
+**Findings from Phase 8.5 Oracle Review (Score: 7.5/10):**
+
+#### High Priority: Use-after-free risk with Unmanaged pointer
+- [ ] Guarantee `removeTap()` on teardown
+- [ ] Add `AudioPlayer.deinit` that calls `stop()` or `removeVisualizerTapIfNeeded()`
+- [ ] Or switch to retained context with explicit release
+
+#### Medium Priority: Swift 6 Sendable conformance
+- [ ] Add `: Sendable` to `VisualizerData` struct
+- [ ] Add `: Sendable` to `ButterchurnFrame` struct
+- [ ] Verify @Sendable Task captures are correct
+
+#### Medium Priority: Audio-thread allocations
+- [ ] Move window/input/output buffers into VisualizerScratchBuffers
+- [ ] Move waveform buffer allocation to scratch
+- [ ] Eliminate per-buffer allocations in processButterchurnFFT
+
+#### Low Priority: AppSettings per-frame lookup
+- [ ] Consider injecting/caching useSpectrum flag
+- [ ] Or pass from AudioPlayer to reduce hidden dependency
+
+### 9.1 Extract Track Struct (Lowest Risk)
+
+- [ ] Create `MacAmpApp/Models/Track.swift`
+- [ ] Move Track struct from AudioPlayer.swift
+- [ ] Add Sendable conformance if needed
+- [ ] Update imports in AudioPlayer, PlaylistController
 - [ ] Build verification
-- [ ] Commit: "style: Fix SwiftLint violations in AudioPlayer"
+- [ ] Test: Playlist operations
+- [ ] Commit: "refactor: Extract Track struct to Models/ (Phase 9.1)"
 
-#### 8.0.2 SnapUtils.swift Verification
-- [ ] Run `swiftlint lint MacAmpApp/Models/SnapUtils.swift`
-- [ ] Verify Phase 7 fixes are complete
-- [ ] Fix any remaining violations (if any)
+### 9.2 Encapsulate pendingTrackURLs (Medium Risk)
 
-### 8.1 Phase 8a: Extract EQPresetStore (Low Risk)
-
-- [ ] Create `MacAmpApp/Audio/EQPresetStore.swift`
-- [ ] Add `@MainActor @Observable final class EQPresetStore`
-- [ ] Move properties: `userPresets`, `perTrackPresets`, `presetsFileName`, `userPresetDefaultsKey`
-- [ ] Move methods: `loadUserPresets()`, `persistUserPresets()`, `loadPerTrackPresets()`, `savePerTrackPresets()`, `storeUserPreset(_:)`, `importEqfPreset(from:)`, `appSupportDirectory()`, `presetsFileURL()`
-- [ ] Add `eqPresetStore` property to AudioPlayer
-- [ ] Update AudioPlayer methods to delegate to store
+- [ ] Make `pendingTrackURLs` private in PlaylistController
+- [ ] Add accessor methods: `markPending`, `clearPending`, `isPending`
+- [ ] Update AudioPlayer to use new API
 - [ ] Build verification
-- [ ] Test: Save/load presets, import EQF, per-track presets
-- [ ] Commit: "refactor: Extract EQPresetStore from AudioPlayer"
+- [ ] Test: Track loading, duplicate prevention
+- [ ] Commit: "refactor: Encapsulate pendingTrackURLs in PlaylistController (Phase 9.2)"
 
-### 8.2 Phase 8b: Extract VisualizerPipeline (OPTIONAL - Medium Risk)
+### 9.3 Background I/O for EQPresetStore (Highest Risk)
 
-- [ ] Document current tap lifecycle
-- [ ] Create `MacAmpApp/Audio/VisualizerPipeline.swift`
-- [ ] Move `VisualizerScratchBuffers`, `VisualizerTapContext`, `ButterchurnFrame`
-- [ ] Move tap installation/removal logic
-- [ ] **CRITICAL:** Ensure `Unmanaged` pointer lifetime preserved
+- [ ] Add async `loadPresets()` method
+- [ ] Convert `persistUserPresets()` to fire-and-forget Task.detached
+- [ ] Convert `savePerTrackPresets()` to fire-and-forget Task.detached
+- [ ] Add nonisolated static I/O methods
+- [ ] Update AudioPlayer init to call async load
+- [ ] Ensure EQPreset/EqfPreset are Sendable
 - [ ] Build verification
-- [ ] Test: Spectrum analyzer, oscilloscope, Butterchurn
-- [ ] Commit: "refactor: Extract VisualizerPipeline from AudioPlayer"
+- [ ] Test: Preset save/load, import EQF, per-track presets
+- [ ] Commit: "refactor: Background I/O for EQPresetStore (Phase 9.3)"
 
-### 8.3 Phase 8c: AudioEngineController (DEFERRED - High Risk)
+### 9.4 Final Oracle Review
 
-- [ ] Defer until 8.1 and 8.2 are stable
-- [ ] Document architecture before proceeding
+- [ ] Run Oracle review with gpt-5.2-codex (xhigh)
+- [ ] Confirm score is 10/10
+- [ ] Document any new findings
 
 ### 8.4 Verification Checklist
 

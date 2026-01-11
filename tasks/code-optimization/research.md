@@ -977,3 +977,665 @@ Recommended Sequence (Risk-Ordered):
 - Option A: 1/10 (no benefit)
 - Option B: 5/10 (partial benefit, foundation for more)
 - Option C (incremental): 9/10 (full benefit, managed risk)
+
+---
+
+## 14. Option C Architecture: Full Extraction Design
+
+### 14.1 Current AudioPlayer Structure (Before)
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        AudioPlayer.swift (1,810 lines)                  │
+│                     @Observable @MainActor final class                  │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  ┌─────────────────────┐  ┌─────────────────────┐  ┌─────────────────┐  │
+│  │   Engine Layer      │  │   State Layer       │  │   UI Data       │  │
+│  │   ─────────────     │  │   ───────────       │  │   ───────       │  │
+│  │   audioEngine       │  │   playbackState     │  │   currentTitle  │  │
+│  │   playerNode        │  │   isPlaying         │  │   currentTime   │  │
+│  │   eqNode            │  │   isPaused          │  │   currentDur... │  │
+│  │   audioFile         │  │   currentSeekID     │  │   playbackProg..│  │
+│  │   progressTimer     │  │   seekGuardActive   │  │   visualizer... │  │
+│  └─────────────────────┘  └─────────────────────┘  └─────────────────┘  │
+│                                                                         │
+│  ┌─────────────────────┐  ┌─────────────────────┐  ┌─────────────────┐  │
+│  │   EQ/Presets        │  │   Playlist          │  │   Video         │  │
+│  │   ─────────────     │  │   ────────          │  │   ─────         │  │
+│  │   preamp            │  │   playlist[]        │  │   videoPlayer   │  │
+│  │   eqBands[]         │  │   currentTrack      │  │   videoEnd...   │  │
+│  │   isEqOn            │  │   currentPlaylist...│  │   videoTime...  │  │
+│  │   userPresets[]     │  │   shuffleEnabled    │  │   currentMedia..│  │
+│  │   perTrackPresets{} │  │   repeatMode        │  │   videoMetadata │  │
+│  └─────────────────────┘  └─────────────────────┘  └─────────────────┘  │
+│                                                                         │
+│  ┌─────────────────────┐  ┌─────────────────────┐                       │
+│  │   Visualizer        │  │   Metadata          │                       │
+│  │   ──────────        │  │   ────────          │                       │
+│  │   visualizerTap...  │  │   channelCount      │                       │
+│  │   visualizerPeaks[] │  │   bitrate           │                       │
+│  │   latestRMS[]       │  │   sampleRate        │                       │
+│  │   latestSpectrum[]  │  │                     │                       │
+│  │   butterchurn...    │  │                     │                       │
+│  └─────────────────────┘  └─────────────────────┘                       │
+│                                                                         │
+├─────────────────────────────────────────────────────────────────────────┤
+│                         Supporting Types (Top of File)                  │
+├─────────────────────────────────────────────────────────────────────────┤
+│  • VisualizerScratchBuffers (class, @unchecked Sendable) - lines 22-165 │
+│  • VisualizerTapContext (struct, @unchecked Sendable) - lines 167-169   │
+│  • ButterchurnFrame (struct) - lines 176-182                            │
+│  • Track (struct, Identifiable, Equatable) - lines 186-205              │
+│  • PlaybackStopReason (enum) - lines 207-211                            │
+│  • PlaybackState (enum) - lines 213-219                                 │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### 14.2 MARK Sections and Line Counts
+
+| MARK Section | Line | Functions | Responsibility |
+|--------------|------|-----------|----------------|
+| Butterchurn FFT Processing | 97 | 4 | FFT calculation for visualizer |
+| Butterchurn Audio Frame | 176 | - | Data struct for visualizer |
+| Track | 186 | - | Track data model |
+| Track Management | 369 | 2 | addTrack, playTrack |
+| Video Time Observer | 587 | 2 | Video progress tracking |
+| Preset persistence | 970 | 8 | Load/save presets |
+| Engine Wiring | 1042 | 5 | AVAudioEngine setup |
+| Seeking / Scrubbing | 1381 | 2 | Seek operations |
+| Visualizer Support | 1517 | 3 | Get visualizer data |
+| Butterchurn Audio Data | 1600 | 1 | Snapshot for Butterchurn |
+| Playlist navigation | 1658 | 3 | Next/prev track |
+
+### 14.3 Target Architecture (After Option C)
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                              Mechanism Layer                             │
+│                        (Business Logic & Persistence)                    │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  ┌───────────────────────┐  ┌───────────────────────┐                   │
+│  │    EQPresetStore      │  │    MetadataLoader     │                   │
+│  │    ─────────────      │  │    ──────────────     │                   │
+│  │    @MainActor         │  │    nonisolated        │                   │
+│  │    @Observable        │  │    @concurrent ready  │                   │
+│  ├───────────────────────┤  ├───────────────────────┤                   │
+│  │  • userPresets[]      │  │  • loadMetadata()     │                   │
+│  │  • perTrackPresets{}  │  │  • extractArtwork()   │                   │
+│  │  • loadUserPresets()  │  │  • parseDuration()    │                   │
+│  │  • persistPresets()   │  │                       │                   │
+│  │  • importEqfPreset()  │  │  ~100-150 lines       │                   │
+│  │  ~150 lines           │  └───────────────────────┘                   │
+│  └───────────────────────┘                                              │
+│                                                                         │
+│  ┌───────────────────────┐  ┌───────────────────────┐                   │
+│  │  PlaylistController   │  │ VideoPlaybackController│                   │
+│  │  ──────────────────   │  │ ─────────────────────  │                   │
+│  │  @MainActor           │  │  @MainActor           │                   │
+│  │  @Observable          │  │  @Observable          │                   │
+│  ├───────────────────────┤  ├───────────────────────┤                   │
+│  │  • playlist[]         │  │  • videoPlayer        │                   │
+│  │  • currentTrack       │  │  • endObserver        │                   │
+│  │  • shuffleEnabled     │  │  • timeObserver       │                   │
+│  │  • repeatMode         │  │  • loadVideo()        │                   │
+│  │  • nextTrack()        │  │  • cleanupPlayer()    │                   │
+│  │  • previousTrack()    │  │  ~150-200 lines       │                   │
+│  │  ~150-200 lines       │  └───────────────────────┘                   │
+│  └───────────────────────┘                                              │
+│                                                                         │
+│  ┌───────────────────────────────────────────────────────────────────┐  │
+│  │                      VisualizerPipeline                           │  │
+│  │                      ──────────────────                           │  │
+│  │                      nonisolated (with MainActor updates)         │  │
+│  ├───────────────────────────────────────────────────────────────────┤  │
+│  │  • VisualizerScratchBuffers (class, @unchecked Sendable)          │  │
+│  │  • VisualizerTapContext (struct, @unchecked Sendable)             │  │
+│  │  • ButterchurnFrame (struct)                                      │  │
+│  │  • installTap() / removeTap()                                     │  │
+│  │  • makeVisualizerTapHandler() - static                            │  │
+│  │  • getFrequencyData() / getRMSData() / getWaveformSamples()       │  │
+│  │  ~200-250 lines                                                   │  │
+│  │  ⚠️ HIGH RISK: Unmanaged pointer lifecycle                        │  │
+│  └───────────────────────────────────────────────────────────────────┘  │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                              Bridge Layer                                │
+│                          (Facade & Coordination)                         │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  ┌───────────────────────────────────────────────────────────────────┐  │
+│  │                    AudioPlayer (Facade)                           │  │
+│  │                    ────────────────────                           │  │
+│  │                    @MainActor @Observable                         │  │
+│  ├───────────────────────────────────────────────────────────────────┤  │
+│  │                                                                   │  │
+│  │  Engine Core (~400-500 lines after extraction):                   │  │
+│  │  ─────────────────────────────────────────────                    │  │
+│  │  • audioEngine, playerNode, eqNode                                │  │
+│  │  • audioFile, progressTimer                                       │  │
+│  │  • playbackState, isPlaying, isPaused                             │  │
+│  │  • currentSeekID, seekGuardActive, isHandlingCompletion           │  │
+│  │  • setupEngine(), configureEQ(), rewireForCurrentFile()           │  │
+│  │  • scheduleFrom(), startEngineIfNeeded()                          │  │
+│  │  • play(), pause(), stop(), eject()                               │  │
+│  │  • seekToPercent(), seek()                                        │  │
+│  │                                                                   │  │
+│  │  Component References:                                            │  │
+│  │  ─────────────────────                                            │  │
+│  │  • eqPresetStore: EQPresetStore                                   │  │
+│  │  • playlistController: PlaylistController                         │  │
+│  │  • videoController: VideoPlaybackController                       │  │
+│  │  • visualizerPipeline: VisualizerPipeline                         │  │
+│  │  • metadataLoader: MetadataLoader                                 │  │
+│  │                                                                   │  │
+│  │  Computed Forwarding (maintains existing bindings):               │  │
+│  │  ─────────────────────────────────────────────────                │  │
+│  │  var userPresets: [EQPreset] { eqPresetStore.userPresets }        │  │
+│  │  var playlist: [Track] { playlistController.playlist }            │  │
+│  │  var currentTrack: Track? { playlistController.currentTrack }     │  │
+│  │                                                                   │  │
+│  └───────────────────────────────────────────────────────────────────┘  │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           Presentation Layer                             │
+│                             (SwiftUI Views)                              │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  Views access AudioPlayer only (never extracted components directly):   │
+│                                                                         │
+│  • WinampMainWindow      → audioPlayer.play/pause/stop                  │
+│  • EqualizerView         → audioPlayer.eqBands, audioPlayer.preamp      │
+│  • PlaylistView          → audioPlayer.playlist, audioPlayer.nextTrack  │
+│  • SpectrumAnalyzerView  → audioPlayer.getFrequencyData()               │
+│  • VideoWindowView       → audioPlayer.videoMetadataString              │
+│                                                                         │
+│  ⚠️ LAYER BOUNDARY: Views never import or access:                       │
+│     EQPresetStore, PlaylistController, VisualizerPipeline, etc.         │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### 14.4 Component Specifications
+
+#### EQPresetStore
+
+```swift
+// MacAmpApp/Audio/EQPresetStore.swift
+@MainActor
+@Observable
+final class EQPresetStore {
+    // MARK: - State
+    private(set) var userPresets: [EQPreset] = []
+    var perTrackPresets: [String: EqfPreset] = [:]
+
+    // MARK: - Private
+    private let presetsFileName = "perTrackPresets.json"
+    private let userPresetDefaultsKey = "MacAmp.UserEQPresets.v1"
+
+    // MARK: - Lifecycle
+    init() {
+        loadUserPresets()
+        loadPerTrackPresets()
+    }
+
+    // MARK: - Public API
+    func storeUserPreset(_ preset: EQPreset) { ... }
+    func deleteUserPreset(id: UUID) { ... }
+    func importEqfPreset(from url: URL) { ... }  // Uses Task.detached
+    func presetForTrack(_ trackPath: String) -> EqfPreset? { ... }
+    func savePresetForTrack(_ trackPath: String, preset: EqfPreset) { ... }
+
+    // MARK: - Private Persistence
+    private func appSupportDirectory() -> URL? { ... }
+    private func presetsFileURL() -> URL? { ... }
+    private func loadPerTrackPresets() { ... }
+    private func savePerTrackPresets() { ... }
+    private func loadUserPresets() { ... }
+    private func persistUserPresets() { ... }
+}
+```
+
+**Swift 6.2 Enhancement:**
+```swift
+// File I/O can use @concurrent when Swift 6.2 is adopted
+nonisolated struct EQPresetPersistence {
+    @concurrent
+    func loadPresets(from url: URL) async throws -> [EQPreset] { ... }
+
+    @concurrent
+    func savePresets(_ presets: [EQPreset], to url: URL) async throws { ... }
+}
+```
+
+#### MetadataLoader
+
+```swift
+// MacAmpApp/Audio/MetadataLoader.swift
+nonisolated struct MetadataLoader {
+    // MARK: - Swift 6.2 Ready (@concurrent)
+    func loadTrackMetadata(url: URL) async -> Track { ... }
+    func loadVideoMetadata(url: URL) async -> VideoMetadata { ... }
+    func extractAudioProperties(url: URL) -> AudioProperties { ... }
+}
+
+struct AudioProperties {
+    let channelCount: Int
+    let bitrate: Int
+    let sampleRate: Int
+}
+
+struct VideoMetadata {
+    let title: String
+    let duration: Double
+    let resolution: CGSize?
+}
+```
+
+#### PlaylistController
+
+```swift
+// MacAmpApp/Audio/PlaylistController.swift
+@MainActor
+@Observable
+final class PlaylistController {
+    // MARK: - State
+    private(set) var playlist: [Track] = []
+    private(set) var currentTrack: Track?
+    private var currentIndex: Int?
+    var shuffleEnabled: Bool = false
+
+    // MARK: - Repeat Mode (delegates to AppSettings)
+    var repeatMode: AppSettings.RepeatMode {
+        get { AppSettings.instance().repeatMode }
+        set { AppSettings.instance().repeatMode = newValue }
+    }
+
+    // MARK: - Playlist Operations
+    func addTrack(_ track: Track) { ... }
+    func removeTrack(at index: Int) { ... }
+    func moveTrack(from: Int, to: Int) { ... }
+    func clear() { ... }
+
+    // MARK: - Navigation
+    func nextTrack(isManualSkip: Bool) -> PlaylistAdvanceAction { ... }
+    func previousTrack() -> PlaylistAdvanceAction { ... }
+    func selectTrack(at index: Int) -> Track? { ... }
+    func updatePosition(with track: Track?) { ... }
+}
+
+enum PlaylistAdvanceAction {
+    case playTrack(Track)
+    case stopPlayback
+    case noChange
+}
+```
+
+#### VideoPlaybackController
+
+```swift
+// MacAmpApp/Audio/VideoPlaybackController.swift
+@MainActor
+@Observable
+final class VideoPlaybackController {
+    // MARK: - State
+    private(set) var player: AVPlayer?
+    private(set) var metadataString: String = ""
+    private(set) var currentTime: Double = 0
+    private(set) var duration: Double = 0
+
+    // MARK: - Private
+    private var endObserver: NSObjectProtocol?
+    private var timeObserver: Any?
+
+    // MARK: - Callbacks
+    var onPlaybackEnded: (() -> Void)?
+    var onTimeUpdate: ((Double) -> Void)?
+
+    // MARK: - Lifecycle
+    func loadVideo(url: URL) async { ... }
+    func play() { ... }
+    func pause() { ... }
+    func seek(to time: Double) { ... }
+    func cleanup() { ... }
+
+    // MARK: - Private
+    private func setupTimeObserver() { ... }
+    private func tearDownObservers() { ... }
+}
+```
+
+#### VisualizerPipeline
+
+```swift
+// MacAmpApp/Audio/VisualizerPipeline.swift
+
+// MARK: - Supporting Types (moved from AudioPlayer.swift)
+final class VisualizerScratchBuffers: @unchecked Sendable { ... }
+private struct VisualizerTapContext: @unchecked Sendable { ... }
+struct ButterchurnFrame { ... }
+
+// MARK: - Pipeline
+@MainActor
+final class VisualizerPipeline {
+    // MARK: - State
+    private var tapInstalled = false
+    private var scratch: VisualizerScratchBuffers?
+    private var latestRMS: [Float] = []
+    private var latestSpectrum: [Float] = []
+    private var latestWaveform: [Float] = []
+    private var butterchurnSpectrum: [Float] = Array(repeating: 0, count: 1024)
+    private var butterchurnWaveform: [Float] = Array(repeating: 0, count: 1024)
+
+    // MARK: - Configuration
+    var smoothing: Float = 0.6
+    var peakFalloff: Float = 1.2
+
+    // MARK: - Tap Management
+    /// ⚠️ CRITICAL: Must be called with valid mixer node
+    /// The Unmanaged pointer must remain valid while tap is installed
+    func installTap(on mixer: AVAudioMixerNode, playerPointer: UnsafeMutableRawPointer) { ... }
+    func removeTap(from mixer: AVAudioMixerNode) { ... }
+
+    // MARK: - Data Access
+    func getFrequencyData(bands: Int) -> [Float] { ... }
+    func getRMSData(bands: Int) -> [Float] { ... }
+    func getWaveformSamples(count: Int) -> [Float] { ... }
+    func snapshotButterchurnFrame() -> ButterchurnFrame? { ... }
+
+    // MARK: - Internal Update (called from tap handler via Task)
+    func updateLevels(rms: [Float], spectrum: [Float], waveform: [Float],
+                      butterchurnSpectrum: [Float], butterchurnWaveform: [Float]) { ... }
+
+    // MARK: - Static Tap Handler Factory
+    static func makeVisualizerTapHandler(
+        pipeline: VisualizerPipeline,
+        context: VisualizerTapContext,
+        scratch: VisualizerScratchBuffers
+    ) -> AVAudioNodeTapBlock { ... }
+}
+```
+
+### 14.5 Data Flow Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           User Interaction                               │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         SwiftUI Views (Presentation)                     │
+│                                                                         │
+│   EqualizerView ──────┐     PlaylistView ──────┐     SpectrumView ────┐ │
+│                       │                        │                      │ │
+└───────────────────────┼────────────────────────┼──────────────────────┼─┘
+                        │                        │                      │
+                        ▼                        ▼                      ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    AudioPlayer (Facade/Coordinator)                      │
+│  ┌──────────────────────────────────────────────────────────────────┐   │
+│  │                        Public API                                │   │
+│  │  • play() / pause() / stop()                                     │   │
+│  │  • setEqBand(index:value:)          ──────▶ eqPresetStore        │   │
+│  │  • nextTrack() / previousTrack()    ──────▶ playlistController   │   │
+│  │  • getFrequencyData(bands:)         ──────▶ visualizerPipeline   │   │
+│  │  • playVideoFile(url:)              ──────▶ videoController      │   │
+│  └──────────────────────────────────────────────────────────────────┘   │
+│                                                                         │
+│  ┌──────────────────────────────────────────────────────────────────┐   │
+│  │                     Engine Core (retained)                       │   │
+│  │  • AVAudioEngine lifecycle                                       │   │
+│  │  • AVAudioPlayerNode scheduling                                  │   │
+│  │  • Seek guards (currentSeekID, seekGuardActive)                  │   │
+│  │  • Progress timer                                                │   │
+│  └──────────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────┘
+          │              │              │              │
+          ▼              ▼              ▼              ▼
+┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐
+│ EQPreset    │  │ Playlist    │  │ Visualizer  │  │ Video       │
+│ Store       │  │ Controller  │  │ Pipeline    │  │ Controller  │
+│             │  │             │  │             │  │             │
+│ @Observable │  │ @Observable │  │ @MainActor  │  │ @Observable │
+│ @MainActor  │  │ @MainActor  │  │ nonisolated │  │ @MainActor  │
+│             │  │             │  │ tap handler │  │             │
+├─────────────┤  ├─────────────┤  ├─────────────┤  ├─────────────┤
+│ File I/O    │  │ Pure Logic  │  │ Core Audio  │  │ AVPlayer    │
+│ UserDefaults│  │ Array Ops   │  │ Realtime    │  │ Observers   │
+└─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘
+          │                                               │
+          ▼                                               ▼
+┌─────────────────────────────┐             ┌─────────────────────────────┐
+│       App Support Dir       │             │         AVPlayer            │
+│   • perTrackPresets.json    │             │   (Video Playback)          │
+│   • UserDefaults            │             │                             │
+└─────────────────────────────┘             └─────────────────────────────┘
+```
+
+### 14.6 Dependency Graph
+
+```
+                        ┌─────────────────────┐
+                        │    AudioPlayer      │
+                        │      (Facade)       │
+                        └─────────────────────┘
+                                  │
+              ┌───────────────────┼───────────────────┐
+              │                   │                   │
+              ▼                   ▼                   ▼
+     ┌────────────────┐  ┌────────────────┐  ┌────────────────┐
+     │ EQPresetStore  │  │PlaylistController│  │VisualizerPipeline│
+     └────────────────┘  └────────────────┘  └────────────────┘
+              │                   │                   │
+              │                   │                   │
+              ▼                   ▼                   ▼
+     ┌────────────────┐  ┌────────────────┐  ┌────────────────┐
+     │  AppSettings   │  │  AppSettings   │  │ AVAudioEngine  │
+     │  (RepeatMode)  │  │  (RepeatMode)  │  │ (mixer node)   │
+     └────────────────┘  └────────────────┘  └────────────────┘
+              │
+              ▼
+     ┌────────────────┐
+     │ MetadataLoader │ ◀─────── (no dependencies, pure functions)
+     └────────────────┘
+
+     ┌────────────────┐
+     │VideoPlayback   │
+     │   Controller   │ ◀─────── (AVPlayer, no AudioPlayer dep)
+     └────────────────┘
+
+Dependencies Legend:
+─────────────────────
+→  Direct dependency (holds reference)
+◀  No external dependencies (standalone)
+```
+
+### 14.7 File Structure After Extraction
+
+```
+MacAmpApp/
+├── Audio/
+│   ├── AudioPlayer.swift              (~400-500 lines) - Facade + Engine Core
+│   ├── EQPresetStore.swift            (~150 lines) - Preset persistence
+│   ├── MetadataLoader.swift           (~100-150 lines) - Track metadata
+│   ├── PlaylistController.swift       (~150-200 lines) - Playlist logic
+│   ├── VideoPlaybackController.swift  (~150-200 lines) - AVPlayer wrapper
+│   ├── VisualizerPipeline.swift       (~200-250 lines) - Audio tap + FFT
+│   └── Models/
+│       ├── Track.swift                (~50 lines) - Track data model
+│       ├── EQPreset.swift             (existing)
+│       ├── EqfPreset.swift            (existing)
+│       ├── PlaybackState.swift        (~20 lines) - State enums
+│       └── ButterchurnFrame.swift     (~20 lines) - Visualizer frame
+```
+
+### 14.8 Migration Checklist
+
+| Step | Component | Existing Deps | New Location | Risk |
+|------|-----------|---------------|--------------|------|
+| 1 | EQPreset model | None | Models/EQPreset.swift | ★☆☆☆☆ |
+| 2 | Track model | None | Models/Track.swift | ★☆☆☆☆ |
+| 3 | PlaybackState enums | None | Models/PlaybackState.swift | ★☆☆☆☆ |
+| 4 | EQPresetStore | AppSettings | EQPresetStore.swift | ★★☆☆☆ |
+| 5 | MetadataLoader | AVFoundation | MetadataLoader.swift | ★★☆☆☆ |
+| 6 | PlaylistController | AppSettings | PlaylistController.swift | ★★☆☆☆ |
+| 7 | VideoPlaybackController | AVFoundation | VideoPlaybackController.swift | ★★★☆☆ |
+| 8 | VisualizerPipeline | AVAudioEngine | VisualizerPipeline.swift | ★★★★☆ |
+| 9 | AudioPlayer refactor | All above | AudioPlayer.swift | ★★★☆☆ |
+
+### 14.9 Testing Strategy Per Component
+
+| Component | Unit Tests | Integration Tests | Manual Tests |
+|-----------|------------|-------------------|--------------|
+| EQPresetStore | ✅ Mock file system | ✅ Real persistence | Load/save presets |
+| MetadataLoader | ✅ Mock URLs | ✅ Real audio files | Track info display |
+| PlaylistController | ✅ Pure logic | ✅ With AudioPlayer | Add/remove/navigate |
+| VideoPlaybackController | ⚠️ Mock AVPlayer | ✅ Real video files | Play video |
+| VisualizerPipeline | ⚠️ Synthetic data | ✅ With engine | Spectrum display |
+| AudioPlayer (Facade) | ⚠️ Mock components | ✅ Full stack | Full playback |
+
+### 14.10 Rollback Strategy
+
+Each extraction is a separate commit with clear boundaries:
+
+```
+git log --oneline (after Phase 8 complete):
+──────────────────────────────────────────
+abc1234 refactor: Extract VisualizerPipeline from AudioPlayer
+def5678 refactor: Extract VideoPlaybackController from AudioPlayer
+ghi9012 refactor: Extract PlaylistController from AudioPlayer
+jkl3456 refactor: Extract MetadataLoader from AudioPlayer
+mno7890 refactor: Extract EQPresetStore from AudioPlayer
+pqr1234 style: Fix SwiftLint violations in AudioPlayer
+```
+
+**To rollback any extraction:**
+```bash
+git revert <commit-hash>  # Reverts specific extraction
+# OR
+git reset --hard <previous-hash>  # Reverts to before extraction
+```
+
+Each extracted component is self-contained, so reverting one doesn't affect others.
+
+---
+
+## 15. Oracle Review: Phase 8.0-8.3 Quality Gate (2026-01-11)
+
+**Model:** gpt-5.2-codex
+**Reasoning Effort:** xhigh
+**Score:** 7/10 → **8/10** (after fix)
+
+### 15.1 Findings
+
+| Severity | Issue | Location | Status |
+|----------|-------|----------|--------|
+| **High** | Repeat-one auto-repeat regression | `AudioPlayer.swift:1538-1540` | ✅ FIXED |
+| Medium | EQPresetStore I/O on main actor | `EQPresetStore.swift:26,94,106` | Documented |
+| Medium | `pendingTrackURLs` encapsulation leak | `PlaylistController.swift:45` | Documented |
+| Low | `Track` coupling remains | `AudioPlayer.swift:185` | Deferred |
+
+### 15.2 High Priority Fix: Repeat-One Regression
+
+**Problem:** `onPlaybackEnded` transitions to `.stopped(.completed)` (sets `isPlaying = false`) before calling `nextTrack()`. When `.restartCurrent` action is returned, `handlePlaylistAction` called `seek(to: 0, resume: isPlaying)`, but `isPlaying` was already `false`.
+
+**Fix Applied:**
+```swift
+case .restartCurrent:
+    // Always resume: repeat-one at end-of-track means "restart and play"
+    // (isPlaying is already false after onPlaybackEnded transition)
+    seek(to: 0, resume: true)
+    return .restartCurrent
+```
+
+### 15.3 Medium Priority: EQPresetStore I/O
+
+The `EQPresetStore` init and save methods perform file I/O synchronously on the main actor. This conflicts with Option C guidance about background I/O.
+
+**Current Impact:** Low - preset files are small (< 1KB typically)
+**Future Action:** Consider `Task.detached` for I/O operations when implementing larger preset libraries
+
+### 15.4 Medium Priority: pendingTrackURLs Encapsulation
+
+`pendingTrackURLs` is marked `@ObservationIgnored` but accessed directly from AudioPlayer. This is a minor encapsulation leak.
+
+**Mitigation:** The property is intentionally non-observable (prevents unnecessary view updates). Direct access is acceptable for this internal-only property.
+
+### 15.5 Low Priority: Track Coupling
+
+`Track` struct remains defined in `AudioPlayer.swift`, creating coupling between `PlaylistController` and `AudioPlayer.swift`.
+
+**Future Action:** Extract `Track` to `MacAmpApp/Models/Track.swift` in Phase 9 cleanup
+
+### 15.6 Positive Findings
+
+- ✅ Computed property forwardings (`playlist`, `shuffleEnabled`, `userPresets`) correct and complete
+- ✅ No direct view access to internal controllers (EQPresetStore, PlaylistController)
+- ✅ MetadataLoader correctly implemented as `nonisolated struct` with static async methods
+- ✅ PlaylistController returns pure actions (no side effects in navigation logic)
+- ✅ Bridge pattern (`handlePlaylistAction`) implemented as designed
+- ✅ All WinampPlaylistWindow call sites properly updated
+
+---
+
+## 16. Oracle 10/10 Verification (2026-01-11)
+
+**Model:** gpt-5.2-codex
+**Reasoning Effort:** xhigh
+
+### 16.1 Question: Will Fixing All Three Issues Achieve 10/10?
+
+**Oracle Response:** "Likely yes if those are the only remaining issues from the prior review; fixing all three should plausibly bring it to 10/10."
+
+**Caveat:** "A fresh pass might still surface new Swift 6 concurrency or API surface issues (e.g., Sendable violations, async init usage in SwiftUI, or missing tests around persistence). So '10/10' is contingent on no new findings after changes."
+
+### 16.2 Risk-Ordered Remediation
+
+| Priority | Issue | Risk | Reason |
+|----------|-------|------|--------|
+| 9.1 | Track coupling | Lowest | Mostly mechanical extraction |
+| 9.2 | pendingTrackURLs encapsulation | Medium | API changes, but localized |
+| 9.3 | EQPresetStore async I/O | Highest | Behavioral change, possible race/save ordering |
+
+**Recommended Order:** 9.1 → 9.2 → 9.3 (low risk first catches compile errors early)
+
+### 16.3 Key Implementation Guidance
+
+**Track Extraction:**
+- Move to `MacAmpApp/Models/Track.swift`
+- Avoid non-hashable AVFoundation members in model
+- Add `Sendable` conformance for Swift 6 readiness
+
+**pendingTrackURLs Encapsulation:**
+- Make private with accessor methods: `markPending`, `clearPending`, `isPending`
+- Direct access "defeats invariants and makes later refactors harder"
+
+**EQPresetStore Async I/O:**
+- Use `Task.detached(priority: .utility)` for file operations
+- Nonisolated static methods for actual I/O (Sendable-safe)
+- Fire-and-forget saves (no await needed for writes)
+- Call `loadPresets()` async after init
+
+### 16.4 Sendable Requirements
+
+Oracle warning: "`Task.detached` closures are `@Sendable`, so captured values must be `Sendable`. If `EQPreset` isn't `Sendable`, this will surface quickly."
+
+Action: Ensure `EQPreset` and `EqfPreset` are value types with only `Sendable` members, or add explicit conformance.
+
+### 16.5 Phase 9 Plan Status
+
+Full implementation plan documented in `plan.md` §Phase 9.
+
+**Estimated Effort:**
+- 9.1 Track extraction: ~15 min
+- 9.2 pendingTrackURLs: ~20 min
+- 9.3 EQPresetStore I/O: ~45 min
+- 9.4 Final Oracle review: ~10 min
+
+**Total:** ~90 minutes for 10/10 score
