@@ -367,5 +367,4 @@ final class AppSettings {
             UserDefaults.standard.set(repeatMode.rawValue, forKey: Keys.repeatMode)
         }
     }
-
 }
