@@ -54,16 +54,16 @@ MacAmp is a SwiftUI-based audio player for macOS that recreates the iconic deskt
 
 ## Download
 
-### Latest Release: v1.0.1 (January 2026)
+### Latest Release: v1.0.5 (January 2026)
 
-[![Download MacAmp](https://img.shields.io/badge/Download-MacAmp%20v1.0.1-blue?style=for-the-badge)](https://github.com/hfyeomans/MacAmp/releases/tag/v1.0.1)
+[![Download MacAmp](https://img.shields.io/badge/Download-MacAmp%20v1.0.5-blue?style=for-the-badge)](https://github.com/hfyeomans/MacAmp/releases/tag/v1.0.5)
 
-**[Download MacAmp-v1.0.1.dmg](https://github.com/hfyeomans/MacAmp/releases/tag/v1.0.1)** (3.4 MB)
+**[Download MacAmp-1.0.5.dmg](https://github.com/hfyeomans/MacAmp/releases/tag/v1.0.5)** (2.7 MB)
 
 | Property | Value |
 |----------|-------|
-| Version | 1.0.1 |
-| Build | 3 |
+| Version | 1.0.5 |
+| Build | 5 |
 | Signed | Developer ID Application |
 | Notarized | Yes (Apple approved) |
 | Architecture | Universal (arm64 + x86_64) |
@@ -74,14 +74,14 @@ MacAmp is a SwiftUI-based audio player for macOS that recreates the iconic deskt
 3. Drag MacAmp to Applications folder
 4. Launch from Applications (no Gatekeeper warnings)
 
-**What's New in v1.0.1:**
-- **Resizable Milkdrop Window** - Drag corner to resize with 25×29px quantized segments
-- **Butterchurn Visualization Packs** - 245 authentic Milkdrop 2 presets with WebGL rendering
-- **Dynamic Titlebar Expansion** - Gold filler tiles expand symmetrically as window grows
-- **Preset Controls** - Space/Backspace navigation, R for randomize, C for auto-cycle
-- **Context Menu** - Right-click for direct preset selection from full library
+**What's New in v1.0.5:**
+- **Force Unwrap Elimination** - Removed all force unwraps from AudioPlayer for safer, crash-resistant playback
+- **AudioPlayer Refactoring** - Three-layer architecture with `AudioEngineController`, `AudioPlaybackController`, and `AudioBusController`
+- **SwiftLint Integration** - Consistent code style and quality enforcement across the codebase
+- **Documentation Updates** - Comprehensive architecture guide and 11 new optimization patterns
+- **Code Quality Improvements** - Enhanced error handling, cleaner state management, and improved concurrency safety
 
-See [Release Notes](https://github.com/hfyeomans/MacAmp/releases/tag/v1.0.1) for full changelog.
+See [Release Notes](https://github.com/hfyeomans/MacAmp/releases/tag/v1.0.5) for full changelog.
 
 ## Installation
 
@@ -561,6 +561,36 @@ See [`docs/SpriteResolver-Architecture.md`](docs/SpriteResolver-Architecture.md)
 - **Conditional Logging** - `#if DEBUG` wraps all debug output
 
 ## Recent Updates
+
+### v1.0.5 (January 2026) - Code Quality & Architecture Improvements 🛠️
+
+**A major code quality release focusing on stability and maintainability.**
+
+**Major Changes:**
+- ✅ **Force Unwrap Elimination** - Comprehensive audit and removal of all force unwraps
+  - AudioPlayer completely refactored for safe optional handling
+  - Prevents potential crashes from unexpected nil values
+  - Cleaner error handling throughout playback pipeline
+- ✅ **AudioPlayer Three-Layer Architecture** - Professional restructuring
+  - `AudioEngineController` - AVAudioEngine lifecycle management
+  - `AudioPlaybackController` - Playback state and operations
+  - `AudioBusController` - EQ and audio bus configuration
+  - Clear separation of concerns for better maintainability
+- ✅ **SwiftLint Integration** - Consistent code style enforcement
+  - Automated linting for all Swift files
+  - Enforces best practices and coding standards
+- ✅ **Documentation Updates** - 11 new optimization patterns documented
+  - Comprehensive architecture guide for AudioPlayer refactoring
+  - Lessons learned from force unwrap elimination
+  - Best practices for Swift 6 concurrency
+
+**Technical:**
+- Enhanced error handling with proper optional chaining
+- Improved state management with clear ownership
+- Thread Sanitizer clean with @MainActor annotations
+- Developer ID signed and Apple notarized
+
+---
 
 ### v1.0.1 (January 2026) - Resizable Milkdrop + Butterchurn Packs 🎆
 

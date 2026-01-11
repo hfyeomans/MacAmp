@@ -7,10 +7,8 @@
     <key>teamID</key>
     <string>AC3LGVEJJ8</string>
     <key>signingStyle</key>
-    <string>automatic</string>
+    <string>manual</string>
     <key>signingCertificate</key>
     <string>Developer ID Application</string>
-    <key>provisioningProfiles</key>
-    <dict/>
 </dict>
 </plist>
