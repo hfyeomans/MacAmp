@@ -380,10 +380,10 @@ rg --type swift '\{ [^}]*\bself\.' MacAmpApp/ | grep -v '\[weak self\]'
 
 | File | Original | Fixed | Remaining |
 |------|----------|-------|-----------|
-| `AudioPlayer.swift` | 21 | 0 | 21 (architectural) |
-| `AppSettings.swift` | 10 | 9 | 1 (whitespace) |
-| `SnapUtils.swift` | 8 | 0 | 8 (statement position) |
-| `EqGraphView.swift` | 1 | 0 | 1 (closure length) |
+| `AudioPlayer.swift` | 21 | 5 | 16 (architectural - Phase 8) |
+| `AppSettings.swift` | 10 | 10 | **0** ✅ |
+| `SnapUtils.swift` | 8 | 8 | **0** ✅ |
+| `EqGraphView.swift` | 1 | 0 | 1 (closure length - acceptable) |
 
 ### AudioPlayer.swift (21 violations - Deferred)
 
@@ -418,38 +418,42 @@ rg --type swift '\{ [^}]*\bself\.' MacAmpApp/ | grep -v '\[weak self\]'
 | 819:5 | `vertical_whitespace` | Extra blank lines (3 lines, limit 1) |
 | 1182:1 | `vertical_whitespace` | Extra blank line (2 lines, limit 1) |
 
-### AppSettings.swift (10 violations)
+### AppSettings.swift (10 violations) - ✅ ALL FIXED
 
 #### Redundant String Enum Values (9) - ✅ FIXED
 
 All enums had explicit string values matching case names. Fixed by removing redundant values.
 
-#### Whitespace (1) - Remaining
+#### Whitespace (1) - ✅ FIXED
 
-| Line | Rule | Description |
-|------|------|-------------|
-| 345:1 | `vertical_whitespace_closing_braces` | Empty line before closing `}` |
+| Line | Rule | Description | Status |
+|------|------|-------------|--------|
+| 345:1 | `vertical_whitespace_closing_braces` | Empty line before closing `}` | ✅ Fixed |
 
-### SnapUtils.swift (8 violations) - Pending
+### SnapUtils.swift (8 violations) - ✅ ALL FIXED
 
-#### Statement Position (8)
+#### Statement Position (8) - ✅ FIXED
 
-All violations: `else` should be on same line as closing `}`:
+All `else` statements moved to same line as closing `}`. Reformatted to multi-line style:
 
 ```swift
-// Current (violations)
-}
-else { ... }
+// Before
+if condition { x = value }
+else if condition { x = other }
 
-// Should be
-} else { ... }
+// After
+if condition {
+    x = value
+} else if condition {
+    x = other
+}
 ```
 
-| Lines |
-|-------|
-| 53:64, 54:81, 55:67 |
-| 60:65, 61:81, 62:64 |
-| 104:44, 106:44 |
+| Lines | Status |
+|-------|--------|
+| 53-56 (snap function, X axis) | ✅ Fixed |
+| 60-63 (snap function, Y axis) | ✅ Fixed |
+| 104-107 (snapWithin function) | ✅ Fixed |
 
 ### EqGraphView.swift (1 violation) - Acceptable
 

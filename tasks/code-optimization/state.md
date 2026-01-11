@@ -58,7 +58,7 @@
 | Force unwraps (Tests) | **0** | 0 | ✅ |
 | Compiler warnings | **0** | 0 | ✅ |
 | SwiftLint violations (original) | 40 | Baseline | Documented |
-| SwiftLint violations (after Phase 7) | ~31 | <10 | 9 enum values fixed |
+| SwiftLint violations (after fixes) | **17** | <10 | 23 fixed (9 enum + 1 whitespace + 8 statement + 5 AudioPlayer) |
 | Dead code functions | **1 (documented)** | 0 (documented) | ✅ |
 | Pre-existing bugs fixed | **1** | 0 | ✅ EqGraphView |
 | Build status | **SUCCEEDED** | Pass | ✅ |
