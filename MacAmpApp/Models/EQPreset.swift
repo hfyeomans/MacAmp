@@ -1,7 +1,7 @@
 import Foundation
 
 /// Represents an EQ preset with values for all 10 bands + preamp
-struct EQPreset: Codable, Identifiable {
+struct EQPreset: Codable, Identifiable, Sendable {
     let id: UUID
     let name: String
     let preamp: Float  // -12.0 to +12.0 dB

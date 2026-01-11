@@ -15,7 +15,7 @@ final class PlaylistNavigationTests: XCTestCase {
 
         let localURL = testRoot.appendingPathComponent("mono_test.wav")
         let localTrack = Track(url: localURL, title: "Local", artist: "Artist", duration: 10)
-        let streamURL = URL(string: "https://example.com/stream")!
+        let streamURL = try XCTUnwrap(URL(string: "https://example.com/stream"))
         let streamTrack = Track(url: streamURL, title: "Stream", artist: "", duration: 0)
 
         player.playlist = [localTrack, streamTrack]
@@ -43,7 +43,7 @@ final class PlaylistNavigationTests: XCTestCase {
 
         let localURL = testRoot.appendingPathComponent("mono_test.wav")
         let localTrack = Track(url: localURL, title: "Local", artist: "Artist", duration: 10)
-        let streamURL = URL(string: "https://example.com/stream")!
+        let streamURL = try XCTUnwrap(URL(string: "https://example.com/stream"))
         let streamTrack = Track(url: streamURL, title: "Stream", artist: "", duration: 0)
 
         player.playlist = [localTrack, streamTrack]

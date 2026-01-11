@@ -50,17 +50,27 @@ enum SnapUtils {
         var y: CGFloat?
 
         if overlapY(boxA, boxB) {
-            if near(left(boxA), right(boxB)) { x = right(boxB) }
-            else if near(right(boxA), left(boxB)) { x = left(boxB) - boxA.width }
-            else if near(left(boxA), left(boxB)) { x = left(boxB) }
-            else if near(right(boxA), right(boxB)) { x = right(boxB) - boxA.width }
+            if near(left(boxA), right(boxB)) {
+                x = right(boxB)
+            } else if near(right(boxA), left(boxB)) {
+                x = left(boxB) - boxA.width
+            } else if near(left(boxA), left(boxB)) {
+                x = left(boxB)
+            } else if near(right(boxA), right(boxB)) {
+                x = right(boxB) - boxA.width
+            }
         }
 
         if overlapX(boxA, boxB) {
-            if near(top(boxA), bottom(boxB)) { y = bottom(boxB) }
-            else if near(bottom(boxA), top(boxB)) { y = top(boxB) - boxA.height }
-            else if near(top(boxA), top(boxB)) { y = top(boxB) }
-            else if near(bottom(boxA), bottom(boxB)) { y = bottom(boxB) - boxA.height }
+            if near(top(boxA), bottom(boxB)) {
+                y = bottom(boxB)
+            } else if near(bottom(boxA), top(boxB)) {
+                y = top(boxB) - boxA.height
+            } else if near(top(boxA), top(boxB)) {
+                y = top(boxB)
+            } else if near(bottom(boxA), bottom(boxB)) {
+                y = bottom(boxB) - boxA.height
+            }
         }
         return Diff(x: x, y: y)
     }
@@ -68,8 +78,8 @@ enum SnapUtils {
     static func snapDiff(_ a: Box, _ b: Box) -> Point {
         let newPos = snap(a, b)
         return Point(
-            x: (newPos.x == nil ? 0 : newPos.x! - a.x),
-            y: (newPos.y == nil ? 0 : newPos.y! - a.y)
+            x: newPos.x.map { $0 - a.x } ?? 0,
+            y: newPos.y.map { $0 - a.y } ?? 0
         )
     }
 
@@ -101,10 +111,16 @@ enum SnapUtils {
     static func snapWithin(_ a: Box, _ bound: BoundingBox) -> Diff {
         var x: CGFloat?
         var y: CGFloat?
-        if a.x - SNAP_DISTANCE < 0 { x = 0 }
-        else if a.x + a.width + SNAP_DISTANCE > bound.width { x = bound.width - a.width }
-        if a.y - SNAP_DISTANCE < 0 { y = 0 }
-        else if a.y + a.height + SNAP_DISTANCE > bound.height { y = bound.height - a.height }
+        if a.x - SNAP_DISTANCE < 0 {
+            x = 0
+        } else if a.x + a.width + SNAP_DISTANCE > bound.width {
+            x = bound.width - a.width
+        }
+        if a.y - SNAP_DISTANCE < 0 {
+            y = 0
+        } else if a.y + a.height + SNAP_DISTANCE > bound.height {
+            y = bound.height - a.height
+        }
         return Diff(x: x, y: y)
     }
 
@@ -150,8 +166,8 @@ enum SnapUtils {
     static func snapWithinDiff(_ a: Box, _ bound: BoundingBox) -> Point {
         let newPos = snapWithin(a, bound)
         return Point(
-            x: (newPos.x == nil ? 0 : newPos.x! - a.x),
-            y: (newPos.y == nil ? 0 : newPos.y! - a.y)
+            x: newPos.x.map { $0 - a.x } ?? 0,
+            y: newPos.y.map { $0 - a.y } ?? 0
         )
     }
 

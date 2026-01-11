@@ -80,7 +80,7 @@ final class PlaylistWindowActions: NSObject {
                         artist: "Internet Radio",
                         duration: 0.0  // Streams have no duration
                     )
-                    audioPlayer.playlist.append(streamTrack)
+                    audioPlayer.addStreamTrack(streamTrack)
                     addedStreams += 1
                 } else {
                     // Add local file to playlist
@@ -159,7 +159,7 @@ final class PlaylistWindowActions: NSObject {
                 duration: 0.0
             )
 
-            audioPlayer.playlist.append(streamTrack)
+            audioPlayer.addStreamTrack(streamTrack)
 
             showAlert("Stream Added", "Added '\(stationName)' to playlist.\n\nClick to play!")
         }
@@ -186,9 +186,7 @@ final class PlaylistWindowActions: NSObject {
             showAlert("Remove Selected", "No tracks selected")
         } else {
             for index in indices.sorted().reversed() {
-                if index < audioPlayer.playlist.count {
-                    audioPlayer.playlist.remove(at: index)
-                }
+                audioPlayer.removeTrack(at: index)
             }
             PlaylistWindowActions.shared.selectedIndices = []
         }
@@ -205,7 +203,7 @@ final class PlaylistWindowActions: NSObject {
         } else {
             let validIndices = indices.sorted().filter { $0 < audioPlayer.playlist.count }
             let selectedTracks = validIndices.map { audioPlayer.playlist[$0] }
-            audioPlayer.playlist = selectedTracks
+            audioPlayer.replacePlaylist(with: selectedTracks)
             PlaylistWindowActions.shared.selectedIndices = []
         }
     }
@@ -214,7 +212,7 @@ final class PlaylistWindowActions: NSObject {
         guard let audioPlayer = sender.representedObject as? AudioPlayer else {
             return
         }
-        audioPlayer.playlist = []
+        audioPlayer.clearPlaylist()
     }
 
     @objc func removeMisc(_ sender: NSMenuItem) {
@@ -889,7 +887,7 @@ struct WinampPlaylistWindow: View {
     private func removeSelectedTrack() {
         guard let index = selectedIndices.first,
               index < audioPlayer.playlist.count else { return }
-        audioPlayer.playlist.remove(at: index)
+        audioPlayer.removeTrack(at: index)
         selectedIndices.remove(index)
     }
 

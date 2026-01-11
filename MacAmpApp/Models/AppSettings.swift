@@ -4,9 +4,9 @@ import Observation
 
 /// Material integration levels for Liquid Glass UI support
 enum MaterialIntegrationLevel: String, CaseIterable, Codable {
-    case classic = "classic"
-    case hybrid = "hybrid"
-    case modern = "modern"
+    case classic
+    case hybrid
+    case modern
 
     var displayName: String {
         switch self {
@@ -29,15 +29,40 @@ enum MaterialIntegrationLevel: String, CaseIterable, Codable {
 @Observable
 @MainActor
 final class AppSettings {
+
+    // MARK: - UserDefaults Keys
+
+    /// Centralized storage keys to prevent typos and enable refactoring
+    private enum Keys {
+        static let materialIntegration = "MaterialIntegration"
+        static let enableLiquidGlass = "EnableLiquidGlass"
+        static let isDoubleSizeMode = "isDoubleSizeMode"
+        static let isAlwaysOnTop = "isAlwaysOnTop"
+        static let isMainWindowShaded = "isMainWindowShaded"
+        static let showVideoWindow = "showVideoWindow"
+        static let showMilkdropWindow = "showMilkdropWindow"
+        static let timeDisplayMode = "timeDisplayMode"
+        static let visualizerMode = "visualizerMode"
+        static let repeatMode = "repeatMode"
+        static let butterchurnRandomize = "butterchurnRandomize"
+        static let butterchurnCycling = "butterchurnCycling"
+        static let butterchurnCycleInterval = "butterchurnCycleInterval"
+        static let butterchurnTrackTitleInterval = "butterchurnTrackTitleInterval"
+        // Legacy key for migration
+        static let audioPlayerRepeatEnabled = "audioPlayerRepeatEnabled"
+    }
+
+    // MARK: - Material Integration
+
     var materialIntegration: MaterialIntegrationLevel {
         didSet {
-            UserDefaults.standard.set(materialIntegration.rawValue, forKey: "MaterialIntegration")
+            UserDefaults.standard.set(materialIntegration.rawValue, forKey: Keys.materialIntegration)
         }
     }
 
     var enableLiquidGlass: Bool {
         didSet {
-            UserDefaults.standard.set(enableLiquidGlass, forKey: "EnableLiquidGlass")
+            UserDefaults.standard.set(enableLiquidGlass, forKey: Keys.enableLiquidGlass)
         }
     }
 
@@ -48,16 +73,16 @@ final class AppSettings {
         self.enableLiquidGlass = Self.loadLiquidGlassSetting()
 
         // Load persisted clutter bar states (default to false)
-        self.isDoubleSizeMode = UserDefaults.standard.bool(forKey: "isDoubleSizeMode")
-        self.isAlwaysOnTop = UserDefaults.standard.bool(forKey: "isAlwaysOnTop")
-        self.isMainWindowShaded = UserDefaults.standard.bool(forKey: "isMainWindowShaded")
-        self.showVideoWindow = UserDefaults.standard.bool(forKey: "showVideoWindow")
-        self.showMilkdropWindow = UserDefaults.standard.bool(forKey: "showMilkdropWindow")
+        self.isDoubleSizeMode = UserDefaults.standard.bool(forKey: Keys.isDoubleSizeMode)
+        self.isAlwaysOnTop = UserDefaults.standard.bool(forKey: Keys.isAlwaysOnTop)
+        self.isMainWindowShaded = UserDefaults.standard.bool(forKey: Keys.isMainWindowShaded)
+        self.showVideoWindow = UserDefaults.standard.bool(forKey: Keys.showVideoWindow)
+        self.showMilkdropWindow = UserDefaults.standard.bool(forKey: Keys.showMilkdropWindow)
 
         // NOTE: videoWindowSizeMode loading removed - Size2D persisted in VideoWindowSizeState
 
         // Load persisted time display mode (default to elapsed)
-        if let rawTimeMode = UserDefaults.standard.string(forKey: "timeDisplayMode"),
+        if let rawTimeMode = UserDefaults.standard.string(forKey: Keys.timeDisplayMode),
            let mode = TimeDisplayMode(rawValue: rawTimeMode) {
             self.timeDisplayMode = mode
         } else {
@@ -65,25 +90,25 @@ final class AppSettings {
         }
 
         // Load persisted visualizer mode (default to spectrum)
-        let rawMode = UserDefaults.standard.integer(forKey: "visualizerMode")
+        let rawMode = UserDefaults.standard.integer(forKey: Keys.visualizerMode)
         self.visualizerMode = VisualizerMode(rawValue: rawMode) ?? .spectrum
 
         // Load repeat mode with migration from old boolean (preserves user preference)
-        if let savedMode = UserDefaults.standard.string(forKey: "repeatMode"),
+        if let savedMode = UserDefaults.standard.string(forKey: Keys.repeatMode),
            let mode = RepeatMode(rawValue: savedMode) {
             self.repeatMode = mode
         } else {
             // Migrate from old boolean key: true → .all, false → .off
-            let oldRepeat = UserDefaults.standard.bool(forKey: "audioPlayerRepeatEnabled")
+            let oldRepeat = UserDefaults.standard.bool(forKey: Keys.audioPlayerRepeatEnabled)
             self.repeatMode = oldRepeat ? .all : .off
         }
 
         // Load Butterchurn settings (with sensible defaults)
-        self.butterchurnRandomize = UserDefaults.standard.object(forKey: "butterchurnRandomize") as? Bool ?? true
-        self.butterchurnCycling = UserDefaults.standard.object(forKey: "butterchurnCycling") as? Bool ?? true
-        let savedInterval = UserDefaults.standard.double(forKey: "butterchurnCycleInterval")
+        self.butterchurnRandomize = UserDefaults.standard.object(forKey: Keys.butterchurnRandomize) as? Bool ?? true
+        self.butterchurnCycling = UserDefaults.standard.object(forKey: Keys.butterchurnCycling) as? Bool ?? true
+        let savedInterval = UserDefaults.standard.double(forKey: Keys.butterchurnCycleInterval)
         self.butterchurnCycleInterval = savedInterval > 0 ? savedInterval : 15.0
-        self.butterchurnTrackTitleInterval = UserDefaults.standard.double(forKey: "butterchurnTrackTitleInterval")
+        self.butterchurnTrackTitleInterval = UserDefaults.standard.double(forKey: Keys.butterchurnTrackTitleInterval)
     }
     
     static func instance() -> AppSettings {
@@ -128,7 +153,7 @@ final class AppSettings {
     }
 
     private static func loadMaterialIntegration() -> MaterialIntegrationLevel {
-        guard let savedRaw = UserDefaults.standard.string(forKey: "MaterialIntegration"),
+        guard let savedRaw = UserDefaults.standard.string(forKey: Keys.materialIntegration),
               let saved = MaterialIntegrationLevel(rawValue: savedRaw) else {
             return .hybrid
         }
@@ -136,7 +161,7 @@ final class AppSettings {
     }
 
     private static func loadLiquidGlassSetting() -> Bool {
-        guard let stored = UserDefaults.standard.object(forKey: "EnableLiquidGlass") as? Bool else {
+        guard let stored = UserDefaults.standard.object(forKey: Keys.enableLiquidGlass) as? Bool else {
             return true
         }
         return stored
@@ -164,9 +189,12 @@ final class AppSettings {
         return skinsDir
     }
 
-    static func fallbackSkinsDirectory(fileManager: FileManager = .default) -> URL {
-        let caches = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first!
-        return caches.appendingPathComponent("MacAmp/FallbackSkins", isDirectory: true)
+    static func fallbackSkinsDirectory() -> URL {
+        // URL.cachesDirectory is available in macOS 13+ and is non-optional.
+        // .appending(component:directoryHint:) is the modern path API.
+        URL.cachesDirectory
+            .appending(component: "MacAmp", directoryHint: .isDirectory)
+            .appending(component: "FallbackSkins", directoryHint: .isDirectory)
     }
 
     // MARK: - Double Size Mode
@@ -176,7 +204,7 @@ final class AppSettings {
     /// to maintain @Observable reactivity
     var isDoubleSizeMode: Bool = false {
         didSet {
-            UserDefaults.standard.set(isDoubleSizeMode, forKey: "isDoubleSizeMode")
+            UserDefaults.standard.set(isDoubleSizeMode, forKey: Keys.isDoubleSizeMode)
         }
     }
 
@@ -186,7 +214,7 @@ final class AppSettings {
     /// Note: Using didSet pattern to maintain @Observable reactivity
     var isAlwaysOnTop: Bool = false {
         didSet {
-            UserDefaults.standard.set(isAlwaysOnTop, forKey: "isAlwaysOnTop")
+            UserDefaults.standard.set(isAlwaysOnTop, forKey: Keys.isAlwaysOnTop)
         }
     }
 
@@ -197,7 +225,7 @@ final class AppSettings {
     /// Persists across app restarts - defaults to false (full window)
     var isMainWindowShaded: Bool = false {
         didSet {
-            UserDefaults.standard.set(isMainWindowShaded, forKey: "isMainWindowShaded")
+            UserDefaults.standard.set(isMainWindowShaded, forKey: Keys.isMainWindowShaded)
         }
     }
 
@@ -205,15 +233,15 @@ final class AppSettings {
 
     /// Time display mode for elapsed vs remaining time
     enum TimeDisplayMode: String, Codable, CaseIterable {
-        case elapsed = "elapsed"
-        case remaining = "remaining"
+        case elapsed
+        case remaining
     }
 
     /// Current time display mode - persists across app restarts
     /// Note: Using didSet pattern to maintain @Observable reactivity
     var timeDisplayMode: TimeDisplayMode = .elapsed {
         didSet {
-            UserDefaults.standard.set(timeDisplayMode.rawValue, forKey: "timeDisplayMode")
+            UserDefaults.standard.set(timeDisplayMode.rawValue, forKey: Keys.timeDisplayMode)
         }
     }
 
@@ -235,7 +263,7 @@ final class AppSettings {
     /// V - Video Window visibility state (persisted)
     var showVideoWindow: Bool = false {
         didSet {
-            UserDefaults.standard.set(showVideoWindow, forKey: "showVideoWindow")
+            UserDefaults.standard.set(showVideoWindow, forKey: Keys.showVideoWindow)
         }
     }
 
@@ -247,7 +275,7 @@ final class AppSettings {
     /// Milkdrop Window visibility state (persisted)
     var showMilkdropWindow: Bool = false {
         didSet {
-            UserDefaults.standard.set(showMilkdropWindow, forKey: "showMilkdropWindow")
+            UserDefaults.standard.set(showMilkdropWindow, forKey: Keys.showMilkdropWindow)
         }
     }
 
@@ -263,7 +291,7 @@ final class AppSettings {
     /// Current visualizer mode - click analyzer to cycle
     var visualizerMode: VisualizerMode = .spectrum {
         didSet {
-            UserDefaults.standard.set(visualizerMode.rawValue, forKey: "visualizerMode")
+            UserDefaults.standard.set(visualizerMode.rawValue, forKey: Keys.visualizerMode)
         }
     }
 
@@ -272,21 +300,21 @@ final class AppSettings {
     /// Whether to randomize preset selection (default: true, matches Winamp)
     var butterchurnRandomize: Bool = true {
         didSet {
-            UserDefaults.standard.set(butterchurnRandomize, forKey: "butterchurnRandomize")
+            UserDefaults.standard.set(butterchurnRandomize, forKey: Keys.butterchurnRandomize)
         }
     }
 
     /// Whether automatic preset cycling is enabled (default: true)
     var butterchurnCycling: Bool = true {
         didSet {
-            UserDefaults.standard.set(butterchurnCycling, forKey: "butterchurnCycling")
+            UserDefaults.standard.set(butterchurnCycling, forKey: Keys.butterchurnCycling)
         }
     }
 
     /// Preset cycle interval in seconds (default: 15s, Milkdrop standard)
     var butterchurnCycleInterval: Double = 15.0 {
         didSet {
-            UserDefaults.standard.set(butterchurnCycleInterval, forKey: "butterchurnCycleInterval")
+            UserDefaults.standard.set(butterchurnCycleInterval, forKey: Keys.butterchurnCycleInterval)
         }
     }
 
@@ -294,7 +322,7 @@ final class AppSettings {
     /// When > 0, track title is displayed at this interval automatically
     var butterchurnTrackTitleInterval: Double = 0 {
         didSet {
-            UserDefaults.standard.set(butterchurnTrackTitleInterval, forKey: "butterchurnTrackTitleInterval")
+            UserDefaults.standard.set(butterchurnTrackTitleInterval, forKey: Keys.butterchurnTrackTitleInterval)
         }
     }
 
@@ -305,9 +333,9 @@ final class AppSettings {
     /// - all: Loop entire playlist (Winamp repeat-all)
     /// - one: Repeat current track (shows "1" badge, Winamp repeat-one)
     enum RepeatMode: String, Codable, CaseIterable {
-        case off = "off"
-        case all = "all"
-        case one = "one"
+        case off
+        case all
+        case one
 
         /// Cycle to next mode (Winamp 5 Modern button behavior: Off → All → One → Off)
         func next() -> RepeatMode {
@@ -336,8 +364,7 @@ final class AppSettings {
     /// Note: Using didSet pattern to maintain @Observable reactivity
     var repeatMode: RepeatMode = .off {
         didSet {
-            UserDefaults.standard.set(repeatMode.rawValue, forKey: "repeatMode")
+            UserDefaults.standard.set(repeatMode.rawValue, forKey: Keys.repeatMode)
         }
     }
-
 }

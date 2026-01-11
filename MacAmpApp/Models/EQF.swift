@@ -1,6 +1,6 @@
 import Foundation
 
-struct EqfPreset: Codable {
+struct EqfPreset: Codable, Sendable {
     var name: String?
     var preampDB: Float // dB in range [-12, 12]
     var bandsDB: [Float] // 10 values (Winamp centers), dB in range [-12, 12]
