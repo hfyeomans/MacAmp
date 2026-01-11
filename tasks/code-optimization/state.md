@@ -223,6 +223,8 @@ Commits ahead: 0
   - **Test: PASSED** - playlist add/remove, navigation, shuffle, repeat modes ✅
   - **Note:** Streaming volume control limitation documented in placeholder.md (pre-existing)
   - Commit: `42bfb33`
+- Oracle fix: `d621902` (repeat-one restart)
+- **Repeat-one verified working** by user ✅
 
 ### 2026-01-10
 - Created `code-simplification` branch from `main`
