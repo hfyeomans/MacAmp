@@ -1581,3 +1581,61 @@ The `EQPresetStore` init and save methods perform file I/O synchronously on the 
 - ✅ PlaylistController returns pure actions (no side effects in navigation logic)
 - ✅ Bridge pattern (`handlePlaylistAction`) implemented as designed
 - ✅ All WinampPlaylistWindow call sites properly updated
+
+---
+
+## 16. Oracle 10/10 Verification (2026-01-11)
+
+**Model:** gpt-5.2-codex
+**Reasoning Effort:** xhigh
+
+### 16.1 Question: Will Fixing All Three Issues Achieve 10/10?
+
+**Oracle Response:** "Likely yes if those are the only remaining issues from the prior review; fixing all three should plausibly bring it to 10/10."
+
+**Caveat:** "A fresh pass might still surface new Swift 6 concurrency or API surface issues (e.g., Sendable violations, async init usage in SwiftUI, or missing tests around persistence). So '10/10' is contingent on no new findings after changes."
+
+### 16.2 Risk-Ordered Remediation
+
+| Priority | Issue | Risk | Reason |
+|----------|-------|------|--------|
+| 9.1 | Track coupling | Lowest | Mostly mechanical extraction |
+| 9.2 | pendingTrackURLs encapsulation | Medium | API changes, but localized |
+| 9.3 | EQPresetStore async I/O | Highest | Behavioral change, possible race/save ordering |
+
+**Recommended Order:** 9.1 → 9.2 → 9.3 (low risk first catches compile errors early)
+
+### 16.3 Key Implementation Guidance
+
+**Track Extraction:**
+- Move to `MacAmpApp/Models/Track.swift`
+- Avoid non-hashable AVFoundation members in model
+- Add `Sendable` conformance for Swift 6 readiness
+
+**pendingTrackURLs Encapsulation:**
+- Make private with accessor methods: `markPending`, `clearPending`, `isPending`
+- Direct access "defeats invariants and makes later refactors harder"
+
+**EQPresetStore Async I/O:**
+- Use `Task.detached(priority: .utility)` for file operations
+- Nonisolated static methods for actual I/O (Sendable-safe)
+- Fire-and-forget saves (no await needed for writes)
+- Call `loadPresets()` async after init
+
+### 16.4 Sendable Requirements
+
+Oracle warning: "`Task.detached` closures are `@Sendable`, so captured values must be `Sendable`. If `EQPreset` isn't `Sendable`, this will surface quickly."
+
+Action: Ensure `EQPreset` and `EqfPreset` are value types with only `Sendable` members, or add explicit conformance.
+
+### 16.5 Phase 9 Plan Status
+
+Full implementation plan documented in `plan.md` §Phase 9.
+
+**Estimated Effort:**
+- 9.1 Track extraction: ~15 min
+- 9.2 pendingTrackURLs: ~20 min
+- 9.3 EQPresetStore I/O: ~45 min
+- 9.4 Final Oracle review: ~10 min
+
+**Total:** ~90 minutes for 10/10 score

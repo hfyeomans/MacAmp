@@ -208,9 +208,10 @@ codex "@file1.swift @file2.swift Review these changes..."
 | Phase 8.0: Quick Fixes | ✅ Complete | 9/9 |
 | Phase 8.1: EQPresetStore | ✅ Complete | 9/9 |
 | Phase 8.2: MetadataLoader | ✅ Complete | 8/8 |
-| Phase 8.3: PlaylistController | ✅ Complete | 11/11 |
+| Phase 8.3: PlaylistController | ✅ Complete | 14/14 |
 | Phase 8.4-8.6: Remaining | ⏳ Pending | 0/20 |
-| **Total (1-8.3)** | **✅ COMPLETE** | **109/129** |
+| Phase 9: Quality Gate (10/10) | ⏳ Planned | 0/22 |
+| **Total (1-8.3)** | **✅ COMPLETE** | **112/154** |
 
 ### All Tasks Complete (Phases 1-7) ✅
 - [x] Git hooks configured
@@ -311,6 +312,9 @@ codex "@file1.swift @file2.swift Review these changes..."
 - [x] Update `WinampPlaylistWindow.swift` to use new API
 - [x] Build verification: SUCCEEDED
 - [x] Test: **PASSED** - playlist add/remove, navigation, shuffle, repeat modes ✅
+- [x] Commit: `42bfb33` "refactor: Extract PlaylistController from AudioPlayer (Phase 8.3)"
+- [x] Oracle review: gpt-5.2-codex (xhigh reasoning) - Score 8/10
+- [x] Fix: Repeat-one regression (commit `d621902`)
 
 ### 8.4 Phase 8d: Extract VideoPlaybackController (Medium Risk)
 
@@ -333,6 +337,50 @@ codex "@file1.swift @file2.swift Review these changes..."
 
 - [ ] Defer until Phases 8.1-8.5 are stable
 - [ ] Document architecture before proceeding
+
+---
+
+## Phase 9: Quality Gate Remediation (10/10 Score)
+
+**Oracle Review:** gpt-5.2-codex (xhigh reasoning)
+**Current Score:** 8/10 → **Target: 10/10**
+
+### 9.1 Extract Track Struct (Lowest Risk)
+
+- [ ] Create `MacAmpApp/Models/Track.swift`
+- [ ] Move Track struct from AudioPlayer.swift
+- [ ] Add Sendable conformance if needed
+- [ ] Update imports in AudioPlayer, PlaylistController
+- [ ] Build verification
+- [ ] Test: Playlist operations
+- [ ] Commit: "refactor: Extract Track struct to Models/ (Phase 9.1)"
+
+### 9.2 Encapsulate pendingTrackURLs (Medium Risk)
+
+- [ ] Make `pendingTrackURLs` private in PlaylistController
+- [ ] Add accessor methods: `markPending`, `clearPending`, `isPending`
+- [ ] Update AudioPlayer to use new API
+- [ ] Build verification
+- [ ] Test: Track loading, duplicate prevention
+- [ ] Commit: "refactor: Encapsulate pendingTrackURLs in PlaylistController (Phase 9.2)"
+
+### 9.3 Background I/O for EQPresetStore (Highest Risk)
+
+- [ ] Add async `loadPresets()` method
+- [ ] Convert `persistUserPresets()` to fire-and-forget Task.detached
+- [ ] Convert `savePerTrackPresets()` to fire-and-forget Task.detached
+- [ ] Add nonisolated static I/O methods
+- [ ] Update AudioPlayer init to call async load
+- [ ] Ensure EQPreset/EqfPreset are Sendable
+- [ ] Build verification
+- [ ] Test: Preset save/load, import EQF, per-track presets
+- [ ] Commit: "refactor: Background I/O for EQPresetStore (Phase 9.3)"
+
+### 9.4 Final Oracle Review
+
+- [ ] Run Oracle review with gpt-5.2-codex (xhigh)
+- [ ] Confirm score is 10/10
+- [ ] Document any new findings
 
 ### 8.4 Verification Checklist
 
