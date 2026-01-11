@@ -351,10 +351,36 @@ codex "@file1.swift @file2.swift Review these changes..."
 - [x] Test: Spectrum analyzer, oscilloscope, Butterchurn ✅ (user verified)
 - [x] Commit: `9489d76` "refactor: Extract VisualizerPipeline from AudioPlayer (Phase 8.5)"
 
-### 8.6 Phase 8f: AudioEngineController (DEFER DECISION)
+### 8.6 Phase 8f: AudioEngineController (DEFERRED - Evaluate After Phase 9)
 
-- [ ] Defer until Phases 8.1-8.5 are stable
-- [ ] Document architecture before proceeding
+**Oracle Analysis:** gpt-5.2-codex (high reasoning) - 2026-01-11
+**Risk Level:** ★★★★★ (HIGHEST)
+**Recommendation:** Do NOT proceed until Phase 9 complete
+
+#### What Would Move (~450-500 lines)
+- Engine objects: audioEngine, playerNode, eqNode, audioFile
+- Engine wiring: setupEngine, rewireForCurrentFile, configureEQ
+- Scheduling: scheduleFrom, startEngineIfNeeded
+- Seek guards: currentSeekID, seekGuardActive, isHandlingCompletion
+- Progress timer lifecycle
+
+#### Key Risks
+- **Seek guards crossing class boundaries** - "old segment completion fires after stop" bug protection
+- **Engine graph lifecycle** - rewireForCurrentFile uses specific order to avoid assertions
+- **Tap installation timing** - must install after engine starts, before playback
+- **Audio/Video branching** - play/pause/seek interwoven with media type routing
+
+#### Limited Benefits
+- Testability: Limited - AVAudioEngine is hardware-bound
+- Swift 6.2: Minimal - still @MainActor, no @concurrent opportunity
+- Maintainability: Mixed - smaller class, but more delegation overhead
+
+#### Decision Checklist
+- [x] Oracle analysis complete
+- [x] Risk/benefit evaluated: unfavorable
+- [x] Decision: Complete Phase 9 first
+- [ ] Re-evaluate after Phase 9 (may be unnecessary)
+- [ ] If proceeding: add integration tests for seek/stop/track-advance FIRST
 
 ---
 

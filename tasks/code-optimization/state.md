@@ -26,7 +26,7 @@
 [✅] Phase 8.3     - PlaylistController Extraction (complete)
 [✅] Phase 8.4     - VideoPlaybackController Extraction (complete)
 [✅] Phase 8.5     - VisualizerPipeline Extraction (complete)
-[⏳] Phase 8.6     - AudioEngineController (DEFER DECISION)
+[⏸️] Phase 8.6     - AudioEngineController (DEFERRED - evaluate after Phase 9)
 ```
 
 ---
@@ -285,6 +285,15 @@ Commits ahead: 0
   - Low priority: AppSettings per-frame lookup hidden dependency
   - **Deferred to Phase 9:** All Oracle findings (quality gate phase)
   - Commit: `9489d76`
+- **Phase 8.6 Oracle Analysis:** AudioEngineController extraction evaluated
+  - Oracle model: gpt-5.2-codex (high reasoning)
+  - Risk level: ★★★★★ (HIGHEST) - seek guards, engine lifecycle, tap installation
+  - Estimated extraction: ~450-500 lines
+  - Remaining AudioPlayer: ~500-600 lines
+  - **Recommendation:** Do NOT proceed - risk/benefit ratio unfavorable
+  - **Decision:** Complete Phase 9 first, then re-evaluate
+  - Key risks: seek guards crossing class boundaries, engine graph assertions, tap timing
+  - Limited benefits: AVAudioEngine still @MainActor, minimal testability gain
 
 ### 2026-01-10
 - Created `code-simplification` branch from `main`
