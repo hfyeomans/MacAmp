@@ -209,9 +209,10 @@ codex "@file1.swift @file2.swift Review these changes..."
 | Phase 8.1: EQPresetStore | ✅ Complete | 9/9 |
 | Phase 8.2: MetadataLoader | ✅ Complete | 8/8 |
 | Phase 8.3: PlaylistController | ✅ Complete | 14/14 |
-| Phase 8.4-8.6: Remaining | ⏳ Pending | 0/20 |
+| Phase 8.4: VideoPlaybackController | ✅ Complete | 15/15 |
+| Phase 8.5-8.6: Remaining | ⏳ Pending | 0/12 |
 | Phase 9: Quality Gate (10/10) | ⏳ Planned | 0/22 |
-| **Total (1-8.3)** | **✅ COMPLETE** | **112/154** |
+| **Total (1-8.4)** | **✅ COMPLETE** | **127/166** |
 
 ### All Tasks Complete (Phases 1-7) ✅
 - [x] Git hooks configured
@@ -316,12 +317,23 @@ codex "@file1.swift @file2.swift Review these changes..."
 - [x] Oracle review: gpt-5.2-codex (xhigh reasoning) - Score 8/10
 - [x] Fix: Repeat-one regression (commit `d621902`)
 
-### 8.4 Phase 8d: Extract VideoPlaybackController (Medium Risk)
+### 8.4 Phase 8d: Extract VideoPlaybackController (Medium Risk) ✅ COMPLETE
 
-- [ ] Create `MacAmpApp/Audio/VideoPlaybackController.swift`
-- [ ] Move video playback state and methods
-- [ ] Build verification
-- [ ] Test: Video playback, aspect ratio, controls
+- [x] Create `MacAmpApp/Audio/VideoPlaybackController.swift`
+- [x] Move video playback state: player, isPlaying, isPaused, currentTime, duration, progress, volume
+- [x] Move video methods: loadVideo, play, pause, stop, seek, seekToPercent
+- [x] Move observer management: setupTimeObserver, tearDownTimeObserver, endObserver
+- [x] Add callback pattern: onPlaybackEnded, onTimeUpdate
+- [x] Add computed forwarding in AudioPlayer: videoPlayer, videoMetadataString
+- [x] Wire volume sync in AudioPlayer didSet
+- [x] Setup callbacks in AudioPlayer init
+- [x] Update play/pause/stop/seek to delegate to videoPlaybackController
+- [x] Remove old video methods from AudioPlayer
+- [x] Add to Xcode project (manually edited project.pbxproj)
+- [x] Build verification: SUCCEEDED
+- [x] Test: Video playback, seeking, controls, metadata, volume, time display ✅
+- [x] Bug fix: Time display not updating (added onTimeUpdate callback)
+- [x] Oracle review: gpt-5.2-codex (xhigh) - Score 7.5/10
 
 ### 8.5 Phase 8e: Extract VisualizerPipeline (HIGH RISK - LAST)
 

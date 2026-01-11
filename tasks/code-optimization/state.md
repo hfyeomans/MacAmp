@@ -24,7 +24,7 @@
 [✅] Phase 8.1     - EQPresetStore Extraction (complete)
 [✅] Phase 8.2     - MetadataLoader Extraction (complete)
 [✅] Phase 8.3     - PlaylistController Extraction (complete)
-[⏳] Phase 8.4     - VideoPlaybackController Extraction (Medium Risk)
+[✅] Phase 8.4     - VideoPlaybackController Extraction (complete)
 [⏳] Phase 8.5     - VisualizerPipeline Extraction (HIGH RISK - LAST)
 [⏳] Phase 8.6     - AudioEngineController (DEFER DECISION)
 ```
@@ -40,6 +40,7 @@
 | `MacAmpApp/Audio/EQPresetStore.swift` | ✅ Created | Extracted EQ preset persistence (96 lines) |
 | `MacAmpApp/Audio/MetadataLoader.swift` | ✅ Created | Extracted metadata loading (171 lines) |
 | `MacAmpApp/Audio/PlaylistController.swift` | ✅ Created | Extracted playlist state and navigation (260 lines) |
+| `MacAmpApp/Audio/VideoPlaybackController.swift` | ✅ Created | Extracted video playback lifecycle (259 lines) |
 | `MacAmpApp/Views/WinampPlaylistWindow.swift` | ✅ Updated | Updated to use new playlist API |
 | `MacAmpApp/Models/AppSettings.swift` | ✅ Done | Swift 6 `URL.cachesDirectory`; `Keys` enum; Redundant enum values removed |
 | `MacAmpApp/Views/EqGraphView.swift` | ✅ Done | Guard chain for `tiffRepresentation`; Fixed `min(0,...)` bug |
@@ -102,6 +103,18 @@
 | Cumulative reduction | **252 lines** | 179 | -14.0% from 1,805 |
 | Build status | **SUCCEEDED** | Pass | ✅ |
 | Test status | **PASSED** | - | User verified ✅ |
+
+### After Phase 8.4 ✅
+| Metric | Value | Previous | Change |
+|--------|-------|----------|--------|
+| AudioPlayer.swift lines | **1,434** | 1,553 | -119 (-7.7%) |
+| New files extracted | **4** | 3 | +VideoPlaybackController.swift |
+| VideoPlaybackController.swift lines | **259** | N/A | New file |
+| VideoPlaybackController.swift violations | **0** | N/A | Clean |
+| Cumulative reduction | **371 lines** | 252 | -20.6% from 1,805 |
+| Build status | **SUCCEEDED** | Pass | ✅ |
+| Test status | **PASSED** | - | User verified ✅ |
+| Oracle score | **7.5/10** | 8/10 | Medium priority issues (cleanup lifecycle) |
 
 ---
 
@@ -225,6 +238,20 @@ Commits ahead: 0
   - Commit: `42bfb33`
 - Oracle fix: `d621902` (repeat-one restart)
 - **Repeat-one verified working** by user ✅
+- **Phase 8.4 Complete:** VideoPlaybackController extracted from AudioPlayer
+  - Created `MacAmpApp/Audio/VideoPlaybackController.swift` (259 lines, 0 SwiftLint violations)
+  - Extracted: AVPlayer lifecycle, time/end observers, video playback state
+  - Callback pattern for cross-component sync (onPlaybackEnded, onTimeUpdate)
+  - AudioPlayer reduced from 1,553 to 1,434 lines (-119 lines, -7.7%)
+  - Cumulative: 1,805 → 1,434 lines (-371, -20.6%)
+  - Build: SUCCEEDED
+  - **Bug found & fixed:** Time display not updating during video playback
+    - Root cause: VideoPlaybackController updated internal state but AudioPlayer UI-bound properties weren't synced
+    - Fix: Added `onTimeUpdate` callback to sync currentTime, currentDuration, playbackProgress
+  - **Test: PASSED** - video playback, seeking, controls, metadata, volume, time display ✅
+  - Oracle review: gpt-5.2-codex (xhigh reasoning) - Score 7.5/10
+  - Medium priority findings: cleanup() not called in deinit, stale state after cleanup()
+  - Low priority: metadata race condition, bridge layer label inconsistency
 
 ### 2026-01-10
 - Created `code-simplification` branch from `main`
