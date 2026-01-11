@@ -23,7 +23,7 @@
 [✅] Phase 8.0     - Quick Fixes (complete)
 [✅] Phase 8.1     - EQPresetStore Extraction (complete)
 [✅] Phase 8.2     - MetadataLoader Extraction (complete)
-[⏳] Phase 8.3     - PlaylistController Extraction (Low Risk)
+[✅] Phase 8.3     - PlaylistController Extraction (complete)
 [⏳] Phase 8.4     - VideoPlaybackController Extraction (Medium Risk)
 [⏳] Phase 8.5     - VisualizerPipeline Extraction (HIGH RISK - LAST)
 [⏳] Phase 8.6     - AudioEngineController (DEFER DECISION)
@@ -36,9 +36,11 @@
 | File | Status | Changes Made |
 |------|--------|--------------|
 | `MacAmpApp/Models/SnapUtils.swift` | ✅ Done | Lines 71-72, 153-154: `Optional.map` pattern |
-| `MacAmpApp/Audio/AudioPlayer.swift` | ✅ Done | Phase 8.0: SwiftLint quick fixes; Phase 8.1: EQPresetStore extraction; Phase 8.2: MetadataLoader extraction |
-| `MacAmpApp/Audio/EQPresetStore.swift` | ✅ Created | Extracted EQ preset persistence from AudioPlayer (96 lines) |
-| `MacAmpApp/Audio/MetadataLoader.swift` | ✅ Created | Extracted metadata loading (track, audio, video) from AudioPlayer (171 lines) |
+| `MacAmpApp/Audio/AudioPlayer.swift` | ✅ Done | Phase 8.0-8.3: SwiftLint, EQPresetStore, MetadataLoader, PlaylistController |
+| `MacAmpApp/Audio/EQPresetStore.swift` | ✅ Created | Extracted EQ preset persistence (96 lines) |
+| `MacAmpApp/Audio/MetadataLoader.swift` | ✅ Created | Extracted metadata loading (171 lines) |
+| `MacAmpApp/Audio/PlaylistController.swift` | ✅ Created | Extracted playlist state and navigation (260 lines) |
+| `MacAmpApp/Views/WinampPlaylistWindow.swift` | ✅ Updated | Updated to use new playlist API |
 | `MacAmpApp/Models/AppSettings.swift` | ✅ Done | Swift 6 `URL.cachesDirectory`; `Keys` enum; Redundant enum values removed |
 | `MacAmpApp/Views/EqGraphView.swift` | ✅ Done | Guard chain for `tiffRepresentation`; Fixed `min(0,...)` bug |
 | `.swiftlint.yml` | ✅ Created | Full config with 21 validated rules |
@@ -89,6 +91,17 @@
 | MetadataLoader.swift lines | **171** | N/A | New file |
 | MetadataLoader.swift violations | **0** | N/A | Clean |
 | Build status | **SUCCEEDED** | Pass | ✅ |
+
+### After Phase 8.3 ✅
+| Metric | Value | Previous | Change |
+|--------|-------|----------|--------|
+| AudioPlayer.swift lines | **1,553** | 1,626 | -73 (-4.5%) |
+| New files extracted | **3** | 2 | +PlaylistController.swift |
+| PlaylistController.swift lines | **260** | N/A | New file |
+| PlaylistController.swift violations | **0** | N/A | Clean |
+| Cumulative reduction | **252 lines** | 179 | -14.0% from 1,805 |
+| Build status | **SUCCEEDED** | Pass | ✅ |
+| Test status | **PASSED** | - | User verified ✅ |
 
 ---
 
@@ -190,6 +203,17 @@ Commits ahead: 0
   - Build: SUCCEEDED
   - **Test: PASSED** - metadata display, bitrate/sample rate info verified
   - Commit: `306f960`
+- **Phase 8.3 Complete:** PlaylistController extracted from AudioPlayer
+  - Created `MacAmpApp/Audio/PlaylistController.swift` (260 lines, 0 SwiftLint violations)
+  - Extracted: `playlist`, `shuffleEnabled`, `hasEnded`, navigation methods
+  - Pure navigation logic with `AdvanceAction` return type (no side effects)
+  - AudioPlayer handles actions via `handlePlaylistAction(_:)` bridge method
+  - Updated `WinampPlaylistWindow.swift` to use new API (`addStreamTrack`, `removeTrack`, etc.)
+  - AudioPlayer reduced from 1,626 to 1,553 lines (-73 lines, -4.5%)
+  - Cumulative: 1,805 → 1,553 lines (-252, -14.0%)
+  - Build: SUCCEEDED
+  - **Test: PASSED** - playlist add/remove, navigation, shuffle, repeat modes ✅
+  - **Note:** Streaming volume control limitation documented in placeholder.md (pre-existing)
 
 ### 2026-01-10
 - Created `code-simplification` branch from `main`

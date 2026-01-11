@@ -208,8 +208,9 @@ codex "@file1.swift @file2.swift Review these changes..."
 | Phase 8.0: Quick Fixes | ✅ Complete | 9/9 |
 | Phase 8.1: EQPresetStore | ✅ Complete | 9/9 |
 | Phase 8.2: MetadataLoader | ✅ Complete | 8/8 |
-| Phase 8.3-8.6: Remaining | ⏳ Pending | 0/20 |
-| **Total (1-8.2)** | **✅ COMPLETE** | **98/118** |
+| Phase 8.3: PlaylistController | ✅ Complete | 11/11 |
+| Phase 8.4-8.6: Remaining | ⏳ Pending | 0/20 |
+| **Total (1-8.3)** | **✅ COMPLETE** | **109/129** |
 
 ### All Tasks Complete (Phases 1-7) ✅
 - [x] Git hooks configured
@@ -297,12 +298,19 @@ codex "@file1.swift @file2.swift Review these changes..."
 - [x] Test: PASSED - metadata display, bitrate/sample rate info verified
 - [x] Commit: `306f960` "refactor: Extract MetadataLoader from AudioPlayer (Phase 8.2)"
 
-### 8.3 Phase 8c: Extract PlaylistController (Low Risk)
+### 8.3 Phase 8c: Extract PlaylistController (Low Risk) ✅ COMPLETE
 
-- [ ] Create `MacAmpApp/Audio/PlaylistController.swift`
-- [ ] Move playlist manipulation methods
-- [ ] Build verification
-- [ ] Test: Add/remove tracks, shuffle, navigation
+- [x] Create `MacAmpApp/Audio/PlaylistController.swift`
+- [x] Add `@MainActor @Observable final class PlaylistController`
+- [x] Extract state: `playlist`, `currentIndex`, `shuffleEnabled`, `hasEnded`, `pendingTrackURLs`
+- [x] Extract operations: `addTrack`, `addPlaceholder`, `replacePlaceholder`, `removeTrack`, `clear`
+- [x] Extract navigation: `nextTrack`, `previousTrack`, `updatePosition`, `selectTrack`
+- [x] Define `AdvanceAction` enum (pure logic, no side effects)
+- [x] Add forwarding methods to AudioPlayer: `addStreamTrack`, `removeTrack`, `replacePlaylist`, `clearPlaylist`
+- [x] Update AudioPlayer to use `handlePlaylistAction(_:)` bridge
+- [x] Update `WinampPlaylistWindow.swift` to use new API
+- [x] Build verification: SUCCEEDED
+- [x] Test: **PASSED** - playlist add/remove, navigation, shuffle, repeat modes ✅
 
 ### 8.4 Phase 8d: Extract VideoPlaybackController (Medium Risk)
 

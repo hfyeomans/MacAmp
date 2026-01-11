@@ -257,10 +257,8 @@ final class AudioPlayer {
     private(set) var isPaused: Bool = false
     @ObservationIgnored private var currentSeekID: UUID = UUID() // Identifies which seek operation scheduled the current audio
     @ObservationIgnored private var isHandlingCompletion = false // Prevents re-entrant onPlaybackEnded calls
-    @ObservationIgnored private var trackHasEnded = false // Tracks when playlist has finished
     @ObservationIgnored private var seekGuardActive = false
     @ObservationIgnored private var autoEQTask: Task<Void, Never>?
-    @ObservationIgnored private var pendingTrackURLs = Set<URL>()
     var currentTrackURL: URL? // Placeholder for the currently playing track
     var currentTitle: String = "No Track Loaded"
     var currentDuration: Double = 0.0
@@ -279,11 +277,17 @@ final class AudioPlayer {
         didSet { playerNode.pan = balance }
     }
 
-    var playlist: [Track] = [] // New: List of tracks
-    var currentTrack: Track? // New: Currently playing track
-    @ObservationIgnored private var currentPlaylistIndex: Int?
+    // Playlist management (extracted to separate controller)
+    let playlistController = PlaylistController()
+
+    // Computed forwarding for backwards compatibility
+    var playlist: [Track] { playlistController.playlist }
+    var currentTrack: Track? // Currently playing track (owned by AudioPlayer for playback state)
     var externalPlaybackHandler: ((Track) -> Void)?
-    var shuffleEnabled: Bool = false
+    var shuffleEnabled: Bool {
+        get { playlistController.shuffleEnabled }
+        set { playlistController.shuffleEnabled = newValue }
+    }
 
     // Video playback support
     var videoPlayer: AVPlayer?
@@ -370,14 +374,14 @@ final class AudioPlayer {
     func addTrack(url: URL) {
         let normalizedURL = url.standardizedFileURL
 
-        let duplicateInPlaylist = playlist.contains { $0.url.standardizedFileURL == normalizedURL }
-        if duplicateInPlaylist || pendingTrackURLs.contains(normalizedURL) {
+        // Check for duplicates using playlistController
+        if playlistController.containsTrack(url: normalizedURL) {
             AppLog.debug(.audio, "Track already pending or in playlist: \(normalizedURL.lastPathComponent)")
             return
         }
 
         AppLog.debug(.audio, "Adding track from \(normalizedURL.lastPathComponent)")
-        pendingTrackURLs.insert(normalizedURL)
+        playlistController.pendingTrackURLs.insert(normalizedURL)
 
         let placeholder = Track(
             url: normalizedURL,
@@ -388,8 +392,7 @@ final class AudioPlayer {
 
         let shouldAutoplay = currentTrack == nil
 
-        playlist.append(placeholder)
-        AppLog.debug(.audio, "Queued placeholder '\(placeholder.title)' (total: \(playlist.count) tracks)")
+        playlistController.addPlaceholder(placeholder)
 
         if shouldAutoplay {
             playTrack(track: placeholder)
@@ -397,17 +400,14 @@ final class AudioPlayer {
 
         Task { @MainActor [weak self] in
             guard let self else { return }
-            defer { self.pendingTrackURLs.remove(normalizedURL) }
+            defer { self.playlistController.pendingTrackURLs.remove(normalizedURL) }
 
             AppLog.debug(.audio, "Loading metadata for \(normalizedURL.lastPathComponent)")
             let metadata = await MetadataLoader.loadTrackMetadata(from: normalizedURL)
             let track = Track(url: normalizedURL, title: metadata.title, artist: metadata.artist, duration: metadata.duration)
             AppLog.debug(.audio, "Metadata loaded - title: '\(track.title)', artist: '\(track.artist)', duration: \(track.duration)s")
 
-            if let index = self.playlist.firstIndex(where: { $0.id == placeholder.id }) {
-                AppLog.debug(.audio, "Updating placeholder at index \(index)")
-                self.playlist[index] = track
-
+            if self.playlistController.replacePlaceholder(id: placeholder.id, with: track) {
                 if self.currentTrack?.id == placeholder.id {
                     AppLog.debug(.audio, "Updating current track metadata")
                     self.currentTrack = track
@@ -418,13 +418,34 @@ final class AudioPlayer {
                     // Notify coordinator that metadata updated
                     self.externalPlaybackHandler?(track)
                 }
-            } else if !self.playlist.contains(where: { $0.url.standardizedFileURL == normalizedURL }) {
-                AppLog.debug(.audio, "Appending track to playlist")
-                self.playlist.append(track)
+            } else if !self.playlistController.containsTrack(url: normalizedURL) {
+                self.playlistController.addTrack(track)
             }
-
-            AppLog.debug(.audio, "Added '\(track.title)' to playlist (total: \(self.playlist.count) tracks)")
         }
+    }
+
+    /// Add a stream track directly to the playlist (no metadata loading)
+    func addStreamTrack(_ track: Track) {
+        playlistController.addTrack(track)
+    }
+
+    /// Remove a track at the specified index
+    func removeTrack(at index: Int) {
+        playlistController.removeTrack(at: index)
+    }
+
+    /// Replace the entire playlist with the specified tracks
+    func replacePlaylist(with tracks: [Track]) {
+        playlistController.clear()
+        for track in tracks {
+            playlistController.addTrack(track)
+        }
+        AppLog.debug(.audio, "Replaced playlist with \(tracks.count) tracks")
+    }
+
+    /// Clear all tracks from the playlist
+    func clearPlaylist() {
+        playlistController.clear()
     }
 
     /// Play an EXISTING track from the playlist
@@ -461,7 +482,7 @@ final class AudioPlayer {
         playbackProgress = 0
         transition(to: .preparing)
         seekGuardActive = false
-        trackHasEnded = false  // Reset playlist end flag
+        playlistController.resetEnded()  // Reset playlist end flag
 
         AppLog.info(.audio, "Playing track '\(track.title)'")
 
@@ -631,7 +652,7 @@ final class AudioPlayer {
 
     func play() {
         // If playlist has ended, restart from the beginning
-        if trackHasEnded && !playlist.isEmpty {
+        if playlistController.hasEnded && !playlist.isEmpty {
             playTrack(track: playlist[0])
             return
         }
@@ -734,14 +755,13 @@ final class AudioPlayer {
     func eject() {
         stop()
         transition(to: .stopped(.ejected))
-        playlist.removeAll()
+        playlistController.clear()
         currentTrack = nil
         currentTrackURL = nil
         currentTitle = "No Track Loaded"
         currentDuration = 0.0
         currentTime = 0.0
         playbackProgress = 0.0
-        trackHasEnded = false
         appliedAutoPresetTrack = nil
         audioFile = nil
         bitrate = 0
@@ -1472,6 +1492,8 @@ final class AudioPlayer {
     }
 
     // MARK: - Playlist navigation
+
+    /// Action types returned by playlist navigation (for PlaybackCoordinator)
     enum PlaylistAdvanceAction {
         case none
         case restartCurrent
@@ -1479,148 +1501,53 @@ final class AudioPlayer {
         case requestCoordinatorPlayback(Track)
     }
 
+    /// Update playlist position after playing a track
     func updatePlaylistPosition(with track: Track?) {
-        guard let track else {
-            currentPlaylistIndex = nil
-            return
-        }
-
-        if let index = playlist.firstIndex(of: track) {
-            currentPlaylistIndex = index
-            trackHasEnded = false
-        } else {
-            currentPlaylistIndex = nil
-        }
+        playlistController.updatePosition(with: track)
     }
 
+    /// Advance to next track in playlist
+    /// - Parameter isManualSkip: Whether this is a user-initiated skip (affects repeat-one behavior)
+    /// - Returns: Action for PlaybackCoordinator to handle
     @discardableResult
     func nextTrack(isManualSkip: Bool = false) -> PlaylistAdvanceAction {
-        guard !playlist.isEmpty else { return .none }
+        // Sync current track with playlistController before navigation
+        playlistController.updatePosition(with: currentTrack)
 
-        trackHasEnded = false
-
-        // ──────────────────────────────────────
-        // WINAMP 5 REPEAT MODE LOGIC
-        // ──────────────────────────────────────
-        // Repeat-one: Only auto-restart on track end, allow manual skips
-        if repeatMode == .one && !isManualSkip {
-            // Auto-advance (track ended naturally): restart current track
-            guard let current = currentTrack else { return .none }
-
-            if current.isStream {
-                // Internet radio: reload via coordinator
-                return .requestCoordinatorPlayback(current)
-            } else {
-                // Local file: seek to beginning and resume
-                seek(to: 0, resume: true)
-                return .playLocally(current)
-            }
-        }
-        // Manual skip OR modes .off/.all: continue with normal advancement logic below
-
-        if shuffleEnabled {
-            guard let randomTrack = playlist.randomElement(),
-                  let randomIndex = playlist.firstIndex(of: randomTrack) else {
-                return .none
-            }
-
-            currentPlaylistIndex = randomIndex
-            trackHasEnded = false
-            if randomTrack.isStream {
-                return .requestCoordinatorPlayback(randomTrack)
-            }
-
-            playTrack(track: randomTrack)
-            return .playLocally(randomTrack)
-        }
-
-        let activeIndex: Int
-        if let index = currentPlaylistIndex {
-            activeIndex = index
-        } else if let current = currentTrack, let index = playlist.firstIndex(of: current) {
-            activeIndex = index
-            currentPlaylistIndex = index
-        } else {
-            activeIndex = -1
-        }
-
-        let nextIndex = activeIndex + 1
-        if nextIndex < playlist.count {
-            let track = playlist[nextIndex]
-            currentPlaylistIndex = nextIndex
-            trackHasEnded = false
-            if track.isStream {
-                return .requestCoordinatorPlayback(track)
-            }
-
-            playTrack(track: track)
-            return .playLocally(track)
-        }
-
-        // End of playlist reached - handle based on repeat mode
-        if repeatMode == .all {
-            // Winamp 5 repeat-all: wrap to first track
-            let track = playlist[0]
-            currentPlaylistIndex = 0
-            trackHasEnded = false
-            if track.isStream {
-                return .requestCoordinatorPlayback(track)
-            }
-
-            playTrack(track: track)
-            return .playLocally(track)
-        }
-
-        // Repeat mode .off: stop at playlist end
-        trackHasEnded = true
-        currentPlaylistIndex = nil
-        return .none
+        let action = playlistController.nextTrack(isManualSkip: isManualSkip)
+        return handlePlaylistAction(action)
     }
 
+    /// Go to previous track in playlist
+    /// - Returns: Action for PlaybackCoordinator to handle
     @discardableResult
     func previousTrack() -> PlaylistAdvanceAction {
-        guard !playlist.isEmpty else { return .none }
+        // Sync current track with playlistController before navigation
+        playlistController.updatePosition(with: currentTrack)
 
-        if shuffleEnabled {
-            guard let track = playlist.randomElement(),
-                  let index = playlist.firstIndex(of: track) else {
-                return .none
-            }
+        let action = playlistController.previousTrack()
+        return handlePlaylistAction(action)
+    }
 
-            currentPlaylistIndex = index
-            trackHasEnded = false
-            if track.isStream {
-                return .requestCoordinatorPlayback(track)
-            }
+    /// Handle action returned from PlaylistController
+    private func handlePlaylistAction(_ action: PlaylistController.AdvanceAction) -> PlaylistAdvanceAction {
+        switch action {
+        case .none:
+            return .none
 
+        case .restartCurrent:
+            seek(to: 0, resume: isPlaying)
+            return .restartCurrent
+
+        case .playTrack(let track):
             playTrack(track: track)
             return .playLocally(track)
-        }
 
-        let activeIndex: Int
-        if let index = currentPlaylistIndex {
-            activeIndex = index
-        } else if let current = currentTrack, let index = playlist.firstIndex(of: current) {
-            activeIndex = index
-            currentPlaylistIndex = index
-        } else {
+        case .requestCoordinatorPlayback(let track):
+            return .requestCoordinatorPlayback(track)
+
+        case .endOfPlaylist:
             return .none
         }
-
-        if activeIndex > 0 {
-            let previousIndex = playlist.index(before: activeIndex)
-            let track = playlist[previousIndex]
-            currentPlaylistIndex = previousIndex
-            trackHasEnded = false
-            if track.isStream {
-                return .requestCoordinatorPlayback(track)
-            }
-
-            playTrack(track: track)
-            return .playLocally(track)
-        }
-
-        seek(to: 0, resume: isPlaying)
-        return .restartCurrent
     }
 }

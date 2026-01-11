@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		848E5CDF982D4B08A90D8B5E /* PlaylistController.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBD01B167E2D416C9691AC8C /* PlaylistController.swift */; };
 		00818CBB70425D395EE2B862 /* SkinnedText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DCDB09162242F5E73FF35F6 /* SkinnedText.swift */; };
 		09ABEB45DA77F1178E0F5317 /* SkinManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97F3E1419E231E886A674A64 /* SkinManager.swift */; };
 		0E00109AB5375E26C755CA89 /* M3UEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31F32D02E5A363D621708145 /* M3UEntry.swift */; };
@@ -189,6 +190,7 @@
 		BC875DDD2BE621229D463CB9 /* AudioPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlayer.swift; sourceTree = "<group>"; };
 		39D077A9CAF04C95BAF984F6 /* MetadataLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataLoader.swift; sourceTree = "<group>"; };
 		BE2906FB25D545309B1FD395 /* EQPresetStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EQPresetStore.swift; sourceTree = "<group>"; };
+		EBD01B167E2D416C9691AC8C /* PlaylistController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaylistController.swift; sourceTree = "<group>"; };
 		BC98BCD0ED814A6F90A8021D /* RadioStationLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadioStationLibrary.swift; sourceTree = "<group>"; };
 		C32D1ED0603B1A1497664E37 /* MacAmpApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacAmpApp.swift; sourceTree = "<group>"; };
 		CABDEB04D5D23C3DAAAFEEFC /* PlaylistTimeText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaylistTimeText.swift; sourceTree = "<group>"; };
@@ -323,6 +325,7 @@
 				BC875DDD2BE621229D463CB9 /* AudioPlayer.swift */,
 				39D077A9CAF04C95BAF984F6 /* MetadataLoader.swift */,
 				BE2906FB25D545309B1FD395 /* EQPresetStore.swift */,
+				EBD01B167E2D416C9691AC8C /* PlaylistController.swift */,
 			);
 			path = Audio;
 			sourceTree = "<group>";
@@ -621,7 +624,9 @@
 				73A21EA6B7FEBC3B30A7943C /* ButterchurnWebView.swift in Sources */,
 			
 				E78F06DB7035402FA285F0CE /* EQPresetStore.swift in Sources */,
-				46CCD694793E413E9EA00B35 /* MetadataLoader.swift in Sources */,);
+				46CCD694793E413E9EA00B35 /* MetadataLoader.swift in Sources */,
+				848E5CDF982D4B08A90D8B5E /* PlaylistController.swift in Sources */,
+			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		A8F1C1A0F5D7413A9A0B0201 /* Sources */ = {
