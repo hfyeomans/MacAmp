@@ -22,7 +22,7 @@
 [✅] Phase 7       - Swift 6 Modernization (complete)
 [✅] Phase 8.0     - Quick Fixes (complete)
 [✅] Phase 8.1     - EQPresetStore Extraction (complete)
-[⏳] Phase 8.2     - MetadataLoader Extraction (Low Risk)
+[✅] Phase 8.2     - MetadataLoader Extraction (complete)
 [⏳] Phase 8.3     - PlaylistController Extraction (Low Risk)
 [⏳] Phase 8.4     - VideoPlaybackController Extraction (Medium Risk)
 [⏳] Phase 8.5     - VisualizerPipeline Extraction (HIGH RISK - LAST)
@@ -36,8 +36,9 @@
 | File | Status | Changes Made |
 |------|--------|--------------|
 | `MacAmpApp/Models/SnapUtils.swift` | ✅ Done | Lines 71-72, 153-154: `Optional.map` pattern |
-| `MacAmpApp/Audio/AudioPlayer.swift` | ✅ Done | Line 907: `flatMap`; Line 1178: local timer capture; Line 898-924: `Task.detached` for file I/O; Phase 8.0: SwiftLint quick fixes; Phase 8.1: EQPresetStore extraction |
+| `MacAmpApp/Audio/AudioPlayer.swift` | ✅ Done | Phase 8.0: SwiftLint quick fixes; Phase 8.1: EQPresetStore extraction; Phase 8.2: MetadataLoader extraction |
 | `MacAmpApp/Audio/EQPresetStore.swift` | ✅ Created | Extracted EQ preset persistence from AudioPlayer (96 lines) |
+| `MacAmpApp/Audio/MetadataLoader.swift` | ✅ Created | Extracted metadata loading (track, audio, video) from AudioPlayer (171 lines) |
 | `MacAmpApp/Models/AppSettings.swift` | ✅ Done | Swift 6 `URL.cachesDirectory`; `Keys` enum; Redundant enum values removed |
 | `MacAmpApp/Views/EqGraphView.swift` | ✅ Done | Guard chain for `tiffRepresentation`; Fixed `min(0,...)` bug |
 | `.swiftlint.yml` | ✅ Created | Full config with 21 validated rules |
@@ -78,6 +79,15 @@
 | AudioPlayer SwiftLint violations | **7** | 16 | -9 (quick fixes) |
 | New files extracted | **1** | 0 | EQPresetStore.swift |
 | EQPresetStore.swift violations | **0** | N/A | Clean |
+| Build status | **SUCCEEDED** | Pass | ✅ |
+
+### After Phase 8.2 ✅
+| Metric | Value | Previous | Change |
+|--------|-------|----------|--------|
+| AudioPlayer.swift lines | **1,626** | 1,709 | -83 (-4.9%) |
+| New files extracted | **2** | 1 | +MetadataLoader.swift |
+| MetadataLoader.swift lines | **171** | N/A | New file |
+| MetadataLoader.swift violations | **0** | N/A | Clean |
 | Build status | **SUCCEEDED** | Pass | ✅ |
 
 ---
@@ -172,6 +182,13 @@ Commits ahead: 0
   - **Test: PASSED** - save/load presets, per-track presets verified
   - **Note:** Auto EQ `generateAutoPreset` is a pre-existing stub (not a regression)
   - Commit: `eb7f501`
+- **Phase 8.2 Complete:** MetadataLoader extracted from AudioPlayer
+  - Created `MacAmpApp/Audio/MetadataLoader.swift` (171 lines, 0 SwiftLint violations)
+  - Extracted: `loadTrackMetadata`, `loadAudioProperties`, `loadVideoMetadata`
+  - Pure `nonisolated struct` with static async methods (Swift 6.2 ready)
+  - AudioPlayer reduced from 1,709 to 1,626 lines (-83 lines, -4.9%)
+  - Build: SUCCEEDED
+  - **Test: PASSED** - metadata display, bitrate/sample rate info verified
 
 ### 2026-01-10
 - Created `code-simplification` branch from `main`

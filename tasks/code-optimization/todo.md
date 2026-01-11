@@ -2,7 +2,7 @@
 
 **Task ID:** code-optimization
 **Branch:** code-simplification
-**Last Updated:** 2026-01-10
+**Last Updated:** 2026-01-11
 **Oracle Review:** Complete (see `oracle-review.md`)
 
 ---
@@ -205,8 +205,11 @@ codex "@file1.swift @file2.swift Review these changes..."
 | Phase 5: Verification | ✅ Complete | 10/10 |
 | Phase 6: Commit | ✅ Complete | 5/5 |
 | Phase 7: Swift 6 Modernization | ✅ Complete | 12/12 |
-| Phase 8: AudioPlayer Refactor | ⏳ Deferred | 0/25 |
-| **Total (1-7)** | **✅ COMPLETE** | **72/72** |
+| Phase 8.0: Quick Fixes | ✅ Complete | 9/9 |
+| Phase 8.1: EQPresetStore | ✅ Complete | 9/9 |
+| Phase 8.2: MetadataLoader | ✅ Complete | 8/8 |
+| Phase 8.3-8.6: Remaining | ⏳ Pending | 0/20 |
+| **Total (1-8.2)** | **✅ COMPLETE** | **98/118** |
 
 ### All Tasks Complete (Phases 1-7) ✅
 - [x] Git hooks configured
@@ -282,7 +285,32 @@ codex "@file1.swift @file2.swift Review these changes..."
 
 **Note:** Auto EQ "automatic analysis" is a pre-existing stub (`generateAutoPreset`). Per-track preset recall works correctly. Full audio analysis implementation deferred to future task.
 
-### 8.2 Phase 8b: Extract VisualizerPipeline (OPTIONAL - Medium Risk)
+### 8.2 Phase 8b: Extract MetadataLoader (Low Risk) ✅ COMPLETE
+
+- [x] Create `MacAmpApp/Audio/MetadataLoader.swift`
+- [x] Add `nonisolated struct MetadataLoader` with static async methods
+- [x] Extract: `loadTrackMetadata`, `loadAudioProperties`, `loadVideoMetadata`
+- [x] Define result types: `TrackMetadata`, `AudioProperties`, `VideoMetadata`
+- [x] Update AudioPlayer call sites to use MetadataLoader
+- [x] Remove old private functions from AudioPlayer
+- [x] Build verification: SUCCEEDED
+- [x] Test: **PENDING** - metadata display, bitrate/sample rate info
+
+### 8.3 Phase 8c: Extract PlaylistController (Low Risk)
+
+- [ ] Create `MacAmpApp/Audio/PlaylistController.swift`
+- [ ] Move playlist manipulation methods
+- [ ] Build verification
+- [ ] Test: Add/remove tracks, shuffle, navigation
+
+### 8.4 Phase 8d: Extract VideoPlaybackController (Medium Risk)
+
+- [ ] Create `MacAmpApp/Audio/VideoPlaybackController.swift`
+- [ ] Move video playback state and methods
+- [ ] Build verification
+- [ ] Test: Video playback, aspect ratio, controls
+
+### 8.5 Phase 8e: Extract VisualizerPipeline (HIGH RISK - LAST)
 
 - [ ] Document current tap lifecycle
 - [ ] Create `MacAmpApp/Audio/VisualizerPipeline.swift`
@@ -291,11 +319,10 @@ codex "@file1.swift @file2.swift Review these changes..."
 - [ ] **CRITICAL:** Ensure `Unmanaged` pointer lifetime preserved
 - [ ] Build verification
 - [ ] Test: Spectrum analyzer, oscilloscope, Butterchurn
-- [ ] Commit: "refactor: Extract VisualizerPipeline from AudioPlayer"
 
-### 8.3 Phase 8c: AudioEngineController (DEFERRED - High Risk)
+### 8.6 Phase 8f: AudioEngineController (DEFER DECISION)
 
-- [ ] Defer until 8.1 and 8.2 are stable
+- [ ] Defer until Phases 8.1-8.5 are stable
 - [ ] Document architecture before proceeding
 
 ### 8.4 Verification Checklist

@@ -400,7 +400,8 @@ final class AudioPlayer {
             defer { self.pendingTrackURLs.remove(normalizedURL) }
 
             AppLog.debug(.audio, "Loading metadata for \(normalizedURL.lastPathComponent)")
-            let track = await self.loadTrackMetadata(url: normalizedURL)
+            let metadata = await MetadataLoader.loadTrackMetadata(from: normalizedURL)
+            let track = Track(url: normalizedURL, title: metadata.title, artist: metadata.artist, duration: metadata.duration)
             AppLog.debug(.audio, "Metadata loaded - title: '\(track.title)', artist: '\(track.artist)', duration: \(track.duration)s")
 
             if let index = self.playlist.firstIndex(where: { $0.id == placeholder.id }) {
@@ -546,40 +547,8 @@ final class AudioPlayer {
 
         // Extract and format video metadata for display
         Task { @MainActor in
-            await self.loadVideoMetadata(url: url)
-        }
-    }
-
-    /// Extract video metadata for display in video window
-    /// Format: "filename M4V 1280x720" (simple, matches Winamp classic)
-    private func loadVideoMetadata(url: URL) async {
-        // Get filename (without extension)
-        let filename = url.deletingPathExtension().lastPathComponent
-
-        // Get file extension as video type
-        let videoType = url.pathExtension.uppercased()
-
-        do {
-            let asset = AVURLAsset(url: url)
-            let tracks = try await asset.load(.tracks)
-
-            // Get video resolution
-            if let videoTrack = tracks.first(where: { $0.mediaType == .video }) {
-                let naturalSize = try await videoTrack.load(.naturalSize)
-                let width = Int(naturalSize.width)
-                let height = Int(naturalSize.height)
-
-                // Winamp format: "filename (WMV): Video: 1280x720"
-                videoMetadataString = "\(filename) (\(videoType)): Video: \(width)x\(height)"
-                AppLog.debug(.audio, "Video metadata: \(videoMetadataString)")
-            } else {
-                // No video track found
-                videoMetadataString = "\(filename) (\(videoType)): Video: Unknown"
-                AppLog.debug(.audio, "Video metadata (no track): \(videoMetadataString)")
-            }
-        } catch {
-            videoMetadataString = "\(filename) (\(videoType)): Video: Unknown"
-            AppLog.warn(.audio, "Failed to load video metadata: \(error)")
+            let metadata = await MetadataLoader.loadVideoMetadata(from: url)
+            self.videoMetadataString = metadata.displayString
         }
     }
 
@@ -647,68 +616,16 @@ final class AudioPlayer {
             playerNode.volume = volume
             playerNode.pan = balance
 
-            // Update audio properties synchronously
-            updateAudioProperties(for: url)
+            // Update audio properties asynchronously
+            Task { @MainActor [weak self] in
+                if let props = await MetadataLoader.loadAudioProperties(from: url) {
+                    self?.channelCount = props.channelCount
+                    self?.bitrate = props.bitrate
+                    self?.sampleRate = props.sampleRate
+                }
+            }
         } catch {
             AppLog.error(.audio, "Failed to open file: \(error)")
-        }
-    }
-
-    /// Private: Load track metadata asynchronously
-    private func loadTrackMetadata(url: URL) async -> Track {
-        let asset = AVURLAsset(url: url)
-
-        do {
-            let metadata = try await asset.load(.commonMetadata)
-            let durationCM = try await asset.load(.duration)
-
-            let titleItem = AVMetadataItem.metadataItems(from: metadata, filteredByIdentifier: .commonIdentifierTitle).first
-            let artistItem = AVMetadataItem.metadataItems(from: metadata, filteredByIdentifier: .commonIdentifierArtist).first
-            let title = (try? await titleItem?.load(.stringValue)) ?? url.lastPathComponent
-            let artist = (try? await artistItem?.load(.stringValue)) ?? "Unknown Artist"
-            let duration = durationCM.seconds
-
-            return Track(url: url, title: title, artist: artist, duration: duration)
-        } catch {
-            AppLog.warn(.audio, "Failed to load metadata for \(url.lastPathComponent): \(error)")
-            return Track(url: url, title: url.lastPathComponent, artist: "Unknown", duration: 0.0)
-        }
-    }
-
-    /// Private: Update audio properties (channel count, bitrate, sample rate)
-    private func updateAudioProperties(for url: URL) {
-        let asset = AVURLAsset(url: url)
-        Task { @MainActor in
-            do {
-                let audioTracks = try await asset.load(.tracks)
-
-                if let firstAudioTrack = audioTracks.first(where: { $0.mediaType == .audio }) {
-                    let audioDesc = try await firstAudioTrack.load(.formatDescriptions)
-                    let estimatedDataRate = try await firstAudioTrack.load(.estimatedDataRate)
-
-                    if let desc = audioDesc.first {
-                        let audioStreamBasicDescription = CMAudioFormatDescriptionGetStreamBasicDescription(desc)
-                        if let streamDesc = audioStreamBasicDescription?.pointee {
-                            // Channel count
-                            let channelsPerFrame = streamDesc.mChannelsPerFrame
-                            self.channelCount = Int(channelsPerFrame)
-                            AppLog.debug(.audio, "Detected \(channelsPerFrame) channel(s) - \(channelsPerFrame == 1 ? "Mono" : "Stereo")")
-
-                            // Sample rate
-                            let sampleRateHz = Int(streamDesc.mSampleRate)
-                            self.sampleRate = sampleRateHz
-                            AppLog.debug(.audio, "Sample rate: \(sampleRateHz) Hz (\(sampleRateHz/1000) kHz)")
-                        }
-                    }
-
-                    // Bitrate (convert from bits per second to kbps)
-                    let bitrateKbps = Int(estimatedDataRate / 1000)
-                    self.bitrate = bitrateKbps
-                    AppLog.debug(.audio, "Bitrate: \(bitrateKbps) kbps")
-                }
-            } catch {
-                AppLog.warn(.audio, "Failed to load audio properties: \(error)")
-            }
         }
     }
 
