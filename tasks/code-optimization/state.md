@@ -189,6 +189,7 @@ Commits ahead: 0
   - AudioPlayer reduced from 1,709 to 1,626 lines (-83 lines, -4.9%)
   - Build: SUCCEEDED
   - **Test: PASSED** - metadata display, bitrate/sample rate info verified
+  - Commit: `306f960`
 
 ### 2026-01-10
 - Created `code-simplification` branch from `main`

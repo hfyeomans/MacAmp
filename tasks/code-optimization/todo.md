@@ -294,7 +294,8 @@ codex "@file1.swift @file2.swift Review these changes..."
 - [x] Update AudioPlayer call sites to use MetadataLoader
 - [x] Remove old private functions from AudioPlayer
 - [x] Build verification: SUCCEEDED
-- [x] Test: **PENDING** - metadata display, bitrate/sample rate info
+- [x] Test: PASSED - metadata display, bitrate/sample rate info verified
+- [x] Commit: `306f960` "refactor: Extract MetadataLoader from AudioPlayer (Phase 8.2)"
 
 ### 8.3 Phase 8c: Extract PlaylistController (Low Risk)
 
