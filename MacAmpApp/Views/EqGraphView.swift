@@ -18,7 +18,8 @@ struct EqGraphView: View {
     }
 
     private static func extractVerticalColors(from image: NSImage) -> [Color] {
-        guard let rep = NSBitmapImageRep(data: image.tiffRepresentation!) else { return [] }
+        guard let tiffData = image.tiffRepresentation,
+              let rep = NSBitmapImageRep(data: tiffData) else { return [] }
         var colors: [Color] = []
         let h = Int(rep.pixelsHigh)
         let x = min(0, Int(rep.pixelsWide - 1))

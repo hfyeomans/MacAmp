@@ -904,7 +904,7 @@ final class AudioPlayer {
             }
             let suggestedName = eqfPreset.name?.trimmingCharacters(in: .whitespacesAndNewlines)
             let fallbackName = url.deletingPathExtension().lastPathComponent
-            let finalName = (suggestedName?.isEmpty == false ? suggestedName! : fallbackName)
+            let finalName = suggestedName.flatMap { $0.isEmpty ? nil : $0 } ?? fallbackName
             let preset = EQPreset(name: finalName, preamp: eqfPreset.preampDB, bands: eqfPreset.bandsDB)
             storeUserPreset(preset)
             applyEQPreset(preset)
@@ -1159,7 +1159,7 @@ final class AudioPlayer {
 
     private func startProgressTimer() {
         progressTimer?.invalidate()
-        progressTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+        let timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self = self else { return }
                 if let nodeTime = self.playerNode.lastRenderTime,
@@ -1175,7 +1175,8 @@ final class AudioPlayer {
                 }
             }
         }
-        RunLoop.main.add(progressTimer!, forMode: .common)
+        progressTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
     }
 
 

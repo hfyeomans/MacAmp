@@ -68,8 +68,8 @@ enum SnapUtils {
     static func snapDiff(_ a: Box, _ b: Box) -> Point {
         let newPos = snap(a, b)
         return Point(
-            x: (newPos.x == nil ? 0 : newPos.x! - a.x),
-            y: (newPos.y == nil ? 0 : newPos.y! - a.y)
+            x: newPos.x.map { $0 - a.x } ?? 0,
+            y: newPos.y.map { $0 - a.y } ?? 0
         )
     }
 
@@ -150,8 +150,8 @@ enum SnapUtils {
     static func snapWithinDiff(_ a: Box, _ bound: BoundingBox) -> Point {
         let newPos = snapWithin(a, bound)
         return Point(
-            x: (newPos.x == nil ? 0 : newPos.x! - a.x),
-            y: (newPos.y == nil ? 0 : newPos.y! - a.y)
+            x: newPos.x.map { $0 - a.x } ?? 0,
+            y: newPos.y.map { $0 - a.y } ?? 0
         )
     }
 

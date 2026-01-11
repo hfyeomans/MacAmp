@@ -1,0 +1,67 @@
+# MacAmp SwiftLint Configuration
+# See: tasks/code-optimization/research.md for rationale
+# Setup: git config core.hooksPath .githooks
+
+# Opt-in rules (all validated against SwiftLint 0.63.0)
+opt_in_rules:
+  - force_unwrapping
+  - implicitly_unwrapped_optional
+  - legacy_random
+  - redundant_nil_coalescing
+  - unused_import
+  - vertical_whitespace_closing_braces
+  - yoda_condition
+  - closure_body_length
+  - cyclomatic_complexity
+  - function_body_length
+  - type_body_length
+  - weak_delegate
+  - unused_closure_parameter
+  - empty_count
+  - first_where
+  - last_where
+  - sorted_first_last
+  - contains_over_filter_count
+  - contains_over_filter_is_empty
+  - flatmap_over_map_reduce
+  - todo  # Enforce centralized placeholder.md instead of in-code TODOs
+
+# Disabled rules
+disabled_rules:
+  - line_length           # Often too strict for SwiftUI
+  - identifier_name       # Winamp conventions differ
+  - trailing_whitespace   # Can be noisy
+
+# Paths
+included:
+  - MacAmpApp
+  - Tests
+
+excluded:
+  - tmp
+  - .build
+  - tasks
+  - Package.swift
+
+# Rule configurations
+force_unwrapping:
+  severity: warning
+
+cyclomatic_complexity:
+  warning: 15
+  error: 25
+
+function_body_length:
+  warning: 60
+  error: 100
+
+type_body_length:
+  warning: 400
+  error: 600
+
+closure_body_length:
+  warning: 30
+  error: 50
+
+# Reporter
+reporter: xcode
