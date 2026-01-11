@@ -17,7 +17,7 @@
   - `AudioPlayer.swift:907,1178` - 2 fixable (flatMap + if-let)
   - `AppSettings.swift:168` - 1 fixable (Swift 6 URL.cachesDirectory)
   - `EqGraphView.swift:21` - 1 fixable (guard chain)
-  - `Tests/PlaylistNavigationTests.swift:18,46` - 2 in test code (lower priority)
+  - `Tests/PlaylistNavigationTests.swift:18,46` - ✅ Fixed with XCTUnwrap
 
 ### 0.2 Placeholder Documentation Decision
 - [x] Decide: Create `placeholder.md` OR remove TODO comment → **placeholder.md chosen**
@@ -74,7 +74,7 @@
 
 ### Build Verification ✅
 - [x] `xcodebuild -scheme MacAmpApp -configuration Debug build` → **BUILD SUCCEEDED**
-- [x] SwiftLint force_unwrapping: **0 violations in MacAmpApp** (2 remain in Tests - lower priority)
+- [x] SwiftLint force_unwrapping: **0 violations** (MacAmpApp + Tests)
 
 ---
 
