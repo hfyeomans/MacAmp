@@ -1,4 +1,3 @@
-
 import Foundation
 import Combine
 import AVFoundation
@@ -140,7 +139,7 @@ private final class VisualizerScratchBuffers: @unchecked Sendable {
             var magnitude = sqrt(real * real + imag * imag)
 
             // Normalize and scale for visualization (0-1 range)
-            magnitude = magnitude / Float(Self.butterchurnFFTSize)
+            magnitude /= Float(Self.butterchurnFFTSize)
             magnitude = min(1.0, magnitude * 4.0)  // Boost for visibility
 
             butterchurnSpectrum[i] = magnitude
@@ -316,7 +315,7 @@ final class AudioPlayer {
     private(set) var userPresets: [EQPreset] = []
     @ObservationIgnored private let userPresetDefaultsKey = "MacAmp.UserEQPresets.v1"
     var visualizerLevels: [Float] = Array(repeating: 0.0, count: 20)
-    var appliedAutoPresetTrack: String? = nil
+    var appliedAutoPresetTrack: String?
     var channelCount: Int = 2 // 1 = mono, 2 = stereo
     var bitrate: Int = 0 // in kbps
     var sampleRate: Int = 0 // in Hz (will display as kHz)
@@ -644,7 +643,7 @@ final class AudioPlayer {
             audioFile = try AVAudioFile(forReading: url)
             rewireForCurrentFile()
             currentSeekID = UUID()
-            let _ = scheduleFrom(time: 0, seekID: currentSeekID)
+            _ = scheduleFrom(time: 0, seekID: currentSeekID)
             playerNode.volume = volume
             playerNode.pan = balance
 
@@ -712,7 +711,6 @@ final class AudioPlayer {
             }
         }
     }
-
 
     func play() {
         // If playlist has ended, restart from the beginning
@@ -794,7 +792,7 @@ final class AudioPlayer {
         // Audio playback cleanup
         playerNode.stop()
         currentSeekID = UUID()
-        let _ = scheduleFrom(time: 0, seekID: currentSeekID)  // Ignore return - reset to beginning
+        _ = scheduleFrom(time: 0, seekID: currentSeekID)  // Ignore return - reset to beginning
 
         // Clear currentTrack so UI doesn't show stale info during stream playback
         currentTrack = nil
@@ -815,8 +813,6 @@ final class AudioPlayer {
         seekGuardActive = false
         AppLog.debug(.audio, "Stop")
     }
-
-    
 
     func eject() {
         stop()
@@ -1079,7 +1075,7 @@ final class AudioPlayer {
         audioEngine.disconnectNodeOutput(playerNode)
         audioEngine.disconnectNodeOutput(eqNode)
         
-        guard let _ = audioFile else { return }
+        guard audioFile != nil else { return }
         
         // Connect with the new format - use nil format to let the engine determine the best format
         audioEngine.connect(playerNode, to: eqNode, format: nil)
@@ -1187,7 +1183,6 @@ final class AudioPlayer {
         progressTimer = timer
         RunLoop.main.add(timer, forMode: .common)
     }
-
 
     @MainActor
     private func updateVisualizerLevels(
