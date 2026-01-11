@@ -101,6 +101,7 @@
 		D077337C4C05A6658475376F /* VisualizerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 499433D5A14F2C47C9EB0931 /* VisualizerView.swift */; };
 		EE878CCB3C1E4F7801C5430E /* DockingController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74EDF33D12E79F86166AF268 /* DockingController.swift */; };
 		FF66EE55DD44CC33BB22AA11 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA11BB22CC33DD44EE55FF66 /* Assets.xcassets */; };
+		D4E5F60708192A3B4C5D6E70 /* Track.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3D4E5F607081A2B3C4D5E6F /* Track.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -210,6 +211,7 @@
 		FC5E2339EECD4415B1146559 /* PlaybackCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackCoordinator.swift; sourceTree = "<group>"; };
 		FDF85EA8990A038079FC0CC3 /* EQF.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EQF.swift; sourceTree = "<group>"; };
 		b220e925d4d54168a0d0f84b /* SpriteResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpriteResolver.swift; sourceTree = "<group>"; };
+		C3D4E5F607081A2B3C4D5E6F /* Track.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Track.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -390,6 +392,7 @@
 				b220e925d4d54168a0d0f84b /* SpriteResolver.swift */,
 				A6D5886DD239C58D98785419 /* VisColorParser.swift */,
 				195F00AABD5483A18861EC8A /* WindowSpec.swift */,
+				C3D4E5F607081A2B3C4D5E6F /* Track.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -634,6 +637,7 @@
 				848E5CDF982D4B08A90D8B5E /* PlaylistController.swift in Sources */,
 				A1B2C3D4E5F607089A0B1C2D /* VideoPlaybackController.swift in Sources */,
 				B2C3D4E5F60708190A1B2C3D /* VisualizerPipeline.swift in Sources */,
+				D4E5F60708192A3B4C5D6E70 /* Track.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -6,7 +6,8 @@ import Observation
 
 /// Snapshot of audio data for Butterchurn visualization
 /// Produced by VisualizerPipeline tap, consumed by ButterchurnBridge at 30 FPS
-struct ButterchurnFrame {
+/// Sendable for safe cross-actor transfer in Swift 6
+struct ButterchurnFrame: Sendable {
     let spectrum: [Float]       // 1024 frequency bins (from 2048-point FFT)
     let waveform: [Float]       // 1024 mono samples (time-domain)
     let timestamp: TimeInterval // CACurrentMediaTime() when captured
@@ -15,7 +16,8 @@ struct ButterchurnFrame {
 // MARK: - Visualizer Data
 
 /// Container for all visualizer datasets produced by the audio tap
-struct VisualizerData {
+/// Sendable for safe cross-actor transfer in Swift 6
+struct VisualizerData: Sendable {
     let rms: [Float]
     let spectrum: [Float]
     let waveform: [Float]
@@ -40,6 +42,13 @@ private final class VisualizerScratchBuffers: @unchecked Sendable {
     private(set) var butterchurnSpectrum: [Float] = Array(repeating: 0, count: butterchurnBins)
     private(set) var butterchurnWaveform: [Float] = Array(repeating: 0, count: butterchurnBins)
 
+    // Pre-allocated FFT working buffers (avoid per-buffer allocations on audio thread)
+    private var hannWindow: [Float] = Array(repeating: 0, count: butterchurnFFTSize)
+    private var fftInputReal: [Float] = Array(repeating: 0, count: butterchurnFFTSize / 2)
+    private var fftInputImag: [Float] = Array(repeating: 0, count: butterchurnFFTSize / 2)
+    private var fftOutputReal: [Float] = Array(repeating: 0, count: butterchurnFFTSize / 2)
+    private var fftOutputImag: [Float] = Array(repeating: 0, count: butterchurnFFTSize / 2)
+
     // vDSP FFT setup (log2(2048) = 11)
     private let fftSetup: vDSP_DFT_Setup?
 
@@ -50,6 +59,9 @@ private final class VisualizerScratchBuffers: @unchecked Sendable {
             vDSP_Length(Self.butterchurnFFTSize),
             .FORWARD
         )
+
+        // Pre-compute Hann window (never changes)
+        vDSP_hann_window(&hannWindow, vDSP_Length(Self.butterchurnFFTSize), Int32(vDSP_HANN_NORM))
     }
 
     deinit {
@@ -105,6 +117,7 @@ private final class VisualizerScratchBuffers: @unchecked Sendable {
 
     /// Process audio samples for Butterchurn visualization
     /// - Parameter samples: Mono audio samples (at least 2048 for full FFT)
+    /// - Note: Uses pre-allocated buffers to avoid audio-thread allocations
     func processButterchurnFFT(samples: [Float]) {
         guard let setup = fftSetup else { return }
 
@@ -118,32 +131,24 @@ private final class VisualizerScratchBuffers: @unchecked Sendable {
             butterchurnReal[i] = 0
         }
 
-        // Apply Hann window to reduce spectral leakage
-        var window = [Float](repeating: 0, count: Self.butterchurnFFTSize)
-        vDSP_hann_window(&window, vDSP_Length(Self.butterchurnFFTSize), Int32(vDSP_HANN_NORM))
-        vDSP_vmul(butterchurnReal, 1, window, 1, &butterchurnReal, 1, vDSP_Length(Self.butterchurnFFTSize))
+        // Apply pre-computed Hann window to reduce spectral leakage
+        vDSP_vmul(butterchurnReal, 1, hannWindow, 1, &butterchurnReal, 1, vDSP_Length(Self.butterchurnFFTSize))
 
-        // Prepare split complex for FFT
+        // Prepare split complex for FFT using pre-allocated buffers
         // For real-to-complex DFT, input is interleaved as even/odd
-        var inputReal = [Float](repeating: 0, count: Self.butterchurnFFTSize / 2)
-        var inputImag = [Float](repeating: 0, count: Self.butterchurnFFTSize / 2)
-
         for i in 0..<(Self.butterchurnFFTSize / 2) {
-            inputReal[i] = butterchurnReal[i * 2]
-            inputImag[i] = butterchurnReal[i * 2 + 1]
+            fftInputReal[i] = butterchurnReal[i * 2]
+            fftInputImag[i] = butterchurnReal[i * 2 + 1]
         }
 
-        var outputReal = [Float](repeating: 0, count: Self.butterchurnFFTSize / 2)
-        var outputImag = [Float](repeating: 0, count: Self.butterchurnFFTSize / 2)
-
-        // Execute FFT
-        vDSP_DFT_Execute(setup, inputReal, inputImag, &outputReal, &outputImag)
+        // Execute FFT into pre-allocated output buffers
+        vDSP_DFT_Execute(setup, fftInputReal, fftInputImag, &fftOutputReal, &fftOutputImag)
 
         // Compute magnitude spectrum (first 1024 bins)
         // Magnitude = sqrt(real² + imag²)
         for i in 0..<Self.butterchurnBins {
-            let real = outputReal[i % outputReal.count]
-            let imag = outputImag[i % outputImag.count]
+            let real = fftOutputReal[i % fftOutputReal.count]
+            let imag = fftOutputImag[i % fftOutputImag.count]
             var magnitude = sqrt(real * real + imag * imag)
 
             // Normalize and scale for visualization (0-1 range)
@@ -180,20 +185,24 @@ private struct VisualizerTapContext: @unchecked Sendable {
 // MARK: - VisualizerPipeline
 
 /// Manages audio visualization tap and data processing.
-/// Extracts from AudioPlayer for single responsibility and cleaner separation.
+/// Extracted from AudioPlayer for single responsibility and cleaner separation.
 ///
-/// **Architecture:**
-/// - Mechanism layer component, sits alongside AudioPlayer
+/// **Layer:** Mechanism (audio processing)
+/// **Responsibilities:**
 /// - Owns tap lifecycle and scratch buffer management
 /// - Provides callbacks for visualizer data updates
 /// - Handles all FFT/spectrum processing on audio thread
+/// - Manages Butterchurn frame generation at 30 FPS
 @MainActor
 @Observable
 final class VisualizerPipeline {
     // MARK: - Tap State
+    // Note: nonisolated(unsafe) allows removeTap() to be called from deinit
+    // Safe because AVAudioMixerNode.removeTap is thread-safe and at deinit
+    // there are no concurrent references
 
-    @ObservationIgnored private var tapInstalled = false
-    @ObservationIgnored private weak var mixerNode: AVAudioMixerNode?
+    @ObservationIgnored nonisolated(unsafe) private var tapInstalled = false
+    @ObservationIgnored nonisolated(unsafe) private weak var mixerNode: AVAudioMixerNode?
 
     // MARK: - Visualizer Data Storage
 
@@ -216,6 +225,10 @@ final class VisualizerPipeline {
 
     /// Peak falloff rate (units per second)
     var peakFalloff: Float = 1.2
+
+    /// Cached spectrum/RMS mode to avoid per-frame AppSettings lookup
+    /// AudioPlayer sets this when visualizerMode changes in AppSettings
+    var useSpectrum: Bool = true
 
     // MARK: - Observable State (for UI)
 
@@ -265,7 +278,8 @@ final class VisualizerPipeline {
     }
 
     /// Remove visualizer tap if installed
-    func removeTap() {
+    /// Nonisolated to allow calling from deinit (AVAudioMixerNode.removeTap is thread-safe)
+    nonisolated func removeTap() {
         guard tapInstalled, let mixer = mixerNode else { return }
         mixer.removeTap(onBus: 0)
         tapInstalled = false
@@ -275,7 +289,7 @@ final class VisualizerPipeline {
     }
 
     /// Check if tap is currently installed
-    var isTapInstalled: Bool {
+    nonisolated var isTapInstalled: Bool {
         tapInstalled
     }
 
@@ -503,9 +517,8 @@ final class VisualizerPipeline {
             // Dispatch to MainActor to update pipeline state
             Task { @MainActor [context, data] in
                 let pipeline = Unmanaged<VisualizerPipeline>.fromOpaque(context.pipelinePointer).takeUnretainedValue()
-                // Get useSpectrum from AppSettings on MainActor
-                let useSpectrum = AppSettings.instance().visualizerMode == .spectrum
-                pipeline.updateLevels(with: data, useSpectrum: useSpectrum)
+                // Use cached useSpectrum from pipeline (set by AudioPlayer when settings change)
+                pipeline.updateLevels(with: data, useSpectrum: pipeline.useSpectrum)
             }
         }
     }

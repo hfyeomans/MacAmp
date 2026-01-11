@@ -22,10 +22,15 @@ final class EQPresetStore {
     @ObservationIgnored private let presetsFileName = "perTrackPresets.json"
     @ObservationIgnored private let userPresetDefaultsKey = "MacAmp.UserEQPresets.v1"
 
+    /// Flag to track when initial per-track preset load is complete
+    /// Prevents race condition where async load could overwrite early saves
+    @ObservationIgnored private var perTrackPresetsLoaded = false
+
     // MARK: - Initialization
     init() {
         loadUserPresets()
-        loadPerTrackPresets()
+        // Load per-track presets asynchronously to avoid blocking main thread
+        Task { await loadPerTrackPresets() }
     }
 
     // MARK: - User Presets (UserDefaults)
@@ -91,25 +96,52 @@ final class EQPresetStore {
         appSupportDirectory()?.appendingPathComponent(presetsFileName)
     }
 
-    private func loadPerTrackPresets() {
-        guard let url = presetsFileURL(), FileManager.default.fileExists(atPath: url.path) else { return }
-        do {
-            let data = try Data(contentsOf: url)
-            let loaded = try JSONDecoder().decode([String: EqfPreset].self, from: data)
-            perTrackPresets = loaded
-            AppLog.debug(.audio, "Loaded \(loaded.count) per-track presets")
-        } catch {
-            AppLog.warn(.audio, "Failed to load per-track presets: \(error)")
+    private func loadPerTrackPresets() async {
+        guard let url = presetsFileURL() else {
+            perTrackPresetsLoaded = true
+            return
         }
+
+        // Perform file I/O off main thread
+        let result: [String: EqfPreset]? = await Task.detached(priority: .userInitiated) {
+            guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+            do {
+                let data = try Data(contentsOf: url)
+                return try JSONDecoder().decode([String: EqfPreset].self, from: data)
+            } catch {
+                AppLog.warn(.audio, "Failed to load per-track presets: \(error)")
+                return nil
+            }
+        }.value
+
+        // Merge loaded data with any changes made during load (preserves early saves)
+        if let loaded = result {
+            // Start with loaded data, then overlay any in-memory changes
+            var merged = loaded
+            for (key, value) in perTrackPresets {
+                merged[key] = value  // In-memory changes take precedence
+            }
+            perTrackPresets = merged
+            AppLog.debug(.audio, "Loaded \(loaded.count) per-track presets (merged with \(perTrackPresets.count - loaded.count) in-flight changes)")
+        }
+        perTrackPresetsLoaded = true
     }
 
     func savePerTrackPresets() {
         guard let url = presetsFileURL() else { return }
-        do {
-            let data = try JSONEncoder().encode(perTrackPresets)
-            try data.write(to: url, options: .atomic)
-        } catch {
-            AppLog.warn(.audio, "Failed to save per-track presets: \(error)")
+
+        // Capture current state for background write
+        let presetsToSave = perTrackPresets
+
+        // Perform file I/O off main thread (fire-and-forget with error logging)
+        Task.detached(priority: .utility) {
+            do {
+                let data = try JSONEncoder().encode(presetsToSave)
+                try data.write(to: url, options: .atomic)
+                AppLog.debug(.audio, "Saved \(presetsToSave.count) per-track presets")
+            } catch {
+                AppLog.warn(.audio, "Failed to save per-track presets: \(error)")
+            }
         }
     }
 

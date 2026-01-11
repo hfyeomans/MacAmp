@@ -20,40 +20,7 @@ extension String {
 // VisualizerScratchBuffers, VisualizerTapContext, and ButterchurnFrame
 // have been extracted to VisualizerPipeline.swift
 
-// MARK: - Track
-
-struct Track: Identifiable, Equatable {
-    let id = UUID()
-    let url: URL
-    var title: String
-    var artist: String
-    var duration: Double
-
-    /// Returns true if this track is an internet radio stream (HTTP/HTTPS URL)
-    /// Streams cannot be played via AudioPlayer (which uses AVAudioFile for local files only)
-    /// and must be routed through PlaybackCoordinator → StreamPlayer instead.
-    var isStream: Bool {
-        !url.isFileURL && (url.scheme == "http" || url.scheme == "https")
-    }
-
-    static func == (lhs: Track, rhs: Track) -> Bool {
-        lhs.id == rhs.id
-    }
-}
-
-enum PlaybackStopReason: Equatable {
-    case manual
-    case completed
-    case ejected
-}
-
-enum PlaybackState: Equatable {
-    case idle
-    case preparing
-    case playing
-    case paused
-    case stopped(PlaybackStopReason)
-}
+// Track, PlaybackStopReason, and PlaybackState have been extracted to Models/Track.swift
 
 @Observable
 @MainActor
@@ -63,7 +30,7 @@ final class AudioPlayer {
     @ObservationIgnored private let playerNode = AVAudioPlayerNode()
     @ObservationIgnored private let eqNode = AVAudioUnitEQ(numberOfBands: 10)
     @ObservationIgnored private var audioFile: AVAudioFile?
-    @ObservationIgnored private var progressTimer: Timer?
+    @ObservationIgnored nonisolated(unsafe) private var progressTimer: Timer?  // nonisolated(unsafe) for deinit access
     @ObservationIgnored private var playheadOffset: Double = 0 // seconds offset for current scheduled segment
 
     // MARK: - Extracted Controllers
@@ -74,6 +41,7 @@ final class AudioPlayer {
         get { AppSettings.instance().visualizerMode == .spectrum }
         set {
             AppSettings.instance().visualizerMode = newValue ? .spectrum : .none
+            visualizerPipeline.useSpectrum = newValue  // Sync cached value to avoid per-frame lookup
         }
     }
 
@@ -166,6 +134,9 @@ final class AudioPlayer {
         configureEQ()
         // Note: eqPresetStore loads presets in its own init
 
+        // Sync initial visualizer mode to pipeline (avoids per-frame AppSettings lookup)
+        visualizerPipeline.useSpectrum = AppSettings.instance().visualizerMode == .spectrum
+
         // Setup video playback callbacks
         videoPlaybackController.onPlaybackEnded = { [weak self] in
             Task { @MainActor in
@@ -182,7 +153,16 @@ final class AudioPlayer {
         videoPlaybackController.volume = volume
     }
 
-    deinit {}
+    deinit {
+        // Ensure visualizer tap is removed to prevent use-after-free
+        // The tap handler holds an Unmanaged pointer to VisualizerPipeline
+        visualizerPipeline.removeTap()
+
+        // Invalidate progress timer if running
+        progressTimer?.invalidate()
+
+        // Video controller has its own deinit that calls cleanup()
+    }
 
     private func transition(to newState: PlaybackState) {
         guard playbackState != newState else { return }
@@ -232,7 +212,7 @@ final class AudioPlayer {
         }
 
         AppLog.debug(.audio, "Adding track from \(normalizedURL.lastPathComponent)")
-        playlistController.pendingTrackURLs.insert(normalizedURL)
+        playlistController.addPendingURL(normalizedURL)
 
         let placeholder = Track(
             url: normalizedURL,
@@ -251,7 +231,7 @@ final class AudioPlayer {
 
         Task { @MainActor [weak self] in
             guard let self else { return }
-            defer { self.playlistController.pendingTrackURLs.remove(normalizedURL) }
+            defer { self.playlistController.removePendingURL(normalizedURL) }
 
             AppLog.debug(.audio, "Loading metadata for \(normalizedURL.lastPathComponent)")
             let metadata = await MetadataLoader.loadTrackMetadata(from: normalizedURL)
@@ -789,11 +769,13 @@ final class AudioPlayer {
         // VIDEO SEEKING - delegate to VideoPlaybackController
         if currentMediaType == .video {
             videoPlaybackController.seekToPercent(percent, resume: resume) { [weak self] (actualTime: Double) in
-                guard let self else { return }
-                self.currentTime = actualTime
-                self.playbackProgress = self.videoPlaybackController.progress
-                self.currentDuration = self.videoPlaybackController.duration
-                self.transition(to: self.videoPlaybackController.isPlaying ? .playing : .paused)
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.currentTime = actualTime
+                    self.playbackProgress = self.videoPlaybackController.progress
+                    self.currentDuration = self.videoPlaybackController.duration
+                    self.transition(to: self.videoPlaybackController.isPlaying ? .playing : .paused)
+                }
             }
             return
         }
@@ -817,11 +799,13 @@ final class AudioPlayer {
         // VIDEO SEEKING - delegate to VideoPlaybackController
         if currentMediaType == .video {
             videoPlaybackController.seek(to: time, resume: resume) { [weak self] (actualTime: Double) in
-                guard let self else { return }
-                self.currentTime = actualTime
-                self.playbackProgress = self.videoPlaybackController.progress
-                self.currentDuration = self.videoPlaybackController.duration
-                self.transition(to: self.videoPlaybackController.isPlaying ? .playing : .paused)
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.currentTime = actualTime
+                    self.playbackProgress = self.videoPlaybackController.progress
+                    self.currentDuration = self.videoPlaybackController.duration
+                    self.transition(to: self.videoPlaybackController.isPlaying ? .playing : .paused)
+                }
             }
             return
         }

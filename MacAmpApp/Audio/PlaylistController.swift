@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 
 /// Manages playlist state and navigation logic.
 /// Extracted from AudioPlayer as part of the Option C incremental refactoring.
@@ -42,7 +43,19 @@ final class PlaylistController {
     private(set) var hasEnded: Bool = false
 
     /// URLs of tracks currently being loaded (to prevent duplicates)
-    @ObservationIgnored var pendingTrackURLs: Set<URL> = []
+    @ObservationIgnored private var pendingTrackURLs: Set<URL> = []
+
+    // MARK: - Pending URL Management
+
+    /// Add a URL to the pending set (used during async metadata loading)
+    func addPendingURL(_ url: URL) {
+        pendingTrackURLs.insert(url)
+    }
+
+    /// Remove a URL from the pending set (called when loading completes)
+    func removePendingURL(_ url: URL) {
+        pendingTrackURLs.remove(url)
+    }
 
     // MARK: - Computed Properties
 

@@ -27,6 +27,7 @@
 [✅] Phase 8.4     - VideoPlaybackController Extraction (complete)
 [✅] Phase 8.5     - VisualizerPipeline Extraction (complete)
 [⏸️] Phase 8.6     - AudioEngineController (DEFERRED - evaluate after Phase 9)
+[✅] Phase 9       - Quality Gate Fixes (complete - 10/10)
 ```
 
 ---
@@ -128,6 +129,17 @@
 | Build status | **SUCCEEDED** | Pass | ✅ |
 | Test status | **PASSED** | - | Spectrum, oscilloscope, Butterchurn ✅ |
 | Oracle score | **7.5/10** | - | Unmanaged lifetime, Sendable conformance |
+
+### After Phase 9 ✅ (Quality Gate - 10/10)
+| Metric | Value | Previous | Change |
+|--------|-------|----------|--------|
+| New files created | **6** | 5 | +Track.swift |
+| Models with Sendable | **6** | 2 | +Track, PlaybackState, PlaybackStopReason, EqfPreset, EQPreset |
+| Types with Sendable | **8** | 2 | All data transfer types Swift 6 ready |
+| Background I/O methods | **3** | 1 | loadPerTrackPresets, savePerTrackPresets, importEqfPreset |
+| Oracle score | **10/10** | 7.5/10 | All high/medium issues resolved |
+| Build status | **SUCCEEDED** | Pass | ✅ |
+| Swift 6 readiness | **HIGH** | Medium | Sendable + async I/O complete |
 
 ---
 
@@ -294,6 +306,69 @@ Commits ahead: 0
   - **Decision:** Complete Phase 9 first, then re-evaluate
   - Key risks: seek guards crossing class boundaries, engine graph assertions, tap timing
   - Limited benefits: AVAudioEngine still @MainActor, minimal testability gain
+  - Commit: `5da7e9b`
+- **Phase 9 Started:** Quality Gate Fixes
+  - Phase 9.0.1-9.0.2: VideoPlaybackController lifecycle fixes
+    - Added cleanup() call in deinit for proper observer removal
+    - Moved state reset into cleanup() method to prevent stale values
+    - Fixed `@MainActor` isolation in deinit with `nonisolated(unsafe)` properties
+    - Added `_playerForCleanup` shadow property for deinit access
+  - Phase 9.0.5 HIGH: AudioPlayer.deinit removeTap() call
+    - Added `visualizerPipeline.removeTap()` in AudioPlayer.deinit
+    - Prevents use-after-free with `Unmanaged` pointer
+    - Marked `progressTimer` as `nonisolated(unsafe)` for deinit access
+  - Phase 9.0.5 MEDIUM: Sendable conformance
+    - Added `Sendable` to `ButterchurnFrame` and `VisualizerData` structs
+    - Ready for Swift 6 strict concurrency
+  - Phase 9.0.5 MEDIUM: Pre-allocated FFT buffers
+    - Added pre-allocated buffers in `VisualizerScratchBuffers.init()`
+    - `hannWindow`, `fftInputReal/Imag`, `fftOutputReal/Imag`
+    - Pre-computed Hann window once (never changes)
+    - Eliminates per-buffer allocations on audio thread
+  - VisualizerPipeline: Made `removeTap()` and `isTapInstalled` nonisolated
+    - Marked `tapInstalled` and `mixerNode` as `nonisolated(unsafe)`
+    - Enables safe cleanup from nonisolated deinit contexts
+  - Phase 9.1: Extracted Track struct to Models/Track.swift
+    - Added `Sendable` conformance to Track, PlaybackStopReason, PlaybackState
+    - Added to Xcode project (PBXFileReference, PBXBuildFile, PBXGroup, PBXSourcesBuildPhase)
+  - Phase 9.2: Encapsulated pendingTrackURLs in PlaylistController
+    - Made `pendingTrackURLs` private
+    - Added `addPendingURL(_:)` and `removePendingURL(_:)` methods
+    - Updated AudioPlayer to use new methods
+  - Phase 9.3: Background I/O for EQPresetStore
+    - Made `loadPerTrackPresets()` async with `Task.detached` for file I/O
+    - Made `savePerTrackPresets()` use fire-and-forget `Task.detached` pattern
+    - Captures state before dispatch to avoid race conditions
+    - Added `Sendable` conformance to `EqfPreset` and `EQPreset`
+  - Phase 9.4: Final Oracle Review
+    - Initial review: 9/10 (missing import, async load race)
+    - Fixed: Added `import Observation` to PlaylistController
+    - Fixed: Added merge logic to loadPerTrackPresets() for in-flight changes
+    - Final score: **10/10** ✅
+  - Phase 9.0.3: Metadata Race Condition (Low Priority)
+    - Added `metadataTask` property to VideoPlaybackController
+    - Task is cancelled in cleanup() to prevent stale metadata overwrites
+    - Check for Task.isCancelled before updating metadataString
+  - Phase 9.0.4: MARK Comment Styling (Low Priority)
+    - Aligned doc comment format across all extracted controllers
+    - VideoPlaybackController: Changed "Bridge layer component" to "Layer: Mechanism"
+    - VisualizerPipeline: Changed "Architecture:" to "Layer: Mechanism"
+    - All controllers now use consistent format: Layer, Responsibilities
+  - Phase 9.0.5 LOW: AppSettings Per-frame Lookup
+    - Added `useSpectrum` cached property to VisualizerPipeline
+    - AudioPlayer syncs initial value in init()
+    - AudioPlayer updates cached value when useSpectrumVisualizer setter is called
+    - Tap handler now uses cached value instead of per-frame AppSettings lookup
+  - Build: SUCCEEDED
+  - Phase 9.5: Swift 6 Strict Concurrency Fix
+    - Fixed non-Sendable closure warning in VideoPlaybackController
+    - Changed completion parameters to `@Sendable` in seek methods
+    - Wrapped AudioPlayer completion closures in `Task { @MainActor in }` for isolation
+  - Build Warnings Evaluated:
+    - `duplicate -rpath '@executable_path'` - Benign linker warning (cosmetic)
+    - `appintentsmetadataprocessor: Metadata extraction skipped` - Informational (no AppIntents usage)
+  - Build: SUCCEEDED
+- **Phase 9 Complete:** All quality gate fixes applied (including low priority), Oracle score 10/10
 
 ### 2026-01-10
 - Created `code-simplification` branch from `main`

@@ -4,11 +4,12 @@ import Observation
 /// Manages AVPlayer-based video playback with proper observer lifecycle.
 /// Extracted from AudioPlayer for single responsibility and cleaner separation.
 ///
-/// **Architecture:**
-/// - Bridge layer component, sits between AudioPlayer (orchestrator) and AVPlayer (mechanism)
+/// **Layer:** Mechanism (AVPlayer wrapper)
+/// **Responsibilities:**
 /// - Owns AVPlayer lifecycle and observer cleanup
+/// - Manages video playback state (play, pause, seek)
 /// - Provides callbacks for playback events (ended, time updates)
-/// - Does NOT make routing decisions - that stays in AudioPlayer
+/// - Does NOT make routing decisions - that stays in AudioPlayer (Bridge layer)
 @MainActor
 @Observable
 final class VideoPlaybackController {
@@ -21,9 +22,15 @@ final class VideoPlaybackController {
     private(set) var metadataString: String = ""
 
     // MARK: - Observer Management
+    // Note: nonisolated(unsafe) allows deinit to access these for cleanup
+    // Safe because at deinit time there are no concurrent references
 
-    @ObservationIgnored private var endObserver: NSObjectProtocol?
-    @ObservationIgnored private var timeObserver: Any?
+    @ObservationIgnored nonisolated(unsafe) private var endObserver: NSObjectProtocol?
+    @ObservationIgnored nonisolated(unsafe) private var timeObserver: Any?
+    @ObservationIgnored nonisolated(unsafe) private var _playerForCleanup: AVPlayer?
+
+    /// Task for async metadata loading (cancelled on cleanup to prevent race conditions)
+    @ObservationIgnored private var metadataTask: Task<Void, Never>?
 
     // MARK: - Playback State (for AudioPlayer sync)
 
@@ -55,7 +62,27 @@ final class VideoPlaybackController {
 
     init() {}
 
-    deinit {}
+    deinit {
+        // Ensure observers are removed when controller is deallocated
+        // Note: Using nonisolated(unsafe) properties directly since deinit is nonisolated
+        // and we cannot call @MainActor cleanup() from here
+
+        // Remove time observer
+        if let observer = timeObserver, let player = _playerForCleanup {
+            player.removeTimeObserver(observer)
+        }
+        timeObserver = nil
+
+        // Remove notification observer
+        if let observer = endObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        endObserver = nil
+
+        // Pause player for clean shutdown
+        _playerForCleanup?.pause()
+        _playerForCleanup = nil
+    }
 
     // MARK: - Video Loading
 
@@ -68,7 +95,9 @@ final class VideoPlaybackController {
         cleanup()
 
         // Create video player
-        player = AVPlayer(url: url)
+        let newPlayer = AVPlayer(url: url)
+        player = newPlayer
+        _playerForCleanup = newPlayer  // Keep in sync for deinit access
         player?.volume = volume
 
         // Observe video completion
@@ -96,9 +125,10 @@ final class VideoPlaybackController {
 
         AppLog.debug(.audio, "VideoPlaybackController: Loading video file: \(url.lastPathComponent)")
 
-        // Extract and format video metadata for display
-        Task { @MainActor in
+        // Extract and format video metadata for display (cancellable to prevent race conditions)
+        metadataTask = Task { @MainActor in
             let metadata = await MetadataLoader.loadVideoMetadata(from: url)
+            guard !Task.isCancelled else { return }  // Prevent stale metadata from overwriting
             self.metadataString = metadata.displayString
         }
     }
@@ -124,13 +154,7 @@ final class VideoPlaybackController {
     }
 
     func stop() {
-        cleanup()
-        isPlaying = false
-        isPaused = false
-        currentTime = 0
-        duration = 0
-        progress = 0
-        metadataString = ""
+        cleanup()  // cleanup() now resets all state
         AppLog.debug(.audio, "VideoPlaybackController: Stop")
     }
 
@@ -140,8 +164,8 @@ final class VideoPlaybackController {
     /// - Parameters:
     ///   - time: Target time in seconds
     ///   - resume: Whether to resume playback after seek (nil = maintain current state)
-    ///   - completion: Called when seek completes with actual seek position
-    func seek(to time: Double, resume: Bool?, completion: ((Double) -> Void)? = nil) {
+    ///   - completion: Called when seek completes with actual seek position (must be @Sendable for Swift 6)
+    func seek(to time: Double, resume: Bool?, completion: (@Sendable (Double) -> Void)? = nil) {
         guard let player else {
             AppLog.warn(.audio, "VideoPlaybackController: Cannot seek - no video loaded")
             return
@@ -184,7 +208,7 @@ final class VideoPlaybackController {
     }
 
     /// Seek to a percentage of the video (0.0 to 1.0)
-    func seekToPercent(_ percent: Double, resume: Bool?, completion: ((Double) -> Void)? = nil) {
+    func seekToPercent(_ percent: Double, resume: Bool?, completion: (@Sendable (Double) -> Void)? = nil) {
         guard let player,
               let dur = player.currentItem?.duration.seconds,
               dur.isFinite else {
@@ -237,8 +261,12 @@ final class VideoPlaybackController {
 
     // MARK: - Cleanup
 
-    /// Cleanup all video resources
+    /// Cleanup all video resources and reset state
     func cleanup() {
+        // Cancel any in-flight metadata loading to prevent race conditions
+        metadataTask?.cancel()
+        metadataTask = nil
+
         tearDownTimeObserver()
         if let observer = endObserver {
             NotificationCenter.default.removeObserver(observer)
@@ -246,6 +274,16 @@ final class VideoPlaybackController {
         }
         player?.pause()
         player = nil
+        _playerForCleanup = nil  // Keep in sync
+
+        // Reset playback state to prevent stale values
+        isPlaying = false
+        isPaused = false
+        currentTime = 0
+        duration = 0
+        progress = 0
+        metadataString = ""
+
         AppLog.debug(.audio, "VideoPlaybackController: Cleanup complete")
     }
 
