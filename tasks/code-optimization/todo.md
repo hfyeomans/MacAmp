@@ -210,7 +210,7 @@ codex "@file1.swift @file2.swift Review these changes..."
 | Phase 8.2: MetadataLoader | ✅ Complete | 8/8 |
 | Phase 8.3: PlaylistController | ✅ Complete | 14/14 |
 | Phase 8.4: VideoPlaybackController | ✅ Complete | 15/15 |
-| Phase 8.5: VisualizerPipeline | ✅ Complete | 6/7 (pending user test) |
+| Phase 8.5: VisualizerPipeline | ✅ Complete | 7/7 |
 | Phase 8.6: AudioEngineController | ⏳ Deferred | 0/2 |
 | Phase 9: Quality Gate (10/10) | ⏳ Planned | 0/26 |
 | **Total (1-8.5)** | **✅ COMPLETE** | **133/172** |
@@ -348,7 +348,7 @@ codex "@file1.swift @file2.swift Review these changes..."
 - [x] Build verification: SUCCEEDED
 - [x] Oracle review: gpt-5.2-codex (high) - Score 7.5/10
 - [x] Oracle fixes deferred to Phase 9 (quality gate)
-- [ ] Test: Spectrum analyzer, oscilloscope, Butterchurn (pending user verification)
+- [x] Test: Spectrum analyzer, oscilloscope, Butterchurn ✅ (user verified)
 - [x] Commit: `9489d76` "refactor: Extract VisualizerPipeline from AudioPlayer (Phase 8.5)"
 
 ### 8.6 Phase 8f: AudioEngineController (DEFER DECISION)

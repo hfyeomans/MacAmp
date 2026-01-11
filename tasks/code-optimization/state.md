@@ -126,6 +126,7 @@
 | VisualizerPipeline.swift violations | **0** | N/A | Clean |
 | Cumulative reduction | **746 lines** | 371 | -41.3% from 1,805 |
 | Build status | **SUCCEEDED** | Pass | ✅ |
+| Test status | **PASSED** | - | Spectrum, oscilloscope, Butterchurn ✅ |
 | Oracle score | **7.5/10** | - | Unmanaged lifetime, Sendable conformance |
 
 ---
