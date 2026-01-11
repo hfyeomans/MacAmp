@@ -122,7 +122,7 @@
 ## Phase 5: Verification ✅ COMPLETE
 
 ### 5.1 Build Verification
-- [x] Run `xcodebuild -scheme MacAmp -configuration Debug build` → **BUILD SUCCEEDED**
+- [x] Run `xcodebuild -scheme MacAmpApp -configuration Debug build` → **BUILD SUCCEEDED**
 - [x] Confirm 0 warnings ✅
 - [x] Confirm 0 errors ✅
 
@@ -165,10 +165,10 @@
 ### Commands
 ```bash
 # Build with sanitizer
-xcodebuild -scheme MacAmp -configuration Debug -enableThreadSanitizer YES build
+xcodebuild -scheme MacAmpApp -configuration Debug -enableThreadSanitizer YES build
 
 # Run tests
-xcodebuild test -scheme MacAmp -enableThreadSanitizer YES
+xcodebuild test -scheme MacAmpApp -enableThreadSanitizer YES
 
 # Lint
 swiftlint lint --path MacAmpApp/
@@ -246,48 +246,61 @@ codex "@file1.swift @file2.swift Review these changes..."
 
 ---
 
-## Phase 8: AudioPlayer Refactoring (DEFERRED)
+## Phase 8: AudioPlayer Refactoring (REVISED 2026-01-11)
 
-### 8.1 Pre-requisites
-- [ ] Complete Phase 7 and verify stability ✅
-- [ ] Document current AudioPlayer architecture
-- [ ] Identify all dependencies on AudioPlayer class
+**Oracle Review:** Complete (see research.md §13)
+**Recommended Approach:** Option B (EQPresetStore extraction) with incremental follow-up
 
-### 8.2 Extract AudioEngineController
-- [ ] Create `AudioEngineController.swift`
-- [ ] Move engine initialization logic
-- [ ] Move node configuration
-- [ ] Expose public interface
-- [ ] Update AudioPlayer to use extracted class
+### 8.0 Pre-requisites: Quick Fixes (Separate Commits)
 
-### 8.3 Extract EQPresetStore
-- [ ] Create `EQPresetStore.swift`
-- [ ] Move preset loading/saving logic
-- [ ] Move per-track preset management
-- [ ] Update AudioPlayer to delegate
+#### 8.0.1 AudioPlayer.swift Quick Fixes
+- [ ] Remove leading whitespace (line 1)
+- [ ] Use shorthand operator `+=` (line 143)
+- [ ] Remove implicit `= nil` initialization (line 319)
+- [ ] Replace `let _ =` with `_ =` (lines 647, 797)
+- [ ] Replace unused optional binding with `!= nil` (line 1073)
+- [ ] Remove extra blank lines (lines 716, 819, 1182)
+- [ ] Build verification
+- [ ] Commit: "style: Fix SwiftLint violations in AudioPlayer"
 
-### 8.4 Extract VisualizerPipeline
-- [ ] Create `VisualizerPipeline.swift`
-- [ ] Move audio tap configuration
-- [ ] Move FFT/smoothing logic
-- [ ] Expose observable visualization data
+#### 8.0.2 SnapUtils.swift Verification
+- [ ] Run `swiftlint lint MacAmpApp/Models/SnapUtils.swift`
+- [ ] Verify Phase 7 fixes are complete
+- [ ] Fix any remaining violations (if any)
 
-### 8.5 Quick Fixes (AudioPlayer.swift)
-- [ ] Fix leading whitespace (line 1)
-- [ ] Fix shorthand operator (line 143)
-- [ ] Fix implicit optional initialization (line 319)
-- [ ] Fix redundant discardable let (lines 647, 797)
-- [ ] Fix unused optional binding (line 1073)
-- [ ] Fix vertical whitespace (lines 716, 819, 1182)
+### 8.1 Phase 8a: Extract EQPresetStore (Low Risk)
 
-### 8.6 Statement Position Fixes (SnapUtils.swift)
-- [ ] Move `else` to same line as `}` (8 locations)
+- [ ] Create `MacAmpApp/Audio/EQPresetStore.swift`
+- [ ] Add `@MainActor @Observable final class EQPresetStore`
+- [ ] Move properties: `userPresets`, `perTrackPresets`, `presetsFileName`, `userPresetDefaultsKey`
+- [ ] Move methods: `loadUserPresets()`, `persistUserPresets()`, `loadPerTrackPresets()`, `savePerTrackPresets()`, `storeUserPreset(_:)`, `importEqfPreset(from:)`, `appSupportDirectory()`, `presetsFileURL()`
+- [ ] Add `eqPresetStore` property to AudioPlayer
+- [ ] Update AudioPlayer methods to delegate to store
+- [ ] Build verification
+- [ ] Test: Save/load presets, import EQF, per-track presets
+- [ ] Commit: "refactor: Extract EQPresetStore from AudioPlayer"
 
-### 8.7 Verification
-- [ ] Build succeeds
-- [ ] All tests pass
-- [ ] SwiftLint violations < 10
-- [ ] Manual smoke test
+### 8.2 Phase 8b: Extract VisualizerPipeline (OPTIONAL - Medium Risk)
+
+- [ ] Document current tap lifecycle
+- [ ] Create `MacAmpApp/Audio/VisualizerPipeline.swift`
+- [ ] Move `VisualizerScratchBuffers`, `VisualizerTapContext`, `ButterchurnFrame`
+- [ ] Move tap installation/removal logic
+- [ ] **CRITICAL:** Ensure `Unmanaged` pointer lifetime preserved
+- [ ] Build verification
+- [ ] Test: Spectrum analyzer, oscilloscope, Butterchurn
+- [ ] Commit: "refactor: Extract VisualizerPipeline from AudioPlayer"
+
+### 8.3 Phase 8c: AudioEngineController (DEFERRED - High Risk)
+
+- [ ] Defer until 8.1 and 8.2 are stable
+- [ ] Document architecture before proceeding
+
+### 8.4 Verification Checklist
+
+- [ ] `xcodebuild -scheme MacAmpApp build` succeeds
+- [ ] `swiftlint lint MacAmpApp/Audio/` shows reduced violations
+- [ ] Manual smoke test: playback, EQ, presets, visualizer, video
 
 ---
 

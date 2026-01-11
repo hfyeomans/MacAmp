@@ -484,3 +484,496 @@ if condition {
    - `EQPresetStore` (persistence)
    - `VisualizerPipeline` (tap + smoothing)
    - `PlaybackState` (observable state)
+
+---
+
+## 13. Phase 8 Oracle Review (2026-01-11)
+
+**Oracle Model:** gpt-5.2-codex
+**Reasoning Effort:** xhigh (high)
+**File Analyzed:** `MacAmpApp/Audio/AudioPlayer.swift` (1,810 lines)
+
+### 13.1 Oracle Findings Summary
+
+The Oracle review identifies **significant gaps** in the Phase 8 plan. While the proposed extraction strategy is directionally correct, it:
+
+1. **Misses major responsibilities** (playlist management, video playback, metadata loading)
+2. **Underestimates coupling** (25+ files depend on AudioPlayer)
+3. **Has high-risk areas** (visualizer tap lifetime, seek re-entrancy guards)
+
+### 13.2 Key Findings by Priority
+
+#### HIGH Priority Issues
+
+| Issue | Location | Risk |
+|-------|----------|------|
+| Incomplete decomposition - plan misses playlist/video/metadata | Lines 369, 587, 638, 1658 | Refactor leaves large coupled class |
+| Visualizer tap uses `Unmanaged` pointers across actor boundaries | Lines 1342, 1362 | Crashes or UI stalls if lifetime broken |
+
+#### MEDIUM Priority Issues
+
+| Issue | Location | Risk |
+|-------|----------|------|
+| SwiftUI views bind directly to AudioPlayer properties | WinampMainWindow:360, VisualizerOptions:23 | UI breaks without forwarding |
+| PlaybackCoordinator relies on API surface + PlaylistAdvanceAction | AudioPlayer:1659, PlaybackCoordinator:173 | Stream/local routing breaks |
+
+#### LOW Priority Issues
+
+| Issue | Location | Risk |
+|-------|----------|------|
+| SwiftLint fixes are mechanical, unrelated to behavior | Lines 1, 647, 1073 | Bundling increases diff noise |
+
+### 13.3 Dependency Analysis
+
+AudioPlayer is referenced by **25+ files** across the codebase:
+
+**Core Infrastructure:**
+- `MacAmpApp.swift:6,16` - App bootstrap
+- `WindowCoordinator.swift:108` - Window coordination
+- `PlaybackCoordinator.swift:37,75,173,228` - Playback routing
+
+**Window Controllers:**
+- `WinampMainWindowController.swift:6`
+- `WinampEqualizerWindowController.swift:6`
+- `WinampPlaylistWindowController.swift:6`
+- `WinampVideoWindowController.swift:6`
+- `WinampMilkdropWindowController.swift:12`
+
+**Views (Direct Property Binding):**
+- `WinampMainWindow.swift:360,870` - Playback state
+- `WinampPlaylistWindow.swift:35` - Playlist
+- `WinampEqualizerWindow.swift:55,195` - EQ controls
+- `VisualizerView.swift:91` - Visualization data
+- `VisualizerOptions.swift:23` - Visualizer settings
+- `WinampVideoWindow.swift:19` - Video player
+- `EqGraphView.swift:57` - EQ curve
+- `PresetsButton.swift:79` - Preset management
+- `TrackInfoView.swift:18` - Track metadata
+
+**Butterchurn Integration:**
+- `ButterchurnBridge.swift:41,139,165` - Audio data feed
+
+### 13.4 Risk Analysis
+
+**Highest Risk Areas:**
+
+1. **Seek Re-entrancy Guards** (Lines 355, 1608, 1414)
+   - Complex state machine: `currentSeekID`, `seekGuardActive`, `isHandlingCompletion`
+   - Refactoring can easily reintroduce double-completions or stuck state
+
+2. **Visualizer Tap Lifetime** (Lines 1342, 1375)
+   - `Unmanaged.passUnretained(self)` creates raw pointer
+   - Changing ownership risks use-after-free or tap not removed
+
+3. **Video/Audio Switching** (Lines 505, 587)
+   - Requires strict cleanup ordering
+   - Moving pieces risks stale observers or incorrect `currentMediaType`
+
+4. **UI Observation**
+   - All views depend on `@Observable` property changes
+   - Extracted types must preserve change notifications
+
+### 13.5 Phase 8 Approach Options
+
+#### Option A: Extension-Based Organization (Zero Risk)
+
+Split AudioPlayer into logical extensions without moving code:
+
+```
+MacAmpApp/Audio/
+├── AudioPlayer.swift              (~200 lines - core + init)
+├── AudioPlayer+Playback.swift     (~400 lines - play/pause/stop/seek)
+├── AudioPlayer+EQ.swift           (~200 lines - equalizer)
+├── AudioPlayer+Visualizer.swift   (~250 lines - tap + data)
+├── AudioPlayer+Playlist.swift     (~200 lines - navigation)
+├── AudioPlayer+Video.swift        (~200 lines - AVPlayer)
+└── AudioPlayer+Presets.swift      (~150 lines - persistence)
+```
+
+**Pros:** Zero behavior change, immediate readability improvement
+**Cons:** No reduction in coupling, still one large type
+**Effort:** ~1 hour
+
+#### Option B: Extract EQPresetStore Only (Low Risk)
+
+Extract the clearest single-responsibility violation:
+
+```swift
+// New file: MacAmpApp/Audio/EQPresetStore.swift
+@MainActor
+@Observable
+final class EQPresetStore {
+    var userPresets: [EQPreset] = []
+    var perTrackPresets: [String: EqfPreset] = [:]
+
+    func loadUserPresets() { ... }
+    func persistUserPresets() { ... }
+    func loadPerTrackPresets() { ... }
+    func savePerTrackPresets() { ... }
+    func storeUserPreset(_ preset: EQPreset) { ... }
+    func importEqfPreset(from url: URL) { ... }
+}
+```
+
+AudioPlayer keeps `eqPresetStore` reference and delegates.
+
+**Pros:** Clear SRP win, low coupling, easy to test
+**Cons:** Only ~150 lines extracted
+**Effort:** ~2 hours
+
+#### Option C: Full Extraction (High Risk, High Reward)
+
+Expand Phase 8 to include all responsibilities:
+
+1. `AudioEngineController` - AVAudioEngine, nodes, connections
+2. `EQPresetStore` - Preset persistence
+3. `VisualizerPipeline` - Tap, FFT, data delivery
+4. `PlaylistController` - Track management, navigation
+5. `VideoPlaybackController` - AVPlayer for video
+6. `MetadataLoader` - Async track/video metadata
+
+AudioPlayer becomes a thin facade coordinating these components.
+
+**Pros:** Full decomposition, testable components
+**Cons:** High risk, extensive testing required, ~6-8 hours
+**Effort:** 6-8 hours
+
+### 13.6 Swift 6.0/6.2 Considerations
+
+**Extension Approach (Option A):**
+- Compatible with Swift 6 but doesn't leverage new patterns
+- No improvement in testability or actor isolation
+- Good for immediate organization but technical debt remains
+
+**EQPresetStore Extraction (Option B):**
+- Aligns with Swift 6 `@Observable` pattern
+- Can be made `Sendable` for background persistence
+- Fits MacAmp's three-layer architecture (mechanism layer)
+- Enables unit testing of preset logic
+
+**Full Extraction (Option C):**
+- Best long-term architecture for Swift 6 strict concurrency
+- Each component can have appropriate actor isolation
+- VisualizerPipeline could use `@preconcurrency` for tap callbacks
+- Matches Apple's modern framework patterns (separation of concerns)
+
+### 13.7 Quick Fixes (Separate Commit)
+
+**SwiftLint violations in AudioPlayer.swift (do before refactor):**
+
+| Line | Rule | Fix |
+|------|------|-----|
+| 1 | `leading_whitespace` | Remove leading blank line |
+| 143 | `shorthand_operator` | Use `+=` |
+| 319 | `implicit_optional_initialization` | Remove `= nil` |
+| 647, 797 | `redundant_discardable_let` | Use `_ = foo()` |
+| 1073 | `unused_optional_binding` | Use `!= nil` |
+| 716, 819, 1182 | `vertical_whitespace` | Remove extra blank lines |
+
+**SnapUtils.swift else-on-same-line fixes:** Also separate commit.
+
+### 13.8 Recommended Sequencing
+
+1. **Pre-refactor:** Quick fixes (separate commit)
+2. **Pre-refactor:** SnapUtils fixes (separate commit)
+3. **Phase 8a:** Extract EQPresetStore (low risk)
+4. **Verify:** Build + manual smoke test
+5. **Phase 8b:** Extract VisualizerPipeline (medium risk)
+6. **Verify:** Build + visualizer test
+7. **Phase 8c:** Extract AudioEngineController (high risk)
+8. **Verify:** Full playback regression test
+9. **Phase 8d (optional):** PlaylistController, VideoPlaybackController
+
+### 13.9 Testing Strategy
+
+**Core Playback:**
+- Local file: play/pause/stop/seek
+- End-of-track auto-advance
+- Repeat modes: off/all/one
+- Shuffle mode
+- Scrub while playing
+
+**Playlist:**
+- Add/remove/reorder tracks
+- Empty playlist behavior
+- Stream handoff to PlaybackCoordinator
+
+**EQ/Presets:**
+- Toggle EQ on/off
+- Adjust bands/preamp
+- Save/load user presets
+- Per-track auto presets
+- Import EQF file
+
+**Visualizer:**
+- Spectrum updates when playing
+- Oscilloscope updates when playing
+- Freeze when stopped
+- Butterchurn frame feed
+
+**Video:**
+- Play video file
+- Switch audio <-> video
+- Metadata string updates
+- Cleanup on stop/eject
+
+### 13.10 Architecture Review (Oracle, 2026-01-11)
+
+Second Oracle review validating Phase 8 plan against `docs/MACAMP_ARCHITECTURE_GUIDE.md` and `docs/IMPLEMENTATION_PATTERNS.md`.
+
+**Model:** gpt-5.2-codex (high reasoning)
+
+**Validation Results:**
+
+| Question | Answer |
+|----------|--------|
+| Does Phase 8 align with three-layer architecture? | ✅ Yes, if extracted classes remain Mechanism layer |
+| Does EQPresetStore follow IMPLEMENTATION_PATTERNS? | ✅ Mostly - ensure computed forwarding |
+| Any architecture concerns? | ⚠️ Layer-boundary leakage, main-thread I/O |
+| Which layer for EQPresetStore? | **Mechanism layer** (like AppSettings) |
+
+**Findings:**
+
+1. **Layer Boundary Protection (Medium):** EQPresetStore must NOT be accessed directly by views. Access via AudioPlayer/PlaybackCoordinator only. This maintains the "No Skip" rule (Presentation → Bridge → Mechanism).
+
+2. **Background I/O Preservation (Medium):** EQPresetStore methods that do file I/O must preserve background execution. Only state updates should be on @MainActor.
+
+3. **Single Source of Truth (Low):** Use computed forwarding on AudioPlayer to avoid duplicate state. Existing bindings remain stable.
+
+**Open Question:**
+- Inject EQPresetStore via Environment or keep private behind AudioPlayer?
+- **Decision:** Keep private behind AudioPlayer (maintains layer boundary)
+
+**Final Recommendations:**
+1. Add explicit note: "no direct view access to EQPresetStore; route via AudioPlayer/PlaybackCoordinator"
+2. Preserve background I/O for preset load/import, with MainActor updates only
+3. Add computed forwarding on AudioPlayer to keep existing bindings stable
+
+### 13.11 Deep Evaluation: Swift 6.0/6.2 Trade-off Analysis
+
+**Evaluation Date:** 2026-01-11
+**Swift Version Context:** Swift 6.0 (current), Swift 6.2 (macOS 26 Tahoe)
+
+---
+
+#### Swift 6.2 Key Features for This Analysis
+
+From Xcode 26 documentation (`Swift-Concurrency-Updates.md`):
+
+| Feature | Description | Relevance |
+|---------|-------------|-----------|
+| `@concurrent` | Explicitly offload work to background thread pool | High - FFT, file I/O |
+| Isolated conformances | `extension Type: @MainActor Protocol` | Medium - protocol conformances |
+| Default MainActor inference | Opt-in mode for app targets | High - reduces annotations |
+| Approachable concurrency | Async functions run on caller's actor by default | High - simplifies async code |
+
+---
+
+#### Option A: Extensions Only
+
+**What it does:** Split AudioPlayer into 7 files using Swift extensions without creating new types.
+
+**Swift 6.0 Impact:**
+- ❌ No concurrency improvements - still one giant @MainActor type
+- ❌ Cannot use `@concurrent` because all code is MainActor-isolated
+- ❌ Cannot leverage isolated conformances (no new types to conform)
+- ❌ No testability improvements - same tightly coupled type
+
+**Swift 6.2 Impact:**
+- ❌ Default MainActor inference provides no benefit (already @MainActor)
+- ❌ `@concurrent` cannot be applied to methods needing instance state
+- ❌ Approachable concurrency irrelevant - no new async boundaries
+
+**Risk/Reward:**
+```
+Risk:   ★☆☆☆☆ (Very Low - zero behavior change)
+Reward: ★☆☆☆☆ (Very Low - organizational only)
+Effort: ★☆☆☆☆ (~1 hour)
+```
+
+**Long-term value:** Near zero. Technical debt remains. Future Swift versions provide no benefit.
+
+---
+
+#### Option B: EQPresetStore Extraction
+
+**What it does:** Extract ~150 lines of preset persistence logic to a new @Observable @MainActor class.
+
+**Swift 6.0 Impact:**
+- ✅ Follows `@Observable` pattern correctly
+- ✅ File I/O can use `Task.detached` for background execution (already done)
+- ✅ Unit testable in isolation with mock file system
+- ⚠️ Limited scope - main complexity remains in AudioPlayer
+
+**Swift 6.2 Impact:**
+- ✅ Can mark file I/O methods as `@concurrent`:
+  ```swift
+  nonisolated struct EQPresetPersistence {
+      @concurrent
+      func loadPresets() async -> [EQPreset] { ... }
+  }
+  ```
+- ✅ Clean separation allows isolated conformances if needed
+- ✅ Establishes pattern for future extractions
+
+**Risk/Reward:**
+```
+Risk:   ★★☆☆☆ (Low - isolated functionality, minimal coupling)
+Reward: ★★★☆☆ (Medium - proves pattern, enables testing, Swift 6.2 ready)
+Effort: ★★☆☆☆ (~2-3 hours)
+```
+
+**Long-term value:** Good foundation. Establishes extraction pattern. Can iterate.
+
+---
+
+#### Option C: Full Extraction
+
+**What it does:** Create 6 focused components:
+1. `EQPresetStore` - Preset persistence
+2. `VisualizerPipeline` - Audio tap, FFT, data delivery
+3. `AudioEngineController` - AVAudioEngine, nodes, connections
+4. `PlaylistController` - Track management, navigation
+5. `VideoPlaybackController` - AVPlayer for video
+6. `MetadataLoader` - Async track/video metadata
+
+AudioPlayer becomes a thin facade coordinating these components.
+
+**Swift 6.0 Impact:**
+- ✅ Each component has appropriate actor isolation
+- ✅ VisualizerPipeline can be `nonisolated` with explicit MainActor updates
+- ✅ Full unit testability with dependency injection
+- ✅ Matches Apple's modern framework separation of concerns
+
+**Swift 6.2 Impact:**
+- ✅ **`@concurrent` for CPU-intensive work:**
+  ```swift
+  nonisolated struct FFTProcessor {
+      @concurrent
+      func processSpectrum(samples: [Float]) async -> [Float] { ... }
+  }
+  ```
+- ✅ **Isolated conformances for each component:**
+  ```swift
+  extension EQPresetStore: @MainActor PresetProvider { ... }
+  extension PlaylistController: @MainActor PlaylistNavigable { ... }
+  ```
+- ✅ **MetadataLoader perfect for `@concurrent`:**
+  ```swift
+  nonisolated struct MetadataLoader {
+      @concurrent
+      func loadMetadata(for url: URL) async throws -> TrackMetadata { ... }
+  }
+  ```
+- ✅ Components can opt into default MainActor inference individually
+
+**Risk Assessment by Component:**
+
+| Component | Risk | Reason |
+|-----------|------|--------|
+| EQPresetStore | ★★☆☆☆ Low | Isolated, no shared state |
+| PlaylistController | ★★☆☆☆ Low | Pure data manipulation |
+| MetadataLoader | ★★☆☆☆ Low | Async-only, no side effects |
+| VideoPlaybackController | ★★★☆☆ Medium | AVPlayer observer lifecycle |
+| VisualizerPipeline | ★★★★☆ HIGH | `Unmanaged` pointer lifetime critical |
+| AudioEngineController | ★★★★★ HIGHEST | Core playback, seek guards, engine state |
+
+**Risk/Reward:**
+```
+Risk:   ★★★★☆ (High - especially VisualizerPipeline and AudioEngineController)
+Reward: ★★★★★ (Highest - full Swift 6.2 leverage, testable, maintainable)
+Effort: ★★★★☆ (6-8 hours)
+```
+
+---
+
+#### The `Unmanaged` Pointer Problem (VisualizerPipeline)
+
+The visualizer tap uses `Unmanaged<AudioPlayer>` to cross the Core Audio callback boundary:
+
+```swift
+// Current code (AudioPlayer.swift:1362-1363)
+let context = VisualizerTapContext(
+    playerPointer: Unmanaged.passUnretained(self).toOpaque()
+)
+// ... later in callback (line 1343):
+let player = Unmanaged<AudioPlayer>.fromOpaque(context.playerPointer).takeUnretainedValue()
+```
+
+**Why this is HIGH RISK:**
+1. `passUnretained` means AudioPlayer could be deallocated while tap is running
+2. Core Audio callbacks run on realtime audio thread (not main actor)
+3. Incorrect lifetime management → crash or memory corruption
+4. Swift 6 strict concurrency makes this even more fragile
+
+**Swift 6.2 solution would require:**
+- Careful `Sendable` conformance for data crossing actor boundary
+- Explicit lifecycle management for pipeline vs AudioPlayer
+- Possibly `@preconcurrency` annotation for Core Audio callback
+
+---
+
+#### Verdict: Is Full Refactor Highest Reward?
+
+**YES** - but with critical caveats:
+
+**Full extraction (Option C) provides highest long-term reward because:**
+
+1. **Swift 6.2 `@concurrent`** - Only Option C can fully leverage this for:
+   - FFT spectrum processing
+   - Metadata loading
+   - File I/O operations
+   - Shuffle algorithm for large playlists
+
+2. **Testability** - Only Option C provides true unit testing:
+   - Mock `EQPresetStore` for UI tests
+   - Test `PlaylistController` shuffle deterministically
+   - Test `MetadataLoader` with fake network responses
+
+3. **Maintainability** - With 25+ files depending on AudioPlayer:
+   - Facade pattern localizes changes
+   - Each component has single responsibility
+   - Easier onboarding for new contributors
+
+4. **Future-proofing** - Swift evolution favors:
+   - Fine-grained actor isolation
+   - Explicit concurrency boundaries
+   - Protocol-based composition
+
+**BUT - the reward/risk ratio is optimized by incremental extraction:**
+
+```
+Recommended Sequence (Risk-Ordered):
+
+1. EQPresetStore      (★★☆☆☆) → Proves pattern, low risk
+2. PlaylistController (★★☆☆☆) → Pure logic, easy to test
+3. MetadataLoader     (★★☆☆☆) → Async-focused, Swift 6.2 @concurrent perfect
+4. VideoPlaybackController (★★★☆☆) → Observer lifecycle needs care
+5. VisualizerPipeline (★★★★☆) → Unmanaged pointers, do LAST
+6. AudioEngineController (★★★★★) → OPTIONAL - may not be worth the risk
+```
+
+**Key Insight:** AudioEngineController extraction may not be worth the risk. The seek guards, engine lifecycle, and tap installation are deeply intertwined. Leaving this as the "core" of AudioPlayer while extracting peripheral concerns may be the optimal architecture.
+
+---
+
+#### Final Recommendation
+
+**Pursue Option C incrementally, with Option B as the first milestone:**
+
+| Phase | Component | Swift 6.2 Benefit | Risk |
+|-------|-----------|-------------------|------|
+| 8.0 | Quick Fixes | - | ★☆☆☆☆ |
+| 8.1 | EQPresetStore | `@concurrent` file I/O | ★★☆☆☆ |
+| 8.2 | MetadataLoader | `@concurrent` metadata | ★★☆☆☆ |
+| 8.3 | PlaylistController | Testability | ★★☆☆☆ |
+| 8.4 | VideoPlaybackController | Observer cleanup | ★★★☆☆ |
+| 8.5 | VisualizerPipeline | `@concurrent` FFT | ★★★★☆ |
+| 8.6 | AudioEngineController | DEFER | ★★★★★ |
+
+**Stop Point:** After Phase 8.5, evaluate if AudioEngineController extraction provides sufficient value given the risk. The remaining AudioPlayer would be ~400-500 lines focused solely on engine lifecycle - a reasonable size for a single class.
+
+**Swift 6.2 Readiness Score by Option:**
+- Option A: 1/10 (no benefit)
+- Option B: 5/10 (partial benefit, foundation for more)
+- Option C (incremental): 9/10 (full benefit, managed risk)

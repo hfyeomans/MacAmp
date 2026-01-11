@@ -2,7 +2,7 @@
 
 **Task ID:** code-optimization
 **Branch:** code-simplification
-**Last Updated:** 2026-01-10
+**Last Updated:** 2026-01-11
 
 ---
 
@@ -10,8 +10,8 @@
 
 ```
 [✅] Research      - Complete
-[✅] Planning      - Complete
-[✅] Oracle Review - Complete (see oracle-review.md)
+[✅] Planning      - Complete (revised 2026-01-11)
+[✅] Oracle Review - Complete (see research.md §13)
 [✅] Phase 0       - Pre-Implementation Fixes (complete)
 [✅] Phase 1       - Force Unwrap Elimination (complete)
 [✅] Phase 2       - Dead Code Docs (complete via placeholder.md)
@@ -20,7 +20,13 @@
 [✅] Phase 5       - Verification (complete)
 [✅] Phase 6       - Commit & Documentation (complete)
 [✅] Phase 7       - Swift 6 Modernization (complete)
-[⏳] Phase 8       - AudioPlayer Refactoring (DEFERRED)
+[⏳] Phase 8.0     - Quick Fixes (READY - next step)
+[⏳] Phase 8.1     - EQPresetStore Extraction (Low Risk)
+[⏳] Phase 8.2     - MetadataLoader Extraction (Low Risk)
+[⏳] Phase 8.3     - PlaylistController Extraction (Low Risk)
+[⏳] Phase 8.4     - VideoPlaybackController Extraction (Medium Risk)
+[⏳] Phase 8.5     - VisualizerPipeline Extraction (HIGH RISK - LAST)
+[⏳] Phase 8.6     - AudioEngineController (DEFER DECISION)
 ```
 
 ---
@@ -102,34 +108,46 @@ Commits ahead: 0
 
 ---
 
-## Oracle Review Summary
+## Oracle Reviews
 
-**Status:** ✅ Complete
-**Document:** `oracle-review.md`
+### Initial Review (2026-01-10) ✅
+- Pre-merge code review: APPROVE WITH SUGGESTIONS (9/10)
+- All critical issues addressed in Phases 0-7
 
-### High Priority Issues Identified
-1. ⚠️ Force unwrap scan methodology flawed (regex matches IUO types and `!=`)
-2. ⚠️ Missing `placeholder.md` per project conventions
-3. ⚠️ Pre-commit hook not versionable in `.git/hooks/`
+### Phase 8 Review (2026-01-11) ✅
+- Model: gpt-5.2-codex with xhigh reasoning
+- Findings documented in research.md §13
+- Key insight: 25+ files depend on AudioPlayer
+- Recommended approach: Option B (EQPresetStore extraction)
 
-### Decisions Made ✅
-| Decision | Options | Chosen | Rationale |
-|----------|---------|--------|-----------|
-| Placeholder approach | `placeholder.md` vs docs-only | ✅ **placeholder.md** | Project convention; no in-code TODOs |
-| Pre-commit hooks | `.githooks/` vs local-only | ✅ **.githooks/** | Tracked directory for team sharing |
-| AppSettings fallback | `fatalError` vs `.temporaryDirectory` | ✅ **Swift 6 pattern** | `URL.cachesDirectory` is non-optional |
-
-### Swift 6 Pattern (Approved)
-```swift
-static func fallbackSkinsDirectory() -> URL {
-    URL.cachesDirectory
-        .appending(component: "MacAmp/FallbackSkins", directoryHint: .isDirectory)
-}
-```
+### Architecture Review (2026-01-11) ✅
+- Model: gpt-5.2-codex with high reasoning
+- Validated Phase 8 plan against docs/MACAMP_ARCHITECTURE_GUIDE.md
+- EQPresetStore confirmed as Mechanism layer (like AppSettings)
+- Key constraints: layer boundary, background I/O, computed forwarding
+- Findings documented in research.md §13.10
 
 ---
 
 ## Progress Log
+
+### 2026-01-11
+- Phase 8 Oracle Review with gpt-5.2-codex (xhigh reasoning)
+- Identified 25+ file dependencies on AudioPlayer
+- Revised Phase 8 plan: Quick Fixes → EQPresetStore → VisualizerPipeline (optional)
+- Consolidated oracle-review.md into research.md §13
+- Updated plan.md and todo.md with revised Phase 8 structure
+- Architecture Review: Validated plan against docs/MACAMP_ARCHITECTURE_GUIDE.md
+- EQPresetStore confirmed as Mechanism layer with three constraints
+- **Swift 6.0/6.2 Deep Evaluation:** (research.md §13.11)
+  - Option A (Extensions): 1/10 Swift 6.2 readiness - near zero benefit
+  - Option B (EQPresetStore): 5/10 - good foundation, limited scope
+  - Option C (Incremental Full): 9/10 - highest reward, managed risk
+  - **Decision:** Pursue Option C incrementally, risk-ordered sequence
+  - VisualizerPipeline moved to LAST due to `Unmanaged` pointer risk
+  - AudioEngineController: defer decision until after 8.5
+- Fixed scheme name: MacAmp → MacAmpApp (7 occurrences)
+- Next step: Phase 8.0 Quick Fixes (separate commit)
 
 ### 2026-01-10
 - Created `code-simplification` branch from `main`

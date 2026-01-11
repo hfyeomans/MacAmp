@@ -327,7 +327,7 @@ git config core.hooksPath .githooks
 ### 5.1 Build Verification
 
 ```bash
-xcodebuild -scheme MacAmp -configuration Debug -enableThreadSanitizer YES build
+xcodebuild -scheme MacAmpApp -configuration Debug -enableThreadSanitizer YES build
 ```
 
 **Expected:** Build succeeds with 0 warnings
@@ -335,7 +335,7 @@ xcodebuild -scheme MacAmp -configuration Debug -enableThreadSanitizer YES build
 ### 5.2 Test Suite
 
 ```bash
-xcodebuild test -scheme MacAmp -enableThreadSanitizer YES
+xcodebuild test -scheme MacAmpApp -enableThreadSanitizer YES
 ```
 
 **Expected:** All tests pass
@@ -430,65 +430,219 @@ Move task to `tasks/done/` when verified.
 
 ---
 
-## Phase 8: AudioPlayer Refactoring (DEFERRED)
+## Phase 8: AudioPlayer Refactoring (REVISED per Oracle Review 2026-01-11)
 
-### 8.1 Pre-requisites
-- [ ] Complete Phase 7 and verify stability
-- [ ] Document current AudioPlayer architecture
-- [ ] Identify all dependencies on AudioPlayer class
+### Overview
 
-### 8.2 Extract AudioEngineController (~400 lines)
-**Responsibility:** AVAudioEngine setup, nodes, connections
+**Status:** Planning Complete - Ready for Implementation
+**Oracle Review:** Complete (see research.md §13)
+**Recommended Approach:** Option B (EQPresetStore extraction) with incremental follow-up
 
-- [ ] Create `AudioEngineController.swift`
-- [ ] Move engine initialization logic
-- [ ] Move node configuration (mixer, eq, playerNode)
-- [ ] Expose public interface for playback control
-- [ ] Update AudioPlayer to use extracted class
+The Oracle review identified that the original Phase 8 plan was incomplete and underestimated coupling (25+ files depend on AudioPlayer). The revised plan prioritizes low-risk extractions with verification between each step.
 
-### 8.3 Extract EQPresetStore (~150 lines)
+### 8.0 Pre-requisites (Quick Fixes - Separate Commits)
+
+**Rationale:** Oracle recommends doing mechanical SwiftLint fixes BEFORE refactoring to reduce diff noise.
+
+#### 8.0.1 AudioPlayer.swift Quick Fixes (Commit 1)
+- [ ] Remove leading whitespace (line 1)
+- [ ] Use shorthand operator `+=` (line 143)
+- [ ] Remove implicit `= nil` initialization (line 319)
+- [ ] Replace `let _ =` with `_ =` (lines 647, 797)
+- [ ] Replace unused optional binding with `!= nil` (line 1073)
+- [ ] Remove extra blank lines (lines 716, 819, 1182)
+- [ ] Build verification
+- [ ] Commit: "style: Fix SwiftLint violations in AudioPlayer"
+
+#### 8.0.2 SnapUtils.swift Quick Fixes (Commit 2 - if not already done)
+- [ ] Verify else-on-same-line fixes from Phase 7
+- [ ] Run `swiftlint lint MacAmpApp/Models/SnapUtils.swift`
+- [ ] Fix any remaining violations
+- [ ] Commit: "style: Fix remaining SwiftLint violations in SnapUtils"
+
+### 8.1 Phase 8a: Extract EQPresetStore (Low Risk)
+
 **Responsibility:** EQ preset persistence and management
+**Lines moved:** ~150
+**Risk:** Low - isolated functionality, minimal coupling
+**Layer:** Mechanism (like AppSettings) - NOT directly accessible by views
 
-- [ ] Create `EQPresetStore.swift`
-- [ ] Move preset loading/saving logic
-- [ ] Move per-track preset management
-- [ ] Move user preset storage
-- [ ] Update AudioPlayer to delegate to store
+#### Architecture Constraints (Oracle Review)
+1. **Layer Boundary:** No direct view access to EQPresetStore. Route via AudioPlayer/PlaybackCoordinator only.
+2. **Background I/O:** Preserve `Task.detached` for file I/O. Only state updates on @MainActor.
+3. **Computed Forwarding:** AudioPlayer exposes computed properties forwarding to EQPresetStore. Existing bindings remain stable.
 
-### 8.4 Extract VisualizerPipeline (~200 lines)
+#### Implementation
+- [ ] Create `MacAmpApp/Audio/EQPresetStore.swift`
+- [ ] Add `@MainActor @Observable final class EQPresetStore`
+- [ ] Move properties:
+  - `userPresets: [EQPreset]`
+  - `perTrackPresets: [String: EqfPreset]`
+  - `presetsFileName`
+  - `userPresetDefaultsKey`
+- [ ] Move methods:
+  - `loadUserPresets()`
+  - `persistUserPresets()`
+  - `loadPerTrackPresets()`
+  - `savePerTrackPresets()`
+  - `storeUserPreset(_:)`
+  - `importEqfPreset(from:)`
+  - `appSupportDirectory()`
+  - `presetsFileURL()`
+- [ ] Add `eqPresetStore` property to AudioPlayer
+- [ ] Update AudioPlayer methods to delegate to store
+- [ ] Build verification
+- [ ] Test: Save/load presets, import EQF, per-track presets
+- [ ] Commit: "refactor: Extract EQPresetStore from AudioPlayer"
+
+### 8.2 Phase 8b: Extract VisualizerPipeline (Medium Risk) - OPTIONAL
+
 **Responsibility:** Audio tap and visualization data
+**Lines moved:** ~200-250
+**Risk:** Medium - `Unmanaged` pointer lifetime is fragile
 
-- [ ] Create `VisualizerPipeline.swift`
-- [ ] Move audio tap configuration
-- [ ] Move FFT/smoothing logic
-- [ ] Move RMS/spectrum calculation
-- [ ] Expose observable visualization data
+#### Prerequisites
+- [ ] Complete 8.1 (EQPresetStore)
+- [ ] Verify all tests pass
+- [ ] Document current tap lifecycle
 
-### 8.5 Extract PlaybackState (~100 lines)
-**Responsibility:** Observable playback state
+#### Implementation
+- [ ] Create `MacAmpApp/Audio/VisualizerPipeline.swift`
+- [ ] Move `VisualizerScratchBuffers` class
+- [ ] Move `VisualizerTapContext` struct
+- [ ] Move `ButterchurnFrame` struct
+- [ ] Move tap installation/removal logic
+- [ ] Move visualizer data properties
+- [ ] Move `makeVisualizerTapHandler` static method
+- [ ] Update AudioPlayer to hold `visualizerPipeline` reference
+- [ ] **CRITICAL:** Ensure `Unmanaged` pointer lifetime is preserved
+- [ ] Build verification
+- [ ] Test: Spectrum analyzer, oscilloscope, Butterchurn
+- [ ] Commit: "refactor: Extract VisualizerPipeline from AudioPlayer"
 
-- [ ] Create `PlaybackState.swift` (or keep in AudioPlayer)
-- [ ] Move observable state properties
-- [ ] Ensure @MainActor compliance
-- [ ] Consider if this should stay in AudioPlayer as facade
+### 8.3 Phase 8c: Extract MetadataLoader (Low Risk)
 
-### 8.6 Quick Fixes (Can do before or during refactor)
-- [ ] Fix leading whitespace (line 1)
-- [ ] Fix shorthand operator (line 143)
-- [ ] Fix implicit optional initialization (line 319)
-- [ ] Fix redundant discardable let (lines 647, 797)
-- [ ] Fix unused optional binding (line 1073)
-- [ ] Fix vertical whitespace (lines 716, 819, 1182)
+**Responsibility:** Async track and video metadata loading
+**Lines moved:** ~100-150
+**Risk:** Low - async-only, no shared mutable state
+**Swift 6.2:** Perfect for `@concurrent` attribute
 
-### 8.7 Statement Position Fixes (SnapUtils.swift)
-- [ ] Move `else` to same line as `}` (8 locations)
-- [ ] Run SwiftLint to verify fixes
+#### Implementation
+- [ ] Create `MacAmpApp/Audio/MetadataLoader.swift`
+- [ ] Add `nonisolated struct MetadataLoader`
+- [ ] Move metadata loading logic from AudioPlayer
+- [ ] Mark loading methods as `@concurrent` (Swift 6.2 ready)
+- [ ] Build verification
+- [ ] Test: Track info display, bitrate/sample rate
+- [ ] Commit: "refactor: Extract MetadataLoader from AudioPlayer"
 
-### 8.8 Verification
-- [ ] Build succeeds
-- [ ] All tests pass
-- [ ] SwiftLint violations reduced
-- [ ] Manual smoke test (audio, EQ, visualization)
+### 8.4 Phase 8d: Extract PlaylistController (Low Risk)
+
+**Responsibility:** Playlist data management, navigation, shuffle
+**Lines moved:** ~150-200
+**Risk:** Low - pure data manipulation
+**Swift 6.2:** Shuffle can use `@concurrent` for large playlists
+
+#### Implementation
+- [ ] Create `MacAmpApp/Audio/PlaylistController.swift`
+- [ ] Add `@MainActor @Observable final class PlaylistController`
+- [ ] Move: playlist array, currentIndex, shuffle/repeat state
+- [ ] Move: add/remove/reorder logic, navigation methods
+- [ ] Build verification
+- [ ] Test: Add tracks, navigate, shuffle, repeat modes
+- [ ] Commit: "refactor: Extract PlaylistController from AudioPlayer"
+
+### 8.5 Phase 8e: Extract VideoPlaybackController (Medium Risk)
+
+**Responsibility:** AVPlayer for video playback
+**Lines moved:** ~150-200
+**Risk:** Medium - AVPlayer observer lifecycle needs care
+
+#### Implementation
+- [ ] Create `MacAmpApp/Audio/VideoPlaybackController.swift`
+- [ ] Move: videoPlayer, videoEndObserver, videoTimeObserver
+- [ ] Move: video-specific playback logic
+- [ ] Ensure observer cleanup is correct
+- [ ] Build verification
+- [ ] Test: Video playback, seek, metadata
+- [ ] Commit: "refactor: Extract VideoPlaybackController from AudioPlayer"
+
+### 8.6 Phase 8f: Extract VisualizerPipeline (HIGH Risk) - LAST
+
+**Responsibility:** Audio tap and visualization data
+**Lines moved:** ~200-250
+**Risk:** HIGH - `Unmanaged` pointer lifetime is critical
+**Swift 6.2:** FFT processing can use `@concurrent`
+
+#### Prerequisites
+- [ ] Complete 8.1-8.5 (all lower-risk extractions)
+- [ ] Verify all tests pass
+- [ ] Document current tap lifecycle thoroughly
+
+#### Implementation
+- [ ] Create `MacAmpApp/Audio/VisualizerPipeline.swift`
+- [ ] Move `VisualizerScratchBuffers` class
+- [ ] Move `VisualizerTapContext` struct
+- [ ] Move `ButterchurnFrame` struct
+- [ ] Move tap installation/removal logic
+- [ ] Move visualizer data properties
+- [ ] Move `makeVisualizerTapHandler` static method
+- [ ] **CRITICAL:** Ensure `Unmanaged` pointer lifetime is preserved
+- [ ] Build verification
+- [ ] Test: Spectrum analyzer, oscilloscope, Butterchurn
+- [ ] Commit: "refactor: Extract VisualizerPipeline from AudioPlayer"
+
+### 8.7 Phase 8g: AudioEngineController - DEFER DECISION
+
+**Status:** Evaluate after 8.6 completion
+**Risk:** HIGHEST - core playback, seek guards, engine state
+
+**Key Insight:** AudioEngineController extraction may not be worth the risk. After extracting all other components, AudioPlayer will be ~400-500 lines focused on engine lifecycle. This may be an acceptable "core" size.
+
+**Decision Point:** After Phase 8.6, if AudioPlayer is still >500 lines with complex interdependencies, consider extraction. Otherwise, leave as-is.
+
+### 8.8 Alternative: Extension-Based Organization (Option A)
+
+**Use if:** Full extraction proves too risky
+
+Split AudioPlayer into extensions without behavior change:
+```
+MacAmpApp/Audio/
+├── AudioPlayer.swift              (~200 lines - core)
+├── AudioPlayer+Playback.swift     (~400 lines)
+├── AudioPlayer+EQ.swift           (~200 lines)
+├── AudioPlayer+Visualizer.swift   (~250 lines)
+├── AudioPlayer+Playlist.swift     (~200 lines)
+├── AudioPlayer+Video.swift        (~200 lines)
+└── AudioPlayer+Presets.swift      (~150 lines)
+```
+
+**Note:** Option A provides near-zero Swift 6.2 benefit - only use as fallback.
+
+### 8.9 Verification Checklist
+
+After each extraction phase:
+- [ ] `xcodebuild -scheme MacAmpApp -configuration Debug build` succeeds
+- [ ] `swiftlint lint MacAmpApp/Audio/` shows reduced violations
+- [ ] Manual smoke test:
+  - [ ] Play/pause/stop local files
+  - [ ] EQ on/off, band adjustment
+  - [ ] Presets save/load/import
+  - [ ] Visualizer updates when playing
+  - [ ] Video playback works
+  - [ ] Seek/scrub during playback
+
+### 8.10 Decision Log
+
+| Decision | Options | Chosen | Rationale |
+|----------|---------|--------|-----------|
+| Approach | A (Extensions) / B (EQPresetStore) / C (Full) | **C (Incremental)** | Highest Swift 6.2 reward, managed risk via sequencing |
+| Quick fixes | Bundle / Separate | **Separate** | Oracle: reduces diff noise |
+| SnapUtils fixes | With Phase 8 / Separate | **Separate** | Unrelated to AudioPlayer |
+| Sequencing | Big bang / Incremental | **Incremental** | Risk-ordered: low → medium → high |
+| VisualizerPipeline | Early / Late | **Last** | `Unmanaged` pointers are highest risk |
+| AudioEngineController | Extract / Keep | **Defer decision** | Evaluate after 8.6; may not be worth risk |
+| Swift 6.2 readiness | Now / Later | **Design for it** | Use `@concurrent`-ready patterns |
 
 ---
 
