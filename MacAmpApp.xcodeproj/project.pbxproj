@@ -16,6 +16,7 @@
 		46CCD694793E413E9EA00B35 /* MetadataLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39D077A9CAF04C95BAF984F6 /* MetadataLoader.swift */; };
 		E78F06DB7035402FA285F0CE /* EQPresetStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE2906FB25D545309B1FD395 /* EQPresetStore.swift */; };
 		A1B2C3D4E5F607089A0B1C2D /* VideoPlaybackController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0E1D2C3B4A596780F1E2D3C /* VideoPlaybackController.swift */; };
+		B2C3D4E5F60708190A1B2C3D /* VisualizerPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1D2C3B4A5967809F0E1D2C4 /* VisualizerPipeline.swift */; };
 		2BEEA991452D4A86CD1AC9F7 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = EA5D7D010AE0DE961C9470AC /* ZIPFoundation */; };
 		342759E1558D4553A66C3AD9 /* RadioStationLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC98BCD0ED814A6F90A8021D /* RadioStationLibrary.swift */; };
 		34EEE95E7D965A0D94D12C30 /* WinampMainWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C3495B177A8BA24181B484E /* WinampMainWindow.swift */; };
@@ -193,6 +194,7 @@
 		BE2906FB25D545309B1FD395 /* EQPresetStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EQPresetStore.swift; sourceTree = "<group>"; };
 		EBD01B167E2D416C9691AC8C /* PlaylistController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaylistController.swift; sourceTree = "<group>"; };
 		F0E1D2C3B4A596780F1E2D3C /* VideoPlaybackController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoPlaybackController.swift; sourceTree = "<group>"; };
+		E1D2C3B4A5967809F0E1D2C4 /* VisualizerPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisualizerPipeline.swift; sourceTree = "<group>"; };
 		BC98BCD0ED814A6F90A8021D /* RadioStationLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadioStationLibrary.swift; sourceTree = "<group>"; };
 		C32D1ED0603B1A1497664E37 /* MacAmpApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacAmpApp.swift; sourceTree = "<group>"; };
 		CABDEB04D5D23C3DAAAFEEFC /* PlaylistTimeText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaylistTimeText.swift; sourceTree = "<group>"; };
@@ -329,6 +331,7 @@
 				BE2906FB25D545309B1FD395 /* EQPresetStore.swift */,
 				EBD01B167E2D416C9691AC8C /* PlaylistController.swift */,
 				F0E1D2C3B4A596780F1E2D3C /* VideoPlaybackController.swift */,
+				E1D2C3B4A5967809F0E1D2C4 /* VisualizerPipeline.swift */,
 			);
 			path = Audio;
 			sourceTree = "<group>";
@@ -630,6 +633,7 @@
 				46CCD694793E413E9EA00B35 /* MetadataLoader.swift in Sources */,
 				848E5CDF982D4B08A90D8B5E /* PlaylistController.swift in Sources */,
 				A1B2C3D4E5F607089A0B1C2D /* VideoPlaybackController.swift in Sources */,
+				B2C3D4E5F60708190A1B2C3D /* VisualizerPipeline.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

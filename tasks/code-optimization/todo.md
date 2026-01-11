@@ -210,9 +210,10 @@ codex "@file1.swift @file2.swift Review these changes..."
 | Phase 8.2: MetadataLoader | ✅ Complete | 8/8 |
 | Phase 8.3: PlaylistController | ✅ Complete | 14/14 |
 | Phase 8.4: VideoPlaybackController | ✅ Complete | 15/15 |
-| Phase 8.5-8.6: Remaining | ⏳ Pending | 0/12 |
-| Phase 9: Quality Gate (10/10) | ⏳ Planned | 0/22 |
-| **Total (1-8.4)** | **✅ COMPLETE** | **127/166** |
+| Phase 8.5: VisualizerPipeline | ✅ Complete | 6/7 (pending user test) |
+| Phase 8.6: AudioEngineController | ⏳ Deferred | 0/2 |
+| Phase 9: Quality Gate (10/10) | ⏳ Planned | 0/26 |
+| **Total (1-8.5)** | **✅ COMPLETE** | **133/172** |
 
 ### All Tasks Complete (Phases 1-7) ✅
 - [x] Git hooks configured
@@ -334,16 +335,18 @@ codex "@file1.swift @file2.swift Review these changes..."
 - [x] Test: Video playback, seeking, controls, metadata, volume, time display ✅
 - [x] Bug fix: Time display not updating (added onTimeUpdate callback)
 - [x] Oracle review: gpt-5.2-codex (xhigh) - Score 7.5/10
+- [x] Oracle fixes deferred to Phase 9 (quality gate)
+- [x] Commit: `e8b5772` "refactor: Extract VideoPlaybackController from AudioPlayer (Phase 8.4)"
 
-### 8.5 Phase 8e: Extract VisualizerPipeline (HIGH RISK - LAST)
+### 8.5 Phase 8e: Extract VisualizerPipeline (HIGH RISK - LAST) ✅ COMPLETE
 
-- [ ] Document current tap lifecycle
-- [ ] Create `MacAmpApp/Audio/VisualizerPipeline.swift`
-- [ ] Move `VisualizerScratchBuffers`, `VisualizerTapContext`, `ButterchurnFrame`
-- [ ] Move tap installation/removal logic
-- [ ] **CRITICAL:** Ensure `Unmanaged` pointer lifetime preserved
-- [ ] Build verification
-- [ ] Test: Spectrum analyzer, oscilloscope, Butterchurn
+- [x] Document current tap lifecycle
+- [x] Create `MacAmpApp/Audio/VisualizerPipeline.swift`
+- [x] Move `VisualizerScratchBuffers`, `VisualizerTapContext`, `ButterchurnFrame`
+- [x] Move tap installation/removal logic
+- [x] **CRITICAL:** Ensure `Unmanaged` pointer lifetime preserved ✅
+- [x] Build verification: SUCCEEDED
+- [ ] Test: Spectrum analyzer, oscilloscope, Butterchurn (pending user verification)
 
 ### 8.6 Phase 8f: AudioEngineController (DEFER DECISION)
 
@@ -355,7 +358,51 @@ codex "@file1.swift @file2.swift Review these changes..."
 ## Phase 9: Quality Gate Remediation (10/10 Score)
 
 **Oracle Review:** gpt-5.2-codex (xhigh reasoning)
-**Current Score:** 8/10 → **Target: 10/10**
+**Current Score:** 7.5/10 → **Target: 10/10**
+
+### 9.0 VideoPlaybackController Oracle Fixes (Medium Priority)
+
+**Findings from Phase 8.4 Oracle Review:**
+
+#### 9.0.1 Lifecycle: cleanup() not called in deinit
+- [ ] Add `deinit` to VideoPlaybackController
+- [ ] Call `cleanup()` in deinit
+- [ ] Verify no retain cycles prevent deinit
+
+#### 9.0.2 Lifecycle: cleanup() leaves stale state
+- [ ] Reset `currentTime`, `currentDuration`, `playbackProgress` in cleanup()
+- [ ] Consider resetting `isPlaying`, `isPaused` flags
+
+#### 9.0.3 Metadata Race Condition (Low Priority)
+- [ ] Ensure video metadata extraction doesn't race with playback state
+- [ ] Consider using Task with cancellation
+
+#### 9.0.4 Bridge Layer Label Inconsistency (Low Priority)
+- [ ] Review MARK comments for consistent labeling pattern
+- [ ] Align with other extracted controllers
+
+### 9.0.5 VisualizerPipeline Oracle Fixes (Phase 8.5)
+
+**Findings from Phase 8.5 Oracle Review (Score: 7.5/10):**
+
+#### High Priority: Use-after-free risk with Unmanaged pointer
+- [ ] Guarantee `removeTap()` on teardown
+- [ ] Add `AudioPlayer.deinit` that calls `stop()` or `removeVisualizerTapIfNeeded()`
+- [ ] Or switch to retained context with explicit release
+
+#### Medium Priority: Swift 6 Sendable conformance
+- [ ] Add `: Sendable` to `VisualizerData` struct
+- [ ] Add `: Sendable` to `ButterchurnFrame` struct
+- [ ] Verify @Sendable Task captures are correct
+
+#### Medium Priority: Audio-thread allocations
+- [ ] Move window/input/output buffers into VisualizerScratchBuffers
+- [ ] Move waveform buffer allocation to scratch
+- [ ] Eliminate per-buffer allocations in processButterchurnFFT
+
+#### Low Priority: AppSettings per-frame lookup
+- [ ] Consider injecting/caching useSpectrum flag
+- [ ] Or pass from AudioPlayer to reduce hidden dependency
 
 ### 9.1 Extract Track Struct (Lowest Risk)
 

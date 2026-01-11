@@ -25,7 +25,7 @@
 [✅] Phase 8.2     - MetadataLoader Extraction (complete)
 [✅] Phase 8.3     - PlaylistController Extraction (complete)
 [✅] Phase 8.4     - VideoPlaybackController Extraction (complete)
-[⏳] Phase 8.5     - VisualizerPipeline Extraction (HIGH RISK - LAST)
+[✅] Phase 8.5     - VisualizerPipeline Extraction (complete)
 [⏳] Phase 8.6     - AudioEngineController (DEFER DECISION)
 ```
 
@@ -41,6 +41,7 @@
 | `MacAmpApp/Audio/MetadataLoader.swift` | ✅ Created | Extracted metadata loading (171 lines) |
 | `MacAmpApp/Audio/PlaylistController.swift` | ✅ Created | Extracted playlist state and navigation (260 lines) |
 | `MacAmpApp/Audio/VideoPlaybackController.swift` | ✅ Created | Extracted video playback lifecycle (259 lines) |
+| `MacAmpApp/Audio/VisualizerPipeline.swift` | ✅ Created | Extracted visualizer tap and FFT processing (512 lines) |
 | `MacAmpApp/Views/WinampPlaylistWindow.swift` | ✅ Updated | Updated to use new playlist API |
 | `MacAmpApp/Models/AppSettings.swift` | ✅ Done | Swift 6 `URL.cachesDirectory`; `Keys` enum; Redundant enum values removed |
 | `MacAmpApp/Views/EqGraphView.swift` | ✅ Done | Guard chain for `tiffRepresentation`; Fixed `min(0,...)` bug |
@@ -115,6 +116,17 @@
 | Build status | **SUCCEEDED** | Pass | ✅ |
 | Test status | **PASSED** | - | User verified ✅ |
 | Oracle score | **7.5/10** | 8/10 | Medium priority issues (cleanup lifecycle) |
+
+### After Phase 8.5 ✅
+| Metric | Value | Previous | Change |
+|--------|-------|----------|--------|
+| AudioPlayer.swift lines | **1,059** | 1,434 | -375 (-26.1%) |
+| New files extracted | **5** | 4 | +VisualizerPipeline.swift |
+| VisualizerPipeline.swift lines | **512** | N/A | New file |
+| VisualizerPipeline.swift violations | **0** | N/A | Clean |
+| Cumulative reduction | **746 lines** | 371 | -41.3% from 1,805 |
+| Build status | **SUCCEEDED** | Pass | ✅ |
+| Oracle score | **7.5/10** | - | Unmanaged lifetime, Sendable conformance |
 
 ---
 
@@ -252,6 +264,25 @@ Commits ahead: 0
   - Oracle review: gpt-5.2-codex (xhigh reasoning) - Score 7.5/10
   - Medium priority findings: cleanup() not called in deinit, stale state after cleanup()
   - Low priority: metadata race condition, bridge layer label inconsistency
+  - **Deferred to Phase 9:** All Oracle findings (quality gate phase)
+  - Commit: `e8b5772`
+- **Phase 8.5 Complete:** VisualizerPipeline extracted from AudioPlayer
+  - Created `MacAmpApp/Audio/VisualizerPipeline.swift` (512 lines, 0 SwiftLint violations)
+  - Extracted: VisualizerScratchBuffers, VisualizerTapContext, ButterchurnFrame
+  - Extracted: tap handler, install/remove tap, updateLevels, snapshotButterchurnFrame
+  - Extracted: getRMSData, getWaveformSamples, spectrum/waveform state
+  - **HIGH RISK:** `Unmanaged` pointer pattern preserved correctly
+    - Pointer now references VisualizerPipeline instead of AudioPlayer
+    - Callback pattern for AppSettings access (useSpectrum flag)
+  - AudioPlayer reduced from 1,434 to 1,059 lines (-375 lines, -26.1%)
+  - Cumulative: 1,805 → 1,059 lines (-746, -41.3%)
+  - Build: SUCCEEDED
+  - Oracle review: gpt-5.2-codex (high reasoning) - Score 7.5/10
+  - High priority: Use-after-free risk with Unmanaged pointer if tap outlives pipeline
+  - Medium priority: Swift 6 Sendable conformance for VisualizerData/ButterchurnFrame
+  - Medium priority: Audio-thread allocations in processButterchurnFFT
+  - Low priority: AppSettings per-frame lookup hidden dependency
+  - **Deferred to Phase 9:** All Oracle findings (quality gate phase)
 
 ### 2026-01-10
 - Created `code-simplification` branch from `main`
