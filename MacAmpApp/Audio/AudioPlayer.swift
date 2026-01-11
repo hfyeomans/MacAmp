@@ -1536,7 +1536,9 @@ final class AudioPlayer {
             return .none
 
         case .restartCurrent:
-            seek(to: 0, resume: isPlaying)
+            // Always resume: repeat-one at end-of-track means "restart and play"
+            // (isPlaying is already false after onPlaybackEnded transition)
+            seek(to: 0, resume: true)
             return .restartCurrent
 
         case .playTrack(let track):

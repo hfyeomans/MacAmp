@@ -1523,3 +1523,61 @@ git reset --hard <previous-hash>  # Reverts to before extraction
 ```
 
 Each extracted component is self-contained, so reverting one doesn't affect others.
+
+---
+
+## 15. Oracle Review: Phase 8.0-8.3 Quality Gate (2026-01-11)
+
+**Model:** gpt-5.2-codex
+**Reasoning Effort:** xhigh
+**Score:** 7/10 → **8/10** (after fix)
+
+### 15.1 Findings
+
+| Severity | Issue | Location | Status |
+|----------|-------|----------|--------|
+| **High** | Repeat-one auto-repeat regression | `AudioPlayer.swift:1538-1540` | ✅ FIXED |
+| Medium | EQPresetStore I/O on main actor | `EQPresetStore.swift:26,94,106` | Documented |
+| Medium | `pendingTrackURLs` encapsulation leak | `PlaylistController.swift:45` | Documented |
+| Low | `Track` coupling remains | `AudioPlayer.swift:185` | Deferred |
+
+### 15.2 High Priority Fix: Repeat-One Regression
+
+**Problem:** `onPlaybackEnded` transitions to `.stopped(.completed)` (sets `isPlaying = false`) before calling `nextTrack()`. When `.restartCurrent` action is returned, `handlePlaylistAction` called `seek(to: 0, resume: isPlaying)`, but `isPlaying` was already `false`.
+
+**Fix Applied:**
+```swift
+case .restartCurrent:
+    // Always resume: repeat-one at end-of-track means "restart and play"
+    // (isPlaying is already false after onPlaybackEnded transition)
+    seek(to: 0, resume: true)
+    return .restartCurrent
+```
+
+### 15.3 Medium Priority: EQPresetStore I/O
+
+The `EQPresetStore` init and save methods perform file I/O synchronously on the main actor. This conflicts with Option C guidance about background I/O.
+
+**Current Impact:** Low - preset files are small (< 1KB typically)
+**Future Action:** Consider `Task.detached` for I/O operations when implementing larger preset libraries
+
+### 15.4 Medium Priority: pendingTrackURLs Encapsulation
+
+`pendingTrackURLs` is marked `@ObservationIgnored` but accessed directly from AudioPlayer. This is a minor encapsulation leak.
+
+**Mitigation:** The property is intentionally non-observable (prevents unnecessary view updates). Direct access is acceptable for this internal-only property.
+
+### 15.5 Low Priority: Track Coupling
+
+`Track` struct remains defined in `AudioPlayer.swift`, creating coupling between `PlaylistController` and `AudioPlayer.swift`.
+
+**Future Action:** Extract `Track` to `MacAmpApp/Models/Track.swift` in Phase 9 cleanup
+
+### 15.6 Positive Findings
+
+- ✅ Computed property forwardings (`playlist`, `shuffleEnabled`, `userPresets`) correct and complete
+- ✅ No direct view access to internal controllers (EQPresetStore, PlaylistController)
+- ✅ MetadataLoader correctly implemented as `nonisolated struct` with static async methods
+- ✅ PlaylistController returns pure actions (no side effects in navigation logic)
+- ✅ Bridge pattern (`handlePlaylistAction`) implemented as designed
+- ✅ All WinampPlaylistWindow call sites properly updated
