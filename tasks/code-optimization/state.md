@@ -169,6 +169,9 @@ Commits ahead: 0
   - AudioPlayer uses computed forwarding for `userPresets` property
   - AudioPlayer reduced from 1,805 to 1,709 lines (-96 lines, -5.3%)
   - Build: SUCCEEDED
+  - **Test: PASSED** - save/load presets, per-track presets verified
+  - **Note:** Auto EQ `generateAutoPreset` is a pre-existing stub (not a regression)
+  - Commit: `eb7f501`
 
 ### 2026-01-10
 - Created `code-simplification` branch from `main`

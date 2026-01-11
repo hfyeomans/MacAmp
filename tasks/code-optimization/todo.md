@@ -277,8 +277,10 @@ codex "@file1.swift @file2.swift Review these changes..."
 - [x] Add `eqPresetStore` property to AudioPlayer
 - [x] Update AudioPlayer methods to delegate to store
 - [x] Build verification: SUCCEEDED
-- [ ] Test: Save/load presets, import EQF, per-track presets (manual verification pending)
-- [ ] Commit: "refactor: Extract EQPresetStore from AudioPlayer"
+- [x] Test: Save/load presets, import EQF, per-track presets ✅
+- [x] Commit: `eb7f501` "refactor: Extract EQPresetStore from AudioPlayer"
+
+**Note:** Auto EQ "automatic analysis" is a pre-existing stub (`generateAutoPreset`). Per-track preset recall works correctly. Full audio analysis implementation deferred to future task.
 
 ### 8.2 Phase 8b: Extract VisualizerPipeline (OPTIONAL - Medium Risk)
 
