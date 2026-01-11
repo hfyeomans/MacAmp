@@ -310,10 +310,11 @@ final class AudioPlayer {
     var isEqOn: Bool = false // New: EQ On/Off state
     var eqAutoEnabled: Bool = false
     var useLogScaleBands: Bool = true
-    @ObservationIgnored var perTrackPresets: [String: EqfPreset] = [:]
-    @ObservationIgnored private let presetsFileName = "perTrackPresets.json"
-    private(set) var userPresets: [EQPreset] = []
-    @ObservationIgnored private let userPresetDefaultsKey = "MacAmp.UserEQPresets.v1"
+    // EQ preset persistence (extracted to separate store)
+    let eqPresetStore = EQPresetStore()
+
+    // Computed forwarding for backwards compatibility
+    var userPresets: [EQPreset] { eqPresetStore.userPresets }
     var visualizerLevels: [Float] = Array(repeating: 0.0, count: 20)
     var appliedAutoPresetTrack: String?
     var channelCount: Int = 2 // 1 = mono, 2 = stereo
@@ -323,8 +324,7 @@ final class AudioPlayer {
     init() {
         setupEngine()
         configureEQ()
-        loadPerTrackPresets()
-        loadUserPresets()
+        // Note: eqPresetStore loads presets in its own init
     }
 
     deinit {}
@@ -879,57 +879,33 @@ final class AudioPlayer {
         let trimmedName = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else { return }
         let preset = getCurrentEQPreset(name: trimmedName)
-        storeUserPreset(preset)
+        eqPresetStore.storeUserPreset(preset)
         AppLog.info(.audio, "Saved user EQ preset '\(trimmedName)'")
     }
 
     func deleteUserPreset(id: UUID) {
-        if let index = userPresets.firstIndex(where: { $0.id == id }) {
-            let removed = userPresets.remove(at: index)
-            persistUserPresets()
-            AppLog.info(.audio, "Deleted user EQ preset '\(removed.name)'")
-        }
+        eqPresetStore.deleteUserPreset(id: id)
     }
 
     func importEqfPreset(from url: URL) {
-        // Move file I/O off main thread to avoid UI stalls
-        Task.detached(priority: .userInitiated) { [weak self] in
-            do {
-                let data = try Data(contentsOf: url)
-                guard let eqfPreset = EQFCodec.parse(data: data) else {
-                    AppLog.warn(.audio, "Failed to parse EQF preset at \(url.lastPathComponent)")
-                    return
-                }
-                let suggestedName = eqfPreset.name?.trimmingCharacters(in: .whitespacesAndNewlines)
-                let fallbackName = url.deletingPathExtension().lastPathComponent
-                let finalName = suggestedName.flatMap { $0.isEmpty ? nil : $0 } ?? fallbackName
-                let preset = EQPreset(name: finalName, preamp: eqfPreset.preampDB, bands: eqfPreset.bandsDB)
-                // Return to MainActor for state updates
-                await self?.applyImportedPreset(preset, name: finalName)
-            } catch {
-                AppLog.error(.audio, "Failed to load EQF preset: \(error)")
+        Task { [weak self] in
+            guard let self = self else { return }
+            if let preset = await self.eqPresetStore.importEqfPreset(from: url) {
+                self.applyEQPreset(preset)
             }
         }
-    }
-
-    @MainActor
-    private func applyImportedPreset(_ preset: EQPreset, name: String) {
-        storeUserPreset(preset)
-        applyEQPreset(preset)
-        AppLog.info(.audio, "Imported EQ preset '\(name)' from EQF")
     }
 
     func savePresetForCurrentTrack() {
         guard let t = currentTrack else { return }
         let p = EqfPreset(name: t.title, preampDB: preamp, bandsDB: eqBands)
-        perTrackPresets[t.url.absoluteString] = p
+        eqPresetStore.savePreset(p, forTrackURL: t.url.absoluteString)
         AppLog.debug(.audio, "Saved per-track EQ preset for \(t.title)")
-        savePerTrackPresets()
     }
 
     private func applyAutoPreset(for track: Track) {
         guard eqAutoEnabled else { return }
-        if let preset = perTrackPresets[track.url.absoluteString] {
+        if let preset = eqPresetStore.preset(forTrackURL: track.url.absoluteString) {
             applyPreset(preset)
             appliedAutoPresetTrack = track.title
             Task { @MainActor [weak self] in
@@ -961,78 +937,6 @@ final class AudioPlayer {
         autoEQTask?.cancel()
         autoEQTask = nil
         AppLog.debug(.audio, "AutoEQ: automatic analysis disabled, no preset generated for \(track.title)")
-    }
-
-    // MARK: - Preset persistence
-    private func appSupportDirectory() -> URL? {
-        let fm = FileManager.default
-        guard let base = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return nil }
-        let dir = base.appendingPathComponent("MacAmp", isDirectory: true)
-        if !fm.fileExists(atPath: dir.path) {
-            do { try fm.createDirectory(at: dir, withIntermediateDirectories: true) } catch {
-                AppLog.error(.audio, "Failed to create app support dir: \(error)")
-            }
-        }
-        return dir
-    }
-
-    private func presetsFileURL() -> URL? {
-        appSupportDirectory()?.appendingPathComponent(presetsFileName)
-    }
-
-    private func loadPerTrackPresets() {
-        guard let url = presetsFileURL(), FileManager.default.fileExists(atPath: url.path) else { return }
-        do {
-            let data = try Data(contentsOf: url)
-            let loaded = try JSONDecoder().decode([String: EqfPreset].self, from: data)
-            perTrackPresets = loaded
-            AppLog.debug(.audio, "Loaded \(loaded.count) per-track presets")
-        } catch {
-            AppLog.warn(.audio, "Failed to load per-track presets: \(error)")
-        }
-    }
-
-    private func savePerTrackPresets() {
-        guard let url = presetsFileURL() else { return }
-        do {
-            let data = try JSONEncoder().encode(perTrackPresets)
-            try data.write(to: url, options: .atomic)
-        } catch {
-            AppLog.warn(.audio, "Failed to save per-track presets: \(error)")
-        }
-    }
-
-    private func loadUserPresets() {
-        let defaults = UserDefaults.standard
-        guard let data = defaults.data(forKey: userPresetDefaultsKey) else { return }
-        do {
-            var decoded = try JSONDecoder().decode([EQPreset].self, from: data)
-            decoded.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-            userPresets = decoded
-            AppLog.debug(.audio, "Loaded \(decoded.count) user EQ presets")
-        } catch {
-            AppLog.warn(.audio, "Failed to decode user EQ presets: \(error)")
-            userPresets = []
-        }
-    }
-
-    private func persistUserPresets() {
-        do {
-            let data = try JSONEncoder().encode(userPresets)
-            UserDefaults.standard.set(data, forKey: userPresetDefaultsKey)
-        } catch {
-            AppLog.warn(.audio, "Failed to persist user EQ presets: \(error)")
-        }
-    }
-
-    private func storeUserPreset(_ preset: EQPreset) {
-        if let index = userPresets.firstIndex(where: { $0.name.caseInsensitiveCompare(preset.name) == .orderedSame }) {
-            userPresets[index] = preset
-        } else {
-            userPresets.append(preset)
-        }
-        userPresets.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-        persistUserPresets()
     }
 
     // MARK: - Engine Wiring

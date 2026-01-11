@@ -12,6 +12,7 @@
 		0E00109AB5375E26C755CA89 /* M3UEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31F32D02E5A363D621708145 /* M3UEntry.swift */; };
 		11C6F38CB7C5AADA7B5AFE57 /* VisualizerOptions.swift in Sources */ = {isa = PBXBuildFile; fileRef = B361EDCFD1F533FD16157EC1 /* VisualizerOptions.swift */; };
 		2A33850C38AA921D5659ECA7 /* AudioPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC875DDD2BE621229D463CB9 /* AudioPlayer.swift */; };
+		E78F06DB7035402FA285F0CE /* EQPresetStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE2906FB25D545309B1FD395 /* EQPresetStore.swift */; };
 		2BEEA991452D4A86CD1AC9F7 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = EA5D7D010AE0DE961C9470AC /* ZIPFoundation */; };
 		342759E1558D4553A66C3AD9 /* RadioStationLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC98BCD0ED814A6F90A8021D /* RadioStationLibrary.swift */; };
 		34EEE95E7D965A0D94D12C30 /* WinampMainWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C3495B177A8BA24181B484E /* WinampMainWindow.swift */; };
@@ -185,6 +186,7 @@
 		B6G987CE11B9DCEF82D39E62 /* Internet-Archive.wsz */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Internet-Archive.wsz"; sourceTree = "<group>"; };
 		BAA63D879B46D5FFF6BA8BE9 /* WinampVolumeSlider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WinampVolumeSlider.swift; sourceTree = "<group>"; };
 		BC875DDD2BE621229D463CB9 /* AudioPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlayer.swift; sourceTree = "<group>"; };
+		BE2906FB25D545309B1FD395 /* EQPresetStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EQPresetStore.swift; sourceTree = "<group>"; };
 		BC98BCD0ED814A6F90A8021D /* RadioStationLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadioStationLibrary.swift; sourceTree = "<group>"; };
 		C32D1ED0603B1A1497664E37 /* MacAmpApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacAmpApp.swift; sourceTree = "<group>"; };
 		CABDEB04D5D23C3DAAAFEEFC /* PlaylistTimeText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaylistTimeText.swift; sourceTree = "<group>"; };
@@ -317,6 +319,7 @@
 				FC5E2339EECD4415B1146559 /* PlaybackCoordinator.swift */,
 				7DABC15D1E724A7EB6490977 /* StreamPlayer.swift */,
 				BC875DDD2BE621229D463CB9 /* AudioPlayer.swift */,
+				BE2906FB25D545309B1FD395 /* EQPresetStore.swift */,
 			);
 			path = Audio;
 			sourceTree = "<group>";
@@ -613,7 +616,8 @@
 				8DDDC53B861A22B0AFB1C250 /* ButterchurnBridge.swift in Sources */,
 				B4C5D6E7F8091A2B3C4D5E6F /* ButterchurnPresetManager.swift in Sources */,
 				73A21EA6B7FEBC3B30A7943C /* ButterchurnWebView.swift in Sources */,
-			);
+			
+				E78F06DB7035402FA285F0CE /* EQPresetStore.swift in Sources */,);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		A8F1C1A0F5D7413A9A0B0201 /* Sources */ = {

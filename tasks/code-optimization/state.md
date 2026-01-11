@@ -20,8 +20,8 @@
 [✅] Phase 5       - Verification (complete)
 [✅] Phase 6       - Commit & Documentation (complete)
 [✅] Phase 7       - Swift 6 Modernization (complete)
-[⏳] Phase 8.0     - Quick Fixes (READY - next step)
-[⏳] Phase 8.1     - EQPresetStore Extraction (Low Risk)
+[✅] Phase 8.0     - Quick Fixes (complete)
+[✅] Phase 8.1     - EQPresetStore Extraction (complete)
 [⏳] Phase 8.2     - MetadataLoader Extraction (Low Risk)
 [⏳] Phase 8.3     - PlaylistController Extraction (Low Risk)
 [⏳] Phase 8.4     - VideoPlaybackController Extraction (Medium Risk)
@@ -36,7 +36,8 @@
 | File | Status | Changes Made |
 |------|--------|--------------|
 | `MacAmpApp/Models/SnapUtils.swift` | ✅ Done | Lines 71-72, 153-154: `Optional.map` pattern |
-| `MacAmpApp/Audio/AudioPlayer.swift` | ✅ Done | Line 907: `flatMap`; Line 1178: local timer capture; Line 898-924: `Task.detached` for file I/O |
+| `MacAmpApp/Audio/AudioPlayer.swift` | ✅ Done | Line 907: `flatMap`; Line 1178: local timer capture; Line 898-924: `Task.detached` for file I/O; Phase 8.0: SwiftLint quick fixes; Phase 8.1: EQPresetStore extraction |
+| `MacAmpApp/Audio/EQPresetStore.swift` | ✅ Created | Extracted EQ preset persistence from AudioPlayer (96 lines) |
 | `MacAmpApp/Models/AppSettings.swift` | ✅ Done | Swift 6 `URL.cachesDirectory`; `Keys` enum; Redundant enum values removed |
 | `MacAmpApp/Views/EqGraphView.swift` | ✅ Done | Guard chain for `tiffRepresentation`; Fixed `min(0,...)` bug |
 | `.swiftlint.yml` | ✅ Created | Full config with 21 validated rules |
@@ -69,6 +70,15 @@
 | Pre-existing bugs fixed | **1** | 0 | ✅ EqGraphView |
 | Build status | **SUCCEEDED** | Pass | ✅ |
 | Oracle score | **9/10** | Pass | ✅ |
+
+### After Phase 8.1 ✅
+| Metric | Value | Previous | Change |
+|--------|-------|----------|--------|
+| AudioPlayer.swift lines | **1,709** | 1,805 | -96 (-5.3%) |
+| AudioPlayer SwiftLint violations | **7** | 16 | -9 (quick fixes) |
+| New files extracted | **1** | 0 | EQPresetStore.swift |
+| EQPresetStore.swift violations | **0** | N/A | Clean |
+| Build status | **SUCCEEDED** | Pass | ✅ |
 
 ---
 
@@ -147,7 +157,18 @@ Commits ahead: 0
   - VisualizerPipeline moved to LAST due to `Unmanaged` pointer risk
   - AudioEngineController: defer decision until after 8.5
 - Fixed scheme name: MacAmp → MacAmpApp (7 occurrences)
-- Next step: Phase 8.0 Quick Fixes (separate commit)
+- Created sub-branch `phase8-audioplayer-refactor` for extraction work
+- Added §14 "Option C Architecture" to research.md (comprehensive design docs)
+- **Phase 8.0 Complete:** SwiftLint quick fixes in AudioPlayer.swift
+  - Removed leading whitespace, implicit nil, redundant let _, extra blank lines
+  - Used shorthand operators and `!= nil` pattern
+  - Violations reduced from 16 to 7 (remaining are structural)
+- **Phase 8.1 Complete:** EQPresetStore extracted from AudioPlayer
+  - Created `MacAmpApp/Audio/EQPresetStore.swift` (0 SwiftLint violations)
+  - Moved preset persistence: userPresets, perTrackPresets, import/export
+  - AudioPlayer uses computed forwarding for `userPresets` property
+  - AudioPlayer reduced from 1,805 to 1,709 lines (-96 lines, -5.3%)
+  - Build: SUCCEEDED
 
 ### 2026-01-10
 - Created `code-simplification` branch from `main`

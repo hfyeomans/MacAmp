@@ -249,35 +249,35 @@ codex "@file1.swift @file2.swift Review these changes..."
 ## Phase 8: AudioPlayer Refactoring (REVISED 2026-01-11)
 
 **Oracle Review:** Complete (see research.md §13)
-**Recommended Approach:** Option B (EQPresetStore extraction) with incremental follow-up
+**Recommended Approach:** Option C (Incremental Full Extraction)
 
-### 8.0 Pre-requisites: Quick Fixes (Separate Commits)
+### 8.0 Pre-requisites: Quick Fixes (Separate Commits) ✅ COMPLETE
 
-#### 8.0.1 AudioPlayer.swift Quick Fixes
-- [ ] Remove leading whitespace (line 1)
-- [ ] Use shorthand operator `+=` (line 143)
-- [ ] Remove implicit `= nil` initialization (line 319)
-- [ ] Replace `let _ =` with `_ =` (lines 647, 797)
-- [ ] Replace unused optional binding with `!= nil` (line 1073)
-- [ ] Remove extra blank lines (lines 716, 819, 1182)
-- [ ] Build verification
-- [ ] Commit: "style: Fix SwiftLint violations in AudioPlayer"
+#### 8.0.1 AudioPlayer.swift Quick Fixes ✅
+- [x] Remove leading whitespace (line 1)
+- [x] Use shorthand operator `/=` (line 143)
+- [x] Remove implicit `= nil` initialization (line 319)
+- [x] Replace `let _ =` with `_ =` (lines 647, 797)
+- [x] Replace unused optional binding with `!= nil` (line 1082)
+- [x] Remove extra blank lines (lines 716, 819, 1191)
+- [x] Build verification
+- [x] Commit: `8661bbd` "style: Fix SwiftLint violations in AudioPlayer"
 
-#### 8.0.2 SnapUtils.swift Verification
-- [ ] Run `swiftlint lint MacAmpApp/Models/SnapUtils.swift`
-- [ ] Verify Phase 7 fixes are complete
-- [ ] Fix any remaining violations (if any)
+#### 8.0.2 SnapUtils.swift Verification ✅
+- [x] Run `swiftlint lint MacAmpApp/Models/SnapUtils.swift` → 0 violations
+- [x] Verify Phase 7 fixes are complete
+- [x] No remaining violations
 
-### 8.1 Phase 8a: Extract EQPresetStore (Low Risk)
+### 8.1 Phase 8a: Extract EQPresetStore (Low Risk) ✅ COMPLETE
 
-- [ ] Create `MacAmpApp/Audio/EQPresetStore.swift`
-- [ ] Add `@MainActor @Observable final class EQPresetStore`
-- [ ] Move properties: `userPresets`, `perTrackPresets`, `presetsFileName`, `userPresetDefaultsKey`
-- [ ] Move methods: `loadUserPresets()`, `persistUserPresets()`, `loadPerTrackPresets()`, `savePerTrackPresets()`, `storeUserPreset(_:)`, `importEqfPreset(from:)`, `appSupportDirectory()`, `presetsFileURL()`
-- [ ] Add `eqPresetStore` property to AudioPlayer
-- [ ] Update AudioPlayer methods to delegate to store
-- [ ] Build verification
-- [ ] Test: Save/load presets, import EQF, per-track presets
+- [x] Create `MacAmpApp/Audio/EQPresetStore.swift`
+- [x] Add `@MainActor @Observable final class EQPresetStore`
+- [x] Move properties: `userPresets`, `perTrackPresets`, `presetsFileName`, `userPresetDefaultsKey`
+- [x] Move methods: `loadUserPresets()`, `persistUserPresets()`, `loadPerTrackPresets()`, `savePerTrackPresets()`, `storeUserPreset(_:)`, `importEqfPreset(from:)`, `appSupportDirectory()`, `presetsFileURL()`
+- [x] Add `eqPresetStore` property to AudioPlayer
+- [x] Update AudioPlayer methods to delegate to store
+- [x] Build verification: SUCCEEDED
+- [ ] Test: Save/load presets, import EQF, per-track presets (manual verification pending)
 - [ ] Commit: "refactor: Extract EQPresetStore from AudioPlayer"
 
 ### 8.2 Phase 8b: Extract VisualizerPipeline (OPTIONAL - Medium Risk)
