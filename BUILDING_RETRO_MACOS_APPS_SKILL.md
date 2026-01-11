@@ -4072,6 +4072,8 @@ Did macOS 15/26 fix this? What specific APIs would enable migration?"
 
 ### 11. Technical Debt vs Correct Architecture: Validation Framework
 
+> **Note:** See also Lesson #22 for Quality Gate validation with Oracle reviews.
+
 **The Problem:** Code that appears to "fight framework patterns" may actually be the correct approach for specific requirements.
 
 **Before Oracle Re-consultation:**
@@ -4128,6 +4130,518 @@ WindowGroup(id: "main-placeholder") {
 
 **Action:** When you identify "debt," trace back to the original implementation decision. If requirements haven't changed and the pattern still satisfies them, it's not debt—it's correct architecture.
 
+### 12. Force Unwrap Elimination Patterns (January 2026)
+
+**The Problem:** Force unwraps (`!`) create implicit crash points. They're easy to write but hard to debug when they fail in production.
+
+**Pattern 1: Optional.map for Conditional Transformation**
+
+```swift
+// ❌ BEFORE: Ternary with force unwrap
+return Point(
+    x: (newPos.x == nil ? 0 : newPos.x! - a.x),
+    y: (newPos.y == nil ? 0 : newPos.y! - a.y)
+)
+
+// ✅ AFTER: Optional.map with nil coalescing
+return Point(
+    x: newPos.x.map { $0 - a.x } ?? 0,
+    y: newPos.y.map { $0 - a.y } ?? 0
+)
+```
+
+**When to use:** Transform an optional value and provide a default. The pattern `optional.map { transform } ?? default` is idiomatic Swift and zero-cost at runtime.
+
+**Pattern 2: flatMap for Empty String Handling**
+
+```swift
+// ❌ BEFORE: Awkward empty check with force unwrap
+let finalName = (suggestedName?.isEmpty == false ? suggestedName! : fallbackName)
+
+// ✅ AFTER: flatMap converts empty to nil
+let finalName = suggestedName.flatMap { $0.isEmpty ? nil : $0 } ?? fallbackName
+```
+
+**When to use:** When you need to treat empty strings as `nil` for clean nil-coalescing.
+
+**Pattern 3: Guard Chain for Sequential Optionals**
+
+```swift
+// ❌ BEFORE: Force unwrap in guard
+guard let rep = NSBitmapImageRep(data: image.tiffRepresentation!) else { return [] }
+
+// ✅ AFTER: Chain optionals in guard
+guard let tiffData = image.tiffRepresentation,
+      let rep = NSBitmapImageRep(data: tiffData) else {
+    return []
+}
+```
+
+**When to use:** When one optional depends on another. Guard chains fail gracefully if either is nil.
+
+**Pattern 4: Swift 6 URL.cachesDirectory (Non-Optional)**
+
+```swift
+// ❌ BEFORE: Force unwrap on directory URL
+let caches = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first!
+
+// ✅ AFTER: Swift 6 non-optional directory (macOS 13+)
+let caches = URL.cachesDirectory
+    .appending(component: "MacAmp/Cache", directoryHint: .isDirectory)
+```
+
+**Key Insight:** `URL.cachesDirectory`, `URL.documentsDirectory`, `URL.applicationSupportDirectory` are **non-optional** in macOS 13+. No force unwrap or guard needed.
+
+### 13. Component Extraction Strategy: Risk-Ordered Incremental Refactoring
+
+**The Problem:** Monolithic files (1,800+ lines) accumulate coupling over time. Big-bang refactoring risks breaking everything at once.
+
+**Solution: Risk-Ordered Incremental Extraction**
+
+```
+Phase Sequence:
+┌─────────────────────────────────────────────────────┐
+│  LOW RISK                                           │
+│  EQPresetStore (preset persistence) → 96 lines      │
+│  MetadataLoader (async track info) → 171 lines      │
+│  PlaylistController (navigation) → 260 lines        │
+├─────────────────────────────────────────────────────┤
+│  MEDIUM RISK                                        │
+│  VideoPlaybackController (AVPlayer) → 259 lines     │
+├─────────────────────────────────────────────────────┤
+│  HIGH RISK                                          │
+│  VisualizerPipeline (Unmanaged ptr) → 512 lines     │
+├─────────────────────────────────────────────────────┤
+│  HIGHEST RISK - DEFER DECISION                      │
+│  AudioEngineController (engine lifecycle)           │
+└─────────────────────────────────────────────────────┘
+```
+
+**Result:** AudioPlayer reduced from 1,805 to 1,059 lines (-41.3%) without breaking changes.
+
+**Computed Property Forwarding for API Stability:**
+
+```swift
+// In AudioPlayer - preserve existing API while delegating
+var userPresets: [EQPreset] {
+    eqPresetStore.userPresets
+}
+
+// Views continue using audioPlayer.userPresets unchanged
+```
+
+**Callback Patterns for Cross-Component Sync:**
+
+```swift
+// VideoPlaybackController notifies AudioPlayer of state changes
+final class VideoPlaybackController {
+    var onPlaybackEnded: (() -> Void)?
+    var onTimeUpdate: ((Double, Double) -> Void)?  // currentTime, duration
+
+    private func observeTimeUpdates() {
+        onTimeUpdate?(currentTime, currentDuration)
+    }
+}
+
+// AudioPlayer wires callbacks in init
+videoController.onTimeUpdate = { [weak self] time, duration in
+    self?.currentTime = time
+    self?.currentDuration = duration
+}
+```
+
+**Key Rules:**
+1. Extract isolated functionality first (persistence, metadata, navigation)
+2. Verify build + manual test after EACH extraction
+3. Use computed properties to preserve existing API
+4. Callback patterns for state synchronization
+5. Defer highest-risk extractions until lower-risk ones prove stable
+6. Re-evaluate deferred extractions—sometimes "good enough" IS the answer
+
+### 14. Swift 6 Readiness: Sendable and Concurrency Patterns
+
+**The Problem:** Swift 6 strict concurrency requires data crossing actor boundaries to be `Sendable`. Retrofitting later is painful.
+
+**Pattern 1: Sendable Data Transfer Types**
+
+```swift
+// Mark all data-only structs as Sendable NOW
+struct Track: Codable, Hashable, Sendable {
+    let url: URL
+    let title: String
+    let duration: Double?
+}
+
+struct EQPreset: Codable, Identifiable, Sendable {
+    let id: UUID
+    let name: String
+    let bands: [Float]
+}
+
+struct ButterchurnFrame: Sendable {
+    let left: [Float]
+    let right: [Float]
+    let timestamp: Double
+}
+```
+
+**When to add Sendable:** Any struct/enum that:
+- Passes between actors
+- Goes into async closures
+- Gets captured by `Task.detached`
+
+**Pattern 2: nonisolated(unsafe) for deinit Cleanup**
+
+```swift
+@MainActor
+final class VideoPlaybackController {
+    // Properties needed in deinit must be nonisolated(unsafe)
+    nonisolated(unsafe) private var videoEndObserver: Any?
+    nonisolated(unsafe) private var videoTimeObserver: Any?
+
+    deinit {
+        // deinit is nonisolated, can access nonisolated(unsafe) properties
+        if let observer = videoEndObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        if let observer = videoTimeObserver {
+            videoPlayer?.removeTimeObserver(observer)
+        }
+    }
+}
+```
+
+**Key Insight:** `deinit` runs in a nonisolated context even for `@MainActor` classes. Use `nonisolated(unsafe)` for cleanup-only properties.
+
+**Pattern 3: @Sendable Closures for Completion Handlers**
+
+```swift
+// Completion handlers crossing actor boundaries need @Sendable
+func seek(to time: Double, completion: (@Sendable () -> Void)? = nil) {
+    videoPlayer?.seek(to: CMTime(seconds: time, preferredTimescale: 1)) { _ in
+        Task { @MainActor in
+            completion?()
+        }
+    }
+}
+```
+
+### 15. Background I/O with Task.detached
+
+**The Problem:** File I/O on `@MainActor` blocks the UI thread, causing stutter during playlist load or preset save.
+
+**Pattern: Fire-and-Forget Background Save**
+
+```swift
+func savePerTrackPresets() {
+    // Capture state BEFORE dispatch (avoids race conditions)
+    let presetsCopy = perTrackPresets
+    let url = perTrackPresetsFileURL()
+
+    Task.detached(priority: .utility) {
+        do {
+            let data = try JSONEncoder().encode(presetsCopy)
+            try data.write(to: url, options: .atomic)
+        } catch {
+            print("Failed to save per-track presets: \(error)")
+        }
+    }
+}
+```
+
+**Pattern: Async Load with Merge Logic**
+
+```swift
+func loadPerTrackPresets() async {
+    let url = perTrackPresetsFileURL()
+    let loaded = await Task.detached(priority: .utility) {
+        guard let data = try? Data(contentsOf: url),
+              let presets = try? JSONDecoder().decode([String: EqfPreset].self, from: data)
+        else { return [:] }
+        return presets
+    }.value
+
+    // Merge: preserve any in-flight changes during load
+    for (key, value) in loaded where perTrackPresets[key] == nil {
+        perTrackPresets[key] = value
+    }
+}
+```
+
+**Key Rules:**
+1. Capture state before `Task.detached` to avoid actor-hop races
+2. Use `.utility` priority for I/O (not `.background` which is too low)
+3. Merge loaded data with existing state to preserve in-flight changes
+4. Fire-and-forget is safe for saves—loss of single save is acceptable
+
+### 16. Pre-allocated Buffers for Audio Thread Safety
+
+**The Problem:** Allocations on the audio render thread cause glitches. Every `malloc` risks blocking.
+
+**Solution: Pre-allocate in init, reuse in tap handler**
+
+```swift
+final class VisualizerScratchBuffers {
+    // Pre-allocated once in init
+    var hannWindow: [Float]
+    var fftInputReal: [Float]
+    var fftInputImag: [Float]
+    var fftOutputReal: [Float]
+    var fftOutputImag: [Float]
+
+    init(fftSize: Int) {
+        // All allocations happen ONCE during init
+        hannWindow = [Float](repeating: 0, count: fftSize)
+        fftInputReal = [Float](repeating: 0, count: fftSize)
+        fftInputImag = [Float](repeating: 0, count: fftSize)
+        fftOutputReal = [Float](repeating: 0, count: fftSize)
+        fftOutputImag = [Float](repeating: 0, count: fftSize)
+
+        // Pre-compute Hann window (never changes)
+        for i in 0..<fftSize {
+            hannWindow[i] = 0.5 - 0.5 * cos(2 * .pi * Float(i) / Float(fftSize))
+        }
+    }
+}
+
+// In tap handler - ZERO allocations, only reuse
+func processAudio(_ buffer: AVAudioPCMBuffer) {
+    // Use pre-allocated buffers
+    vDSP_vmul(samples, 1, scratch.hannWindow, 1, &scratch.fftInputReal, 1, vDSP_Length(fftSize))
+    // ... FFT processing with pre-allocated arrays
+}
+```
+
+**Key Insight:** Audio threads are real-time. Any system call (malloc, objc_msgSend, locks) can cause dropouts. Pre-allocate everything.
+
+### 17. UserDefaults Keys Enum Pattern
+
+**The Problem:** String-based UserDefaults keys are typo-prone and hard to refactor.
+
+**Solution: Centralized Keys enum**
+
+```swift
+@MainActor
+@Observable
+final class AppSettings {
+    enum Keys {
+        static let volume = "volume"
+        static let balance = "balance"
+        static let shuffleEnabled = "shuffleEnabled"
+        static let repeatMode = "repeatMode"
+        static let eqEnabled = "eqEnabled"
+        static let preampValue = "preampValue"
+        static let doubleSize = "doubleSize"
+        static let useSpectrumVisualizer = "useSpectrumVisualizer"
+        // ... all 15+ keys in one place
+    }
+
+    var volume: Float = 1.0 {
+        didSet { UserDefaults.standard.set(volume, forKey: Keys.volume) }
+    }
+
+    init() {
+        volume = UserDefaults.standard.float(forKey: Keys.volume)
+        // ... load all settings
+    }
+}
+```
+
+**Benefits:**
+1. Autocomplete prevents typos
+2. Find usages shows all access points
+3. Refactoring is single-point change
+4. No magic strings scattered across codebase
+
+### 18. Placeholder.md Convention for Future Features
+
+**The Problem:** `// TODO` comments scattered in code get lost. In-code placeholders for planned features pollute the codebase.
+
+**Solution: Centralized placeholder.md per task**
+
+```markdown
+# Placeholder Documentation
+
+## fallbackSkinsDirectory (MacAmpApp/Models/AppSettings.swift:167)
+
+**Purpose:** Scaffolding for `tasks/default-skin-fallback/` feature
+**Status:** Function defined but not called (intentional)
+**Action:** Implement when feature activated, or remove if abandoned
+
+## Streaming Volume Control (MacAmpApp/Audio/AudioPlayer.swift)
+
+**Purpose:** AVPlayer volume control for internet radio
+**Status:** Placeholder - AVPlayer volume API differs from AVAudioEngine
+**Action:** Implement when streaming feature expanded
+```
+
+**Key Rules:**
+1. NO `// TODO` comments in production code
+2. Document placeholders in `tasks/<task-id>/placeholder.md`
+3. Include file:line, purpose, status, and action
+4. Review during task completion—remove or implement
+
+### 19. Pre-commit Hooks with Tracked .githooks/ Directory
+
+**The Problem:** `.git/hooks/` is not version-controlled. Team members don't get hooks automatically.
+
+**Solution: Tracked .githooks/ directory**
+
+```bash
+# Create tracked hooks directory
+mkdir -p .githooks
+```
+
+```bash
+#!/bin/bash
+# .githooks/pre-commit
+
+STAGED_SWIFT_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.swift$')
+
+if [ -n "$STAGED_SWIFT_FILES" ]; then
+    echo "🔍 Running SwiftLint on staged files..."
+
+    if ! command -v swiftlint &> /dev/null; then
+        echo "⚠️  SwiftLint not installed. Run: brew install swiftlint"
+        exit 0  # Don't block if tool missing
+    fi
+
+    swiftlint lint --strict --quiet $STAGED_SWIFT_FILES
+    if [ $? -ne 0 ]; then
+        echo "❌ SwiftLint violations. Fix before committing."
+        exit 1
+    fi
+    echo "✅ SwiftLint passed"
+fi
+```
+
+**Setup (document in README):**
+
+```bash
+# Each developer runs once after clone
+git config core.hooksPath .githooks
+```
+
+**Benefits:**
+1. Hooks are version-controlled
+2. All team members use same hooks after one-time setup
+3. CI can use same hooks for consistency
+
+### 20. Unmanaged Pointer Lifecycle Management
+
+**The Problem:** `Unmanaged<T>` pointers in audio taps can cause use-after-free if the owning object deallocates while the tap is still installed.
+
+**Solution: Explicit removeTap() in deinit**
+
+```swift
+@MainActor
+final class AudioPlayer {
+    private let visualizerPipeline: VisualizerPipeline
+
+    deinit {
+        // CRITICAL: Remove tap BEFORE VisualizerPipeline deallocates
+        // The tap handler holds Unmanaged pointer to pipeline
+        visualizerPipeline.removeTap()
+
+        // Now safe to invalidate timer
+        progressTimer?.invalidate()
+    }
+}
+
+final class VisualizerPipeline {
+    // Must be nonisolated for deinit access
+    nonisolated(unsafe) private var tapInstalled = false
+    nonisolated(unsafe) private weak var mixerNode: AVAudioMixerNode?
+
+    nonisolated func removeTap() {
+        guard tapInstalled else { return }
+        mixerNode?.removeTap(onBus: 0)
+        tapInstalled = false
+    }
+}
+```
+
+**Key Pattern:** The object that INSTALLS the tap is responsible for REMOVING it. Don't rely on the tap handler's owner to clean up—explicitly call removeTap() in the installer's deinit.
+
+### 21. Callback Pattern for Cross-Component State Sync
+
+**The Problem:** Extracted components need to notify the parent of state changes without creating circular dependencies.
+
+**Solution: Callback closures set by parent**
+
+```swift
+// Extracted component defines callbacks (but doesn't call parent directly)
+final class VideoPlaybackController {
+    var onPlaybackEnded: (() -> Void)?
+    var onTimeUpdate: ((Double, Double) -> Void)?
+
+    private func handlePlaybackEnded() {
+        onPlaybackEnded?()  // Parent decides what to do
+    }
+}
+
+// Parent wires callbacks in init
+init() {
+    videoController = VideoPlaybackController()
+
+    videoController.onPlaybackEnded = { [weak self] in
+        self?.handleVideoEnded()
+    }
+
+    videoController.onTimeUpdate = { [weak self] time, duration in
+        self?.currentTime = time
+        self?.currentDuration = duration
+    }
+}
+```
+
+**Benefits:**
+1. No circular references (child doesn't know parent type)
+2. Parent controls reaction to events
+3. Easy to test—inject mock callbacks
+4. [weak self] prevents retain cycles
+
+### 22. Quality Gate: Achieving 10/10 Oracle Score
+
+**The Problem:** Large refactorings accumulate issues across multiple commits. How do you know when you're "done"?
+
+**Solution: Quality Gate Phase**
+
+After completing feature work, add a dedicated "Quality Gate" phase:
+
+```
+Phase 9: Quality Gate Remediation
+├── 9.0.1: High Priority - deinit cleanup (prevent crashes)
+├── 9.0.2: High Priority - Unmanaged pointer safety
+├── 9.0.3: Medium Priority - Sendable conformance
+├── 9.0.4: Medium Priority - Background I/O
+├── 9.0.5: Low Priority - Comment styling consistency
+└── 9.1.0: Final Oracle Review → Target 10/10
+```
+
+**Oracle Review Template:**
+
+```bash
+codex "@File1.swift @File2.swift @File3.swift
+Quality Gate Review:
+1. Thread safety - @MainActor, nonisolated(unsafe)
+2. Memory safety - Unmanaged lifetime, weak references
+3. Swift 6 readiness - Sendable, @Sendable closures
+4. Resource cleanup - deinit, observer removal
+5. Background I/O - no UI blocking
+6. API stability - computed forwarding preserved
+
+Rate 1-10 with specific issues to fix."
+```
+
+**Scoring Interpretation:**
+- 10/10: Ship it—all issues addressed
+- 8-9/10: Ship with documented follow-ups
+- 6-7/10: Address medium/high before shipping
+- <6/10: Significant rework needed
+
+**Key Insight:** The Quality Gate phase is when you FIX everything the Oracle finds. Don't defer—each unaddressed issue compounds. A 7.5/10 → 10/10 improvement might take 2 hours but prevents weeks of debugging later.
+
 ---
 
 ## Quick Reference
@@ -4138,7 +4652,12 @@ WindowGroup(id: "main-placeholder") {
 MacAmp/
 ├── MacAmpApp/
 │   ├── Audio/
-│   │   └── AudioPlayer.swift           # AVAudioEngine + EQ + spectrum
+│   │   ├── AudioPlayer.swift           # Orchestrator (~1,059 lines after refactor)
+│   │   ├── EQPresetStore.swift         # EQ preset persistence (96 lines)
+│   │   ├── MetadataLoader.swift        # Async track metadata (171 lines)
+│   │   ├── PlaylistController.swift    # Navigation & shuffle (260 lines)
+│   │   ├── VideoPlaybackController.swift # AVPlayer lifecycle (259 lines)
+│   │   └── VisualizerPipeline.swift    # Audio tap & FFT (512 lines)
 │   ├── Models/
 │   │   ├── SpriteResolver.swift        # Semantic → actual sprite mapping
 │   │   ├── Skin.swift                  # Skin data model
@@ -4218,6 +4737,12 @@ ls -la ~/Library/Developer/Xcode/DerivedData/MacAmpApp-*/Build/Products/Debug/Ma
 14. **WKUserScript Injection** - Load JavaScript libraries via WKUserScript (not `<script>` tags) for WKWebView
 15. **Swift→JS Audio Bridge** - Use callAsyncJavaScript at 30 FPS with Timer + MainActor for reliable delivery
 16. **NSMenu Closure Bridge** - Store menu in @State, use representedObject to keep target classes alive
+17. **Force Unwrap Elimination** - Use `Optional.map { } ?? default` and `flatMap` patterns; never force unwrap
+18. **Risk-Ordered Refactoring** - Extract components incrementally: low risk → medium → high; verify after each
+19. **Swift 6 Sendable Readiness** - Mark all data transfer structs as `Sendable` now; use `nonisolated(unsafe)` for deinit
+20. **Pre-allocated Audio Buffers** - Zero allocations on audio thread; pre-allocate FFT buffers in init
+21. **Quality Gate Methodology** - Use Oracle reviews with 10/10 target; fix all high/medium issues before shipping
+22. **Placeholder.md Convention** - No `// TODO` in code; document placeholders in `tasks/<task>/placeholder.md`
 
 ### This Skill Enables You To
 
@@ -4238,6 +4763,12 @@ ls -la ~/Library/Developer/Xcode/DerivedData/MacAmpApp-*/Build/Products/Debug/Ma
 - ✅ Integrate JavaScript visualization libraries via WKWebView with audio bridge
 - ✅ Build context menus with NSMenu closure-to-selector bridge pattern
 - ✅ Manage timer lifecycles in @Observable classes with proper cleanup
+- ✅ Eliminate force unwraps with idiomatic Optional.map/flatMap patterns
+- ✅ Refactor monolithic files with risk-ordered incremental extraction
+- ✅ Prepare codebase for Swift 6 strict concurrency with Sendable conformance
+- ✅ Implement real-time audio processing with pre-allocated buffers
+- ✅ Achieve 10/10 Oracle scores through systematic quality gate phases
+- ✅ Document future features with centralized placeholder.md convention
 
 ### Next Project Improvements
 
@@ -4256,9 +4787,23 @@ When building your next retro macOS app:
 **Document Status:** Production Ready
 **Maintenance:** Update when new patterns/pitfalls discovered
 **Owner:** MacAmp Development Team
-**Last Updated:** 2026-01-06
+**Last Updated:** 2026-01-11
 
 **Recent Additions:**
+- **Code Optimization Patterns** (Jan 11, 2026) - Comprehensive refactoring and Swift 6 readiness
+  - Force unwrap elimination with Optional.map, flatMap, guard chains (Lessons #12)
+  - Risk-ordered incremental component extraction: AudioPlayer 1,805→1,059 lines (Lesson #13)
+  - Swift 6 Sendable conformance for 8 data transfer types (Lesson #14)
+  - Background I/O with Task.detached and merge logic (Lesson #15)
+  - Pre-allocated FFT buffers for audio thread safety (Lesson #16)
+  - UserDefaults Keys enum for centralized key management (Lesson #17)
+  - Placeholder.md convention replacing TODO comments (Lesson #18)
+  - Pre-commit hooks with tracked .githooks/ directory (Lesson #19)
+  - Unmanaged pointer lifecycle management (Lesson #20)
+  - Callback patterns for cross-component sync (Lesson #21)
+  - Quality Gate methodology for 10/10 Oracle scores (Lesson #22)
+  - New Audio directory structure: 5 extracted components
+  - Oracle score progression: 7.5/10 → 10/10 through systematic fixes
 - **WASM vs Hybrid Rendering Mode** (Jan 6, 2026) - WebGL security configuration for Butterchurn
   - `onlyUseWASM: true` option for hardened WASM-only rendering (recommended for security)
   - Current implementation uses hybrid mode (WASM with JavaScript fallback)
