@@ -9,7 +9,7 @@ import Observation
 /// - Owns AVPlayer lifecycle and observer cleanup
 /// - Manages video playback state (play, pause, seek)
 /// - Provides callbacks for playback events (ended, time updates)
-/// - Does NOT make routing decisions - that stays in AudioPlayer (Bridge layer)
+/// - Does NOT make routing decisions - that stays in AudioPlayer (Mechanism layer)
 @MainActor
 @Observable
 final class VideoPlaybackController {

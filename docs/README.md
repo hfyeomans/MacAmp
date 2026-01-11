@@ -1,9 +1,9 @@
 # MacAmp Documentation Guide
 
-**Version:** 3.2.1
-**Date:** 2026-01-06
+**Version:** 3.3.0
+**Date:** 2026-01-11
 **Purpose:** Master index and navigation guide for all MacAmp documentation
-**Total Documentation:** 14,695 lines across 18 current docs + 23 archived docs
+**Total Documentation:** 19,105 lines across 20 current docs + 23 archived docs
 
 ---
 
@@ -26,7 +26,7 @@
 
 ## Executive Summary
 
-The MacAmp documentation system consists of **17 active technical documents** (13,673 lines) providing comprehensive coverage of a pixel-perfect Winamp 2.x recreation for macOS. Documentation spans from high-level architecture to implementation details, window management systems, video playback, visualization windows, build processes, and skin system specifications.
+The MacAmp documentation system consists of **20 active technical documents** (19,105 lines) providing comprehensive coverage of a pixel-perfect Winamp 2.x recreation for macOS. Documentation spans from high-level architecture to implementation details, window management systems, video playback, visualization windows, build processes, and skin system specifications.
 
 ### Documentation Purpose
 
@@ -109,11 +109,11 @@ Swap `Core` for `Concurrency` or `All` as needed.
 
 ## Complete Documentation Inventory
 
-### 🏗️ Architecture & Design (11 documents, 11,663 lines)
+### 🏗️ Architecture & Design (12 documents, 14,200 lines)
 
 #### **[MACAMP_ARCHITECTURE_GUIDE.md](MACAMP_ARCHITECTURE_GUIDE.md)** ⭐
-- **Size**: 120KB, 3,818 lines
-- **Last Updated**: 2025-12-28
+- **Size**: 145KB, 4,555 lines
+- **Last Updated**: 2026-01-11
 - **Status**: ✅ AUTHORITATIVE
 - **Purpose**: Complete architectural reference for MacAmp
 - **Key Sections**:
@@ -122,7 +122,7 @@ Swap `Core` for `Concurrency` or `All` as needed.
   - State management with Swift 6 @Observable
   - Internet radio streaming implementation
   - Component integration maps
-  - 19-bar Goertzel-like spectrum analyzer
+  - 20-bar Goertzel-like spectrum analyzer
   - Window snapping + double-size docking pipeline (updated 2025-11-09)
   - Custom menu patterns (SpriteMenuItem + PlaylistMenuDelegate)
 - **When to Read**: Starting development, architectural reviews, major refactoring
@@ -130,8 +130,8 @@ Swap `Core` for `Concurrency` or `All` as needed.
 - **Quality**: ⭐⭐⭐⭐⭐ Authoritative (post-corrections)
 
 #### **[IMPLEMENTATION_PATTERNS.md](IMPLEMENTATION_PATTERNS.md)** ⭐
-- **Size**: 56KB, 1,791 lines
-- **Last Updated**: 2025-12-28
+- **Size**: 74KB, 2,327 lines
+- **Last Updated**: 2026-01-11
 - **Status**: ✅ AUTHORITATIVE
 - **Purpose**: Practical code patterns and best practices
 - **Key Sections**:
@@ -181,7 +181,7 @@ Swap `Core` for `Concurrency` or `All` as needed.
 - **Quality**: ⭐⭐⭐⭐⭐ Authoritative
 
 #### **[VIDEO_WINDOW.md](VIDEO_WINDOW.md)** ⭐
-- **Size**: 30KB, 927 lines
+- **Size**: 38KB, 1,151 lines
 - **Last Updated**: 2025-11-14
 - **Status**: ✅ PRODUCTION
 - **Purpose**: Complete video window documentation with chrome system and playback architecture
@@ -198,7 +198,7 @@ Swap `Core` for `Concurrency` or `All` as needed.
 - **Quality**: ⭐⭐⭐⭐⭐ Authoritative
 
 #### **[PLAYLIST_WINDOW.md](PLAYLIST_WINDOW.md)** ⭐ NEW
-- **Size**: 22KB, 650 lines
+- **Size**: 28KB, 860 lines
 - **Last Updated**: 2025-12-16
 - **Status**: ✅ PRODUCTION
 - **Purpose**: Complete playlist window documentation with segment-based resize system
@@ -216,7 +216,7 @@ Swap `Core` for `Concurrency` or `All` as needed.
 - **Quality**: ⭐⭐⭐⭐⭐ Authoritative (Oracle Grade A-)
 
 #### **[MILKDROP_WINDOW.md](MILKDROP_WINDOW.md)** ⭐
-- **Size**: 38KB, 1,113 lines
+- **Size**: 54KB, 1,623 lines
 - **Last Updated**: 2026-01-06
 - **Status**: ✅ PRODUCTION - Complete with Butterchurn visualization and resize
 - **Purpose**: Milkdrop visualization window with Butterchurn.js integration
@@ -608,14 +608,18 @@ Includes:
 |-------|----------|---------|
 | **@Observable pattern** | IMPLEMENTATION_PATTERNS.md | §2 State Management |
 | **@MainActor usage** | IMPLEMENTATION_PATTERNS.md | §2, MACAMP_ARCH §10 |
-| **19-bar spectrum analyzer** | MACAMP_ARCHITECTURE_GUIDE.md | §8.4 Audio Processing |
+| **Action-based bridge pattern** | IMPLEMENTATION_PATTERNS.md | §2 State Management Patterns |
+| **AudioPlayer decomposition** | MACAMP_ARCHITECTURE_GUIDE.md | §4a AudioPlayer Decomposition |
+| **20-bar spectrum analyzer** | MACAMP_ARCHITECTURE_GUIDE.md | §8.4 Audio Processing |
 | **Always On Top (A button)** | MACAMP_ARCHITECTURE_GUIDE.md | §UI Controls & Features |
 | **App notarization** | RELEASE_BUILD_GUIDE.md | §Notarization |
 | **Audio backend switching** | MACAMP_ARCHITECTURE_GUIDE.md | §4 Dual Audio Backend |
 | **AVAudioEngine setup** | MACAMP_ARCHITECTURE_GUIDE.md | §8 Audio Processing |
 | **AVPlayer streaming** | MACAMP_ARCHITECTURE_GUIDE.md | §9 Internet Radio |
+| **Background I/O fire-and-forget** | IMPLEMENTATION_PATTERNS.md | §5 Async/Await Patterns |
 | **Build configurations** | RELEASE_BUILD_COMPARISON.md | Full document |
 | **Clutter bar buttons** | MACAMP_ARCHITECTURE_GUIDE.md | §UI Controls & Features |
+| **Computed forwarding pattern** | IMPLEMENTATION_PATTERNS.md | §2 State Management Patterns |
 | **Code signing errors** | CODE_SIGNING_FIX.md | §Common Issues |
 | **Component integration** | MACAMP_ARCHITECTURE_GUIDE.md | §11 Integration Maps |
 | **Custom menus** | MACAMP_ARCHITECTURE_GUIDE.md | §SpriteMenuItem |
@@ -623,6 +627,7 @@ Includes:
 | **Developer ID setup** | RELEASE_BUILD_GUIDE.md | §Prerequisites |
 | **Dual audio backend** | MACAMP_ARCHITECTURE_GUIDE.md | §4 Complete section |
 | **EQ implementation** | MACAMP_ARCHITECTURE_GUIDE.md | §8.3 EQ Processing |
+| **EQPresetStore** | MACAMP_ARCHITECTURE_GUIDE.md, IMPLEMENTATION_PATTERNS.md | §4a, §4 Audio Processing Patterns |
 | **Error handling** | IMPLEMENTATION_PATTERNS.md | §6 Error Handling |
 | **Fallback sprites** | SPRITE_SYSTEM_COMPLETE.md | §6 Fallback Generation |
 | **Goertzel algorithm** | MACAMP_ARCHITECTURE_GUIDE.md | §8.4 Spectrum |
@@ -632,11 +637,14 @@ Includes:
 | **Keyboard shortcuts** | MACAMP_ARCHITECTURE_GUIDE.md | §UI Controls & Features |
 | **M3UParser** | MACAMP_ARCHITECTURE_GUIDE.md | §M3U Parsing |
 | **Magnetic snapping** | MACAMP_ARCHITECTURE_GUIDE.md | §WindowSnapManager |
+| **MetadataLoader** | MACAMP_ARCHITECTURE_GUIDE.md | §4a AudioPlayer Decomposition |
 | **Migration guides** | IMPLEMENTATION_PATTERNS.md | §8 Migration |
+| **nonisolated(unsafe) deinit** | IMPLEMENTATION_PATTERNS.md | §4 Audio Processing Patterns |
 | **NUMBERS.bmp format** | WINAMP_SKIN_VARIATIONS.md | §Two Number Systems |
 | **NUMS_EX.bmp format** | WINAMP_SKIN_VARIATIONS.md | §Two Number Systems |
 | **Options menu (O button)** | MACAMP_ARCHITECTURE_GUIDE.md | §UI Controls & Features |
 | **PlaybackCoordinator** | MACAMP_ARCHITECTURE_GUIDE.md | §4.3 Orchestration |
+| **PlaylistController** | MACAMP_ARCHITECTURE_GUIDE.md, IMPLEMENTATION_PATTERNS.md | §4a, §4 Audio Processing Patterns |
 | **Semantic sprites** | SPRITE_SYSTEM_COMPLETE.md | §3 Semantic Enum |
 | **Signing workflow** | CODE_SIGNING_FIX_DIAGRAM.md | Full diagram |
 | **Skin compatibility** | WINAMP_SKIN_VARIATIONS.md | Full document |
@@ -651,6 +659,7 @@ Includes:
 | **Three-layer architecture** | MACAMP_ARCHITECTURE_GUIDE.md | §3 Three-Layer |
 | **Thread safety** | IMPLEMENTATION_PATTERNS.md | §5 Async/Await |
 | **Time display system** | MACAMP_ARCHITECTURE_GUIDE.md | §UI Controls & Features |
+| **Unmanaged pointer pattern** | IMPLEMENTATION_PATTERNS.md | §4 Audio Processing Patterns |
 | **Track information (I button)** | MACAMP_ARCHITECTURE_GUIDE.md | §UI Controls & Features |
 | **Custom window dragging** | CUSTOM_DRAG_FIX.md | Full document |
 | **Dynamic titlebar expansion** | MILKDROP_WINDOW.md | §12.3 Window Resizing |
@@ -673,6 +682,7 @@ Includes:
 | **Multi-window quick start** | MULTI_WINDOW_QUICK_START.md | Full document |
 | **performDrag API** | CUSTOM_DRAG_FIX.md | §Solution |
 | **Two-piece sprites** | MILKDROP_WINDOW.md | §Two-Piece Sprite System |
+| **VideoPlaybackController** | MACAMP_ARCHITECTURE_GUIDE.md, IMPLEMENTATION_PATTERNS.md | §4a, §4 Audio Processing Patterns |
 | **Video Window (V button)** | VIDEO_WINDOW.md | Full document |
 | **VIDEO.bmp sprites** | VIDEO_WINDOW.md | §Appendix: Sprite Definitions |
 | **Video formats** | VIDEO_WINDOW.md | §Video Playback System |
@@ -690,6 +700,7 @@ Includes:
 | **currentSeekID invalidation** | VIDEO_WINDOW.md | §Critical Bug Fix |
 | **playbackProgress stored** | VIDEO_WINDOW.md | §Part 21: Time Observer Pattern |
 | **Visualization** | MACAMP_ARCHITECTURE_GUIDE.md | §8.4 Visualization |
+| **VisualizerPipeline** | MACAMP_ARCHITECTURE_GUIDE.md, IMPLEMENTATION_PATTERNS.md | §4a, §4 Audio Processing Patterns |
 | **Window clustering** | MULTI_WINDOW_ARCHITECTURE.md | §Window Grouping |
 | **Window focus tracking** | WINDOW_FOCUS_ARCHITECTURE.md | Full document |
 | **Window hierarchy** | MULTI_WINDOW_ARCHITECTURE.md | §Window Hierarchy |
@@ -726,7 +737,7 @@ Includes:
 | "How do I test my changes?" | README.md Test Plan Quick Reference + IMPLEMENTATION_PATTERNS.md §7 |
 | "What Swift 6 features are used?" | MACAMP_ARCHITECTURE_GUIDE.md §10 |
 | "How does window snapping work?" | MACAMP_ARCHITECTURE_GUIDE.md §WindowSnapManager |
-| "What's the spectrum analyzer algorithm?" | MACAMP_ARCHITECTURE_GUIDE.md §8.4 (19-bar Goertzel) |
+| "What's the spectrum analyzer algorithm?" | MACAMP_ARCHITECTURE_GUIDE.md §8.4 (20-bar Goertzel) |
 | "What are the clutter bar buttons?" | MACAMP_ARCHITECTURE_GUIDE.md §UI Controls & Features |
 | "How do I add clutter bar features?" | MACAMP_ARCHITECTURE_GUIDE.md §UI Controls & Features |
 | "What keyboard shortcuts are available?" | MACAMP_ARCHITECTURE_GUIDE.md §UI Controls & Features |
@@ -772,28 +783,30 @@ Includes:
 ┌─────────────────────────────────────────────────────────┐
 │ Category               │ Lines  │ Docs │ Coverage      │
 ├───────────────────────┼────────┼──────┼───────────────┤
-│ Architecture & Design  │12,313  │ 12   │ █████████░ 96%│
+│ Architecture & Design  │14,200  │ 12   │ █████████░ 96%│
 │ Build & Distribution   │ 1,310  │  4   │ █████████░ 95%│
 │ Skin System           │   652  │  1   │ █████████░ 90%│
-│ Navigation & Index     │   724  │  1   │ ██████████100%│
-│ TOTAL                 │14,999  │ 18   │ █████████░ 95%│
+│ Navigation & Index     │ 1,001  │  1   │ ██████████100%│
+│ Staging (Refactoring)  │ 1,942  │  2   │ █████████░ 90%│
+│ TOTAL                 │19,105  │ 20   │ █████████░ 95%│
 └─────────────────────────────────────────────────────────┘
 ```
 
 ### Documentation Health
 
 ```
-Total Active Docs:        18
+Total Active Docs:        20
 Total Archived Docs:      23 (local only)
-Total Lines:             14,323
-Average Doc Size:        796 lines
-Last Full Review:        2025-12-16
-Documentation Version:   3.1.0
+Total Lines:             19,105
+Average Doc Size:        955 lines
+Last Full Review:        2026-01-11
+Documentation Version:   3.3.0
+Recent Update:           AudioPlayer decomposition (+1,273 lines)
 
 Quality Ratings:
-⭐⭐⭐⭐⭐ Authoritative:   10 docs (56%)
-⭐⭐⭐⭐  Reference:        7 docs (39%)
-⭐⭐⭐   Historical:       1 doc  (5%)
+⭐⭐⭐⭐⭐ Authoritative:   10 docs (50%)
+⭐⭐⭐⭐  Reference:        8 docs (40%)
+⭐⭐⭐   Staging:          2 docs (10%)
 ```
 
 ### Accuracy Assessment
@@ -834,7 +847,7 @@ Quality Ratings:
 | **Bug fix with lessons** | Add to anti-patterns | IMPLEMENTATION_PATTERNS.md §9 |
 | **Build process change** | Update build guide | RELEASE_BUILD_GUIDE.md |
 | **Skin compatibility issue** | Document variation | WINAMP_SKIN_VARIATIONS.md |
-| **Component refactor** | Update component maps | MACAMP_ARCHITECTURE_GUIDE.md §11 |
+| **Component refactor** | Update component maps | MACAMP_ARCHITECTURE_GUIDE.md §Component Integration Maps |
 
 ### When to Create New Documentation
 
@@ -921,36 +934,39 @@ The following documents have been **archived to docs/archive/** (local only, not
 ### Current Active Documentation
 
 ```
-18 Core Technical Documents
+20 Core Technical Documents
 ─────────────────────────────
-MACAMP_ARCHITECTURE_GUIDE.md    3,818 lines  (27%)
-IMPLEMENTATION_PATTERNS.md      1,791 lines  (13%)
-MULTI_WINDOW_ARCHITECTURE.md    1,060 lines  (7%)
-VIDEO_WINDOW.md                   927 lines  (6%)
-SPRITE_SYSTEM_COMPLETE.md         814 lines  (6%)
-MILKDROP_WINDOW.md              1,113 lines  (7%)
-README.md (this file)             750 lines  (5%)
-PLAYLIST_WINDOW.md                650 lines  (5%) ⭐ NEW
-WINAMP_SKIN_VARIATIONS.md         652 lines  (5%)
-WINDOW_FOCUS_ARCHITECTURE.md      599 lines  (4%)
-RELEASE_BUILD_GUIDE.md            447 lines  (3%)
-CODE_SIGNING_FIX_DIAGRAM.md       433 lines  (3%)
-README_MULTI_WINDOW.md            364 lines  (3%)
-MULTI_WINDOW_QUICK_START.md       315 lines  (2%)
-MULTI_WINDOW_RESEARCH_SUMMARY.md  278 lines  (2%)
-CUSTOM_DRAG_FIX.md                254 lines  (2%)
-RELEASE_BUILD_COMPARISON.md       230 lines  (2%)
-CODE_SIGNING_FIX.md               200 lines  (1%)
+MACAMP_ARCHITECTURE_GUIDE.md         4,555 lines  (24%) ⭐ UPDATED +737
+IMPLEMENTATION_PATTERNS.md           2,327 lines  (12%) ⭐ UPDATED +536
+MILKDROP_WINDOW.md                   1,623 lines  (8%)
+VIDEO_WINDOW.md                      1,151 lines  (6%)
+MULTI_WINDOW_ARCHITECTURE.md         1,060 lines  (6%)
+README.md (this file)                1,001 lines  (5%)
+AUDIOPLAYER_REFACTORING_2026_CORRECTED.md  987 lines  (5%)
+AUDIOPLAYER_REFACTORING_2026.md        955 lines  (5%)
+PLAYLIST_WINDOW.md                     860 lines  (5%)
+SPRITE_SYSTEM_COMPLETE.md              814 lines  (4%)
+WINAMP_SKIN_VARIATIONS.md              652 lines  (3%)
+WINDOW_FOCUS_ARCHITECTURE.md           599 lines  (3%)
+RELEASE_BUILD_GUIDE.md                 447 lines  (2%)
+CODE_SIGNING_FIX_DIAGRAM.md            433 lines  (2%)
+README_MULTI_WINDOW.md                 364 lines  (2%)
+MULTI_WINDOW_QUICK_START.md            315 lines  (2%)
+MULTI_WINDOW_RESEARCH_SUMMARY.md       278 lines  (1%)
+CUSTOM_DRAG_FIX.md                     254 lines  (1%)
+RELEASE_BUILD_COMPARISON.md            230 lines  (1%)
+CODE_SIGNING_FIX.md                    200 lines  (1%)
 ─────────────────────────────
-TOTAL:                         14,349 lines
+TOTAL:                              19,105 lines
 ```
 
 ### Documentation by Category
 
-- **Architecture & Design**: 81% (11,089 lines)
-- **Build & Distribution**: 10% (1,310 lines)
-- **Skin System**: 5% (652 lines)
-- **Navigation & Index**: 5% (724 lines)
+- **Architecture & Design**: 74% (14,200 lines)
+- **Build & Distribution**: 7% (1,310 lines)
+- **Skin System**: 3% (652 lines)
+- **Navigation & Index**: 5% (1,001 lines)
+- **Staging (Refactoring)**: 10% (1,942 lines)
 
 ---
 
@@ -984,6 +1000,6 @@ For questions or corrections, the documentation was comprehensively reviewed on 
 
 ---
 
-**MacAmp Documentation v3.2.1 | Last Updated: 2026-01-06 | Status: Production Authoritative**
+**MacAmp Documentation v3.3.0 | Last Updated: 2026-01-11 | Status: Production Authoritative**
 
-*Master index for 14,695 lines of verified technical documentation (18 active docs)*
+*Master index for 19,105 lines of verified technical documentation (20 active docs)*

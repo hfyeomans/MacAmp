@@ -1,7 +1,7 @@
 # MacAmp Implementation Patterns
 
-**Version:** 1.0.0
-**Date:** 2025-12-28
+**Version:** 1.2.0
+**Date:** 2026-01-11
 **Purpose:** Practical code patterns and best practices for MacAmp development
 
 ---
@@ -13,8 +13,10 @@
    - [@Observable with @MainActor](#pattern-observable-with-mainactor)
    - [Dependency Injection via Environment](#pattern-dependency-injection-via-environment)
    - [Computed Properties with Dependency Tracking](#pattern-computed-properties-with-dependency-tracking)
+   - [Computed Forwarding for API Compatibility](#pattern-computed-forwarding-for-api-compatibility) **(New - Swift 6)**
    - [Enum State with Persistence](#pattern-enum-state-with-persistence-repeatmode-pattern)
    - [Window Focus State Tracking](#pattern-window-focus-state-tracking)
+   - [Action-Based Bridge Pattern](#pattern-action-based-bridge-pattern) **(New - Swift 6)**
 3. [UI Component Patterns](#ui-component-patterns)
    - [Sprite-Based Button Component](#pattern-sprite-based-button-component)
    - [Absolute Positioning Extension](#pattern-absolute-positioning-extension)
@@ -23,7 +25,15 @@
    - [GEN.bmp Chrome & Two-Piece Sprites](#pattern-genbmp-chrome--two-piece-sprites)
    - [Video Playback Embedding](#pattern-video-playback-embedding)
 4. [Audio Processing Patterns](#audio-processing-patterns)
+   - [Safe Audio Buffer Processing](#pattern-safe-audio-buffer-processing)
+   - [Thread-Safe Audio State](#pattern-thread-safe-audio-state)
+   - [nonisolated(unsafe) Deinit Safety](#pattern-nonisolatedunsafe-deinit-safety-swift-6) **(New - Swift 6)**
+   - [Unmanaged Pointer for Core Audio Callbacks](#pattern-unmanaged-pointer-for-core-audio-callbacks-swift-6) **(New - Swift 6)**
 5. [Async/Await Patterns](#asyncawait-patterns)
+   - [Async Stream Events](#pattern-async-stream-events)
+   - [Cancellable Tasks](#pattern-cancellable-tasks)
+   - [Background I/O Fire-and-Forget](#pattern-background-io-fire-and-forget-swift-6) **(New - Swift 6)**
+   - [Callback Synchronization for Cross-Component Communication](#pattern-callback-synchronization-for-cross-component-communication) **(New - Swift 6)**
 6. [Error Handling Patterns](#error-handling-patterns)
 7. [Testing Patterns](#testing-patterns)
 8. [Migration Guides](#migration-guides)
@@ -168,6 +178,74 @@ final class PlaylistManager {
 ```
 
 **Real usage**: `PlaybackCoordinator.swift` for `displayTitle`, `canUseEQ`
+
+### Pattern: Computed Forwarding for API Compatibility
+
+**When to use**: Maintaining backwards-compatible API surface after extracting functionality to sub-components
+
+**Swift 6 Relevance**: Essential for incremental refactoring while preserving existing view bindings
+
+**Implementation**:
+```swift
+// File: MacAmpApp/Audio/AudioPlayer.swift:86-126
+// Purpose: Forward state from extracted components while preserving existing bindings
+// Context: Views bind to AudioPlayer.playlist instead of playlistController.playlist
+
+@Observable
+@MainActor
+final class AudioPlayer {
+    // Extracted controllers (internal implementation)
+    let playlistController = PlaylistController()
+    let eqPresetStore = EQPresetStore()
+    let videoPlaybackController = VideoPlaybackController()
+    let visualizerPipeline = VisualizerPipeline()
+
+    // MARK: - Computed Forwarding (API Compatibility)
+
+    // Read-only forwarding
+    var playlist: [Track] { playlistController.playlist }
+    var userPresets: [EQPreset] { eqPresetStore.userPresets }
+    var videoPlayer: AVPlayer? { videoPlaybackController.player }
+    var videoMetadataString: String { videoPlaybackController.metadataString }
+    var visualizerLevels: [Float] { visualizerPipeline.levels }
+
+    // Read-write forwarding
+    var shuffleEnabled: Bool {
+        get { playlistController.shuffleEnabled }
+        set { playlistController.shuffleEnabled = newValue }
+    }
+
+    // Settings-backed forwarding (delegates to AppSettings)
+    var repeatMode: AppSettings.RepeatMode {
+        get { AppSettings.instance().repeatMode }
+        set { AppSettings.instance().repeatMode = newValue }
+    }
+
+    // Method forwarding with state sync
+    var visualizerSmoothing: Float {
+        get { visualizerPipeline.smoothing }
+        set { visualizerPipeline.smoothing = newValue }
+    }
+}
+```
+
+**When to use this pattern**:
+- **Incremental refactoring**: Extract functionality without breaking existing view bindings
+- **Facade maintenance**: Keep public API stable while internal structure evolves
+- **Single source of truth**: Prevent duplicate state across components
+
+**When NOT to use**:
+- New code should access components directly where appropriate
+- Views should use the facade (AudioPlayer), not reach into sub-components
+- Don't forward every property - only those needed by external callers
+
+**Real usage**: `AudioPlayer.swift` maintains API compatibility after extracting `PlaylistController`, `EQPresetStore`, `VideoPlaybackController`, and `VisualizerPipeline`
+
+**Pitfalls**:
+- Don't duplicate state - always delegate to the source component
+- Remember to update forwarding when component API changes
+- Avoid deep forwarding chains (A forwards to B forwards to C)
+- Keep forwarding properties grouped together for discoverability
 
 ### Pattern: Enum State with Persistence (RepeatMode Pattern)
 
@@ -323,6 +401,103 @@ struct VideoWindowChromeView: View {
 - Remember to add delegate to multiplexer, not replace window.delegate
 - Use computed properties in views, not @State caching
 - Don't cache isWindowActive in @State - breaks reactivity
+
+### Pattern: Action-Based Bridge Pattern
+
+**When to use**: Separating navigation logic from playback side effects for testability and clarity
+
+**Swift 6 Relevance**: Enables pure unit testing of logic without mocking playback infrastructure
+
+**Implementation**:
+```swift
+// File: MacAmpApp/Audio/PlaylistController.swift:20-29
+// Purpose: Return navigation actions instead of directly triggering playback
+// Context: PlaylistController computes what to play; AudioPlayer handles how
+
+/// PlaylistController - Pure navigation logic (no side effects)
+@MainActor
+@Observable
+final class PlaylistController {
+    /// Action to be performed after playlist navigation
+    enum AdvanceAction: Equatable {
+        case none                               // No change needed
+        case restartCurrent                     // Repeat-one: restart current track
+        case playTrack(Track)                   // Play local file
+        case requestCoordinatorPlayback(Track)  // Stream: delegate to coordinator
+        case endOfPlaylist                      // Playlist exhausted (repeat off)
+    }
+
+    /// Compute the next track to play (pure logic, no side effects)
+    /// - Parameter isManualSkip: Whether this is a user-initiated skip
+    /// - Returns: The action to perform (caller handles playback)
+    func nextTrack(isManualSkip: Bool = false) -> AdvanceAction {
+        guard !playlist.isEmpty else { return .none }
+
+        // Repeat-one: Only auto-restart on track end, allow manual skips
+        if repeatMode == .one && !isManualSkip {
+            guard let track = currentTrack else { return .none }
+            return track.isStream ? .requestCoordinatorPlayback(track) : .restartCurrent
+        }
+
+        // ... navigation logic ...
+        return .playTrack(nextTrack)
+    }
+}
+
+// File: MacAmpApp/Audio/AudioPlayer.swift:1021-1042
+// Purpose: Bridge method translates actions to actual playback operations
+
+/// AudioPlayer - Bridges actions to playback
+@Observable
+@MainActor
+final class AudioPlayer {
+    /// Handle action returned from PlaylistController
+    private func handlePlaylistAction(_ action: PlaylistController.AdvanceAction) -> PlaylistAdvanceAction {
+        switch action {
+        case .none:
+            return .none
+
+        case .restartCurrent:
+            // Always resume: repeat-one at end-of-track means "restart and play"
+            // (isPlaying is already false after onPlaybackEnded transition)
+            seek(to: 0, resume: true)
+            return .restartCurrent
+
+        case .playTrack(let track):
+            playTrack(track: track)
+            return .playLocally(track)
+
+        case .requestCoordinatorPlayback(let track):
+            return .requestCoordinatorPlayback(track)
+
+        case .endOfPlaylist:
+            return .none
+        }
+    }
+
+    /// Go to next track in playlist
+    @discardableResult
+    func nextTrack(isManualSkip: Bool = false) -> PlaylistAdvanceAction {
+        playlistController.updatePosition(with: currentTrack)
+        let action = playlistController.nextTrack(isManualSkip: isManualSkip)
+        return handlePlaylistAction(action)
+    }
+}
+```
+
+**Benefits**:
+1. **Testability**: PlaylistController can be unit tested with mock data
+2. **Clarity**: Navigation logic is separate from playback mechanics
+3. **Flexibility**: Actions can be logged, intercepted, or transformed
+4. **Type safety**: Enum ensures all cases are handled
+
+**Real usage**: `PlaylistController.swift` for playlist navigation, `AudioPlayer.swift` for bridge method
+
+**Pitfalls**:
+- Ensure the bridge method handles ALL action cases
+- Action state may be stale - check preconditions before executing
+- Don't add side effects to the logic component (PlaylistController)
+- The bridge method must handle edge cases (e.g., isPlaying already false)
 
 ---
 
@@ -1101,6 +1276,206 @@ Task { @MainActor in
 
 **Real usage**: Visualization data flow in `AudioPlayer.swift`
 
+### Pattern: nonisolated(unsafe) Deinit Safety (Swift 6)
+
+**When to use**: Accessing @MainActor properties in deinit for cleanup
+
+**Swift 6 Relevance**: Required for safe observer cleanup when deinit cannot be @MainActor
+
+**Implementation**:
+```swift
+// File: MacAmpApp/Audio/VideoPlaybackController.swift:24-85
+// Purpose: Clean up AVPlayer observers in deinit (which is nonisolated)
+// Context: Swift 6 prohibits calling @MainActor methods from deinit
+
+@MainActor
+@Observable
+final class VideoPlaybackController {
+    // MARK: - Observer Management
+    // Note: nonisolated(unsafe) allows deinit to access these for cleanup
+    // Safe because at deinit time there are no concurrent references
+
+    @ObservationIgnored nonisolated(unsafe) private var endObserver: NSObjectProtocol?
+    @ObservationIgnored nonisolated(unsafe) private var timeObserver: Any?
+
+    /// Shadow property to maintain AVPlayer reference for deinit access
+    /// Required because `player` property might be nil-ed out before deinit
+    @ObservationIgnored nonisolated(unsafe) private var _playerForCleanup: AVPlayer?
+
+    @ObservationIgnored private(set) var player: AVPlayer?
+
+    func loadVideo(url: URL, autoPlay: Bool = true) {
+        cleanup()  // Clean up any existing video player
+
+        let newPlayer = AVPlayer(url: url)
+        player = newPlayer
+        _playerForCleanup = newPlayer  // Keep in sync for deinit access
+
+        // ... setup observers ...
+    }
+
+    func cleanup() {
+        // ... normal cleanup on MainActor ...
+        player = nil
+        _playerForCleanup = nil  // Keep in sync
+    }
+
+    deinit {
+        // NOTE: Cannot call @MainActor cleanup() from deinit
+        // Must access nonisolated(unsafe) properties directly
+
+        // Remove time observer (requires player reference)
+        if let observer = timeObserver, let player = _playerForCleanup {
+            player.removeTimeObserver(observer)
+        }
+        timeObserver = nil
+
+        // Remove notification observer
+        if let observer = endObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        endObserver = nil
+
+        // Pause player for clean shutdown
+        _playerForCleanup?.pause()
+        _playerForCleanup = nil
+    }
+}
+```
+
+**Key elements**:
+1. **nonisolated(unsafe)**: Marks properties as accessible from nonisolated context
+2. **Shadow property**: `_playerForCleanup` maintains reference when `player` is nilled
+3. **Manual cleanup**: deinit must duplicate cleanup logic (cannot call @MainActor methods)
+4. **Safety rationale**: At deinit time, no other references exist - single-threaded access
+
+**When to use**:
+- AVPlayer/AVPlayerItem observer cleanup
+- NotificationCenter observer removal
+- Timer invalidation
+- Any cleanup requiring access to @MainActor properties
+
+**Real usage**: `VideoPlaybackController.swift` for observer cleanup, `VisualizerPipeline.swift` for tap removal
+
+**Pitfalls**:
+- Must keep shadow properties in sync with main properties
+- Document WHY nonisolated(unsafe) is safe in comments
+- Don't use nonisolated(unsafe) for properties accessed during normal operation
+- Consider if cleanup can be moved to explicit `cleanup()` method called before deinit
+
+### Pattern: Unmanaged Pointer for Core Audio Callbacks (Swift 6)
+
+**When to use**: Passing Swift objects to C-style callback contexts (e.g., AVAudioEngine taps)
+
+**Swift 6 Relevance**: Bridges Swift actor isolation to non-actor C callbacks
+
+**Implementation**:
+```swift
+// File: MacAmpApp/Audio/VisualizerPipeline.swift:178-184, 265-274, 518-522
+// Purpose: Pass VisualizerPipeline reference through Core Audio tap callback
+// Context: Audio tap runs on realtime audio thread, not @MainActor
+
+/// Context passed to audio tap (must be Sendable for Swift 6)
+private struct VisualizerTapContext: @unchecked Sendable {
+    let pipelinePointer: UnsafeMutableRawPointer
+}
+
+@MainActor
+@Observable
+final class VisualizerPipeline {
+    @ObservationIgnored nonisolated(unsafe) private var tapInstalled = false
+    @ObservationIgnored nonisolated(unsafe) private weak var mixerNode: AVAudioMixerNode?
+
+    /// Install visualizer tap on the given mixer node
+    func installTap(on mixer: AVAudioMixerNode) {
+        guard !tapInstalled else { return }
+
+        mixerNode = mixer
+
+        // Create context with Unmanaged pointer to self
+        // passUnretained: Does NOT increment reference count
+        // CRITICAL: self must outlive the tap - caller must call removeTap() before releasing
+        let context = VisualizerTapContext(
+            pipelinePointer: Unmanaged.passUnretained(self).toOpaque()
+        )
+
+        let handler = Self.makeTapHandler(context: context, scratch: VisualizerScratchBuffers())
+
+        mixer.installTap(onBus: 0, bufferSize: 2048, format: nil, block: handler)
+        tapInstalled = true
+    }
+
+    /// Remove visualizer tap if installed
+    /// Nonisolated to allow calling from deinit (AVAudioMixerNode.removeTap is thread-safe)
+    nonisolated func removeTap() {
+        guard tapInstalled, let mixer = mixerNode else { return }
+        mixer.removeTap(onBus: 0)
+        tapInstalled = false
+        mixerNode = nil
+    }
+
+    /// Build the tap handler in a nonisolated context
+    /// AVAudioEngine calls this on its realtime audio queue
+    private nonisolated static func makeTapHandler(
+        context: VisualizerTapContext,
+        scratch: VisualizerScratchBuffers
+    ) -> @Sendable (AVAudioPCMBuffer, AVAudioTime?) -> Void {
+        { buffer, _ in
+            // ... process buffer ...
+
+            // Dispatch to MainActor to update pipeline state
+            Task { @MainActor [context, data] in
+                // Convert opaque pointer back to VisualizerPipeline
+                let pipeline = Unmanaged<VisualizerPipeline>.fromOpaque(
+                    context.pipelinePointer
+                ).takeUnretainedValue()
+
+                pipeline.updateLevels(with: data, useSpectrum: pipeline.useSpectrum)
+            }
+        }
+    }
+}
+
+// In AudioPlayer.deinit - ensure tap is removed before pipeline is deallocated
+deinit {
+    // CRITICAL: Remove tap before self deallocates to prevent use-after-free
+    visualizerPipeline.removeTap()
+}
+```
+
+**Key elements**:
+1. **Unmanaged.passUnretained**: Creates raw pointer without retaining (caller manages lifetime)
+2. **@unchecked Sendable context**: Context struct holds raw pointer, marked Sendable for crossing actor boundary
+3. **nonisolated removeTap()**: Can be called from deinit to safely remove tap
+4. **Static tap handler**: Uses `nonisolated static func` to avoid capturing self directly
+5. **Task dispatch**: Hops back to MainActor after processing
+
+**Lifetime contract**:
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     LIFETIME CONTRACT                            │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  1. VisualizerPipeline created                                   │
+│  2. installTap() called - tap holds Unmanaged pointer            │
+│  3. Tap callback runs repeatedly on audio thread                 │
+│  4. removeTap() MUST be called before VisualizerPipeline release │
+│  5. VisualizerPipeline deallocated                               │
+│                                                                  │
+│  If step 4 is skipped: USE-AFTER-FREE crash in tap callback      │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Real usage**: `VisualizerPipeline.swift` for audio tap callback
+
+**Pitfalls**:
+- **CRITICAL**: removeTap() must be called before releasing the object
+- Don't use `passRetained` unless you explicitly call `release()` later
+- Verify lifetime management in code review - memory bugs are subtle
+- Consider logging when tap is installed/removed for debugging
+- Test with Thread Sanitizer to catch use-after-free issues
+
 ---
 
 ## Async/Await Patterns
@@ -1190,6 +1565,149 @@ struct DataLoadingView: View {
 ```
 
 **Real usage**: Stream metadata loading in `StreamPlayer.swift`
+
+### Pattern: Background I/O Fire-and-Forget (Swift 6)
+
+**When to use**: File I/O operations that don't need immediate confirmation of success
+
+**Swift 6 Relevance**: Uses `Task.detached` with state snapshot for `@Sendable` compliance
+
+**Implementation**:
+```swift
+// File: MacAmpApp/Audio/EQPresetStore.swift:130-146
+// Purpose: Perform file writes off main thread without blocking UI
+// Context: Per-track preset persistence - writes happen on every EQ change
+
+@MainActor
+@Observable
+final class EQPresetStore {
+    @ObservationIgnored var perTrackPresets: [String: EqfPreset] = [:]
+
+    /// Save per-track presets to JSON file (fire-and-forget)
+    /// State is captured before dispatch to prevent race conditions
+    func savePerTrackPresets() {
+        guard let url = presetsFileURL() else { return }
+
+        // CRITICAL: Capture current state BEFORE dispatching
+        // This ensures we save the state at call time, not when the task runs
+        let presetsToSave = perTrackPresets
+
+        // Perform file I/O off main thread (fire-and-forget with error logging)
+        Task.detached(priority: .utility) {
+            do {
+                let data = try JSONEncoder().encode(presetsToSave)
+                try data.write(to: url, options: .atomic)
+                AppLog.debug(.audio, "Saved \(presetsToSave.count) per-track presets")
+            } catch {
+                AppLog.warn(.audio, "Failed to save per-track presets: \(error)")
+            }
+        }
+    }
+}
+```
+
+**Key elements**:
+1. **State snapshot**: Capture state before `Task.detached` to avoid Sendable violations
+2. **Fire-and-forget**: No `await` - caller continues immediately
+3. **Error logging**: Use `AppLog` for errors since we can't propagate them
+4. **Priority**: Use `.utility` for non-urgent I/O, `.userInitiated` for user-triggered saves
+
+**When to use**:
+- Periodic auto-saves (preference changes, EQ adjustments)
+- Non-critical persistence (cache files, recent items)
+- High-frequency updates where blocking would cause UI lag
+
+**When NOT to use**:
+- Operations where success confirmation is needed (use `await Task.detached { }.value`)
+- Writes that must complete before app terminates (use synchronous I/O or `await`)
+- Operations with complex error recovery requirements
+
+**Real usage**: `EQPresetStore.savePerTrackPresets()`, per-track preset auto-save
+
+**Pitfalls**:
+- Always capture state BEFORE the `Task.detached` block
+- The captured type must be `Sendable` (value types or explicitly marked)
+- Fire-and-forget loses error propagation - ensure adequate logging
+- Multiple rapid calls may result in out-of-order writes (use `.atomic` option)
+
+### Pattern: Callback Synchronization for Cross-Component Communication
+
+**When to use**: Coordinating state updates between extracted components without tight coupling
+
+**Swift 6 Relevance**: Closures must be marked `@Sendable` when crossing actor boundaries
+
+**Implementation**:
+```swift
+// File: MacAmpApp/Audio/VideoPlaybackController.swift:52-59
+// Purpose: Notify AudioPlayer of video events without direct reference
+// Context: VideoPlaybackController extracted but needs to sync UI state
+
+@MainActor
+@Observable
+final class VideoPlaybackController {
+    // MARK: - Callbacks
+
+    /// Called when video playback reaches end
+    var onPlaybackEnded: (() -> Void)?
+
+    /// Called periodically during playback with time updates (for UI sync)
+    /// Parameters: currentTime, duration, progress
+    var onTimeUpdate: ((Double, Double, Double) -> Void)?
+
+    // ... playback methods set up time observer ...
+
+    private func setupTimeObserver() {
+        let interval = CMTime(seconds: 0.1, preferredTimescale: 600)
+        timeObserver = player?.addPeriodicTimeObserver(
+            forInterval: interval,
+            queue: .main
+        ) { [weak self] time in
+            Task { @MainActor in
+                guard let self else { return }
+                // ... compute time values ...
+
+                // Notify AudioPlayer to sync its UI-bound properties
+                self.onTimeUpdate?(seconds, dur, self.progress)
+            }
+        }
+    }
+}
+
+// File: MacAmpApp/Audio/AudioPlayer.swift:141-153
+// Purpose: Wire up callbacks during initialization
+
+init() {
+    // ... other setup ...
+
+    // Setup video playback callbacks
+    videoPlaybackController.onPlaybackEnded = { [weak self] in
+        Task { @MainActor in
+            self?.onPlaybackEnded()
+        }
+    }
+    videoPlaybackController.onTimeUpdate = { [weak self] time, duration, progress in
+        guard let self else { return }
+        // Sync UI-bound properties during video playback
+        self.currentTime = time
+        self.currentDuration = duration
+        self.playbackProgress = progress
+    }
+}
+```
+
+**Benefits**:
+1. **Loose coupling**: VideoPlaybackController doesn't import or reference AudioPlayer
+2. **Testability**: Callbacks can be mocked or replaced in tests
+3. **Flexibility**: Multiple listeners possible (though currently 1:1)
+4. **Clear data flow**: Explicit about what data crosses component boundaries
+
+**Real usage**: `VideoPlaybackController.swift` for `onPlaybackEnded`, `onTimeUpdate` callbacks
+
+**Pitfalls**:
+- Always use `[weak self]` in callbacks to prevent retain cycles
+- Mark closures `@Sendable` if they cross actor boundaries
+- Don't pass non-Sendable types through callbacks in Swift 6
+- Consider using `AsyncStream` for high-frequency events
 
 ---
 
@@ -1806,4 +2324,4 @@ When implementing new features, prefer these established patterns. When you disc
 
 ---
 
-*Document Version: 1.1.0 | Last Updated: 2025-11-14 | Lines: 1,553*
+*Document Version: 1.2.0 | Last Updated: 2026-01-11 | Lines: 2,327*
