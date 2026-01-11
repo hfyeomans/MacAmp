@@ -166,6 +166,7 @@ static func fallbackSkinsDirectory() -> URL {
   - Removed redundant string enum values (9 occurrences in 3 enums)
   - Evaluated ContinuousClock → kept Timer (correct for .common RunLoop)
   - Consolidated swiftlint-violations.md into research.md
+- **Commit 3:** `bf79fc6` - refactor: Swift 6 modernization and bug fixes (Phase 7)
 - **Build:** SUCCEEDED
 - **Next:** Phase 8 (AudioPlayer Refactoring) - DEFERRED
 
