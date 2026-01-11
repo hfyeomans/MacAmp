@@ -1,5 +1,11 @@
 # MacAmp
 
+![Platform](https://img.shields.io/badge/platform-macOS%2015.0+-blue?logo=apple)
+![Swift](https://img.shields.io/badge/Swift-6.0-orange?logo=swift)
+![GitHub release](https://img.shields.io/github/v/release/hfyeomans/MacAmp?color=brightgreen)
+![Notarized](https://img.shields.io/badge/Notarized-Apple%20Approved-brightgreen?logo=apple)
+![GitHub last commit](https://img.shields.io/github/last-commit/hfyeomans/MacAmp?color=yellow)
+
 A pixel-perfect, native macOS audio player that brings the classic desktop audio player experience to modern Apple Silicon Macs with full skin compatibility.
 
 ![MacAmp Screenshot](docs/screenshots/macamp-main.png)
