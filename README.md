@@ -834,11 +834,31 @@ We welcome contributions! Areas that need work:
 
 ## Documentation
 
-- **Architecture:** [`docs/ARCHITECTURE_REVELATION.md`](docs/ARCHITECTURE_REVELATION.md)
-- **Sprite System:** [`docs/SpriteResolver-Architecture.md`](docs/SpriteResolver-Architecture.md)
-- **Skin Format:** [`docs/winamp-skins-lessons.md`](docs/winamp-skins-lessons.md)
-- **Playlist Window:** [`docs/PLAYLIST_WINDOW.md`](docs/PLAYLIST_WINDOW.md)
-- **Phase 4 Plan:** [`tasks/phase4-polish-and-bugfixes/plan.md`](tasks/phase4-polish-and-bugfixes/plan.md)
+**📚 Complete Documentation Index:** [`docs/README.md`](docs/README.md) (19,105 lines across 20 documents)
+
+### Architecture & Design
+
+| Document | Description | Lines |
+|----------|-------------|-------|
+| [`MACAMP_ARCHITECTURE_GUIDE.md`](docs/MACAMP_ARCHITECTURE_GUIDE.md) | ⭐ **Primary Reference** - Complete system architecture, three-layer design, dual audio backend | 4,555 |
+| [`IMPLEMENTATION_PATTERNS.md`](docs/IMPLEMENTATION_PATTERNS.md) | Code patterns, @Observable usage, testing, anti-patterns | 2,327 |
+| [`SPRITE_SYSTEM_COMPLETE.md`](docs/SPRITE_SYSTEM_COMPLETE.md) | Semantic sprite resolution, skin file structure | 814 |
+
+### Window Documentation
+
+| Document | Description | Lines |
+|----------|-------------|-------|
+| [`MULTI_WINDOW_ARCHITECTURE.md`](docs/MULTI_WINDOW_ARCHITECTURE.md) | 5-window system design, focus management, magnetic snapping | 1,060 |
+| [`PLAYLIST_WINDOW.md`](docs/PLAYLIST_WINDOW.md) | Playlist resize, scroll slider, mini visualizer | 860 |
+| [`VIDEO_WINDOW.md`](docs/VIDEO_WINDOW.md) | Video playback, VIDEO.bmp chrome, seek/volume sync | 1,151 |
+| [`MILKDROP_WINDOW.md`](docs/MILKDROP_WINDOW.md) | Butterchurn visualization, GEN.bmp sprites, preset management | 1,623 |
+
+### Build & Distribution
+
+| Document | Description |
+|----------|-------------|
+| [`RELEASE_BUILD_GUIDE.md`](docs/RELEASE_BUILD_GUIDE.md) | Building, signing, notarizing, DMG creation |
+| [`WINAMP_SKIN_VARIATIONS.md`](docs/WINAMP_SKIN_VARIATIONS.md) | Skin format specifications, file structure |
 
 ## Credits
 
