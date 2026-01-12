@@ -840,7 +840,9 @@ MacAmp draws inspiration from the classic desktop audio player that defined a ge
 
 ## License
 
-[Add your license here]
+MIT License - see [LICENSE](LICENSE) for details.
+
+Free to use, modify, and distribute with attribution.
 
 ## Support
 
