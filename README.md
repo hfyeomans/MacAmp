@@ -308,22 +308,28 @@ MacAmp supports three repeat modes matching Winamp 5 Modern skins (Modern, Bento
 
 ## Architecture
 
-MacAmp uses a three-layer architecture inspired by modern frontend frameworks:
+MacAmp uses a strict three-layer separation, inspired by web frameworks but adapted for SwiftUI's declarative paradigm.
 
-### Mechanism Layer
-- **AudioPlayer** - AVAudioEngine-based playback with EQ
-- **PlaylistManager** - Track queue and playback order
-- **SkinManager** - Dynamic skin loading and hot-swapping
+### Mechanism Layer ("What the app does")
+- **PlaybackCoordinator** - Orchestrates dual audio backends (local + streaming)
+- **AudioPlayer** - AVAudioEngine lifecycle for local files with 10-band EQ
+- **StreamPlayer** - AVPlayer-based HTTP/HTTPS radio streaming
+- **VisualizerPipeline** - Audio tap, FFT processing, Butterchurn data
+- **PlaylistController** - Playlist state and navigation logic
+- **VideoPlaybackController** - Video AVPlayer lifecycle management
+- **EQPresetStore** - Preset persistence (UserDefaults + JSON)
+- **SkinManager** - Skin loading and hot-swapping
 
-### Bridge Layer
+### Bridge Layer ("How components connect")
 - **SpriteResolver** - Semantic sprite resolution for cross-skin compatibility
-- **ViewModels** - State management and business logic
-- **DockingController** - Multi-window coordination
+- **WindowCoordinator** - 5-window lifecycle and AppKit/SwiftUI bridge
+- **DockingController** - Multi-window magnetic snapping
+- **WindowFocusState** - Unified focus tracking across all windows
 
-### Presentation Layer
-- **SwiftUI Views** - Pixel-perfect component rendering
-- **SimpleSpriteImage** - Sprite sheet rendering with semantic support
-- **Custom Sliders** - Frame-based sprite animation
+### Presentation Layer ("What the user sees")
+- **SwiftUI Views** - Pixel-perfect sprite rendering (`.interpolation(.none)`)
+- **SimpleSpriteImage** - Interactive sprite components with semantic IDs
+- **Window Chrome Views** - Skinnable VIDEO.bmp and GEN.bmp chrome
 
 For detailed architecture documentation, see [`docs/MACAMP_ARCHITECTURE_GUIDE.md`](docs/MACAMP_ARCHITECTURE_GUIDE.md).
 
@@ -430,52 +436,20 @@ tasks/                                  # Development Planning & Context
 Package.swift                           # Swift Package Manager Configuration
 ```
 
-### Recent Architectural Changes (2025)
+### Architecture Evolution
 
-**Playlist Window Resize** (December 2025):
-- Added **PlaylistWindowSizeState** for observable resize state with computed layout properties
-- Added **PlaylistScrollSlider** component with proportional thumb sizing
-- Added **isMainWindowShaded** to AppSettings for cross-window shade state observation
-- Three-section bottom bar: LEFT (125px) + CENTER (dynamic tiles) + RIGHT (150px)
-- Segment-based resize (25×29px) with UserDefaults persistence
-- Mini visualizer integration when main window is shaded
+**January 2026 - AudioPlayer Decomposition (v1.0.5)**
+- Reduced AudioPlayer from 1,805 → 1,043 lines (-42%)
+- Extracted 5 focused components: EQPresetStore, MetadataLoader, PlaylistController, VideoPlaybackController, VisualizerPipeline
+- Full Swift 6 strict concurrency compliance (Sendable, @MainActor)
 
-**Video & Milkdrop Windows** (November 2025):
-- Added **WindowCoordinator** for 5-window lifecycle management and AppKit/SwiftUI bridge
-- Added **WindowFocusState** and **WindowFocusDelegate** for active/inactive titlebar tracking
-- Added **Size2D** and **VideoWindowSizeState** for quantized 25×29px resize segments
-- Added **VIDEO.bmp sprites** (24 sprites) to SkinSprites.swift for skinnable chrome
-- Added **GEN.bmp two-piece letter sprites** (32 sprites) for Milkdrop titlebar
-- Video playback integrated into AudioPlayer (MediaType routing, AVPlayer backend)
-- Task { @MainActor in } pattern for timer/observer closures (Thread Sanitizer clean)
-- Observable visibility state for window toggle coordination
+**2025 - Foundation**
+- **5-Window System**: Main, Equalizer, Playlist, Video, Milkdrop with unified focus tracking
+- **Dual Audio Backend**: PlaybackCoordinator orchestrating AVAudioEngine (local) + AVPlayer (streams)
+- **Swift 6 Migration**: @Observable macro pattern replacing ObservableObject
+- **Segment-Based Resize**: 25×29px quantized sizing for all resizable windows
 
-**Internet Radio Support** (October 2025):
-- Added **PlaybackCoordinator** to orchestrate dual audio backends
-- Added **StreamPlayer** for AVPlayer-based HTTP/HTTPS streaming
-- Added **RadioStation** and **RadioStationLibrary** for station management
-- Streams integrated into playlist alongside local files (Winamp parity)
-
-**Swift 6 Modernization** (October 2025):
-- Migrated to **@Observable** framework (replaced ObservableObject)
-- Added **PlaylistMenuDelegate** for keyboard navigation in sprite menus
-- Applied pixel-perfect rendering (`.interpolation(.none)`) throughout
-- Full Swift 6 strict concurrency compliance
-
-**UI Enhancements** (October-November 2025):
-- **Video & Milkdrop Windows** (v0.8.9): 5-window architecture complete
-  - **V Button**: Video Window toggle (Ctrl+V) - 1x/2x resize, metadata ticker
-  - **Milkdrop Window**: GEN.bmp chrome foundation (Ctrl+K)
-- **Clutter Bar Controls** (v0.7.8): 5 of 5 buttons functional
-  - **O Button**: Options menu with time display toggle, settings access (Ctrl+O, Ctrl+T)
-  - **A Button**: Always On Top window floating (Ctrl+A)
-  - **I Button**: Track Information metadata dialog (Ctrl+I)
-  - **D Button**: Double-Size 100%/200% scaling (Ctrl+D)
-  - **V Button**: Video Window toggle (Ctrl+V)
-- **Visualizer Modes**: Clickable visualizer cycles through Spectrum → Oscilloscope → None
-- **Keyboard Navigation**: Arrow keys and VoiceOver support in all menus
-
-For detailed architecture documentation, see [`docs/*]
+See [`docs/MACAMP_ARCHITECTURE_GUIDE.md`](docs/MACAMP_ARCHITECTURE_GUIDE.md) for complete architecture documentation.
 
 ## Keyboard Shortcuts
 
