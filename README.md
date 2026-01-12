@@ -828,9 +828,16 @@ MacAmp draws inspiration from the classic desktop audio player that defined a ge
 
 ### Dependencies
 
-- [ZIPFoundation](https://github.com/weichsel/ZIPFoundation) - ZIP archive handling
-- AVFoundation - Native macOS audio engine
-- SwiftUI - Modern declarative UI framework
+**Third-party:**
+- [ZIPFoundation](https://github.com/weichsel/ZIPFoundation) - WSZ skin archive extraction
+- [Butterchurn](https://github.com/jberg/butterchurn) - Milkdrop 2 WebGL visualizations
+
+**Apple Frameworks:**
+- **AVFoundation** - AVAudioEngine, AVPlayer, 10-band EQ, audio/video playback
+- **SwiftUI** - Declarative UI with @Observable state management
+- **AppKit** - NSWindow, NSMenu, NSWindowController for window chrome
+- **Accelerate** - vDSP hardware-accelerated FFT for spectrum analysis
+- **WebKit** - WKWebView for Butterchurn visualization rendering
 
 ### References
 
