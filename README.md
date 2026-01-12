@@ -796,41 +796,22 @@ See [`docs/SpriteResolver-Architecture.md`](docs/SpriteResolver-Architecture.md)
 
 ## Development
 
-### Completed Phases
-
-**Swift Modernization (Oct 2025):**
-- ✅ **Phase 1:** Pixel-perfect sprite rendering (PR #23)
-- ✅ **Phase 2:** @Observable migration + Swift 6 (PR #24)
-- ✅ **Phase 3:** NSMenuDelegate keyboard navigation (PR #25)
-
-**Earlier Phases:**
-- ✅ SpriteResolver architecture
-- ✅ Time display with semantic sprites
-- ✅ All slider implementations (volume, balance, position, EQ)
-- ✅ EQ with 17 presets
-- ✅ Shuffle and repeat modes
-- ✅ Borderless windows with WindowDragGesture
-- ✅ Playlist menu system with multi-select
-- ✅ Native text rendering
-
 ### Known Limitations
 
-**Not Yet Implemented:**
-- Settings persistence (volume resets on restart)
-- Playlist scrolling (for large playlists)
-- Enter key menu activation (arrow keys + click work)
-
-See [`tasks/swift-modernization-recommendations/unimplemented-features.md`](tasks/swift-modernization-recommendations/unimplemented-features.md) for details.
+- **EQ for Streams** - Equalizer only works for local files (AVPlayer limitation for HTTP streams)
+- **Skin Sprite Coverage** - Some rare skin variants may have missing sprites (fallbacks generated)
+- **Enter Key in Menus** - Menu activation requires click (arrow key navigation + click works)
+- **Multi-Room Sync** - AirPlay 2 multi-room audio not yet supported
 
 ### Contributing
 
-We welcome contributions! Areas that need work:
+We welcome contributions! High-impact areas from our [tasks backlog](tasks/):
 
-1. **Additional Skin Support** - Test with more classic skins
-2. **Playlist Persistence** - Save/restore playlists
-3. **Media Key Support** - Respond to keyboard media keys
-4. **Dock Integration** - Show controls in macOS dock
-5. **File Format Support** - Add OGG Vorbis, Opus support
+1. **AirPlay Support** - Stream audio to AirPlay speakers and devices ([tasks/airplay](tasks/airplay/))
+2. **Playlist Drag & Drop** - Drop files directly into the playlist window ([tasks/playlist-drag-and-drop](tasks/playlist-drag-and-drop/))
+3. **Media Key Support** - Respond to macOS keyboard media keys (Play/Pause/Next/Previous)
+4. **OGG/Opus Codecs** - Add Vorbis and Opus audio format support via FFmpeg or native decoders
+5. **Dock Integration** - Show transport controls in macOS dock menu
 
 ## Documentation
 
