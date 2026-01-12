@@ -107,204 +107,107 @@ xcodebuild -scheme MacAmp -configuration Debug -destination "platform=macOS"
 
 ## Usage
 
-### Basic Playback
+### Main Window
 
-1. **Load Audio/Video Files** - Click the eject button (supports MP3, FLAC, WAV, MP4, MOV, M4V) or drag files to the window
-2. **Play/Pause/Stop** - Use transport controls
-3. **Seek** - Drag the position slider to jump to any point in the track
-4. **Volume** - Adjust with the vertical volume slider
-5. **Balance** - Pan left/right with the balance slider
+**Playback Controls:**
+- **Load Files** - Click eject button or drag files (MP3, FLAC, WAV, M4A, MP4, MOV)
+- **Transport** - Play/Pause/Stop, Previous/Next track buttons
+- **Seek** - Drag position slider to jump to any point
+- **Volume/Balance** - Vertical sliders for volume and stereo pan
 
-### Equalizer
+**Clutter Bar** (vertical strip, left side):
+| Button | Shortcut | Function |
+|--------|----------|----------|
+| **O** | Ctrl+O | Options menu (time display, double-size, repeat, shuffle) |
+| **A** | Ctrl+A | Always On Top toggle |
+| **I** | Ctrl+I | Track Information dialog |
+| **D** | Ctrl+D | Double Size mode (100%/200%) |
+| **V** | Ctrl+V | Video Window toggle |
 
-1. **Open Equalizer** - Press `Cmd+Shift+E` or click the EQ button
-2. **Adjust Bands** - Drag any of the 10 frequency sliders or preamp
-3. **Load Presets** - Click "Presets" → "Load" → Choose from 17 built-in presets
-4. **Save Settings** - Click "Presets" → "Save" to create custom presets
-5. **Toggle EQ** - Click "ON" button to enable/disable equalization
+**Visualizer** - Click to cycle: Spectrum Analyzer → Oscilloscope → None
 
-Available presets: Classical, Club, Dance, Full Bass, Full Bass & Treble, Full Treble, Laptop Speakers/Headphones, Large Hall, Live, Party, Pop, Reggae, Rock, Ska, Soft, Soft Rock, Techno
+**Repeat Modes** (Ctrl+R to cycle):
+- **Off** - Stops at playlist end
+- **All** - Loops entire playlist
+- **One** - Repeats current track (shows "1" badge)
 
-### Playlist
+**Shade Mode** - Cmd+Option+1 minimizes to 14px title bar
 
-1. **Open Playlist** - Press `Cmd+Shift+P` or click the PL button
-2. **Add Files** - Click ADD button for local files or M3U/M3U8 playlists
-3. **Add Radio Stream** - Click ADD → ADD URL, paste URL (e.g., `http://ice1.somafm.com/groovesalad-256-mp3`)
-4. **Play** - Double-click any item (file or stream)
-5. **Navigate** - Next/Previous work across local files and streams
-6. **Shuffle/Repeat** - Work with mixed playlists
+### Equalizer Window
 
-**Note:** Streams show "Connecting..." during buffering, then live metadata. No EQ/visualizer for streams (AVPlayer limitation).
+Open with **Cmd+Shift+E** or click the EQ button.
 
-### Playlist Window Resize
+- **10 Frequency Bands** - Drag sliders to adjust (60Hz to 16kHz)
+- **Preamp** - Overall gain control
+- **ON/OFF** - Toggle EQ processing (local files only, not streams)
+- **Presets** - 17 built-in presets (Classical, Rock, Dance, etc.) via Presets button
 
-1. **Resize Window** - Drag the bottom-right corner to resize
-2. **Quantized Sizing** - Snaps to 25×29px segments (Winamp standard)
-3. **Size Range** - Minimum 275×116px, maximum 2000×900px
-4. **Dynamic Layout:**
-   - **Top Bar** - Title tiles expand/contract with width
-   - **Side Borders** - Vertical tiles adjust to height
-   - **Bottom Bar** - Three sections: LEFT (menus) + CENTER (tiles) + RIGHT (controls)
-5. **Scroll Slider** - Gold thumb appears on right border, drag to scroll playlist
-6. **Persistence** - Window size remembered across app restarts
+### Playlist Window
 
-**Size Examples:**
-| Segments | Pixels | Visible Tracks |
-|----------|--------|----------------|
-| [0,0] | 275×116 | 4 tracks |
-| [0,4] | 275×232 | 13 tracks (default) |
-| [4,8] | 375×348 | 21 tracks |
+Open with **Cmd+Shift+P** or click the PL button.
 
-### Playlist Mini Visualizer
+**Sprite-Based Menus:**
+- **ADD** - Add local files, directories, or URLs (internet radio)
+- **REM** - Remove selected, crop to selection, clear playlist
+- **MISC** - Sort options, file info
+- **LIST OPTS** - Playlist load/save operations
 
-The playlist window includes a mini spectrum analyzer that activates when the main window is **shaded**:
+**Features:**
+- **Double-click** to play any track
+- **Multi-select** - Shift+Click for range, Cmd+A for all
+- **Resize** - Drag bottom-right corner (25×29px segments, min 275×116)
+- **Scroll Slider** - Gold thumb on right border
+- **Mini Visualizer** - Appears when main window is shaded (≥350px width)
 
-1. **Activation** - Shade the main window (click titlebar shade button or press `Cmd+Option+1`)
-2. **Requirements:**
-   - Playlist window must be **wide enough** (≥350px, or 3+ width segments)
-   - Main window must be in **shade mode** (minimized to 14px bar)
-3. **Behavior:**
-   - Same 19-bar spectrum analyzer as main window
-   - Located in bottom-right visualizer background area
-   - Deactivates automatically when main window unshades
-4. **Usage** - Allows visualizer viewing while main window is minimized
-
-### Skins
-
-1. **Switch Skins** - Use keyboard shortcuts:
-   - `Cmd+Shift+1` - Classic Winamp
-   - `Cmd+Shift+2` - Internet Archive
-   - `Cmd+Shift+3` - Tron Vaporwave
-   - `Cmd+Shift+4` - Winamp3 Classified
-2. **Import Skins** - Place `.wsz` files in `~/Library/Application Support/MacAmp/Skins/`
-3. **Supported Formats** - Standard ZIP-based skin files
-
-### Options Menu (O Button)
-
-1. **Open Menu** - Click the "O" button in the clutter bar OR press **Ctrl+O**
-2. **Menu Contents:**
-   - **Time Display** - Toggle between elapsed and remaining time (also **Ctrl+T**)
-   - **Double Size** - Toggle 200% scaling (also **Ctrl+D** or D button)
-   - **Repeat** - Enable/disable repeat mode (also **Ctrl+R**)
-   - **Shuffle** - Enable/disable shuffle mode (also **Ctrl+S**)
-3. **Visual Feedback** - Active settings show checkmarks (✓)
-4. **Keyboard Shortcut** - **Ctrl+O** (open menu), **Ctrl+T** (toggle time)
-
-### Double-Size Mode
-
-1. **Toggle Size** - Click the "D" button in the clutter bar, use the "O" button menu, OR press **Ctrl+D**
-2. **Normal Mode** - Windows at 100% size (275×116 for main/EQ)
-3. **Doubled Mode** - Windows at 200% size (550×232 for main/EQ)
-4. **Behavior** - All 3 windows (main, EQ, playlist) scale together
-5. **Persistence** - Last size remembered across app restarts
-6. **Animation** - Smooth 0.2-second transition
-7. **Keyboard Shortcut** - **Ctrl+D** (also in Windows menu and O button menu)
-
-### Always On Top
-
-1. **Toggle Float** - Click the "A" button in the clutter bar, use the "O" button menu, OR press **Ctrl+A**
-2. **Normal Mode** - Window at normal level (can be covered by other apps)
-3. **Float Mode** - Window stays above all other windows
-4. **Persistence** - Last setting remembered across app restarts
-5. **Keyboard Shortcut** - **Ctrl+A** (also in Windows menu and O button menu)
-
-### Track Information (I Button)
-
-1. **Open Dialog** - Click the "I" button in the clutter bar OR press **Ctrl+I**
-2. **Displays:**
-   - Track title and artist (for local files)
-   - Duration in MM:SS format
-   - Technical details: bitrate, sample rate, channels
-   - Stream name (for radio streams)
-   - Graceful fallbacks for limited metadata
-3. **Visual Feedback** - I button highlighted while dialog is open
-4. **Dismissal** - Click "Close" button, press Esc, or click outside
-5. **Keyboard Shortcut** - **Ctrl+I**
-
-### Repeat Modes (Winamp 5 Modern Fidelity)
-
-MacAmp supports three repeat modes matching Winamp 5 Modern skins (Modern, Bento, cPro):
-
-1. **Repeat: Off** - Stops at playlist end (button unlit)
-2. **Repeat: All** - Loops entire playlist (button lit)
-3. **Repeat: One** - Repeats current track (button lit + white "1" badge)
-
-**Usage:**
-- **Click repeat button** to cycle: Off → All → One → Off
-- **Keyboard shortcut:** Press **Ctrl+R** to cycle through modes
-- **Options menu:** Press **Ctrl+O**, select specific mode directly
-- **Visual indicator:** White "1" badge appears on button when in Repeat One mode
-
-**Behavior:**
-- **Off mode:** Next button stops at last track, Previous stops at first
-- **All mode:** Next wraps to first track, Previous wraps to last
-- **One mode:** Next/Previous skip to adjacent track, track ending naturally restarts same track
-- **Persistence:** Mode remembered across app restarts
-
-**Winamp Compatibility:**
-- Badge uses same overlay technique as Winamp 5 plugins for classic skins
-- Shadow ensures legibility across all skin colors (dark and light buttons)
-- Scales automatically with double-size mode (Ctrl+D)
-
-### Visualizer Modes
-
-1. **Click to Cycle** - Click the spectrum analyzer window to cycle through visualization modes
-2. **3 Modes Available:**
-   - **Spectrum Analyzer** - Frequency bars showing bass to treble (default)
-   - **Oscilloscope** - Waveform display showing actual audio wave shape
-   - **None** - Visualizer off (blank)
-3. **Persistence** - Last mode remembered across app restarts
-4. **How to Use:**
-   - Play music
-   - Click the black analyzer window (shows bars or waveform)
-   - Cycles: Spectrum → Oscilloscope → None → Spectrum...
-
-**Visualization Modes:**
-- **Spectrum:** 19 vertical bars dancing to different frequencies - bass on left, treble on right
-- **Oscilloscope:** Connected waveform line showing the actual audio wave (very active and dynamic!)
-- **None:** Blank display (visualizer off)
-
-**Clutter Bar Buttons** (vertical strip, left side):
-- **O** - Options menu with time display, double-size, repeat, shuffle toggles (functional) ✅
-- **A** - Always On Top window floating (functional) ✅
-- **I** - Track Information metadata dialog (functional) ✅
-- **D** - Double Size 100%/200% scaling (functional) ✅
-- **V** - Video Window toggle (functional) ✅
+**Note:** Internet streams show "Connecting..." during buffering, then live metadata. EQ/visualizer unavailable for streams (AVPlayer limitation).
 
 ### Video Window
 
-1. **Open Video Window** - Click the "V" button in the clutter bar OR press **Ctrl+V**
-2. **Load Video** - Drop MP4, MOV, or M4V files into playlist and double-click
-3. **Resize** - Drag bottom-right corner (25×29px quantized segments) or use 1x/2x buttons
-4. **Controls** - Volume slider, seek bar, and time display work just like audio
-5. **Metadata** - Bottom bar shows scrolling filename, codec, and resolution
-6. **Skinnable** - VIDEO.bmp chrome (from skin) or classic fallback
-7. **Docking** - Video window snaps to other MacAmp windows magnetically
-8. **Persistence** - Window position and size remembered across restarts
+Open with **Ctrl+V** or click the V clutter button.
 
-### Milkdrop Visualizations
+- **Supported Formats** - MP4, MOV, M4V, AVI
+- **Resize** - Drag corner (25×29px segments) or use 1x/2x preset buttons
+- **Controls** - Volume, seek, and time display sync with main window
+- **Metadata Ticker** - Scrolling filename, codec, and resolution
+- **Skinnable** - VIDEO.bmp chrome or classic fallback
 
-1. **Open Window** - Press **Ctrl+K** to toggle Milkdrop window
-2. **Visualizations** - 245 authentic Milkdrop 2 presets with WebGL rendering at 60 FPS
-3. **Preset Navigation:**
-   - **Space** - Next preset (or random if randomize enabled)
-   - **Backspace** - Previous preset (history-based)
-   - **R** - Toggle randomize mode
-   - **C** - Toggle auto-cycle (configurable intervals: 5s/10s/15s/30s/60s)
-   - **T** - Toggle track title display (configurable intervals or manual)
-4. **Context Menu** - Right-click for:
-   - Current preset display
-   - Direct preset selection (up to 100 shown in menu)
-   - Cycle and randomize toggles
-   - Track title interval configuration
-5. **Window Features:**
-   - GEN.bmp skinnable chrome with MILKDROP HD letterforms
-   - Active/Inactive titlebar states (focus tracking)
-   - Drag-to-resize with 25×29px segments (minimum 275×116, default 275×232)
-   - Dynamic titlebar expansion using gold filler tiles
-   - Magnetic docking to other MacAmp windows and screen edges
-   - Size and position persisted across app restarts
-6. **Audio Sync** - Real-time FFT audio from AVAudioEngine (30 FPS data → 60 FPS WebGL rendering)
+### Milkdrop Window
+
+Open with **Ctrl+K** for 245 Milkdrop 2 presets at 60 FPS.
+
+**Keyboard:**
+| Key | Action |
+|-----|--------|
+| Space | Next preset |
+| Backspace | Previous preset |
+| R | Toggle randomize |
+| C | Toggle auto-cycle |
+| T | Show track title |
+
+**Context Menu (Right-click):**
+- Current preset display
+- Next/Previous preset
+- Randomize and Auto-Cycle toggles
+- Cycle Interval submenu (5s/10s/15s/30s/60s)
+- Track Title Interval submenu
+- Preset list (245 presets, first 100 shown)
+
+**Window:** Resizable (25×29px segments), magnetic docking, GEN.bmp skinnable chrome.
+
+### Skins
+
+**Switch Bundled Skins:**
+- Cmd+Shift+1 - Classic Winamp
+- Cmd+Shift+2 - Internet Archive
+- Cmd+Shift+3 - Tron Vaporwave
+- Cmd+Shift+4 - Winamp3 Classified
+
+**Skins Menu (menu bar):**
+- **Cmd+Shift+O** - Open Skins Folder
+- **Cmd+Shift+L** - Load Skin File
+- **Cmd+Shift+R** - Reload Current Skin
+
+**Import Skins:** Place `.wsz` files in `~/Library/Application Support/MacAmp/Skins/`
 
 ## Architecture
 
