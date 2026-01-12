@@ -16,7 +16,7 @@ MacAmp is a SwiftUI-based audio player for macOS that recreates the iconic deskt
 
 ### Key Features
 
-- 🎨 **Full Skin Support** - Load and switch between classic `.wsz` skins with VISCOLOR.TXT gradients
+- 🎨 **Full Skin Support** - Load and switch between classic `.wsz` skins with full sprite and color support
 - 🎵 **Native Audio Engine** - Built on AVFoundation for optimal macOS performance
 - 🎚️ **10-Band Equalizer** - Professional audio control with 17 built-in presets
 - 📊 **Spectrum Analyzer & Oscilloscope** - Click visualizer to cycle through 3 modes: Spectrum (frequency bars), Oscilloscope (waveform), or None
@@ -95,23 +95,14 @@ See [Release Notes](https://github.com/hfyeomans/MacAmp/releases/tag/v1.0.5) for
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/MacAmp.git
+git clone https://github.com/hfyeomans/MacAmp.git
 cd MacAmp
 
-# Build with Swift Package Manager
-swift build
-
-# Run the app
-.build/debug/MacAmpApp
-```
-
-### Running in Xcode
-
-```bash
 # Open in Xcode
-open Package.swift
+open MacAmpApp.xcodeproj
 
-# Press Cmd+R to build and run
+# Build and run (Cmd+R) or build from command line:
+xcodebuild -scheme MacAmp -configuration Debug -destination "platform=macOS"
 ```
 
 ## Usage
@@ -334,7 +325,7 @@ MacAmp uses a three-layer architecture inspired by modern frontend frameworks:
 - **SimpleSpriteImage** - Sprite sheet rendering with semantic support
 - **Custom Sliders** - Frame-based sprite animation
 
-For detailed architecture documentation, see [`docs/ARCHITECTURE_REVELATION.md`](docs/ARCHITECTURE_REVELATION.md).
+For detailed architecture documentation, see [`docs/MACAMP_ARCHITECTURE_GUIDE.md`](docs/MACAMP_ARCHITECTURE_GUIDE.md).
 
 ## Project Structure
 
@@ -343,9 +334,14 @@ MacAmp follows a three-layer architecture inspired by modern frontend frameworks
 ```
 MacAmpApp/
 ├── Audio/                              # 🔧 MECHANISM LAYER - Audio Engine & Playback
-│   ├── AudioPlayer.swift                   # AVAudioEngine-based local file playback with 10-band EQ
-│   ├── PlaybackCoordinator.swift           # ⭐ NEW: Orchestrates dual backend (local + streaming)
-│   └── StreamPlayer.swift                  # ⭐ NEW: AVPlayer-based HTTP/HTTPS radio streaming
+│   ├── AudioPlayer.swift                   # AVAudioEngine lifecycle (1,043 lines, refactored)
+│   ├── EQPresetStore.swift                 # EQ preset persistence (UserDefaults + JSON)
+│   ├── MetadataLoader.swift                # Async track/video metadata extraction
+│   ├── PlaybackCoordinator.swift           # Orchestrates dual backend (local + streaming)
+│   ├── PlaylistController.swift            # Playlist state and navigation logic
+│   ├── StreamPlayer.swift                  # AVPlayer-based HTTP/HTTPS radio streaming
+│   ├── VideoPlaybackController.swift       # AVPlayer lifecycle and observer management
+│   └── VisualizerPipeline.swift            # Audio tap, FFT processing, Butterchurn data
 │
 ├── Models/                             # 🔧 MECHANISM LAYER - Data Models & Parsers
 │   ├── AppSettings.swift                   # @Observable app settings and preferences
@@ -355,12 +351,12 @@ MacAmpApp/
 │   ├── M3UEntry.swift                      # M3U playlist entry structure
 │   ├── M3UParser.swift                     # M3U/M3U8 playlist parser (local + remote)
 │   ├── PLEditParser.swift                  # PLEDIT.txt color parser
-│   ├── PlaylistWindowSizeState.swift       # ⭐ NEW: Playlist resize state with computed properties
-│   ├── RadioStation.swift                  # ⭐ NEW: Radio station model
-│   ├── RadioStationLibrary.swift           # ⭐ NEW: Favorite stations persistence
-│   ├── Size2D.swift                        # ⭐ NEW: Quantized 25×29px resize segments
-│   ├── VideoWindowSizeState.swift          # ⭐ NEW: Video window resize state management
-│   ├── WindowFocusState.swift              # ⭐ NEW: Window focus tracking for active/inactive
+│   ├── PlaylistWindowSizeState.swift       # Playlist resize state with computed properties
+│   ├── RadioStation.swift                  # Radio station model
+│   ├── RadioStationLibrary.swift           # Favorite stations persistence
+│   ├── Size2D.swift                        # Quantized 25×29px resize segments
+│   ├── VideoWindowSizeState.swift          # Video window resize state management
+│   ├── WindowFocusState.swift              # Window focus tracking for active/inactive
 │   ├── Skin.swift                          # Skin package data model
 │   ├── SkinSprites.swift                   # Sprite name definitions and mappings (VIDEO + GEN letters)
 │   ├── SnapUtils.swift                     # Window snapping utilities
@@ -372,25 +368,25 @@ MacAmpApp/
 ├── ViewModels/                         # 🌉 BRIDGE LAYER - State Management & Controllers
 │   ├── DockingController.swift             # Multi-window coordination and positioning
 │   ├── SkinManager.swift                   # Dynamic skin loading, hot-swapping, sprite caching
-│   └── WindowCoordinator.swift             # ⭐ NEW: 5-window lifecycle, AppKit bridge, focus tracking
+│   └── WindowCoordinator.swift             # 5-window lifecycle, AppKit bridge, focus tracking
 │
 ├── Windows/                            # 🖼️ NSWindowController Layer (AppKit)
 │   ├── WinampMainWindowController.swift    # Main window controller with @MainActor
 │   ├── WinampEqualizerWindowController.swift   # EQ window controller
 │   ├── WinampPlaylistWindowController.swift    # Playlist window controller
-│   ├── WinampVideoWindowController.swift   # ⭐ NEW: Video window controller
-│   └── WinampMilkdropWindowController.swift    # ⭐ NEW: Milkdrop window controller
+│   ├── WinampVideoWindowController.swift   # Video window controller
+│   └── WinampMilkdropWindowController.swift    # Milkdrop window controller
 │
 ├── Views/                              # 🎨 PRESENTATION LAYER - SwiftUI Windows & Views
 │   ├── Components/                         # Reusable UI Components
 │   │   ├── PlaylistBitmapText.swift            # Bitmap font rendering for playlist
-│   │   ├── PlaylistMenuDelegate.swift          # ⭐ NEW: NSMenuDelegate for keyboard navigation
-│   │   ├── PlaylistScrollSlider.swift          # ⭐ NEW: Gold thumb scroll slider with proportional sizing
+│   │   ├── PlaylistMenuDelegate.swift          # NSMenuDelegate for keyboard navigation
+│   │   ├── PlaylistScrollSlider.swift          # Gold thumb scroll slider with proportional sizing
 │   │   ├── PlaylistTimeText.swift              # Time display component
 │   │   ├── SimpleSpriteImage.swift             # Pixel-perfect sprite rendering (.interpolation(.none))
 │   │   ├── SpriteMenuItem.swift                # Sprite-based popup menu items
 │   │   └── WinampVolumeSlider.swift            # Frame-based volume/balance sliders
-│   ├── Windows/                            # ⭐ NEW: Window Chrome Components
+│   ├── Windows/                            # Window Chrome Components
 │   │   ├── VideoWindowChromeView.swift         # VIDEO.bmp chrome with dynamic sizing
 │   │   ├── MilkdropWindowChromeView.swift      # GEN.bmp chrome with two-piece letters
 │   │   ├── AVPlayerViewRepresentable.swift     # NSViewRepresentable for AVPlayerView
@@ -406,12 +402,12 @@ MacAmpApp/
 │   ├── WinampEqualizerWindow.swift         # 10-band equalizer window
 │   ├── WinampMainWindow.swift              # Main player window with transport controls
 │   ├── WinampPlaylistWindow.swift          # Playlist window with sprite-based menus
-│   ├── WinampVideoWindow.swift             # ⭐ NEW: Video window with AVPlayer
-│   └── WinampMilkdropWindow.swift          # ⭐ NEW: Milkdrop visualization window
+│   ├── WinampVideoWindow.swift             # Video window with AVPlayer
+│   └── WinampMilkdropWindow.swift          # Milkdrop visualization window
 │
 ├── Utilities/                          # 🔧 Helper Functions & Extensions
 │   ├── WindowAccessor.swift                # NSWindow access from SwiftUI
-│   ├── WindowFocusDelegate.swift           # ⭐ NEW: NSWindowDelegate for focus tracking
+│   ├── WindowFocusDelegate.swift           # NSWindowDelegate for focus tracking
 │   └── WindowSnapManager.swift             # Magnetic window snapping
 │
 ├── AppCommands.swift                   # Global keyboard shortcuts and menu commands
@@ -527,6 +523,13 @@ For detailed architecture documentation, see [`docs/*]
 - AAC/M4A
 - WAV/AIFF
 - Apple Lossless (ALAC)
+- OGG Vorbis (via AVFoundation)
+
+### Video Files
+- MP4 (H.264, HEVC)
+- MOV (QuickTime)
+- M4V (iTunes video)
+- AVI (common codecs)
 
 ### Playlists & Streams
 - M3U/M3U8 (local files + radio URLs)
@@ -534,8 +537,7 @@ For detailed architecture documentation, see [`docs/*]
 
 ### Skins
 - WSZ (ZIP-based Winamp skins)
-- VISCOLOR.TXT gradients
-- Classic skin sprite sheets
+- Classic skin sprite sheets with fallback generation
 
 ## Technical Highlights
 
@@ -558,7 +560,7 @@ MacAmp implements comprehensive skin support:
 - **2D Grid Rendering** - Supports complex sprite layouts (e.g., EQMAIN.BMP 14×2 grid)
 - **Mirrored Gradients** - Balance slider with proper center snapping
 
-See [`docs/SpriteResolver-Architecture.md`](docs/SpriteResolver-Architecture.md) for implementation details.
+See [`docs/SPRITE_SYSTEM_COMPLETE.md`](docs/SPRITE_SYSTEM_COMPLETE.md) for implementation details.
 
 ### Performance Optimizations
 
