@@ -541,11 +541,12 @@ For detailed architecture documentation, see [`docs/*]
 
 ### Modern macOS Features
 
-- **WindowDragGesture** - Native SwiftUI window dragging (macOS 15+)
-- **Borderless Windows** - Custom title bars with system chrome removed
-- **SwiftUI Materials** - Glass effects and backdrop blur (optional)
-- **AVAudioEngine** - Real-time audio processing and EQ
-- **Structured Concurrency** - Modern Swift async/await patterns
+- **Five-Window Architecture** - Independent WindowGroup(id:) scenes with unified focus state
+- **WindowDragGesture** - Native SwiftUI borderless window dragging (macOS 15+)
+- **@Observable Macro** - Swift 6 strict concurrency with @MainActor isolation
+- **Dual Audio Backend** - AVAudioEngine (local + EQ) / AVPlayer (streams) orchestration
+- **10-Band Parametric EQ** - Real-time equalization via AVAudioUnitEQ
+- **Hot Skin Swapping** - Runtime skin changes without app restart
 
 ### Skin Compatibility
 
@@ -561,10 +562,12 @@ See [`docs/SpriteResolver-Architecture.md`](docs/SpriteResolver-Architecture.md)
 
 ### Performance Optimizations
 
+- **Pre-allocated FFT Buffers** - Zero allocations on realtime audio thread (VisualizerScratchBuffers)
+- **Goertzel Algorithm** - Efficient single-bin DFT for 20-bar spectrum analysis
+- **vDSP Acceleration** - Hardware-accelerated audio processing via Accelerate framework
 - **Sprite Sheet Caching** - Pre-processed backgrounds for instant rendering
-- **SwiftUI Body Minimization** - Prevents ghost images from re-evaluation
-- **Progress Timer Optimization** - 100ms update interval balances CPU vs. smoothness
-- **Conditional Logging** - `#if DEBUG` wraps all debug output
+- **Background I/O** - Fire-and-forget Task.detached for preset persistence
+- **Progress Timer** - 100ms update interval balances CPU vs. smoothness
 
 ## Recent Updates
 
