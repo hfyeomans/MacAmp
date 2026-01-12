@@ -836,7 +836,7 @@ MacAmp draws inspiration from the classic desktop audio player that defined a ge
 
 - **Webamp** - Browser-based implementation for architectural patterns
 - **Skin Format Specification** - Classic skin `.wsz` format documentation
-- **Apple SwiftUI Documentation** - macOS 15+ features
+- **Apple Documentation** - SwiftUI and Swift 6.2 for macOS 15+/26+
 
 ## License
 
