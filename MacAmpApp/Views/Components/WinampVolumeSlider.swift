@@ -18,57 +18,54 @@ struct WinampVolumeSlider: View {
     private let thumbHeight: CGFloat = 11
     
     var body: some View {
-        // Winamp-style volume slider - matches position slider appearance
         ZStack(alignment: .leading) {
-            // STEP 1 TEST: Try rendering VOLUME.BMP from skin
-            // Keep programmatic gradient as backup to compare
-            if let skin = skinManager.currentSkin,
-               let volumeBg = skin.images["MAIN_VOLUME_BACKGROUND"] {
-                // Simplest approach: image, frame, clip - that's it!
-                Image(nsImage: volumeBg)
-                    .interpolation(.none)
-                    .frame(width: sliderWidth, height: sliderHeight, alignment: .top)
-                    .offset(y: calculateVolumeFrameOffset())
-                    .clipped()
-                    .allowsHitTesting(false)
-            } else {
-                // Fallback: Dark groove background with rounded ends
-                RoundedRectangle(cornerRadius: trackFillHeight / 2)
-                    .fill(Color.black.opacity(0.3))
-                    .frame(width: sliderWidth, height: trackFillHeight)
-                    .offset(y: (sliderHeight - trackFillHeight) / 2)
-
-                // Colored channel with rounded ends (solid color that changes)
-                RoundedRectangle(cornerRadius: (trackFillHeight - 2) / 2)
-                    .fill(sliderColor)
-                    .frame(width: sliderWidth - 2, height: trackFillHeight - 2)
-                    .offset(x: 1, y: (sliderHeight - trackFillHeight + 2) / 2)
-            }
-
-            // Sprite thumb (from skin) - vertically centered on slider
-            let thumbSprite = isDragging ? "MAIN_VOLUME_THUMB_SELECTED" : "MAIN_VOLUME_THUMB"
-            // Slider height: 13px, Thumb height: 11px
-            // Center: (13 - 11) / 2 = 1px
-            SimpleSpriteImage(thumbSprite, width: thumbWidth, height: thumbHeight)
-                .at(x: thumbPosition, y: 1)  // Vertically center on 13px slider
-
-            // Invisible interaction area
-            GeometryReader { geo in
-                Color.clear
-                    .contentShape(Rectangle())
-                    .gesture(
-                        DragGesture(minimumDistance: 0)
-                            .onChanged { value in
-                                isDragging = true
-                                updateVolume(from: value, in: geo)
-                            }
-                            .onEnded { _ in
-                                isDragging = false
-                            }
-                    )
-            }
+            volumeTrack
+            volumeInteractionArea
         }
         .frame(width: sliderWidth, height: sliderHeight)
+    }
+
+    @ViewBuilder
+    private var volumeTrack: some View {
+        if let skin = skinManager.currentSkin,
+           let volumeBg = skin.images["MAIN_VOLUME_BACKGROUND"] {
+            Image(nsImage: volumeBg)
+                .interpolation(.none)
+                .frame(width: sliderWidth, height: sliderHeight, alignment: .top)
+                .offset(y: calculateVolumeFrameOffset())
+                .clipped()
+                .allowsHitTesting(false)
+        } else {
+            RoundedRectangle(cornerRadius: trackFillHeight / 2)
+                .fill(Color.black.opacity(0.3))
+                .frame(width: sliderWidth, height: trackFillHeight)
+                .offset(y: (sliderHeight - trackFillHeight) / 2)
+            RoundedRectangle(cornerRadius: (trackFillHeight - 2) / 2)
+                .fill(sliderColor)
+                .frame(width: sliderWidth - 2, height: trackFillHeight - 2)
+                .offset(x: 1, y: (sliderHeight - trackFillHeight + 2) / 2)
+        }
+
+        let thumbSprite = isDragging ? "MAIN_VOLUME_THUMB_SELECTED" : "MAIN_VOLUME_THUMB"
+        SimpleSpriteImage(thumbSprite, width: thumbWidth, height: thumbHeight)
+            .at(x: thumbPosition, y: 1)
+    }
+
+    private var volumeInteractionArea: some View {
+        GeometryReader { geo in
+            Color.clear
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            isDragging = true
+                            updateVolume(from: value, in: geo)
+                        }
+                        .onEnded { _ in
+                            isDragging = false
+                        }
+                )
+        }
     }
     
     private var thumbPosition: CGFloat {
@@ -135,6 +132,7 @@ struct WinampBalanceSlider: View {
     @Environment(SkinManager.self) var skinManager
 
     @State private var isDragging = false
+    @State private var isSnappedToCenter = false
 
     // Winamp balance slider specs
     private let sliderWidth: CGFloat = 38
@@ -144,70 +142,75 @@ struct WinampBalanceSlider: View {
 
     var body: some View {
         ZStack(alignment: .leading) {
-            // BALANCE.BMP frame rendering (same technique as volume)
-            if let skin = skinManager.currentSkin,
-               let balanceBg = skin.images["MAIN_BALANCE_BACKGROUND"] {
-                // Use BALANCE.BMP frames - CRITICAL: frame→offset→clip order!
-                Image(nsImage: balanceBg)
-                    .interpolation(.none)
-                    .frame(width: sliderWidth, height: sliderHeight, alignment: .top)
-                    .offset(y: calculateBalanceFrameOffset())
-                    .clipped()
-                    .allowsHitTesting(false)
-
-                // Thumb sprite
-                let thumbSprite = isDragging ? "MAIN_BALANCE_THUMB_ACTIVE" : "MAIN_BALANCE_THUMB"
-                SimpleSpriteImage(thumbSprite, width: thumbWidth, height: thumbHeight)
-                    .at(x: thumbPosition, y: 1)  // Vertically centered
-
-            } else {
-                // Fallback: simple gradient
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(Color.blue.opacity(0.5))
-                    .frame(width: sliderWidth, height: 7)
-
-                // Center line
-                Rectangle()
-                    .fill(Color.white)
-                    .frame(width: 2, height: 7)
-                    .offset(x: sliderWidth / 2 - 1)
-            }
-
-            // Invisible interaction area
-            GeometryReader { geo in
-                Color.clear
-                    .contentShape(Rectangle())
-                    .gesture(
-                        DragGesture(minimumDistance: 0)
-                            .onChanged { value in
-                                isDragging = true
-                                let x = min(max(0, value.location.x), geo.size.width)
-                                let normalized = Float(x / geo.size.width)
-                                var newBalance = (normalized * 2.0) - 1.0
-
-                                // Gentle snap to center with haptic feedback
-                                let snapThreshold: Float = 0.08  // 8% threshold for gentle catch
-                                if abs(newBalance) < snapThreshold {
-                                    newBalance = 0
-
-                                    // Provide haptic feedback when catching center
-                                    #if os(macOS)
-                                    NSHapticFeedbackManager.defaultPerformer.perform(
-                                        .alignment,
-                                        performanceTime: .default
-                                    )
-                                    #endif
-                                }
-
-                                balance = max(-1, min(1, newBalance))
-                            }
-                            .onEnded { _ in
-                                isDragging = false
-                            }
-                    )
-            }
+            balanceTrack
+            balanceInteractionArea
         }
         .frame(width: sliderWidth, height: sliderHeight)
+    }
+
+    @ViewBuilder
+    private var balanceTrack: some View {
+        if let skin = skinManager.currentSkin,
+           let balanceBg = skin.images["MAIN_BALANCE_BACKGROUND"] {
+            Image(nsImage: balanceBg)
+                .interpolation(.none)
+                .frame(width: sliderWidth, height: sliderHeight, alignment: .top)
+                .offset(y: calculateBalanceFrameOffset())
+                .clipped()
+                .allowsHitTesting(false)
+
+            let thumbSprite = isDragging ? "MAIN_BALANCE_THUMB_ACTIVE" : "MAIN_BALANCE_THUMB"
+            SimpleSpriteImage(thumbSprite, width: thumbWidth, height: thumbHeight)
+                .at(x: thumbPosition, y: 1)
+        } else {
+            RoundedRectangle(cornerRadius: 3)
+                .fill(Color.blue.opacity(0.5))
+                .frame(width: sliderWidth, height: 7)
+            Rectangle()
+                .fill(Color.white)
+                .frame(width: 2, height: 7)
+                .offset(x: sliderWidth / 2 - 1)
+        }
+    }
+
+    private var balanceInteractionArea: some View {
+        GeometryReader { geo in
+            Color.clear
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in handleDrag(value, in: geo) }
+                        .onEnded { _ in
+                            isDragging = false
+                            isSnappedToCenter = false
+                        }
+                )
+        }
+    }
+
+    private func handleDrag(_ value: DragGesture.Value, in geo: GeometryProxy) {
+        isDragging = true
+        let x = min(max(0, value.location.x), geo.size.width)
+        let normalized = Float(x / geo.size.width)
+        var newBalance = (normalized * 2.0) - 1.0
+
+        let snapThreshold: Float = 0.12
+        if abs(newBalance) < snapThreshold {
+            newBalance = 0
+            if !isSnappedToCenter {
+                isSnappedToCenter = true
+                #if os(macOS)
+                NSHapticFeedbackManager.defaultPerformer.perform(
+                    .alignment,
+                    performanceTime: .default
+                )
+                #endif
+            }
+        } else {
+            isSnappedToCenter = false
+        }
+
+        balance = max(-1, min(1, newBalance))
     }
 
     private var thumbPosition: CGFloat {
@@ -216,23 +219,14 @@ struct WinampBalanceSlider: View {
         return CGFloat(normalizedBalance) * maxOffset
     }
 
+    // BALANCE.BMP frame offset: frame 0 (green) at top, frame 27 (red) at bottom.
+    // Symmetric mapping from center via abs(balance).
+    // Matches webamp: Math.floor(Math.abs(balance) / 100 * 27) * 15
     private func calculateBalanceFrameOffset() -> CGFloat {
-        // Balance uses gradient TWICE - mirrored from center:
-        // -1.0 (left/red) → 0.0 (center/green) → 1.0 (right/red)
-        // Distance from center determines color intensity
-
-        let absBalance = abs(balance)  // 0.0 to 1.0 (distance from center)
-        let percent = min(max(CGFloat(absBalance), 0), 1)
-
-        // Map to frame range where green is in middle
-        // At center (abs=0): want frame 14 (green)
-        // At edges (abs=1): want frame 27 (red)
-        // This means: frame = 14 + (abs * 13)
-        let baseFrame = 14  // Green/center frame
-        let additionalFrames = Int(round(percent * 13.0))  // 0 to 13
-        let frameIndex = min(27, baseFrame + additionalFrames)
-
-        return -CGFloat(frameIndex) * 15.0
+        let percent = min(max(CGFloat(abs(balance)), 0), 1)
+        let sprite = Int(floor(percent * 27.0))
+        let offset = CGFloat(sprite) * 15.0
+        return -offset
     }
 }
 

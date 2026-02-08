@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import Foundation
 import Combine
 import AVFoundation
@@ -24,7 +25,7 @@ extension String {
 
 @Observable
 @MainActor
-final class AudioPlayer {
+final class AudioPlayer { // swiftlint:disable:this type_body_length
     // AVAudioEngine-based playback - NOT observable (engine implementation details)
     @ObservationIgnored private let audioEngine = AVAudioEngine()
     @ObservationIgnored private let playerNode = AVAudioPlayerNode()
@@ -70,14 +71,18 @@ final class AudioPlayer {
     var currentTime: Double = 0.0
     var playbackProgress: Double = 0.0 // New: 0.0 to 1.0
 
-    var volume: Float = 1.0 { // 0.0 to 1.0
+    var volume: Float = 0.0 { // 0.0 to 1.0
         didSet {
             playerNode.volume = volume
             videoPlaybackController.volume = volume
+            UserDefaults.standard.set(volume, forKey: "volume")
         }
     }
     var balance: Float = 0.0 { // -1.0 (left) to 1.0 (right)
-        didSet { playerNode.pan = balance }
+        didSet {
+            playerNode.pan = balance
+            UserDefaults.standard.set(balance, forKey: "balance")
+        }
     }
 
     // Playlist management (extracted to separate controller)
@@ -130,9 +135,20 @@ final class AudioPlayer {
     var sampleRate: Int = 0 // in Hz (will display as kHz)
 
     init() {
+        if let saved = UserDefaults.standard.object(forKey: "volume") as? Float {
+            self.volume = saved
+        }
+        if let saved = UserDefaults.standard.object(forKey: "balance") as? Float {
+            self.balance = saved
+        }
+
         setupEngine()
         configureEQ()
         // Note: eqPresetStore loads presets in its own init
+
+        // Apply restored volume/balance to audio nodes
+        playerNode.volume = volume
+        playerNode.pan = balance
 
         // Sync initial visualizer mode to pipeline (avoids per-frame AppSettings lookup)
         visualizerPipeline.useSpectrum = AppSettings.instance().visualizerMode == .spectrum
