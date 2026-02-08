@@ -26,6 +26,11 @@ extension String {
 @Observable
 @MainActor
 final class AudioPlayer { // swiftlint:disable:this type_body_length
+    private enum Keys {
+        static let volume = "volume"
+        static let balance = "balance"
+    }
+
     // AVAudioEngine-based playback - NOT observable (engine implementation details)
     @ObservationIgnored private let audioEngine = AVAudioEngine()
     @ObservationIgnored private let playerNode = AVAudioPlayerNode()
@@ -75,13 +80,13 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
         didSet {
             playerNode.volume = volume
             videoPlaybackController.volume = volume
-            UserDefaults.standard.set(volume, forKey: "volume")
+            UserDefaults.standard.set(volume, forKey: Keys.volume)
         }
     }
     var balance: Float = 0.0 { // -1.0 (left) to 1.0 (right)
         didSet {
             playerNode.pan = balance
-            UserDefaults.standard.set(balance, forKey: "balance")
+            UserDefaults.standard.set(balance, forKey: Keys.balance)
         }
     }
 
@@ -135,10 +140,10 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     var sampleRate: Int = 0 // in Hz (will display as kHz)
 
     init() {
-        if let saved = UserDefaults.standard.object(forKey: "volume") as? Float {
+        if let saved = UserDefaults.standard.object(forKey: Keys.volume) as? Float {
             self.volume = saved
         }
-        if let saved = UserDefaults.standard.object(forKey: "balance") as? Float {
+        if let saved = UserDefaults.standard.object(forKey: Keys.balance) as? Float {
             self.balance = saved
         }
 
