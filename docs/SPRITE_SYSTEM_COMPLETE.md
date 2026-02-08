@@ -518,8 +518,8 @@ MySkin.wsz (ZIP archive)
 ├── monoster.bmp      # Mono/stereo indicators
 ├── playpaus.bmp      # Play/pause indicators
 ├── posbar.bmp        # Position slider
-├── volume.bmp        # Volume slider
-├── balance.bmp       # Balance slider
+├── volume.bmp        # Volume slider (28 frames, 15px each, green→red gradient)
+├── balance.bmp       # Balance slider (28 frames, 15px each, green→red gradient)
 ├── numbers.bmp       # Standard digits (9x13)
 ├── nums_ex.bmp       # Extended digits (optional)
 ├── text.bmp          # Bitmap font
@@ -555,10 +555,18 @@ struct WinampSpriteCoordinates {
         NSRect(x: n * 9, y: 0, width: 9, height: 13)
     }
 
-    // VOLUME.BMP layout
-    static let volumeBackground = NSRect(x: 0, y: 0, width: 68, height: 14)
-    static let volumeThumb = NSRect(x: 0, y: 15, width: 14, height: 11)
-    static let volumeThumbPressed = NSRect(x: 15, y: 15, width: 14, height: 11)
+    // VOLUME.BMP layout (28 frames stacked vertically, 15px each)
+    // Frame 0 (y:0) = green (mute), Frame 27 (y:405) = red (max)
+    static let volumeBackground = NSRect(x: 0, y: 0, width: 68, height: 420)
+    static let volumeThumb = NSRect(x: 15, y: 422, width: 14, height: 11)
+    static let volumeThumbPressed = NSRect(x: 0, y: 422, width: 14, height: 11)
+
+    // BALANCE.BMP layout (28 frames stacked vertically, 15px each)
+    // Frame 0 (y:0) = green (center/neutral), Frame 27 (y:405) = red (full L/R)
+    // Webamp-compatible: offset = floor(abs(balance) * 27) * 15
+    static let balanceBackground = NSRect(x: 9, y: 0, width: 38, height: 420)
+    static let balanceThumb = NSRect(x: 15, y: 422, width: 14, height: 11)
+    static let balanceThumbActive = NSRect(x: 0, y: 422, width: 14, height: 11)
 }
 ```
 
@@ -767,7 +775,7 @@ resolver.resolve(.previousButton)
 // Digits for time
 (0...9).map { resolver.resolve(.digit($0)) }
 
-// Sliders
+// Sliders (static thumb images; dynamic frame selection via calculateBalanceFrameOffset())
 resolver.resolve(.volumeThumb)
 resolver.resolve(.balanceThumb)
 resolver.resolve(.positionSliderThumb)

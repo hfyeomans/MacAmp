@@ -1,7 +1,7 @@
 # MacAmp Complete Architecture Guide
 
-**Version:** 2.2.0
-**Date:** 2026-01-11
+**Version:** 2.3.0
+**Date:** 2026-02-07
 **Project State:** Production-Ready (5-Window System, Video Playback, Swift 6, macOS 15+/26+, AudioPlayer Decomposition)
 **Purpose:** Deep technical reference for developers joining or maintaining MacAmp
 
@@ -4129,6 +4129,55 @@ enum TimeDisplayMode: String, Codable {
 }
 ```
 
+### Volume & Balance Sliders
+
+**Implementation** (v1.0.6):
+
+**State & Persistence** (AudioPlayer mechanism layer):
+```swift
+// AudioPlayer.swift - Centralized UserDefaults keys
+private enum Keys {
+    static let volume = "volume"
+    static let balance = "balance"
+}
+
+var volume: Float = 0.75 {  // 0.0 to 1.0, default 0.75 (audible)
+    didSet {
+        playerNode.volume = volume
+        videoPlaybackController.volume = volume
+        UserDefaults.standard.set(volume, forKey: Keys.volume)
+    }
+}
+
+var balance: Float = 0.0 {  // -1.0 (left) to 1.0 (right)
+    didSet {
+        playerNode.pan = balance
+        UserDefaults.standard.set(balance, forKey: Keys.balance)
+    }
+}
+
+// Restoration in init()
+init() {
+    if let saved = UserDefaults.standard.object(forKey: Keys.volume) as? Float {
+        self.volume = saved
+    }
+    if let saved = UserDefaults.standard.object(forKey: Keys.balance) as? Float {
+        self.balance = saved
+    }
+}
+```
+
+**Balance Slider Color Gradient** (WinampVolumeSlider.swift):
+- BALANCE.BMP: 28 frames stacked vertically (15px each, 420px total)
+- Frame 0 (top) = green (neutral center), Frame 27 (bottom) = red (full L/R)
+- Uses webamp-compatible linear mapping: `floor(abs(balance) * 27) * 15`
+- Symmetric via `abs(balance)`: both full-left and full-right show red
+
+**Haptic Snap-to-Center**:
+- Fires once on entry into center zone (not every frame)
+- Threshold: 12% of slider range
+- Uses NSHapticFeedbackManager for system-native feedback
+
 ---
 
 ## Testing Strategies
@@ -4369,7 +4418,7 @@ struct TimeDisplayContainer: View {
 ```
 MacAmpApp/
 ├── Audio/
-│   ├── AudioPlayer.swift           # AVAudioEngine, EQ, local playback (1,043 lines)
+│   ├── AudioPlayer.swift           # AVAudioEngine, EQ, local playback, volume/balance persistence
 │   ├── EQPresetStore.swift         # EQ preset persistence (187 lines)
 │   ├── MetadataLoader.swift        # Async track/video metadata (171 lines)
 │   ├── PlaylistController.swift    # Playlist state and navigation (273 lines)

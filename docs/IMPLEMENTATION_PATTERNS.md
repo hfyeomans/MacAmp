@@ -1,7 +1,7 @@
 # MacAmp Implementation Patterns
 
-**Version:** 1.2.0
-**Date:** 2026-01-11
+**Version:** 1.3.0
+**Date:** 2026-02-07
 **Purpose:** Practical code patterns and best practices for MacAmp development
 
 ---
@@ -15,6 +15,7 @@
    - [Computed Properties with Dependency Tracking](#pattern-computed-properties-with-dependency-tracking)
    - [Computed Forwarding for API Compatibility](#pattern-computed-forwarding-for-api-compatibility) **(New - Swift 6)**
    - [Enum State with Persistence](#pattern-enum-state-with-persistence-repeatmode-pattern)
+   - [UserDefaults Persistence with Centralized Keys](#pattern-userdefaults-persistence-with-centralized-keys)
    - [Window Focus State Tracking](#pattern-window-focus-state-tracking)
    - [Action-Based Bridge Pattern](#pattern-action-based-bridge-pattern) **(New - Swift 6)**
 3. [UI Component Patterns](#ui-component-patterns)
@@ -321,6 +322,60 @@ var repeatMode: AppSettings.RepeatMode {
 - Don't duplicate state (use computed property in AudioPlayer)
 - Remember migration logic for existing users
 - Use CaseIterable for future-proof cycling
+
+### Pattern: UserDefaults Persistence with Centralized Keys
+
+**When to use**: Persisting scalar properties (Float, Int, Bool) across app launches with organized key management
+
+**Implementation**:
+```swift
+// File: MacAmpApp/Audio/AudioPlayer.swift:29-32, 79-91, 143-148
+// Purpose: Persist volume and balance settings across launches
+// Context: Keys enum centralizes string literals, didSet auto-saves
+
+@Observable
+@MainActor
+final class AudioPlayer {
+    private enum Keys {
+        static let volume = "volume"
+        static let balance = "balance"
+    }
+
+    var volume: Float = 0.75 {  // Default 0.75 when no saved preference
+        didSet {
+            playerNode.volume = volume
+            videoPlaybackController.volume = volume
+            UserDefaults.standard.set(volume, forKey: Keys.volume)
+        }
+    }
+
+    var balance: Float = 0.0 {  // -1.0 (left) to 1.0 (right)
+        didSet {
+            playerNode.pan = balance
+            UserDefaults.standard.set(balance, forKey: Keys.balance)
+        }
+    }
+
+    init() {
+        // Restore saved values; use object(forKey:) to distinguish
+        // "not set" from "set to 0"
+        if let saved = UserDefaults.standard.object(forKey: Keys.volume) as? Float {
+            self.volume = saved
+        }
+        if let saved = UserDefaults.standard.object(forKey: Keys.balance) as? Float {
+            self.balance = saved
+        }
+    }
+}
+```
+
+**Real usage**: `AudioPlayer.swift` volume/balance, `EQPresetStore.swift` preset data
+
+**Pitfalls**:
+- Use `object(forKey:) as? Float` instead of `float(forKey:)` to distinguish "never set" (nil) from "set to 0.0"
+- Keep the `Keys` enum `private` to prevent external key access
+- The default property value (e.g., 0.75) acts as the first-launch default
+- Place persistence in the mechanism layer (AudioPlayer) not the settings layer (AppSettings) when the value drives hardware state directly
 
 ### Pattern: Window Focus State Tracking
 
@@ -676,6 +731,31 @@ struct SkinSlider: View {
 ```
 
 **Real usage**: Volume/balance sliders, EQ sliders
+
+#### Balance Slider Gradient Mapping
+
+The balance slider maps `abs(balance)` (0.0-1.0) to BALANCE.BMP sprite frames using webamp-compatible linear mapping:
+
+```swift
+// File: MacAmpApp/Views/Components/WinampVolumeSlider.swift:225-229
+// BALANCE.BMP: 28 frames (15px each), frame 0 = green, frame 27 = red
+// Matches webamp: Math.floor(Math.abs(balance) / 100 * 27) * 15
+private func calculateBalanceFrameOffset() -> CGFloat {
+    let percent = min(max(CGFloat(abs(balance)), 0), 1)
+    let sprite = Int(floor(percent * 27.0))
+    let offset = CGFloat(sprite) * 15.0
+    return -offset
+}
+```
+
+**Frame mapping**: balance=0 -> frame 0 (green), balance=+/-0.5 -> frame 13 (mid), balance=+/-1.0 -> frame 27 (red)
+
+#### Haptic Snap-to-Center
+
+Balance and volume sliders use haptic feedback when the thumb enters the center snap zone:
+- **Threshold**: 12% of slider range (widened from original 8% for noticeable catch)
+- **Trigger**: Fires once on entry into snap zone, not on every frame
+- **Implementation**: Track previous snap state to detect entry vs. continued presence
 
 ### Pattern: VIDEO.bmp Chrome Composition
 
