@@ -71,7 +71,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     var currentTime: Double = 0.0
     var playbackProgress: Double = 0.0 // New: 0.0 to 1.0
 
-    var volume: Float = 0.0 { // 0.0 to 1.0
+    var volume: Float = 0.75 { // 0.0 to 1.0
         didSet {
             playerNode.volume = volume
             videoPlaybackController.volume = volume
