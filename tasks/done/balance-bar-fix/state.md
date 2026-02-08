@@ -4,7 +4,7 @@
 
 ---
 
-## Current Status: RESEARCH COMPLETE / PENDING PLAN REVIEW
+## Current Status: COMPLETE - MERGED
 
 ## Progress
 
@@ -12,15 +12,17 @@
 - [x] Webamp reference implementation analyzed
 - [x] Plan written with fix approach
 - [x] TODO items broken down
-- [ ] Plan reviewed and approved
-- [ ] Implementation started
-- [ ] Implementation complete
-- [ ] Verification complete
+- [x] Plan reviewed and approved
+- [x] Implementation complete
+- [x] Verification complete
+- [x] PR #43 merged (squash) to main
 
 ## Key Decisions
 
 1. **Fix approach:** Match webamp's `Math.floor(percent * 27)` pattern rather than inventing a new calculation
-2. **Scope:** Single function change only - no architectural changes needed
+2. **Scope expanded:** Added volume/balance UserDefaults persistence and snap-to-center haptic improvement
+3. **Default volume:** 0.75 (audible) when no saved preference exists, per PR review feedback
+4. **Keys refactor:** Centralized UserDefaults string keys into `private enum Keys` matching AppSettings pattern
 
 ## Blockers
 
@@ -28,4 +30,4 @@ None.
 
 ## Open Questions
 
-None - root cause and fix are clear.
+None.

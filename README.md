@@ -2,7 +2,7 @@
 
 ![Platform](https://img.shields.io/badge/platform-macOS%2015.0+-blue?logo=apple)
 ![Swift](https://img.shields.io/badge/Swift-6.0-orange?logo=swift)
-![Version](https://img.shields.io/badge/version-1.0.5-brightgreen)
+![Version](https://img.shields.io/badge/version-1.0.6-brightgreen)
 ![Notarized](https://img.shields.io/badge/Notarized-Apple%20Approved-brightgreen?logo=apple)
 ![Maintained](https://img.shields.io/badge/maintained-yes-green)
 
@@ -60,16 +60,16 @@ MacAmp is a SwiftUI-based audio player for macOS that recreates the iconic deskt
 
 ## Download
 
-### Latest Release: v1.0.5 (January 2026)
+### Latest Release: v1.0.6 (February 2026)
 
-[![Download MacAmp](https://img.shields.io/badge/Download-MacAmp%20v1.0.5-blue?style=for-the-badge)](https://github.com/hfyeomans/MacAmp/releases/tag/v1.0.5)
+[![Download MacAmp](https://img.shields.io/badge/Download-MacAmp%20v1.0.6-blue?style=for-the-badge)](https://github.com/hfyeomans/MacAmp/releases/tag/v1.0.6)
 
-**[Download MacAmp-1.0.5.dmg](https://github.com/hfyeomans/MacAmp/releases/tag/v1.0.5)** (2.7 MB)
+**[Download MacAmp-1.0.6.dmg](https://github.com/hfyeomans/MacAmp/releases/tag/v1.0.6)** (6.0 MB)
 
 | Property | Value |
 |----------|-------|
-| Version | 1.0.5 |
-| Build | 5 |
+| Version | 1.0.6 |
+| Build | 6 |
 | Signed | Developer ID Application |
 | Notarized | Yes (Apple approved) |
 | Architecture | Universal (arm64 + x86_64) |
@@ -80,14 +80,11 @@ MacAmp is a SwiftUI-based audio player for macOS that recreates the iconic deskt
 3. Drag MacAmp to Applications folder
 4. Launch from Applications (no Gatekeeper warnings)
 
-**What's New in v1.0.5:**
-- **Force Unwrap Elimination** - Removed all force unwraps from AudioPlayer for safer, crash-resistant playback
-- **AudioPlayer Refactoring** - Three-layer architecture with `AudioEngineController`, `AudioPlaybackController`, and `AudioBusController`
-- **SwiftLint Integration** - Consistent code style and quality enforcement across the codebase
-- **Documentation Updates** - Comprehensive architecture guide and 11 new optimization patterns
-- **Code Quality Improvements** - Enhanced error handling, cleaner state management, and improved concurrency safety
+**What's New in v1.0.6:**
+- **Balance Slider Fix** - Fixed balance slider color gradient to properly display left/right stereo panning
+- **Volume/Balance Persistence** - Volume and balance settings now persist across app restarts via UserDefaults
 
-See [Release Notes](https://github.com/hfyeomans/MacAmp/releases/tag/v1.0.5) for full changelog.
+See [Release Notes](https://github.com/hfyeomans/MacAmp/releases/tag/v1.0.6) for full changelog.
 
 ## Installation
 
@@ -449,6 +446,15 @@ See [`docs/SPRITE_SYSTEM_COMPLETE.md`](docs/SPRITE_SYSTEM_COMPLETE.md) for imple
 - **Progress Timer** - 100ms update interval balances CPU vs. smoothness
 
 ## Recent Updates
+
+### v1.0.6 (February 2026) - Balance Slider Fix & Persistence
+
+**Bug Fixes & Improvements:**
+- **Balance Slider Color Gradient** - Fixed the balance slider to properly display left/right stereo panning with correct color gradient
+- **Volume/Balance Persistence** - Volume and balance slider values now persist across app restarts via UserDefaults
+- Developer ID signed and Apple notarized
+
+---
 
 ### v1.0.5 (January 2026) - Code Quality & Architecture Improvements 🛠️
 
