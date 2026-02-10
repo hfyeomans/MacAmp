@@ -1,56 +1,6 @@
 import AppKit
 import Observation
 
-private struct PlaylistAttachmentSnapshot {
-    let anchor: WindowKind
-    let attachment: PlaylistDockingContext.Attachment
-}
-
-// NEW: Video window attachment tracking (same pattern as playlist)
-private struct VideoAttachmentSnapshot {
-    let anchor: WindowKind
-    let attachment: PlaylistDockingContext.Attachment  // Reuse attachment enum
-}
-
-private struct PlaylistDockingContext {
-    enum Source: CustomStringConvertible {
-        case cluster(Set<WindowKind>)
-        case heuristic
-        case memory
-
-        var description: String {
-            switch self {
-            case .cluster(let kinds):
-                return "cluster=" + kinds.map { "\($0)" }.sorted().joined(separator: ",")
-            case .heuristic:
-                return "heuristic"
-            case .memory:
-                return "memory"
-            }
-        }
-    }
-
-    enum Attachment: CustomStringConvertible {
-        case below(xOffset: CGFloat)
-        case above(xOffset: CGFloat)
-        case left(yOffset: CGFloat)
-        case right(yOffset: CGFloat)
-
-        var description: String {
-            switch self {
-            case .below(let offset): return ".below(xOffset: \(offset))"
-            case .above(let offset): return ".above(xOffset: \(offset))"
-            case .left(let offset): return ".left(yOffset: \(offset))"
-            case .right(let offset): return ".right(yOffset: \(offset))"
-            }
-        }
-    }
-
-    let anchor: WindowKind
-    let attachment: Attachment
-    let source: Source
-}
-
 @MainActor
 @Observable
 final class WindowCoordinator {
@@ -59,40 +9,37 @@ final class WindowCoordinator {
     private let mainController: NSWindowController
     private let eqController: NSWindowController
     private let playlistController: NSWindowController
-    private let videoController: NSWindowController       // NEW: Video window controller
-    private let milkdropController: NSWindowController    // NEW: Milkdrop window controller
-
+    private let videoController: NSWindowController
+    private let milkdropController: NSWindowController
     // Store references for observation/state checks
     private let settings: AppSettings
     private let skinManager: SkinManager
-    private let windowFocusState: WindowFocusState  // NEW: Window focus tracking
-
+    private let windowFocusState: WindowFocusState
     @ObservationIgnored private var skinPresentationTask: Task<Void, Never>?
     @ObservationIgnored private var alwaysOnTopTask: Task<Void, Never>?
     @ObservationIgnored private var doubleSizeTask: Task<Void, Never>?
     @ObservationIgnored private var persistenceTask: Task<Void, Never>?
-    @ObservationIgnored private var videoWindowTask: Task<Void, Never>?  // NEW: Video window observer
-    @ObservationIgnored private var milkdropWindowTask: Task<Void, Never>?  // NEW: Milkdrop window observer
-    @ObservationIgnored private var videoSizeTask: Task<Void, Never>?  // NEW: Video window size observer
+    @ObservationIgnored private var videoWindowTask: Task<Void, Never>?
+    @ObservationIgnored private var milkdropWindowTask: Task<Void, Never>?
+    @ObservationIgnored private var videoSizeTask: Task<Void, Never>?
     private var hasPresentedInitialWindows = false
     private var persistenceSuppressionCount = 0
     private var windowKinds: [ObjectIdentifier: WindowKind] = [:]
     private let windowFrameStore = WindowFrameStore()
     private var persistenceDelegate: WindowPersistenceDelegate?
-    private var mainFocusDelegate: WindowFocusDelegate?  // NEW: Focus delegates for all windows
+    private var mainFocusDelegate: WindowFocusDelegate?
     private var eqFocusDelegate: WindowFocusDelegate?
     private var playlistFocusDelegate: WindowFocusDelegate?
     private var videoFocusDelegate: WindowFocusDelegate?
     private var milkdropFocusDelegate: WindowFocusDelegate?
     private var lastPlaylistAttachment: PlaylistAttachmentSnapshot?
-    private var lastVideoAttachment: VideoAttachmentSnapshot?  // NEW: Video attachment memory
-
+    private var lastVideoAttachment: VideoAttachmentSnapshot?
     // Delegate multiplexers (must store as properties - NSWindow.delegate is weak)
     private var mainDelegateMultiplexer: WindowDelegateMultiplexer?
     private var eqDelegateMultiplexer: WindowDelegateMultiplexer?
     private var playlistDelegateMultiplexer: WindowDelegateMultiplexer?
-    private var videoDelegateMultiplexer: WindowDelegateMultiplexer?       // NEW: Video window multiplexer
-    private var milkdropDelegateMultiplexer: WindowDelegateMultiplexer?   // NEW: Milkdrop window multiplexer
+    private var videoDelegateMultiplexer: WindowDelegateMultiplexer?
+    private var milkdropDelegateMultiplexer: WindowDelegateMultiplexer?
     private enum LayoutDefaults {
         static let stackX: CGFloat = 100
         static let mainY: CGFloat = 500
@@ -102,9 +49,8 @@ final class WindowCoordinator {
     var mainWindow: NSWindow? { mainController.window }
     var eqWindow: NSWindow? { eqController.window }
     var playlistWindow: NSWindow? { playlistController.window }
-    var videoWindow: NSWindow? { videoController.window }           // NEW: Video window accessor
-    var milkdropWindow: NSWindow? { milkdropController.window }     // NEW: Milkdrop window accessor
-
+    var videoWindow: NSWindow? { videoController.window }
+    var milkdropWindow: NSWindow? { milkdropController.window }
     init(skinManager: SkinManager, audioPlayer: AudioPlayer, dockingController: DockingController, settings: AppSettings, radioLibrary: RadioStationLibrary, playbackCoordinator: PlaybackCoordinator, windowFocusState: WindowFocusState) {
         // Store shared state references
         self.settings = settings
@@ -144,7 +90,6 @@ final class WindowCoordinator {
             windowFocusState: windowFocusState
         )
 
-        // NEW: Create Video window with environment injection
         videoController = WinampVideoWindowController(
             skinManager: skinManager,
             audioPlayer: audioPlayer,
@@ -155,7 +100,6 @@ final class WindowCoordinator {
             windowFocusState: windowFocusState
         )
 
-        // NEW: Create Milkdrop window with environment injection
         milkdropController = WinampMilkdropWindowController(
             skinManager: skinManager,
             audioPlayer: audioPlayer,
@@ -186,20 +130,16 @@ final class WindowCoordinator {
         presentWindowsWhenReady()
         debugLogWindowPositions(step: "after presentWindowsWhenReady call")
 
-        // CRITICAL FIX #3: Set initial window levels from persisted always-on-top state
-        // From UnifiedDockView.swift line 80
+        // Set initial window levels from persisted always-on-top state
         let initialLevel: NSWindow.Level = settings.isAlwaysOnTop ? .floating : .normal
         mainWindow?.level = initialLevel
         eqWindow?.level = initialLevel
         playlistWindow?.level = initialLevel
-        videoWindow?.level = initialLevel        // NEW: Include Video window
-        milkdropWindow?.level = initialLevel     // NEW: Include Milkdrop window
+        videoWindow?.level = initialLevel
+        milkdropWindow?.level = initialLevel
         debugLogWindowPositions(step: "after initial window level assignment")
 
-        // CRITICAL FIX #3: Observe always-on-top changes
-        // From UnifiedDockView.swift lines 65-68
-        // Note: AppSettings is @Observable, so we can track changes
-        // Using withObservationTracking for reactive updates
+        // Observe always-on-top changes
         setupAlwaysOnTopObserver()
         debugLogWindowPositions(step: "after setupAlwaysOnTopObserver")
 
@@ -215,8 +155,6 @@ final class WindowCoordinator {
         setupMilkdropWindowObserver()
         debugLogWindowPositions(step: "after setupMilkdropWindowObserver")
 
-        // NOTE: setupVideoSizeObserver removed - Size2D managed by VideoWindowSizeState directly
-
         // Register windows with WindowSnapManager for magnetic snapping and cluster movement
         if let main = mainWindow {
             WindowSnapManager.shared.register(window: main, kind: .main)
@@ -227,7 +165,6 @@ final class WindowCoordinator {
         if let playlist = playlistWindow {
             WindowSnapManager.shared.register(window: playlist, kind: .playlist)
         }
-        // NEW: Register Video and Milkdrop windows
         if let video = videoWindow {
             WindowSnapManager.shared.register(window: video, kind: .video)
         }
@@ -253,13 +190,11 @@ final class WindowCoordinator {
         playlistDelegateMultiplexer?.add(delegate: WindowSnapManager.shared)
         playlistWindow?.delegate = playlistDelegateMultiplexer
 
-        // NEW: Video window multiplexer
-        videoDelegateMultiplexer = WindowDelegateMultiplexer()
+         videoDelegateMultiplexer = WindowDelegateMultiplexer()
         videoDelegateMultiplexer?.add(delegate: WindowSnapManager.shared)
         videoWindow?.delegate = videoDelegateMultiplexer
 
-        // NEW: Milkdrop window multiplexer
-        milkdropDelegateMultiplexer = WindowDelegateMultiplexer()
+             milkdropDelegateMultiplexer = WindowDelegateMultiplexer()
         milkdropDelegateMultiplexer?.add(delegate: WindowSnapManager.shared)
         milkdropWindow?.delegate = milkdropDelegateMultiplexer
 
@@ -269,8 +204,8 @@ final class WindowCoordinator {
             mainDelegateMultiplexer?.add(delegate: persistenceDelegate)
             eqDelegateMultiplexer?.add(delegate: persistenceDelegate)
             playlistDelegateMultiplexer?.add(delegate: persistenceDelegate)
-            videoDelegateMultiplexer?.add(delegate: persistenceDelegate)        // NEW
-            milkdropDelegateMultiplexer?.add(delegate: persistenceDelegate)     // NEW
+            videoDelegateMultiplexer?.add(delegate: persistenceDelegate)
+            milkdropDelegateMultiplexer?.add(delegate: persistenceDelegate)
         }
 
         // Track window focus for active/inactive titlebar sprites
@@ -415,11 +350,6 @@ final class WindowCoordinator {
         }
     }
 
-    // NOTE: setupVideoSizeObserver() and resizeVideoWindow() removed
-    // VIDEO window size now managed by VideoWindowSizeState directly
-    // Size changes happen through drag gesture or button clicks in VideoWindowChromeView
-    // NSWindow frame automatically updates based on SwiftUI .frame() modifier
-
     private func resizeMainAndEQWindows(doubled: Bool, animated _: Bool = true, persistResult: Bool = true) {
         guard let main = mainWindow, let eq = eqWindow else { return }
 
@@ -427,7 +357,7 @@ final class WindowCoordinator {
         let originalEqFrame = eq.frame
         let originalPlaylistFrame = playlistWindow?.frame
         let playlistSize = originalPlaylistFrame?.size ?? playlistWindow?.frame.size
-        let originalVideoFrame = videoWindow?.frame  // NEW: Capture video position
+        let originalVideoFrame = videoWindow?.frame
         let videoSize = originalVideoFrame?.size
 
         let dockingContext = makePlaylistDockingContext(
@@ -436,7 +366,6 @@ final class WindowCoordinator {
             playlistFrame: originalPlaylistFrame
         )
 
-        // NEW: Detect video window docking
         let videoDockingContext = makeVideoDockingContext(
             mainFrame: originalMainFrame,
             eqFrame: originalEqFrame,
@@ -464,7 +393,7 @@ final class WindowCoordinator {
         newEqFrame.origin.y = newMainFrame.origin.y - newEqFrame.size.height
 
         let animationAnchorFrame = dockingContext.flatMap { context in
-            anchorFrame(context.anchor, mainFrame: newMainFrame, eqFrame: newEqFrame)
+            WindowDockingGeometry.anchorFrame(context.anchor, mainFrame: newMainFrame, eqFrame: newEqFrame)
         }
 
         beginSuppressingPersistence()
@@ -475,14 +404,13 @@ final class WindowCoordinator {
 
         if let context = dockingContext,
            let size = playlistSize,
-           let anchorFrame = animationAnchorFrame ?? liveAnchorFrame(context.anchor) ?? anchorFrame(context.anchor, mainFrame: newMainFrame, eqFrame: newEqFrame) {
+           let anchorFrame = animationAnchorFrame ?? liveAnchorFrame(context.anchor) ?? WindowDockingGeometry.anchorFrame(context.anchor, mainFrame: newMainFrame, eqFrame: newEqFrame) {
             movePlaylist(using: context, targetFrame: anchorFrame, playlistSize: size, animated: false)
         }
 
-        // NEW: Move video window if docked
         if let videoContext = videoDockingContext,
            let size = videoSize,
-           let anchorFrame = liveAnchorFrame(videoContext.anchor) ?? anchorFrame(videoContext.anchor, mainFrame: newMainFrame, eqFrame: newEqFrame, playlistFrame: playlistWindow?.frame) {
+           let anchorFrame = liveAnchorFrame(videoContext.anchor) ?? WindowDockingGeometry.anchorFrame(videoContext.anchor, mainFrame: newMainFrame, eqFrame: newEqFrame, playlistFrame: playlistWindow?.frame) {
             moveVideoWindow(using: videoContext, targetFrame: anchorFrame, videoSize: size, animated: false)
         }
 
@@ -505,131 +433,45 @@ final class WindowCoordinator {
 
         if let clusterKinds = WindowSnapManager.shared.clusterKinds(containing: .playlist) {
             if clusterKinds.contains(.equalizer),
-               let attachment = determineAttachment(anchorFrame: eqFrame, playlistFrame: playlistFrame, strict: false) {
+               let attachment = WindowDockingGeometry.determineAttachment(anchorFrame: eqFrame, playlistFrame: playlistFrame, strict: false) {
                 let snapshot = PlaylistAttachmentSnapshot(anchor: .equalizer, attachment: attachment)
                 lastPlaylistAttachment = snapshot
                 return PlaylistDockingContext(anchor: .equalizer, attachment: attachment, source: .cluster(clusterKinds))
             }
             if clusterKinds.contains(.main),
-               let attachment = determineAttachment(anchorFrame: mainFrame, playlistFrame: playlistFrame, strict: false) {
+               let attachment = WindowDockingGeometry.determineAttachment(anchorFrame: mainFrame, playlistFrame: playlistFrame, strict: false) {
                 let snapshot = PlaylistAttachmentSnapshot(anchor: .main, attachment: attachment)
                 lastPlaylistAttachment = snapshot
                 return PlaylistDockingContext(anchor: .main, attachment: attachment, source: .cluster(clusterKinds))
             }
             if let snapshot = lastPlaylistAttachment,
                clusterKinds.contains(snapshot.anchor),
-               let anchorFrame = anchorFrame(snapshot.anchor, mainFrame: mainFrame, eqFrame: eqFrame),
-               attachmentStillEligible(snapshot, anchorFrame: anchorFrame, playlistFrame: playlistFrame) {
+               let anchorFrame = WindowDockingGeometry.anchorFrame(snapshot.anchor, mainFrame: mainFrame, eqFrame: eqFrame),
+               WindowDockingGeometry.attachmentStillEligible(snapshot, anchorFrame: anchorFrame, playlistFrame: playlistFrame) {
                 return PlaylistDockingContext(anchor: snapshot.anchor, attachment: snapshot.attachment, source: .memory)
             }
         }
 
-        if let attachment = determineAttachment(anchorFrame: eqFrame, playlistFrame: playlistFrame) {
+        if let attachment = WindowDockingGeometry.determineAttachment(anchorFrame: eqFrame, playlistFrame: playlistFrame) {
             let snapshot = PlaylistAttachmentSnapshot(anchor: .equalizer, attachment: attachment)
             lastPlaylistAttachment = snapshot
             return PlaylistDockingContext(anchor: .equalizer, attachment: attachment, source: .heuristic)
         }
 
-        if let attachment = determineAttachment(anchorFrame: mainFrame, playlistFrame: playlistFrame) {
+        if let attachment = WindowDockingGeometry.determineAttachment(anchorFrame: mainFrame, playlistFrame: playlistFrame) {
             let snapshot = PlaylistAttachmentSnapshot(anchor: .main, attachment: attachment)
             lastPlaylistAttachment = snapshot
             return PlaylistDockingContext(anchor: .main, attachment: attachment, source: .heuristic)
         }
 
         if let snapshot = lastPlaylistAttachment,
-           let anchorFrame = anchorFrame(snapshot.anchor, mainFrame: mainFrame, eqFrame: eqFrame),
-           attachmentStillEligible(snapshot, anchorFrame: anchorFrame, playlistFrame: playlistFrame) {
+           let anchorFrame = WindowDockingGeometry.anchorFrame(snapshot.anchor, mainFrame: mainFrame, eqFrame: eqFrame),
+           WindowDockingGeometry.attachmentStillEligible(snapshot, anchorFrame: anchorFrame, playlistFrame: playlistFrame) {
             return PlaylistDockingContext(anchor: snapshot.anchor, attachment: snapshot.attachment, source: .memory)
         }
 
         lastPlaylistAttachment = nil
         return nil
-    }
-
-    private func determineAttachment(anchorFrame: NSRect, playlistFrame: NSRect, strict: Bool = true) -> PlaylistDockingContext.Attachment? {
-        let tolerance = SnapUtils.SNAP_DISTANCE
-
-        var candidates: [(distance: CGFloat, attachment: PlaylistDockingContext.Attachment)] = []
-
-        func overlapsX() -> Bool {
-            playlistFrame.minX <= anchorFrame.maxX + tolerance && anchorFrame.minX <= playlistFrame.maxX + tolerance
-        }
-
-        func overlapsY() -> Bool {
-            playlistFrame.minY <= anchorFrame.maxY + tolerance && anchorFrame.minY <= playlistFrame.maxY + tolerance
-        }
-
-        func consider(distance: CGFloat, attachment: PlaylistDockingContext.Attachment) {
-            if strict {
-                if distance <= tolerance {
-                    candidates.append((distance, attachment))
-                }
-            } else {
-                candidates.append((distance, attachment))
-            }
-        }
-
-        if overlapsX() {
-            let playlistTop = playlistFrame.maxY
-            let anchorBottom = anchorFrame.minY
-            consider(distance: abs(playlistTop - anchorBottom), attachment: .below(xOffset: playlistFrame.origin.x - anchorFrame.origin.x))
-
-            let playlistBottom = playlistFrame.minY
-            let anchorTop = anchorFrame.maxY
-            consider(distance: abs(playlistBottom - anchorTop), attachment: .above(xOffset: playlistFrame.origin.x - anchorFrame.origin.x))
-        }
-
-        if overlapsY() {
-            let playlistRight = playlistFrame.maxX
-            let anchorLeft = anchorFrame.minX
-            consider(distance: abs(playlistRight - anchorLeft), attachment: .left(yOffset: playlistFrame.origin.y - anchorFrame.origin.y))
-
-            let playlistLeft = playlistFrame.minX
-            let anchorRight = anchorFrame.maxX
-            consider(distance: abs(playlistLeft - anchorRight), attachment: .right(yOffset: playlistFrame.origin.y - anchorFrame.origin.y))
-        }
-
-        return candidates.min(by: { $0.distance < $1.distance })?.attachment
-    }
-
-    private func playlistOrigin(for attachment: PlaylistDockingContext.Attachment, anchorFrame: NSRect, playlistSize: NSSize) -> NSPoint {
-        switch attachment {
-        case .below(let xOffset):
-            return NSPoint(x: anchorFrame.origin.x + xOffset, y: anchorFrame.origin.y - playlistSize.height)
-        case .above(let xOffset):
-            return NSPoint(x: anchorFrame.origin.x + xOffset, y: anchorFrame.origin.y + anchorFrame.size.height)
-        case .left(let yOffset):
-            return NSPoint(x: anchorFrame.origin.x - playlistSize.width, y: anchorFrame.origin.y + yOffset)
-        case .right(let yOffset):
-            return NSPoint(x: anchorFrame.origin.x + anchorFrame.size.width, y: anchorFrame.origin.y + yOffset)
-        }
-    }
-
-    private func attachmentStillEligible(_ snapshot: PlaylistAttachmentSnapshot, anchorFrame: NSRect, playlistFrame: NSRect) -> Bool {
-        let expected = playlistOrigin(for: snapshot.attachment, anchorFrame: anchorFrame, playlistSize: playlistFrame.size)
-        let dx = abs(playlistFrame.origin.x - expected.x)
-        let dy = abs(playlistFrame.origin.y - expected.y)
-        let tolerance = SnapUtils.SNAP_DISTANCE
-
-        switch snapshot.attachment {
-        case .below, .above:
-            return dx <= tolerance && dy <= anchorFrame.size.height + tolerance
-        case .left, .right:
-            return dy <= tolerance && dx <= playlistFrame.size.width + tolerance
-        }
-    }
-
-    private func anchorFrame(_ anchor: WindowKind, mainFrame: NSRect, eqFrame: NSRect, playlistFrame: NSRect? = nil) -> NSRect? {
-        switch anchor {
-        case .main:
-            return mainFrame
-        case .equalizer:
-            return eqFrame
-        case .playlist:
-            return playlistFrame
-        default:
-            return nil
-        }
     }
 
     private func liveAnchorFrame(_ anchor: WindowKind) -> NSRect? {
@@ -645,7 +487,6 @@ final class WindowCoordinator {
         }
     }
 
-    // NEW: Video window docking (same pattern as playlist)
     private func makeVideoDockingContext(
         mainFrame: NSRect,
         eqFrame: NSRect,
@@ -658,17 +499,17 @@ final class WindowCoordinator {
         if let clusterKinds = WindowSnapManager.shared.clusterKinds(containing: .video) {
             // Prefer playlist as anchor (video typically docks below playlist)
             if let playlistFrame, clusterKinds.contains(.playlist),
-               let attachment = determineAttachment(anchorFrame: playlistFrame, playlistFrame: videoFrame, strict: false) {
+               let attachment = WindowDockingGeometry.determineAttachment(anchorFrame: playlistFrame, playlistFrame: videoFrame, strict: false) {
                 return VideoAttachmentSnapshot(anchor: .playlist, attachment: attachment)
             }
 
             if clusterKinds.contains(.equalizer),
-               let attachment = determineAttachment(anchorFrame: eqFrame, playlistFrame: videoFrame, strict: false) {
+               let attachment = WindowDockingGeometry.determineAttachment(anchorFrame: eqFrame, playlistFrame: videoFrame, strict: false) {
                 return VideoAttachmentSnapshot(anchor: .equalizer, attachment: attachment)
             }
 
             if clusterKinds.contains(.main),
-               let attachment = determineAttachment(anchorFrame: mainFrame, playlistFrame: videoFrame, strict: false) {
+               let attachment = WindowDockingGeometry.determineAttachment(anchorFrame: mainFrame, playlistFrame: videoFrame, strict: false) {
                 return VideoAttachmentSnapshot(anchor: .main, attachment: attachment)
             }
         }
@@ -678,7 +519,7 @@ final class WindowCoordinator {
 
     private func moveVideoWindow(using context: VideoAttachmentSnapshot, targetFrame: NSRect, videoSize: NSSize, animated: Bool) {
         guard let video = videoWindow else { return }
-        let origin = playlistOrigin(for: context.attachment, anchorFrame: targetFrame, playlistSize: videoSize)
+        let origin = WindowDockingGeometry.playlistOrigin(for: context.attachment, anchorFrame: targetFrame, playlistSize: videoSize)
 
         if animated {
             video.animator().setFrameOrigin(origin)
@@ -869,7 +710,7 @@ final class WindowCoordinator {
 
     private func movePlaylist(using context: PlaylistDockingContext, targetFrame: NSRect, playlistSize: NSSize, animated: Bool) {
         guard let playlist = playlistWindow else { return }
-        let origin = playlistOrigin(for: context.attachment, anchorFrame: targetFrame, playlistSize: playlistSize)
+        let origin = WindowDockingGeometry.playlistOrigin(for: context.attachment, anchorFrame: targetFrame, playlistSize: playlistSize)
         if animated {
             playlist.animator().setFrameOrigin(origin)
         } else {
@@ -931,8 +772,8 @@ final class WindowCoordinator {
         mainWindow?.level = level
         eqWindow?.level = level
         playlistWindow?.level = level
-        videoWindow?.level = level        // NEW: Include Video window
-        milkdropWindow?.level = level     // NEW: Include Milkdrop window
+        videoWindow?.level = level
+        milkdropWindow?.level = level
     }
 
     private var canPresentImmediately: Bool {
@@ -1116,7 +957,6 @@ final class WindowCoordinator {
                 applied = true
             }
 
-            // NEW: Restore video window position (video doesn't resize, only position)
             if let video = videoWindow,
                let storedVideo = windowFrameStore.frame(for: .video) {
                 var frame = video.frame
@@ -1125,7 +965,6 @@ final class WindowCoordinator {
                 applied = true
             }
 
-            // NEW: Restore milkdrop window position (milkdrop doesn't resize, only position)
             if let milkdrop = milkdropWindow,
                let storedMilkdrop = windowFrameStore.frame(for: .milkdrop) {
                 var frame = milkdrop.frame
@@ -1147,7 +986,6 @@ final class WindowCoordinator {
         if let playlist = playlistWindow {
             windowFrameStore.save(frame: playlist.frame, for: .playlist)
         }
-        // NEW: Persist video and milkdrop windows
         if let video = videoWindow {
             windowFrameStore.save(frame: video.frame, for: .video)
         }
@@ -1184,7 +1022,6 @@ final class WindowCoordinator {
         if let playlist = playlistWindow {
             windowKinds[ObjectIdentifier(playlist)] = .playlist
         }
-        // NEW: Map video and milkdrop windows
         if let video = videoWindow {
             windowKinds[ObjectIdentifier(video)] = .video
         }
@@ -1250,7 +1087,6 @@ final class WindowCoordinator {
         playlistWindow?.orderOut(nil)
         isPlaylistWindowVisible = false
     }
-    // NEW: Video and Milkdrop window show/hide
     func showVideo() {
         AppLog.debug(.window, "showVideo() called")
         videoWindow?.makeKeyAndOrderFront(nil)
@@ -1277,55 +1113,6 @@ final class WindowCoordinator {
         }
     }
 
-    private struct PersistedWindowFrame: Codable {
-        let originX: Double
-        let originY: Double
-        let width: Double
-        let height: Double
-
-        init(frame: NSRect) {
-            originX = Double(frame.origin.x)
-            originY = Double(frame.origin.y)
-            width = Double(frame.size.width)
-            height = Double(frame.size.height)
-        }
-
-        func asRect() -> NSRect {
-            NSRect(
-                x: CGFloat(originX),
-                y: CGFloat(originY),
-                width: CGFloat(width),
-                height: CGFloat(height)
-            )
-        }
-
-    }
-
-    private struct WindowFrameStore {
-        private let defaults = UserDefaults.standard
-        private let encoder = JSONEncoder()
-        private let decoder = JSONDecoder()
-
-        func frame(for kind: WindowKind) -> NSRect? {
-            guard let data = defaults.data(forKey: key(for: kind)),
-                  let record = try? decoder.decode(PersistedWindowFrame.self, from: data) else {
-                return nil
-            }
-            return record.asRect()
-        }
-
-        func save(frame: NSRect, for kind: WindowKind) {
-            let record = PersistedWindowFrame(frame: frame)
-            if let data = try? encoder.encode(record) {
-                defaults.set(data, forKey: key(for: kind))
-            }
-        }
-
-        private func key(for kind: WindowKind) -> String {
-            "WindowFrame.\(kind.persistenceKey)"
-        }
-    }
-
     @MainActor
     private final class WindowPersistenceDelegate: NSObject, NSWindowDelegate {
         weak var coordinator: WindowCoordinator?
@@ -1340,18 +1127,6 @@ final class WindowCoordinator {
 
         func windowDidResize(_ notification: Notification) {
             coordinator?.handleWindowGeometryChange(notification: notification)
-        }
-    }
-}
-
-private extension WindowKind {
-    var persistenceKey: String {
-        switch self {
-        case .main: return "main"
-        case .playlist: return "playlist"
-        case .equalizer: return "equalizer"
-        case .video: return "video"           // NEW: Video window persistence key
-        case .milkdrop: return "milkdrop"     // NEW: Milkdrop window persistence key
         }
     }
 }
