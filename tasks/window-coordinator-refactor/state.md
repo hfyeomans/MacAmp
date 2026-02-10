@@ -1,20 +1,20 @@
 # Task State: WindowCoordinator.swift Refactoring
 
-## Current Phase: Phase 1 Complete (Oracle Verified)
+## Current Phase: Phase 2 Complete
 
-## Status: Phase 1 Verified - Ready for Commit & Phase 2
+## Status: Ready for Phase 3 (Extract Observation & Wiring)
 
 ## Branch: `refactor/window-coordinator-decomposition`
 
 ## Context
 - **File:** `MacAmpApp/ViewModels/WindowCoordinator.swift`
 - **Original Size:** 1,357 lines
-- **Current Size:** 1,127 lines (-230 lines, -17%)
+- **Current Size:** 583 lines (after Phase 2 extractions, -57%)
 - **Issue:** God object with 10 orthogonal responsibilities, exceeds linting threshold
 - **Goal:** Decompose into focused types using Facade + Composition pattern
 - **Target:** ~200 lines in WindowCoordinator.swift (-85%)
 
-## Phase 1 Results
+## Phase 1 Results (Committed: `89c9150`)
 
 ### Files Created
 | File | Lines | Purpose |
@@ -25,37 +25,71 @@
 | `Tests/MacAmpTests/WindowDockingGeometryTests.swift` | 101 | 7 test methods covering all geometry functions |
 | `Tests/MacAmpTests/WindowFrameStoreTests.swift` | 51 | 3 test methods (roundtrip, save/load, nil) |
 
-### Build & Test Status
+## Phase 2 Results (Complete)
+
+### 2A: WindowRegistry.swift - COMPLETE
+| File | Lines | Purpose |
+|------|-------|---------|
+| `MacAmpApp/Windows/WindowRegistry.swift` | 83 | Owns 5 NSWindowController instances, window lookup by kind |
+
+- Coordinator forwards `mainWindow`, `eqWindow`, etc. as computed properties
+- `liveAnchorFrame()` and `windowKind(for:)` forward to registry
 - Build: **SUCCEEDED**
-- Phase 1 tests (10 tests): **ALL PASS**
-- Full test suite: **ALL PASS**
 
-### Additional Fixes
-- Fixed pre-existing broken `PlaylistNavigationTests.swift` (`player.playlist` is read-only; changed to `player.playlistController.addTrack()`)
-- Cleaned all stale comments per depreciated.md (`// NEW:`, `// CRITICAL FIX #3:`, `// NOTE:`)
+### 2B: WindowFramePersistence.swift - COMPLETE
+| File | Lines | Purpose |
+|------|-------|---------|
+| `MacAmpApp/Windows/WindowFramePersistence.swift` | 145 | Frame persistence, suppression, WindowPersistenceDelegate |
 
-### Pre-Existing Broken Tests Found
-- `PlaylistNavigationTests.swift` had compilation error: `Cannot assign to property: 'playlist' is a get-only property` (fixed — used `playlistController.addTrack()` instead)
+- Coordinator forwards: `persistAllWindowFrames()`, `schedulePersistenceFlush()`, `applyPersistedWindowPositions()`
+- Coordinator forwards: `beginSuppressingPersistence()`, `endSuppressingPersistence()`, `performWithoutPersistence()`
+- Removed: `windowFrameStore` property, old nested `WindowPersistenceDelegate`, `LayoutDefaults.playlistMaxHeight`
+- Build: **SUCCEEDED**
 
-## Oracle Review (Post-Phase 1)
-- **Model:** gpt-5.3-codex, reasoningEffort: xhigh
-- **Finding:** [P2] Test files were in PBXBuildFile but NOT in MacAmpTests PBXSourcesBuildPhase
-- **Impact:** Tests were discovered by Xcode via group membership but not formally in build phase — could cause CI gaps
-- **Fix Applied:** Added `095F23474597A1E26C0CDDFD` and `2E7AF1F816A6079309895544` to MacAmpTests PBXSourcesBuildPhase
-- **Secondary fix:** `WindowFrameStoreTests.swift` had `CGFloat?` to `Double` type mismatch in `XCTAssertEqual` accuracy overload — fixed with `XCTUnwrap`
-- **Post-fix status:** All tests pass (`** TEST SUCCEEDED **`)
+### 2C: WindowVisibilityController.swift - COMPLETE
+| File | Lines | Purpose |
+|------|-------|---------|
+| `MacAmpApp/Windows/WindowVisibilityController.swift` | 161 | Show/hide/toggle for all windows, @Observable visibility state |
 
-## Research Completed
-- [x] Read all related docs (Architecture Guide, Multi-Window, Window Focus, etc.)
-- [x] Analyzed full dependency graph (13 files reference WindowCoordinator)
-- [x] Researched Swift 6.2+ concurrency patterns
-- [x] Researched macOS window management patterns
-- [x] Swift concurrency skill audit (5 findings, all addressed in plan)
+- Moved `isEQWindowVisible`, `isPlaylistWindowVisible` observable properties
+- Moved all show/hide/toggle methods for EQ, Playlist, Video, Milkdrop, Main
+- Moved `showAllWindows()`, `focusAllWindows()`, `minimizeKeyWindow()`, `closeKeyWindow()`
+- Coordinator forwards via computed get/set properties (observation chaining verified)
+- Build: **SUCCEEDED**
+
+### 2D: WindowResizeController.swift - COMPLETE
+| File | Lines | Purpose |
+|------|-------|---------|
+| `MacAmpApp/Windows/WindowResizeController.swift` | 313 | Resize, docking-aware layout, resize preview overlays |
+
+- Moved `resizeMainAndEQWindows()` + docking context builders
+- Moved `lastPlaylistAttachment`, `lastVideoAttachment` state
+- Moved all update*WindowSize() methods, move methods, resize preview methods
+- Moved debug logging helpers
+- Build: **SUCCEEDED**
+
+### 2-VERIFY: PASSED
+- Build: **SUCCEEDED**
+- Full test suite: **TEST SUCCEEDED**
+- Oracle review (gpt-5.3-codex, xhigh reasoning): **No concrete defects found**
 
 ## Oracle Reviews
-- **Pre-implementation:** gpt-5.3-codex, reasoningEffort: xhigh → REVISE then proceed (revisions applied)
-- **Post-Phase 1:** gpt-5.3-codex, reasoningEffort: xhigh → 1 finding (P2: test build phase), fixed
+- **Pre-implementation:** gpt-5.3-codex, reasoningEffort: xhigh -> REVISE then proceed (revisions applied)
+- **Post-Phase 1:** gpt-5.3-codex, reasoningEffort: xhigh -> 1 finding (P2: test build phase), fixed
+- **Post-Phase 2:** gpt-5.3-codex, reasoningEffort: xhigh -> No concrete defects found
+
+## Line Count Summary
+| File | Lines |
+|------|-------|
+| WindowCoordinator.swift | 583 |
+| WindowRegistry.swift | 83 |
+| WindowFramePersistence.swift | 145 |
+| WindowVisibilityController.swift | 161 |
+| WindowResizeController.swift | 313 |
+| **Total** | **1,285** |
 
 ## Next Steps
-1. Commit Phase 1 changes on feature branch
-2. Begin Phase 2 implementation (extract controllers: WindowRegistry, WindowFramePersistence, WindowVisibilityController, WindowResizeController)
+1. Commit Phase 2 changes
+2. Implement Phase 3A: Extract WindowSettingsObserver.swift
+3. Implement Phase 3B: Extract WindowDelegateWiring.swift
+4. Run 3-VERIFY: Full build + tests + Oracle review

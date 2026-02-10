@@ -107,6 +107,10 @@
 		582B7E4749BC2B27907F4B94 /* WindowFrameStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34B7E7228958068656E1BA06 /* WindowFrameStore.swift */; };
 		095F23474597A1E26C0CDDFD /* WindowDockingGeometryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0D545E5FE5EEBF09B4B5E3 /* WindowDockingGeometryTests.swift */; };
 		2E7AF1F816A6079309895544 /* WindowFrameStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C350AB718032EB3008D4038 /* WindowFrameStoreTests.swift */; };
+		A1B2C3D401020304E5F60708 /* WindowRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D401020305E5F60708 /* WindowRegistry.swift */; };
+		A1B2C3D401020306E5F60708 /* WindowFramePersistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D401020307E5F60708 /* WindowFramePersistence.swift */; };
+		A1B2C3D401020308E5F60708 /* WindowVisibilityController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D401020309E5F60708 /* WindowVisibilityController.swift */; };
+		A1B2C3D40102030AE5F60708 /* WindowResizeController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40102030BE5F60708 /* WindowResizeController.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -222,6 +226,10 @@
 		34B7E7228958068656E1BA06 /* WindowFrameStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowFrameStore.swift; sourceTree = "<group>"; };
 		FF0D545E5FE5EEBF09B4B5E3 /* WindowDockingGeometryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowDockingGeometryTests.swift; sourceTree = "<group>"; };
 		2C350AB718032EB3008D4038 /* WindowFrameStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowFrameStoreTests.swift; sourceTree = "<group>"; };
+		A1B2C3D401020305E5F60708 /* WindowRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowRegistry.swift; sourceTree = "<group>"; };
+		A1B2C3D401020307E5F60708 /* WindowFramePersistence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowFramePersistence.swift; sourceTree = "<group>"; };
+		A1B2C3D401020309E5F60708 /* WindowVisibilityController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowVisibilityController.swift; sourceTree = "<group>"; };
+		A1B2C3D40102030BE5F60708 /* WindowResizeController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowResizeController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -265,6 +273,10 @@
 				C5A04FF893A62E7E959F676F /* WindowDockingTypes.swift */,
 				14B116E7CA7F5BF6EABD072F /* WindowDockingGeometry.swift */,
 				34B7E7228958068656E1BA06 /* WindowFrameStore.swift */,
+				A1B2C3D401020305E5F60708 /* WindowRegistry.swift */,
+				A1B2C3D401020307E5F60708 /* WindowFramePersistence.swift */,
+				A1B2C3D401020309E5F60708 /* WindowVisibilityController.swift */,
+				A1B2C3D40102030BE5F60708 /* WindowResizeController.swift */,
 				36CAB62E2EC258AD00902330 /* WinampMilkdropWindowController.swift */,
 				36CAB62F2EC258AD00902330 /* WinampVideoWindowController.swift */,
 				366BB1792EC03F9B006162E2 /* BorderlessWindow.swift */,
@@ -643,6 +655,10 @@
 				D8827B553E2354A0B7AA0D4E /* WindowDockingTypes.swift in Sources */,
 				5C5B27A9956CC1009650D9BE /* WindowDockingGeometry.swift in Sources */,
 				582B7E4749BC2B27907F4B94 /* WindowFrameStore.swift in Sources */,
+				A1B2C3D401020304E5F60708 /* WindowRegistry.swift in Sources */,
+				A1B2C3D401020306E5F60708 /* WindowFramePersistence.swift in Sources */,
+				A1B2C3D401020308E5F60708 /* WindowVisibilityController.swift in Sources */,
+				A1B2C3D40102030AE5F60708 /* WindowResizeController.swift in Sources */,
 				36CAB6262EC13E3D00902330 /* WinampTitlebarDragHandle.swift in Sources */,
 				36CAB6272EC13E3D00902330 /* TitlebarDragCaptureView.swift in Sources */,
 				47C40C273D4B4CD3804B3224 /* WindowSpec.swift in Sources */,
