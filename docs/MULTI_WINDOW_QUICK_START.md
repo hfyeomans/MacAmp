@@ -253,15 +253,26 @@ Handle new WindowKind cases automatically (no changes needed if enum-based)
 - [ ] Keyboard shortcuts work (Cmd+Shift+V, etc.)
 - [ ] Thread sanitizer clean
 
-### Instant Double-Size Docking (New – 2025-11-09)
+### Instant Double-Size Docking (Updated – 2026-02-09)
 
-1. Listen to `AppSettings.isDoubleSizeMode` and call `WindowCoordinator.resizeMainAndEQWindows` on change.
-2. Inside `resizeMainAndEQWindows`, call `WindowSnapManager.clusterKinds(containing: .playlist)` to detect whether the playlist is touching the EQ or Main window. Build a `PlaylistDockingContext` to capture the anchor + attachment.
-3. Call `WindowSnapManager.beginProgrammaticAdjustment()` before updating frames, resize Main/EQ synchronously (no NSAnimation), then `endProgrammaticAdjustment()`.
-4. Reposition the playlist via `movePlaylist(using:context,targetFrame:)` so it stays glued to the chosen anchor.
-5. Remove `.animation` modifiers from the Winamp Main/EQ SwiftUI views so the resize looks instantaneous like classic Winamp.
+**Note:** As of Feb 2026, WindowCoordinator was refactored into 11 focused files. The docking logic is now split across:
 
-If any of the steps above regress, the playlist will drift when CTRL+D toggles—use the `[ORACLE] Docking source …` logs to diagnose.
+1. `WindowSettingsObserver` detects `AppSettings.isDoubleSizeMode` changes via `withObservationTracking`
+2. Fires `onDoubleSizeChanged` callback to `WindowCoordinator`
+3. `WindowCoordinator` forwards to `WindowResizeController.resizeMainAndEQWindows()`
+4. `WindowResizeController.makePlaylistDockingContext()` calls `WindowSnapManager.clusterKinds(containing: .playlist)` and uses `WindowDockingGeometry` pure functions for attachment detection
+5. Main/EQ resize synchronously while `WindowFramePersistence` suppresses writes
+6. Playlist repositioned via `movePlaylist(using:context,targetFrame:)` to stay glued to anchor
+
+**Files involved:**
+- `WindowSettingsObserver.swift` - Observation
+- `WindowResizeController.swift` - Resize orchestration
+- `WindowDockingGeometry.swift` - Pure geometry calculations
+- `WindowFramePersistence.swift` - Persistence suppression
+
+If docking regresses, check debug logs: `[DOCKING] source: ...` (prefix changed from `[ORACLE]`)
+
+See MULTI_WINDOW_ARCHITECTURE.md §10 for complete refactoring details.
 
 ---
 
