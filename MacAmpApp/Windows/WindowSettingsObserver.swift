@@ -56,7 +56,7 @@ final class WindowSettingsObserver {
                 _ = self.settings.isAlwaysOnTop
             } onChange: {
                 Task { @MainActor [weak self] in
-                    guard let self else { return }
+                    guard let self, self.handlers != nil else { return }
                     self.handlers?.onAlwaysOnTopChanged(self.settings.isAlwaysOnTop)
                     self.observeAlwaysOnTop()
                 }
@@ -72,7 +72,7 @@ final class WindowSettingsObserver {
                 _ = self.settings.isDoubleSizeMode
             } onChange: {
                 Task { @MainActor [weak self] in
-                    guard let self else { return }
+                    guard let self, self.handlers != nil else { return }
                     self.handlers?.onDoubleSizeChanged(self.settings.isDoubleSizeMode)
                     self.observeDoubleSize()
                 }
@@ -88,7 +88,7 @@ final class WindowSettingsObserver {
                 _ = self.settings.showVideoWindow
             } onChange: {
                 Task { @MainActor [weak self] in
-                    guard let self else { return }
+                    guard let self, self.handlers != nil else { return }
                     self.handlers?.onShowVideoChanged(self.settings.showVideoWindow)
                     self.observeShowVideo()
                 }
@@ -104,7 +104,7 @@ final class WindowSettingsObserver {
                 _ = self.settings.showMilkdropWindow
             } onChange: {
                 Task { @MainActor [weak self] in
-                    guard let self else { return }
+                    guard let self, self.handlers != nil else { return }
                     self.handlers?.onShowMilkdropChanged(self.settings.showMilkdropWindow)
                     self.observeShowMilkdrop()
                 }

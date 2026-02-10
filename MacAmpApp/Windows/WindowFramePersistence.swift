@@ -47,6 +47,7 @@ final class WindowFramePersistence {
         persistenceTask?.cancel()
         persistenceTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .milliseconds(150))
+            guard !Task.isCancelled else { return }
             self?.persistAllWindowFrames()
         }
     }

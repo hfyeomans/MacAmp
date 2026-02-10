@@ -35,4 +35,99 @@
 
 ---
 
-*Updated during research phase. Will be finalized after refactoring completion.*
+## Post-Refactoring Update (2026-02-09)
+
+### ✅ COMPLETED REMOVALS
+
+All patterns listed above have been addressed during the 4-phase refactoring:
+
+| Pattern | Resolution |
+|---------|------------|
+| Recursive `withObservationTracking` boilerplate | ✅ Extracted to `WindowSettingsObserver.swift` with 4 concrete methods |
+| Force-unwrapped singleton | ⏸️ Deferred (Phase 4 skipped DI migration per Oracle recommendation) |
+| `// NEW:` inline comments | ✅ All removed during Phase 1-3 extractions |
+| `// CRITICAL FIX #3:` comments | ✅ Removed during Phase 2 |
+| `// NOTE:` removed code comments | ✅ Removed during Phase 2 |
+| Nested `WindowPersistenceDelegate` | ✅ Moved to `WindowFramePersistence.swift` as top-level class |
+| Nested `PersistedWindowFrame` | ✅ Moved to `WindowFrameStore.swift` |
+| Nested `WindowFrameStore` | ✅ Moved to `WindowFrameStore.swift` |
+| Duplicate show/hide methods | ✅ Consolidated in `WindowVisibilityController.swift` |
+
+### New Deprecated Patterns (Replaced by Refactoring)
+
+| Old Pattern | Deprecated | Replacement |
+|-------------|------------|-------------|
+| **Direct Task property management** | Lines 14-18 (old) | Use dedicated observer types with lifecycle (e.g., `WindowSettingsObserver`) |
+| **Inline delegate multiplexer setup** | Lines 433-489 (old) | Use static factory pattern (`WindowDelegateWiring.wire()`) |
+| **Inline focus delegate properties** | Lines 19-23 (old) | Collect in struct returned by factory (`WindowDelegateWiring.focusDelegates`) |
+| **Persistence forwarding wrappers** | Lines 367-394 (old) | Direct access to composed controller (`framePersistence.method()`) |
+| **Layout code in main class** | Lines 206-358 (old) | Extract to extension file (`WindowCoordinator+Layout.swift`) |
+
+### Deprecated Architectural Patterns
+
+**God Object Pattern** → **Facade + Composition**
+- **Old**: 1,357-line WindowCoordinator with 10 responsibilities
+- **New**: 223-line facade composing 7 focused controllers + 3 pure types + 1 layout extension
+- **Why**: Single Responsibility Principle, testability, maintainability, SwiftLint compliance
+
+**Property Forwarding Anti-Pattern** → **Direct Composition**
+```swift
+// ❌ DEPRECATED: One-line forwarding wrappers
+private func schedulePersistenceFlush() {
+    framePersistence.schedulePersistenceFlush()
+}
+
+// ✅ CURRENT: Direct access to composed property
+coordinator.framePersistence.schedulePersistenceFlush()
+```
+
+**Inline Task Setup** → **Lifecycle-Aware Observers**
+```swift
+// ❌ DEPRECATED: Direct Task property in main class
+@ObservationIgnored private var alwaysOnTopTask: Task<Void, Never>?
+
+private func setupAlwaysOnTopObserver() {
+    alwaysOnTopTask?.cancel()
+    alwaysOnTopTask = Task { @MainActor [weak self] in
+        withObservationTracking { ... } onChange: { ... }
+    }
+}
+
+// ✅ CURRENT: Dedicated observer with start/stop lifecycle
+private let settingsObserver: WindowSettingsObserver
+
+settingsObserver.start(
+    onAlwaysOnTopChanged: { [weak self] isOn in
+        self?.updateWindowLevels(isOn)
+    }
+)
+// stop() called in teardown (or tasks auto-terminate via [weak self])
+```
+
+**Manual Delegate Wiring** → **Static Factory Pattern**
+```swift
+// ❌ DEPRECATED: Inline multiplexer + delegate creation
+private var mainDelegateMultiplexer: WindowDelegateMultiplexer?
+private var mainFocusDelegate: WindowFocusDelegate?
+// ... 10 more properties (5 multiplexers + 5 focus delegates)
+
+func wireUpDelegates() {
+    let mainMux = WindowDelegateMultiplexer()
+    mainMux.add(delegate: WindowSnapManager.shared)
+    // ... 30+ lines of repetitive setup for 5 windows
+}
+
+// ✅ CURRENT: Static factory returns struct with strong refs
+private var delegateWiring: WindowDelegateWiring?
+
+delegateWiring = WindowDelegateWiring.wire(
+    registry: registry,
+    persistenceDelegate: framePersistence.persistenceDelegate,
+    windowFocusState: windowFocusState
+)
+// Iterates all 5 windows, no boilerplate
+```
+
+---
+
+*Finalized after Phase 4 completion. WindowCoordinator.swift: 1,357 → 223 lines (-84%).*
