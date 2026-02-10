@@ -4,14 +4,12 @@ import Observation
 @MainActor
 @Observable
 final class WindowCoordinator {
-    // swiftlint:disable:next implicitly_unwrapped_optional
-    static var shared: WindowCoordinator!  // Initialized in MacAmpApp.init()
+    static var shared: WindowCoordinator?  // Initialized in MacAmpApp.init()
 
     let registry: WindowRegistry
     private let settings: AppSettings
     let skinManager: SkinManager
     private let windowFocusState: WindowFocusState
-    @ObservationIgnored var skinPresentationTask: Task<Void, Never>?
     let framePersistence: WindowFramePersistence
     let visibility: WindowVisibilityController
     let resizeController: WindowResizeController
@@ -143,7 +141,6 @@ final class WindowCoordinator {
     }
 
     deinit {
-        skinPresentationTask?.cancel()
         // settingsObserver.stop() is not callable from nonisolated deinit;
         // tasks hold [weak self] references so they will naturally terminate.
     }

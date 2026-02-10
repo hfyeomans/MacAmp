@@ -48,6 +48,7 @@ final class DockingController {
     private let persistKey = "DockLayoutV1"
     private let defaults: UserDefaults
     @ObservationIgnored private var persistTask: Task<Void, Never>?
+    @ObservationIgnored weak var windowCoordinator: WindowCoordinator?
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -75,8 +76,9 @@ final class DockingController {
     func toggleMain() { toggleVisibility(.main) }
     func togglePlaylist() {
         toggleVisibility(.playlist)
+        assert(windowCoordinator != nil, "DockingController.windowCoordinator not injected")
         // Sync actual NSWindow to match DockingController state
-        if let coordinator = WindowCoordinator.shared {
+        if let coordinator = windowCoordinator {
             let shouldBeVisible = showPlaylist
             if shouldBeVisible {
                 coordinator.showPlaylistWindow()
@@ -88,8 +90,9 @@ final class DockingController {
 
     func toggleEqualizer() {
         toggleVisibility(.equalizer)
+        assert(windowCoordinator != nil, "DockingController.windowCoordinator not injected")
         // Sync actual NSWindow to match DockingController state
-        if let coordinator = WindowCoordinator.shared {
+        if let coordinator = windowCoordinator {
             let shouldBeVisible = showEqualizer
             if shouldBeVisible {
                 coordinator.showEQWindow()

@@ -1173,15 +1173,14 @@ for await _ in Observations(\.isAlwaysOnTop, on: settings) {
 #### nonisolated deinit Awareness
 
 ```swift
-// WindowCoordinator.swift:145-149
+// WindowCoordinator.swift deinit
 deinit {
-    skinPresentationTask?.cancel()
     // settingsObserver.stop() is not callable from nonisolated deinit;
     // tasks hold [weak self] references so they will naturally terminate.
 }
 ```
 
-In Swift 6.2, `deinit` is `nonisolated` -- it cannot call `@MainActor`-isolated methods. The design deliberately avoids this problem by ensuring all Tasks use `[weak self]`, so they terminate via `guard let self else { return }` when the coordinator is deallocated.
+In Swift 6.2, `deinit` is `nonisolated` -- it cannot call `@MainActor`-isolated methods. The design deliberately avoids this problem by ensuring all Tasks use `[weak self]`, so they terminate via `guard let self else { return }` when the coordinator is deallocated. Skin readiness observation uses `withObservationTracking` (synchronous, event-driven) rather than a cancellable polling Task.
 
 #### @Observable Observation Chaining
 

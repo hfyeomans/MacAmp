@@ -1,4 +1,5 @@
 import AppKit
+import Observation
 
 /// Layout, initialization, and presentation logic for WindowCoordinator.
 /// Separated as an extension to keep the main facade file focused on composition and forwarding.
@@ -112,16 +113,26 @@ extension WindowCoordinator {
             presentInitialWindows()
             return
         }
+        observeSkinReadiness()
+    }
 
-        skinPresentationTask?.cancel()
-        skinPresentationTask = Task { @MainActor [weak self] in
-            guard let self else { return }
-            while !self.canPresentImmediately {
-                if Task.isCancelled { return }
-                try? await Task.sleep(for: .milliseconds(50))
+    private func observeSkinReadiness() {
+        withObservationTracking {
+            _ = self.skinManager.isLoading
+            _ = self.skinManager.currentSkin
+            _ = self.skinManager.loadingError
+        } onChange: {
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                if self.canPresentImmediately {
+                    self.presentInitialWindows()
+                } else {
+                    self.observeSkinReadiness()
+                }
             }
-            if Task.isCancelled { return }
-            self.presentInitialWindows()
+        }
+        if canPresentImmediately {
+            presentInitialWindows()
         }
     }
 

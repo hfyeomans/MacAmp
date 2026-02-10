@@ -5289,7 +5289,6 @@ final class WindowCoordinator {
         // settingsObserver.stop()  // Compiler error in Swift 6.2
 
         // ✅ CORRECT: Tasks use [weak self], auto-terminate on dealloc
-        skinPresentationTask?.cancel()
         // Comment explains why stop() isn't called
     }
 }
@@ -5445,13 +5444,11 @@ After Phase 2 (controllers extracted):
 // Phase 2: Extract controllers, keep tight access
 private let settings: AppSettings
 private let skinManager: SkinManager
-@ObservationIgnored private var skinPresentationTask: Task<Void, Never>?
 private var hasPresentedInitialWindows = false
 
 // Phase 4: Widen access for extension (same module)
 private let settings: AppSettings  // Still private (not used in extension)
 let skinManager: SkinManager  // Widened (extension uses canPresentImmediately)
-@ObservationIgnored var skinPresentationTask: Task<Void, Never>?  // Widened
 var hasPresentedInitialWindows = false  // Widened
 ```
 

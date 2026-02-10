@@ -6,7 +6,6 @@ final class WindowResizeController {
     private let registry: WindowRegistry
     private let persistence: WindowFramePersistence
     private var lastPlaylistAttachment: PlaylistAttachmentSnapshot?
-    private var lastVideoAttachment: VideoAttachmentSnapshot?
 
     init(registry: WindowRegistry, persistence: WindowFramePersistence) {
         self.registry = registry
