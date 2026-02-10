@@ -1,8 +1,8 @@
 # Task State: WindowCoordinator.swift Refactoring
 
-## Current Phase: Phase 3 Complete
+## Current Phase: Phase 4 Complete
 
-## Status: Ready for Phase 4 (Layout Extension)
+## Status: All extraction phases complete. Ready for post-refactoring documentation.
 
 ## Branch: `refactor/window-coordinator-decomposition`
 
@@ -78,6 +78,7 @@
 - **Post-Phase 1:** gpt-5.3-codex, reasoningEffort: xhigh -> 1 finding (P2: test build phase), fixed
 - **Post-Phase 2:** gpt-5.3-codex, reasoningEffort: xhigh -> No concrete defects found
 - **Post-Phase 3:** gpt-5.3-codex, reasoningEffort: xhigh -> No concrete functional regressions found
+- **Post-Phase 4:** gpt-5.3-codex, reasoningEffort: xhigh -> No functional or blocking issues
 
 ## Phase 3 Results (In Progress)
 
@@ -108,22 +109,41 @@
 - Full test suite: **TEST SUCCEEDED** (with Thread Sanitizer)
 - Oracle review (gpt-5.3-codex, xhigh reasoning): **No concrete functional regressions found**
 
-## Line Count Summary
+## Phase 4 Results
+
+### 4A: WindowCoordinator+Layout.swift - COMPLETE
+| File | Lines | Purpose |
+|------|-------|---------|
+| `MacAmpApp/ViewModels/WindowCoordinator+Layout.swift` | 153 | Layout, presentation, default positions, debug logging |
+
+- Moved: LayoutDefaults, configureWindows, setDefaultPositions, applyInitialWindowLayout, resetToDefaultStack
+- Moved: canPresentImmediately, presentWindowsWhenReady, presentInitialWindows, debugLogWindowPositions
+- Removed unused forwarding wrappers (windowKind, persistence helpers)
+- Widened access on 3 properties for cross-file extension access
+- Build: **SUCCEEDED** (with Thread Sanitizer)
+- Tests: **SUCCEEDED** (with Thread Sanitizer)
+
+### 4-VERIFY: PASSED
+- Build with TSan: **SUCCEEDED**
+- Full test suite with TSan: **TEST SUCCEEDED**
+- Oracle review (gpt-5.3-codex, xhigh reasoning): **No functional or blocking issues**
+
+## Line Count Summary (Final)
 | File | Lines |
 |------|-------|
-| WindowCoordinator.swift | 408 |
+| WindowCoordinator.swift | 223 |
+| WindowCoordinator+Layout.swift | 153 |
 | WindowRegistry.swift | 83 |
 | WindowFramePersistence.swift | 146 |
 | WindowVisibilityController.swift | 161 |
 | WindowResizeController.swift | 312 |
 | WindowSettingsObserver.swift | 114 |
-| WindowDelegateWiring.swift | 56 |
+| WindowDelegateWiring.swift | 54 |
 | WindowDockingTypes.swift | 50 |
 | WindowDockingGeometry.swift | 109 |
 | WindowFrameStore.swift | 65 |
-| **Total** | **1,504** |
+| **Total** | **1,470** |
 
 ## Next Steps
-1. Commit Phase 3 changes
-2. Implement Phase 4: Extract WindowCoordinator+Layout.swift extension
-3. Post-refactoring: update docs, final Oracle review
+1. Post-refactoring: update deprecated.md, architecture docs
+2. Final Oracle review of completed refactoring

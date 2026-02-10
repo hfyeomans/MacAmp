@@ -113,6 +113,7 @@
 		A1B2C3D40102030AE5F60708 /* WindowResizeController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40102030BE5F60708 /* WindowResizeController.swift */; };
 		A1B2C3D40102030CE5F60708 /* WindowSettingsObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40102030DE5F60708 /* WindowSettingsObserver.swift */; };
 		A1B2C3D40102030EE5F60708 /* WindowDelegateWiring.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40102030FE5F60708 /* WindowDelegateWiring.swift */; };
+		A1B2C3D401020310E5F60708 /* WindowCoordinator+Layout.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D401020311E5F60708 /* WindowCoordinator+Layout.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -234,6 +235,7 @@
 		A1B2C3D40102030BE5F60708 /* WindowResizeController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowResizeController.swift; sourceTree = "<group>"; };
 		A1B2C3D40102030DE5F60708 /* WindowSettingsObserver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowSettingsObserver.swift; sourceTree = "<group>"; };
 		A1B2C3D40102030FE5F60708 /* WindowDelegateWiring.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowDelegateWiring.swift; sourceTree = "<group>"; };
+		A1B2C3D401020311E5F60708 /* WindowCoordinator+Layout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WindowCoordinator+Layout.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -490,6 +492,7 @@
 			isa = PBXGroup;
 			children = (
 				366BB16F2EC039E6006162E2 /* WindowCoordinator.swift */,
+				A1B2C3D401020311E5F60708 /* WindowCoordinator+Layout.swift */,
 				74EDF33D12E79F86166AF268 /* DockingController.swift */,
 				97F3E1419E231E886A674A64 /* SkinManager.swift */,
 				E0E380FCAD3E1BD185A02129 /* ButterchurnBridge.swift */,
@@ -643,6 +646,7 @@
 				3686476D2EC8336B009D1D8E /* VideoWindowSizeState.swift in Sources */,
 				A268E30146C34EF8B21FCC90 /* PlaylistWindowSizeState.swift in Sources */,
 				366BB1702EC039E6006162E2 /* WindowCoordinator.swift in Sources */,
+				A1B2C3D401020310E5F60708 /* WindowCoordinator+Layout.swift in Sources */,
 				36CAB6362EC25E4000902330 /* VideoWindowChromeView.swift in Sources */,
 				36CAB6302EC258AD00902330 /* WinampVideoWindowController.swift in Sources */,
 				36CAB6312EC258AD00902330 /* WinampMilkdropWindowController.swift in Sources */,
