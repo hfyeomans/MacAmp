@@ -1,0 +1,173 @@
+#!/bin/bash
+
+# MacAmp pre-commit hook
+# Checks: secrets detection, thread safety, SwiftLint, TODO discipline
+# Setup: git config core.hooksPath .githooks
+
+FAILED=0
+
+# Get staged files (excluding deleted)
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM)
+
+if [ -z "$STAGED_FILES" ]; then
+    exit 0
+fi
+
+STAGED_SWIFT_FILES=$(echo "$STAGED_FILES" | grep '\.swift$' || true)
+STAGED_NON_SWIFT_FILES=$(echo "$STAGED_FILES" | grep -v '\.swift$' || true)
+
+# --- Stage 1: Secrets Detection ---
+echo "Checking for secrets..."
+
+SECRETS_FOUND=0
+
+# Check filenames for dangerous patterns
+DANGEROUS_PATTERNS='\.(env|key|pem|p12|pfx|secret)$|^credentials\.|password'
+DANGEROUS_FILES=$(echo "$STAGED_FILES" | grep -iE "$DANGEROUS_PATTERNS" || true)
+
+if [ -n "$DANGEROUS_FILES" ]; then
+    echo "ERROR: Potentially sensitive files staged for commit:"
+    echo "$DANGEROUS_FILES" | while read -r f; do echo "  - $f"; done
+    SECRETS_FOUND=1
+fi
+
+# Check staged content for secret patterns
+if [ -n "$STAGED_FILES" ]; then
+    while IFS= read -r file; do
+        [ -z "$file" ] && continue
+        CONTENT=$(git diff --cached --diff-filter=ACM -- "$file" | grep '^+' | grep -v '^+++' || true)
+        [ -z "$CONTENT" ] && continue
+
+        # AWS access keys
+        if echo "$CONTENT" | grep -qE 'AKIA[0-9A-Z]{16}'; then
+            echo "ERROR: Possible AWS access key found in $file"
+            SECRETS_FOUND=1
+        fi
+
+        # GitHub tokens
+        if echo "$CONTENT" | grep -qE '(ghp_|gho_|ghs_|github_pat_)[A-Za-z0-9_]{20,}'; then
+            echo "ERROR: Possible GitHub token found in $file"
+            SECRETS_FOUND=1
+        fi
+
+        # Private keys (pattern split to avoid self-detection in hook source)
+        PK_PATTERN="-----BEGIN.*PRIVATE KEY"
+        PK_PATTERN="${PK_PATTERN}-----"
+        if echo "$CONTENT" | grep -qE -e "$PK_PATTERN"; then
+            echo "ERROR: Private key found in $file"
+            SECRETS_FOUND=1
+        fi
+
+        # Generic API key patterns (long hex/base64 strings assigned to key-like variables)
+        if echo "$CONTENT" | grep -qiE '(api[_-]?key|api[_-]?secret|auth[_-]?token|access[_-]?token)\s*[:=]\s*["\x27][A-Za-z0-9+/=_-]{32,}["\x27]'; then
+            echo "WARNING: Possible API key/token assignment in $file"
+            SECRETS_FOUND=1
+        fi
+    done <<< "$STAGED_FILES"
+fi
+
+if [ $SECRETS_FOUND -ne 0 ]; then
+    echo ""
+    echo "Commit BLOCKED: secrets detected. Remove sensitive data before committing."
+    echo "If this is a false positive, use: git commit --no-verify"
+    FAILED=1
+else
+    echo "No secrets detected."
+fi
+
+# --- Stage 2: Thread Safety Warnings ---
+if [ -n "$STAGED_SWIFT_FILES" ]; then
+    echo ""
+    echo "Checking thread safety patterns..."
+
+    THREAD_WARNINGS=0
+
+    while IFS= read -r file; do
+        [ -z "$file" ] && continue
+        CONTENT=$(git diff --cached --diff-filter=ACM -- "$file" | grep '^+' | grep -v '^+++' || true)
+        [ -z "$CONTENT" ] && continue
+
+        if echo "$CONTENT" | grep -qE 'DispatchQueue\.main\.sync'; then
+            echo "  WARNING: DispatchQueue.main.sync in $file (deadlock risk)"
+            THREAD_WARNINGS=1
+        fi
+
+        if echo "$CONTENT" | grep -qE 'nonisolated\(unsafe\)'; then
+            echo "  WARNING: nonisolated(unsafe) in $file (concurrency bypass)"
+            THREAD_WARNINGS=1
+        fi
+
+        if echo "$CONTENT" | grep -qE '[^a-zA-Z]Thread\('; then
+            echo "  WARNING: Raw Thread() creation in $file (prefer structured concurrency)"
+            THREAD_WARNINGS=1
+        fi
+
+        if echo "$CONTENT" | grep -qE 'objc_sync_(enter|exit)'; then
+            echo "  WARNING: Legacy objc_sync locking in $file (prefer modern concurrency)"
+            THREAD_WARNINGS=1
+        fi
+    done <<< "$STAGED_SWIFT_FILES"
+
+    if [ $THREAD_WARNINGS -eq 0 ]; then
+        echo "No thread safety concerns."
+    else
+        echo "  (Thread safety warnings are non-blocking. Review before pushing.)"
+    fi
+fi
+
+# --- Stage 3: SwiftLint ---
+if [ -n "$STAGED_SWIFT_FILES" ]; then
+    echo ""
+    echo "Running SwiftLint on staged files..."
+
+    if ! command -v swiftlint &> /dev/null; then
+        echo "ERROR: SwiftLint is REQUIRED. Install: brew install swiftlint"
+        FAILED=1
+    else
+        echo "$STAGED_SWIFT_FILES" | xargs swiftlint lint --quiet --strict
+        RESULT=$?
+
+        if [ $RESULT -ne 0 ]; then
+            echo ""
+            echo "SwiftLint found violations. Please fix before committing."
+            echo "Run 'swiftlint lint' to see all issues."
+            FAILED=1
+        else
+            echo "SwiftLint passed."
+        fi
+    fi
+fi
+
+# --- Stage 4: TODO Discipline (non-Swift files) ---
+if [ -n "$STAGED_NON_SWIFT_FILES" ]; then
+    TODO_FOUND=0
+
+    while IFS= read -r file; do
+        [ -z "$file" ] && continue
+        CONTENT=$(git diff --cached --diff-filter=ACM -- "$file" | grep '^+' | grep -v '^+++' || true)
+        [ -z "$CONTENT" ] && continue
+
+        if echo "$CONTENT" | grep -qiE '(TODO|FIXME):'; then
+            if [ $TODO_FOUND -eq 0 ]; then
+                echo ""
+                echo "TODO/FIXME discipline check..."
+            fi
+            echo "  WARNING: TODO/FIXME found in $file"
+            TODO_FOUND=1
+        fi
+    done <<< "$STAGED_NON_SWIFT_FILES"
+
+    if [ $TODO_FOUND -ne 0 ]; then
+        echo "  Per project conventions, use tasks/<task-id>/placeholder.md instead of inline TODOs."
+        echo "  (Non-blocking warning for non-Swift files. Swift TODOs are enforced by SwiftLint.)"
+    fi
+fi
+
+echo ""
+if [ $FAILED -ne 0 ]; then
+    echo "Pre-commit checks FAILED. Fix issues above or use --no-verify to bypass."
+else
+    echo "All pre-commit checks passed."
+fi
+
+exit $FAILED
