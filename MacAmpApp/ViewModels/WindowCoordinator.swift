@@ -3,7 +3,6 @@ import Observation
 
 @MainActor
 @Observable
-// swiftlint:disable:next type_body_length
 final class WindowCoordinator {
     // swiftlint:disable:next implicitly_unwrapped_optional
     static var shared: WindowCoordinator!  // Initialized in MacAmpApp.init()
@@ -14,28 +13,12 @@ final class WindowCoordinator {
     private let skinManager: SkinManager
     private let windowFocusState: WindowFocusState
     @ObservationIgnored private var skinPresentationTask: Task<Void, Never>?
-    @ObservationIgnored private var alwaysOnTopTask: Task<Void, Never>?
-    @ObservationIgnored private var doubleSizeTask: Task<Void, Never>?
     let framePersistence: WindowFramePersistence
     let visibility: WindowVisibilityController
     let resizeController: WindowResizeController
-    @ObservationIgnored private var videoWindowTask: Task<Void, Never>?
-    @ObservationIgnored private var milkdropWindowTask: Task<Void, Never>?
-    @ObservationIgnored private var videoSizeTask: Task<Void, Never>?
+    private let settingsObserver: WindowSettingsObserver
     private var hasPresentedInitialWindows = false
-    // swiftlint:disable weak_delegate
-    private var mainFocusDelegate: WindowFocusDelegate?
-    private var eqFocusDelegate: WindowFocusDelegate?
-    private var playlistFocusDelegate: WindowFocusDelegate?
-    private var videoFocusDelegate: WindowFocusDelegate?
-    private var milkdropFocusDelegate: WindowFocusDelegate?
-    // swiftlint:enable weak_delegate
-    // Delegate multiplexers (must store as properties - NSWindow.delegate is weak)
-    private var mainDelegateMultiplexer: WindowDelegateMultiplexer?
-    private var eqDelegateMultiplexer: WindowDelegateMultiplexer?
-    private var playlistDelegateMultiplexer: WindowDelegateMultiplexer?
-    private var videoDelegateMultiplexer: WindowDelegateMultiplexer?
-    private var milkdropDelegateMultiplexer: WindowDelegateMultiplexer?
+    private var delegateWiring: WindowDelegateWiring?
     private enum LayoutDefaults {
         static let stackX: CGFloat = 100
         static let mainY: CGFloat = 500
@@ -96,6 +79,9 @@ final class WindowCoordinator {
         // Create resize controller
         resizeController = WindowResizeController(registry: registry, persistence: framePersistence)
 
+        // Create settings observer
+        settingsObserver = WindowSettingsObserver(settings: settings)
+
         // Configure windows (borderless, transparent titlebar)
         configureWindows()
 
@@ -124,213 +110,47 @@ final class WindowCoordinator {
         milkdropWindow?.level = initialLevel
         debugLogWindowPositions(step: "after initial window level assignment")
 
-        // Observe always-on-top changes
-        setupAlwaysOnTopObserver()
-        debugLogWindowPositions(step: "after setupAlwaysOnTopObserver")
-
-        // Observe for double-size changes
-        setupDoubleSizeObserver()
-        debugLogWindowPositions(step: "after setupDoubleSizeObserver")
-
-        // Observe for video window visibility changes
-        setupVideoWindowObserver()
-        debugLogWindowPositions(step: "after setupVideoWindowObserver")
-
-        // Observe for milkdrop window visibility changes
-        setupMilkdropWindowObserver()
-        debugLogWindowPositions(step: "after setupMilkdropWindowObserver")
-
-        // Register windows with WindowSnapManager for magnetic snapping and cluster movement
-        if let main = mainWindow {
-            WindowSnapManager.shared.register(window: main, kind: .main)
-        }
-        if let eq = eqWindow {
-            WindowSnapManager.shared.register(window: eq, kind: .equalizer)
-        }
-        if let playlist = playlistWindow {
-            WindowSnapManager.shared.register(window: playlist, kind: .playlist)
-        }
-        if let video = videoWindow {
-            WindowSnapManager.shared.register(window: video, kind: .video)
-        }
-        if let milkdrop = milkdropWindow {
-            WindowSnapManager.shared.register(window: milkdrop, kind: .milkdrop)
-        }
-        debugLogWindowPositions(step: "after WindowSnapManager registration")
-
-        // Set up delegate multiplexers (allows multiple delegates per window)
-
-        // Main window multiplexer
-        mainDelegateMultiplexer = WindowDelegateMultiplexer()
-        mainDelegateMultiplexer?.add(delegate: WindowSnapManager.shared)
-        mainWindow?.delegate = mainDelegateMultiplexer
-
-        // EQ window multiplexer
-        eqDelegateMultiplexer = WindowDelegateMultiplexer()
-        eqDelegateMultiplexer?.add(delegate: WindowSnapManager.shared)
-        eqWindow?.delegate = eqDelegateMultiplexer
-
-        // Playlist window multiplexer
-        playlistDelegateMultiplexer = WindowDelegateMultiplexer()
-        playlistDelegateMultiplexer?.add(delegate: WindowSnapManager.shared)
-        playlistWindow?.delegate = playlistDelegateMultiplexer
-
-         videoDelegateMultiplexer = WindowDelegateMultiplexer()
-        videoDelegateMultiplexer?.add(delegate: WindowSnapManager.shared)
-        videoWindow?.delegate = videoDelegateMultiplexer
-
-             milkdropDelegateMultiplexer = WindowDelegateMultiplexer()
-        milkdropDelegateMultiplexer?.add(delegate: WindowSnapManager.shared)
-        milkdropWindow?.delegate = milkdropDelegateMultiplexer
-
-        // Persist window movement/resizes
-        if let delegate = framePersistence.persistenceDelegate {
-            mainDelegateMultiplexer?.add(delegate: delegate)
-            eqDelegateMultiplexer?.add(delegate: delegate)
-            playlistDelegateMultiplexer?.add(delegate: delegate)
-            videoDelegateMultiplexer?.add(delegate: delegate)
-            milkdropDelegateMultiplexer?.add(delegate: delegate)
-        }
-
-        // Track window focus for active/inactive titlebar sprites
-        mainFocusDelegate = WindowFocusDelegate(kind: .main, focusState: windowFocusState)
-        eqFocusDelegate = WindowFocusDelegate(kind: .equalizer, focusState: windowFocusState)
-        playlistFocusDelegate = WindowFocusDelegate(kind: .playlist, focusState: windowFocusState)
-        videoFocusDelegate = WindowFocusDelegate(kind: .video, focusState: windowFocusState)
-        milkdropFocusDelegate = WindowFocusDelegate(kind: .milkdrop, focusState: windowFocusState)
-
-        if let mainFocusDelegate {
-            mainDelegateMultiplexer?.add(delegate: mainFocusDelegate)
-        }
-        if let eqFocusDelegate {
-            eqDelegateMultiplexer?.add(delegate: eqFocusDelegate)
-        }
-        if let playlistFocusDelegate {
-            playlistDelegateMultiplexer?.add(delegate: playlistFocusDelegate)
-        }
-        if let videoFocusDelegate {
-            videoDelegateMultiplexer?.add(delegate: videoFocusDelegate)
-        }
-        if let milkdropFocusDelegate {
-            milkdropDelegateMultiplexer?.add(delegate: milkdropFocusDelegate)
-        }
-
-        debugLogWindowPositions(step: "after delegate multiplexer setup")
-    }
-
-    // Always-on-top observer using withObservationTracking for reactive updates
-    private func setupAlwaysOnTopObserver() {
-        // Cancel any existing observer
-        alwaysOnTopTask?.cancel()
-
-        // Use withObservationTracking for reactive updates (no polling)
-        alwaysOnTopTask = Task { @MainActor [weak self] in
-            guard let self else { return }
-
-            // Recursive observation pattern
-            withObservationTracking {
-                _ = self.settings.isAlwaysOnTop
-            } onChange: {
-                Task { @MainActor [weak self] in
-                    guard let self else { return }
-                    self.updateWindowLevels(self.settings.isAlwaysOnTop)
-                    self.setupAlwaysOnTopObserver()  // Re-establish observer
+        // Start observing settings changes (always-on-top, double-size, video, milkdrop)
+        settingsObserver.start(
+            onAlwaysOnTopChanged: { [weak self] isOn in
+                self?.updateWindowLevels(isOn)
+            },
+            onDoubleSizeChanged: { [weak self] doubled in
+                self?.resizeMainAndEQWindows(doubled: doubled)
+            },
+            onShowVideoChanged: { [weak self] show in
+                guard let self else { return }
+                if show {
+                    if self.hasPresentedInitialWindows { self.showVideo() }
+                } else {
+                    self.hideVideo()
+                }
+            },
+            onShowMilkdropChanged: { [weak self] show in
+                guard let self else { return }
+                AppLog.debug(.window, "showMilkdropWindow changed to \(show)")
+                if show {
+                    if self.hasPresentedInitialWindows { self.showMilkdrop() }
+                } else {
+                    self.hideMilkdrop()
                 }
             }
-        }
+        )
+        debugLogWindowPositions(step: "after settings observer start")
+
+        // Wire up snap manager, delegate multiplexers, persistence, and focus delegates
+        delegateWiring = WindowDelegateWiring.wire(
+            registry: registry,
+            persistenceDelegate: framePersistence.persistenceDelegate,
+            windowFocusState: windowFocusState
+        )
+        debugLogWindowPositions(step: "after delegate wiring")
     }
 
     deinit {
         skinPresentationTask?.cancel()
-        alwaysOnTopTask?.cancel()
-        doubleSizeTask?.cancel()
-        videoWindowTask?.cancel()
-        milkdropWindowTask?.cancel()
-        videoSizeTask?.cancel()
-    }
-
-    // Double-size observer (Main + EQ only, not Playlist)
-    private func setupDoubleSizeObserver() {
-        // Cancel any existing observer
-        doubleSizeTask?.cancel()
-
-        // Use withObservationTracking for reactive updates
-        doubleSizeTask = Task { @MainActor [weak self] in
-            guard let self else { return }
-
-            // Recursive observation pattern
-            withObservationTracking {
-                _ = self.settings.isDoubleSizeMode
-            } onChange: {
-                Task { @MainActor [weak self] in
-                    guard let self else { return }
-                    self.resizeMainAndEQWindows(doubled: self.settings.isDoubleSizeMode)
-                    self.setupDoubleSizeObserver()  // Re-establish observer
-                }
-            }
-        }
-    }
-
-    // Video window visibility observer - honors persisted showVideoWindow state
-    private func setupVideoWindowObserver() {
-        // Cancel any existing observer
-        videoWindowTask?.cancel()
-
-        // Use withObservationTracking for reactive updates
-        videoWindowTask = Task { @MainActor [weak self] in
-            guard let self else { return }
-
-            // Recursive observation pattern
-            withObservationTracking {
-                _ = self.settings.showVideoWindow
-            } onChange: {
-                Task { @MainActor [weak self] in
-                    guard let self else { return }
-                    // Only show VIDEO window after initial windows are presented
-                    if self.settings.showVideoWindow {
-                        if self.hasPresentedInitialWindows {
-                            self.showVideo()
-                        }
-                        // If windows not ready yet, setting will be honored in presentInitialWindows()
-                    } else {
-                        self.hideVideo()
-                    }
-                    self.setupVideoWindowObserver()  // Re-establish observer
-                }
-            }
-        }
-    }
-
-    // Milkdrop window visibility observer - honors persisted showMilkdropWindow state
-    private func setupMilkdropWindowObserver() {
-        AppLog.debug(.window, "setupMilkdropWindowObserver() called")
-        // Cancel any existing observer
-        milkdropWindowTask?.cancel()
-
-        // Use withObservationTracking for reactive updates
-        milkdropWindowTask = Task { @MainActor [weak self] in
-            guard let self else { return }
-
-            // Recursive observation pattern
-            withObservationTracking {
-                _ = self.settings.showMilkdropWindow
-            } onChange: {
-                Task { @MainActor [weak self] in
-                    guard let self else { return }
-                    AppLog.debug(.window, "showMilkdropWindow changed to \(self.settings.showMilkdropWindow)")
-                    // Only show Milkdrop window after initial windows are presented
-                    if self.settings.showMilkdropWindow {
-                        if self.hasPresentedInitialWindows {
-                            self.showMilkdrop()
-                        }
-                        // If windows not ready yet, setting will be honored in presentInitialWindows()
-                    } else {
-                        self.hideMilkdrop()
-                    }
-                    self.setupMilkdropWindowObserver()  // Re-establish observer
-                }
-            }
-        }
+        // settingsObserver.stop() is not callable from nonisolated deinit;
+        // tasks hold [weak self] references so they will naturally terminate.
     }
 
     // MARK: - Window Resize (forwarded to WindowResizeController)

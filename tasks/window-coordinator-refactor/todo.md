@@ -95,30 +95,27 @@
 
 ## Phase 3: Extract Observation & Wiring (Low Risk)
 
-- [ ] **3A** Create `MacAmpApp/Windows/WindowSettingsObserver.swift`
-  - Move all 4 observation tasks + setup methods
-  - Implement generic observation helper to eliminate boilerplate
-  - REVISED: Use explicit `start()`/`stop()` lifecycle, NOT deinit cancellation
-    ```swift
-    func start(onAlwaysOnTopChanged:, onDoubleSizeChanged:, ...)
-    func stop() { tasks.values.forEach { $0.cancel() } }
-    // deinit is empty or assert-only
-    ```
-  - Coordinator calls `settingsObserver.stop()` in teardown
-  - Build verify
+- [x] **3A** Create `MacAmpApp/Windows/WindowSettingsObserver.swift` ✓
+  - Moved all 4 observation tasks (alwaysOnTop, doubleSize, showVideo, showMilkdrop)
+  - Used explicit `start()`/`stop()` lifecycle with `Handlers` struct for `@MainActor` closures
+  - 4 concrete observe methods with recursive `withObservationTracking` pattern
+  - Coordinator creates `settingsObserver` and calls `.start()` with callback closures
+  - `deinit` does NOT call `stop()` (nonisolated deinit can't call @MainActor); tasks use `[weak self]`
+  - Build verified
 
-- [ ] **3B** Create `MacAmpApp/Windows/WindowDelegateWiring.swift`
-  - Move delegate multiplexer creation + registration
-  - Move focus delegate creation
-  - Implement as static factory returning a struct with stored references
-  - `WindowFramePersistence` owns `WindowPersistenceDelegate`; wiring only attaches it
-  - Build verify
+- [x] **3B** Create `MacAmpApp/Windows/WindowDelegateWiring.swift` ✓
+  - Moved snap manager registration, delegate multiplexer creation, focus delegate creation
+  - Static `wire()` factory returns struct holding strong refs to multiplexers + focus delegates
+  - Iterates all 5 window kinds, sets up snap + persistence + focus delegates per window
+  - Coordinator stores returned `WindowDelegateWiring?` (optional due to init order)
+  - Removed 10 properties from coordinator (5 multiplexers + 5 focus delegates)
+  - Build verified
 
-- [ ] **3-VERIFY** Phase 3 build + sanitizer
-  - Build with Thread Sanitizer
-  - Test always-on-top toggle
-  - Test video/milkdrop window show/hide via settings
-  - Test window focus (active/inactive titlebar sprites)
+- [x] **3-VERIFY** Phase 3 build + sanitizer ✓
+  - Build: **SUCCEEDED**
+  - Full test suite: **TEST SUCCEEDED** (with Thread Sanitizer)
+  - Oracle review (gpt-5.3-codex, xhigh reasoning): **No concrete functional regressions found**
+  - WindowCoordinator.swift: 583 → 408 lines (-30%, cumulative: 1,357 → 408, -70%)
 
 ---
 

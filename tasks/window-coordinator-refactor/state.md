@@ -1,8 +1,8 @@
 # Task State: WindowCoordinator.swift Refactoring
 
-## Current Phase: Phase 2 Complete
+## Current Phase: Phase 3 Complete
 
-## Status: Ready for Phase 3 (Extract Observation & Wiring)
+## Status: Ready for Phase 4 (Layout Extension)
 
 ## Branch: `refactor/window-coordinator-decomposition`
 
@@ -77,19 +77,53 @@
 - **Pre-implementation:** gpt-5.3-codex, reasoningEffort: xhigh -> REVISE then proceed (revisions applied)
 - **Post-Phase 1:** gpt-5.3-codex, reasoningEffort: xhigh -> 1 finding (P2: test build phase), fixed
 - **Post-Phase 2:** gpt-5.3-codex, reasoningEffort: xhigh -> No concrete defects found
+- **Post-Phase 3:** gpt-5.3-codex, reasoningEffort: xhigh -> No concrete functional regressions found
+
+## Phase 3 Results (In Progress)
+
+### 3A: WindowSettingsObserver.swift - COMPLETE
+| File | Lines | Purpose |
+|------|-------|---------|
+| `MacAmpApp/Windows/WindowSettingsObserver.swift` | 114 | Settings observation with start/stop lifecycle |
+
+- Moved 4 observation tasks from coordinator (alwaysOnTop, doubleSize, showVideo, showMilkdrop)
+- Stores `@MainActor` closures in `Handlers` struct
+- Uses recursive `withObservationTracking` pattern with `[weak self]` captures
+- Coordinator calls `.start()` with callback closures in init
+- Build: **SUCCEEDED**
+
+### 3B: WindowDelegateWiring.swift - COMPLETE
+| File | Lines | Purpose |
+|------|-------|---------|
+| `MacAmpApp/Windows/WindowDelegateWiring.swift` | 56 | Static factory for delegate multiplexer + focus delegate wiring |
+
+- Static `wire()` factory returns struct with strong refs to multiplexers + focus delegates
+- Iterates all 5 window kinds, registers snap manager + persistence + focus delegates
+- Coordinator stores as `WindowDelegateWiring?` (optional due to init ordering)
+- Removed 10 properties from coordinator (5 multiplexers + 5 focus delegates)
+- Build: **SUCCEEDED**
+
+### 3-VERIFY: PASSED
+- Build: **SUCCEEDED**
+- Full test suite: **TEST SUCCEEDED** (with Thread Sanitizer)
+- Oracle review (gpt-5.3-codex, xhigh reasoning): **No concrete functional regressions found**
 
 ## Line Count Summary
 | File | Lines |
 |------|-------|
-| WindowCoordinator.swift | 583 |
+| WindowCoordinator.swift | 408 |
 | WindowRegistry.swift | 83 |
-| WindowFramePersistence.swift | 145 |
+| WindowFramePersistence.swift | 146 |
 | WindowVisibilityController.swift | 161 |
-| WindowResizeController.swift | 313 |
-| **Total** | **1,285** |
+| WindowResizeController.swift | 312 |
+| WindowSettingsObserver.swift | 114 |
+| WindowDelegateWiring.swift | 56 |
+| WindowDockingTypes.swift | 50 |
+| WindowDockingGeometry.swift | 109 |
+| WindowFrameStore.swift | 65 |
+| **Total** | **1,504** |
 
 ## Next Steps
-1. Commit Phase 2 changes
-2. Implement Phase 3A: Extract WindowSettingsObserver.swift
-3. Implement Phase 3B: Extract WindowDelegateWiring.swift
-4. Run 3-VERIFY: Full build + tests + Oracle review
+1. Commit Phase 3 changes
+2. Implement Phase 4: Extract WindowCoordinator+Layout.swift extension
+3. Post-refactoring: update docs, final Oracle review

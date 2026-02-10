@@ -111,6 +111,8 @@
 		A1B2C3D401020306E5F60708 /* WindowFramePersistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D401020307E5F60708 /* WindowFramePersistence.swift */; };
 		A1B2C3D401020308E5F60708 /* WindowVisibilityController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D401020309E5F60708 /* WindowVisibilityController.swift */; };
 		A1B2C3D40102030AE5F60708 /* WindowResizeController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40102030BE5F60708 /* WindowResizeController.swift */; };
+		A1B2C3D40102030CE5F60708 /* WindowSettingsObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40102030DE5F60708 /* WindowSettingsObserver.swift */; };
+		A1B2C3D40102030EE5F60708 /* WindowDelegateWiring.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40102030FE5F60708 /* WindowDelegateWiring.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -230,6 +232,8 @@
 		A1B2C3D401020307E5F60708 /* WindowFramePersistence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowFramePersistence.swift; sourceTree = "<group>"; };
 		A1B2C3D401020309E5F60708 /* WindowVisibilityController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowVisibilityController.swift; sourceTree = "<group>"; };
 		A1B2C3D40102030BE5F60708 /* WindowResizeController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowResizeController.swift; sourceTree = "<group>"; };
+		A1B2C3D40102030DE5F60708 /* WindowSettingsObserver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowSettingsObserver.swift; sourceTree = "<group>"; };
+		A1B2C3D40102030FE5F60708 /* WindowDelegateWiring.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowDelegateWiring.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -277,6 +281,8 @@
 				A1B2C3D401020307E5F60708 /* WindowFramePersistence.swift */,
 				A1B2C3D401020309E5F60708 /* WindowVisibilityController.swift */,
 				A1B2C3D40102030BE5F60708 /* WindowResizeController.swift */,
+				A1B2C3D40102030DE5F60708 /* WindowSettingsObserver.swift */,
+				A1B2C3D40102030FE5F60708 /* WindowDelegateWiring.swift */,
 				36CAB62E2EC258AD00902330 /* WinampMilkdropWindowController.swift */,
 				36CAB62F2EC258AD00902330 /* WinampVideoWindowController.swift */,
 				366BB1792EC03F9B006162E2 /* BorderlessWindow.swift */,
@@ -659,6 +665,8 @@
 				A1B2C3D401020306E5F60708 /* WindowFramePersistence.swift in Sources */,
 				A1B2C3D401020308E5F60708 /* WindowVisibilityController.swift in Sources */,
 				A1B2C3D40102030AE5F60708 /* WindowResizeController.swift in Sources */,
+				A1B2C3D40102030CE5F60708 /* WindowSettingsObserver.swift in Sources */,
+				A1B2C3D40102030EE5F60708 /* WindowDelegateWiring.swift in Sources */,
 				36CAB6262EC13E3D00902330 /* WinampTitlebarDragHandle.swift in Sources */,
 				36CAB6272EC13E3D00902330 /* TitlebarDragCaptureView.swift in Sources */,
 				47C40C273D4B4CD3804B3224 /* WindowSpec.swift in Sources */,
