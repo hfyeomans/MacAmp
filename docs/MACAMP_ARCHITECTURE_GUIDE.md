@@ -1,8 +1,8 @@
 # MacAmp Complete Architecture Guide
 
-**Version:** 2.3.0
-**Date:** 2026-02-07
-**Project State:** Production-Ready (5-Window System, Video Playback, Swift 6, macOS 15+/26+, AudioPlayer Decomposition)
+**Version:** 2.4.0
+**Date:** 2026-02-09
+**Project State:** Production-Ready (5-Window System, WindowCoordinator Refactoring, Swift 6, macOS 15+/26+)
 **Purpose:** Deep technical reference for developers joining or maintaining MacAmp
 
 ---
@@ -79,6 +79,18 @@ Deployment:               Developer ID signed, notarization-ready
 │   - VisualizerPipeline │   1   │   525 │ Mechanism    │
 │   - StreamPlayer       │   1   │   199 │ Mechanism    │
 │   - PlaybackCoord.     │   1   │   352 │ Mechanism    │
+│ Window Management      │  11   │ 1,470 │ Production   │
+│   - WindowCoordinator  │   1   │   223 │ Bridge/Facade│
+│   - Coordinator+Layout │   1   │   153 │ Bridge       │
+│   - WindowRegistry     │   1   │    83 │ Bridge       │
+│   - FramePersistence   │   1   │   146 │ Bridge       │
+│   - VisibilityCtrl     │   1   │   161 │ Bridge       │
+│   - ResizeController   │   1   │   312 │ Bridge       │
+│   - SettingsObserver   │   1   │   114 │ Bridge       │
+│   - DelegateWiring     │   1   │    54 │ Bridge       │
+│   - DockingTypes       │   1   │    50 │ Mechanism    │
+│   - DockingGeometry    │   1   │   109 │ Mechanism    │
+│   - FrameStore         │   1   │    65 │ Mechanism    │
 │ Skin System            │   6   │ 2,134 │ Production   │
 │ UI Views               │  12   │ 3,456 │ Production   │
 │ State Management       │   4   │   987 │ Production   │
@@ -132,6 +144,27 @@ Deployment:               Developer ID signed, notarization-ready
    - Full Swift 6 strict concurrency compliance (Sendable, @MainActor, Task.detached)
    - Background I/O for preset persistence (fire-and-forget pattern)
    - Oracle review: 10/10 quality gate achieved
+
+10. **WindowCoordinator Refactoring (February 2026)**: Facade + Composition decomposition
+   - Reduced WindowCoordinator from 1,357 to 223 lines (-84%)
+   - Extracted 10 focused types using Facade + Composition pattern:
+     - **WindowRegistry** (83 lines): Window ownership and lookup
+     - **WindowFramePersistence** (146 lines): Frame save/load/suppression
+     - **WindowVisibilityController** (161 lines): Show/hide/toggle + @Observable state
+     - **WindowResizeController** (312 lines): Resize + docking-aware layout
+     - **WindowSettingsObserver** (114 lines): Settings observation lifecycle
+     - **WindowDelegateWiring** (54 lines): Delegate setup static factory
+     - **WindowDockingTypes** (50 lines): Sendable value types
+     - **WindowDockingGeometry** (109 lines): Pure geometry functions (nonisolated)
+     - **WindowFrameStore** (65 lines): UserDefaults persistence wrapper
+     - **WindowCoordinator+Layout** (153 lines): Initialization/presentation extension
+   - Acyclic dependency graph (no controller-to-controller dependencies)
+   - 5 Oracle reviews (gpt-5.3-codex, xhigh reasoning), all passed
+   - 2 critical concurrency bugs found and fixed (debounce cancellation, observer lifecycle)
+   - Swift 6.2 compliance: Grade A+ (95/100)
+   - Thread Sanitizer clean on all phases
+   - 10 unit tests added for pure types
+   - See MULTI_WINDOW_ARCHITECTURE.md §10 for complete details
 
 ---
 
@@ -918,6 +951,28 @@ MacAmpApp/
 │   ├── StreamPlayer.swift             (existing) - Internet radio
 │   └── PlaybackCoordinator.swift      (existing) - Backend orchestration
 │
+├── ViewModels/
+│   ├── WindowCoordinator.swift        (223 lines) - Window management facade
+│   ├── WindowCoordinator+Layout.swift (153 lines) - Layout/presentation extension
+│   ├── SkinManager.swift              (existing) - Skin loading
+│   └── DockingController.swift        (existing) - Window docking
+│
+├── Windows/
+│   ├── WindowRegistry.swift           (83 lines) - Window ownership
+│   ├── WindowFramePersistence.swift   (146 lines) - Frame persistence
+│   ├── WindowVisibilityController.swift (161 lines) - Visibility control
+│   ├── WindowResizeController.swift   (312 lines) - Resize + docking
+│   ├── WindowSettingsObserver.swift   (114 lines) - Settings observation
+│   ├── WindowDelegateWiring.swift     (54 lines) - Delegate factory
+│   ├── WindowDockingTypes.swift       (50 lines) - Value types
+│   ├── WindowDockingGeometry.swift    (109 lines) - Pure geometry
+│   ├── WindowFrameStore.swift         (65 lines) - UserDefaults wrapper
+│   ├── WinampMainWindowController.swift (existing)
+│   ├── WinampEqualizerWindowController.swift (existing)
+│   ├── WinampPlaylistWindowController.swift (existing)
+│   ├── WinampVideoWindowController.swift (existing)
+│   └── WinampMilkdropWindowController.swift (existing)
+│
 ├── Models/
 │   ├── Track.swift                    (42 lines) - Track data model (Sendable)
 │   ├── EQPreset.swift                 (existing, + Sendable)
@@ -1682,65 +1737,131 @@ For complete documentation, see: `docs/WINDOW_FOCUS_ARCHITECTURE.md`
 
 MacAmp's window management evolved from a 3-window system (Main, Equalizer, Playlist) to a complete 5-window multimedia stack during TASK 2 implementation.
 
-### Window Controller Architecture
+### Window Controller Architecture (Post-Refactoring, Feb 2026)
+
+**Note:** As of February 2026, WindowCoordinator was refactored from a 1,357-line god object into an 11-file Facade + Composition architecture. See MULTI_WINDOW_ARCHITECTURE.md §10 for complete details.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                     WindowCoordinator                        │
-│                  "Central window orchestrator"                │
+│              WindowCoordinator (Facade, 223 lines)           │
+│                  "Composition root + API forwarding"          │
 │                                                              │
-│ Controllers:                                                 │
+│ Composed Controllers:                                       │
+│  • registry: WindowRegistry (owns 5 NSWindowControllers)   │
+│  • framePersistence: WindowFramePersistence                │
+│  • visibility: WindowVisibilityController (@Observable)    │
+│  • resizeController: WindowResizeController                │
+│  • settingsObserver: WindowSettingsObserver (lifecycle)    │
+│  • delegateWiring: WindowDelegateWiring (static factory)   │
+├──────────────────────────────────────────────────────────────┤
+│                      WindowRegistry (83 lines)               │
+│                   "Window ownership layer"                   │
+│                                                              │
+│ NSWindowController instances (strong references):           │
 │  • mainController:     WinampMainWindowController           │
 │  • eqController:       WinampEqualizerWindowController      │
 │  • playlistController: WinampPlaylistWindowController       │
 │  • videoController:    WinampVideoWindowController          │
 │  • milkdropController: WinampMilkdropWindowController       │
 │                                                              │
-│ Multiplexers (stored as properties):                        │
-│  • mainDelegateMultiplexer                                  │
-│  • eqDelegateMultiplexer                                    │
-│  • playlistDelegateMultiplexer                              │
-│  • videoDelegateMultiplexer                                 │
-│  • milkdropDelegateMultiplexer                              │
+│ Provides:                                                    │
+│  • window(for: WindowKind) -> NSWindow?                     │
+│  • windowKind(for: NSWindow) -> WindowKind?                 │
+│  • forEachWindow(_ body: (NSWindow, WindowKind) -> Void)    │
 ├──────────────────────────────────────────────────────────────┤
-│                  WindowDelegateMultiplexer                   │
-│             "Composites multiple NSWindowDelegate"           │
+│              WindowDelegateWiring (54 lines)                 │
+│              "Static factory for delegate setup"             │
 │                                                              │
-│ For each window, combines:                                  │
-│  • WindowFocusDelegate (focus tracking)                     │
-│  • WindowPersistenceDelegate (position saving)              │
-│  • WindowSnapManager (magnetic docking)                     │
+│ Manages (via WindowDelegateMultiplexer):                    │
+│  • focusDelegates: [WindowFocusDelegate] (5 instances)      │
+│  • multiplexers: [WindowDelegateMultiplexer] (5 instances)  │
+│                                                              │
+│ Static Factory Pattern:                                      │
+│  wire(registry:persistenceDelegate:windowFocusState:)        │
+│    → Iterates all 5 windows                                 │
+│    → Registers with WindowSnapManager                       │
+│    → Creates multiplexer combining:                         │
+│        • WindowSnapManager.shared (magnetic snapping)       │
+│        • WindowPersistenceDelegate (frame saving)           │
+│        • WindowFocusDelegate (focus tracking)               │
+│    → Returns struct with strong references                  │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Window Lifecycle Management
+**Dependency Graph:**
+```
+WindowCoordinator
+    ├── WindowRegistry (no deps)
+    ├── WindowFramePersistence (depends on: WindowRegistry, WindowFrameStore)
+    ├── WindowVisibilityController (depends on: WindowRegistry, AppSettings)
+    ├── WindowResizeController (depends on: WindowRegistry, WindowFramePersistence)
+    ├── WindowSettingsObserver (depends on: AppSettings only)
+    └── WindowDelegateWiring (depends on: WindowRegistry, persistence, focus state)
+
+All acyclic - no controller-to-controller dependencies.
+```
+
+### Window Lifecycle Management (Post-Refactoring)
+
+**Refactored Feb 2026:** Window ownership moved to WindowRegistry, visibility to WindowVisibilityController, delegate wiring to WindowDelegateWiring.
 
 ```swift
-// WindowCoordinator manages all 5 windows
+// WindowCoordinator.swift (223 lines) - Facade pattern
 @MainActor
 @Observable
 final class WindowCoordinator {
-    // Controllers (strong references)
+    // Composed controllers
+    let registry: WindowRegistry  // Owns 5 NSWindowController instances
+    let visibility: WindowVisibilityController  // Show/hide logic (@Observable)
+    private let settingsObserver: WindowSettingsObserver  // Observes 4 settings
+    private var delegateWiring: WindowDelegateWiring?  // Holds multiplexers + focus delegates
+
+    // Forwarding methods (facade API)
+    func showVideo() { visibility.showVideo() }
+    func showMilkdrop() { visibility.showMilkdrop() }
+    func minimizeKeyWindow() { visibility.minimizeKeyWindow() }
+
+    // Forwarding properties (@Observable chaining)
+    var isEQWindowVisible: Bool {
+        get { visibility.isEQWindowVisible }
+        set { visibility.isEQWindowVisible = newValue }
+    }
+
+    var mainWindow: NSWindow? { registry.mainWindow }
+    var videoWindow: NSWindow? { registry.videoWindow }
+}
+```
+
+**WindowRegistry.swift (83 lines) - Window ownership:**
+```swift
+@MainActor
+final class WindowRegistry {
     private let mainController: NSWindowController
     private let eqController: NSWindowController
     private let playlistController: NSWindowController
     private let videoController: NSWindowController
     private let milkdropController: NSWindowController
 
-    // Delegate multiplexers (must store - NSWindow.delegate is weak!)
-    private var mainDelegateMultiplexer: WindowDelegateMultiplexer?
-    private var videoDelegateMultiplexer: WindowDelegateMultiplexer?
-    // ... etc for all 5 windows
+    var mainWindow: NSWindow? { mainController.window }
+    func window(for kind: WindowKind) -> NSWindow?
+    func windowKind(for window: NSWindow) -> WindowKind?
+}
+```
 
-    // Window visibility control
-    func showVideoWindow() {
-        videoController.showWindow(nil)
-        settings.isVideoWindowOpen = true
-    }
+**WindowDelegateWiring.swift (54 lines) - Static factory:**
+```swift
+@MainActor
+struct WindowDelegateWiring {
+    let focusDelegates: [WindowFocusDelegate]  // 5 instances
+    let multiplexers: [WindowDelegateMultiplexer]  // 5 instances
 
-    func showMilkdropWindow() {
-        milkdropController.showWindow(nil)
-        settings.isMilkdropWindowOpen = true
+    static func wire(
+        registry: WindowRegistry,
+        persistenceDelegate: WindowPersistenceDelegate?,
+        windowFocusState: WindowFocusState
+    ) -> WindowDelegateWiring {
+        // Iterates all 5 windows, sets up snap + persistence + focus delegates
+        // Returns struct with strong references (NSWindow.delegate is weak)
     }
 }
 ```
@@ -4449,11 +4570,20 @@ MacAmpApp/
 │       └── SkinnedText.swift       # Bitmap font rendering
 │
 ├── Windows/
-│   ├── WinampMainWindowController.swift     # NSWindowController for main
+│   ├── WindowRegistry.swift                  # Window ownership + lookup (83 lines)
+│   ├── WindowFramePersistence.swift          # Frame save/load/suppress (146 lines)
+│   ├── WindowVisibilityController.swift      # Show/hide/toggle (@Observable, 161 lines)
+│   ├── WindowResizeController.swift          # Resize + docking (312 lines)
+│   ├── WindowSettingsObserver.swift          # Settings observation (114 lines)
+│   ├── WindowDelegateWiring.swift            # Delegate factory (54 lines)
+│   ├── WindowDockingTypes.swift              # Value types (Sendable, 50 lines)
+│   ├── WindowDockingGeometry.swift           # Pure geometry (nonisolated, 109 lines)
+│   ├── WindowFrameStore.swift                # UserDefaults persistence (65 lines)
+│   ├── WinampMainWindowController.swift      # NSWindowController for main
 │   ├── WinampEqualizerWindowController.swift # NSWindowController for EQ
 │   ├── WinampPlaylistWindowController.swift  # NSWindowController for playlist
-│   ├── WinampVideoWindowController.swift    # NSWindowController for video
-│   └── WinampMilkdropWindowController.swift # NSWindowController for milkdrop
+│   ├── WinampVideoWindowController.swift     # NSWindowController for video
+│   └── WinampMilkdropWindowController.swift  # NSWindowController for milkdrop
 │
 └── MacAmpApp.swift                 # App entry point, DI setup
 ```
@@ -4602,4 +4732,11 @@ Welcome to MacAmp. May your audio be crisp and your skins be pixel-perfect.
 
 ---
 
-*Document Version: 2.2.0 | Last Updated: 2026-01-11 | Lines: 4,555*
+*Document Version: 2.4.0 | Last Updated: 2026-02-09 | Lines: 4,555*
+
+**Recent Updates (v2.4.0 - 2026-02-09):**
+- Added WindowCoordinator refactoring to Recent Architectural Changes (#10)
+- Updated Component Breakdown table with Window Management section (11 files, 1,470 lines)
+- Updated Five-Window NSWindowController Stack with post-refactoring architecture
+- Updated File Structure Quick Reference with Windows/ directory breakdown
+- Cross-referenced MULTI_WINDOW_ARCHITECTURE.md §10 for refactoring details

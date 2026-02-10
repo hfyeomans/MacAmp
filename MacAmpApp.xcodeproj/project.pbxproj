@@ -102,6 +102,18 @@
 		EE878CCB3C1E4F7801C5430E /* DockingController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74EDF33D12E79F86166AF268 /* DockingController.swift */; };
 		FF66EE55DD44CC33BB22AA11 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA11BB22CC33DD44EE55FF66 /* Assets.xcassets */; };
 		D4E5F60708192A3B4C5D6E70 /* Track.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3D4E5F607081A2B3C4D5E6F /* Track.swift */; };
+		D8827B553E2354A0B7AA0D4E /* WindowDockingTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5A04FF893A62E7E959F676F /* WindowDockingTypes.swift */; };
+		5C5B27A9956CC1009650D9BE /* WindowDockingGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14B116E7CA7F5BF6EABD072F /* WindowDockingGeometry.swift */; };
+		582B7E4749BC2B27907F4B94 /* WindowFrameStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34B7E7228958068656E1BA06 /* WindowFrameStore.swift */; };
+		095F23474597A1E26C0CDDFD /* WindowDockingGeometryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0D545E5FE5EEBF09B4B5E3 /* WindowDockingGeometryTests.swift */; };
+		2E7AF1F816A6079309895544 /* WindowFrameStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C350AB718032EB3008D4038 /* WindowFrameStoreTests.swift */; };
+		A1B2C3D401020304E5F60708 /* WindowRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D401020305E5F60708 /* WindowRegistry.swift */; };
+		A1B2C3D401020306E5F60708 /* WindowFramePersistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D401020307E5F60708 /* WindowFramePersistence.swift */; };
+		A1B2C3D401020308E5F60708 /* WindowVisibilityController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D401020309E5F60708 /* WindowVisibilityController.swift */; };
+		A1B2C3D40102030AE5F60708 /* WindowResizeController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40102030BE5F60708 /* WindowResizeController.swift */; };
+		A1B2C3D40102030CE5F60708 /* WindowSettingsObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40102030DE5F60708 /* WindowSettingsObserver.swift */; };
+		A1B2C3D40102030EE5F60708 /* WindowDelegateWiring.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40102030FE5F60708 /* WindowDelegateWiring.swift */; };
+		A1B2C3D401020310E5F60708 /* WindowCoordinator+Layout.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D401020311E5F60708 /* WindowCoordinator+Layout.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -212,6 +224,18 @@
 		FDF85EA8990A038079FC0CC3 /* EQF.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EQF.swift; sourceTree = "<group>"; };
 		b220e925d4d54168a0d0f84b /* SpriteResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpriteResolver.swift; sourceTree = "<group>"; };
 		C3D4E5F607081A2B3C4D5E6F /* Track.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Track.swift; sourceTree = "<group>"; };
+		C5A04FF893A62E7E959F676F /* WindowDockingTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowDockingTypes.swift; sourceTree = "<group>"; };
+		14B116E7CA7F5BF6EABD072F /* WindowDockingGeometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowDockingGeometry.swift; sourceTree = "<group>"; };
+		34B7E7228958068656E1BA06 /* WindowFrameStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowFrameStore.swift; sourceTree = "<group>"; };
+		FF0D545E5FE5EEBF09B4B5E3 /* WindowDockingGeometryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowDockingGeometryTests.swift; sourceTree = "<group>"; };
+		2C350AB718032EB3008D4038 /* WindowFrameStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowFrameStoreTests.swift; sourceTree = "<group>"; };
+		A1B2C3D401020305E5F60708 /* WindowRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowRegistry.swift; sourceTree = "<group>"; };
+		A1B2C3D401020307E5F60708 /* WindowFramePersistence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowFramePersistence.swift; sourceTree = "<group>"; };
+		A1B2C3D401020309E5F60708 /* WindowVisibilityController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowVisibilityController.swift; sourceTree = "<group>"; };
+		A1B2C3D40102030BE5F60708 /* WindowResizeController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowResizeController.swift; sourceTree = "<group>"; };
+		A1B2C3D40102030DE5F60708 /* WindowSettingsObserver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowSettingsObserver.swift; sourceTree = "<group>"; };
+		A1B2C3D40102030FE5F60708 /* WindowDelegateWiring.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowDelegateWiring.swift; sourceTree = "<group>"; };
+		A1B2C3D401020311E5F60708 /* WindowCoordinator+Layout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WindowCoordinator+Layout.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -252,6 +276,15 @@
 		366BB1752EC03A18006162E2 /* Windows */ = {
 			isa = PBXGroup;
 			children = (
+				C5A04FF893A62E7E959F676F /* WindowDockingTypes.swift */,
+				14B116E7CA7F5BF6EABD072F /* WindowDockingGeometry.swift */,
+				34B7E7228958068656E1BA06 /* WindowFrameStore.swift */,
+				A1B2C3D401020305E5F60708 /* WindowRegistry.swift */,
+				A1B2C3D401020307E5F60708 /* WindowFramePersistence.swift */,
+				A1B2C3D401020309E5F60708 /* WindowVisibilityController.swift */,
+				A1B2C3D40102030BE5F60708 /* WindowResizeController.swift */,
+				A1B2C3D40102030DE5F60708 /* WindowSettingsObserver.swift */,
+				A1B2C3D40102030FE5F60708 /* WindowDelegateWiring.swift */,
 				36CAB62E2EC258AD00902330 /* WinampMilkdropWindowController.swift */,
 				36CAB62F2EC258AD00902330 /* WinampVideoWindowController.swift */,
 				366BB1792EC03F9B006162E2 /* BorderlessWindow.swift */,
@@ -349,6 +382,8 @@
 		A8F1C1A0F5D7413A9A0B0021 /* MacAmpTests */ = {
 			isa = PBXGroup;
 			children = (
+				FF0D545E5FE5EEBF09B4B5E3 /* WindowDockingGeometryTests.swift */,
+				2C350AB718032EB3008D4038 /* WindowFrameStoreTests.swift */,
 				A8F1C1A0F5D7413A9A0B0001 /* AppSettingsTests.swift */,
 				A8F1C1A0F5D7413A9A0B0002 /* AudioPlayerStateTests.swift */,
 				A8F1C1A0F5D7413A9A0B0003 /* DockingControllerTests.swift */,
@@ -457,6 +492,7 @@
 			isa = PBXGroup;
 			children = (
 				366BB16F2EC039E6006162E2 /* WindowCoordinator.swift */,
+				A1B2C3D401020311E5F60708 /* WindowCoordinator+Layout.swift */,
 				74EDF33D12E79F86166AF268 /* DockingController.swift */,
 				97F3E1419E231E886A674A64 /* SkinManager.swift */,
 				E0E380FCAD3E1BD185A02129 /* ButterchurnBridge.swift */,
@@ -610,6 +646,7 @@
 				3686476D2EC8336B009D1D8E /* VideoWindowSizeState.swift in Sources */,
 				A268E30146C34EF8B21FCC90 /* PlaylistWindowSizeState.swift in Sources */,
 				366BB1702EC039E6006162E2 /* WindowCoordinator.swift in Sources */,
+				A1B2C3D401020310E5F60708 /* WindowCoordinator+Layout.swift in Sources */,
 				36CAB6362EC25E4000902330 /* VideoWindowChromeView.swift in Sources */,
 				36CAB6302EC258AD00902330 /* WinampVideoWindowController.swift in Sources */,
 				36CAB6312EC258AD00902330 /* WinampMilkdropWindowController.swift in Sources */,
@@ -625,6 +662,15 @@
 				878F770AF1608311F0C9BA09 /* WindowAccessor.swift in Sources */,
 				7C97F7855F700CA55821BFD1 /* WindowSnapManager.swift in Sources */,
 				366BB17A2EC03F9B006162E2 /* BorderlessWindow.swift in Sources */,
+				D8827B553E2354A0B7AA0D4E /* WindowDockingTypes.swift in Sources */,
+				5C5B27A9956CC1009650D9BE /* WindowDockingGeometry.swift in Sources */,
+				582B7E4749BC2B27907F4B94 /* WindowFrameStore.swift in Sources */,
+				A1B2C3D401020304E5F60708 /* WindowRegistry.swift in Sources */,
+				A1B2C3D401020306E5F60708 /* WindowFramePersistence.swift in Sources */,
+				A1B2C3D401020308E5F60708 /* WindowVisibilityController.swift in Sources */,
+				A1B2C3D40102030AE5F60708 /* WindowResizeController.swift in Sources */,
+				A1B2C3D40102030CE5F60708 /* WindowSettingsObserver.swift in Sources */,
+				A1B2C3D40102030EE5F60708 /* WindowDelegateWiring.swift in Sources */,
 				36CAB6262EC13E3D00902330 /* WinampTitlebarDragHandle.swift in Sources */,
 				36CAB6272EC13E3D00902330 /* TitlebarDragCaptureView.swift in Sources */,
 				47C40C273D4B4CD3804B3224 /* WindowSpec.swift in Sources */,
@@ -652,6 +698,8 @@
 				A8F1C1A0F5D7413A9A0B0105 /* PlaylistNavigationTests.swift in Sources */,
 				A8F1C1A0F5D7413A9A0B0106 /* SkinManagerTests.swift in Sources */,
 				A8F1C1A0F5D7413A9A0B0107 /* SpriteResolverTests.swift in Sources */,
+				095F23474597A1E26C0CDDFD /* WindowDockingGeometryTests.swift in Sources */,
+				2E7AF1F816A6079309895544 /* WindowFrameStoreTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

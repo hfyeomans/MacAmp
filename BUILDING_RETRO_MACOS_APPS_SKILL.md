@@ -4874,6 +4874,879 @@ When building your next retro macOS app:
   - MainActor safety patterns with Task isolation
   - Thread Sanitizer workflow for concurrency testing
 
+### 23. Facade + Composition Refactoring: From God Object to Focused Types (February 2026)
+
+**Lesson from:** WindowCoordinator refactoring (1,357 → 223 lines, -84%)
+**Oracle Grade:** A (92/100) after fixes, A+ (95/100) Swift 6.2 compliance
+**Total Commits:** 5 commits over 4 phases + Oracle fixes
+**Files Created:** 10 new files + 1 extension + 2 test files
+
+#### The Problem: God Object Anti-Pattern
+
+**Symptoms of a God Object:**
+- Single file exceeds 1,000+ lines
+- 8-10+ orthogonal responsibilities in one class
+- Violates SwiftLint thresholds (type_body_length, function_body_length)
+- Impossible to unit test (too many dependencies)
+- Changes in one area ripple across entire file
+- New features require understanding the entire class
+
+**Real Example - WindowCoordinator.swift (Original):**
+```
+1,357 lines with 10 responsibilities:
+1. Window ownership (5 NSWindowController properties)
+2. Frame persistence (save/load positions, suppression)
+3. Window visibility (show/hide/toggle for all windows)
+4. Window resizing (double-size mode, docking-aware layout)
+5. Settings observation (4 recursive withObservationTracking tasks)
+6. Delegate wiring (5 multiplexers + 5 focus delegates)
+7. Layout initialization (default positions, stacking)
+8. Presentation lifecycle (skin loading, window presentation)
+9. Debug logging (position tracking)
+10. Pure geometry calculations (docking math)
+```
+
+#### Solution: Facade + Composition Pattern
+
+**Phase 1: Extract Pure Types (Zero Risk)**
+```swift
+// WindowDockingTypes.swift (50 lines)
+struct PlaylistAttachmentSnapshot: Sendable {
+    let anchor: WindowKind
+    let attachment: PlaylistAttachment
+}
+
+struct VideoAttachmentSnapshot: Sendable {
+    let anchor: WindowKind
+    let attachment: PlaylistAttachment
+}
+
+struct PlaylistDockingContext {
+    let anchor: WindowKind
+    let attachment: PlaylistAttachment
+    let source: DockingSource
+}
+```
+
+```swift
+// WindowDockingGeometry.swift (109 lines) - Pure functions, no state
+nonisolated struct WindowDockingGeometry {
+    static func determineAttachment(anchorFrame: NSRect, playlistFrame: NSRect, strict: Bool = true) -> PlaylistAttachment?
+    static func playlistOrigin(for attachment: PlaylistAttachment, anchorFrame: NSRect, playlistSize: NSSize) -> NSPoint
+    static func attachmentStillEligible(_ snapshot: PlaylistAttachmentSnapshot, anchorFrame: NSRect, playlistFrame: NSRect) -> Bool
+    static func anchorFrame(_ anchor: WindowKind, mainFrame: NSRect, eqFrame: NSRect, playlistFrame: NSRect? = nil) -> NSRect?
+}
+```
+
+```swift
+// WindowFrameStore.swift (65 lines) - UserDefaults persistence
+@MainActor
+final class WindowFrameStore {
+    private let defaults: UserDefaults
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+    }
+
+    func save(frame: NSRect, for kind: WindowKind)
+    func frame(for kind: WindowKind) -> PersistedWindowFrame?
+}
+```
+
+**Phase 2: Extract Controllers (Low-Medium Risk)**
+```swift
+// WindowRegistry.swift (83 lines) - Window ownership only
+@MainActor
+final class WindowRegistry {
+    private let mainController: NSWindowController
+    private let eqController: NSWindowController
+    private let playlistController: NSWindowController
+    private let videoController: NSWindowController
+    private let milkdropController: NSWindowController
+
+    var mainWindow: NSWindow? { mainController.window }
+    func windowKind(for window: NSWindow) -> WindowKind?
+    func forEachWindow(_ body: (NSWindow, WindowKind) -> Void)
+}
+```
+
+```swift
+// WindowFramePersistence.swift (146 lines) - Persistence only
+@MainActor
+final class WindowFramePersistence {
+    private let registry: WindowRegistry
+    private let windowFrameStore: WindowFrameStore
+    private var persistenceSuppressionCount = 0
+    private(set) var persistenceDelegate: WindowPersistenceDelegate?
+
+    func beginSuppressingPersistence()
+    func endSuppressingPersistence()
+    func persistAllWindowFrames()
+    func schedulePersistenceFlush()  // Debounced with Task cancellation
+    func applyPersistedWindowPositions() -> Bool
+}
+```
+
+```swift
+// WindowVisibilityController.swift (161 lines) - Visibility only
+@MainActor
+@Observable
+final class WindowVisibilityController {
+    var isEQWindowVisible: Bool = false
+    var isPlaylistWindowVisible: Bool = false
+
+    func showEQWindow()
+    func hideEQWindow()
+    func toggleEQWindowVisibility() -> Bool
+    func showAllWindows()
+    func minimizeKeyWindow()
+}
+```
+
+```swift
+// WindowResizeController.swift (312 lines) - Resize + docking only
+@MainActor
+final class WindowResizeController {
+    private let registry: WindowRegistry
+    private let persistence: WindowFramePersistence
+    private var lastPlaylistAttachment: PlaylistAttachmentSnapshot?
+
+    func resizeMainAndEQWindows(doubled: Bool, animated: Bool, persistResult: Bool)
+    func makePlaylistDockingContext(...) -> PlaylistDockingContext?
+    func updateVideoWindowSize(to: CGSize)
+    func showVideoResizePreview(...)
+}
+```
+
+**Phase 3: Extract Observation & Wiring (Low Risk)**
+```swift
+// WindowSettingsObserver.swift (114 lines) - Settings observation only
+@MainActor
+final class WindowSettingsObserver {
+    private let settings: AppSettings
+    private var tasks: [String: Task<Void, Never>] = [:]
+    private var handlers: Handlers?
+
+    private struct Handlers {
+        let onAlwaysOnTopChanged: @MainActor (Bool) -> Void
+        let onDoubleSizeChanged: @MainActor (Bool) -> Void
+        let onShowVideoChanged: @MainActor (Bool) -> Void
+        let onShowMilkdropChanged: @MainActor (Bool) -> Void
+    }
+
+    func start(onAlwaysOnTopChanged:, onDoubleSizeChanged:, ...)
+    func stop() { tasks.values.forEach { $0.cancel() } }
+}
+```
+
+**Key Pattern: Recursive withObservationTracking with Lifecycle**
+```swift
+private func observeAlwaysOnTop() {
+    tasks["alwaysOnTop"]?.cancel()  // 1. Cancel existing
+    tasks["alwaysOnTop"] = Task { @MainActor [weak self] in  // 2. Create new Task
+        guard let self else { return }  // 3. Check deallocation
+        withObservationTracking {  // 4. Observe property
+            _ = self.settings.isAlwaysOnTop
+        } onChange: {  // 5. One-shot onChange callback
+            Task { @MainActor [weak self] in  // 6. Nested Task for @Sendable context
+                guard let self, self.handlers != nil else { return }  // 7. Check lifecycle
+                self.handlers?.onAlwaysOnTopChanged(self.settings.isAlwaysOnTop)
+                self.observeAlwaysOnTop()  // 8. Re-establish (recursive)
+            }
+        }
+    }
+}
+```
+
+**Why Recursive:**
+- `withObservationTracking` is one-shot (fires onChange once, then stops)
+- Must call `observe*()` again in onChange to continue tracking
+- Nested Task required because onChange is `@Sendable` but handlers are `@MainActor`
+- handlers nil-check prevents re-registration after stop()
+
+**Future Migration (macOS 26+):**
+```swift
+// Cleaner AsyncSequence pattern (requires macOS 26+)
+func start(...) {
+    handlers = Handlers(...)
+    Task { @MainActor [weak self] in
+        guard let self else { return }
+        for await _ in Observations(\.isAlwaysOnTop, on: settings) {
+            guard handlers != nil else { break }
+            handlers?.onAlwaysOnTopChanged(settings.isAlwaysOnTop)
+        }
+    }
+}
+```
+
+```swift
+// WindowDelegateWiring.swift (54 lines) - Static factory pattern
+@MainActor
+struct WindowDelegateWiring {
+    let focusDelegates: [WindowFocusDelegate]
+    let multiplexers: [WindowDelegateMultiplexer]
+
+    static func wire(
+        registry: WindowRegistry,
+        persistenceDelegate: WindowPersistenceDelegate?,
+        windowFocusState: WindowFocusState
+    ) -> WindowDelegateWiring {
+        let windowKinds: [(WindowKind, NSWindow?)] = [
+            (.main, registry.mainWindow),
+            (.equalizer, registry.eqWindow),
+            (.playlist, registry.playlistWindow),
+            (.video, registry.videoWindow),
+            (.milkdrop, registry.milkdropWindow)
+        ]
+
+        var multiplexers: [WindowDelegateMultiplexer] = []
+        var focusDelegates: [WindowFocusDelegate] = []
+
+        for (kind, window) in windowKinds {
+            guard let window else { continue }
+            WindowSnapManager.shared.register(window: window, kind: kind)
+            let multiplexer = WindowDelegateMultiplexer()
+            multiplexer.add(delegate: WindowSnapManager.shared)
+            if let persistenceDelegate { multiplexer.add(delegate: persistenceDelegate) }
+            let focusDelegate = WindowFocusDelegate(kind: kind, focusState: windowFocusState)
+            multiplexer.add(delegate: focusDelegate)
+            window.delegate = multiplexer
+            multiplexers.append(multiplexer)
+            focusDelegates.append(focusDelegate)
+        }
+
+        return WindowDelegateWiring(focusDelegates: focusDelegates, multiplexers: multiplexers)
+    }
+}
+```
+
+**Why Static Factory:**
+- Encapsulates complex construction (60+ lines of boilerplate)
+- Returns struct with strong references (NSWindow.delegate is weak)
+- Iterates all 5 windows with identical setup pattern
+- Eliminates 10 properties (5 multiplexers + 5 focus delegates)
+
+**Phase 4: Layout Extension (Cosmetic)**
+```swift
+// WindowCoordinator+Layout.swift (153 lines) - Layout/initialization
+extension WindowCoordinator {
+    enum LayoutDefaults {
+        static let stackX: CGFloat = 100
+        static let mainY: CGFloat = 500
+    }
+
+    func configureWindows()
+    func setDefaultPositions()
+    func resetToDefaultStack()
+    func applyInitialWindowLayout()
+    func presentWindowsWhenReady()
+    func presentInitialWindows()
+    func debugLogWindowPositions(step: String)
+    var canPresentImmediately: Bool { ... }
+}
+```
+
+**Why Extension:**
+- Keeps main facade file focused on composition/forwarding
+- Layout is initialization-only, not core facade responsibility
+- Extensions can access `internal` members in same module
+- Cosmetic separation (doesn't change architecture)
+
+**Final Facade (223 lines):**
+```swift
+@MainActor
+@Observable
+final class WindowCoordinator {
+    // swiftlint:disable:next implicitly_unwrapped_optional
+    static var shared: WindowCoordinator!
+
+    // Composed controllers
+    let registry: WindowRegistry
+    let framePersistence: WindowFramePersistence
+    let visibility: WindowVisibilityController
+    let resizeController: WindowResizeController
+    private let settingsObserver: WindowSettingsObserver
+    private var delegateWiring: WindowDelegateWiring?
+
+    // Forwarding properties for @Observable chaining
+    var isEQWindowVisible: Bool {
+        get { visibility.isEQWindowVisible }
+        set { visibility.isEQWindowVisible = newValue }
+    }
+
+    // Forwarding methods (facade API)
+    func showEQWindow() { visibility.showEQWindow() }
+    func minimizeKeyWindow() { visibility.minimizeKeyWindow() }
+    func updateVideoWindowSize(to: CGSize) { resizeController.updateVideoWindowSize(to: size) }
+}
+```
+
+#### Critical Oracle Findings & Fixes
+
+**HIGH Priority - Debounce Cancellation Bug:**
+```swift
+// ❌ BEFORE: Cancelled tasks still executed
+func schedulePersistenceFlush() {
+    guard persistenceSuppressionCount == 0 else { return }
+    persistenceTask?.cancel()
+    persistenceTask = Task { @MainActor [weak self] in
+        try? await Task.sleep(for: .milliseconds(150))
+        self?.persistAllWindowFrames()  // ← Still executes after cancel!
+    }
+}
+
+// ✅ AFTER: Cancellation guard prevents execution
+func schedulePersistenceFlush() {
+    guard persistenceSuppressionCount == 0 else { return }
+    persistenceTask?.cancel()
+    persistenceTask = Task { @MainActor [weak self] in
+        try? await Task.sleep(for: .milliseconds(150))
+        guard !Task.isCancelled else { return }  // ← Stops here if cancelled
+        self?.persistAllWindowFrames()
+    }
+}
+```
+
+**Why This Matters:** Without the cancellation guard, rapid window movements cause multiple persistence writes. With 10 movements in 1 second, you'd get 10 debounced Tasks, all writing to UserDefaults. The cancellation guard ensures only the final Task executes.
+
+**MEDIUM Priority - Observer Lifecycle Bug:**
+```swift
+// ❌ BEFORE: onChange could fire after stop()
+} onChange: {
+    Task { @MainActor [weak self] in
+        guard let self else { return }
+        self.handlers?.onAlwaysOnTopChanged(...)  // ← handlers was nilled in stop()
+        self.observeAlwaysOnTop()  // ← Re-registers observation after stop()!
+    }
+}
+
+// ✅ AFTER: Lifecycle check prevents re-registration
+} onChange: {
+    Task { @MainActor [weak self] in
+        guard let self, self.handlers != nil else { return }  // ← Exit if stopped
+        self.handlers?.onAlwaysOnTopChanged(...)
+        self.observeAlwaysOnTop()
+    }
+}
+```
+
+**Why This Matters:** `withObservationTracking` onChange callbacks can fire asynchronously. If stop() is called between property change and onChange execution, the handler is nil but the Task still runs. Without the nil-check, observations continue re-registering after stop().
+
+#### Dependency Graph Rules (Acyclic)
+
+**Critical Principle:** NO controller-to-controller lateral dependencies. All coordination goes through the facade.
+
+```
+WindowCoordinator (facade/composition root)
+    ├── WindowRegistry              ← NO dependencies on other extracted types
+    ├── WindowFramePersistence      ← depends on: WindowRegistry, WindowFrameStore
+    ├── WindowVisibilityController  ← depends on: WindowRegistry, AppSettings
+    ├── WindowResizeController      ← depends on: WindowRegistry, WindowFramePersistence, WindowDockingGeometry
+    ├── WindowSettingsObserver      ← depends on: AppSettings only
+    └── WindowDelegateWiring        ← depends on: WindowRegistry, WindowFramePersistence, WindowFocusState
+
+Pure Types (no dependencies):
+    ├── WindowDockingTypes (value types)
+    ├── WindowDockingGeometry (static functions)
+    └── WindowFrameStore (UserDefaults wrapper)
+```
+
+**Violations to Avoid:**
+```swift
+// ❌ WRONG: Controller-to-controller dependency
+class WindowVisibilityController {
+    private let persistence: WindowFramePersistence  // ← Creates cycle risk
+
+    func showWindow() {
+        persistence.suppressPersistence { ... }  // ← Tight coupling
+    }
+}
+
+// ✅ CORRECT: Facade coordinates
+class WindowCoordinator {
+    let visibility: WindowVisibilityController
+    let persistence: WindowFramePersistence
+
+    func showWindowWithoutPersistence() {
+        persistence.beginSuppressingPersistence()
+        visibility.showWindow()
+        persistence.endSuppressingPersistence()
+    }
+}
+```
+
+#### Swift 6.2 Concurrency Patterns
+
+**1. nonisolated deinit Awareness**
+```swift
+@MainActor
+@Observable
+final class WindowCoordinator {
+    private let settingsObserver: WindowSettingsObserver
+
+    deinit {
+        // ❌ WRONG: Cannot call @MainActor method from nonisolated deinit
+        // settingsObserver.stop()  // Compiler error in Swift 6.2
+
+        // ✅ CORRECT: Tasks use [weak self], auto-terminate on dealloc
+        skinPresentationTask?.cancel()
+        // Comment explains why stop() isn't called
+    }
+}
+```
+
+**Why This Works:**
+- In Swift 6.2, `deinit` is `nonisolated` (cannot call `@MainActor` methods)
+- All observer Tasks use `[weak self]`
+- When WindowCoordinator deallocates, weak refs → nil
+- Tasks exit via `guard let self else { return }`
+- No memory leaks, no zombie tasks
+
+**2. Explicit @MainActor on Closures**
+```swift
+// Handlers struct with explicit isolation
+private struct Handlers {
+    let onAlwaysOnTopChanged: @MainActor (Bool) -> Void  // ← Explicit
+    let onDoubleSizeChanged: @MainActor (Bool) -> Void
+    let onShowVideoChanged: @MainActor (Bool) -> Void
+    let onShowMilkdropChanged: @MainActor (Bool) -> Void
+}
+
+// Prevents @Sendable violations in withObservationTracking
+```
+
+**3. @Observable Observation Chaining**
+```swift
+// Facade forwards observable properties for SwiftUI reactivity
+@MainActor
+@Observable
+final class WindowCoordinator {
+    let visibility: WindowVisibilityController  // ← Also @Observable
+
+    var isEQWindowVisible: Bool {
+        get { visibility.isEQWindowVisible }  // ← Chains observation
+        set { visibility.isEQWindowVisible = newValue }
+    }
+}
+
+// SwiftUI views can observe either facade or controller
+struct SomeView: View {
+    @Environment(WindowCoordinator.self) var coordinator
+
+    var body: some View {
+        if coordinator.isEQWindowVisible {  // ← Updates when visibility changes
+            Text("EQ is visible")
+        }
+    }
+}
+```
+
+#### Migration Strategy: Risk-Ordered Phased Approach
+
+**Phase Sequencing:**
+```
+Phase 1 (Zero Risk):
+  - Pure types (no state, no side effects)
+  - Unit tests added (10 tests for geometry + storage)
+  - Build verified after each extraction
+  - Oracle Grade: APPROVED with 1 finding (fixed)
+
+Phase 2 (Low-Medium Risk):
+  - Extract 4 controllers with clear SRP
+  - Facade forwards all methods (API preserved)
+  - Build + manual test after each controller
+  - Oracle Grade: APPROVED (no defects)
+
+Phase 3 (Low Risk):
+  - Extract observation boilerplate
+  - Extract delegate wiring factory
+  - Remove 16 properties from facade
+  - Oracle Grade: APPROVED (no regressions)
+
+Phase 4 (Cosmetic):
+  - Extract layout to extension
+  - Widen access on 3 properties (private → internal)
+  - Oracle Grade: APPROVED (no issues)
+
+Quality Gate (Post-Refactoring):
+  - Oracle comprehensive review (all 11 files)
+  - Found 2 HIGH/MEDIUM bugs, fixed immediately
+  - Swift 6.2 compliance review: Grade A+ (95/100)
+  - Final Oracle Grade: A (92/100)
+```
+
+**Commit Strategy:**
+```bash
+git commit -m "refactor: Phase 1 - Extract pure types from WindowCoordinator"
+git commit -m "refactor: Phase 2 - Extract 4 controllers from WindowCoordinator"
+git commit -m "refactor: Phase 3 - Extract WindowSettingsObserver and WindowDelegateWiring"
+git commit -m "refactor: Phase 4 - Extract WindowCoordinator+Layout extension"
+git commit -m "refactor: Fix Oracle findings and update documentation"
+```
+
+**Each phase:**
+1. Extract files
+2. Update pbxproj (4 sections per file)
+3. Build with `-enableThreadSanitizer YES`
+4. Run full test suite with TSan
+5. Oracle review (gpt-5.3-codex, reasoningEffort: xhigh)
+6. Fix findings immediately
+7. Commit only when clean
+
+#### Testing Patterns for Refactoring
+
+**1. Baseline Verification**
+```bash
+# Before refactoring starts
+xcodebuild test -project MacAmpApp.xcodeproj -scheme MacAmpApp \
+  -enableThreadSanitizer YES > baseline-test-results.txt 2>&1
+
+# Document: X tests pass, Y Thread Sanitizer warnings
+```
+
+**2. After Each Phase**
+```bash
+# Build verification
+xcodebuild -project MacAmpApp.xcodeproj -scheme MacAmpApp \
+  -configuration Debug -enableThreadSanitizer YES build
+
+# Test verification
+xcodebuild test -project MacAmpApp.xcodeproj -scheme MacAmpApp \
+  -configuration Debug -enableThreadSanitizer YES
+
+# Compare results to baseline (should be identical)
+```
+
+**3. Oracle Review Gate**
+```bash
+# Comprehensive review of all changes
+codex review --uncommitted --model gpt-5.3-codex
+
+# Or via MCP:
+mcp__codex-cli__review(uncommitted: true, model: "gpt-5.3-codex")
+```
+
+**4. Manual Functional Test**
+```
+After Phase 2 (controllers extracted):
+□ Load 3 different skins (verify rendering preserved)
+□ Toggle double-size mode (Ctrl+D)
+□ Show/hide EQ and Playlist windows
+□ Drag windows to test magnetic snapping
+□ Resize video/playlist windows
+□ Verify persistence (quit, relaunch, positions restored)
+□ Check always-on-top toggle
+```
+
+#### Access Control Patterns
+
+**Progressive Access Widening:**
+```swift
+// Phase 2: Extract controllers, keep tight access
+private let settings: AppSettings
+private let skinManager: SkinManager
+@ObservationIgnored private var skinPresentationTask: Task<Void, Never>?
+private var hasPresentedInitialWindows = false
+
+// Phase 4: Widen access for extension (same module)
+private let settings: AppSettings  // Still private (not used in extension)
+let skinManager: SkinManager  // Widened (extension uses canPresentImmediately)
+@ObservationIgnored var skinPresentationTask: Task<Void, Never>?  // Widened
+var hasPresentedInitialWindows = false  // Widened
+```
+
+**Rule:** Only widen access when actually needed. Start with `private`, widen to `internal` (no explicit keyword in Swift) only if extension/test requires it.
+
+#### Property Forwarding: When to Use vs Avoid
+
+**✅ When Forwarding is CORRECT:**
+```swift
+// @Observable property forwarding (observation chaining)
+var isEQWindowVisible: Bool {
+    get { visibility.isEQWindowVisible }
+    set { visibility.isEQWindowVisible = newValue }
+}
+```
+**Reason:** SwiftUI @Observable macro requires property access on the observed object. Direct access breaks observation.
+
+**❌ When Forwarding is ANTI-PATTERN:**
+```swift
+// ❌ DEPRECATED: One-line method forwarding wrapper
+private func schedulePersistenceFlush() {
+    framePersistence.schedulePersistenceFlush()
+}
+
+// ✅ BETTER: Direct composition access
+coordinator.framePersistence.schedulePersistenceFlush()
+```
+**Reason:** Adds indirection with zero value. Callers can access composed property directly.
+
+#### Dependency Injection Benefits
+
+**Before Refactoring (Untestable):**
+```swift
+// All singletons, no injection
+class WindowCoordinator {
+    private var windowFrameStore = WindowFrameStore()  // ← Cannot mock
+    private let snapManager = WindowSnapManager.shared  // ← Global state
+}
+```
+
+**After Refactoring (Testable):**
+```swift
+// Injectable dependencies
+final class WindowFramePersistence {
+    init(
+        registry: WindowRegistry,
+        settings: AppSettings,
+        windowFrameStore: WindowFrameStore = WindowFrameStore()  // ← Default parameter
+    )
+}
+
+final class WindowFrameStore {
+    init(defaults: UserDefaults = .standard)  // ← Injectable for tests
+}
+
+// In tests:
+let mockDefaults = UserDefaults(suiteName: "tests")!
+let mockStore = WindowFrameStore(defaults: mockDefaults)
+let persistence = WindowFramePersistence(registry: mockRegistry, settings: mockSettings, windowFrameStore: mockStore)
+```
+
+#### Modern Swift Architecture Patterns Demonstrated
+
+**1. Single Responsibility Principle**
+- Each file has ONE clear responsibility
+- 223-line facade vs 1,357-line god object
+- Easy to understand, easy to test
+
+**2. Dependency Inversion Principle**
+- High-level facade depends on abstractions (protocols/interfaces)
+- Low-level controllers depend on same abstractions
+- No controller knows about facade implementation
+
+**3. Open/Closed Principle**
+- Extension mechanism for layout (open for extension)
+- Controllers are `final` (closed for inheritance)
+- Composition enables extension without modification
+
+**4. Interface Segregation Principle**
+- WindowVisibilityController: Only visibility methods
+- WindowResizeController: Only resize methods
+- Clients depend on focused interfaces, not god object
+
+**5. Composition Over Inheritance**
+- Zero inheritance hierarchies (all `final class` or `struct`)
+- All behavior via composed objects
+- Loose coupling between components
+
+#### When to Apply This Pattern
+
+**Indicators You Need This Refactoring:**
+- Single file exceeds 800-1,000 lines
+- SwiftLint violations: `type_body_length`, `function_body_length`
+- 5+ distinct responsibilities in one class
+- Difficult to write focused unit tests
+- Changes in one area require understanding entire file
+- Multiple engineers can't work on file simultaneously
+- Code review takes >30 minutes per change
+
+**Refactoring Checklist:**
+- [ ] **Identify responsibilities** (aim for 8-10 distinct areas)
+- [ ] **Create dependency matrix** (map dependencies, ensure acyclic)
+- [ ] **Phase 1: Pure types** (value types, pure functions, no state)
+- [ ] **Add unit tests** for pure types (geometry, persistence, etc.)
+- [ ] **Phase 2: Controllers** (stateful but focused types)
+- [ ] **Preserve facade API** with computed property forwarding
+- [ ] **Phase 3: Boilerplate** (observation, wiring, utilities)
+- [ ] **Phase 4: Extensions** (cosmetic code organization)
+- [ ] **Oracle review** after each phase
+- [ ] **Fix findings** immediately (don't defer)
+- [ ] **Thread Sanitizer** verification on every phase
+- [ ] **Update documentation** with new architecture
+- [ ] **Final comprehensive review** (all files together)
+
+#### Anti-Patterns to Avoid
+
+**1. Big-Bang Refactoring**
+```bash
+# ❌ WRONG: Extract everything at once
+git commit -m "refactor: Decompose WindowCoordinator (10 files)"
+# Risk: Everything breaks, hard to debug, impossible to rollback
+
+# ✅ RIGHT: Incremental phases with verification
+git commit -m "refactor: Phase 1 - Extract pure types"
+git commit -m "refactor: Phase 2 - Extract 4 controllers"
+# Benefit: Each commit is independently verifiable and rollbackable
+```
+
+**2. Circular Dependencies**
+```swift
+// ❌ WRONG: Controllers depend on each other
+class WindowVisibilityController {
+    private let resizeController: WindowResizeController  // ← Circular!
+}
+
+class WindowResizeController {
+    private let visibilityController: WindowVisibilityController  // ← Cycle!
+}
+
+// ✅ CORRECT: Both depend on registry, coordinator orchestrates
+class WindowCoordinator {
+    let visibility: WindowVisibilityController
+    let resize: WindowResizeController
+
+    func showAndResize() {
+        visibility.show()  // Coordinator coordinates both
+        resize.resize()
+    }
+}
+```
+
+**3. Leaky Abstraction**
+```swift
+// ❌ WRONG: Exposing internal implementation details
+class WindowCoordinator {
+    let persistenceTask: Task<Void, Never>?  // ← Internal detail leaked
+    var persistenceSuppressionCount: Int  // ← Internal state exposed
+}
+
+// ✅ CORRECT: Only expose facade interface
+class WindowCoordinator {
+    let framePersistence: WindowFramePersistence  // ← Compose, don't leak
+
+    // Callers use: coordinator.framePersistence.schedulePersistenceFlush()
+}
+```
+
+**4. Premature Abstraction**
+```swift
+// ❌ WRONG: Protocol for single implementation
+protocol WindowPersistenceProtocol {
+    func persist()
+}
+
+class WindowFramePersistence: WindowPersistenceProtocol { ... }
+
+// ✅ CORRECT: Concrete type until second implementation exists
+final class WindowFramePersistence {
+    func persist()
+}
+
+// Add protocol when you have 2+ implementations
+```
+
+#### Oracle Consultation Best Practices
+
+**Multi-Phase Review Strategy:**
+```bash
+# After each phase (4 reviews)
+codex review --uncommitted --model gpt-5.3-codex --title "Phase N"
+
+# Final comprehensive (all files, 5th review)
+codex "@File1.swift @File2.swift ... @File11.swift
+Comprehensive architecture review of completed refactoring.
+Verify: dependency graph acyclic, Swift 6.2 compliance, facade pattern."
+```
+
+**Oracle Finding Priority:**
+- **HIGH**: Fix immediately before commit
+- **MEDIUM**: Fix immediately before commit
+- **LOW**: Document as "acceptable" or "deferred"
+
+**Real Results:**
+- Phase 1 Oracle: 1 finding (test build phase config) → Fixed
+- Phase 2 Oracle: 0 findings
+- Phase 3 Oracle: 0 findings
+- Phase 4 Oracle: 0 findings
+- Final Oracle: 2 HIGH/MEDIUM findings → Fixed immediately
+- All phases: Thread Sanitizer clean
+
+#### Refactoring Metrics
+
+| Metric | Before | After | Change |
+|--------|--------|-------|--------|
+| **WindowCoordinator lines** | 1,357 | 223 + 153 ext | -84% main file |
+| **Largest file** | 1,357 | 312 | -77% |
+| **Responsibilities** | 10 in 1 file | 1 per file | +1,000% SRP |
+| **Files** | 1 | 11 | +1,000% |
+| **Unit tests** | 0 | 10 | ∞ |
+| **SwiftLint violations** | 6 | 0 | -100% |
+| **Oracle score** | N/A | A (92/100) | Production ready |
+| **Swift 6.2 grade** | N/A | A+ (95/100) | Exemplary |
+
+#### Key Takeaways
+
+1. **Facade + Composition is the modern alternative to god objects** - Preserve public API while decomposing internals
+2. **Phased migration reduces risk** - 4 phases with verification gates vs big-bang refactoring
+3. **Oracle reviews catch subtle bugs** - 2 critical concurrency bugs found that TSan missed
+4. **withObservationTracking is one-shot** - Must re-establish recursively in onChange callback
+5. **nonisolated deinit in Swift 6.2** - Cannot call @MainActor methods; rely on weak self for cleanup
+6. **Static factories eliminate boilerplate** - 60+ lines of repetitive code → single factory call
+7. **Observation chaining via computed properties** - Necessary for @Observable reactivity, not anti-pattern
+8. **Test early, test often** - Build + TSan + tests after EVERY phase
+9. **Document as you go** - Update architecture docs in final commit, not as afterthought
+10. **Quality gates prevent debt** - Fix all Oracle findings before merge, don't defer
+
+#### Complete Pattern Checklist
+
+When refactoring large files (1,000+ lines):
+
+- [ ] **Map responsibilities** (aim for 8-10 distinct areas)
+- [ ] **Create dependency graph** on paper first (ensure acyclic)
+- [ ] **Plan phases** in risk order (pure → controllers → boilerplate → cosmetic)
+- [ ] **Write plan.md** in tasks/ directory with Oracle review
+- [ ] **Phase 1: Pure types** with unit tests
+- [ ] **Extract value types** first (Sendable structs/enums)
+- [ ] **Extract pure functions** to `nonisolated struct` with static methods
+- [ ] **Add unit tests** for extracted pure code (geometry, storage, etc.)
+- [ ] **Build + TSan** after Phase 1
+- [ ] **Oracle review** Phase 1
+- [ ] **Commit Phase 1** only when clean
+- [ ] **Phase 2: Controllers** with clear SRP
+- [ ] **Preserve facade API** with forwarding (avoid breaking changes)
+- [ ] **Injectable dependencies** via init (default parameters for optionals)
+- [ ] **Build + TSan** after each controller extraction
+- [ ] **Manual functional test** after Phase 2
+- [ ] **Oracle review** Phase 2
+- [ ] **Phase 3: Observation/Wiring** (remove boilerplate)
+- [ ] **Explicit lifecycle** (start/stop) for observer types
+- [ ] **Static factories** for complex construction
+- [ ] **Build + TSan** after Phase 3
+- [ ] **Oracle review** Phase 3
+- [ ] **Phase 4: Extensions** (code organization)
+- [ ] **Widen access** only as needed (private → internal for extensions)
+- [ ] **Build + TSan** after Phase 4
+- [ ] **Oracle review** Phase 4
+- [ ] **Final comprehensive Oracle** (all extracted files together)
+- [ ] **Fix all HIGH/MEDIUM findings** before merge
+- [ ] **Update ARCHITECTURE docs** with new structure
+- [ ] **Update depreciated.md** with replaced patterns
+- [ ] **swift-concurrency-expert** skill review for Swift 6.2 compliance
+- [ ] **Commit docs** with fixes in final commit
+
+#### When NOT to Refactor
+
+**Acceptable Large Files:**
+- Views with extensive layout (SwiftUI body complexity)
+- Controllers with truly cohesive responsibility (e.g., AudioPlayer orchestrating audio lifecycle)
+- Files that are large but have SINGLE responsibility
+- Legacy code that works and isn't changing
+
+**Bad Reasons to Refactor:**
+- "This file is long" (length alone isn't sufficient)
+- "I don't understand it" (documentation may be the solution)
+- "It looks messy" (formatting != architecture)
+
+**Good Reasons to Refactor:**
+- Multiple distinct responsibilities (SRP violation)
+- Can't add features without understanding entire file
+- Unit testing requires complex mocking
+- SwiftLint violations (type_body_length, function_body_length)
+- Frequent merge conflicts from multiple engineers
+
+---
+
 **Built with ❤️ for retro computing on modern macOS**
 
-*This skill document captures 8+ months of lessons learned building MacAmp, distilled into actionable patterns for building similar retro-styled macOS applications with modern Swift 6 patterns. Updated with playlist window resize patterns, scroll slider bridge architecture, and cross-window state observation.*
+*This skill document captures 9+ months of lessons learned building MacAmp, distilled into actionable patterns for building similar retro-styled macOS applications with modern Swift 6 patterns. Updated with WindowCoordinator Facade + Composition refactoring (Feb 2026), demonstrating god object decomposition, phased migration strategy, Oracle-driven quality gates, and Swift 6.2 concurrency compliance.*

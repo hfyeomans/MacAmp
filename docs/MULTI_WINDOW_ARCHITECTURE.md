@@ -19,6 +19,7 @@ This document provides comprehensive research and implementation guidance for cr
 7. [Integration with Existing Infrastructure](#integration-with-existing-infrastructure)
 8. [Swift 6 Concurrency Patterns](#swift-6-concurrency-patterns)
 9. [Common Pitfalls & Solutions](#common-pitfalls--solutions)
+10. [WindowCoordinator Refactoring (2026-02)](#windowcoordinator-refactoring-2026-02)
 
 ---
 
@@ -55,17 +56,29 @@ MacAmp is a pure SwiftUI application for macOS 15+/26+ with the following charac
 3. **Docking System**
    - `DockingController` tracks visible panes with state persistence
    - WindowSnapManager registers windows and handles snapping
-   - 2025-11 update: `WindowCoordinator` now asks `WindowSnapManager.clusterKinds(containing:)` for the playlist's cluster before every double-size toggle. The helper builds a `PlaylistDockingContext` (anchor + attachment) so the playlist can follow either the Equalizer or Main window instantly. Magnetic snapping is disabled via `beginProgrammaticAdjustment()` during the frame update and re-enabled afterwards. See `MacAmpApp/ViewModels/WindowCoordinator.swift` and `MacAmpApp/Utilities/WindowSnapManager.swift`.
+   - 2025-11 update: `WindowCoordinator` asks `WindowSnapManager.clusterKinds(containing:)` for the playlist's cluster before every double-size toggle. The helper builds a `PlaylistDockingContext` (anchor + attachment) so the playlist can follow either the Equalizer or Main window instantly. Magnetic snapping is disabled via `beginProgrammaticAdjustment()` during the frame update and re-enabled afterwards.
+   - **2026-02 refactoring**: `WindowCoordinator` was decomposed from a 1,357-line god object into a 223-line Facade + 10 focused types using Composition pattern. Docking-aware resize logic now lives in `WindowResizeController`, pure geometry in `WindowDockingGeometry`, and value types in `WindowDockingTypes`. See [WindowCoordinator Refactoring (2026-02)](#windowcoordinator-refactoring-2026-02) for complete details. Source files: `MacAmpApp/ViewModels/WindowCoordinator.swift`, `MacAmpApp/Windows/WindowResizeController.swift`, `MacAmpApp/Windows/WindowDockingGeometry.swift`.
 
 #### Instant Double-Size Docking Pipeline
 
 1. `AppSettings.isDoubleSizeMode` toggles via CTRL+D / "D" button.
-2. `WindowCoordinator.resizeMainAndEQWindows` captures the live frames for Main, EQ, and Playlist.
-3. `WindowSnapManager.clusterKinds(containing: .playlist)` returns the current magnetic cluster. If the playlist is touching the EQ or Main window, we derive an attachment enum (`below`, `above`, `left`, `right`) plus a saved anchor.
-4. Main and EQ windows resize synchronously (no NSAnimation). While `WindowSnapManager` is in programmatic adjustment mode the playlist is re-aligned relative to the anchor frame, preserving the Winamp stack.
-5. DEBUG logging prints `[ORACLE] Docking source: …` so QA can immediately see which anchor drove the adjustment.
+2. `WindowSettingsObserver` detects the change via recursive `withObservationTracking` and fires the `onDoubleSizeChanged` callback.
+3. `WindowCoordinator` forwards to `WindowResizeController.resizeMainAndEQWindows()`, which captures the live frames for Main, EQ, and Playlist.
+4. `WindowResizeController.makePlaylistDockingContext()` queries `WindowSnapManager.clusterKinds(containing: .playlist)` to discover the current magnetic cluster. If the playlist is touching the EQ or Main window, it derives an attachment enum (`below`, `above`, `left`, `right`) plus a saved anchor using `WindowDockingGeometry` pure functions.
+5. Main and EQ windows resize synchronously (no NSAnimation). While `WindowSnapManager` is in programmatic adjustment mode and `WindowFramePersistence` has suppressed writes, the playlist is re-aligned relative to the anchor frame, preserving the Winamp stack.
+6. DEBUG logging prints `[DOCKING] source: ...` so QA can immediately see which anchor drove the adjustment.
 
-**Why this matters**: Visualizer windows (or other auxiliary panes) can plug into the same mechanism—once they register with `WindowSnapManager`, the coordinator can ask for their cluster membership and keep them glued to whichever window they are attached to. This architecture keeps the classic Winamp feel (instant 100 % ↔ 200 % snap) while honoring macOS snapping semantics.
+**Why this matters**: Visualizer windows (or other auxiliary panes) can plug into the same mechanism -- once they register with `WindowSnapManager` via `WindowDelegateWiring`, the resize controller can ask for their cluster membership and keep them glued to whichever window they are attached to. This architecture keeps the classic Winamp feel (instant 100% to 200% snap) while honoring macOS snapping semantics.
+
+**File responsibilities in the docking pipeline** (post-refactoring):
+
+| File | Role |
+|------|------|
+| `WindowSettingsObserver.swift` | Detects `isDoubleSizeMode` change |
+| `WindowResizeController.swift` | Orchestrates resize + docking context |
+| `WindowDockingGeometry.swift` | Pure geometry (attachment detection, origin calculation) |
+| `WindowDockingTypes.swift` | Value types (`PlaylistDockingContext`, `PlaylistAttachmentSnapshot`) |
+| `WindowFramePersistence.swift` | Suppresses persistence during programmatic moves |
 
 ---
 
@@ -986,6 +999,300 @@ Task { @MainActor in
 
 ---
 
+## WindowCoordinator Refactoring (2026-02)
+
+### Rationale
+
+`WindowCoordinator` had grown to 1,357 lines with 10 orthogonal responsibilities crammed into a single file:
+
+1. Window controller ownership (5 NSWindowController instances)
+2. Window-to-kind mapping
+3. Frame persistence (save/load/suppress)
+4. Show/hide/toggle visibility for all 5 window types
+5. Double-size resize with docking-aware playlist/video repositioning
+6. Settings observation (always-on-top, double-size, show video, show milkdrop)
+7. Delegate multiplexer + focus delegate wiring
+8. Pure docking geometry calculations
+9. Value types for docking context
+10. Layout defaults, initial positioning, and presentation
+
+This "god object" exceeded the SwiftLint `file_length` threshold, made changes risky (any modification could touch unrelated behavior), and was impossible to unit test in isolation. The Oracle (gpt-5.3-codex) pre-review confirmed the decomposition direction and provided critical architectural feedback.
+
+### Architecture Decision: Facade + Composition
+
+**Why Facade + Composition (chosen)**:
+- Zero breaking changes: all callers continue using `WindowCoordinator.shared.method()` unchanged
+- Incremental migration: each extraction phase is independently verifiable
+- No protocol overhead: controllers are concrete types, no unnecessary abstraction
+- Acyclic dependency graph: no controller-to-controller dependencies
+- @Observable observation chaining: computed property forwarding preserves SwiftUI reactivity
+
+**Why not Protocol-based Abstraction**:
+- Oracle explicitly recommended against "broad protocol abstractions" for internal types
+- Protocols add indirection cost without benefit when there is exactly one implementation
+- The Facade pattern already provides a clean public API surface
+
+**Why not Actor-based isolation**:
+- All window operations must run on the main thread (AppKit requirement)
+- @MainActor annotation provides the same isolation guarantee as an actor
+- Actors would add unnecessary suspension points for purely main-thread work
+
+### File Structure and Responsibilities
+
+After refactoring, `WindowCoordinator.swift` is 223 lines (an 84% reduction) and serves as a pure Facade/Composition root. The 10 extracted types total 1,470 lines across 11 files.
+
+```
+MacAmpApp/ViewModels/
+    WindowCoordinator.swift           (223 lines) -- Facade + composition root
+    WindowCoordinator+Layout.swift    (153 lines) -- Layout, presentation, debug logging
+
+MacAmpApp/Windows/
+    WindowRegistry.swift              ( 83 lines) -- Window ownership + lookup
+    WindowFramePersistence.swift      (147 lines) -- Frame persistence + suppression
+    WindowVisibilityController.swift  (161 lines) -- Show/hide/toggle + @Observable state
+    WindowResizeController.swift      (312 lines) -- Resize + docking-aware layout
+    WindowSettingsObserver.swift      (114 lines) -- Settings observation lifecycle
+    WindowDelegateWiring.swift        ( 54 lines) -- Delegate setup static factory
+    WindowDockingTypes.swift          ( 50 lines) -- Value types (Sendable)
+    WindowDockingGeometry.swift       (109 lines) -- Pure geometry (nonisolated)
+    WindowFrameStore.swift            ( 65 lines) -- UserDefaults wrapper (injectable)
+```
+
+### Responsibility Breakdown
+
+| Type | SRP Responsibility | @MainActor | @Observable | Lines |
+|------|-------------------|:----------:|:-----------:|------:|
+| `WindowCoordinator` | Composition root, API forwarding | Yes | Yes | 223 |
+| `WindowCoordinator+Layout` | Init-time layout, presentation, debug | Yes (inherited) | -- | 153 |
+| `WindowRegistry` | Owns 5 NSWindowController instances, kind mapping | Yes | No | 83 |
+| `WindowFramePersistence` | Save/load/suppress frame positions | Yes | No | 147 |
+| `WindowVisibilityController` | Show/hide/toggle for all windows | Yes | Yes | 161 |
+| `WindowResizeController` | Double-size resize, docking context, move | Yes | No | 312 |
+| `WindowSettingsObserver` | Observe 4 AppSettings properties | Yes | No | 114 |
+| `WindowDelegateWiring` | Static factory for delegate setup | Yes (struct) | No | 54 |
+| `WindowDockingTypes` | Value types for docking context | No (Sendable) | No | 50 |
+| `WindowDockingGeometry` | Pure geometry calculations | nonisolated | No | 109 |
+| `WindowFrameStore` | UserDefaults encode/decode | No (value type) | No | 65 |
+
+### Dependency Graph (Acyclic)
+
+```
+WindowCoordinator (facade / composition root)
+    |
+    +-- WindowRegistry                (no dependencies on other extracted types)
+    |
+    +-- WindowFramePersistence        (depends on: WindowRegistry, WindowFrameStore, AppSettings)
+    |
+    +-- WindowVisibilityController    (depends on: WindowRegistry, AppSettings)
+    |
+    +-- WindowResizeController        (depends on: WindowRegistry, WindowFramePersistence)
+    |       |
+    |       +-- uses WindowDockingGeometry (static, pure functions)
+    |       +-- uses WindowDockingTypes (value types)
+    |
+    +-- WindowSettingsObserver        (depends on: AppSettings only)
+    |
+    +-- WindowDelegateWiring          (depends on: WindowRegistry, WindowPersistenceDelegate, WindowFocusState)
+
+NO controller-to-controller dependencies.
+All cross-cutting coordination goes through WindowCoordinator facade.
+```
+
+The dependency graph is strictly acyclic: controllers at the same level never reference each other. When coordination is required (for example, suppressing persistence during resize), the Facade orchestrates the interaction by calling methods on the appropriate controllers in sequence.
+
+### @MainActor Isolation Boundaries
+
+All types that manipulate `NSWindow` or AppKit objects are annotated `@MainActor`:
+
+```swift
+// WindowCoordinator.swift:4-6
+@MainActor
+@Observable
+final class WindowCoordinator { ... }
+
+// WindowRegistry.swift:4-5
+@MainActor
+final class WindowRegistry { ... }
+
+// WindowFramePersistence.swift:4-5
+@MainActor
+final class WindowFramePersistence { ... }
+
+// WindowVisibilityController.swift:5-7
+@MainActor
+@Observable
+final class WindowVisibilityController { ... }
+```
+
+Two types are intentionally **not** `@MainActor`:
+
+- **`WindowDockingGeometry`**: Declared `nonisolated struct` with all-static methods. Takes `NSRect` inputs and returns `NSRect`/`NSPoint` outputs. No side effects, no mutable state. Can be called from any isolation domain.
+- **`WindowDockingTypes`**: Pure value types (`PlaylistAttachmentSnapshot`, `VideoAttachmentSnapshot`, `PlaylistDockingContext`) marked `Sendable`. Thread-safe by construction.
+
+The `WindowCoordinator+Layout.swift` extension inherits `@MainActor` from the base type declaration -- no explicit annotation is needed on the extension.
+
+### Swift 6.2 Concurrency Patterns
+
+#### Recursive withObservationTracking
+
+`WindowSettingsObserver` uses the standard one-shot observation pattern required for `@Observable` objects outside of SwiftUI View bodies:
+
+```swift
+// WindowSettingsObserver.swift:51-64
+private func observeAlwaysOnTop() {
+    tasks["alwaysOnTop"]?.cancel()  // Cancel existing before creating new
+    tasks["alwaysOnTop"] = Task { @MainActor [weak self] in
+        guard let self else { return }
+        withObservationTracking {
+            _ = self.settings.isAlwaysOnTop  // Register property access
+        } onChange: {
+            Task { @MainActor [weak self] in  // Nested Task for @Sendable boundary
+                guard let self, self.handlers != nil else { return }
+                self.handlers?.onAlwaysOnTopChanged(self.settings.isAlwaysOnTop)
+                self.observeAlwaysOnTop()  // Re-establish (recursive)
+            }
+        }
+    }
+}
+```
+
+Key design decisions:
+- **`[weak self]` on both Tasks**: Prevents retain cycles; when WindowCoordinator deallocates, observers terminate naturally
+- **`self.handlers != nil` guard**: Prevents re-registration after `stop()` has been called
+- **Explicit `@MainActor` on inner Task**: Defensive isolation annotation despite being in @MainActor context
+- **Explicit `start()`/`stop()` lifecycle**: Oracle review required this instead of relying on `deinit` (which is `nonisolated` in Swift 6.2)
+
+**Future migration path (macOS 26+)**:
+```swift
+// When minimum target is macOS 26, replace with:
+for await _ in Observations(\.isAlwaysOnTop, on: settings) {
+    handlers?.onAlwaysOnTopChanged(settings.isAlwaysOnTop)
+}
+```
+
+#### nonisolated deinit Awareness
+
+```swift
+// WindowCoordinator.swift:145-149
+deinit {
+    skinPresentationTask?.cancel()
+    // settingsObserver.stop() is not callable from nonisolated deinit;
+    // tasks hold [weak self] references so they will naturally terminate.
+}
+```
+
+In Swift 6.2, `deinit` is `nonisolated` -- it cannot call `@MainActor`-isolated methods. The design deliberately avoids this problem by ensuring all Tasks use `[weak self]`, so they terminate via `guard let self else { return }` when the coordinator is deallocated.
+
+#### @Observable Observation Chaining
+
+`WindowCoordinator` is `@Observable` and forwards visibility state from `WindowVisibilityController` (also `@Observable`) via computed properties:
+
+```swift
+// WindowCoordinator.swift:188-196
+var isEQWindowVisible: Bool {
+    get { visibility.isEQWindowVisible }
+    set { visibility.isEQWindowVisible = newValue }
+}
+
+var isPlaylistWindowVisible: Bool {
+    get { visibility.isPlaylistWindowVisible }
+    set { visibility.isPlaylistWindowVisible = newValue }
+}
+```
+
+This pattern is necessary because SwiftUI views observe `WindowCoordinator` -- the `@Observable` macro tracks the computed property access and chains the observation through to `WindowVisibilityController`. Without this forwarding, SwiftUI would not detect changes to the visibility state.
+
+#### Debounced Persistence with Cancellation
+
+```swift
+// WindowFramePersistence.swift:45-53
+func schedulePersistenceFlush() {
+    guard persistenceSuppressionCount == 0 else { return }
+    persistenceTask?.cancel()
+    persistenceTask = Task { @MainActor [weak self] in
+        try? await Task.sleep(for: .milliseconds(150))
+        guard !Task.isCancelled else { return }  // Oracle fix: check after sleep
+        self?.persistAllWindowFrames()
+    }
+}
+```
+
+The `guard !Task.isCancelled` check after `Task.sleep` was added based on Oracle review -- without it, a cancelled task could still execute `persistAllWindowFrames()` because `Task.sleep` throws on cancellation only if the caller checks.
+
+### Phased Migration Strategy
+
+The refactoring was executed in 4 phases, each independently buildable and verifiable:
+
+| Phase | Extractions | Risk | Lines Removed |
+|-------|------------|------|:-------------:|
+| Phase 1 | `WindowDockingTypes`, `WindowDockingGeometry`, `WindowFrameStore` | Zero (pure types) | ~325 |
+| Phase 2 | `WindowRegistry`, `WindowFramePersistence`, `WindowVisibilityController`, `WindowResizeController` | Low-Medium (controllers) | ~500 |
+| Phase 3 | `WindowSettingsObserver`, `WindowDelegateWiring` | Low (observation + wiring) | ~200 |
+| Phase 4 | `WindowCoordinator+Layout` (extension) | Cosmetic | ~130 |
+
+**Build verification after each phase**:
+```bash
+xcodebuild -scheme MacAmp -configuration Debug -enableThreadSanitizer YES build
+xcodebuild test -scheme MacAmp -enableThreadSanitizer YES
+```
+
+All 4 phases passed build + Thread Sanitizer + full test suite.
+
+### Oracle Review Results
+
+Five Oracle reviews (gpt-5.3-codex, reasoning effort: xhigh) were conducted across the refactoring:
+
+| Review | Scope | Verdict | Key Findings |
+|--------|-------|---------|-------------|
+| Pre-implementation | Plan review | REVISE then proceed | Split pure/stateful geometry; fix deinit lifecycle |
+| Post-Phase 1 | 3 new files + tests | 1 finding (P2) | Test build phase ordering; fixed |
+| Post-Phase 2 | 4 controllers | No concrete defects | Clean architecture verified |
+| Post-Phase 3 | Observer + wiring | No functional regressions | Lifecycle pattern approved |
+| Post-Phase 4 (Final) | All 11 files | No blocking issues | 2 HIGH fixes applied (debounce cancellation, observer stop guard) |
+
+**Critical fixes from Oracle review**:
+
+1. **Debounce cancellation bug** (HIGH): Added `guard !Task.isCancelled` after `Task.sleep` in `WindowFramePersistence.schedulePersistenceFlush()` to prevent persistence writes after task cancellation.
+
+2. **Observer stop guard** (MEDIUM): Added `self.handlers != nil` guard in all 4 `onChange` callbacks in `WindowSettingsObserver` to prevent re-registration after `stop()` is called.
+
+### Swift 6.2 Compliance Summary
+
+The Swift patterns review (conducted by swift-concurrency-expert skill) graded the refactoring **A+ (95/100)**.
+
+| Check | Status |
+|-------|--------|
+| No implicit @MainActor capture warnings | Pass |
+| No Sendable conformance violations | Pass |
+| No nonisolated deinit violations | Pass |
+| No data race warnings (Thread Sanitizer) | Pass |
+| No @unchecked Sendable usage | Pass |
+| No global mutable state (except managed) | Pass |
+| No Task detachment without isolation | Pass |
+| No unstructured concurrency leaks | Pass |
+
+**Patterns demonstrated**:
+- `@Observable` macro (Swift 5.9+) with fine-grained change tracking
+- Composition over inheritance (zero class hierarchies)
+- Constructor dependency injection throughout
+- Value types where appropriate (`WindowDelegateWiring` struct, docking types)
+- Actor isolation first (all UI types @MainActor)
+- Structured concurrency (all Tasks stored and managed)
+
+### File Organization Principles
+
+1. **Facade stays in `ViewModels/`**: `WindowCoordinator.swift` and its layout extension remain in `MacAmpApp/ViewModels/` because they are consumed by SwiftUI views as an `@Observable` model.
+
+2. **Controllers move to `Windows/`**: All extracted types that deal with `NSWindow` manipulation live in `MacAmpApp/Windows/`, colocated with other window infrastructure (`WindowSnapManager`, `WindowDelegateMultiplexer`, etc.).
+
+3. **Pure types are nonisolated**: `WindowDockingGeometry` and `WindowDockingTypes` have no actor isolation. They are pure value computations that can be called from any context and unit-tested trivially.
+
+4. **Static factories for complex construction**: `WindowDelegateWiring.wire()` encapsulates the 60+ lines of multiplexer/delegate setup into a single call that returns an immutable struct holding strong references.
+
+5. **Injectable dependencies**: `WindowFrameStore` accepts `UserDefaults` via `init(defaults:)`, enabling unit tests with isolated UserDefaults instances.
+
+---
+
 ## Implementation Roadmap
 
 ### Phase 1: Foundation (Week 1)
@@ -1047,6 +1354,22 @@ Task { @MainActor in
    - See `MacAmpApp/Utilities/WindowSnapManager.swift` for magnetic snapping
    - See `MacAmpApp/ViewModels/DockingController.swift` for pane management
    - See `MacAmpApp/Models/AppSettings.swift` for @Observable singleton pattern
+
+4. **WindowCoordinator Refactoring (2026-02)**
+   - See `MacAmpApp/ViewModels/WindowCoordinator.swift` (223 lines, Facade)
+   - See `MacAmpApp/ViewModels/WindowCoordinator+Layout.swift` (153 lines, layout extension)
+   - See `MacAmpApp/Windows/WindowRegistry.swift` (83 lines, window ownership)
+   - See `MacAmpApp/Windows/WindowFramePersistence.swift` (147 lines, frame persistence)
+   - See `MacAmpApp/Windows/WindowVisibilityController.swift` (161 lines, visibility)
+   - See `MacAmpApp/Windows/WindowResizeController.swift` (312 lines, resize + docking)
+   - See `MacAmpApp/Windows/WindowSettingsObserver.swift` (114 lines, observation)
+   - See `MacAmpApp/Windows/WindowDelegateWiring.swift` (54 lines, delegate setup)
+   - See `MacAmpApp/Windows/WindowDockingTypes.swift` (50 lines, value types)
+   - See `MacAmpApp/Windows/WindowDockingGeometry.swift` (109 lines, pure geometry)
+   - See `MacAmpApp/Windows/WindowFrameStore.swift` (65 lines, UserDefaults persistence)
+   - See `tasks/window-coordinator-refactor/plan.md` for refactoring plan
+   - See `tasks/window-coordinator-refactor/state.md` for final state
+   - See `tasks/window-coordinator-refactor/swift-patterns-review.md` for Swift 6.2 review
 
 ---
 

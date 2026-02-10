@@ -3,7 +3,7 @@
 **Version:** 3.3.0
 **Date:** 2026-01-11
 **Purpose:** Master index and navigation guide for all MacAmp documentation
-**Total Documentation:** 19,105 lines across 20 current docs + 23 archived docs
+**Total Documentation:** 19,428 lines across 20 current docs + 23 archived docs
 
 ---
 
@@ -164,8 +164,8 @@ Swap `Core` for `Concurrency` or `All` as needed.
 - **Quality**: ⭐⭐⭐⭐⭐ Authoritative
 
 #### **[MULTI_WINDOW_ARCHITECTURE.md](MULTI_WINDOW_ARCHITECTURE.md)** ⭐
-- **Size**: 33KB, 1,060 lines
-- **Last Updated**: 2025-11-14
+- **Size**: 43KB, 1,383 lines
+- **Last Updated**: 2026-02-09
 - **Status**: ✅ PRODUCTION
 - **Purpose**: Complete multi-window system design and implementation
 - **Key Sections**:
@@ -175,8 +175,13 @@ Swap `Core` for `Concurrency` or `All` as needed.
   - Magnetic snapping coordination
   - Window lifecycle management
   - SwiftUI WindowGroup integration
+  - **WindowCoordinator Refactoring (2026-02)** ⭐ NEW
+    - Facade + Composition pattern (1,357 → 223 lines, -84%)
+    - 11-file decomposition with dependency matrix
+    - Swift 6.2 concurrency patterns
+    - Oracle-driven quality gates (5 reviews, Grade A)
   - Testing and debugging strategies
-- **When to Read**: Working with window management, adding new windows, debugging focus issues
+- **When to Read**: Working with window management, god object refactoring, Swift 6.2 patterns
 - **Related Docs**: WINDOW_FOCUS_ARCHITECTURE.md, VIDEO_WINDOW.md, MILKDROP_WINDOW.md
 - **Quality**: ⭐⭐⭐⭐⭐ Authoritative
 
@@ -720,6 +725,12 @@ Includes:
 | **WindowFocusDelegate** | WINDOW_FOCUS_ARCHITECTURE.md | §WindowFocusDelegate |
 | **WindowFocusState** | WINDOW_FOCUS_ARCHITECTURE.md | §WindowFocusState Model |
 | **WindowGroup** | MULTI_WINDOW_ARCHITECTURE.md | §SwiftUI Integration |
+| **WindowCoordinator refactoring** | MULTI_WINDOW_ARCHITECTURE.md | §10 WindowCoordinator Refactoring (2026-02) |
+| **Facade + Composition pattern** | MULTI_WINDOW_ARCHITECTURE.md | §10.2 Architecture Decision |
+| **God object decomposition** | MULTI_WINDOW_ARCHITECTURE.md | §10 WindowCoordinator Refactoring |
+| **Swift 6.2 concurrency** | MULTI_WINDOW_ARCHITECTURE.md | §10.4 Swift 6.2 Concurrency Patterns |
+| **Recursive withObservationTracking** | MULTI_WINDOW_ARCHITECTURE.md | §10.4.1 Recursive withObservationTracking |
+| **nonisolated deinit** | MULTI_WINDOW_ARCHITECTURE.md | §10.4.2 nonisolated deinit Awareness |
 | **Xcode settings** | RELEASE_BUILD_GUIDE.md | §Xcode Configuration |
 
 ### Common Questions → Answer Location
@@ -936,11 +947,11 @@ The following documents have been **archived to docs/archive/** (local only, not
 ```
 20 Core Technical Documents
 ─────────────────────────────
-MACAMP_ARCHITECTURE_GUIDE.md         4,555 lines  (24%) ⭐ UPDATED +737
+MACAMP_ARCHITECTURE_GUIDE.md         4,555 lines  (23%) ⭐ UPDATED +737
 IMPLEMENTATION_PATTERNS.md           2,327 lines  (12%) ⭐ UPDATED +536
 MILKDROP_WINDOW.md                   1,623 lines  (8%)
+MULTI_WINDOW_ARCHITECTURE.md         1,383 lines  (7%)  ⭐ UPDATED +323
 VIDEO_WINDOW.md                      1,151 lines  (6%)
-MULTI_WINDOW_ARCHITECTURE.md         1,060 lines  (6%)
 README.md (this file)                1,001 lines  (5%)
 AUDIOPLAYER_REFACTORING_2026_CORRECTED.md  987 lines  (5%)
 AUDIOPLAYER_REFACTORING_2026.md        955 lines  (5%)
@@ -957,12 +968,12 @@ CUSTOM_DRAG_FIX.md                     254 lines  (1%)
 RELEASE_BUILD_COMPARISON.md            230 lines  (1%)
 CODE_SIGNING_FIX.md                    200 lines  (1%)
 ─────────────────────────────
-TOTAL:                              19,105 lines
+TOTAL:                              19,428 lines
 ```
 
 ### Documentation by Category
 
-- **Architecture & Design**: 74% (14,200 lines)
+- **Architecture & Design**: 74% (14,523 lines)
 - **Build & Distribution**: 7% (1,310 lines)
 - **Skin System**: 3% (652 lines)
 - **Navigation & Index**: 5% (1,001 lines)
@@ -1000,6 +1011,13 @@ For questions or corrections, the documentation was comprehensively reviewed on 
 
 ---
 
-**MacAmp Documentation v3.3.0 | Last Updated: 2026-01-11 | Status: Production Authoritative**
+**MacAmp Documentation v3.4.0 | Last Updated: 2026-02-09 | Status: Production Authoritative**
 
-*Master index for 19,105 lines of verified technical documentation (20 active docs)*
+*Master index for 19,428 lines of verified technical documentation (20 active docs)*
+
+**Recent Update (v3.4.0 - 2026-02-09):**
+- MULTI_WINDOW_ARCHITECTURE.md: +323 lines (§10 WindowCoordinator Refactoring)
+- WindowCoordinator god object refactored: 1,357 → 223 lines (-84%)
+- 11 focused files created using Facade + Composition pattern
+- Oracle Grade A (92/100), Swift 6.2 Grade A+ (95/100)
+- Complete refactoring methodology documented as Lesson #23

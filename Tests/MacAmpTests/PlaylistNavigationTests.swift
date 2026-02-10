@@ -18,7 +18,8 @@ final class PlaylistNavigationTests: XCTestCase {
         let streamURL = try XCTUnwrap(URL(string: "https://example.com/stream"))
         let streamTrack = Track(url: streamURL, title: "Stream", artist: "", duration: 0)
 
-        player.playlist = [localTrack, streamTrack]
+        player.playlistController.addTrack(localTrack)
+        player.playlistController.addTrack(streamTrack)
         player.currentTrack = localTrack
         player.updatePlaylistPosition(with: localTrack)
 
@@ -46,7 +47,8 @@ final class PlaylistNavigationTests: XCTestCase {
         let streamURL = try XCTUnwrap(URL(string: "https://example.com/stream"))
         let streamTrack = Track(url: streamURL, title: "Stream", artist: "", duration: 0)
 
-        player.playlist = [localTrack, streamTrack]
+        player.playlistController.addTrack(localTrack)
+        player.playlistController.addTrack(streamTrack)
         player.updatePlaylistPosition(with: streamTrack)
         player.currentTrack = localTrack
 
