@@ -39,7 +39,7 @@ struct MacAmpApp: App {
         _windowFocusState = State(initialValue: windowFocusState)
 
         // Initialize WindowCoordinator (creates separate NSWindows for Main, EQ, Playlist, etc.)
-        WindowCoordinator.shared = WindowCoordinator(
+        let coordinator = WindowCoordinator(
             skinManager: skinManager,
             audioPlayer: audioPlayer,
             dockingController: dockingController,
@@ -48,6 +48,8 @@ struct MacAmpApp: App {
             playbackCoordinator: playbackCoordinator,
             windowFocusState: windowFocusState
         )
+        WindowCoordinator.shared = coordinator
+        dockingController.windowCoordinator = coordinator
     }
 
     var body: some Scene {
