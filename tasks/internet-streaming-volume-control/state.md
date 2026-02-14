@@ -4,7 +4,7 @@
 
 ---
 
-## Current Status: PLAN + TODOS COMPLETE — ORACLE REVIEWED — PREREQUISITE VALIDATED
+## Current Status: BLOCKED — Waiting on N1-N6 prerequisite fixes (internet-radio-review)
 
 ## Progress
 
@@ -45,6 +45,18 @@
 12. **Target platforms:** macOS 15+ including macOS 26+ Tahoe
 
 ## Blockers
+
+### Active Blockers
+
+- **N1-N6 Internet Radio Issues (BLOCKING):** Oracle validation (`tasks/internet-radio-review/findings.md`) found 6 issues in the current streaming infrastructure. Phase 1 cannot proceed until at least N1 (HIGH), N2 (MEDIUM), and N5 (MEDIUM) are fixed.
+  - **N1 (HIGH):** Playlist navigation broken during stream playback — `currentTrack` is nil during streams, causing next/previous to always jump to index 0
+  - **N2 (MEDIUM):** PlayPause indicator desync — coordinator flags not synced with StreamPlayer's KVO-driven state changes
+  - **N5 (MEDIUM):** Main window transport indicators bound to AudioPlayer instead of PlaybackCoordinator — shows wrong state during stream playback
+  - **N3 (LOW):** externalPlaybackHandler naming confusion — no functional impact, defer
+  - **N4 (LOW):** StreamPlayer metadata overwrite — cosmetic, coordinator fallback covers it
+  - **N6 (LOW):** Track Info dialog missing live ICY metadata — uses static title instead of displayTitle
+
+### Architectural Blockers (Unchanged)
 
 - AVPlayer cannot feed AVAudioEngine directly (no bridge API in macOS 15 or 26)
 - AVPlayer has no .pan property (balance not possible without Loopback Bridge)

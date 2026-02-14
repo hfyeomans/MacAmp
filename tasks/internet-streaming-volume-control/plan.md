@@ -889,6 +889,55 @@ Enable volume control, EQ, visualization, and balance for internet radio streams
 
 ---
 
+## Prerequisites: Fix N1-N6 Internet Radio Issues
+
+**Status:** BLOCKING — Must be resolved before Phase 1 implementation begins.
+
+The Oracle validation review (`tasks/internet-radio-review/findings.md`) identified 6 issues in the current internet radio/streaming infrastructure. These must be fixed first because Phase 1 builds on PlaybackCoordinator routing and UI bindings that are currently broken or inconsistent for stream playback.
+
+### Must Fix (Blocking Phase 1)
+
+| ID | Issue | Severity | Why It Blocks |
+|----|-------|----------|---------------|
+| N1 | Playlist navigation broken during stream playback | HIGH | Phase 1 routes volume/balance through PlaybackCoordinator, which relies on correct `currentTrack` context. N1's nil-`currentTrack` during streams causes navigation to jump to index 0. Volume routing added on top of broken navigation will compound the confusion. |
+
+**N1 Details:** When playing a stream, `audioPlayer.stop()` clears `currentTrack = nil`. Subsequent `next()`/`previous()` calls sync position with nil, resetting `currentIndex` to nil, and `resolveActiveIndex()` returns -1. Navigation always jumps to the first playlist track instead of advancing sequentially.
+
+**Fix options (from findings.md):**
+- Add `nextTrack(from track: Track?)` / `previousTrack(from track: Track?)` to PlaylistController
+- Make PlaybackCoordinator sync its `currentTrack` into `playlistController.updatePosition()` before calling navigation
+- Make `updatePosition(with: nil)` a no-op when stream context is active
+
+### Should Fix (Same Pass as N1)
+
+| ID | Issue | Severity | Why It Matters |
+|----|-------|----------|----------------|
+| N2 | PlayPause indicator desync from StreamPlayer | MEDIUM | Phase 1 adds capability flags gated on `isStreamBackendActive`. If coordinator `isPlaying`/`isPaused` flags desync from StreamPlayer's actual state (e.g., during buffering stalls), capability flags and UI controls will show incorrect state. |
+| N5 | Main window indicator bound to AudioPlayer, not Coordinator | MEDIUM | Phase 1 reroutes volume/balance through coordinator. If transport indicators still read from AudioPlayer directly, the UI will show wrong play/pause state during stream playback — contradicting the new coordinator-first routing model. |
+
+**N2 Details:** Coordinator sets `isPlaying`/`isPaused` imperatively. StreamPlayer updates asynchronously via `AVPlayer.timeControlStatus` KVO. No observation link exists, so network interruptions change StreamPlayer state without coordinator awareness.
+
+**N5 Details:** `WinampMainWindow.swift` binds to `audioPlayer.isPlaying` / `audioPlayer.isPaused` rather than `playbackCoordinator.isPlaying`. During stream playback, AudioPlayer is stopped, so indicators show incorrect state.
+
+### Can Defer (Bundle or Fix Later)
+
+| ID | Issue | Severity | Notes |
+|----|-------|----------|-------|
+| N3 | externalPlaybackHandler naming | LOW | Naming/clarity only, no functional impact |
+| N4 | StreamPlayer metadata overwrite on play(url:title:artist:) | LOW | Coordinator falls back to `currentTrack?.title`, so title still displays |
+| N6 | Track Info dialog missing live ICY metadata | LOW | Uses `currentTitle` instead of `displayTitle` — static station name shown |
+
+### Prerequisite Verification
+
+Before proceeding to Phase 1:
+1. N1 fixed — playlist next/previous navigates correctly during stream playback
+2. N2 fixed — coordinator play/pause state stays in sync with StreamPlayer during buffering stalls
+3. N5 fixed — main window transport indicators read from coordinator, not AudioPlayer
+4. All existing tests pass with Thread Sanitizer enabled
+5. Manual test: play stream, press next/previous, verify correct navigation
+
+---
+
 ## Phase 1: Stream Volume Control + Capability Flags
 
 **Goal:** Make volume slider work for internet radio streams. Disable EQ and balance UI during stream playback with clear visual indication.
