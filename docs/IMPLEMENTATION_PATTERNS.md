@@ -1451,7 +1451,92 @@ final class VideoPlaybackController {
 
 **Why this pattern exists**: Audio engine tap callbacks run on a real-time thread where heap allocations (Array creation, ARC reference counting, Task dispatch) can cause lock contention and buffer underruns (audible skips). This SPSC (Single Producer, Single Consumer) shared buffer eliminates all allocations from the audio thread by using pre-allocated storage and `os_unfair_lock_trylock` for non-blocking publishing.
 
-**Data flow**:
+**Architecture Evolution (BEFORE → AFTER)**:
+
+#### Previous Architecture (Task Dispatch Pattern)
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                    AUDIO THREAD (real-time)                   │
+│                                                              │
+│  AVAudioEngine Tap Callback (~21.5 Hz)                       │
+│  ┌────────────────────────────────────────────────────────┐  │
+│  │ 1. scratch.prepare(buffer)                             │  │
+│  │ 2. FFT + Goertzel computation                          │  │
+│  │ 3. snapshotRms()          → NEW Array  ⚠️ ALLOC       │  │
+│  │ 4. snapshotSpectrum()     → NEW Array  ⚠️ ALLOC       │  │
+│  │ 5. waveformSnapshot       → NEW Array  ⚠️ ALLOC       │  │
+│  │    (stride.prefix.map)                                 │  │
+│  │ 6. butterchurnSpectrum    → NEW Array  ⚠️ ALLOC       │  │
+│  │ 7. butterchurnWaveform    → NEW Array  ⚠️ ALLOC       │  │
+│  │ 8. VisualizerData(...)    → struct w/ 5 arrays         │  │
+│  │ 9. Task { @MainActor }    → NEW TASK   ⚠️ ALLOC+ARC   │  │
+│  └────────────────┬───────────────────────────────────────┘  │
+│                   │                                          │
+│         ~7-8 heap allocations per callback                   │
+│         = ~150-170 allocations/second                        │
+│         = ARC ref counting = potential lock acquisition      │
+│         = AUDIO THREAD STALL = SKIP                          │
+└───────────────────┼──────────────────────────────────────────┘
+                    │ Task dispatch (heap alloc)
+                    ▼
+┌──────────────────────────────────────────────────────────────┐
+│                    MAIN THREAD                                │
+│  Task { @MainActor in                                        │
+│      pipeline.visualizerData = data   ← triggers @Observable │
+│      pipeline.butterchurnFrame = ...  ← triggers @Observable │
+│  }                                                           │
+└──────────────────────────────────────────────────────────────┘
+```
+
+**Problems:** 7-8 heap allocations per callback on the audio thread. Any allocation can trigger ARC reference counting (which acquires locks), potentially stalling the real-time audio thread and causing buffer underruns (audible skips).
+
+#### New Architecture (SPSC Shared Buffer)
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                    AUDIO THREAD (real-time)                   │
+│                                                              │
+│  AVAudioEngine Tap Callback (~21.5 Hz)                       │
+│  ┌────────────────────────────────────────────────────────┐  │
+│  │ 1. scratch.prepare(buffer)          ← no alloc         │  │
+│  │ 2. FFT + Goertzel computation       ← no alloc         │  │
+│  │ 3. sharedBuffer.tryPublish(scratch) ← no alloc         │  │
+│  │    ├─ os_unfair_lock_trylock()   (non-blocking)        │  │
+│  │    ├─ if locked: memcpy into pre-allocated arrays      │  │
+│  │    ├─ waveform: direct stride copy (no map/iterator)   │  │
+│  │    ├─ generation += 1                                  │  │
+│  │    └─ unlock                                           │  │
+│  │    └─ if contention: drop frame (inaudible, invisible) │  │
+│  └────────────────┬───────────────────────────────────────┘  │
+│                   │                                          │
+│         ZERO heap allocations per callback                   │
+│         trylock = non-blocking (never stalls audio thread)   │
+└───────────────────┼──────────────────────────────────────────┘
+                    │ Shared memory (VisualizerSharedBuffer)
+                    │ Pre-allocated arrays, atomic generation
+                    ▼
+┌──────────────────────────────────────────────────────────────┐
+│                    MAIN THREAD (30 Hz Timer)                  │
+│                                                              │
+│  pollVisualizerData() ← Timer.scheduledTimer @ 30 Hz        │
+│  ┌────────────────────────────────────────────────────────┐  │
+│  │ 1. sharedBuffer.consume()                              │  │
+│  │    ├─ os_unfair_lock_lock()    (OK to block here)      │  │
+│  │    ├─ check generation > lastConsumed                   │  │
+│  │    ├─ create VisualizerData from pre-allocated storage  │  │
+│  │    └─ unlock, return data                              │  │
+│  │ 2. self.visualizerData = data  ← triggers @Observable  │  │
+│  │ 3. self.butterchurnFrame = ... ← triggers @Observable  │  │
+│  └────────────────────────────────────────────────────────┘  │
+│                                                              │
+│  Array allocation happens HERE (main thread = safe)          │
+└──────────────────────────────────────────────────────────────┘
+```
+
+**Key change:** Zero allocations on the audio thread. All Array creation happens on the main thread (30 Hz poll timer), where heap allocations and ARC operations are safe. The `os_unfair_lock_trylock()` is non-blocking - if the main thread holds the lock, the audio thread simply drops that frame (imperceptible at 21.5 Hz).
+
+**Simplified data flow**:
 ```
 Audio Thread (21.5 Hz)              Main Thread (30 Hz poll timer)
 ─────────────────────               ──────────────────────────────
@@ -1641,6 +1726,138 @@ stop()  -> removeTap()  (includes timer cleanup)
 - `consume()` creates Arrays under lock — keep lock hold time minimal by copying raw data only
 - Pre-allocated buffer sizes must match or exceed what the audio tap produces (4096 frame cap in scratch buffers)
 - Test with Thread Sanitizer to verify no data races
+
+**Related Memory Optimizations (Same Release)**:
+
+The SPSC pattern was part of a comprehensive memory optimization effort. Other key improvements:
+
+#### Skin Loading Pipeline Optimization
+
+**BEFORE (Double Load):**
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    APP STARTUP                                │
+│                                                              │
+│  SkinManager.loadInitialSkin()                               │
+│  ┌───────────────────────────────────────────────────────┐   │
+│  │ Step 1: loadDefaultSkinIfNeeded()                     │   │
+│  │   ├─ SkinArchiveLoader.load(Winamp.wsz)               │   │
+│  │   │   └─ Extract ALL BMP sheets from ZIP              │   │
+│  │   ├─ parseDefaultSkin(payload)                        │   │
+│  │   │   ├─ For EACH sheet: NSImage(data:) ⚠️ PEAK      │   │
+│  │   │   └─ For EACH sprite: crop → NSImage  ⚠️ PEAK    │   │
+│  │   └─ defaultSkin = Skin(images: ~200 sprites)         │   │
+│  │       └─ ~15-20 MB of NSImages PERMANENTLY in memory  │   │
+│  │                                                       │   │
+│  │ Step 2: switchToSkin(selectedSkin)                     │   │
+│  │   ├─ SkinArchiveLoader.load(selected.wsz)             │   │
+│  │   │   └─ Extract ALL BMP sheets from ZIP  ⚠️ DOUBLE   │   │
+│  │   ├─ applySkinPayload(payload)                        │   │
+│  │   │   ├─ For EACH sheet: NSImage(data:)               │   │
+│  │   │   └─ For EACH sprite: crop → NSImage              │   │
+│  │   └─ currentSkin = Skin(images: ~200 sprites)         │   │
+│  │                                                       │   │
+│  │ PEAK MEMORY: default sprites + selected sprites       │   │
+│  │              + intermediate CGImage buffers            │   │
+│  │              + float pixel backing stores              │   │
+│  │              = ~594 MB PEAK                            │   │
+│  └───────────────────────────────────────────────────────┘   │
+│                                                              │
+│  At rest: defaultSkin (~15-20 MB) + currentSkin (~15-20 MB)  │
+│         = ~30-40 MB of sprite images always in memory        │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**AFTER (Lazy Loading):**
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    APP STARTUP                                │
+│                                                              │
+│  SkinManager.loadInitialSkin()                               │
+│  ┌───────────────────────────────────────────────────────┐   │
+│  │ Step 1: loadDefaultSkinIfNeeded()                     │   │
+│  │   ├─ SkinArchiveLoader.load(Winamp.wsz)               │   │
+│  │   └─ defaultSkinPayload = payload  (~200 KB ZIP data) │   │
+│  │       └─ NO sprite parsing, NO NSImage creation       │   │
+│  │       └─ Sprites extracted LAZILY on demand            │   │
+│  │                                                       │   │
+│  │ Step 2a: IF selected == "bundled:Winamp"              │   │
+│  │   └─ parseDefaultSkinFully(payload)                   │   │
+│  │       ├─ Parse sprites with autoreleasepool            │   │
+│  │       ├─ Populate defaultSkinSpriteCache              │   │
+│  │       └─ currentSkin = Skin(...)                       │   │
+│  │       └─ PEAK: only ONE skin parsed (not two)         │   │
+│  │                                                       │   │
+│  │ Step 2b: IF selected != default                       │   │
+│  │   ├─ switchToSkin(selectedSkin)                        │   │
+│  │   ├─ applySkinPayload() with autoreleasepool per crop │   │
+│  │   │   └─ Missing sheets → lazy fallback:              │   │
+│  │   │       fallbackSpritesFromDefaultSkin()             │   │
+│  │   │       ├─ Extract ONLY the missing sheet from ZIP  │   │
+│  │   │       ├─ Cache in defaultSkinSpriteCache          │   │
+│  │   │       └─ Only ~5-10 sprites per missing sheet     │   │
+│  │   └─ currentSkin = Skin(...)                           │   │
+│  │                                                       │   │
+│  │ PEAK MEMORY: payload (~200 KB) + ONE skin's sprites   │   │
+│  │              + autoreleasepool cleans intermediates    │   │
+│  │              = MUCH LOWER PEAK                        │   │
+│  └───────────────────────────────────────────────────────┘   │
+│                                                              │
+│  At rest: payload (~200 KB) + spriteCache (lazy, partial)    │
+│         + currentSkin (~15-20 MB)                            │
+│         = ~15-20 MB total (was ~30-40 MB)                    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Result**: Peak memory reduced from ~594 MB to ~553 MB (-23%) by avoiding double skin parse. At-rest memory reduced from ~30-40 MB to ~15-20 MB (-50%) through lazy fallback extraction.
+
+#### CGImage Cropping Pipeline Optimization
+
+**BEFORE (Shared Parent Buffer):**
+```
+NSImage.cropped(to: rect)
+├─ self.cgImage(forProposedRect:)  → creates float-format backing store
+├─ cgImage.cropping(to:)           → child CGImage SHARES parent buffer
+└─ NSImage(cgImage:, size:)        → wraps child, parent buffer RETAINED
+    └─ Parent's full float pixel buffer stays alive as long as
+       ANY cropped sprite references it (~136 KB per parent sheet)
+```
+
+**AFTER (Independent Copy):**
+```
+NSImage.cropped(to: rect)
+├─ self.cgImage(forProposedRect:)  → creates float-format backing store
+├─ cgImage.cropping(to:)           → child CGImage references parent
+├─ CGContext(sRGB, RGBA8, 8bpc)    → independent context
+├─ context.draw(croppedCGImage)    → copies pixels into new buffer
+├─ context.makeImage()             → independent CGImage (no parent ref)
+└─ NSImage(cgImage:, size:)        → wraps independent image
+    └─ Parent float buffer is released when autorelease pool drains
+    └─ Each sprite owns only its own pixel data (~width*height*4 bytes)
+```
+
+**Result**: Eliminates parent-child buffer retention. Each sprite owns only its own pixels instead of retaining the full parent sheet buffer. Combined with `autoreleasepool` per crop, this prevents accumulation during sprite extraction loops.
+
+**File**: `MacAmpApp/Models/ImageSlicing.swift`
+
+#### Pause Tap Policy
+
+**BEFORE:**
+```
+play()  → installVisualizerTapIfNeeded()
+pause() → (tap stays active, callbacks continue at 21.5 Hz)
+stop()  → removeVisualizerTapIfNeeded()
+```
+
+**AFTER:**
+```
+play()  → installVisualizerTapIfNeeded()  + startPollTimer()
+pause() → removeVisualizerTapIfNeeded()   ← NEW
+stop()  → removeVisualizerTapIfNeeded()
+          (removeTap also stops poll timer)
+```
+
+**Result**: Removes visualizer tap on pause, saving CPU during paused playback. Previously the tap continued running at 21.5 Hz even when paused, consuming ~1-2% CPU for unused visualization data.
 
 ---
 
