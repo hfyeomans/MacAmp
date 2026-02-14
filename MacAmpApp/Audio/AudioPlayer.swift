@@ -755,7 +755,8 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     private func startProgressTimer() {
         progressTimer?.invalidate()
         let timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-            Task { @MainActor in
+            dispatchPrecondition(condition: .onQueue(.main))
+            MainActor.assumeIsolated {
                 guard let self = self else { return }
                 if let nodeTime = self.playerNode.lastRenderTime,
                    let playerTime = self.playerNode.playerTime(forNodeTime: nodeTime) {

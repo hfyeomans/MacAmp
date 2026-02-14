@@ -78,19 +78,54 @@ In production (Release build), the actual footprint would be ~39 MB steady-state
 All cosmetic issues have been resolved:
 - ~~Stale visualizer data during video playback~~ — FIXED (commit 0887c28): Added `clearData()` method on `VisualizerPipeline`, called from `removeVisualizerTapIfNeeded()` in `AudioPlayer`.
 
-## Oracle Final Code Review (gpt-5.3-codex, xhigh reasoning)
+## Comprehensive Three-Team Review (Final)
 
-### Findings Addressed
-1. **HIGH — removeTap() nil-mixer early return skips timer cleanup:** When `mixerNode` weak ref is nil but `tapInstalled` is true, the old guard returned early without invalidating the poll timer. **FIXED:** Restructured guard to check `tapInstalled` only, handle nil mixer gracefully.
-2. **MEDIUM — consume() allocates under lock:** Array copies (`Array(rms.prefix(...))`) happen while holding the lock. **ACCEPTED:** Audio thread uses non-blocking `trylock` so is never affected. Main thread lock hold time is bounded (5 small array copies at 30 Hz). Double-buffering would add complexity for minimal gain.
-3. **LOW — MainActor.assumeIsolated in timer callback:** Timer callback uses `dispatchPrecondition(.main)` before `MainActor.assumeIsolated`. Safe in practice as `Timer.scheduledTimer` always fires on main run loop.
-4. **LOW — frameCount > 4096 causes reallocation:** By design — AVAudioEngine buffer size is 2048, the 4096 cap is a safety net that should never execute in normal operation.
+### Review 1: Oracle Code Review (gpt-5.3-codex, xhigh reasoning)
 
-### Overall Assessment
-- SPSC design is sound (single producer tap + single consumer timer + generation counter)
-- `@unchecked Sendable` usages justified by confinement/locking
-- Audio thread path is allocation-free in steady state
-- Tap lifecycle changes are functionally correct
+**Status:** ✅ PASS (0 HIGH findings after fixes)
+
+**Findings & Resolution:**
+1. **HIGH — removeTap() nil-mixer early return:** Poll timer not cleaned up if mixerNode weak ref is nil. **FIXED** (commit 9fea3e1): Restructured guard, handle nil mixer gracefully.
+2. **MEDIUM — removeTap() runtime precondition:** Uses `dispatchPrecondition` instead of compile-time isolation. **ACCEPTED:** All call sites are @MainActor-isolated, current pattern is safe.
+3. **MEDIUM — frameCount > 4096 reallocation:** Reallocation path on audio thread if buffer exceeds cap. **FIXED:** Clamp to pre-allocated capacity instead of reallocating.
+4. **MEDIUM — consume() allocates under lock:** Array copies while holding lock. **ACCEPTED:** Audio thread uses non-blocking trylock, bounded lock hold time (5 small copies at 30 Hz).
+5. **LOW — Waveform downsampling bias:** Tail samples underrepresented in oscilloscope. **ACCEPTED:** Cosmetic only.
+6. **LOW — Fallback sheet marked extracted early:** Sheet added to cache before all crops complete. **ACCEPTED:** Extremely low risk (transient crop failures are theoretical).
+
+**Overall:** SPSC design sound, allocation-free in steady state, tap lifecycle correct.
+
+### Review 2: Architecture Alignment Review
+
+**Status:** ✅ ALIGNED with IMPROVEMENT identified
+
+**Findings:**
+- ✅ Three-layer pattern: All files correctly in Mechanism layer
+- ✅ @Observable usage: Modern pattern throughout, no ObservableObject regressions
+- ✅ Memory patterns: autoreleasepool, nonisolated(unsafe), weak refs match docs
+- ✅ Computed forwarding: AudioPlayer → VisualizerPipeline follows documented pattern
+- 🎯 **IMPROVEMENT:** SPSC shared buffer is clean architectural upgrade over old Unmanaged pointer pattern
+
+**Documentation gaps identified:**
+- IMPLEMENTATION_PATTERNS.md lines 1446-1557 still reference old Unmanaged pointer pattern
+- MACAMP_ARCHITECTURE_GUIDE.md lines 616-628 mention obsolete VisualizerTapContext
+
+### Review 3: Swift 6.2 Compliance Review
+
+**Status:** ✅ COMPLIANT (Swift 6.0 language mode, 6.2.4 compiler, strict concurrency)
+
+**Findings:**
+- ✅ All 4 `nonisolated(unsafe)` usages justified and documented
+- ✅ Both `@unchecked Sendable` (SPSC buffers) justified by lock/confinement
+- ✅ MainActor.assumeIsolated with dispatchPrecondition safety net correct
+- ✅ No data races, all Task patterns use [weak self]
+
+**Suggestions Implemented:**
+1. ✅ Fixed misleading deinit comment (VisualizerPipeline.swift:401-404)
+2. ✅ Aligned progress timer to MainActor.assumeIsolated pattern (AudioPlayer.swift:755-775)
+
+### Final Verdict: ✅ READY FOR MERGE
+
+All optimization goals achieved. Zero high-severity findings. All actionable findings resolved. Branch is production-ready.
 
 ---
 
@@ -299,9 +334,9 @@ AFTER:
 
 ## Files Modified
 
-| File | Changes | Task(s) |
+| File | Changes | Commits |
 |------|---------|---------|
-| `VisualizerPipeline.swift` | Complete rewrite: SPSC shared buffer, pre-allocated arrays, poll timer, zero audio-thread allocations | #1, #2 |
-| `AudioPlayer.swift` | Added `removeVisualizerTapIfNeeded()` in `pause()` | #3 |
-| `SkinManager.swift` | Lazy payload storage, on-demand fallback extraction, autoreleasepool, lockFocus defer, default skin reuse | #4, #5, #6, #7 |
-| `ImageSlicing.swift` | Independent RGBA8 CGContext copy, nil on failure (no shared-buffer fallback) | #7 |
+| `VisualizerPipeline.swift` | SPSC shared buffer, poll timer, zero audio-thread allocations, frameCount clamping, deinit comment fix, clearData() | 3aa54ef, 9c526f8, 0887c28, 9fea3e1, + Oracle fixes |
+| `AudioPlayer.swift` | pause/seek/playTrack tap lifecycle, clearData() call, progress timer MainActor.assumeIsolated | 84a9c2c, 0887c28, + Oracle fixes |
+| `SkinManager.swift` | Lazy payload, autoreleasepool, on-demand fallback extraction | a145978 |
+| `ImageSlicing.swift` | Independent RGBA8 CGContext copy, nil on failure | a145978 |

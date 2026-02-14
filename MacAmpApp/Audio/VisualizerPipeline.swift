@@ -240,18 +240,18 @@ private final class VisualizerScratchBuffers: @unchecked Sendable {
         }
     }
 
-    func prepare(frameCount: Int, bars: Int, sampleRate: Float) {
-        // Grow buffers only if needed (pre-allocated at maxFrameCount/maxBars,
-        // so this branch should never execute in normal operation)
-        if mono.count < frameCount {
-            mono = Array(repeating: 0, count: frameCount)
-        } else {
-            mono.withUnsafeMutableBufferPointer { pointer in
-                guard let baseAddress = pointer.baseAddress else { return }
-                vDSP_vclr(baseAddress, 1, vDSP_Length(frameCount))
-            }
+    func prepare(frameCount: Int, bars: Int, sampleRate: Float) -> Int {
+        // CRITICAL: Never allocate on audio thread. Clamp to pre-allocated capacity
+        // instead of growing buffers. AVAudioEngine buffer size is 2048, well within
+        // our 4096 cap, so this clamp should never activate in normal operation.
+        let cappedFrameCount = min(frameCount, mono.count)
+
+        mono.withUnsafeMutableBufferPointer { pointer in
+            guard let baseAddress = pointer.baseAddress else { return }
+            vDSP_vclr(baseAddress, 1, vDSP_Length(cappedFrameCount))
         }
 
+        // Bars are constant (20) and pre-allocated - no clamping needed
         if rms.count < bars {
             rms = Array(repeating: 0, count: bars)
         }
@@ -262,6 +262,8 @@ private final class VisualizerScratchBuffers: @unchecked Sendable {
 
         // Recompute Goertzel coefficients only when sample rate changes (once per track)
         _ = goertzel.updateIfNeeded(bars: bars, sampleRate: sampleRate)
+
+        return cappedFrameCount
     }
 
     func withMono<R>(_ body: (inout [Float]) -> R) -> R {
@@ -399,8 +401,9 @@ final class VisualizerPipeline {
     init() {}
 
     deinit {
-        // Note: Cannot call removeTap from deinit since it's @MainActor
-        // Caller must call removeTap() before releasing
+        // Note: removeTap() is nonisolated to allow calling from AudioPlayer.deinit
+        // AudioPlayer.deinit (@MainActor) calls removeTap() which requires main thread
+        // (enforced by dispatchPrecondition in removeTap)
     }
 
     // MARK: - Tap Management
@@ -587,12 +590,12 @@ final class VisualizerPipeline {
             if frameCount == 0 { return }
 
             let bars = 20
-            scratch.prepare(frameCount: frameCount, bars: bars, sampleRate: Float(buffer.format.sampleRate))
+            let cappedFrameCount = scratch.prepare(frameCount: frameCount, bars: bars, sampleRate: Float(buffer.format.sampleRate))
 
             // Mix channels to mono
             scratch.withMono { mono in
                 let invCount = 1.0 / Float(channelCount)
-                for frame in 0..<frameCount {
+                for frame in 0..<cappedFrameCount {
                     var sum: Float = 0
                     for channel in 0..<channelCount {
                         sum += ptr[channel][frame]
@@ -604,11 +607,11 @@ final class VisualizerPipeline {
             // Compute RMS per bar
             scratch.withMonoReadOnly { mono in // swiftlint:disable:this closure_body_length
                 scratch.withRms { rms in
-                    let bucketSize = max(1, frameCount / bars)
+                    let bucketSize = max(1, cappedFrameCount / bars)
                     var cursor = 0
                     for b in 0..<bars {
                         let start = cursor
-                        let end = min(frameCount, start + bucketSize)
+                        let end = min(cappedFrameCount, start + bucketSize)
                         if end > start {
                             var sumSq: Float = 0
                             var index = start
@@ -629,7 +632,7 @@ final class VisualizerPipeline {
 
                 // Compute spectrum using Goertzel algorithm with precomputed coefficients
                 scratch.withSpectrum { spectrum in
-                    let sampleCount = min(1024, frameCount)
+                    let sampleCount = min(1024, cappedFrameCount)
                     if sampleCount > 0 {
                         let coefficients = scratch.goertzel.coefficients
                         let gains = scratch.goertzel.equalizationGains
@@ -663,11 +666,11 @@ final class VisualizerPipeline {
 
             // Process Butterchurn FFT (2048-point for 1024 bins)
             scratch.withMonoReadOnly { mono in
-                scratch.processButterchurnFFT(samples: mono, validCount: frameCount)
+                scratch.processButterchurnFFT(samples: mono, validCount: cappedFrameCount)
             }
 
             // Publish to shared buffer (non-blocking: drops frame on contention)
-            _ = sharedBuffer.tryPublish(from: scratch, oscilloscopeSamples: 76, validFrameCount: frameCount)
+            _ = sharedBuffer.tryPublish(from: scratch, oscilloscopeSamples: 76, validFrameCount: cappedFrameCount)
         }
     }
     // swiftlint:enable function_body_length
