@@ -783,6 +783,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
 
     private func removeVisualizerTapIfNeeded() {
         visualizerPipeline.removeTap()
+        visualizerPipeline.clearData()
     }
 
     // MARK: - Seeking / Scrubbing

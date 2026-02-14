@@ -442,6 +442,17 @@ final class VisualizerPipeline {
         AppLog.debug(.audio, "VisualizerPipeline: Tap removed")
     }
 
+    /// Clear cached visualizer data so UI shows empty bars instead of stale data.
+    /// Call after removeTap() when transitioning away from audio playback.
+    func clearData() {
+        levels = []
+        latestRMS = []
+        latestSpectrum = []
+        latestWaveform = []
+        butterchurnSpectrum = Array(repeating: 0, count: 1024)
+        butterchurnWaveform = Array(repeating: 0, count: 1024)
+    }
+
     /// Check if tap is currently installed
     nonisolated var isTapInstalled: Bool {
         tapInstalled
