@@ -101,59 +101,48 @@ private enum SkinImportError: LocalizedError {
 // react when a new skin is loaded.
 @Observable
 @MainActor
+// swiftlint:disable:next type_body_length
 final class SkinManager {
 
     var currentSkin: Skin?
     var isLoading: Bool = false
     var availableSkins: [SkinMetadata] = []
-    var loadingError: String? = nil
+    var loadingError: String?
 
-    // Default skin (Winamp.wsz) - loaded once, used as fallback for missing sprites
-    @ObservationIgnored private var defaultSkin: Skin?
+    // Default skin payload - ZIP data kept in memory (~200 KB) for on-demand fallback extraction
+    @ObservationIgnored private var defaultSkinPayload: SkinArchivePayload?
+    // Cache of sprites already extracted from default skin (populated lazily per-sheet)
+    @ObservationIgnored private var defaultSkinSpriteCache: [String: NSImage] = [:]
+    // Track which sheets have been extracted from the default payload
+    @ObservationIgnored private var defaultSkinExtractedSheets: Set<String> = []
 
     init() {
         // Scan will happen on first access since we're @MainActor
     }
 
-    /// Load default Winamp skin for fallback sprites
-    /// MUST run synchronously before loading other skins
+    /// Load default Winamp skin payload (ZIP data only, ~200 KB)
+    /// Sprites are extracted lazily on demand when needed for fallback resolution.
     private func loadDefaultSkinIfNeeded() {
-        AppLog.debug(.skin, "loadDefaultSkinIfNeeded() called")
+        guard defaultSkinPayload == nil else { return }
 
-        guard defaultSkin == nil else {
-            AppLog.debug(.skin, "Default skin already loaded")
-            return
-        }
-
-        AppLog.debug(.skin, "Looking for bundled Winamp skin for default fallback...")
-        AppLog.debug(.skin, "SkinMetadata.bundledSkins count: \(SkinMetadata.bundledSkins.count)")
-
-        // Find bundled Winamp.wsz
         guard let winampSkin = SkinMetadata.bundledSkins.first(where: { $0.id == "bundled:Winamp" }) else {
-            AppLog.warn(.skin, "Default Winamp skin not found in bundle - no fallback available. Available: \(SkinMetadata.bundledSkins.map { $0.id })")
+            AppLog.warn(.skin, "Default Winamp skin not found in bundle - no fallback available")
             return
         }
-
-        AppLog.debug(.skin, "Loading default skin (Winamp.wsz) for fallback sprites from: \(winampSkin.url.path)")
 
         do {
             let expectedSheets = Set(SkinSprites.defaultSprites.sheets.keys.map { $0.lowercased() })
             let payload = try SkinArchiveLoader.load(from: winampSkin.url, expectedSheets: expectedSheets)
-
-            AppLog.debug(.skin, "Default skin archive loaded, parsing sprites...")
-
-            // Parse default skin sprites using same pipeline
-            let skin = try parseDefaultSkin(payload: payload, sourceURL: winampSkin.url)
-            defaultSkin = skin
-
-            AppLog.info(.skin, "Default skin loaded successfully! Sheets: \(skin.loadedSheets.sorted().joined(separator: ", ")), VIDEO sprites: \(skin.images.keys.filter { $0.hasPrefix("VIDEO_") }.count)")
+            defaultSkinPayload = payload
+            AppLog.info(.skin, "Default skin payload loaded (~\(payload.sheets.values.reduce(0) { $0 + $1.count } / 1024) KB)")
         } catch {
-            AppLog.error(.skin, "Failed to load default skin: \(error)")
+            AppLog.error(.skin, "Failed to load default skin payload: \(error)")
         }
     }
 
-    /// Parse default skin payload (simplified version of applySkinPayload)
-    private func parseDefaultSkin(payload: SkinArchivePayload, sourceURL: URL) throws -> Skin {
+    /// Fully parse default skin payload into a Skin object.
+    /// Used only when the default skin IS the selected skin (Task #4 optimization).
+    private func parseDefaultSkinFully(payload: SkinArchivePayload) -> Skin {
         var extractedImages: [String: NSImage] = [:]
         var loadedSheets: Set<String> = []
         let sheetsToProcess = SkinSprites.defaultSprites.sheets
@@ -161,24 +150,28 @@ final class SkinManager {
         for (sheetName, sprites) in sheetsToProcess {
             guard let data = payload.sheets[sheetName.lowercased()],
                   let sheetImage = NSImage(data: data) else {
-                continue  // Skip missing sheets in default skin
+                continue
             }
 
             loadedSheets.insert(sheetName)
 
             for sprite in sprites {
-                if let croppedImage = sheetImage.cropped(to: sprite.rect) {
-                    extractedImages[sprite.name] = croppedImage
+                autoreleasepool {
+                    if let croppedImage = sheetImage.cropped(to: sprite.rect) {
+                        extractedImages[sprite.name] = croppedImage
+                    }
                 }
             }
         }
 
-        // Parse PLEDIT for playlist style
+        // Also populate the sprite cache so fallback lookups are instant
+        defaultSkinSpriteCache = extractedImages
+        defaultSkinExtractedSheets = loadedSheets
+
         let playlistStyle: PlaylistStyle
         if let pleditData = payload.pledit, let parsed = PLEditParser.parse(from: pleditData) {
             playlistStyle = parsed
         } else {
-            // Default Winamp classic playlist colors
             playlistStyle = PlaylistStyle(
                 normalTextColor: Color.green,
                 currentTextColor: Color.white,
@@ -188,12 +181,10 @@ final class SkinManager {
             )
         }
 
-        // Parse visualizer colors
         let visualizerColors: [Color]
         if let visData = payload.viscolor, let colors = VisColorParser.parse(from: visData) {
             visualizerColors = colors
         } else {
-            // Default visualizer colors (24 colors)
             visualizerColors = (0..<24).map { _ in Color.green }
         }
 
@@ -290,6 +281,16 @@ final class SkinManager {
 
         let selectedID = AppSettings.instance().selectedSkinIdentifier ?? "bundled:Winamp"
         AppLog.info(.skin, "Loading initial skin: \(selectedID)")
+
+        // If selected skin IS the default Winamp skin, parse the already-loaded payload
+        // instead of re-extracting the ZIP (avoids double skin load peak memory spike)
+        if selectedID == "bundled:Winamp", let payload = defaultSkinPayload {
+            AppLog.info(.skin, "Selected skin is default Winamp - parsing from already-loaded payload")
+            currentSkin = parseDefaultSkinFully(payload: payload)
+            isLoading = false
+            return
+        }
+
         switchToSkin(identifier: selectedID)
     }
 
@@ -476,6 +477,7 @@ final class SkinManager {
         let processedImage = NSImage(size: size)
 
         processedImage.lockFocus()
+        defer { processedImage.unlockFocus() }
 
         // Draw original image
         image.draw(at: .zero, from: NSRect(origin: .zero, size: size), operation: .copy, fraction: 1.0)
@@ -503,24 +505,37 @@ final class SkinManager {
         // Extended by 2px to ensure rightmost digit is fully covered
         NSRect(x: 74, y: timeDisplayY, width: 24, height: 13).fill()
 
-        processedImage.unlockFocus()
-
         AppLog.debug(.skin, "Preprocessed MAIN_WINDOW_BACKGROUND: 2 blocks (24×14) leaving colon gap at y:\(timeDisplayY)")
         return processedImage
     }
 
     // MARK: - Fallback Sprite Generation
 
-    /// Get sprites from default Winamp skin for a missing sheet
-    /// Returns sprites from Winamp.wsz if available, nil otherwise
+    /// Get sprites from default Winamp skin for a missing sheet.
+    /// Extracts on-demand from the stored payload and caches results.
     private func fallbackSpritesFromDefaultSkin(sheet sheetName: String, sprites: [Sprite]) -> [String: NSImage]? {
-        guard let defaultSkin = defaultSkin else { return nil }
-        guard defaultSkin.loadedSheets.contains(sheetName) else { return nil }
+        guard let payload = defaultSkinPayload else { return nil }
+
+        // If this sheet hasn't been extracted yet, do it now and cache
+        if !defaultSkinExtractedSheets.contains(sheetName) {
+            guard let data = payload.sheets[sheetName.lowercased()],
+                  let sheetImage = NSImage(data: data) else {
+                return nil
+            }
+            defaultSkinExtractedSheets.insert(sheetName)
+            for sprite in sprites {
+                autoreleasepool {
+                    if let croppedImage = sheetImage.cropped(to: sprite.rect) {
+                        defaultSkinSpriteCache[sprite.name] = croppedImage
+                    }
+                }
+            }
+        }
 
         var fallbackSprites: [String: NSImage] = [:]
         for sprite in sprites {
-            if let defaultImage = defaultSkin.images[sprite.name] {
-                fallbackSprites[sprite.name] = defaultImage
+            if let cached = defaultSkinSpriteCache[sprite.name] {
+                fallbackSprites[sprite.name] = cached
             }
         }
 
@@ -545,12 +560,11 @@ final class SkinManager {
         // Create a transparent image
         let image = NSImage(size: size)
         image.lockFocus()
+        defer { image.unlockFocus() }
 
         // Fill with transparent color
         NSColor.clear.setFill()
         NSRect(origin: .zero, size: size).fill()
-
-        image.unlockFocus()
 
         return image
     }
@@ -606,6 +620,7 @@ final class SkinManager {
         }
     }
 
+    // swiftlint:disable:next cyclomatic_complexity function_body_length
     private func applySkinPayload(_ payload: SkinArchivePayload, sourceURL: URL) throws {
         var extractedImages: [String: NSImage] = [:]
         var loadedSheets: Set<String> = []  // Track which sheets actually loaded
@@ -624,7 +639,7 @@ final class SkinManager {
                 Sprite(name: "DIGIT_6_EX", x: 54, y: 0, width: 9, height: 13),
                 Sprite(name: "DIGIT_7_EX", x: 63, y: 0, width: 9, height: 13),
                 Sprite(name: "DIGIT_8_EX", x: 72, y: 0, width: 9, height: 13),
-                Sprite(name: "DIGIT_9_EX", x: 81, y: 0, width: 9, height: 13),
+                Sprite(name: "DIGIT_9_EX", x: 81, y: 0, width: 9, height: 13)
             ]
             AppLog.debug(.skin, "OPTIONAL: Found NUMS_EX sprites in archive")
         } else {
@@ -670,18 +685,20 @@ final class SkinManager {
             AppLog.debug(.skin, "Sheet \(sheetName) decoded (\(Int(sheetImage.size.width))x\(Int(sheetImage.size.height))), extracting \(sprites.count) sprites")
 
             for sprite in sprites {
-                let rect = sprite.rect
-                if let croppedImage = sheetImage.cropped(to: rect) {
-                    var finalImage = croppedImage
-                    if sprite.name == "MAIN_WINDOW_BACKGROUND" {
-                        finalImage = preprocessMainBackground(croppedImage)
+                autoreleasepool {
+                    let rect = sprite.rect
+                    if let croppedImage = sheetImage.cropped(to: rect) {
+                        var finalImage = croppedImage
+                        if sprite.name == "MAIN_WINDOW_BACKGROUND" {
+                            finalImage = preprocessMainBackground(croppedImage)
+                        }
+                        extractedImages[sprite.name] = finalImage
+                    } else {
+                        AppLog.warn(.skin, "Failed to crop \(sprite.name) from \(sheetName) at \(rect)")
+                        let fallbackImage = createFallbackSprite(named: sprite.name)
+                        extractedImages[sprite.name] = fallbackImage
+                        AppLog.debug(.skin, "Generated fallback sprite for '\(sprite.name)'")
                     }
-                    extractedImages[sprite.name] = finalImage
-                } else {
-                    AppLog.warn(.skin, "Failed to crop \(sprite.name) from \(sheetName) at \(rect)")
-                    let fallbackImage = createFallbackSprite(named: sprite.name)
-                    extractedImages[sprite.name] = fallbackImage
-                    AppLog.debug(.skin, "Generated fallback sprite for '\(sprite.name)'")
                 }
             }
         }
