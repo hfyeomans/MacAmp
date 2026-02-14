@@ -76,7 +76,7 @@ Deployment:               Developer ID signed, notarization-ready
 │   - MetadataLoader     │   1   │   171 │ Mechanism    │
 │   - PlaylistController │   1   │   273 │ Mechanism    │
 │   - VideoPlaybackCtrl  │   1   │   297 │ Mechanism    │
-│   - VisualizerPipeline │   1   │   525 │ Mechanism    │
+│   - VisualizerPipeline │   1   │   675 │ Mechanism    │
 │   - StreamPlayer       │   1   │   199 │ Mechanism    │
 │   - PlaybackCoord.     │   1   │   352 │ Mechanism    │
 │ Window Management      │  11   │ 1,470 │ Production   │
@@ -138,7 +138,7 @@ Deployment:               Developer ID signed, notarization-ready
      - **MetadataLoader** (171 lines): Async track/video metadata extraction (nonisolated struct)
      - **PlaylistController** (273 lines): Playlist state and navigation logic
      - **VideoPlaybackController** (297 lines): AVPlayer lifecycle and observer management
-     - **VisualizerPipeline** (525 lines): Audio tap, FFT processing, Butterchurn data
+     - **VisualizerPipeline** (675 lines): Audio tap, FFT processing, SPSC shared buffer, Butterchurn data
    - Extracted **Track** model to `Models/Track.swift` with Sendable conformance (42 lines)
    - AudioPlayer remains in Mechanism layer, now focused on AVAudioEngine lifecycle
    - Full Swift 6 strict concurrency compliance (Sendable, @MainActor, Task.detached)
@@ -617,14 +617,15 @@ The AudioPlayer class was refactored in January 2026 following the Option C incr
 │  │                      ──────────────────                            │  │
 │  │                      @MainActor @Observable                        │  │
 │  ├───────────────────────────────────────────────────────────────────┤  │
+│  │  • VisualizerSharedBuffer (class, @unchecked Sendable, SPSC)      │  │
 │  │  • VisualizerScratchBuffers (class, @unchecked Sendable)          │  │
-│  │  • VisualizerTapContext (struct, @unchecked Sendable)             │  │
 │  │  • ButterchurnFrame (struct, Sendable)                            │  │
 │  │  • installTap() - configures audio tap on mixer                   │  │
 │  │  • removeTap() - nonisolated for deinit safety                    │  │
-│  │  • makeTapHandler() - static, Sendable closure                    │  │
+│  │  • makeTapHandler() - static, Sendable closure (SPSC publish)     │  │
+│  │  • pollTimer (30 Hz) - consumes shared buffer on main thread      │  │
 │  │  • getRMSData() / getWaveformSamples() / snapshotButterchurnFrame │  │
-│  │  ~525 lines                                                        │  │
+│  │  ~675 lines                                                        │  │
 │  └───────────────────────────────────────────────────────────────────┘  │
 │                                                                          │
 │  ┌───────────────────────────────────────────────────────────────────┐  │
@@ -836,8 +837,8 @@ final class VideoPlaybackController {
 #### VisualizerPipeline (`MacAmpApp/Audio/VisualizerPipeline.swift`)
 
 **Layer:** Mechanism
-**Lines:** 525
-**Purpose:** Audio visualization tap, FFT processing, and Butterchurn data generation
+**Lines:** 675
+**Purpose:** Audio visualization tap, FFT processing, SPSC shared buffer, and Butterchurn data generation
 
 ```swift
 @MainActor
@@ -846,20 +847,28 @@ final class VisualizerPipeline {
     // Tap State (nonisolated(unsafe) for removeTap() in deinit contexts)
     @ObservationIgnored nonisolated(unsafe) private var tapInstalled = false
     @ObservationIgnored nonisolated(unsafe) private weak var mixerNode: AVAudioMixerNode?
+    @ObservationIgnored private let sharedBuffer = VisualizerSharedBuffer()
+    @ObservationIgnored nonisolated(unsafe) private var pollTimer: Timer?
 
     // Cached AppSettings flag to avoid per-frame lookup
-    @ObservationIgnored private var useSpectrum: Bool = true
+    var useSpectrum: Bool = true
 
     // Tap Management
     func installTap(on mixer: AVAudioMixerNode)
     nonisolated func removeTap()  // Safe for deinit
     nonisolated var isTapInstalled: Bool { tapInstalled }
 
-    // Static Tap Handler Factory
+    // Static Tap Handler Factory (publishes via SPSC shared buffer)
     private nonisolated static func makeTapHandler(
-        context: VisualizerTapContext,
+        sharedBuffer: VisualizerSharedBuffer,
         scratch: VisualizerScratchBuffers
     ) -> @Sendable (AVAudioPCMBuffer, AVAudioTime?) -> Void
+}
+
+// SPSC Shared Buffer (lock-free audio-to-main transfer)
+private final class VisualizerSharedBuffer: @unchecked Sendable {
+    func tryPublish(from: VisualizerScratchBuffers, ...) -> Bool  // Audio thread (non-blocking trylock)
+    func consume() -> VisualizerData?                              // Main thread (blocking lock)
 }
 
 // Supporting Types (all Sendable)
@@ -869,8 +878,10 @@ private final class VisualizerScratchBuffers: @unchecked Sendable { ... }
 ```
 
 **Key Patterns:**
-- `Unmanaged<VisualizerPipeline>` pointer for tap callback (lifetime-critical)
+- **SPSC shared buffer** replaces `Task { @MainActor }` for audio-to-main data transfer (zero allocations on audio thread). Uses `os_unfair_lock` with `trylock` on the audio thread (non-blocking, drops frame on contention) and regular lock on the main thread. A generation counter avoids redundant consumption. See `IMPLEMENTATION_PATTERNS.md` SPSC pattern section.
+- **30 Hz poll timer** on main thread calls `sharedBuffer.consume()` to pull latest data
 - Pre-allocated FFT buffers in `VisualizerScratchBuffers.init()` (no audio-thread allocations)
+- Pre-computed Goertzel coefficients (recomputed only on sample rate change, not per-callback)
 - `useSpectrum` cached to avoid per-frame AppSettings lookup
 - `removeTap()` is `nonisolated` for safe cleanup from AudioPlayer.deinit
 - **20-bar RMS** (not 19) per time bucket for spectrum visualization
@@ -947,7 +958,7 @@ MacAmpApp/
 │   ├── MetadataLoader.swift           (171 lines) - Track metadata
 │   ├── PlaylistController.swift       (273 lines) - Playlist logic
 │   ├── VideoPlaybackController.swift  (297 lines) - AVPlayer wrapper
-│   ├── VisualizerPipeline.swift       (525 lines) - Audio tap + FFT
+│   ├── VisualizerPipeline.swift       (675 lines) - Audio tap + SPSC + FFT
 │   ├── StreamPlayer.swift             (existing) - Internet radio
 │   └── PlaybackCoordinator.swift      (existing) - Backend orchestration
 │
@@ -1031,7 +1042,7 @@ All extracted components follow strict Swift 6 concurrency patterns:
 | `ButterchurnFrame` | `Sendable` | Value type with [Float] arrays |
 | `VisualizerData` | `Sendable` | Container struct |
 | `VisualizerScratchBuffers` | `@unchecked Sendable` | Confined to audio tap queue |
-| `VisualizerTapContext` | `@unchecked Sendable` | Unmanaged pointer context |
+| `VisualizerSharedBuffer` | `@unchecked Sendable` | SPSC lock-free buffer (os_unfair_lock) |
 
 **Background I/O Pattern:**
 ```swift
@@ -1057,10 +1068,13 @@ func savePerTrackPresets() {
 
 ### Risk Mitigation
 
-**VisualizerPipeline - Unmanaged Pointer Safety:**
+**VisualizerPipeline - SPSC Shared Buffer Safety:**
 - `removeTap()` is `nonisolated` and safe to call from deinit
 - AudioPlayer.deinit calls `visualizerPipeline.removeTap()` before deallocation
-- Tap callback uses `Unmanaged<VisualizerPipeline>.fromOpaque()` for pipeline access
+- Audio thread uses `os_unfair_lock_trylock` (non-blocking; drops frame on contention)
+- Main thread uses `os_unfair_lock_lock` (safe to block briefly on 30 Hz timer)
+- Generation counter prevents redundant consumption of unchanged data
+- Poll timer invalidated in `removeTap()` to prevent stale callbacks
 
 **VideoPlaybackController - Observer Cleanup:**
 - `cleanup()` removes observers and resets state (called during stop/eject)
@@ -2242,11 +2256,20 @@ The visualizer tap processing was extracted to `VisualizerPipeline.swift` for si
 │  │     └─ Pre-computed Hann window                                      │  │
 │  │     └─ vDSP_DFT_Execute for FFT                                      │  │
 │  │                                                                      │  │
-│  │  6. Dispatch to MainActor                                            │  │
-│  │     └─ Task { @MainActor in pipeline.updateLevels(...) }             │  │
+│  │  6. Publish to SPSC shared buffer (non-blocking)                     │  │
+│  │     └─ sharedBuffer.tryPublish() — drops frame on contention          │  │
+│  │     └─ Zero allocations on audio thread                               │  │
 │  │                                                                      │  │
 │  └─────────────────────────────────────────────────────────────────────┘  │
 │                                                                            │
+│  ┌─────────────────────────────────────────────────────────────────────┐  │
+│  │              30 Hz Poll Timer (Main Thread)                          │  │
+│  ├─────────────────────────────────────────────────────────────────────┤  │
+│  │  sharedBuffer.consume() → VisualizerData?                           │  │
+│  │  └─ Returns nil if no new data (generation counter check)           │  │
+│  └─────────────────────────────────────────────────────────────────────┘  │
+│       │                                                                    │
+│       ▼                                                                    │
 │  updateLevels(with: VisualizerData, useSpectrum: Bool)                     │
 │       │                                                                    │
 │       ▼                                                                    │
@@ -2304,7 +2327,7 @@ The visualizer tap processing was extracted to `VisualizerPipeline.swift` for si
 To avoid allocations on the realtime audio thread, `VisualizerScratchBuffers` pre-allocates all FFT working buffers:
 
 ```swift
-// VisualizerPipeline.swift:28-67
+// VisualizerPipeline.swift (VisualizerScratchBuffers)
 private final class VisualizerScratchBuffers: @unchecked Sendable {
     // Pre-allocated FFT working buffers
     private var hannWindow: [Float] = Array(repeating: 0, count: 2048)
@@ -2447,9 +2470,10 @@ private func handlePlaylistAction(_ action: PlaylistController.AdvanceAction) ->
 // File: MacAmpApp/Audio/VisualizerPipeline.swift
 // Purpose: Real-time spectrum analysis using Goertzel-like single-bin DFT
 // Context: More efficient than FFT for specific frequency detection
+// Data transfer: SPSC shared buffer (replaces Task { @MainActor })
 
 private nonisolated static func makeTapHandler(
-    context: VisualizerTapContext,
+    sharedBuffer: VisualizerSharedBuffer,
     scratch: VisualizerScratchBuffers
 ) -> @Sendable (AVAudioPCMBuffer, AVAudioTime?) -> Void {
     { buffer, _ in
@@ -2458,95 +2482,42 @@ private nonisolated static func makeTapHandler(
         let frameCount = Int(buffer.frameLength)
         if frameCount == 0 { return }
 
-        let bars = 20  // 20 bars for spectrum visualization
-        scratch.prepare(frameCount: frameCount, bars: bars)
+        let bars = 20
+        // prepare() clamps to pre-allocated capacity (no allocation on audio thread)
+        let cappedFrameCount = scratch.prepare(
+            frameCount: frameCount, bars: bars,
+            sampleRate: Float(buffer.format.sampleRate)  // Triggers Goertzel recompute on rate change
+        )
 
         // Convert to mono by averaging channels
         scratch.withMono { mono in
             let invCount = 1.0 / Float(channelCount)
-            for frame in 0..<frameCount {
+            for frame in 0..<cappedFrameCount {
                 var sum: Float = 0
-                for channel in 0..<channelCount {
-                    sum += ptr[channel][frame]
-                }
+                for channel in 0..<channelCount { sum += ptr[channel][frame] }
                 mono[frame] = sum * invCount
             }
         }
 
-        // Calculate RMS levels for each time bucket
+        // RMS + Spectrum (using pre-computed Goertzel coefficients)
         scratch.withMonoReadOnly { mono in
-            scratch.withRms { rms in
-                let bucketSize = max(1, frameCount / bars)
-                var cursor = 0
-                for b in 0..<bars {
-                    let start = cursor
-                    let end = min(frameCount, start + bucketSize)
-                    if end > start {
-                        var sumSq: Float = 0
-                        var index = start
-                        while index < end {
-                            let sample = mono[index]
-                            sumSq += sample * sample
-                            index += 1
-                        }
-                        var value = sqrt(sumSq / Float(end - start))
-                        value = min(1.0, value * 4.0)
-                        rms[b] = value
-                    } else {
-                        rms[b] = 0
-                    }
-                    cursor = end
-                }
-            }
-
-            // Calculate spectrum using Goertzel-like algorithm
+            scratch.withRms { rms in /* ... RMS per time bucket ... */ }
             scratch.withSpectrum { spectrum in
-                let sampleRate = Float(buffer.format.sampleRate)
-                let sampleCount = min(1024, frameCount)
-                if sampleCount > 0 {
-                    let minimumFrequency: Float = 50
-                    let maximumFrequency: Float = min(16000, sampleRate * 0.45)
-
-                    for b in 0..<bars {
-                        // Calculate center frequency for this band
-                        let normalized = Float(b) / Float(max(1, bars - 1))
-                        let logScale = minimumFrequency * pow(maximumFrequency / minimumFrequency, normalized)
-                        let linScale = minimumFrequency + normalized * (maximumFrequency - minimumFrequency)
-                        let centerFrequency = 0.91 * logScale + 0.09 * linScale  // Hybrid log-linear
-
-                        // Goertzel algorithm - efficient single-bin DFT
-                        let omega = 2 * Float.pi * centerFrequency / sampleRate
-                        let coefficient = 2 * cos(omega)
-                        var s0: Float = 0
-                        var s1: Float = 0
-                        var s2: Float = 0
-                        var index = 0
-                        while index < sampleCount {
-                            let sample = mono[index]
-                            s0 = sample + coefficient * s1 - s2
-                            s2 = s1
-                            s1 = s0
-                            index += 1
-                        }
-                        let power = s1 * s1 + s2 * s2 - coefficient * s1 * s2
-                        var value = sqrt(max(0, power)) / Float(sampleCount)
-
-                        // Apply frequency-dependent gain to compensate for perception
-                        let normalizedFreq = (centerFrequency - minimumFrequency) / (maximumFrequency - minimumFrequency)
-                        let dbAdjustment = -8.0 + 16.0 * normalizedFreq
-                        let equalizationGain = pow(10.0, dbAdjustment / 20.0)
-
-                        value *= equalizationGain
-                        value = min(1.0, value * 15.0)
-                        spectrum[b] = value
-                    }
-                } else {
-                    for b in 0..<bars {
-                        spectrum[b] = 0
-                    }
-                }
+                let coefficients = scratch.goertzel.coefficients  // Pre-computed
+                let gains = scratch.goertzel.equalizationGains    // Pre-computed
+                // Goertzel single-bin DFT using cached coefficients
+                // (eliminates 20x pow() + 20x cos() per callback)
             }
         }
+
+        // Process Butterchurn FFT (2048-point → 1024 bins)
+        scratch.withMonoReadOnly { mono in
+            scratch.processButterchurnFFT(samples: mono, validCount: cappedFrameCount)
+        }
+
+        // Publish to SPSC shared buffer (non-blocking: drops frame on contention)
+        _ = sharedBuffer.tryPublish(from: scratch, oscilloscopeSamples: 76,
+                                     validFrameCount: cappedFrameCount)
     }
 }
 ```
@@ -4544,7 +4515,7 @@ MacAmpApp/
 │   ├── MetadataLoader.swift        # Async track/video metadata (171 lines)
 │   ├── PlaylistController.swift    # Playlist state and navigation (273 lines)
 │   ├── VideoPlaybackController.swift # AVPlayer lifecycle (297 lines)
-│   ├── VisualizerPipeline.swift    # Audio tap, FFT, Butterchurn (525 lines)
+│   ├── VisualizerPipeline.swift    # Audio tap, FFT, SPSC buffer, Butterchurn (675 lines)
 │   ├── StreamPlayer.swift          # AVPlayer, internet radio (199 lines)
 │   └── PlaybackCoordinator.swift   # Orchestrates both backends (352 lines)
 │

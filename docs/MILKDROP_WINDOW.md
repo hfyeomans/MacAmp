@@ -568,8 +568,8 @@ The Butterchurn integration uses WKUserScript injection to load JavaScript libra
           ▼                              │
 ┌─────────────────────────────────────────────────────────────┐
 │                    AVAudioEngine                             │
-│    • installTap(1024 samples, 48kHz)                        │
-│    • Goertzel-like 19-band spectrum analysis                │
+│    • installTap(2048 samples, 48kHz)                        │
+│    • Goertzel-like 20-band spectrum analysis                │
 └─────────────────────────────────────────────────────────────┘
 ```
 

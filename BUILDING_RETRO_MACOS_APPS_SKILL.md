@@ -4209,8 +4209,8 @@ Phase Sequence:
 │  MEDIUM RISK                                        │
 │  VideoPlaybackController (AVPlayer) → 259 lines     │
 ├─────────────────────────────────────────────────────┤
-│  HIGH RISK                                          │
-│  VisualizerPipeline (Unmanaged ptr) → 512 lines     │
+│  HIGH RISK (COMPLETED - see Lesson #24)              │
+│  VisualizerPipeline (SPSC buffer) → 678 lines        │
 ├─────────────────────────────────────────────────────┤
 │  HIGHEST RISK - DEFER DECISION                      │
 │  AudioEngineController (engine lifecycle)           │
@@ -4529,6 +4529,8 @@ git config core.hooksPath .githooks
 
 ### 20. Unmanaged Pointer Lifecycle Management
 
+> **Note (Feb 2026):** The `Unmanaged<T>` pointer pattern described here has been **superseded** by the SPSC shared buffer approach in Lesson #24. The new pattern eliminates the need for `Unmanaged` pointers entirely by using a `nonisolated static func makeTapHandler()` that captures only `Sendable` types (`VisualizerSharedBuffer` and `VisualizerScratchBuffers`). The lifecycle management principles below remain valid for any C-callback context pattern.
+
 **The Problem:** `Unmanaged<T>` pointers in audio taps can cause use-after-free if the owning object deallocates while the tap is still installed.
 
 **Solution: Explicit removeTap() in deinit**
@@ -4612,7 +4614,7 @@ After completing feature work, add a dedicated "Quality Gate" phase:
 ```
 Phase 9: Quality Gate Remediation
 ├── 9.0.1: High Priority - deinit cleanup (prevent crashes)
-├── 9.0.2: High Priority - Unmanaged pointer safety
+├── 9.0.2: High Priority - Unmanaged pointer safety (superseded by SPSC in Lesson #24)
 ├── 9.0.3: Medium Priority - Sendable conformance
 ├── 9.0.4: Medium Priority - Background I/O
 ├── 9.0.5: Low Priority - Comment styling consistency
@@ -4625,7 +4627,7 @@ Phase 9: Quality Gate Remediation
 codex "@File1.swift @File2.swift @File3.swift
 Quality Gate Review:
 1. Thread safety - @MainActor, nonisolated(unsafe)
-2. Memory safety - Unmanaged lifetime, weak references
+2. Memory safety - SPSC buffer lifecycle, weak references (Unmanaged superseded)
 3. Swift 6 readiness - Sendable, @Sendable closures
 4. Resource cleanup - deinit, observer removal
 5. Background I/O - no UI blocking
@@ -4743,6 +4745,8 @@ ls -la ~/Library/Developer/Xcode/DerivedData/MacAmpApp-*/Build/Products/Debug/Ma
 20. **Pre-allocated Audio Buffers** - Zero allocations on audio thread; pre-allocate FFT buffers in init
 21. **Quality Gate Methodology** - Use Oracle reviews with 10/10 target; fix all high/medium issues before shipping
 22. **Placeholder.md Convention** - No `// TODO` in code; document placeholders in `tasks/<task>/placeholder.md`
+23. **SPSC Audio Thread Safety** - Zero allocations on audio thread; use os_unfair_lock_trylock() with pre-allocated shared buffers
+24. **Memory Profiling with LLDB** - Use `footprint`, `leaks`, `heap` CLI tools; subtract sanitizer overhead for actual metrics
 
 ### This Skill Enables You To
 
@@ -4769,6 +4773,9 @@ ls -la ~/Library/Developer/Xcode/DerivedData/MacAmpApp-*/Build/Products/Debug/Ma
 - ✅ Implement real-time audio processing with pre-allocated buffers
 - ✅ Achieve 10/10 Oracle scores through systematic quality gate phases
 - ✅ Document future features with centralized placeholder.md convention
+- ✅ Implement SPSC shared buffers for allocation-free real-time audio thread data transfer
+- ✅ Profile and fix memory leaks with LLDB heap/leaks/footprint tools
+- ✅ Optimize peak memory with lazy extraction and independent CGContext copies
 
 ### Next Project Improvements
 
@@ -4787,9 +4794,18 @@ When building your next retro macOS app:
 **Document Status:** Production Ready
 **Maintenance:** Update when new patterns/pitfalls discovered
 **Owner:** MacAmp Development Team
-**Last Updated:** 2026-01-11
+**Last Updated:** 2026-02-14
 
 **Recent Additions:**
+- **Memory & CPU Optimization** (Feb 14, 2026) - SPSC shared buffer, zero audio-thread allocations, memory leak fixes
+  - SPSC shared buffer with os_unfair_lock_trylock for audio-to-main thread data transfer (Lesson #24)
+  - Goertzel coefficient precomputation and pre-allocated scratch buffers
+  - Pause tap policy (remove tap on pause, reinstall on play)
+  - Lazy default skin loading (compressed ZIP payload instead of full parse)
+  - Independent CGContext copies for sprite cropping (breaks parent-child buffer retention)
+  - Metrics: -19% footprint, -23% peak, -100% leaks, 0 audio thread allocations
+  - Lesson #20 updated: Unmanaged pointer pattern superseded by SPSC
+- **Facade + Composition Refactoring** (Feb 2026) - WindowCoordinator decomposition (Lesson #23)
 - **Code Optimization Patterns** (Jan 11, 2026) - Comprehensive refactoring and Swift 6 readiness
   - Force unwrap elimination with Optional.map, flatMap, guard chains (Lessons #12)
   - Risk-ordered incremental component extraction: AudioPlayer 1,805→1,059 lines (Lesson #13)
@@ -4799,7 +4815,7 @@ When building your next retro macOS app:
   - UserDefaults Keys enum for centralized key management (Lesson #17)
   - Placeholder.md convention replacing TODO comments (Lesson #18)
   - Pre-commit hooks with tracked .githooks/ directory (Lesson #19)
-  - Unmanaged pointer lifecycle management (Lesson #20)
+  - Unmanaged pointer lifecycle management (Lesson #20, superseded by SPSC in Lesson #24)
   - Callback patterns for cross-component sync (Lesson #21)
   - Quality Gate methodology for 10/10 Oracle scores (Lesson #22)
   - New Audio directory structure: 5 extracted components
@@ -5742,8 +5758,250 @@ When refactoring large files (1,000+ lines):
 - SwiftLint violations (type_body_length, function_body_length)
 - Frequent merge conflicts from multiple engineers
 
+### 24. Memory & CPU Optimization: SPSC Audio Thread Patterns (February 2026)
+
+**Lesson from:** Memory & CPU optimization task (`tasks/memory-cpu-optimization/`)
+**Oracle Grade:** PASS (0 HIGH findings after fixes, gpt-5.3-codex, xhigh reasoning)
+**Total Commits:** 7 commits across 3 phases + Oracle fixes
+**Branch:** `perf/memory-cpu-optimization`
+
+#### The Problem: Heap Allocations on the Real-Time Audio Thread
+
+AVAudioEngine tap callbacks run on a real-time audio thread with strict latency guarantees (~23 ms window at 44.1 kHz / 1024 samples). Any heap allocation on this thread can trigger ARC reference counting, which acquires a spinlock internally. Under memory pressure, this stalls the audio thread, causing buffer underruns (audible skips).
+
+**Before:** The visualizer tap callback performed ~7-8 heap allocations per invocation:
+```
+Audio Thread Callback (~21.5 Hz):
+  1. snapshotRms()           → NEW Array   (heap alloc)
+  2. snapshotSpectrum()      → NEW Array   (heap alloc)
+  3. waveformSnapshot        → NEW Array   (heap alloc via stride.prefix.map)
+  4. butterchurnSpectrum     → NEW Array   (heap alloc)
+  5. butterchurnWaveform     → NEW Array   (heap alloc)
+  6. VisualizerData(...)     → struct w/ 5 arrays
+  7. Task { @MainActor }     → NEW TASK    (heap alloc + ARC)
+
+Total: ~150-170 heap allocations/second on the audio render thread
+```
+
+**Root cause analysis:** The code looks correct in isolation -- creating Arrays and dispatching Tasks are normal Swift patterns. The violation is invisible in code review because it's a thread-context issue: these operations are safe on any thread **except** the real-time audio render thread. Standard profilers (Instruments Time Profiler) don't flag it. Diagnosis required LLDB `heap` analysis combined with knowledge of Apple's real-time audio constraints (WWDC 2014 Session 502).
+
+#### Solution: SPSC Shared Buffer with Non-Blocking trylock
+
+Replace per-callback allocations and `Task { @MainActor }` dispatch with a Single-Producer Single-Consumer (SPSC) shared buffer using `os_unfair_lock_trylock()`:
+
+```swift
+private final class VisualizerSharedBuffer: @unchecked Sendable {
+    // Pre-allocated arrays (never reallocated after init)
+    private var rms = [Float](repeating: 0, count: 20)
+    private var spectrum = [Float](repeating: 0, count: 20)
+    private var waveform = [Float](repeating: 0, count: 76)
+    private var bcSpectrum = [Float](repeating: 0, count: 1024)
+    private var bcWaveform = [Float](repeating: 0, count: 1024)
+
+    private var lock = os_unfair_lock()
+    private var generation: UInt64 = 0
+    private var lastConsumed: UInt64 = 0
+
+    /// Audio thread: non-blocking publish via trylock
+    func tryPublish(from scratch: VisualizerScratchBuffers, ...) -> Bool {
+        guard os_unfair_lock_trylock(&lock) else { return false }  // Drop frame on contention
+        defer { os_unfair_lock_unlock(&lock) }
+
+        // memcpy into pre-allocated arrays (zero allocation)
+        scratchRms.withUnsafeBufferPointer { src in
+            rms.withUnsafeMutableBufferPointer { dst in
+                memcpy(dst.baseAddress!, src.baseAddress!, count * MemoryLayout<Float>.stride)
+            }
+        }
+        // ... repeat for spectrum, waveform, butterchurn data ...
+        generation &+= 1
+        return true
+    }
+
+    /// Main thread: blocking consume (safe to block here)
+    func consume() -> VisualizerData? {
+        os_unfair_lock_lock(&lock)
+        guard generation != lastConsumed else {
+            os_unfair_lock_unlock(&lock)
+            return nil  // No new data
+        }
+        lastConsumed = generation
+        let data = VisualizerData(
+            rms: Array(rms.prefix(rmsCount)),      // Array allocation on main thread (safe)
+            spectrum: Array(spectrum.prefix(...)),
+            // ...
+        )
+        os_unfair_lock_unlock(&lock)
+        return data
+    }
+}
+```
+
+**Key design decisions:**
+- `os_unfair_lock_trylock()` on audio thread: **non-blocking** -- if main thread holds the lock, audio thread drops one visualization frame (imperceptible at 21.5 Hz) instead of stalling
+- `os_unfair_lock_lock()` on main thread: **blocking OK** -- main thread can safely wait briefly (lock hold time is bounded: 5 small memcpy operations)
+- All `Array` construction happens in `consume()` on the main thread where heap allocations and ARC operations are safe
+- `generation` counter enables the main thread to detect stale data without polling the arrays
+- `@unchecked Sendable` is justified by the lock protecting all mutable state
+
+#### Tap Handler: Static Factory for Sendable Compliance
+
+The tap callback cannot capture `self` (a `@MainActor`-isolated object). Use a static factory method:
+
+```swift
+@MainActor
+@Observable
+final class VisualizerPipeline {
+    @ObservationIgnored private let sharedBuffer = VisualizerSharedBuffer()
+
+    func installTap(on mixer: AVAudioMixerNode) {
+        let scratch = VisualizerScratchBuffers()
+        let handler = Self.makeTapHandler(sharedBuffer: sharedBuffer, scratch: scratch)
+        mixer.installTap(onBus: 0, bufferSize: 2048, format: nil, block: handler)
+        startPollTimer()  // 30 Hz Timer on main thread
+    }
+
+    /// Build tap handler in nonisolated context -- captures only Sendable types
+    private nonisolated static func makeTapHandler(
+        sharedBuffer: VisualizerSharedBuffer,
+        scratch: VisualizerScratchBuffers
+    ) -> @Sendable (AVAudioPCMBuffer, AVAudioTime?) -> Void {
+        { buffer, _ in
+            // All processing uses pre-allocated scratch buffers
+            let cappedFrameCount = scratch.prepare(frameCount: Int(buffer.frameLength), ...)
+            // ... mix to mono, compute RMS, Goertzel spectrum, Butterchurn FFT ...
+            _ = sharedBuffer.tryPublish(from: scratch, ...)  // Zero allocations
+        }
+    }
+}
+```
+
+**Why static factory:** Avoids capturing `self` in the closure (which would require `@MainActor` isolation or `Unmanaged` pointers). The handler only captures `VisualizerSharedBuffer` and `VisualizerScratchBuffers`, both marked `@unchecked Sendable` with proper justification.
+
+#### Additional Optimizations in This Task
+
+**1. Goertzel Coefficient Precomputation:**
+```swift
+private struct GoertzelCoefficients {
+    var coefficients: [Float]
+    var equalizationGains: [Float]
+    private(set) var sampleRate: Float = 0
+
+    mutating func updateIfNeeded(bars: Int, sampleRate: Float) -> Bool {
+        guard sampleRate != self.sampleRate else { return false }  // Only recompute on track change
+        // Eliminates 20x pow() + 20x cos() calls per callback (~21.5 Hz)
+        for b in 0..<bars {
+            let omega = 2 * Float.pi * centerFrequency / sampleRate
+            coefficients[b] = 2 * cos(omega)
+            equalizationGains[b] = pow(10.0, dbAdjustment / 20.0)
+        }
+        return true
+    }
+}
+```
+
+**2. Pre-allocated Scratch Buffers with Capacity Clamping:**
+```swift
+private final class VisualizerScratchBuffers: @unchecked Sendable {
+    private static let maxFrameCount = 4096  // AVAudioEngine uses 2048, well within cap
+
+    init() {
+        mono = Array(repeating: 0, count: Self.maxFrameCount)
+        rms = Array(repeating: 0, count: Self.maxBars)
+        spectrum = Array(repeating: 0, count: Self.maxBars)
+    }
+
+    func prepare(frameCount: Int, ...) -> Int {
+        // CRITICAL: Clamp to pre-allocated capacity instead of growing
+        let cappedFrameCount = min(frameCount, mono.count)
+        vDSP_vclr(&mono, 1, vDSP_Length(cappedFrameCount))  // Zero without reallocation
+        return cappedFrameCount
+    }
+}
+```
+
+**3. Pause Tap Policy:**
+```swift
+// BEFORE: tap stays active during pause (wasted CPU processing silence)
+pause() → (tap continues at 21.5 Hz, processing zeros)
+
+// AFTER: tap removed on pause, reinstalled on play
+play()  → installVisualizerTapIfNeeded() + startPollTimer()
+pause() → removeVisualizerTapIfNeeded()   // NEW
+stop()  → removeVisualizerTapIfNeeded()
+```
+
+**4. Lazy Default Skin Loading:**
+```swift
+// BEFORE: Both default + selected skins fully parsed at startup (594 MB peak)
+// AFTER:  Default skin kept as compressed ZIP payload (~200 KB)
+//         Fallback sprites extracted lazily per-sheet on demand
+```
+
+**5. Independent CGContext Copies for Sprite Cropping:**
+```swift
+// BEFORE: cgImage.cropping(to:) shares parent's float pixel buffer
+//         Parent buffer (512 KB+) retained as long as ANY child sprite exists
+
+// AFTER:  Copy pixels into independent sRGB RGBA8 CGContext
+//         Each sprite owns only its own pixel data (width*height*4 bytes)
+//         autoreleasepool around each crop drains intermediates immediately
+```
+
+#### Metrics Achieved
+
+| Metric | Before | After | Delta |
+|--------|--------|-------|-------|
+| **Actual Footprint** | ~48 MB | ~39 MB | **-19%** |
+| **Actual Peak** | ~377 MB | ~291 MB | **-23%** |
+| **Leaked Bytes** | 496 KB (47 leaks) | 0 (0 leaks) | **-100%** |
+| **Heap Nodes** | 86,379 | 71,416 | **-17%** |
+| **Heap Bytes** | 3.8 MB | 2.7 MB | **-29%** |
+| **Audio Thread Allocs/sec** | ~150-170 | 0 | **-100%** |
+| **CPU at Idle** | 0.0% | 0.0% | Maintained |
+
+*Profiled with `footprint` and `leaks` CLI tools. TSan overhead (~217-262 MB) subtracted for actual metrics.*
+
+#### Oracle Validation
+
+The implementation was reviewed by Oracle (gpt-5.3-codex, xhigh reasoning) with three separate reviews:
+
+1. **Code Review:** Found 2 HIGH findings (both fixed), 4 MEDIUM (2 fixed, 2 accepted), 2 LOW (accepted). Final verdict: "SPSC design sound, allocation-free in steady state, tap lifecycle correct."
+2. **Architecture Alignment Review:** Confirmed three-layer pattern compliance, @Observable usage, and noted SPSC is a "clean architectural upgrade over old Unmanaged pointer pattern."
+3. **Swift 6.2 Compliance Review:** Verified all 4 `nonisolated(unsafe)` usages justified, both `@unchecked Sendable` justified, `MainActor.assumeIsolated` with `dispatchPrecondition` correct.
+
+#### When to Use This Pattern
+
+**Use SPSC shared buffer when:**
+- Transferring data from a real-time thread (audio, MIDI, sensor) to the main thread
+- The producer (audio thread) cannot tolerate ANY blocking or heap allocation
+- Dropped frames are acceptable (visualization, meters, UI updates)
+- Data is fixed-size or bounded (known maximum array sizes)
+
+**Use `Task { @MainActor }` when:**
+- The producer is NOT a real-time thread (network callbacks, file I/O)
+- Every update must be delivered (no frame dropping acceptable)
+- Data size varies significantly between updates
+
+**Use lock-free atomics when:**
+- Only a single scalar value is transferred (e.g., playback position)
+- No multi-field consistency is required
+
+#### Key Takeaways
+
+1. **Zero allocations on audio thread is non-negotiable** -- any allocation can trigger ARC spinlock contention
+2. **`os_unfair_lock_trylock()` is the right primitive** for audio → main thread transfer (non-blocking, drops frame on contention)
+3. **Static factory tap handlers** eliminate Unmanaged pointer risk and satisfy Swift 6 Sendable requirements
+4. **Precompute everything possible** outside the tap callback (Goertzel coefficients, Hann window, FFT setup)
+5. **Clamp to pre-allocated capacity** instead of growing buffers on the audio thread
+6. **Remove taps during pause** to eliminate wasted CPU processing silence
+7. **Lazy fallback extraction** avoids double skin parsing at startup (594 MB → ~291 MB peak)
+8. **Independent CGContext copies** break CGImage parent-child buffer retention chains
+9. **LLDB `heap` + `leaks` + `footprint`** are essential for memory profiling (Instruments alone insufficient)
+10. **Oracle multi-review strategy** (code + architecture + Swift 6.2) catches issues that single reviews miss
+
 ---
 
 **Built with ❤️ for retro computing on modern macOS**
 
-*This skill document captures 9+ months of lessons learned building MacAmp, distilled into actionable patterns for building similar retro-styled macOS applications with modern Swift 6 patterns. Updated with WindowCoordinator Facade + Composition refactoring (Feb 2026), demonstrating god object decomposition, phased migration strategy, Oracle-driven quality gates, and Swift 6.2 concurrency compliance.*
+*This skill document captures 9+ months of lessons learned building MacAmp, distilled into actionable patterns for building similar retro-styled macOS applications with modern Swift 6 patterns. Updated with memory & CPU optimization (Feb 2026), featuring SPSC shared buffer for zero-allocation audio thread data transfer, Goertzel precomputation, lazy skin loading, and CGImage memory leak fixes. Also includes WindowCoordinator Facade + Composition refactoring, demonstrating god object decomposition, phased migration strategy, Oracle-driven quality gates, and Swift 6.2 concurrency compliance.*
