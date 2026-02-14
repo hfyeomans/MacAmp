@@ -430,12 +430,15 @@ final class VisualizerPipeline {
     /// Remove visualizer tap if installed
     /// Nonisolated to allow calling from deinit (AVAudioMixerNode.removeTap is thread-safe)
     nonisolated func removeTap() {
-        guard tapInstalled, let mixer = mixerNode else { return }
+        guard tapInstalled else { return }
         // pollTimer was scheduled on main run loop — must invalidate from main thread
         dispatchPrecondition(condition: .onQueue(.main))
         pollTimer?.invalidate()
         pollTimer = nil
-        mixer.removeTap(onBus: 0)
+        // mixerNode may be nil if the AVAudioMixerNode was deallocated first
+        if let mixer = mixerNode {
+            mixer.removeTap(onBus: 0)
+        }
         tapInstalled = false
         mixerNode = nil
 
