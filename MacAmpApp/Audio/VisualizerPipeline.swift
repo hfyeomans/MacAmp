@@ -1,6 +1,7 @@
 import AVFoundation
 import Accelerate
 import Observation
+import os
 
 // MARK: - Butterchurn Audio Frame
 
@@ -23,6 +24,125 @@ struct VisualizerData: Sendable {
     let waveform: [Float]
     let butterchurnSpectrum: [Float]
     let butterchurnWaveform: [Float]
+}
+
+// MARK: - Shared Buffer (Lock-Free Audio-to-Main Transfer)
+
+/// Thread-safe shared buffer for transferring visualizer data from the audio tap
+/// to the main thread without any allocation on the audio thread.
+///
+/// Uses os_unfair_lock with trylock on the audio thread (non-blocking, drops frame
+/// on contention) and regular lock on the main thread (safe to block briefly).
+private final class VisualizerSharedBuffer: @unchecked Sendable {
+    private var rms = [Float](repeating: 0, count: 20)
+    private var spectrum = [Float](repeating: 0, count: 20)
+    private var waveform = [Float](repeating: 0, count: 76)
+    private var bcSpectrum = [Float](repeating: 0, count: 1024)
+    private var bcWaveform = [Float](repeating: 0, count: 1024)
+    private var waveformCount: Int = 0
+    private var rmsCount: Int = 0
+    private var spectrumCount: Int = 0
+
+    private var lock = os_unfair_lock()
+    private var generation: UInt64 = 0
+    private var lastConsumed: UInt64 = 0
+
+    /// Audio thread: try to publish data (non-blocking).
+    /// Returns false if lock is contended (frame is dropped).
+    func tryPublish(from scratch: VisualizerScratchBuffers, oscilloscopeSamples: Int, validFrameCount: Int) -> Bool {
+        guard os_unfair_lock_trylock(&lock) else { return false }
+        defer { os_unfair_lock_unlock(&lock) }
+
+        let scratchRms = scratch.rms
+        let rCount = min(scratchRms.count, rms.count)
+        scratchRms.withUnsafeBufferPointer { src in
+            rms.withUnsafeMutableBufferPointer { dst in
+                if rCount > 0, let s = src.baseAddress, let d = dst.baseAddress {
+                    memcpy(d, s, rCount * MemoryLayout<Float>.stride)
+                }
+            }
+        }
+        rmsCount = rCount
+
+        let scratchSpec = scratch.spectrum
+        let sCount = min(scratchSpec.count, spectrum.count)
+        scratchSpec.withUnsafeBufferPointer { src in
+            spectrum.withUnsafeMutableBufferPointer { dst in
+                if sCount > 0, let s = src.baseAddress, let d = dst.baseAddress {
+                    memcpy(d, s, sCount * MemoryLayout<Float>.stride)
+                }
+            }
+        }
+        spectrumCount = sCount
+
+        // Downsample waveform using validFrameCount (not mono.count)
+        let scratchMono = scratch.mono
+        let monoLen = validFrameCount
+        let step = max(1, monoLen / oscilloscopeSamples)
+        let actualSamples = min(oscilloscopeSamples, waveform.count)
+        scratchMono.withUnsafeBufferPointer { src in
+            waveform.withUnsafeMutableBufferPointer { dst in
+                guard let s = src.baseAddress, let d = dst.baseAddress else { return }
+                for i in 0..<actualSamples {
+                    let idx = min(i * step, monoLen - 1)
+                    d[i] = s[idx]
+                }
+            }
+        }
+        waveformCount = actualSamples
+
+        let scratchBcSpec = scratch.butterchurnSpectrum
+        scratchBcSpec.withUnsafeBufferPointer { src in
+            bcSpectrum.withUnsafeMutableBufferPointer { dst in
+                let count = min(src.count, dst.count)
+                if count > 0, let s = src.baseAddress, let d = dst.baseAddress {
+                    memcpy(d, s, count * MemoryLayout<Float>.stride)
+                }
+            }
+        }
+
+        let scratchBcWave = scratch.butterchurnWaveform
+        scratchBcWave.withUnsafeBufferPointer { src in
+            bcWaveform.withUnsafeMutableBufferPointer { dst in
+                let count = min(src.count, dst.count)
+                if count > 0, let s = src.baseAddress, let d = dst.baseAddress {
+                    memcpy(d, s, count * MemoryLayout<Float>.stride)
+                }
+            }
+        }
+
+        generation &+= 1
+        return true
+    }
+
+    /// Main thread: consume latest data (blocking lock, safe for main thread).
+    func consume() -> VisualizerData? {
+        os_unfair_lock_lock(&lock)
+
+        guard generation != lastConsumed else {
+            os_unfair_lock_unlock(&lock)
+            return nil
+        }
+        lastConsumed = generation
+
+        // Copy raw data under lock (memcpy only, no construction)
+        let localRms = Array(rms.prefix(rmsCount))
+        let localSpec = Array(spectrum.prefix(spectrumCount))
+        let localWave = Array(waveform.prefix(waveformCount))
+        let localBcSpec = Array(bcSpectrum)
+        let localBcWave = Array(bcWaveform)
+
+        os_unfair_lock_unlock(&lock)
+
+        // Construct VisualizerData after releasing lock
+        return VisualizerData(
+            rms: localRms,
+            spectrum: localSpec,
+            waveform: localWave,
+            butterchurnSpectrum: localBcSpec,
+            butterchurnWaveform: localBcWave
+        )
+    }
 }
 
 // MARK: - Goertzel Coefficients
@@ -160,14 +280,6 @@ private final class VisualizerScratchBuffers: @unchecked Sendable {
         body(&spectrum)
     }
 
-    func snapshotRms() -> [Float] {
-        rms
-    }
-
-    func snapshotSpectrum() -> [Float] {
-        spectrum
-    }
-
     // MARK: - Butterchurn FFT Processing
 
     /// Process audio samples for Butterchurn visualization
@@ -220,21 +332,6 @@ private final class VisualizerScratchBuffers: @unchecked Sendable {
             butterchurnWaveform[i] = samples[sampleIndex]
         }
     }
-
-    func snapshotButterchurnSpectrum() -> [Float] {
-        butterchurnSpectrum
-    }
-
-    func snapshotButterchurnWaveform() -> [Float] {
-        butterchurnWaveform
-    }
-}
-
-// MARK: - Tap Context
-
-/// Context passed to audio tap for callback to VisualizerPipeline
-private struct VisualizerTapContext: @unchecked Sendable {
-    let pipelinePointer: UnsafeMutableRawPointer
 }
 
 // MARK: - VisualizerPipeline
@@ -258,6 +355,8 @@ final class VisualizerPipeline {
 
     @ObservationIgnored nonisolated(unsafe) private var tapInstalled = false
     @ObservationIgnored nonisolated(unsafe) private weak var mixerNode: AVAudioMixerNode?
+    @ObservationIgnored private let sharedBuffer = VisualizerSharedBuffer()
+    @ObservationIgnored nonisolated(unsafe) private var pollTimer: Timer?
 
     // MARK: - Visualizer Data Storage
 
@@ -318,16 +417,12 @@ final class VisualizerPipeline {
         mixer.removeTap(onBus: 0)
 
         let scratch = VisualizerScratchBuffers()
-
-        let context = VisualizerTapContext(
-            pipelinePointer: Unmanaged.passUnretained(self).toOpaque()
-        )
-
-        let handler = Self.makeTapHandler(context: context, scratch: scratch)
+        let handler = Self.makeTapHandler(sharedBuffer: sharedBuffer, scratch: scratch)
 
         // Buffer size 2048 for Butterchurn FFT - provides 1024 frequency bins
         mixer.installTap(onBus: 0, bufferSize: 2048, format: nil, block: handler)
         tapInstalled = true
+        startPollTimer()
 
         AppLog.debug(.audio, "VisualizerPipeline: Tap installed")
     }
@@ -336,6 +431,10 @@ final class VisualizerPipeline {
     /// Nonisolated to allow calling from deinit (AVAudioMixerNode.removeTap is thread-safe)
     nonisolated func removeTap() {
         guard tapInstalled, let mixer = mixerNode else { return }
+        // pollTimer was scheduled on main run loop — must invalidate from main thread
+        dispatchPrecondition(condition: .onQueue(.main))
+        pollTimer?.invalidate()
+        pollTimer = nil
         mixer.removeTap(onBus: 0)
         tapInstalled = false
         mixerNode = nil
@@ -346,6 +445,23 @@ final class VisualizerPipeline {
     /// Check if tap is currently installed
     nonisolated var isTapInstalled: Bool {
         tapInstalled
+    }
+
+    // MARK: - Poll Timer
+
+    private func startPollTimer() {
+        pollTimer?.invalidate()
+        pollTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
+            dispatchPrecondition(condition: .onQueue(.main))
+            MainActor.assumeIsolated {
+                self?.pollVisualizerData()
+            }
+        }
+    }
+
+    private func pollVisualizerData() {
+        guard let data = sharedBuffer.consume() else { return }
+        updateLevels(with: data, useSpectrum: useSpectrum)
     }
 
     // MARK: - Butterchurn Data Access
@@ -402,10 +518,10 @@ final class VisualizerPipeline {
         return result
     }
 
-    // MARK: - Data Update (called from tap)
+    // MARK: - Data Update (called from poll timer)
 
-    /// Update visualizer levels with new data from audio tap
-    /// Called on MainActor from tap handler via Task
+    /// Update visualizer levels with new data from shared buffer
+    /// Called on MainActor from 30 Hz poll timer
     func updateLevels(with data: VisualizerData, useSpectrum: Bool) {
         // Store all visualizer datasets
         latestRMS = data.rms
@@ -442,11 +558,14 @@ final class VisualizerPipeline {
 
     // MARK: - Tap Handler (nonisolated)
 
+    // swiftlint:disable function_body_length
     /// Build the tap handler in a nonisolated context so AVAudioEngine can call it on its realtime queue.
+    /// Uses SPSC shared buffer instead of Task { @MainActor } to avoid allocations on the audio thread.
     private nonisolated static func makeTapHandler(
-        context: VisualizerTapContext,
+        sharedBuffer: VisualizerSharedBuffer,
         scratch: VisualizerScratchBuffers
     ) -> @Sendable (AVAudioPCMBuffer, AVAudioTime?) -> Void {
+        // swiftlint:disable:next closure_body_length
         { buffer, _ in
             let channelCount = Int(buffer.format.channelCount)
             guard channelCount > 0, let ptr = buffer.floatChannelData else { return }
@@ -469,7 +588,7 @@ final class VisualizerPipeline {
             }
 
             // Compute RMS per bar
-            scratch.withMonoReadOnly { mono in
+            scratch.withMonoReadOnly { mono in // swiftlint:disable:this closure_body_length
                 scratch.withRms { rms in
                     let bucketSize = max(1, frameCount / bars)
                     var cursor = 0
@@ -528,42 +647,14 @@ final class VisualizerPipeline {
                 }
             }
 
-            let rmsSnapshot = scratch.snapshotRms()
-            let spectrumSnapshot = scratch.snapshotSpectrum()
-
-            // Capture waveform samples for oscilloscope
-            // Use frameCount (not mono.count which is pre-allocated capacity 4096)
-            let oscilloscopeSamples = 76  // Match VisualizerLayout.oscilloscopeSampleCount
-            var waveformSnapshot: [Float] = []
-            scratch.withMonoReadOnly { mono in
-                let step = max(1, frameCount / oscilloscopeSamples)
-                waveformSnapshot = stride(from: 0, to: frameCount, by: step)
-                    .prefix(oscilloscopeSamples)
-                    .map { mono[$0] }
-            }
-
             // Process Butterchurn FFT (2048-point for 1024 bins)
             scratch.withMonoReadOnly { mono in
                 scratch.processButterchurnFFT(samples: mono, validCount: frameCount)
             }
-            let butterchurnSpectrumSnapshot = scratch.snapshotButterchurnSpectrum()
-            let butterchurnWaveformSnapshot = scratch.snapshotButterchurnWaveform()
 
-            // Create data container
-            let data = VisualizerData(
-                rms: rmsSnapshot,
-                spectrum: spectrumSnapshot,
-                waveform: waveformSnapshot,
-                butterchurnSpectrum: butterchurnSpectrumSnapshot,
-                butterchurnWaveform: butterchurnWaveformSnapshot
-            )
-
-            // Dispatch to MainActor to update pipeline state
-            Task { @MainActor [context, data] in
-                let pipeline = Unmanaged<VisualizerPipeline>.fromOpaque(context.pipelinePointer).takeUnretainedValue()
-                // Use cached useSpectrum from pipeline (set by AudioPlayer when settings change)
-                pipeline.updateLevels(with: data, useSpectrum: pipeline.useSpectrum)
-            }
+            // Publish to shared buffer (non-blocking: drops frame on contention)
+            _ = sharedBuffer.tryPublish(from: scratch, oscilloscopeSamples: 76, validFrameCount: frameCount)
         }
     }
+    // swiftlint:enable function_body_length
 }
