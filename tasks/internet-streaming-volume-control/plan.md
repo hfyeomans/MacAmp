@@ -4,7 +4,880 @@
 
 ---
 
-## Status: ORACLE REVIEWED — CORRECTIONS APPLIED
+## Status: ORACLE REVIEWED — CORRECTIONS APPLIED — PREREQUISITE VALIDATION COMPLETE
+
+---
+
+## Architecture Diagrams
+
+### 1. Current Architecture (Before — The Problem)
+
+Two disconnected audio backends with no unified volume routing:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           MacAmp Audio System (Current)                     │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌───────────────────── LOCAL FILE BACKEND ─────────────────────┐           │
+│  │                                                               │           │
+│  │  AVAudioFile                                                  │           │
+│  │      │                                                        │           │
+│  │      ▼                                                        │           │
+│  │  AVAudioPlayerNode ──► AVAudioUnitEQ ──► AVAudioMixerNode ──►│──► Output │
+│  │   .volume ✅            (10-band)          │                  │           │
+│  │   .pan ✅                                  │ [installTap]     │           │
+│  │                                            ▼                  │           │
+│  │                                   VisualizerPipeline          │           │
+│  │                                   (Goertzel + FFT)            │           │
+│  └───────────────────────────────────────────────────────────────┘           │
+│                                                                             │
+│  ┌───────────────────── STREAM BACKEND ─────────────────────────┐           │
+│  │                                                               │           │
+│  │  HTTP URL ──► AVPlayer ──────────────────────────────────────►│──► Output │
+│  │               .volume ❌ (EXISTS but NOT WIRED TO UI)         │           │
+│  │               .pan ❌ (DOES NOT EXIST)                        │           │
+│  │               EQ ❌ (NO NODE GRAPH)                           │           │
+│  │               Viz ❌ (NO TAP POINT)                           │           │
+│  └───────────────────────────────────────────────────────────────┘           │
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────┐         │
+│  │                     PlaybackCoordinator                         │         │
+│  │  • Routes play(track:) to correct backend                      │         │
+│  │  • Does NOT propagate volume/balance/EQ ◄── ROOT CAUSE         │         │
+│  └─────────────────────────────────────────────────────────────────┘         │
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────┐         │
+│  │                    UI Layer (WinampMainWindow)                   │         │
+│  │                                                                 │         │
+│  │  Volume Slider ──► audioPlayer.volume (AVAudioEngine ONLY)      │         │
+│  │  Balance Slider ──► audioPlayer.balance (AVAudioEngine ONLY)    │         │
+│  │  EQ Sliders ──► audioPlayer.eqNode (AVAudioEngine ONLY)        │         │
+│  │                                                                 │         │
+│  │  ❌ StreamPlayer is NEVER updated by any UI control             │         │
+│  └─────────────────────────────────────────────────────────────────┘         │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Signal break:** The UI binds directly to `AudioPlayer` properties. `StreamPlayer` has no
+volume property and receives no updates from any UI control.
+
+---
+
+### 2. Phase 1 Architecture — Volume Routing via PlaybackCoordinator
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         MacAmp Audio System (Phase 1)                       │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌────────────────────── UI Layer ──────────────────────┐                   │
+│  │                                                       │                   │
+│  │  Volume Slider ─────┐                                 │                   │
+│  │  Balance Slider ────┤                                 │                   │
+│  │  EQ Sliders ────────┤     (all route through          │                   │
+│  │                      ▼      coordinator now)           │                   │
+│  └──────────────────────┬────────────────────────────────┘                   │
+│                         │                                                    │
+│                         ▼                                                    │
+│  ┌──────────────── PlaybackCoordinator ─────────────────────────────┐       │
+│  │                                                                   │       │
+│  │  setVolume(vol) ─────┬──► audioPlayer.volume = vol               │       │
+│  │                      ├──► streamPlayer.volume = vol     ◄── NEW  │       │
+│  │                      └──► videoPlayer.volume = vol               │       │
+│  │                                                                   │       │
+│  │  setBalance(bal) ────┬──► audioPlayer.balance = bal              │       │
+│  │                      └──► streamPlayer.balance = bal    ◄── NEW  │       │
+│  │                           (stored, not applied)                   │       │
+│  │                                                                   │       │
+│  │  Capability Flags:                                                │       │
+│  │  ┌─────────────────────────────────────────────────────┐         │       │
+│  │  │ supportsEQ:         !isStreamPlaying                │         │       │
+│  │  │ supportsBalance:    !isStreamPlaying                │         │       │
+│  │  │ supportsVisualizer: !isStreamPlaying                │         │       │
+│  │  └─────────────────────────────────────────────────────┘         │       │
+│  └──────────────────────────────────────────────────────────────────┘       │
+│                                                                             │
+│       ┌──────────────────┐          ┌───────────────────────┐               │
+│       │   AudioPlayer    │          │    StreamPlayer        │               │
+│       │  (Local Files)   │          │   (Internet Radio)     │               │
+│       ├──────────────────┤          ├───────────────────────┤               │
+│       │ .volume ✅       │          │ .volume ✅  ◄── NEW   │               │
+│       │ .balance ✅      │          │ .balance (stored only) │               │
+│       │ .eqNode ✅       │          │ EQ ❌ (unavailable)    │               │
+│       │ .visualizer ✅   │          │ Viz ❌ (unavailable)   │               │
+│       └──────────────────┘          └───────────────────────┘               │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### 3. Phase 1 Volume Signal Flow
+
+Step-by-step propagation when user moves the volume slider:
+
+```
+  User drags volume slider
+          │
+          ▼
+  ┌─────────────────────────┐
+  │ WinampVolumeSlider       │
+  │ $coordinator.volume      │  SwiftUI binding triggers didSet
+  └────────────┬─────────────┘
+               │
+               ▼
+  ┌──────────────────────────────────────────────────────────────────┐
+  │ PlaybackCoordinator.volume didSet                                │
+  │                                                                  │
+  │   ┌─────────────────────────────────────────────────────────┐    │
+  │   │ audioPlayer.volume = vol                                │    │
+  │   │   └──► playerNode.volume = vol  (AVAudioEngine)         │    │
+  │   │   └──► UserDefaults.set(vol)    (persistence)           │    │
+  │   │                                                         │    │
+  │   │ streamPlayer.volume = vol                    ◄── NEW    │    │
+  │   │   └──► player.volume = vol      (AVPlayer)              │    │
+  │   │                                                         │    │
+  │   │ videoPlaybackController.volume = vol                    │    │
+  │   │   └──► player.volume = vol      (Video AVPlayer)        │    │
+  │   └─────────────────────────────────────────────────────────┘    │
+  │                                                                  │
+  │  All backends updated unconditionally (idempotent, no branching) │
+  └──────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### 4. Phase 1 Capability Flags Decision Tree
+
+How UI controls determine enabled/disabled state:
+
+```
+                    ┌──────────────────────┐
+                    │ Is current track a   │
+                    │ stream? (.isStream)  │
+                    └────────┬─────────────┘
+                             │
+                    ┌────────┴────────┐
+                    │                 │
+                    ▼                 ▼
+               YES (Stream)     NO (Local File)
+                    │                 │
+              ┌─────┴──────┐    ┌────┴──────────────┐
+              │ supportsEQ │    │ supportsEQ:    ✅  │
+              │   = false  │    │ supportsBalance:✅  │
+              │            │    │ supportsViz:   ✅  │
+              │ supportsBal│    │                    │
+              │   = false  │    │ All controls       │
+              │            │    │ fully enabled      │
+              │ supportsViz│    └────────────────────┘
+              │   = false  │
+              └─────┬──────┘
+                    │
+                    ▼
+         ┌──────────────────────────────────┐
+         │ UI Response:                      │
+         │  • EQ sliders: dimmed / greyed    │
+         │  • Balance slider: dimmed         │
+         │  • Visualizer: inactive           │
+         │  • Volume slider: STILL ACTIVE ✅ │
+         │  • Presets: still selectable       │
+         │    (applied when local resumes)    │
+         └──────────────────────────────────┘
+```
+
+---
+
+### 5. Phase 2 Loopback Bridge Architecture (Full Pipeline)
+
+The complete stream audio path through AVAudioEngine:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                      MacAmp Audio System (Phase 2 — Loopback Bridge)            │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│  ┌─── STREAM INGESTION ──────────────────────────────────────────────────────┐  │
+│  │                                                                           │  │
+│  │  HTTP/HLS URL                                                             │  │
+│  │      │                                                                    │  │
+│  │      ▼                                                                    │  │
+│  │  AVPlayer ──► AVPlayerItem                                                │  │
+│  │      │            │                                                       │  │
+│  │      │      ┌─────┴────────────────────────────────┐                      │  │
+│  │      │      │ MTAudioProcessingTap (PreEffects)    │                      │  │
+│  │      │      │                                      │                      │  │
+│  │      │      │ tapProcess callback:                 │                      │  │
+│  │      │      │   1. GetSourceAudio(PCM samples)     │                      │  │
+│  │      │      │   2. ringBuffer.write(samples) ──────┼──┐                   │  │
+│  │      │      │   3. Zero output buffer ◄─ prevents  │  │                   │  │
+│  │      │      │      double-render (silence AVPlayer) │  │                   │  │
+│  │      │      └──────────────────────────────────────┘  │                   │  │
+│  │      │                                                │                   │  │
+│  │      ▼                                                │                   │  │
+│  │  [AVPlayer direct output SILENCED]                    │                   │  │
+│  │                                                       │                   │  │
+│  └───────────────────────────────────────────────────────┼───────────────────┘  │
+│                                                          │                      │
+│                              ┌────────────────────────────┘                      │
+│                              │                                                   │
+│                              ▼                                                   │
+│  ┌─── LOCK-FREE RING BUFFER ────────────────────────────────────────────────┐   │
+│  │                                                                           │   │
+│  │  ┌─────────────────────────────────────────────────────────────────┐      │   │
+│  │  │ Capacity: 4096 frames (~85ms @ 48kHz)                          │      │   │
+│  │  │ Format: Stereo Float32                                         │      │   │
+│  │  │ Writer: MTAudioProcessingTap thread (real-time)                │      │   │
+│  │  │ Reader: AVAudioEngine render thread (real-time)                │      │   │
+│  │  │ Sync: Swift Atomics (no locks, no allocations)                 │      │   │
+│  │  │ Underrun: Fill silence    Overrun: Drop oldest                 │      │   │
+│  │  │ ABR: Atomic generation ID to detect format changes             │      │   │
+│  │  └─────────────────────────────────────────────────────────────────┘      │   │
+│  │                                                                           │   │
+│  └───────────────────────────────────────────────────────┬───────────────────┘   │
+│                                                          │                       │
+│                                                          ▼                       │
+│  ┌─── AVAudioEngine PROCESSING ─────────────────────────────────────────────┐   │
+│  │                                                                           │   │
+│  │  AVAudioSourceNode                                                        │   │
+│  │   (render block reads                                                     │   │
+│  │    from ring buffer)                                                      │   │
+│  │      │                                                                    │   │
+│  │      ▼                                                                    │   │
+│  │  AVAudioUnitEQ ◄── Existing 10-band EQ (reused! no custom biquads)       │   │
+│  │   (60Hz–16kHz)                                                            │   │
+│  │      │                                                                    │   │
+│  │      ▼                                                                    │   │
+│  │  AVAudioMixerNode                                                         │   │
+│  │      │          │                                                         │   │
+│  │      │    [installTap] ◄── Existing visualizer tap (reused!)              │   │
+│  │      │          │                                                         │   │
+│  │      │          ▼                                                         │   │
+│  │      │   VisualizerPipeline                                               │   │
+│  │      │   (Goertzel + FFT)                                                 │   │
+│  │      │                                                                    │   │
+│  │      ▼                                                                    │   │
+│  │  OutputNode ──────────────────────────────────────────────────►  Speakers  │   │
+│  │                                                                           │   │
+│  └───────────────────────────────────────────────────────────────────────────┘   │
+│                                                                                  │
+└──────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### 6. Phase 2 Thread Model
+
+Real-time thread interactions and safety boundaries:
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                           Thread Interaction Model                            │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌─────────────────────────────────────────────────────────────────────────┐ │
+│  │ MAIN THREAD (@MainActor)                                                │ │
+│  │                                                                         │ │
+│  │  • UI slider changes → PlaybackCoordinator.setVolume()                  │ │
+│  │  • Capability flag reads (supportsEQ, supportsBalance)                  │ │
+│  │  • Bridge lifecycle management (start/stop/teardown)                    │ │
+│  │  • Read underrun/overrun telemetry counters                             │ │
+│  │  • EQ preset selection                                                  │ │
+│  │                                                                         │ │
+│  │  ⚠️  SAFE: Allocations, ARC, logging, locks all OK here                │ │
+│  └────────────────────────┬────────────────────────────────────────────────┘ │
+│                           │                                                  │
+│              ┌────────────┴────────────┐                                     │
+│              ▼                         ▼                                      │
+│  ┌────────────────────┐   ┌────────────────────────────┐                     │
+│  │ TAP THREAD          │   │ RENDER THREAD               │                    │
+│  │ (CoreMedia RT)      │   │ (CoreAudio RT)              │                    │
+│  │                     │   │                              │                    │
+│  │ tapProcess():       │   │ sourceNode render block:     │                    │
+│  │  GetSourceAudio()   │   │  ringBuffer.read()           │                    │
+│  │  ringBuffer.write() │──►│  Fill silence on underrun    │                    │
+│  │  Zero output buffer │   │  return noErr                │                    │
+│  │                     │   │                              │                    │
+│  │ tapPrepare():       │   │ Pulls at hardware rate       │                    │
+│  │  Capture format     │   │ (typically 512 frames        │                    │
+│  │  Reset ring buffer  │   │  @ 48kHz = ~10.7ms)          │                    │
+│  │  Update generation  │   │                              │                    │
+│  │                     │   │                              │                    │
+│  │ ⛔ FORBIDDEN:       │   │ ⛔ FORBIDDEN:                │                    │
+│  │  • malloc/free      │   │  • malloc/free               │                    │
+│  │  • Swift ARC ops    │   │  • Swift ARC ops             │                    │
+│  │  • Locks/mutexes    │   │  • Locks/mutexes             │                    │
+│  │  • ObjC messaging   │   │  • ObjC messaging            │                    │
+│  │  • print/NSLog      │   │  • print/NSLog               │                    │
+│  │  • Task/async       │   │  • Task/async                │                    │
+│  └────────────────────┘   └────────────────────────────┘                     │
+│              │                         │                                      │
+│              │    ┌────────────────────┘                                      │
+│              ▼    ▼                                                           │
+│  ┌────────────────────────────────────────┐                                  │
+│  │ SHARED STATE (Lock-Free Only)          │                                  │
+│  │                                        │                                  │
+│  │  Ring Buffer:                          │                                  │
+│  │   writeHead: AtomicUInt64 (tap owns)   │                                  │
+│  │   readHead:  AtomicUInt64 (render owns)│                                  │
+│  │   storage:   UnsafeMutableBufferPointer │                                  │
+│  │   generationID: AtomicUInt32 (ABR)     │                                  │
+│  │                                        │                                  │
+│  │  Telemetry:                            │                                  │
+│  │   underrunCount: AtomicUInt64          │                                  │
+│  │   overrunCount:  AtomicUInt64          │                                  │
+│  │                                        │                                  │
+│  │  Swift 6: nonisolated(unsafe)          │                                  │
+│  │  Tap types: @unchecked Sendable        │                                  │
+│  └────────────────────────────────────────┘                                  │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### 7. Backend Switching State Machine
+
+Transitions between local file and stream playback:
+
+```
+                              ┌──────────────┐
+                              │    IDLE       │
+                              │ (no playback) │
+                              └──────┬───────┘
+                                     │
+                        ┌────────────┴────────────┐
+                        │                         │
+                   play(local)               play(stream)
+                        │                         │
+                        ▼                         ▼
+              ┌──────────────────┐    ┌────────────────────────┐
+              │  LOCAL PLAYING   │    │   STREAM PLAYING       │
+              │                  │    │                        │
+              │ Engine graph:    │    │ Phase 1:               │
+              │  playerNode      │    │  AVPlayer direct       │
+              │  → eqNode        │    │  volume via .volume    │
+              │  → mixerNode     │    │  EQ/Bal/Viz disabled   │
+              │  → outputNode    │    │                        │
+              │                  │    │ Phase 2:               │
+              │ All controls ✅  │    │  Bridge active         │
+              │ volume ✅        │    │  streamSourceNode      │
+              │ balance ✅       │    │  → eqNode              │
+              │ EQ ✅            │    │  → mixerNode           │
+              │ visualizer ✅    │    │  → outputNode          │
+              │                  │    │  All controls ✅       │
+              └────────┬─────────┘    └──────────┬─────────────┘
+                       │                         │
+                       │    ┌──────────────┐     │
+                       │    │  SWITCHING   │     │
+                       └───►│              │◄────┘
+                            │ 1. Stop src  │
+                            │ 2. Disconnect│
+                            │    old node  │
+                            │ 3. Connect   │
+                            │    new node  │
+                            │ 4. Apply vol │
+                            │    bal, EQ   │
+                            │ 5. Update    │
+                            │    cap flags │
+                            │              │
+                            │ ⚠️  Engine   │
+                            │ stays running│
+                            │ (no restart) │
+                            └──────────────┘
+
+  Phase 2 Engine Graph Switching Detail:
+
+  LOCAL → STREAM:                        STREAM → LOCAL:
+  ┌─────────────────────────┐            ┌─────────────────────────┐
+  │ 1. disconnect(playerNode)│            │ 1. disconnect(srcNode)  │
+  │ 2. connect(srcNode→eq)   │            │ 2. connect(playerNode→eq)│
+  │ 3. Start tap + bridge    │            │ 3. Stop tap + bridge    │
+  │ 4. Re-apply volume/bal   │            │ 4. Re-apply volume/bal  │
+  │ 5. Update cap flags      │            │ 5. Update cap flags     │
+  │                           │            │                         │
+  │ Engine never stops ✅     │            │ Engine never stops ✅   │
+  └─────────────────────────┘            └─────────────────────────┘
+```
+
+---
+
+### 8. ABR (Adaptive Bitrate) Format Change Handling
+
+How HLS bitrate switches are handled in the Loopback Bridge:
+
+```
+  Normal Streaming                    ABR Bitrate Switch Event
+  ─────────────────                   ──────────────────────────
+
+  tapProcess()                        CoreMedia detects bandwidth change
+      │                                       │
+      ▼                                       ▼
+  GetSourceAudio ──► write            ┌──────────────────┐
+  GetSourceAudio ──► write            │ tapUnprepare()   │
+  GetSourceAudio ──► write            │  • Flush buffer  │
+  ...                                 │  • Signal reader │
+                                      └────────┬─────────┘
+                                               │
+                                               ▼
+                                      ┌──────────────────┐
+                                      │ tapPrepare()     │
+                                      │  • New format:   │
+                                      │    48kHz→44.1kHz │
+                                      │    or vice versa │
+                                      │  • Reinit buffer │
+                                      │  • Increment     │
+                                      │    generationID  │
+                                      └────────┬─────────┘
+                                               │
+                                               ▼
+                                      tapProcess() resumes
+                                          │
+                                          ▼
+                                      GetSourceAudio ──► write (new format)
+                                      ...
+
+  Reader side during transition:
+
+  sourceNode render block              sourceNode render block
+      │                                       │
+      ▼                                       ▼
+  ringBuffer.read()                    ringBuffer.read()
+  → framesRead = N ✅                 → framesRead = 0 (buffer flushed)
+  → output samples                    → fill silence ◄── brief gap OK
+                                               │
+                                               ▼
+                                      Check generationID changed?
+                                      → Yes: accept new format
+                                      → Resume reading new data
+```
+
+---
+
+### 9. Component Dependency Map
+
+Files and their relationships across both phases:
+
+```
+  ┌─────────────────────────────────────────────────────────────────────────────┐
+  │                         Component Dependency Map                            │
+  ├─────────────────────────────────────────────────────────────────────────────┤
+  │                                                                             │
+  │                        ┌──────────────────────┐                             │
+  │                        │  WinampMainWindow     │                             │
+  │                        │  (volume/balance UI)  │                             │
+  │                        └──────────┬───────────┘                             │
+  │                                   │ binds to                                │
+  │  ┌────────────────────┐           │           ┌───────────────────────┐     │
+  │  │ WinampEqualizer    │           │           │ VisualizerView        │     │
+  │  │ Window (EQ UI)     │           │           │ (spectrum display)    │     │
+  │  └────────┬───────────┘           │           └───────────┬───────────┘     │
+  │           │ reads                 │                       │ reads            │
+  │           │ supportsEQ            ▼                       │ supportsViz     │
+  │           │              ┌──────────────────┐             │                 │
+  │           └─────────────►│ Playback         │◄────────────┘                 │
+  │                          │ Coordinator      │                               │
+  │                          │                  │                               │
+  │                          │ • setVolume()    │                               │
+  │                          │ • setBalance()   │                               │
+  │                          │ • supportsEQ     │                               │
+  │                          │ • supportsBalance│                               │
+  │                          │ • supportsViz    │                               │
+  │                          └───────┬──────────┘                               │
+  │                                  │ propagates to                            │
+  │                    ┌─────────────┼─────────────┐                            │
+  │                    │             │             │                             │
+  │                    ▼             ▼             ▼                             │
+  │           ┌──────────────┐ ┌──────────┐ ┌──────────────────┐               │
+  │           │ AudioPlayer  │ │ Stream   │ │ VideoPlayback    │               │
+  │           │              │ │ Player   │ │ Controller       │               │
+  │           │ .volume      │ │ .volume  │ │ .volume          │               │
+  │           │ .balance     │ │ .balance │ │                  │               │
+  │           │ .eqNode      │ │ .player  │ │                  │               │
+  │           │ .playerNode  │ │          │ │                  │               │
+  │           │ .sourceNode* │ │ .tap*    │ │                  │               │
+  │           └──────┬───────┘ └────┬─────┘ └──────────────────┘               │
+  │                  │              │                                            │
+  │                  │   Phase 2    │  Phase 2                                  │
+  │                  │   only       │  only                                     │
+  │                  │              │                                            │
+  │                  │    ┌─────────┘                                            │
+  │                  │    │                                                      │
+  │                  ▼    ▼                                                      │
+  │           ┌─────────────────────┐                                           │
+  │           │ LockFreeRingBuffer  │  Phase 2 only                             │
+  │           │ (Swift Atomics)     │  (from ring buffer task)                  │
+  │           └─────────────────────┘                                           │
+  │                                                                             │
+  │  Legend:  ── Phase 1    ── Phase 2 only (marked with *)                     │
+  │                                                                             │
+  └─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### 10. Comparison: Winamp vs Webamp vs MacAmp Pipelines
+
+```
+  WINAMP (Windows) — Unified PCM Pipeline
+  ─────────────────────────────────────────
+  Any Source ──► Decode to PCM ──► vis_*.dll ──► dsp_*.dll (EQ) ──► out_*.dll
+                                                      │
+                                  All sources are PCM by this point.
+                                  EQ sees no difference between file/stream.
+
+
+  WEBAMP (JavaScript) — Web Audio API Unified Graph
+  ──────────────────────────────────────────────────
+  <audio> element ──► MediaElementSource ──► BiquadFilter (EQ) ──► Analyser (Viz) ──► Destination
+                             │
+               Web Audio connects ANY source to processing nodes.
+               No file/stream distinction.
+
+
+  MACAMP (macOS) — Dual Backend (Current)
+  ────────────────────────────────────────
+  Local:  AVAudioFile ──► AVAudioEngine (EQ ✅, Viz ✅, Vol ✅, Bal ✅)
+  Stream: HTTP URL ──► AVPlayer (closed box — Vol ❌, EQ ❌, Viz ❌, Bal ❌)
+
+                  ⬇️  Phase 1 fixes volume  ⬇️
+
+  Local:  AVAudioFile ──► AVAudioEngine (EQ ✅, Viz ✅, Vol ✅, Bal ✅)
+  Stream: HTTP URL ──► AVPlayer (Vol ✅, EQ ❌, Viz ❌, Bal ❌)
+
+                  ⬇️  Phase 2 Loopback Bridge  ⬇️
+
+  Local:  AVAudioFile ──► AVAudioEngine (EQ ✅, Viz ✅, Vol ✅, Bal ✅)
+  Stream: HTTP URL ──► AVPlayer ──► Tap ──► Ring Buffer ──► AVAudioEngine
+                                                             (EQ ✅, Viz ✅, Vol ✅, Bal ✅)
+
+                  Both backends converge on AVAudioEngine for processing.
+                  Matches Winamp/Webamp unified pipeline philosophy.
+```
+
+---
+
+### 11. Completed System — Final Architecture (Post Phase 1 + Phase 2)
+
+The unified MacAmp audio system after all work is complete:
+
+```
+┌──────────────────────────────────────────────────────────────────────────────────────┐
+│                                                                                      │
+│                        MacAmp Audio System — COMPLETED STATE                         │
+│                        ─────────────────────────────────────                         │
+│                                                                                      │
+│          All audio sources converge on AVAudioEngine for processing.                 │
+│          Every UI control works identically regardless of source.                    │
+│                                                                                      │
+├──────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                      │
+│                              ┌──────────────────────┐                                │
+│                              │      UI LAYER         │                                │
+│                              │  (WinampMainWindow)   │                                │
+│                              │                       │                                │
+│                              │  Volume ■■■■■□□ 71%   │                                │
+│                              │  Balance ◄──●───► 0   │                                │
+│                              │  [▶] [■] [◄◄] [►►]   │                                │
+│                              │                       │                                │
+│                              │  All controls active  │                                │
+│                              │  for ALL sources ✅   │                                │
+│                              └──────────┬────────────┘                                │
+│                                         │                                             │
+│                                         ▼                                             │
+│                              ┌──────────────────────────────────────────┐             │
+│                              │         PlaybackCoordinator              │             │
+│                              │                                          │             │
+│                              │  setVolume(vol) ───► all backends        │             │
+│                              │  setBalance(bal) ──► all backends        │             │
+│                              │                                          │             │
+│                              │  supportsEQ:      true  (always)        │             │
+│                              │  supportsBalance:  true  (always)        │             │
+│                              │  supportsViz:      true  (always)        │             │
+│                              │                                          │             │
+│                              │  play(track) ──► route to correct path   │             │
+│                              └─────────────────┬────────────────────────┘             │
+│                                                │                                      │
+│                               ┌────────────────┴────────────────┐                     │
+│                               │                                 │                     │
+│                          Local File?                       Stream URL?                │
+│                               │                                 │                     │
+│                               ▼                                 ▼                     │
+│                                                                                      │
+│  SOURCE A: LOCAL FILES                    SOURCE B: INTERNET RADIO                   │
+│  ══════════════════════                   ═══════════════════════                     │
+│                                                                                      │
+│  ┌───────────────────┐                    ┌───────────────────────────────────┐       │
+│  │                   │                    │                                   │       │
+│  │   AVAudioFile     │                    │   HTTP/HLS URL                    │       │
+│  │   (MP3/FLAC/      │                    │       │                           │       │
+│  │    WAV/M4A/OGG)   │                    │       ▼                           │       │
+│  │       │           │                    │   AVPlayer                        │       │
+│  │       ▼           │                    │       │                           │       │
+│  │  AVAudioPlayer    │                    │       ▼                           │       │
+│  │  Node             │                    │   AVPlayerItem                    │       │
+│  │                   │                    │       │                           │       │
+│  └───────┬───────────┘                    │   MTAudioProcessingTap            │       │
+│          │                                │       │                           │       │
+│          │                                │       ▼                           │       │
+│          │                                │   tapProcess():                   │       │
+│          │                                │     GetSourceAudio(PCM)           │       │
+│          │                                │     ringBuffer.write(samples)     │       │
+│          │                                │     zero output (silence direct)  │       │
+│          │                                │                                   │       │
+│          │                                └──────────────┬────────────────────┘       │
+│          │                                               │                            │
+│          │                                               ▼                            │
+│          │                                ┌──────────────────────────┐                │
+│          │                                │  Lock-Free Ring Buffer   │                │
+│          │                                │  4096 frames (~85ms)     │                │
+│          │                                │  Swift Atomics           │                │
+│          │                                └─────────────┬────────────┘                │
+│          │                                              │                             │
+│          │                                              ▼                             │
+│          │                                ┌──────────────────────────┐                │
+│          │                                │  AVAudioSourceNode       │                │
+│          │                                │  (render block reads     │                │
+│          │                                │   from ring buffer)      │                │
+│          │                                └─────────────┬────────────┘                │
+│          │                                              │                             │
+│          │      ┌───────────────────────────────────────┘                             │
+│          │      │                                                                     │
+│          │      │   Engine graph hot-swaps source node:                               │
+│          │      │   Local  → playerNode connected                                     │
+│          │      │   Stream → sourceNode connected                                     │
+│          │      │   (engine never restarts)                                           │
+│          │      │                                                                     │
+│          ▼      ▼                                                                     │
+│  ════════════════════════════════════════════════════════════════════════              │
+│  ║                    SHARED AVAudioEngine PIPELINE                    ║              │
+│  ║                    (identical processing for both sources)          ║              │
+│  ║                                                                    ║              │
+│  ║   ┌─────────────────────────────────────────────────────────────┐  ║              │
+│  ║   │                                                             │  ║              │
+│  ║   │   [playerNode OR sourceNode]                                │  ║              │
+│  ║   │              │                                              │  ║              │
+│  ║   │              ▼                                              │  ║              │
+│  ║   │     AVAudioUnitEQ (10-band)                                 │  ║              │
+│  ║   │     60Hz · 170Hz · 310Hz · 600Hz · 1kHz                    │  ║              │
+│  ║   │     3kHz · 6kHz · 12kHz · 14kHz · 16kHz                    │  ║              │
+│  ║   │              │                                              │  ║              │
+│  ║   │              ▼                                              │  ║              │
+│  ║   │     AVAudioMixerNode                                       │  ║              │
+│  ║   │         │            │                                      │  ║              │
+│  ║   │         │      [installTap]                                 │  ║              │
+│  ║   │         │            │                                      │  ║              │
+│  ║   │         │            ▼                                      │  ║              │
+│  ║   │         │    VisualizerPipeline                             │  ║              │
+│  ║   │         │    ┌─────────────────────────┐                    │  ║              │
+│  ║   │         │    │ Goertzel (20-bar)       │                    │  ║              │
+│  ║   │         │    │ vDSP FFT (waveform)     │──► Visualizer UI  │  ║              │
+│  ║   │         │    │ Spectrum analysis        │                    │  ║              │
+│  ║   │         │    └─────────────────────────┘                    │  ║              │
+│  ║   │         │                                                   │  ║              │
+│  ║   │         ▼                                                   │  ║              │
+│  ║   │     OutputNode ─────────────────────────────► 🔊 Speakers  │  ║              │
+│  ║   │                                                             │  ║              │
+│  ║   └─────────────────────────────────────────────────────────────┘  ║              │
+│  ║                                                                    ║              │
+│  ════════════════════════════════════════════════════════════════════════              │
+│                                                                                      │
+│  ┌────────────────────────────────────────────────────────────────────┐               │
+│  │                         EQ WINDOW                                  │               │
+│  │                                                                    │               │
+│  │  60   170  310  600  1k   3k   6k  12k  14k  16k                 │               │
+│  │  ┃     ┃    ┃    ┃    ┃    ┃    ┃    ┃    ┃    ┃                  │               │
+│  │  ┃  ┌──╂──┐ ┃    ┃    ┃    ┃    ┃    ┃    ┃    ┃  Preamp         │               │
+│  │  ┃  │  ╂  │ ┃    ┃ ┌──╂──┐ ┃    ┃    ┃    ┃    ┃  ┃              │               │
+│  │  ╂──┤  ╂  ├─╂────╂─┤  ╂  ├─╂────╂────╂────╂────╂──╂── 0dB       │               │
+│  │  ┃  │  ╂  │ ┃    ┃ │  ╂  │ ┃    ┃ ┌──╂──┐ ┃    ┃  ┃              │               │
+│  │  ┃  └──╂──┘ ┃    ┃ └──╂──┘ ┃    ┃ │  ╂  │ ┃    ┃  ┃              │               │
+│  │  ┃     ┃    ┃    ┃    ┃    ┃    ┃ └──╂──┘ ┃    ┃  ┃              │               │
+│  │                                                                    │               │
+│  │  ✅ ACTIVE for BOTH local files AND internet streams              │               │
+│  └────────────────────────────────────────────────────────────────────┘               │
+│                                                                                      │
+└──────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### 12. Completed System — End-to-End User Flow
+
+What happens from the user's perspective when playing an internet radio stream:
+
+```
+  USER ACTION                          SYSTEM RESPONSE
+  ═══════════                          ═══════════════
+
+  1. User clicks "Open URL"
+     enters: http://stream.radio.com
+         │
+         ▼
+  ┌─────────────────────┐
+  │ PlaybackCoordinator  │
+  │ play(track:)         │
+  │                      │    Track.isStream == true
+  │ Detects stream URL ──┼──► Route to StreamPlayer
+  └──────────┬───────────┘
+             │
+             ▼
+  ┌──────────────────────────────────────────────────────┐
+  │ StreamPlayer.play(url:)                               │
+  │                                                       │
+  │  1. Create AVPlayerItem(url:)                         │
+  │  2. Attach MTAudioProcessingTap to item               │
+  │  3. Set player.replaceCurrentItem(with: item)         │
+  │  4. Apply volume: player.volume = currentVolume       │
+  │  5. player.play()                                     │
+  │                                                       │
+  │  ICY metadata extraction begins (title/artist)        │
+  └──────────────────────┬────────────────────────────────┘
+                         │
+                         ▼
+  ┌──────────────────────────────────────────────────────┐
+  │ PlaybackCoordinator activates bridge                  │
+  │                                                       │
+  │  1. Disconnect playerNode from eqNode                 │
+  │  2. Connect streamSourceNode → eqNode                 │
+  │  3. Engine stays running (no restart)                 │
+  │  4. Apply current volume + balance                    │
+  │  5. Update capability flags (all true)                │
+  └──────────────────────┬────────────────────────────────┘
+                         │
+                         ▼
+  ┌──────────────────────────────────────────────────────┐
+  │ Audio flows through unified pipeline                  │
+  │                                                       │
+  │  HTTP data ──► AVPlayer decodes ──► Tap extracts PCM  │
+  │  ──► Ring Buffer ──► SourceNode ──► EQ ──► Mixer      │
+  │  ──► Output                                           │
+  │       │                                               │
+  │       └──► installTap ──► VisualizerPipeline          │
+  └──────────────────────────────────────────────────────┘
+             │
+             ▼
+
+  ╔══════════════════════════════════════════════════════╗
+  ║              USER SEES & HEARS                       ║
+  ╠══════════════════════════════════════════════════════╣
+  ║                                                      ║
+  ║  🔊 Audio plays through speakers                     ║
+  ║                                                      ║
+  ║  📊 Visualizer animates (20-bar spectrum)            ║
+  ║     ▁▃▅▇█▇▅▃▁▂▄▆█▆▄▂▁▃                             ║
+  ║                                                      ║
+  ║  🎚️ Volume slider: adjusts stream volume             ║
+  ║  ◄►  Balance slider: pans left/right                 ║
+  ║  🎛️ EQ sliders: shape frequency response             ║
+  ║                                                      ║
+  ║  📻 Title bar: "KEXP - Radiohead - Everything..."    ║
+  ║     (ICY metadata from stream)                       ║
+  ║                                                      ║
+  ║  Identical experience to local file playback ✅      ║
+  ╚══════════════════════════════════════════════════════╝
+
+
+  2. User adjusts volume slider during stream
+         │
+         ▼
+  ┌──────────────────────────┐
+  │ PlaybackCoordinator       │
+  │ setVolume(0.45)           │
+  │                           │
+  │  audioPlayer.volume = 0.45│──► playerNode.volume (idle, no-op)
+  │  streamPlayer.volume= 0.45│──► player.volume = 0.45
+  │  videoPlayer.volume = 0.45│──► (idle, no-op)
+  │                           │
+  │  UserDefaults.set(0.45)   │──► persisted for next launch
+  └───────────────────────────┘
+         │
+         ▼
+  Volume change is INSTANT ✅ (AVPlayer.volume is synchronous)
+
+
+  3. User adjusts EQ slider (e.g., boost 1kHz +6dB)
+         │
+         ▼
+  ┌──────────────────────────┐
+  │ AudioPlayer.eqNode        │
+  │  band[4].gain = 6.0       │──► AVAudioUnitEQ processes in engine
+  └───────────────────────────┘       │
+         │                            ▼
+         │                   Stream audio flowing through engine
+         │                   is affected by EQ in real-time ✅
+         ▼
+  User hears bass boost on the radio stream
+
+
+  4. User switches from stream to local file
+         │
+         ▼
+  ┌──────────────────────────────────────────────────────┐
+  │ PlaybackCoordinator                                   │
+  │                                                       │
+  │  1. streamPlayer.stop()                               │
+  │  2. Detach MTAudioProcessingTap                       │
+  │  3. Flush ring buffer                                 │
+  │  4. Disconnect streamSourceNode from eqNode           │
+  │  5. Connect playerNode → eqNode                       │
+  │  6. audioPlayer.play(file)                            │
+  │  7. Re-apply current volume + balance                 │
+  │  8. Engine stayed running — no gap ✅                 │
+  │                                                       │
+  │  EQ preset preserved across switch ✅                 │
+  │  Volume preserved across switch ✅                    │
+  │  Balance preserved across switch ✅                   │
+  │  Visualizer continues seamlessly ✅                   │
+  └──────────────────────────────────────────────────────┘
+
+
+  5. User quits and relaunches MacAmp, plays stream
+         │
+         ▼
+  ┌──────────────────────────────────────────────────────┐
+  │ App Launch                                            │
+  │                                                       │
+  │  1. Read volume from UserDefaults → 0.45              │
+  │  2. Read balance from UserDefaults → 0.0              │
+  │  3. Read EQ preset from UserDefaults → "Rock"         │
+  │  4. Apply to all backends                             │
+  │  5. User plays stream → volume is 0.45 immediately    │
+  │  6. EQ "Rock" preset shapes the stream audio          │
+  │                                                       │
+  │  Complete persistence across sessions ✅              │
+  └──────────────────────────────────────────────────────┘
+```
+
+---
+
+### 13. Completed System — Feature Parity Matrix
+
+```
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │                    FEATURE PARITY MATRIX (Completed)                │
+  ├───────────────────┬──────────────┬─────────────────┬───────────────┤
+  │ Feature           │ Local Files  │ Internet Streams │ Video Files   │
+  ├───────────────────┼──────────────┼─────────────────┼───────────────┤
+  │ Volume Control    │     ✅       │       ✅         │     ✅        │
+  │ Balance/Pan       │     ✅       │       ✅         │     ❌        │
+  │ 10-Band EQ        │     ✅       │       ✅         │     ❌        │
+  │ Visualizer        │     ✅       │       ✅         │     ❌        │
+  │ Metadata          │     ✅       │       ✅ (ICY)   │     ✅        │
+  │ Seek              │     ✅       │       ❌ (live)  │     ✅        │
+  │ Persistence       │     ✅       │       ✅         │     ✅        │
+  ├───────────────────┼──────────────┼─────────────────┼───────────────┤
+  │ Audio Engine      │ AVAudioEngine│ AVPlayer →       │ AVPlayer      │
+  │                   │ (direct)     │ Bridge →         │ (direct)      │
+  │                   │              │ AVAudioEngine    │               │
+  └───────────────────┴──────────────┴─────────────────┴───────────────┘
+
+  Before:  Streams had 1/7 features working (metadata only)
+  After:   Streams have 6/7 features working (all except seek — inherent to live radio)
+```
+
+---
 
 ## Overview
 
@@ -62,7 +935,8 @@ Add volume/balance propagation methods that route to the active backend:
 func setVolume(_ volume: Float) {
     audioPlayer.volume = volume
     streamPlayer.volume = volume
-    // Both backends always in sync — coordinator doesn't need to track which is active
+    audioPlayer.videoPlaybackController.volume = volume
+    // All backends always in sync — coordinator doesn't need to track which is active
 }
 
 func setBalance(_ balance: Float) {
@@ -71,7 +945,7 @@ func setBalance(_ balance: Float) {
 }
 ```
 
-**Design decision:** Update BOTH backends unconditionally rather than checking which is active. This is simpler, avoids race conditions during backend switching, and has zero cost (setting volume on an idle player is a no-op).
+**Design decision:** Update ALL backends unconditionally rather than checking which is active. This is simpler, avoids race conditions during backend switching, and has zero cost (setting volume on an idle player is a no-op). This includes video volume propagation, which moves from AudioPlayer.volume didSet to the coordinator (see Step 1.6).
 
 ### Step 1.4: Add capability flags to PlaybackCoordinator
 
@@ -81,21 +955,27 @@ Add computed properties that UI components can observe to gate feature availabil
 
 ```swift
 var supportsEQ: Bool {
-    !isStreamPlaying
+    !isStreamBackendActive
 }
 
 var supportsBalance: Bool {
-    !isStreamPlaying
+    !isStreamBackendActive
 }
 
 var supportsVisualizer: Bool {
-    !isStreamPlaying
+    !isStreamBackendActive
 }
 
-private var isStreamPlaying: Bool {
-    currentTrack?.isStream == true && streamPlayer.isPlaying
+/// Whether the stream backend is active (playing OR paused on a stream).
+/// Uses currentSource rather than currentTrack?.isStream because currentTrack
+/// can be nil when playing a station directly (not from playlist).
+private var isStreamBackendActive: Bool {
+    if case .radioStation = currentSource { return true }
+    return false
 }
 ```
+
+**Note:** Uses `currentSource` (which is always set correctly by play methods) rather than `currentTrack?.isStream` because `currentTrack` can be nil when playing a radio station directly via `play(station:)` (see PlaybackCoordinator.swift line 133). Also, a paused stream should still report as stream-backend-active for capability flag purposes.
 
 ### Step 1.5: Wire UI volume slider through PlaybackCoordinator
 
@@ -141,13 +1021,14 @@ Read `playbackCoordinator.supportsEQ` and visually indicate when EQ is unavailab
 - EQ sliders still show current preset but don't affect stream audio
 - Preset selection still works (will apply when switching back to local file)
 
-### Step 1.8: Disable balance slider during stream playback
+### Step 1.8: Disable balance slider during stream playback + reroute binding
 
 **File:** `MacAmpApp/Views/WinampMainWindow.swift`
 
 Read `playbackCoordinator.supportsBalance` and visually indicate when balance is unavailable:
 - Dim/grey out balance slider
 - Slider position preserved but doesn't affect stream audio
+- **Also reroute balance binding** through PlaybackCoordinator (same as volume in Step 1.5) — currently balance binds directly to `audioPlayer.balance`, bypassing the coordinator
 
 ### Step 1.9: Apply persisted volume on stream start
 
@@ -161,6 +1042,8 @@ func play(url: URL) {
     // ... existing playback code
 }
 ```
+
+**Startup sync:** Persisted volume is loaded in AudioPlayer.init() from UserDefaults. PlaybackCoordinator must propagate this initial volume to StreamPlayer during init (or lazily before first stream play) to ensure StreamPlayer.volume matches the persisted value before the first stream playback. Otherwise, the first stream play will use the default 0.75 instead of the user's saved volume.
 
 ### Phase 1 Verification
 
@@ -189,6 +1072,10 @@ AVPlayer → MTAudioProcessingTap (PreEffects) → Lock-Free Ring Buffer → AVA
 ```
 
 **Prerequisite:** `lock-free-ring-buffer` task must be completed first.
+
+**Prerequisite status:** ~~VisualizerPipeline zero-allocation refactor~~ **COMPLETE.** The SPSC shared buffer pattern (VisualizerSharedBuffer) provides a proven structural template for the ring buffer: generation counter, tryPublish/consume pattern, pre-allocated storage. However, the Phase 2 ring buffer between MTAudioProcessingTap and AVAudioEngine render threads (both real-time) requires true lock-free SPSC atomics (head/tail indices), not os_unfair_lock — the lock pattern is appropriate for RT-to-main but not RT-to-RT.
+
+**clearData():** VisualizerPipeline.clearData() (line 453) must be called during stream-to-local transitions to prevent stale visualizer data. Already used by AudioPlayer.removeVisualizerTapIfNeeded().
 
 **No impact on local file playback** — the Loopback Bridge only activates when playing streams. Local files continue using the existing AVAudioPlayerNode path.
 

@@ -4,7 +4,7 @@
 
 ---
 
-## Current Status: PLAN + TODOS COMPLETE — ORACLE REVIEWED
+## Current Status: PLAN + TODOS COMPLETE — ORACLE REVIEWED — PREREQUISITE VALIDATED
 
 ## Progress
 
@@ -23,6 +23,8 @@
 - [x] Todos written (todo.md)
 - [x] Oracle review of plan + todos (corrections applied)
 - [x] Ring buffer task created (tasks/lock-free-ring-buffer/)
+- [x] Prerequisite validation complete (VisualizerPipeline SPSC refactor confirmed)
+- [x] Oracle comprehensive validation (gpt-5.3-codex, xhigh reasoning, 2026-02-14)
 - [ ] Plan approved by user
 - [ ] Implementation
 - [ ] Verification
@@ -34,7 +36,7 @@
 3. **EQ during streams (Phase 1):** Grey out UI with visual indication — architectural limitation of AVPlayer
 4. **EQ during streams (Phase 2):** Loopback Bridge architecture (Approach G) gives EQ via existing AVAudioUnitEQ
 5. **Phased approach revised:** Phase 1 (volume + capability flags), Phase 2 (Loopback Bridge for full EQ+vis+balance), Phase 3 eliminated
-6. **Feasibility recalibration:** Tap-read 6-7/10, Tap-write EQ 3-5/10, Loopback Bridge 5.5-6.5/10
+6. **Feasibility recalibration (updated):** Tap-read **8.5/10** (prereq complete), Tap-write EQ 3-5/10, Loopback Bridge **6.0-7.0/10** (prereq complete)
 7. **CoreAudio process taps:** Not recommended (entitlement requirements, App Store risk)
 8. **Swift 6.2 features:** nonisolated(unsafe) + ~Copyable useful now; InlineArray/Span macOS 26+ only
 9. **Double-render prevention:** Zero bufferListInOut in PreEffects tap callback after copying to ring buffer (Oracle-verified, most deterministic approach)
@@ -46,7 +48,7 @@
 
 - AVPlayer cannot feed AVAudioEngine directly (no bridge API in macOS 15 or 26)
 - AVPlayer has no .pan property (balance not possible without Loopback Bridge)
-- VisualizerPipeline allocates in callback path — must refactor for any tap-based approach
+- ~~VisualizerPipeline allocates in callback path~~ **RESOLVED** — SPSC shared buffer pattern implemented (VisualizerSharedBuffer + pre-allocated VisualizerScratchBuffers + static makeTapHandler). Zero allocations on audio thread confirmed.
 - MTAudioProcessingTap types are non-Sendable in Swift 6 strict mode
 
 ## Loopback Bridge Architecture (Confirmed)
