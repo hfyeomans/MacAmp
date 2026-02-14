@@ -1,7 +1,7 @@
 # MacAmp Implementation Patterns
 
-**Version:** 1.3.0
-**Date:** 2026-02-07
+**Version:** 1.4.0
+**Date:** 2026-02-14
 **Purpose:** Practical code patterns and best practices for MacAmp development
 
 ---
@@ -29,7 +29,7 @@
    - [Safe Audio Buffer Processing](#pattern-safe-audio-buffer-processing)
    - [Thread-Safe Audio State](#pattern-thread-safe-audio-state)
    - [nonisolated(unsafe) Deinit Safety](#pattern-nonisolatedunsafe-deinit-safety-swift-6) **(New - Swift 6)**
-   - [Unmanaged Pointer for Core Audio Callbacks](#pattern-unmanaged-pointer-for-core-audio-callbacks-swift-6) **(New - Swift 6)**
+   - [SPSC Shared Buffer for Audio-to-Main Thread Transfer](#pattern-spsc-shared-buffer-for-audio-to-main-thread-transfer) **(Updated - Swift 6)**
 5. [Async/Await Patterns](#asyncawait-patterns)
    - [Async Stream Events](#pattern-async-stream-events)
    - [Cancellable Tasks](#pattern-cancellable-tasks)
@@ -1443,118 +1443,421 @@ final class VideoPlaybackController {
 - Don't use nonisolated(unsafe) for properties accessed during normal operation
 - Consider if cleanup can be moved to explicit `cleanup()` method called before deinit
 
-### Pattern: Unmanaged Pointer for Core Audio Callbacks (Swift 6)
+### Pattern: SPSC Shared Buffer for Audio-to-Main Thread Transfer
 
-**When to use**: Passing Swift objects to C-style callback contexts (e.g., AVAudioEngine taps)
+**When to use**: Transferring real-time audio data (visualizer, spectrum, waveform) from the audio thread to the main thread without any heap allocations on the audio thread.
 
-**Swift 6 Relevance**: Bridges Swift actor isolation to non-actor C callbacks
+**Swift 6 Relevance**: Replaces the previous `Unmanaged` pointer + `Task { @MainActor }` pattern, eliminating use-after-free risk and audio-thread allocations.
 
-**Implementation**:
+**Why this pattern exists**: Audio engine tap callbacks run on a real-time thread where heap allocations (Array creation, ARC reference counting, Task dispatch) can cause lock contention and buffer underruns (audible skips). This SPSC (Single Producer, Single Consumer) shared buffer eliminates all allocations from the audio thread by using pre-allocated storage and `os_unfair_lock_trylock` for non-blocking publishing.
+
+**Architecture Evolution (BEFORE → AFTER)**:
+
+#### Previous Architecture (Task Dispatch Pattern)
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                    AUDIO THREAD (real-time)                   │
+│                                                              │
+│  AVAudioEngine Tap Callback (~21.5 Hz)                       │
+│  ┌────────────────────────────────────────────────────────┐  │
+│  │ 1. scratch.prepare(buffer)                             │  │
+│  │ 2. FFT + Goertzel computation                          │  │
+│  │ 3. snapshotRms()          → NEW Array  ⚠️ ALLOC       │  │
+│  │ 4. snapshotSpectrum()     → NEW Array  ⚠️ ALLOC       │  │
+│  │ 5. waveformSnapshot       → NEW Array  ⚠️ ALLOC       │  │
+│  │    (stride.prefix.map)                                 │  │
+│  │ 6. butterchurnSpectrum    → NEW Array  ⚠️ ALLOC       │  │
+│  │ 7. butterchurnWaveform    → NEW Array  ⚠️ ALLOC       │  │
+│  │ 8. VisualizerData(...)    → struct w/ 5 arrays         │  │
+│  │ 9. Task { @MainActor }    → NEW TASK   ⚠️ ALLOC+ARC   │  │
+│  └────────────────┬───────────────────────────────────────┘  │
+│                   │                                          │
+│         ~7-8 heap allocations per callback                   │
+│         = ~150-170 allocations/second                        │
+│         = ARC ref counting = potential lock acquisition      │
+│         = AUDIO THREAD STALL = SKIP                          │
+└───────────────────┼──────────────────────────────────────────┘
+                    │ Task dispatch (heap alloc)
+                    ▼
+┌──────────────────────────────────────────────────────────────┐
+│                    MAIN THREAD                                │
+│  Task { @MainActor in                                        │
+│      pipeline.visualizerData = data   ← triggers @Observable │
+│      pipeline.butterchurnFrame = ...  ← triggers @Observable │
+│  }                                                           │
+└──────────────────────────────────────────────────────────────┘
+```
+
+**Problems:** 7-8 heap allocations per callback on the audio thread. Any allocation can trigger ARC reference counting (which acquires locks), potentially stalling the real-time audio thread and causing buffer underruns (audible skips).
+
+#### New Architecture (SPSC Shared Buffer)
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                    AUDIO THREAD (real-time)                   │
+│                                                              │
+│  AVAudioEngine Tap Callback (~21.5 Hz)                       │
+│  ┌────────────────────────────────────────────────────────┐  │
+│  │ 1. scratch.prepare(buffer)          ← no alloc         │  │
+│  │ 2. FFT + Goertzel computation       ← no alloc         │  │
+│  │ 3. sharedBuffer.tryPublish(scratch) ← no alloc         │  │
+│  │    ├─ os_unfair_lock_trylock()   (non-blocking)        │  │
+│  │    ├─ if locked: memcpy into pre-allocated arrays      │  │
+│  │    ├─ waveform: direct stride copy (no map/iterator)   │  │
+│  │    ├─ generation += 1                                  │  │
+│  │    └─ unlock                                           │  │
+│  │    └─ if contention: drop frame (inaudible, invisible) │  │
+│  └────────────────┬───────────────────────────────────────┘  │
+│                   │                                          │
+│         ZERO heap allocations per callback                   │
+│         trylock = non-blocking (never stalls audio thread)   │
+└───────────────────┼──────────────────────────────────────────┘
+                    │ Shared memory (VisualizerSharedBuffer)
+                    │ Pre-allocated arrays, atomic generation
+                    ▼
+┌──────────────────────────────────────────────────────────────┐
+│                    MAIN THREAD (30 Hz Timer)                  │
+│                                                              │
+│  pollVisualizerData() ← Timer.scheduledTimer @ 30 Hz        │
+│  ┌────────────────────────────────────────────────────────┐  │
+│  │ 1. sharedBuffer.consume()                              │  │
+│  │    ├─ os_unfair_lock_lock()    (OK to block here)      │  │
+│  │    ├─ check generation > lastConsumed                   │  │
+│  │    ├─ create VisualizerData from pre-allocated storage  │  │
+│  │    └─ unlock, return data                              │  │
+│  │ 2. self.visualizerData = data  ← triggers @Observable  │  │
+│  │ 3. self.butterchurnFrame = ... ← triggers @Observable  │  │
+│  └────────────────────────────────────────────────────────┘  │
+│                                                              │
+│  Array allocation happens HERE (main thread = safe)          │
+└──────────────────────────────────────────────────────────────┘
+```
+
+**Key change:** Zero allocations on the audio thread. All Array creation happens on the main thread (30 Hz poll timer), where heap allocations and ARC operations are safe. The `os_unfair_lock_trylock()` is non-blocking - if the main thread holds the lock, the audio thread simply drops that frame (imperceptible at 21.5 Hz).
+
+**Simplified data flow**:
+```
+Audio Thread (21.5 Hz)              Main Thread (30 Hz poll timer)
+─────────────────────               ──────────────────────────────
+1. scratch.prepare(buffer)          1. sharedBuffer.consume()
+2. FFT + Goertzel computation          ├─ os_unfair_lock_lock()
+3. sharedBuffer.tryPublish(scratch)    ├─ check generation > lastConsumed
+   ├─ os_unfair_lock_trylock()         ├─ copy data (Array creation OK here)
+   ├─ memcpy into pre-allocated arrays └─ unlock, return VisualizerData
+   ├─ generation += 1              2. pipeline.visualizerData = data
+   └─ unlock                          (triggers @Observable)
+   └─ if contention: drop frame
+      (imperceptible at 21.5 Hz)
+```
+
+**Implementation (shared buffer)**:
 ```swift
-// File: MacAmpApp/Audio/VisualizerPipeline.swift:178-184, 265-274, 518-522
-// Purpose: Pass VisualizerPipeline reference through Core Audio tap callback
-// Context: Audio tap runs on realtime audio thread, not @MainActor
+// File: MacAmpApp/Audio/VisualizerPipeline.swift:36-146
+// Purpose: Lock-protected shared storage for audio-to-main thread data transfer
+// Context: Audio thread writes via tryPublish(), main thread reads via consume()
 
-/// Context passed to audio tap (must be Sendable for Swift 6)
-private struct VisualizerTapContext: @unchecked Sendable {
-    let pipelinePointer: UnsafeMutableRawPointer
+private final class VisualizerSharedBuffer: @unchecked Sendable {
+    // Pre-allocated arrays - sizes match visualization requirements
+    private var rms = [Float](repeating: 0, count: 20)
+    private var spectrum = [Float](repeating: 0, count: 20)
+    private var waveform = [Float](repeating: 0, count: 76)
+    private var bcSpectrum = [Float](repeating: 0, count: 1024)
+    private var bcWaveform = [Float](repeating: 0, count: 1024)
+    private var waveformCount: Int = 0
+    private var rmsCount: Int = 0
+    private var spectrumCount: Int = 0
+
+    private var lock = os_unfair_lock()
+    private var generation: UInt64 = 0     // Incremented by producer
+    private var lastConsumed: UInt64 = 0   // Tracks consumer position
+
+    /// Audio thread: try to publish data (non-blocking).
+    /// Returns false if lock is contended (frame is dropped — imperceptible).
+    func tryPublish(from scratch: VisualizerScratchBuffers,
+                    oscilloscopeSamples: Int, validFrameCount: Int) -> Bool {
+        guard os_unfair_lock_trylock(&lock) else { return false }
+        defer { os_unfair_lock_unlock(&lock) }
+
+        // memcpy from scratch buffers into pre-allocated storage
+        // (using withUnsafeBufferPointer for zero-overhead access)
+        let scratchRms = scratch.rms
+        let rCount = min(scratchRms.count, rms.count)
+        scratchRms.withUnsafeBufferPointer { src in
+            rms.withUnsafeMutableBufferPointer { dst in
+                if rCount > 0, let s = src.baseAddress, let d = dst.baseAddress {
+                    memcpy(d, s, rCount * MemoryLayout<Float>.stride)
+                }
+            }
+        }
+        rmsCount = rCount
+
+        // ... same pattern for spectrum, waveform, bcSpectrum, bcWaveform ...
+
+        generation &+= 1
+        return true
+    }
+
+    /// Main thread: consume latest data (blocking lock, safe for main thread).
+    /// Returns nil if no new data since last consume (generation unchanged).
+    func consume() -> VisualizerData? {
+        os_unfair_lock_lock(&lock)
+
+        guard generation != lastConsumed else {
+            os_unfair_lock_unlock(&lock)
+            return nil
+        }
+        lastConsumed = generation
+
+        // Array creation happens HERE on main thread (safe to allocate)
+        let localRms = Array(rms.prefix(rmsCount))
+        let localSpec = Array(spectrum.prefix(spectrumCount))
+        let localWave = Array(waveform.prefix(waveformCount))
+        let localBcSpec = Array(bcSpectrum)
+        let localBcWave = Array(bcWaveform)
+
+        os_unfair_lock_unlock(&lock)
+
+        return VisualizerData(
+            rms: localRms, spectrum: localSpec, waveform: localWave,
+            butterchurnSpectrum: localBcSpec, butterchurnWaveform: localBcWave
+        )
+    }
 }
+```
+
+**Implementation (poll timer and tap handler)**:
+```swift
+// File: MacAmpApp/Audio/VisualizerPipeline.swift:350-677
+// Purpose: Connect the shared buffer to the audio tap and UI
 
 @MainActor
 @Observable
 final class VisualizerPipeline {
-    @ObservationIgnored nonisolated(unsafe) private var tapInstalled = false
-    @ObservationIgnored nonisolated(unsafe) private weak var mixerNode: AVAudioMixerNode?
+    @ObservationIgnored private let sharedBuffer = VisualizerSharedBuffer()
+    @ObservationIgnored nonisolated(unsafe) private var pollTimer: Timer?
 
-    /// Install visualizer tap on the given mixer node
     func installTap(on mixer: AVAudioMixerNode) {
         guard !tapInstalled else { return }
-
         mixerNode = mixer
+        mixer.removeTap(onBus: 0)
 
-        // Create context with Unmanaged pointer to self
-        // passUnretained: Does NOT increment reference count
-        // CRITICAL: self must outlive the tap - caller must call removeTap() before releasing
-        let context = VisualizerTapContext(
-            pipelinePointer: Unmanaged.passUnretained(self).toOpaque()
-        )
-
-        let handler = Self.makeTapHandler(context: context, scratch: VisualizerScratchBuffers())
+        let scratch = VisualizerScratchBuffers()
+        let handler = Self.makeTapHandler(sharedBuffer: sharedBuffer, scratch: scratch)
 
         mixer.installTap(onBus: 0, bufferSize: 2048, format: nil, block: handler)
         tapInstalled = true
+        startPollTimer()  // Start 30 Hz consumer
     }
 
-    /// Remove visualizer tap if installed
-    /// Nonisolated to allow calling from deinit (AVAudioMixerNode.removeTap is thread-safe)
-    nonisolated func removeTap() {
-        guard tapInstalled, let mixer = mixerNode else { return }
-        mixer.removeTap(onBus: 0)
-        tapInstalled = false
-        mixerNode = nil
-    }
-
-    /// Build the tap handler in a nonisolated context
-    /// AVAudioEngine calls this on its realtime audio queue
-    private nonisolated static func makeTapHandler(
-        context: VisualizerTapContext,
-        scratch: VisualizerScratchBuffers
-    ) -> @Sendable (AVAudioPCMBuffer, AVAudioTime?) -> Void {
-        { buffer, _ in
-            // ... process buffer ...
-
-            // Dispatch to MainActor to update pipeline state
-            Task { @MainActor [context, data] in
-                // Convert opaque pointer back to VisualizerPipeline
-                let pipeline = Unmanaged<VisualizerPipeline>.fromOpaque(
-                    context.pipelinePointer
-                ).takeUnretainedValue()
-
-                pipeline.updateLevels(with: data, useSpectrum: pipeline.useSpectrum)
+    // 30 Hz timer polls shared buffer on main thread
+    private func startPollTimer() {
+        pollTimer?.invalidate()
+        pollTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0,
+                                         repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.pollVisualizerData()
             }
         }
     }
+
+    private func pollVisualizerData() {
+        guard let data = sharedBuffer.consume() else { return }
+        updateLevels(with: data, useSpectrum: useSpectrum)
+    }
+
+    // Tap handler: runs on audio thread, zero allocations
+    private nonisolated static func makeTapHandler(
+        sharedBuffer: VisualizerSharedBuffer,
+        scratch: VisualizerScratchBuffers
+    ) -> @Sendable (AVAudioPCMBuffer, AVAudioTime?) -> Void {
+        { buffer, _ in
+            // ... mix to mono, compute RMS/spectrum/FFT in scratch buffers ...
+
+            // Publish to shared buffer (non-blocking)
+            _ = sharedBuffer.tryPublish(
+                from: scratch,
+                oscilloscopeSamples: 76,
+                validFrameCount: cappedFrameCount
+            )
+        }
+    }
+
+    nonisolated func removeTap() {
+        guard tapInstalled else { return }
+        dispatchPrecondition(condition: .onQueue(.main))
+        pollTimer?.invalidate()
+        pollTimer = nil
+        if let mixer = mixerNode {
+            mixer.removeTap(onBus: 0)
+        }
+        tapInstalled = false
+        mixerNode = nil
+    }
 }
-
-// In AudioPlayer.deinit - ensure tap is removed before pipeline is deallocated
-deinit {
-    // CRITICAL: Remove tap before self deallocates to prevent use-after-free
-    visualizerPipeline.removeTap()
-}
 ```
 
-**Key elements**:
-1. **Unmanaged.passUnretained**: Creates raw pointer without retaining (caller manages lifetime)
-2. **@unchecked Sendable context**: Context struct holds raw pointer, marked Sendable for crossing actor boundary
-3. **nonisolated removeTap()**: Can be called from deinit to safely remove tap
-4. **Static tap handler**: Uses `nonisolated static func` to avoid capturing self directly
-5. **Task dispatch**: Hops back to MainActor after processing
+**Key design decisions**:
+1. **`os_unfair_lock_trylock`** on audio thread: Non-blocking. If the main thread holds the lock, the audio thread drops that frame (imperceptible at 21.5 Hz producer rate with 30 Hz consumer rate).
+2. **`os_unfair_lock_lock`** on main thread: Blocking is safe here. Lock hold time is bounded (5 small memcpy operations).
+3. **Generation counter**: Consumer skips `consume()` when no new data has been published, avoiding unnecessary Array allocation.
+4. **Pre-allocated arrays**: All storage in `VisualizerSharedBuffer` is allocated once at init. `tryPublish()` only performs `memcpy` into existing buffers.
+5. **30 Hz poll timer**: Decouples UI update rate from audio callback rate. Timer runs on main run loop, so `MainActor.assumeIsolated` is safe (with `dispatchPrecondition` safety net).
 
-**Lifetime contract**:
+**Supersedes**: The previous `Unmanaged` pointer + `Task { @MainActor }` pattern, which had two problems:
+- **7-8 heap allocations per audio callback** (Array creation, Task dispatch, ARC)
+- **Use-after-free risk** if `removeTap()` was not called before deallocation
+
+The SPSC pattern eliminates both: zero audio-thread allocations in steady state, and no raw pointer lifetime management required.
+
+**Pause tap policy**: The visualizer tap is removed on pause (not just stop), saving CPU when paused:
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                     LIFETIME CONTRACT                            │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  1. VisualizerPipeline created                                   │
-│  2. installTap() called - tap holds Unmanaged pointer            │
-│  3. Tap callback runs repeatedly on audio thread                 │
-│  4. removeTap() MUST be called before VisualizerPipeline release │
-│  5. VisualizerPipeline deallocated                               │
-│                                                                  │
-│  If step 4 is skipped: USE-AFTER-FREE crash in tap callback      │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+play()  -> installTap() + startPollTimer()
+pause() -> removeTap()  (includes timer cleanup)
+stop()  -> removeTap()  (includes timer cleanup)
 ```
 
-**Real usage**: `VisualizerPipeline.swift` for audio tap callback
+**Real usage**: `VisualizerPipeline.swift` for audio visualization data transport
 
 **Pitfalls**:
-- **CRITICAL**: removeTap() must be called before releasing the object
-- Don't use `passRetained` unless you explicitly call `release()` later
-- Verify lifetime management in code review - memory bugs are subtle
-- Consider logging when tap is installed/removed for debugging
-- Test with Thread Sanitizer to catch use-after-free issues
+- `VisualizerSharedBuffer` is `@unchecked Sendable` — safety relies on the `os_unfair_lock` discipline
+- `removeTap()` must clean up the poll timer (runs on main run loop, must invalidate from main thread)
+- `tryPublish()` must never allocate — use only `memcpy` / `withUnsafeBufferPointer` patterns
+- `consume()` creates Arrays under lock — keep lock hold time minimal by copying raw data only
+- Pre-allocated buffer sizes must match or exceed what the audio tap produces (4096 frame cap in scratch buffers)
+- Test with Thread Sanitizer to verify no data races
+
+**Related Memory Optimizations (Same Release)**:
+
+The SPSC pattern was part of a comprehensive memory optimization effort. Other key improvements:
+
+#### Skin Loading Pipeline Optimization
+
+**BEFORE (Double Load):**
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    APP STARTUP                                │
+│                                                              │
+│  SkinManager.loadInitialSkin()                               │
+│  ┌───────────────────────────────────────────────────────┐   │
+│  │ Step 1: loadDefaultSkinIfNeeded()                     │   │
+│  │   ├─ SkinArchiveLoader.load(Winamp.wsz)               │   │
+│  │   │   └─ Extract ALL BMP sheets from ZIP              │   │
+│  │   ├─ parseDefaultSkin(payload)                        │   │
+│  │   │   ├─ For EACH sheet: NSImage(data:) ⚠️ PEAK      │   │
+│  │   │   └─ For EACH sprite: crop → NSImage  ⚠️ PEAK    │   │
+│  │   └─ defaultSkin = Skin(images: ~200 sprites)         │   │
+│  │       └─ ~15-20 MB of NSImages PERMANENTLY in memory  │   │
+│  │                                                       │   │
+│  │ Step 2: switchToSkin(selectedSkin)                     │   │
+│  │   ├─ SkinArchiveLoader.load(selected.wsz)             │   │
+│  │   │   └─ Extract ALL BMP sheets from ZIP  ⚠️ DOUBLE   │   │
+│  │   ├─ applySkinPayload(payload)                        │   │
+│  │   │   ├─ For EACH sheet: NSImage(data:)               │   │
+│  │   │   └─ For EACH sprite: crop → NSImage              │   │
+│  │   └─ currentSkin = Skin(images: ~200 sprites)         │   │
+│  │                                                       │   │
+│  │ PEAK MEMORY: default sprites + selected sprites       │   │
+│  │              + intermediate CGImage buffers            │   │
+│  │              + float pixel backing stores              │   │
+│  │              = ~594 MB PEAK                            │   │
+│  └───────────────────────────────────────────────────────┘   │
+│                                                              │
+│  At rest: defaultSkin (~15-20 MB) + currentSkin (~15-20 MB)  │
+│         = ~30-40 MB of sprite images always in memory        │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**AFTER (Lazy Loading):**
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    APP STARTUP                                │
+│                                                              │
+│  SkinManager.loadInitialSkin()                               │
+│  ┌───────────────────────────────────────────────────────┐   │
+│  │ Step 1: loadDefaultSkinIfNeeded()                     │   │
+│  │   ├─ SkinArchiveLoader.load(Winamp.wsz)               │   │
+│  │   └─ defaultSkinPayload = payload  (~200 KB ZIP data) │   │
+│  │       └─ NO sprite parsing, NO NSImage creation       │   │
+│  │       └─ Sprites extracted LAZILY on demand            │   │
+│  │                                                       │   │
+│  │ Step 2a: IF selected == "bundled:Winamp"              │   │
+│  │   └─ parseDefaultSkinFully(payload)                   │   │
+│  │       ├─ Parse sprites with autoreleasepool            │   │
+│  │       ├─ Populate defaultSkinSpriteCache              │   │
+│  │       └─ currentSkin = Skin(...)                       │   │
+│  │       └─ PEAK: only ONE skin parsed (not two)         │   │
+│  │                                                       │   │
+│  │ Step 2b: IF selected != default                       │   │
+│  │   ├─ switchToSkin(selectedSkin)                        │   │
+│  │   ├─ applySkinPayload() with autoreleasepool per crop │   │
+│  │   │   └─ Missing sheets → lazy fallback:              │   │
+│  │   │       fallbackSpritesFromDefaultSkin()             │   │
+│  │   │       ├─ Extract ONLY the missing sheet from ZIP  │   │
+│  │   │       ├─ Cache in defaultSkinSpriteCache          │   │
+│  │   │       └─ Only ~5-10 sprites per missing sheet     │   │
+│  │   └─ currentSkin = Skin(...)                           │   │
+│  │                                                       │   │
+│  │ PEAK MEMORY: payload (~200 KB) + ONE skin's sprites   │   │
+│  │              + autoreleasepool cleans intermediates    │   │
+│  │              = MUCH LOWER PEAK                        │   │
+│  └───────────────────────────────────────────────────────┘   │
+│                                                              │
+│  At rest: payload (~200 KB) + spriteCache (lazy, partial)    │
+│         + currentSkin (~15-20 MB)                            │
+│         = ~15-20 MB total (was ~30-40 MB)                    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Result**: Peak memory reduced from ~594 MB to ~553 MB (-23%) by avoiding double skin parse. At-rest memory reduced from ~30-40 MB to ~15-20 MB (-50%) through lazy fallback extraction.
+
+#### CGImage Cropping Pipeline Optimization
+
+**BEFORE (Shared Parent Buffer):**
+```
+NSImage.cropped(to: rect)
+├─ self.cgImage(forProposedRect:)  → creates float-format backing store
+├─ cgImage.cropping(to:)           → child CGImage SHARES parent buffer
+└─ NSImage(cgImage:, size:)        → wraps child, parent buffer RETAINED
+    └─ Parent's full float pixel buffer stays alive as long as
+       ANY cropped sprite references it (~136 KB per parent sheet)
+```
+
+**AFTER (Independent Copy):**
+```
+NSImage.cropped(to: rect)
+├─ self.cgImage(forProposedRect:)  → creates float-format backing store
+├─ cgImage.cropping(to:)           → child CGImage references parent
+├─ CGContext(sRGB, RGBA8, 8bpc)    → independent context
+├─ context.draw(croppedCGImage)    → copies pixels into new buffer
+├─ context.makeImage()             → independent CGImage (no parent ref)
+└─ NSImage(cgImage:, size:)        → wraps independent image
+    └─ Parent float buffer is released when autorelease pool drains
+    └─ Each sprite owns only its own pixel data (~width*height*4 bytes)
+```
+
+**Result**: Eliminates parent-child buffer retention. Each sprite owns only its own pixels instead of retaining the full parent sheet buffer. Combined with `autoreleasepool` per crop, this prevents accumulation during sprite extraction loops.
+
+**File**: `MacAmpApp/Models/ImageSlicing.swift`
+
+#### Pause Tap Policy
+
+**BEFORE:**
+```
+play()  → installVisualizerTapIfNeeded()
+pause() → (tap stays active, callbacks continue at 21.5 Hz)
+stop()  → removeVisualizerTapIfNeeded()
+```
+
+**AFTER:**
+```
+play()  → installVisualizerTapIfNeeded()  + startPollTimer()
+pause() → removeVisualizerTapIfNeeded()   ← NEW
+stop()  → removeVisualizerTapIfNeeded()
+          (removeTap also stops poll timer)
+```
+
+**Result**: Removes visualizer tap on pause, saving CPU during paused playback. Previously the tap continued running at 21.5 Hz even when paused, consuming ~1-2% CPU for unused visualization data.
 
 ---
 
@@ -2404,4 +2707,4 @@ When implementing new features, prefer these established patterns. When you disc
 
 ---
 
-*Document Version: 1.2.0 | Last Updated: 2026-01-11 | Lines: 2,327*
+*Document Version: 1.4.0 | Last Updated: 2026-02-14*

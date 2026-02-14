@@ -124,7 +124,7 @@ if [ -n "$STAGED_SWIFT_FILES" ]; then
         echo "ERROR: SwiftLint is REQUIRED. Install: brew install swiftlint"
         FAILED=1
     else
-        echo "$STAGED_SWIFT_FILES" | xargs swiftlint lint --quiet --strict
+        echo "$STAGED_SWIFT_FILES" | xargs swiftlint lint --quiet --strict --no-cache
         RESULT=$?
 
         if [ $RESULT -ne 0 ]; then

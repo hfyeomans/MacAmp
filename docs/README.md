@@ -665,6 +665,8 @@ Includes:
 | **Thread safety** | IMPLEMENTATION_PATTERNS.md | §5 Async/Await |
 | **Time display system** | MACAMP_ARCHITECTURE_GUIDE.md | §UI Controls & Features |
 | **Unmanaged pointer pattern** | IMPLEMENTATION_PATTERNS.md | §4 Audio Processing Patterns |
+| **VisualizerSharedBuffer (SPSC)** | IMPLEMENTATION_PATTERNS.md, MACAMP_ARCHITECTURE_GUIDE.md | §4 Audio Processing Patterns, §8.4 |
+| **SPSC shared buffer pattern** | IMPLEMENTATION_PATTERNS.md | §4 Audio Processing Patterns |
 | **Track information (I button)** | MACAMP_ARCHITECTURE_GUIDE.md | §UI Controls & Features |
 | **Custom window dragging** | CUSTOM_DRAG_FIX.md | Full document |
 | **Dynamic titlebar expansion** | MILKDROP_WINDOW.md | §12.3 Window Resizing |
@@ -749,6 +751,7 @@ Includes:
 | "What Swift 6 features are used?" | MACAMP_ARCHITECTURE_GUIDE.md §10 |
 | "How does window snapping work?" | MACAMP_ARCHITECTURE_GUIDE.md §WindowSnapManager |
 | "What's the spectrum analyzer algorithm?" | MACAMP_ARCHITECTURE_GUIDE.md §8.4 (20-bar Goertzel) |
+| "How does audio data reach the UI thread?" | IMPLEMENTATION_PATTERNS.md §4 (SPSC shared buffer + poll timer) |
 | "What are the clutter bar buttons?" | MACAMP_ARCHITECTURE_GUIDE.md §UI Controls & Features |
 | "How do I add clutter bar features?" | MACAMP_ARCHITECTURE_GUIDE.md §UI Controls & Features |
 | "What keyboard shortcuts are available?" | MACAMP_ARCHITECTURE_GUIDE.md §UI Controls & Features |

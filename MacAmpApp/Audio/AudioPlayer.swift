@@ -18,7 +18,7 @@ extension String {
     }
 }
 
-// VisualizerScratchBuffers, VisualizerTapContext, and ButterchurnFrame
+// VisualizerScratchBuffers, VisualizerSharedBuffer, and ButterchurnFrame
 // have been extracted to VisualizerPipeline.swift
 
 // Track, PlaybackStopReason, and PlaybackState have been extracted to Models/Track.swift
@@ -175,8 +175,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     }
 
     deinit {
-        // Ensure visualizer tap is removed to prevent use-after-free
-        // The tap handler holds an Unmanaged pointer to VisualizerPipeline
+        // Ensure visualizer tap and poll timer are stopped
         visualizerPipeline.removeTap()
 
         // Invalidate progress timer if running
@@ -348,8 +347,11 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
                 // Switching FROM video to audio - cleanup video
                 videoPlaybackController.cleanup()
                 AppLog.debug(.audio, "Switching from video to audio - cleanup complete")
+            } else if currentMediaType == .audio {
+                // Switching FROM audio to video - remove visualizer tap
+                removeVisualizerTapIfNeeded()
+                AppLog.debug(.audio, "Switching from audio to video - tap removed")
             }
-            // Note: Audio cleanup happens in loadAudioFile() via playerNode.stop()
         }
 
         currentMediaType = mediaType
@@ -458,6 +460,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
         // Audio playback
         guard playerNode.isPlaying else { return }
         playerNode.pause()
+        removeVisualizerTapIfNeeded()
         transition(to: .paused)
         seekGuardActive = false
         AppLog.debug(.audio, "Pause")
@@ -752,7 +755,8 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     private func startProgressTimer() {
         progressTimer?.invalidate()
         let timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-            Task { @MainActor in
+            dispatchPrecondition(condition: .onQueue(.main))
+            MainActor.assumeIsolated {
                 guard let self = self else { return }
                 if let nodeTime = self.playerNode.lastRenderTime,
                    let playerTime = self.playerNode.playerTime(forNodeTime: nodeTime) {
@@ -780,6 +784,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
 
     private func removeVisualizerTapIfNeeded() {
         visualizerPipeline.removeTap()
+        visualizerPipeline.clearData()
     }
 
     // MARK: - Seeking / Scrubbing
@@ -867,6 +872,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
         // If scheduleFrom returned false, it means we sought to the end
         if audioScheduled && shouldPlay {
             startEngineIfNeeded()
+            installVisualizerTapIfNeeded()
             playerNode.play()
             startProgressTimer()  // Restart timer with fresh state
             transition(to: .playing)
