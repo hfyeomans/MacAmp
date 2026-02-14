@@ -25,6 +25,42 @@ struct VisualizerData: Sendable {
     let butterchurnWaveform: [Float]
 }
 
+// MARK: - Goertzel Coefficients
+
+/// Pre-computed Goertzel coefficients for spectrum analysis.
+/// Depends on bar count and sample rate. Recomputed only when sample rate
+/// changes (i.e., on track change), not on every tap callback (~21.5 Hz).
+/// This eliminates 20x pow() + 20x cos() calls per callback.
+private struct GoertzelCoefficients {
+    var coefficients: [Float]
+    var equalizationGains: [Float]
+    private(set) var sampleRate: Float = 0
+
+    init(bars: Int) {
+        coefficients = [Float](repeating: 0, count: bars)
+        equalizationGains = [Float](repeating: 0, count: bars)
+    }
+
+    mutating func updateIfNeeded(bars: Int, sampleRate: Float) -> Bool {
+        guard sampleRate != self.sampleRate else { return false }
+        self.sampleRate = sampleRate
+        let minimumFrequency: Float = 50
+        let maximumFrequency: Float = min(16000, sampleRate * 0.45)
+        for b in 0..<bars {
+            let normalized = Float(b) / Float(max(1, bars - 1))
+            let logScale = minimumFrequency * pow(maximumFrequency / minimumFrequency, normalized)
+            let linScale = minimumFrequency + normalized * (maximumFrequency - minimumFrequency)
+            let centerFrequency = 0.91 * logScale + 0.09 * linScale
+            let omega = 2 * Float.pi * centerFrequency / sampleRate
+            coefficients[b] = 2 * cos(omega)
+            let normalizedFreq = (centerFrequency - minimumFrequency) / (maximumFrequency - minimumFrequency)
+            let dbAdjustment = -8.0 + 16.0 * normalizedFreq
+            equalizationGains[b] = pow(10.0, dbAdjustment / 20.0)
+        }
+        return true
+    }
+}
+
 // MARK: - Scratch Buffers
 
 /// Scratch buffers are confined to the audio tap queue, so @unchecked Sendable is safe.
@@ -32,6 +68,9 @@ private final class VisualizerScratchBuffers: @unchecked Sendable {
     private(set) var mono: [Float] = []
     private(set) var rms: [Float] = []
     private(set) var spectrum: [Float] = []
+
+    // Pre-computed Goertzel coefficients (recomputed only when sample rate changes)
+    var goertzel: GoertzelCoefficients
 
     // Butterchurn FFT buffers
     private static let butterchurnFFTSize: Int = 2048
@@ -52,7 +91,13 @@ private final class VisualizerScratchBuffers: @unchecked Sendable {
     // vDSP FFT setup (log2(2048) = 11)
     private let fftSetup: vDSP_DFT_Setup?
 
+    // Pre-allocated capacity to avoid reallocation on frame-size changes
+    private static let maxFrameCount = 4096
+    private static let maxBars = 20
+
     init() {
+        goertzel = GoertzelCoefficients(bars: Self.maxBars)
+
         // Create FFT setup for 2048-point real-to-complex transform
         fftSetup = vDSP_DFT_zrop_CreateSetup(
             nil,
@@ -62,6 +107,11 @@ private final class VisualizerScratchBuffers: @unchecked Sendable {
 
         // Pre-compute Hann window (never changes)
         vDSP_hann_window(&hannWindow, vDSP_Length(Self.butterchurnFFTSize), Int32(vDSP_HANN_NORM))
+
+        // Pre-allocate buffers at max capacity to avoid reallocation
+        mono = Array(repeating: 0, count: Self.maxFrameCount)
+        rms = Array(repeating: 0, count: Self.maxBars)
+        spectrum = Array(repeating: 0, count: Self.maxBars)
     }
 
     deinit {
@@ -70,8 +120,10 @@ private final class VisualizerScratchBuffers: @unchecked Sendable {
         }
     }
 
-    func prepare(frameCount: Int, bars: Int) {
-        if mono.count != frameCount {
+    func prepare(frameCount: Int, bars: Int, sampleRate: Float) {
+        // Grow buffers only if needed (pre-allocated at maxFrameCount/maxBars,
+        // so this branch should never execute in normal operation)
+        if mono.count < frameCount {
             mono = Array(repeating: 0, count: frameCount)
         } else {
             mono.withUnsafeMutableBufferPointer { pointer in
@@ -80,13 +132,16 @@ private final class VisualizerScratchBuffers: @unchecked Sendable {
             }
         }
 
-        if rms.count != bars {
+        if rms.count < bars {
             rms = Array(repeating: 0, count: bars)
         }
 
-        if spectrum.count != bars {
+        if spectrum.count < bars {
             spectrum = Array(repeating: 0, count: bars)
         }
+
+        // Recompute Goertzel coefficients only when sample rate changes (once per track)
+        _ = goertzel.updateIfNeeded(bars: bars, sampleRate: sampleRate)
     }
 
     func withMono<R>(_ body: (inout [Float]) -> R) -> R {
@@ -118,10 +173,10 @@ private final class VisualizerScratchBuffers: @unchecked Sendable {
     /// Process audio samples for Butterchurn visualization
     /// - Parameter samples: Mono audio samples (at least 2048 for full FFT)
     /// - Note: Uses pre-allocated buffers to avoid audio-thread allocations
-    func processButterchurnFFT(samples: [Float]) {
+    func processButterchurnFFT(samples: [Float], validCount: Int? = nil) {
         guard let setup = fftSetup else { return }
 
-        let sampleCount = min(samples.count, Self.butterchurnFFTSize)
+        let sampleCount = min(validCount ?? samples.count, Self.butterchurnFFTSize)
 
         // Copy input samples and zero-pad if needed
         for i in 0..<sampleCount {
@@ -399,7 +454,7 @@ final class VisualizerPipeline {
             if frameCount == 0 { return }
 
             let bars = 20
-            scratch.prepare(frameCount: frameCount, bars: bars)
+            scratch.prepare(frameCount: frameCount, bars: bars, sampleRate: Float(buffer.format.sampleRate))
 
             // Mix channels to mono
             scratch.withMono { mono in
@@ -439,22 +494,15 @@ final class VisualizerPipeline {
                     }
                 }
 
-                // Compute spectrum using Goertzel algorithm
+                // Compute spectrum using Goertzel algorithm with precomputed coefficients
                 scratch.withSpectrum { spectrum in
-                    let sampleRate = Float(buffer.format.sampleRate)
                     let sampleCount = min(1024, frameCount)
                     if sampleCount > 0 {
-                        let minimumFrequency: Float = 50
-                        let maximumFrequency: Float = min(16000, sampleRate * 0.45)
+                        let coefficients = scratch.goertzel.coefficients
+                        let gains = scratch.goertzel.equalizationGains
 
                         for b in 0..<bars {
-                            let normalized = Float(b) / Float(max(1, bars - 1))
-                            let logScale = minimumFrequency * pow(maximumFrequency / minimumFrequency, normalized)
-                            let linScale = minimumFrequency + normalized * (maximumFrequency - minimumFrequency)
-                            let centerFrequency = 0.91 * logScale + 0.09 * linScale
-
-                            let omega = 2 * Float.pi * centerFrequency / sampleRate
-                            let coefficient = 2 * cos(omega)
+                            let coefficient = coefficients[b]
                             var s0: Float = 0
                             var s1: Float = 0
                             var s2: Float = 0
@@ -468,12 +516,7 @@ final class VisualizerPipeline {
                             }
                             let power = s1 * s1 + s2 * s2 - coefficient * s1 * s2
                             var value = sqrt(max(0, power)) / Float(sampleCount)
-
-                            let normalizedFreq = (centerFrequency - minimumFrequency) / (maximumFrequency - minimumFrequency)
-                            let dbAdjustment = -8.0 + 16.0 * normalizedFreq
-                            let equalizationGain = pow(10.0, dbAdjustment / 20.0)
-
-                            value *= equalizationGain
+                            value *= gains[b]
                             value = min(1.0, value * 15.0)
                             spectrum[b] = value
                         }
@@ -489,18 +532,19 @@ final class VisualizerPipeline {
             let spectrumSnapshot = scratch.snapshotSpectrum()
 
             // Capture waveform samples for oscilloscope
+            // Use frameCount (not mono.count which is pre-allocated capacity 4096)
             let oscilloscopeSamples = 76  // Match VisualizerLayout.oscilloscopeSampleCount
             var waveformSnapshot: [Float] = []
             scratch.withMonoReadOnly { mono in
-                let step = max(1, mono.count / oscilloscopeSamples)
-                waveformSnapshot = stride(from: 0, to: mono.count, by: step)
+                let step = max(1, frameCount / oscilloscopeSamples)
+                waveformSnapshot = stride(from: 0, to: frameCount, by: step)
                     .prefix(oscilloscopeSamples)
                     .map { mono[$0] }
             }
 
             // Process Butterchurn FFT (2048-point for 1024 bins)
             scratch.withMonoReadOnly { mono in
-                scratch.processButterchurnFFT(samples: mono)
+                scratch.processButterchurnFFT(samples: mono, validCount: frameCount)
             }
             let butterchurnSpectrumSnapshot = scratch.snapshotButterchurnSpectrum()
             let butterchurnWaveformSnapshot = scratch.snapshotButterchurnWaveform()
