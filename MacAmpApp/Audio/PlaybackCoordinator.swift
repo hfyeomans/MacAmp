@@ -170,13 +170,16 @@ final class PlaybackCoordinator {
 
     /// Navigate to next track in playlist
     func next() async {
-        let action = audioPlayer.nextTrack(isManualSkip: true)  // User-initiated skip
+        // Pass coordinator's currentTrack so PlaylistController can resolve position
+        // even when audioPlayer.currentTrack is nil (e.g., during stream playback)
+        let action = audioPlayer.nextTrack(from: currentTrack, isManualSkip: true)
         await handlePlaylistAdvance(action: action)
     }
 
     /// Navigate to previous track in playlist
     func previous() async {
-        let action = audioPlayer.previousTrack()
+        // Pass coordinator's currentTrack for position context during stream playback
+        let action = audioPlayer.previousTrack(from: currentTrack)
         await handlePlaylistAdvance(action: action)
     }
 

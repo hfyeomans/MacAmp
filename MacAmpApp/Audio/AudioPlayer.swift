@@ -1033,6 +1033,18 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
         return handlePlaylistAction(action)
     }
 
+    /// Advance to next track with external position context.
+    /// Used by PlaybackCoordinator when audioPlayer.currentTrack is nil (e.g., during stream playback).
+    /// - Parameters:
+    ///   - track: External track for position resolution (typically coordinator's currentTrack)
+    ///   - isManualSkip: Whether this is a user-initiated skip
+    /// - Returns: Action for PlaybackCoordinator to handle
+    @discardableResult
+    func nextTrack(from track: Track?, isManualSkip: Bool = false) -> PlaylistAdvanceAction {
+        let action = playlistController.nextTrack(from: track, isManualSkip: isManualSkip)
+        return handlePlaylistAction(action)
+    }
+
     /// Go to previous track in playlist
     /// - Returns: Action for PlaybackCoordinator to handle
     @discardableResult
@@ -1041,6 +1053,16 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
         playlistController.updatePosition(with: currentTrack)
 
         let action = playlistController.previousTrack()
+        return handlePlaylistAction(action)
+    }
+
+    /// Go to previous track with external position context.
+    /// Used by PlaybackCoordinator when audioPlayer.currentTrack is nil (e.g., during stream playback).
+    /// - Parameter track: External track for position resolution (typically coordinator's currentTrack)
+    /// - Returns: Action for PlaybackCoordinator to handle
+    @discardableResult
+    func previousTrack(from track: Track?) -> PlaylistAdvanceAction {
+        let action = playlistController.previousTrack(from: track)
         return handlePlaylistAction(action)
     }
 
