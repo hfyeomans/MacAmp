@@ -39,8 +39,27 @@ final class PlaybackCoordinator {
 
     // MARK: - Unified State
 
-    private(set) var isPlaying: Bool = false
-    private(set) var isPaused: Bool = false
+    /// Derived from the active audio source. True when audio is actively rendering to speakers.
+    /// During stream buffering stalls, this returns false (audio is not being rendered).
+    var isPlaying: Bool {
+        switch currentSource {
+        case .localTrack: return audioPlayer.isPlaying
+        case .radioStation: return streamPlayer.isPlaying && !streamPlayer.isBuffering
+        case .none: return false
+        }
+    }
+
+    /// Derived from the active audio source. True when user has explicitly paused playback.
+    /// False during buffering stalls (not user-initiated) and error states.
+    var isPaused: Bool {
+        switch currentSource {
+        case .localTrack: return audioPlayer.isPaused
+        case .radioStation:
+            return !streamPlayer.isPlaying && !streamPlayer.isBuffering && streamPlayer.error == nil
+        case .none: return false
+        }
+    }
+
     private(set) var currentSource: PlaybackSource?
     private(set) var currentTitle: String?
     private(set) var currentTrack: Track?  // For playlist position tracking
@@ -80,7 +99,6 @@ final class PlaybackCoordinator {
                 trackArtist: "",
                 url: url
             )
-            isPlaying = audioPlayer.isPlaying
         } else {
             // Stop local file if playing
             audioPlayer.stop()
@@ -90,10 +108,7 @@ final class PlaybackCoordinator {
             await streamPlayer.play(station: station)
             currentSource = .radioStation(station)
             currentTitle = streamPlayer.streamTitle ?? station.name
-            isPlaying = streamPlayer.isPlaying
         }
-
-        isPaused = false
     }
 
     /// Play a track from the playlist (supports both local files and streams)
@@ -109,8 +124,6 @@ final class PlaybackCoordinator {
             await streamPlayer.play(url: track.url, title: track.title, artist: track.artist)
             currentSource = .radioStation(RadioStation(name: track.title, streamURL: track.url))
             currentTitle = track.title
-            isPlaying = streamPlayer.isPlaying
-            isPaused = false
         } else {
             // Stop stream if playing
             streamPlayer.stop()
@@ -131,30 +144,22 @@ final class PlaybackCoordinator {
         currentSource = .radioStation(station)
         currentTitle = streamPlayer.streamTitle ?? station.name
         currentTrack = nil  // Not from playlist
-        isPlaying = streamPlayer.isPlaying
-        isPaused = false
     }
 
     func pause() {
         switch currentSource {
         case .localTrack:
             audioPlayer.pause()
-            isPlaying = audioPlayer.isPlaying
         case .radioStation:
             streamPlayer.pause()
-            isPlaying = streamPlayer.isPlaying
         case .none:
             break
         }
-
-        isPaused = true
     }
 
     func stop() {
         audioPlayer.stop()
         streamPlayer.stop()
-        isPlaying = false
-        isPaused = false
         currentSource = nil
         currentTitle = nil
         currentTrack = nil  // Clear so playlist highlighting resets
@@ -187,16 +192,12 @@ final class PlaybackCoordinator {
         switch currentSource {
         case .localTrack:
             audioPlayer.play()
-            isPlaying = audioPlayer.isPlaying
         case .radioStation:
             // Just resume, don't rebuild stream
             streamPlayer.player.play()
-            isPlaying = true
         case .none:
             break
         }
-
-        isPaused = false
     }
 
     // MARK: - Helpers
@@ -228,8 +229,6 @@ final class PlaybackCoordinator {
             trackArtist: track.artist,
             url: track.url
         )
-        isPlaying = audioPlayer.isPlaying
-        isPaused = audioPlayer.isPaused
     }
 
     private func handlePlaylistAdvance(action: AudioPlayer.PlaylistAdvanceAction) async {
