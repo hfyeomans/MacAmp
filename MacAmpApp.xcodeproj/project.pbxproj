@@ -20,6 +20,7 @@
 		2BEEA991452D4A86CD1AC9F7 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = EA5D7D010AE0DE961C9470AC /* ZIPFoundation */; };
 		342759E1558D4553A66C3AD9 /* RadioStationLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC98BCD0ED814A6F90A8021D /* RadioStationLibrary.swift */; };
 		34EEE95E7D965A0D94D12C30 /* WinampMainWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C3495B177A8BA24181B484E /* WinampMainWindow.swift */; };
+		92CB5AD1B7A572BDE3FE75DC /* WinampMainWindow+Helpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8DC578157092D705BB00E22 /* WinampMainWindow+Helpers.swift */; };
 		366BB1702EC039E6006162E2 /* WindowCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 366BB16F2EC039E6006162E2 /* WindowCoordinator.swift */; };
 		366BB1762EC03A18006162E2 /* WinampMainWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 366BB1732EC03A18006162E2 /* WinampMainWindowController.swift */; };
 		366BB1772EC03A18006162E2 /* WinampPlaylistWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 366BB1742EC03A18006162E2 /* WinampPlaylistWindowController.swift */; };
@@ -129,6 +130,7 @@
 /* Begin PBXFileReference section */
 		032A0DEAD316CCA0CDA2645D /* EqGraphView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EqGraphView.swift; sourceTree = "<group>"; };
 		0C3495B177A8BA24181B484E /* WinampMainWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WinampMainWindow.swift; sourceTree = "<group>"; };
+		A8DC578157092D705BB00E22 /* WinampMainWindow+Helpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WinampMainWindow+Helpers.swift"; sourceTree = "<group>"; };
 		12C0A7D97E8D3B2E715D4EA0 /* SkinnedBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkinnedBanner.swift; sourceTree = "<group>"; };
 		1883C37C0887C2C13F6C9563 /* PLEditParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PLEditParser.swift; sourceTree = "<group>"; };
 		195F00AABD5483A18861EC8A /* WindowSpec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowSpec.swift; sourceTree = "<group>"; };
@@ -448,6 +450,7 @@
 				499433D5A14F2C47C9EB0931 /* VisualizerView.swift */,
 				4A489CA15E452302405E6FAE /* WinampEqualizerWindow.swift */,
 				0C3495B177A8BA24181B484E /* WinampMainWindow.swift */,
+				A8DC578157092D705BB00E22 /* WinampMainWindow+Helpers.swift */,
 				75C52A558EFD4C84BBA21F92 /* WinampPlaylistWindow.swift */,
 				0542534C840178895387FEE4 /* Components */,
 			);
@@ -656,6 +659,7 @@
 				D077337C4C05A6658475376F /* VisualizerView.swift in Sources */,
 				3D5787FD4B060D13BE690E2A /* WinampEqualizerWindow.swift in Sources */,
 				34EEE95E7D965A0D94D12C30 /* WinampMainWindow.swift in Sources */,
+				92CB5AD1B7A572BDE3FE75DC /* WinampMainWindow+Helpers.swift in Sources */,
 				36CABCFF2EC8016000902330 /* WindowFocusDelegate.swift in Sources */,
 				ADDBF8E53028E97A7A005307 /* WinampPlaylistWindow.swift in Sources */,
 				592F5C98FC8B29F71341CBD8 /* WinampVolumeSlider.swift in Sources */,
