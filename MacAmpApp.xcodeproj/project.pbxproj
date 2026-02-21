@@ -89,6 +89,8 @@
 		AC7BAF317F478CEB2F36F3DB /* PlaylistTimeText.swift in Sources */ = {isa = PBXBuildFile; fileRef = CABDEB04D5D23C3DAAAFEEFC /* PlaylistTimeText.swift */; };
 		AC7BAF327F478CEB2F36F3DC /* PlaylistScrollSlider.swift in Sources */ = {isa = PBXBuildFile; fileRef = CABDEB05D5D23C3DAAAFEEFE /* PlaylistScrollSlider.swift */; };
 		ADDBF8E53028E97A7A005307 /* WinampPlaylistWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75C52A558EFD4C84BBA21F92 /* WinampPlaylistWindow.swift */; };
+		41CC6A0218BF7407A0E0DCAB /* WinampPlaylistWindow+Menus.swift in Sources */ = {isa = PBXBuildFile; fileRef = A07FAE881085D53B61451758 /* WinampPlaylistWindow+Menus.swift */; };
+		CE0D5E43E740A1B33A606613 /* PlaylistWindowActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1223B201D13A96A323E467F8 /* PlaylistWindowActions.swift */; };
 		B3A2FD6D778A60B9F0D92258 /* AppCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7CCE1500578ECAEED8FAA42 /* AppCommands.swift */; };
 		B4C5D6E7F8091A2B3C4D5E6F /* ButterchurnPresetManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B4C5D6E7F8091A2B3C4D5E /* ButterchurnPresetManager.swift */; };
 		B95D3BA95DB24E4CBDF9E30B /* TrackInfoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6317A3F050254D92940A7202 /* TrackInfoView.swift */; };
@@ -178,6 +180,8 @@
 		7324174AA2F7231F3B2508AE /* SpritePositions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpritePositions.swift; sourceTree = "<group>"; };
 		74EDF33D12E79F86166AF268 /* DockingController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DockingController.swift; sourceTree = "<group>"; };
 		75C52A558EFD4C84BBA21F92 /* WinampPlaylistWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WinampPlaylistWindow.swift; sourceTree = "<group>"; };
+		A07FAE881085D53B61451758 /* WinampPlaylistWindow+Menus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WinampPlaylistWindow+Menus.swift"; sourceTree = "<group>"; };
+		1223B201D13A96A323E467F8 /* PlaylistWindowActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PlaylistWindowActions.swift"; sourceTree = "<group>"; };
 		77A0C7921140C73AB173A5E8 /* SimpleSpriteImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleSpriteImage.swift; sourceTree = "<group>"; };
 		7DABC15D1E724A7EB6490977 /* StreamPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamPlayer.swift; sourceTree = "<group>"; };
 		7F44EA25E2124A32A7D3696D /* PlaylistWindowSizeState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaylistWindowSizeState.swift; sourceTree = "<group>"; };
@@ -452,6 +456,8 @@
 				0C3495B177A8BA24181B484E /* WinampMainWindow.swift */,
 				A8DC578157092D705BB00E22 /* WinampMainWindow+Helpers.swift */,
 				75C52A558EFD4C84BBA21F92 /* WinampPlaylistWindow.swift */,
+				A07FAE881085D53B61451758 /* WinampPlaylistWindow+Menus.swift */,
+				1223B201D13A96A323E467F8 /* PlaylistWindowActions.swift */,
 				0542534C840178895387FEE4 /* Components */,
 			);
 			path = Views;
@@ -662,6 +668,8 @@
 				92CB5AD1B7A572BDE3FE75DC /* WinampMainWindow+Helpers.swift in Sources */,
 				36CABCFF2EC8016000902330 /* WindowFocusDelegate.swift in Sources */,
 				ADDBF8E53028E97A7A005307 /* WinampPlaylistWindow.swift in Sources */,
+				41CC6A0218BF7407A0E0DCAB /* WinampPlaylistWindow+Menus.swift in Sources */,
+				CE0D5E43E740A1B33A606613 /* PlaylistWindowActions.swift in Sources */,
 				592F5C98FC8B29F71341CBD8 /* WinampVolumeSlider.swift in Sources */,
 				878F770AF1608311F0C9BA09 /* WindowAccessor.swift in Sources */,
 				7C97F7855F700CA55821BFD1 /* WindowSnapManager.swift in Sources */,
