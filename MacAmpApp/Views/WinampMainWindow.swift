@@ -150,7 +150,7 @@ struct WinampMainWindow: View {
         }
         .onReceive(pauseBlinkTimer) { _ in
             // Only blink when paused (Swift 6 safe pattern)
-            if audioPlayer.isPaused {
+            if playbackCoordinator.isPaused {
                 pauseBlinkVisible.toggle()
             } else {
                 pauseBlinkVisible = true  // Always visible when not paused
@@ -303,9 +303,9 @@ struct WinampMainWindow: View {
     
     private func buildPlayPauseIndicator() -> some View {
         let spriteKey: String
-        if audioPlayer.isPlaying {
+        if playbackCoordinator.isPlaying {
             spriteKey = "MAIN_PLAYING_INDICATOR"
-        } else if audioPlayer.isPaused {
+        } else if playbackCoordinator.isPaused {
             spriteKey = "MAIN_PAUSED_INDICATOR"
         } else {
             spriteKey = "MAIN_STOPPED_INDICATOR"
@@ -361,7 +361,7 @@ struct WinampMainWindow: View {
             max(0.0, audioPlayer.currentDuration - audioPlayer.currentTime) :
             audioPlayer.currentTime
         let digits = timeDigits(from: timeToShow)
-        let shouldShowDigits = !audioPlayer.isPaused || pauseBlinkVisible
+        let shouldShowDigits = !playbackCoordinator.isPaused || pauseBlinkVisible
 
         if shouldShowDigits {
             SimpleSpriteImage(.digit(digits[0]), width: 9, height: 13).offset(x: 6, y: 0)
