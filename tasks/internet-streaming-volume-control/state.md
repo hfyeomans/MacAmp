@@ -4,7 +4,7 @@
 
 ---
 
-## Current Status: PLAN + TODOS COMPLETE — ORACLE REVIEWED
+## Current Status: BLOCKED — Waiting on N1-N6 prerequisite fixes (internet-radio-review)
 
 ## Progress
 
@@ -23,6 +23,8 @@
 - [x] Todos written (todo.md)
 - [x] Oracle review of plan + todos (corrections applied)
 - [x] Ring buffer task created (tasks/lock-free-ring-buffer/)
+- [x] Prerequisite validation complete (VisualizerPipeline SPSC refactor confirmed)
+- [x] Oracle comprehensive validation (gpt-5.3-codex, xhigh reasoning, 2026-02-14)
 - [ ] Plan approved by user
 - [ ] Implementation
 - [ ] Verification
@@ -34,7 +36,7 @@
 3. **EQ during streams (Phase 1):** Grey out UI with visual indication — architectural limitation of AVPlayer
 4. **EQ during streams (Phase 2):** Loopback Bridge architecture (Approach G) gives EQ via existing AVAudioUnitEQ
 5. **Phased approach revised:** Phase 1 (volume + capability flags), Phase 2 (Loopback Bridge for full EQ+vis+balance), Phase 3 eliminated
-6. **Feasibility recalibration:** Tap-read 6-7/10, Tap-write EQ 3-5/10, Loopback Bridge 5.5-6.5/10
+6. **Feasibility recalibration (updated):** Tap-read **8.5/10** (prereq complete), Tap-write EQ 3-5/10, Loopback Bridge **6.0-7.0/10** (prereq complete)
 7. **CoreAudio process taps:** Not recommended (entitlement requirements, App Store risk)
 8. **Swift 6.2 features:** nonisolated(unsafe) + ~Copyable useful now; InlineArray/Span macOS 26+ only
 9. **Double-render prevention:** Zero bufferListInOut in PreEffects tap callback after copying to ring buffer (Oracle-verified, most deterministic approach)
@@ -44,9 +46,21 @@
 
 ## Blockers
 
+### Active Blockers
+
+- **N1-N6 Internet Radio Issues (BLOCKING):** Oracle validation (`tasks/internet-radio-review/findings.md`) found 6 issues in the current streaming infrastructure. Phase 1 cannot proceed until at least N1 (HIGH), N2 (MEDIUM), and N5 (MEDIUM) are fixed.
+  - **N1 (HIGH):** Playlist navigation broken during stream playback — `currentTrack` is nil during streams, causing next/previous to always jump to index 0
+  - **N2 (MEDIUM):** PlayPause indicator desync — coordinator flags not synced with StreamPlayer's KVO-driven state changes
+  - **N5 (MEDIUM):** Main window transport indicators bound to AudioPlayer instead of PlaybackCoordinator — shows wrong state during stream playback
+  - **N3 (LOW):** externalPlaybackHandler naming confusion — no functional impact, defer
+  - **N4 (LOW):** StreamPlayer metadata overwrite — cosmetic, coordinator fallback covers it
+  - **N6 (LOW):** Track Info dialog missing live ICY metadata — uses static title instead of displayTitle
+
+### Architectural Blockers (Unchanged)
+
 - AVPlayer cannot feed AVAudioEngine directly (no bridge API in macOS 15 or 26)
 - AVPlayer has no .pan property (balance not possible without Loopback Bridge)
-- VisualizerPipeline allocates in callback path — must refactor for any tap-based approach
+- ~~VisualizerPipeline allocates in callback path~~ **RESOLVED** — SPSC shared buffer pattern implemented (VisualizerSharedBuffer + pre-allocated VisualizerScratchBuffers + static makeTapHandler). Zero allocations on audio thread confirmed.
 - MTAudioProcessingTap types are non-Sendable in Swift 6 strict mode
 
 ## Loopback Bridge Architecture (Confirmed)

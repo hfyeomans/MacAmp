@@ -1,249 +1,6 @@
 import SwiftUI
 import AppKit
 
-@MainActor
-final class PlaylistWindowActions: NSObject {
-    static let shared = PlaylistWindowActions()
-
-    var selectedIndices: Set<Int> = []
-    weak var radioLibrary: RadioStationLibrary?
-
-    private func showAlert(_ title: String, _ message: String) {
-        let alert = NSAlert()
-        alert.messageText = title
-        alert.informativeText = message
-        alert.alertStyle = .informational
-        alert.addButton(withTitle: "OK")
-        alert.runModal()
-    }
-
-    func presentAddFilesPanel(audioPlayer: AudioPlayer, playbackCoordinator: PlaybackCoordinator? = nil) {
-        let openPanel = NSOpenPanel()
-        openPanel.allowedContentTypes = [.audio, .playlist, .movie]  // NEW: Support video files
-        openPanel.allowsMultipleSelection = true
-        openPanel.canChooseDirectories = false
-        openPanel.title = "Add Files to Playlist"
-        openPanel.message = "Select audio files, video files, or playlists"
-
-        openPanel.begin { response in
-            if response == .OK {
-                let urls = openPanel.urls
-                Task { @MainActor [weak self, urls, audioPlayer, playbackCoordinator] in
-                    guard let self else { return }
-
-                    // Remember if playlist was empty (for autoplay detection)
-                    let wasEmpty = audioPlayer.playlist.isEmpty
-
-                    self.handleSelectedURLs(urls, audioPlayer: audioPlayer)
-
-                    // If playlist was empty and AudioPlayer autoplayed, sync coordinator state
-                    if wasEmpty, let firstTrack = audioPlayer.currentTrack, let coordinator = playbackCoordinator {
-                        await coordinator.play(track: firstTrack)
-                    }
-
-                    // Note: externalPlaybackHandler should be set once in MacAmpApp initialization
-                    // Not here - setting it here clobbers coordinator's handler for playlist advance
-                }
-            }
-        }
-    }
-
-    private func handleSelectedURLs(_ urls: [URL], audioPlayer: AudioPlayer) {
-        for url in urls {
-            let fileExtension = url.pathExtension.lowercased()
-            if fileExtension == "m3u" || fileExtension == "m3u8" {
-                // Load M3U/M3U8 files using radioLibrary
-                if let radioLibrary {
-                    loadM3UPlaylist(url, audioPlayer: audioPlayer, radioLibrary: radioLibrary)
-                } else {
-                    // Fallback if radioLibrary not available (shouldn't happen)
-                    showAlert("Error", "Radio library not initialized. Please restart the app.")
-                }
-            } else {
-                audioPlayer.addTrack(url: url)
-            }
-        }
-    }
-
-    private func loadM3UPlaylist(_ url: URL, audioPlayer: AudioPlayer, radioLibrary: RadioStationLibrary) {
-        do {
-            let entries = try M3UParser.parse(fileURL: url)
-            var addedStreams = 0
-            var addedFiles = 0
-
-            for entry in entries {
-                if entry.isRemoteStream {
-                    // Add to playlist as Track (RadioStationLibrary is for favorites menu only)
-                    let streamTrack = Track(
-                        url: entry.url,
-                        title: entry.title ?? "Unknown Station",
-                        artist: "Internet Radio",
-                        duration: 0.0  // Streams have no duration
-                    )
-                    audioPlayer.addStreamTrack(streamTrack)
-                    addedStreams += 1
-                } else {
-                    // Add local file to playlist
-                    audioPlayer.addTrack(url: entry.url)
-                    addedFiles += 1
-                }
-            }
-
-            // Show feedback
-            let alert = NSAlert()
-            alert.messageText = "M3U Playlist Loaded"
-
-            var message = ""
-            if addedFiles > 0 {
-                message += "Added \(addedFiles) local file(s)"
-            }
-            if addedStreams > 0 {
-                if !message.isEmpty { message += "\n" }
-                message += "Added \(addedStreams) internet radio stream(s)"
-            }
-            message += "\n\nAll items visible in playlist."
-
-            alert.informativeText = message
-            alert.alertStyle = .informational
-            alert.addButton(withTitle: "OK")
-            alert.runModal()
-        } catch {
-            let alert = NSAlert()
-            alert.messageText = "Failed to Load M3U Playlist"
-            alert.informativeText = error.localizedDescription
-            alert.alertStyle = .warning
-            alert.addButton(withTitle: "OK")
-            alert.runModal()
-        }
-    }
-
-    @objc func addURL(_ sender: NSMenuItem) {
-        guard let audioPlayer = sender.representedObject as? AudioPlayer else {
-            showAlert("Error", "Audio player not available")
-            return
-        }
-
-        let alert = NSAlert()
-        alert.messageText = "Add Internet Radio Station"
-        alert.informativeText = "Enter the stream URL (HTTP or HTTPS):"
-
-        let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
-        input.placeholderString = "http://stream.example.com/radio.mp3"
-        alert.accessoryView = input
-
-        alert.addButton(withTitle: "Add")
-        alert.addButton(withTitle: "Cancel")
-
-        let response = alert.runModal()
-
-        if response == .alertFirstButtonReturn {
-            let urlString = input.stringValue.trimmingCharacters(in: .whitespaces)
-
-            guard !urlString.isEmpty else {
-                showAlert("Invalid URL", "Please enter a valid URL")
-                return
-            }
-
-            guard let url = URL(string: urlString),
-                  url.scheme == "http" || url.scheme == "https" else {
-                showAlert("Invalid URL", "URL must start with http:// or https://")
-                return
-            }
-
-            // Add to playlist as Track (RadioStationLibrary is for favorites menu only)
-            let stationName = url.host ?? url.lastPathComponent
-            let streamTrack = Track(
-                url: url,
-                title: stationName,
-                artist: "Internet Radio",
-                duration: 0.0
-            )
-
-            audioPlayer.addStreamTrack(streamTrack)
-
-            showAlert("Stream Added", "Added '\(stationName)' to playlist.\n\nClick to play!")
-        }
-    }
-
-    @objc func addDirectory(_ sender: NSMenuItem) {
-        addFile(sender)
-    }
-
-    @objc func addFile(_ sender: NSMenuItem) {
-        guard let audioPlayer = sender.representedObject as? AudioPlayer else {
-            return
-        }
-        presentAddFilesPanel(audioPlayer: audioPlayer)
-    }
-
-    @objc func removeSelected(_ sender: NSMenuItem) {
-        guard let audioPlayer = sender.representedObject as? AudioPlayer else {
-            return
-        }
-
-        let indices = PlaylistWindowActions.shared.selectedIndices
-        if indices.isEmpty {
-            showAlert("Remove Selected", "No tracks selected")
-        } else {
-            for index in indices.sorted().reversed() {
-                audioPlayer.removeTrack(at: index)
-            }
-            PlaylistWindowActions.shared.selectedIndices = []
-        }
-    }
-
-    @objc func cropPlaylist(_ sender: NSMenuItem) {
-        guard let audioPlayer = sender.representedObject as? AudioPlayer else {
-            return
-        }
-
-        let indices = PlaylistWindowActions.shared.selectedIndices
-        if indices.isEmpty {
-            showAlert("Crop Playlist", "No tracks selected. Select tracks to keep, then crop.")
-        } else {
-            let validIndices = indices.sorted().filter { $0 < audioPlayer.playlist.count }
-            let selectedTracks = validIndices.map { audioPlayer.playlist[$0] }
-            audioPlayer.replacePlaylist(with: selectedTracks)
-            PlaylistWindowActions.shared.selectedIndices = []
-        }
-    }
-
-    @objc func removeAll(_ sender: NSMenuItem) {
-        guard let audioPlayer = sender.representedObject as? AudioPlayer else {
-            return
-        }
-        audioPlayer.clearPlaylist()
-    }
-
-    @objc func removeMisc(_ sender: NSMenuItem) {
-        showAlert("Remove Misc", "Not supported yet")
-    }
-
-    @objc func sortList(_ sender: NSMenuItem) {
-        showAlert("Sort List", "Not supported yet")
-    }
-
-    @objc func fileInfo(_ sender: NSMenuItem) {
-        showAlert("File Info", "Not supported yet")
-    }
-
-    @objc func miscOptions(_ sender: NSMenuItem) {
-        showAlert("Misc Options", "Not supported yet")
-    }
-
-    @objc func newList(_ sender: NSMenuItem) {
-        showAlert("New List", "Not supported yet")
-    }
-
-    @objc func saveList(_ sender: NSMenuItem) {
-        showAlert("Save List", "Not supported yet")
-    }
-
-    @objc func loadList(_ sender: NSMenuItem) {
-        showAlert("Load List", "Not supported yet")
-    }
-}
-
 struct WinampPlaylistWindow: View {
     @Environment(SkinManager.self) var skinManager
     @Environment(AudioPlayer.self) var audioPlayer
@@ -252,10 +9,10 @@ struct WinampPlaylistWindow: View {
     @Environment(PlaybackCoordinator.self) var playbackCoordinator
     @Environment(WindowFocusState.self) var windowFocusState
 
-    @State private var selectedIndices: Set<Int> = []
+    @State var selectedIndices: Set<Int> = []
     @State private var isShadeMode: Bool = false
     @State private var keyboardMonitor: Any?
-    @State private var menuDelegate = PlaylistMenuDelegate()  // NSMenuDelegate for keyboard navigation
+    @State var menuDelegate = PlaylistMenuDelegate()  // NSMenuDelegate for keyboard navigation
     @State private var sizeState = PlaylistWindowSizeState()
 
     // Resize gesture state (Phase 3)
@@ -277,11 +34,11 @@ struct WinampPlaylistWindow: View {
     }
 
     // Dynamic dimensions from size state
-    private var windowWidth: CGFloat { sizeState.windowWidth }
-    private var windowHeight: CGFloat { sizeState.windowHeight }
+    var windowWidth: CGFloat { sizeState.windowWidth }
+    var windowHeight: CGFloat { sizeState.windowHeight }
 
     // Computed: Is this window currently focused?
-    private var isWindowActive: Bool {
+    var isWindowActive: Bool {
         windowFocusState.isPlaylistKey
     }
 
@@ -325,7 +82,7 @@ struct WinampPlaylistWindow: View {
         return "-\(remaining)"
     }
 
-    private var playlistStyle: PlaylistStyle {
+    var playlistStyle: PlaylistStyle {
         skinManager.currentSkin?.playlistStyle ?? PlaylistStyle(
             normalTextColor: Color(red: 0, green: 1.0, blue: 0),
             currentTextColor: .white,
@@ -340,7 +97,7 @@ struct WinampPlaylistWindow: View {
     }
 
     var body: some View {
-        GeometryReader { geometry in
+        GeometryReader { _ in
             ZStack {
                 if !isShadeMode {
                     buildCompleteBackground()
@@ -547,27 +304,11 @@ struct WinampPlaylistWindow: View {
                         trackRow(track: track, index: index)
                             .frame(width: trackWidth, height: 13)
                             .background(trackBackground(track: track, index: index))
-                            .id(index)  // Enable scroll-to by index
+                            .id(index)
                             .onTapGesture(count: 2) {
-                                // Double-click: Play via PlaybackCoordinator (handles both local + streams)
-                                Task {
-                                    await playbackCoordinator.play(track: track)
-                                }
+                                Task { await playbackCoordinator.play(track: track) }
                             }
-                            .onTapGesture {
-                                // Single-click: Handle selection
-                                let modifiers = NSEvent.modifierFlags
-
-                                if modifiers.contains(.shift) {
-                                    if selectedIndices.contains(index) {
-                                        selectedIndices.remove(index)
-                                    } else {
-                                        selectedIndices.insert(index)
-                                    }
-                                } else {
-                                    selectedIndices = [index]
-                                }
-                            }
+                            .onTapGesture { handleTrackTap(index: index) }
                     }
                 }
             }
@@ -616,103 +357,48 @@ struct WinampPlaylistWindow: View {
         let buttonY = windowHeight - 24
 
         // LEFT section buttons (fixed positions from left)
-        Button(action: { showAddMenu() }) {
+        Button(action: { showAddMenu() }, label: {
             Color.clear.frame(width: 22, height: 18).contentShape(Rectangle())
-        }.buttonStyle(.plain).focusable(false).position(x: 16, y: buttonY)
+        }).buttonStyle(.plain).focusable(false).position(x: 16, y: buttonY)
 
-        Button(action: { showRemMenu() }) {
+        Button(action: { showRemMenu() }, label: {
             Color.clear.frame(width: 22, height: 18).contentShape(Rectangle())
-        }.buttonStyle(.plain).focusable(false).position(x: 42, y: buttonY)
+        }).buttonStyle(.plain).focusable(false).position(x: 42, y: buttonY)
 
-        Button(action: { showSelNotSupportedAlert() }) {
+        Button(action: { showSelNotSupportedAlert() }, label: {
             Color.clear.frame(width: 18, height: 18).contentShape(Rectangle())
-        }.buttonStyle(.plain).focusable(false).position(x: 78, y: buttonY)
+        }).buttonStyle(.plain).focusable(false).position(x: 78, y: buttonY)
 
-        Button(action: { showMiscMenu() }) {
+        Button(action: { showMiscMenu() }, label: {
             Color.clear.frame(width: 18, height: 18).contentShape(Rectangle())
-        }.buttonStyle(.plain).focusable(false).position(x: 105, y: buttonY)
+        }).buttonStyle(.plain).focusable(false).position(x: 105, y: buttonY)
 
         // RIGHT section button (fixed position from right edge)
-        Button(action: { showListMenu() }) {
+        Button(action: { showListMenu() }, label: {
             Color.clear.frame(width: 22, height: 18).contentShape(Rectangle())
-        }.buttonStyle(.plain).focusable(false).position(x: windowWidth - 32, y: buttonY)
+        }).buttonStyle(.plain).focusable(false).position(x: windowWidth - 32, y: buttonY)
     }
 
     @ViewBuilder
     private func buildPlaylistTransportButtons() -> some View {
-        // Transport buttons: In RIGHT section of bottom bar (150px from right edge)
-        // Y position: 12px from bottom (windowHeight - 12)
         let transportY = windowHeight - 12
-        // X offset: Center of RIGHT section is at (windowWidth - 75)
-        // Transport buttons start ~8px into the RIGHT section from its center
-        let rightSectionStart = windowWidth - 150
-        let baseX = rightSectionStart + 8  // Start of transport buttons in RIGHT section
+        let baseX = windowWidth - 150 + 8
 
-        Button(action: {
-            Task { await playbackCoordinator.previous() }
-        }) {
-            Color.clear
-                .frame(width: 10, height: 9)
-                .contentShape(Rectangle())
-        }
+        playlistTransportButton(action: { Task { await playbackCoordinator.previous() } }, x: baseX, y: transportY)
+        playlistTransportButton(action: { playbackCoordinator.togglePlayPause() }, x: baseX + 11, y: transportY)
+        playlistTransportButton(action: { playbackCoordinator.pause() }, x: baseX + 22, y: transportY)
+        playlistTransportButton(action: { playbackCoordinator.stop() }, x: baseX + 33, y: transportY)
+        playlistTransportButton(action: { Task { await playbackCoordinator.next() } }, x: baseX + 44, y: transportY)
+        playlistTransportButton(action: { openFileDialog() }, x: baseX + 50, y: transportY)
+    }
+
+    private func playlistTransportButton(action: @escaping () -> Void, x: CGFloat, y: CGFloat) -> some View {
+        Button(action: action, label: {
+            Color.clear.frame(width: 10, height: 9).contentShape(Rectangle())
+        })
         .buttonStyle(.plain)
         .focusable(false)
-        .position(x: baseX, y: transportY)
-
-        Button(action: {
-            playbackCoordinator.togglePlayPause()
-        }) {
-            Color.clear
-                .frame(width: 10, height: 9)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .focusable(false)
-        .position(x: baseX + 11, y: transportY)
-
-        Button(action: {
-            playbackCoordinator.pause()
-        }) {
-            Color.clear
-                .frame(width: 10, height: 9)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .focusable(false)
-        .position(x: baseX + 22, y: transportY)
-
-        Button(action: {
-            playbackCoordinator.stop()
-        }) {
-            Color.clear
-                .frame(width: 10, height: 9)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .focusable(false)
-        .position(x: baseX + 33, y: transportY)
-
-        Button(action: {
-            Task { await playbackCoordinator.next() }
-        }) {
-            Color.clear
-                .frame(width: 10, height: 9)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .focusable(false)
-        .position(x: baseX + 44, y: transportY)
-
-        Button(action: {
-            openFileDialog()
-        }) {
-            Color.clear
-                .frame(width: 10, height: 9)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .focusable(false)
-        .position(x: baseX + 50, y: transportY)
+        .position(x: x, y: y)
     }
 
     @ViewBuilder
@@ -732,29 +418,29 @@ struct WinampPlaylistWindow: View {
     }
 
     @ViewBuilder
-    private func buildTitleBarButtons() -> some View {
+    func buildTitleBarButtons() -> some View {
         // Title bar buttons: Positioned relative to right edge
         let buttonY: CGFloat = 7.5
 
-        Button(action: { WindowCoordinator.shared?.minimizeKeyWindow() }) {
+        Button(action: { WindowCoordinator.shared?.minimizeKeyWindow() }, label: {
             SimpleSpriteImage("MAIN_MINIMIZE_BUTTON", width: 9, height: 9)
-        }
+        })
         .buttonStyle(.plain)
         .focusable(false)
         .position(x: windowWidth - 26.5, y: buttonY)
 
         Button(action: {
             isShadeMode.toggle()
-        }) {
+        }, label: {
             SimpleSpriteImage("MAIN_SHADE_BUTTON", width: 9, height: 9)
-        }
+        })
         .buttonStyle(.plain)
         .focusable(false)
         .position(x: windowWidth - 16.5, y: buttonY)
 
-        Button(action: { WindowCoordinator.shared?.hidePlaylistWindow() }) {
+        Button(action: { WindowCoordinator.shared?.hidePlaylistWindow() }, label: {
             SimpleSpriteImage("MAIN_CLOSE_BUTTON", width: 9, height: 9)
-        }
+        })
         .buttonStyle(.plain)
         .focusable(false)
         .position(x: windowWidth - 6.5, y: buttonY)
@@ -826,265 +512,6 @@ struct WinampPlaylistWindow: View {
                     }
             )
             .position(x: windowWidth - 10, y: windowHeight - 10)
-    }
-
-    @ViewBuilder
-    private func buildShadeMode() -> some View {
-        ZStack {
-            let suffix = isWindowActive ? "_SELECTED" : ""
-            // Shade mode uses full window width titlebar (at 275 fixed width for sprite)
-            SimpleSpriteImage("PLAYLIST_TITLE_BAR\(suffix)", width: 275, height: 14)
-                .frame(width: windowWidth, height: 14)  // Scale to window width
-                .position(x: windowWidth / 2, y: 7)
-
-            if let currentTrack = playbackCoordinator.currentTrack {
-                Text("\(currentTrack.title) - \(currentTrack.artist)")
-                    .font(.system(size: 8))
-                    .foregroundColor(.white)
-                    .lineLimit(1)
-                    .frame(width: windowWidth - 75)  // Leave room for buttons
-                    .position(x: (windowWidth - 75) / 2, y: 7)
-            } else {
-                Text("Winamp Playlist")
-                    .font(.system(size: 8))
-                    .foregroundColor(.white)
-                    .position(x: (windowWidth - 75) / 2, y: 7)
-            }
-
-            buildTitleBarButtons()
-        }
-        .frame(width: windowWidth, height: 14)
-    }
-
-    private func trackTextColor(track: Track) -> Color {
-        // Use coordinator's current track for highlighting
-        if let currentTrack = playbackCoordinator.currentTrack, currentTrack.url == track.url {
-            return playlistStyle.currentTextColor
-        }
-        return playlistStyle.normalTextColor
-    }
-
-    private func trackBackground(track: Track, index: Int) -> Color {
-        // Only show background for selected tracks (not current track)
-        if selectedIndices.contains(index) {
-            return playlistStyle.selectedBackgroundColor.opacity(0.6)
-        }
-        return Color.clear
-    }
-    
-    private func formatDuration(_ duration: Double) -> String {
-        let totalSeconds = Int(duration)
-        let minutes = totalSeconds / 60
-        let seconds = totalSeconds % 60
-        return String(format: "%d:%02d", minutes, seconds)
-    }
-    
-    private func openFileDialog() {
-        PlaylistWindowActions.shared.presentAddFilesPanel(audioPlayer: audioPlayer, playbackCoordinator: playbackCoordinator)
-    }
-
-    
-    private func removeSelectedTrack() {
-        guard let index = selectedIndices.first,
-              index < audioPlayer.playlist.count else { return }
-        audioPlayer.removeTrack(at: index)
-        selectedIndices.remove(index)
-    }
-
-    // Menu positioning helper - get playlist window's contentView (not keyWindow)
-    private func playlistContentView() -> NSView? {
-        // Try to get actual playlist window from WindowCoordinator
-        if let view = WindowCoordinator.shared?.playlistWindow?.contentView {
-            return view
-        }
-        // Fallback for previews/tooling
-        return NSApp.keyWindow?.contentView
-    }
-
-    // Present menu at correct position relative to playlist window
-    private func presentPlaylistMenu(_ menu: NSMenu, at point: NSPoint) {
-        guard let contentView = playlistContentView() else { return }
-        menu.popUp(positioning: nil, at: point, in: contentView)
-    }
-
-    private func showAddMenu() {
-        let menu = NSMenu()
-        menu.autoenablesItems = false
-        menu.delegate = menuDelegate  // Enable keyboard navigation
-
-        let addURLItem = SpriteMenuItem(
-            normalSprite: "PLAYLIST_ADD_URL",
-            selectedSprite: "PLAYLIST_ADD_URL_SELECTED",
-            skinManager: skinManager,
-            action: #selector(PlaylistWindowActions.addURL),
-            target: PlaylistWindowActions.shared
-        )
-        addURLItem.representedObject = audioPlayer
-        menu.addItem(addURLItem)
-
-        let addDirItem = SpriteMenuItem(
-            normalSprite: "PLAYLIST_ADD_DIR",
-            selectedSprite: "PLAYLIST_ADD_DIR_SELECTED",
-            skinManager: skinManager,
-            action: #selector(PlaylistWindowActions.addDirectory),
-            target: PlaylistWindowActions.shared
-        )
-        addDirItem.representedObject = audioPlayer
-        menu.addItem(addDirItem)
-
-        let addFileItem = SpriteMenuItem(
-            normalSprite: "PLAYLIST_ADD_FILE",
-            selectedSprite: "PLAYLIST_ADD_FILE_SELECTED",
-            skinManager: skinManager,
-            action: #selector(PlaylistWindowActions.addFile),
-            target: PlaylistWindowActions.shared
-        )
-        addFileItem.representedObject = audioPlayer
-        menu.addItem(addFileItem)
-
-        // Use playlist-specific positioning (not keyWindow)
-        // NSPoint uses bottom-left origin, so y = windowHeight - distanceFromTop
-        presentPlaylistMenu(menu, at: NSPoint(x: 12, y: windowHeight - 68))
-    }
-
-    private func showRemMenu() {
-        PlaylistWindowActions.shared.selectedIndices = selectedIndices
-
-        let menu = NSMenu()
-        menu.autoenablesItems = false
-        menu.delegate = menuDelegate  // Enable keyboard navigation
-
-        let remMiscItem = SpriteMenuItem(
-            normalSprite: "PLAYLIST_REMOVE_MISC",
-            selectedSprite: "PLAYLIST_REMOVE_MISC_SELECTED",
-            skinManager: skinManager,
-            action: #selector(PlaylistWindowActions.removeMisc),
-            target: PlaylistWindowActions.shared
-        )
-        remMiscItem.representedObject = audioPlayer
-        menu.addItem(remMiscItem)
-
-        let remAllItem = SpriteMenuItem(
-            normalSprite: "PLAYLIST_REMOVE_ALL",
-            selectedSprite: "PLAYLIST_REMOVE_ALL_SELECTED",
-            skinManager: skinManager,
-            action: #selector(PlaylistWindowActions.removeAll),
-            target: PlaylistWindowActions.shared
-        )
-        remAllItem.representedObject = audioPlayer
-        menu.addItem(remAllItem)
-
-        let cropItem = SpriteMenuItem(
-            normalSprite: "PLAYLIST_CROP",
-            selectedSprite: "PLAYLIST_CROP_SELECTED",
-            skinManager: skinManager,
-            action: #selector(PlaylistWindowActions.cropPlaylist),
-            target: PlaylistWindowActions.shared
-        )
-        cropItem.representedObject = audioPlayer
-        menu.addItem(cropItem)
-
-        let remSelItem = SpriteMenuItem(
-            normalSprite: "PLAYLIST_REMOVE_SELECTED",
-            selectedSprite: "PLAYLIST_REMOVE_SELECTED_SELECTED",
-            skinManager: skinManager,
-            action: #selector(PlaylistWindowActions.removeSelected),
-            target: PlaylistWindowActions.shared
-        )
-        remSelItem.representedObject = audioPlayer
-        menu.addItem(remSelItem)
-
-        // Use playlist-specific positioning (not first window)
-        // REM menu has 4 items, needs more space (87px from top)
-        presentPlaylistMenu(menu, at: NSPoint(x: 41, y: windowHeight - 87))
-    }
-
-    private func showSelNotSupportedAlert() {
-        let alert = NSAlert()
-        alert.messageText = "Selection Menu"
-        alert.informativeText = "Not supported yet. Use Shift+click for multi-select (planned feature)."
-        alert.alertStyle = .informational
-        alert.addButton(withTitle: "OK")
-        alert.runModal()
-    }
-
-    private func showMiscMenu() {
-        let menu = NSMenu()
-        menu.autoenablesItems = false
-        menu.delegate = menuDelegate  // Enable keyboard navigation
-
-        let sortItem = SpriteMenuItem(
-            normalSprite: "PLAYLIST_SORT_LIST",
-            selectedSprite: "PLAYLIST_SORT_LIST_SELECTED",
-            skinManager: skinManager,
-            action: #selector(PlaylistWindowActions.sortList),
-            target: PlaylistWindowActions.shared
-        )
-        sortItem.representedObject = audioPlayer
-        menu.addItem(sortItem)
-
-        let fileInfoItem = SpriteMenuItem(
-            normalSprite: "PLAYLIST_FILE_INFO",
-            selectedSprite: "PLAYLIST_FILE_INFO_SELECTED",
-            skinManager: skinManager,
-            action: #selector(PlaylistWindowActions.fileInfo),
-            target: PlaylistWindowActions.shared
-        )
-        fileInfoItem.representedObject = audioPlayer
-        menu.addItem(fileInfoItem)
-
-        let miscOptionsItem = SpriteMenuItem(
-            normalSprite: "PLAYLIST_MISC_OPTIONS",
-            selectedSprite: "PLAYLIST_MISC_OPTIONS_SELECTED",
-            skinManager: skinManager,
-            action: #selector(PlaylistWindowActions.miscOptions),
-            target: PlaylistWindowActions.shared
-        )
-        miscOptionsItem.representedObject = audioPlayer
-        menu.addItem(miscOptionsItem)
-
-        // Use playlist-specific positioning (not first window)
-        presentPlaylistMenu(menu, at: NSPoint(x: 100, y: windowHeight - 68))
-    }
-
-    private func showListMenu() {
-        let menu = NSMenu()
-        menu.autoenablesItems = false
-        menu.delegate = menuDelegate  // Enable keyboard navigation
-
-        let newListItem = SpriteMenuItem(
-            normalSprite: "PLAYLIST_NEW_LIST",
-            selectedSprite: "PLAYLIST_NEW_LIST_SELECTED",
-            skinManager: skinManager,
-            action: #selector(PlaylistWindowActions.newList),
-            target: PlaylistWindowActions.shared
-        )
-        newListItem.representedObject = audioPlayer
-        menu.addItem(newListItem)
-
-        let saveListItem = SpriteMenuItem(
-            normalSprite: "PLAYLIST_SAVE_LIST",
-            selectedSprite: "PLAYLIST_SAVE_LIST_SELECTED",
-            skinManager: skinManager,
-            action: #selector(PlaylistWindowActions.saveList),
-            target: PlaylistWindowActions.shared
-        )
-        saveListItem.representedObject = audioPlayer
-        menu.addItem(saveListItem)
-
-        let loadListItem = SpriteMenuItem(
-            normalSprite: "PLAYLIST_LOAD_LIST",
-            selectedSprite: "PLAYLIST_LOAD_LIST_SELECTED",
-            skinManager: skinManager,
-            action: #selector(PlaylistWindowActions.loadList),
-            target: PlaylistWindowActions.shared
-        )
-        loadListItem.representedObject = audioPlayer
-        menu.addItem(loadListItem)
-
-        // Use playlist-specific positioning (not first window)
-        // X position relative to right edge for LIST menu
-        presentPlaylistMenu(menu, at: NSPoint(x: windowWidth - 46, y: windowHeight - 68))
     }
 }
 

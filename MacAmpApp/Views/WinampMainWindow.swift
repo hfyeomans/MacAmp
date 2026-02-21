@@ -16,20 +16,20 @@ struct WinampMainWindow: View {
 
     // NOTE: isShadeMode moved to AppSettings.isMainWindowShaded for cross-window observation
     // Playlist window needs to know when main window is shaded to show mini visualizer
-    @State private var isScrubbing: Bool = false
-    @State private var wasPlayingPreScrub: Bool = false
-    @State private var scrubbingProgress: Double = 0.0
+    @State var isScrubbing: Bool = false
+    @State var wasPlayingPreScrub: Bool = false
+    @State var scrubbingProgress: Double = 0.0
 
     // Track info scrolling state
-    @State private var scrollOffset: CGFloat = 0
-    @State private var scrollTimer: Timer?
+    @State var scrollOffset: CGFloat = 0
+    @State var scrollTimer: Timer?
 
     // Pause blinking state
-    @State private var pauseBlinkVisible: Bool = true
-    @State private var isViewVisible: Bool = false
+    @State var pauseBlinkVisible: Bool = true
+    @State var isViewVisible: Bool = false
 
     // Menu state - keep strong reference to prevent premature deallocation
-    @State private var activeOptionsMenu: NSMenu?
+    @State var activeOptionsMenu: NSMenu?
 
     // Timer publisher for pause blink animation (Swift 6 pattern)
     let pauseBlinkTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
@@ -40,7 +40,7 @@ struct WinampMainWindow: View {
     }
 
     // Winamp coordinate constants (from original Winamp and webamp)
-    private struct Coords {
+    struct Coords {
         // Transport buttons (all at y: 88)
         static let prevButton = CGPoint(x: 16, y: 88)
         static let playButton = CGPoint(x: 39, y: 88)
@@ -112,7 +112,6 @@ struct WinampMainWindow: View {
                 // Shade mode (collapsed to titlebar only)
                 buildShadeMode()
             }
-
         }
         .frame(
             width: WinampSizes.main.width,
@@ -151,7 +150,7 @@ struct WinampMainWindow: View {
         }
         .onReceive(pauseBlinkTimer) { _ in
             // Only blink when paused (Swift 6 safe pattern)
-            if audioPlayer.isPaused {
+            if playbackCoordinator.isPaused {
                 pauseBlinkVisible.toggle()
             } else {
                 pauseBlinkVisible = true  // Always visible when not paused
@@ -184,7 +183,8 @@ struct WinampMainWindow: View {
             buildSpectrumAnalyzer()
             
             // Transport buttons
-            buildTransportButtons()
+            buildTransportPlaybackButtons()
+            buildTransportNavButtons()
 
             // Shuffle/Repeat buttons
             buildShuffleRepeatButtons()
@@ -201,8 +201,9 @@ struct WinampMainWindow: View {
             // EQ/Playlist buttons
             buildWindowToggleButtons()
 
-            // Clutter bar buttons (O, A, I, D, V)
-            buildClutterBarButtons()
+            // Clutter bar buttons (O, A, I, D, V) - split for closure_body_length
+            buildClutterBarOAI()
+            buildClutterBarDV()
 
             // Additional Winamp elements (simplified)
             buildMonoStereoIndicator()
@@ -215,65 +216,54 @@ struct WinampMainWindow: View {
     
     @ViewBuilder
     private func buildShadeMode() -> some View {
-        // Shade mode shows a compact 275×14px bar with essential controls
-        // CRITICAL: Must use .topLeading alignment for .offset() positioning to work correctly
         ZStack(alignment: .topLeading) {
-            // Shade background
             SimpleSpriteImage("MAIN_SHADE_BACKGROUND", width: 275, height: 14)
                 .at(CGPoint(x: 0, y: 0))
 
-            // Transport controls (compact layout)
-            HStack(spacing: 2) {
-                // Previous
-                Button(action: { Task { await playbackCoordinator.previous() } }) {
-                    SimpleSpriteImage("MAIN_PREVIOUS_BUTTON", width: 23, height: 18)
-                        .scaleEffect(0.6) // Scale down for shade mode
-                }
-                .buttonStyle(.plain)
-                .focusable(false)
+            buildShadeTransportButtons()
 
-                // Play
-                Button(action: { playbackCoordinator.togglePlayPause() }) {
-                    SimpleSpriteImage("MAIN_PLAY_BUTTON", width: 23, height: 18)
-                        .scaleEffect(0.6)
-                }
-                .buttonStyle(.plain)
-                .focusable(false)
-
-                // Pause
-                Button(action: { playbackCoordinator.pause() }) {
-                    SimpleSpriteImage("MAIN_PAUSE_BUTTON", width: 23, height: 18)
-                        .scaleEffect(0.6)
-                }
-                .buttonStyle(.plain)
-                .focusable(false)
-
-                // Stop
-                Button(action: { playbackCoordinator.stop() }) {
-                    SimpleSpriteImage("MAIN_STOP_BUTTON", width: 23, height: 18)
-                        .scaleEffect(0.6)
-                }
-                .buttonStyle(.plain)
-                .focusable(false)
-
-                // Next
-                Button(action: { Task { await playbackCoordinator.next() } }) {
-                    SimpleSpriteImage("MAIN_NEXT_BUTTON", width: 22, height: 18)
-                        .scaleEffect(0.6)
-                }
-                .buttonStyle(.plain)
-                .focusable(false)
-            }
-            .at(CGPoint(x: 45, y: 3))
-
-            // Time display (compact)
             buildTimeDisplay()
                 .scaleEffect(0.7)
                 .at(CGPoint(x: 150, y: 7))
 
-            // Titlebar buttons (keep same position)
             buildTitlebarButtons()
         }
+    }
+
+    @ViewBuilder
+    private func buildShadeTransportButtons() -> some View {
+        HStack(spacing: 2) {
+            Button(action: { Task { await playbackCoordinator.previous() } }, label: {
+                SimpleSpriteImage("MAIN_PREVIOUS_BUTTON", width: 23, height: 18).scaleEffect(0.6)
+            })
+            .buttonStyle(.plain)
+            .focusable(false)
+
+            Button(action: { playbackCoordinator.togglePlayPause() }, label: {
+                SimpleSpriteImage("MAIN_PLAY_BUTTON", width: 23, height: 18).scaleEffect(0.6)
+            })
+            .buttonStyle(.plain)
+            .focusable(false)
+
+            Button(action: { playbackCoordinator.pause() }, label: {
+                SimpleSpriteImage("MAIN_PAUSE_BUTTON", width: 23, height: 18).scaleEffect(0.6)
+            })
+            .buttonStyle(.plain)
+            .focusable(false)
+
+            Button(action: { playbackCoordinator.stop() }, label: {
+                SimpleSpriteImage("MAIN_STOP_BUTTON", width: 23, height: 18).scaleEffect(0.6)
+            })
+            .buttonStyle(.plain)
+            .focusable(false)
+
+            Button(action: { Task { await playbackCoordinator.next() } }, label: {
+                SimpleSpriteImage("MAIN_NEXT_BUTTON", width: 22, height: 18).scaleEffect(0.6)
+            })
+            .buttonStyle(.plain)
+            .focusable(false)
+        }
+        .at(CGPoint(x: 45, y: 3))
     }
     
     @ViewBuilder
@@ -282,9 +272,9 @@ struct WinampMainWindow: View {
             // Minimize button
             Button(action: {
                 WindowCoordinator.shared?.minimizeKeyWindow()
-            }) {
+            }, label: {
                 SimpleSpriteImage("MAIN_MINIMIZE_BUTTON", width: 9, height: 9)
-            }
+            })
             .buttonStyle(.plain)
             .focusable(false)
             .at(Coords.minimizeButton)
@@ -292,9 +282,9 @@ struct WinampMainWindow: View {
             // Shade button
             Button(action: {
                 settings.isMainWindowShaded.toggle()
-            }) {
+            }, label: {
                 SimpleSpriteImage("MAIN_SHADE_BUTTON", width: 9, height: 9)
-            }
+            })
             .buttonStyle(.plain)
             .focusable(false)
             .at(Coords.shadeButton)
@@ -302,9 +292,9 @@ struct WinampMainWindow: View {
             // Close button
             Button(action: {
                 NSApplication.shared.terminate(nil)
-            }) {
+            }, label: {
                 SimpleSpriteImage("MAIN_CLOSE_BUTTON", width: 9, height: 9)
-            }
+            })
             .buttonStyle(.plain)
             .focusable(false)
             .at(Coords.closeButton)
@@ -313,9 +303,9 @@ struct WinampMainWindow: View {
     
     private func buildPlayPauseIndicator() -> some View {
         let spriteKey: String
-        if audioPlayer.isPlaying {
+        if playbackCoordinator.isPlaying {
             spriteKey = "MAIN_PLAYING_INDICATOR"
-        } else if audioPlayer.isPaused {
+        } else if playbackCoordinator.isPaused {
             spriteKey = "MAIN_PAUSED_INDICATOR"
         } else {
             spriteKey = "MAIN_STOPPED_INDICATOR"
@@ -355,38 +345,8 @@ struct WinampMainWindow: View {
                 .offset(x: 1, y: 0) // Position the container at x:1
             }
 
-            // Time digits (MM:SS format) with absolute positioning
-            let timeToShow = settings.timeDisplayMode == .remaining ?
-                max(0.0, audioPlayer.currentDuration - audioPlayer.currentTime) :
-                audioPlayer.currentTime
-
-            let digits = timeDigits(from: timeToShow)
-
-            // Position each digit with proper Winamp spacing
-            // Only hide digits when paused and blink is off, colon always visible
-            let shouldShowDigits = !audioPlayer.isPaused || pauseBlinkVisible
-
-            // Minutes (with 2px gap between digits)
-            if shouldShowDigits {
-                SimpleSpriteImage(.digit(digits[0]), width: 9, height: 13)
-                    .offset(x: 6, y: 0)
-
-                SimpleSpriteImage(.digit(digits[1]), width: 9, height: 13)
-                    .offset(x: 17, y: 0)
-            }
-
-            // NOTE: Colon comes from MAIN.BMP background - NOT rendered here!
-            // All Winamp skins have ":" baked into MAIN.BMP at this position
-            // It's static (doesn't blink) by original Winamp design
-
-            // Seconds (with 2px gap between digits)
-            if shouldShowDigits {
-                SimpleSpriteImage(.digit(digits[2]), width: 9, height: 13)
-                    .offset(x: 35, y: 0)
-
-                SimpleSpriteImage(.digit(digits[3]), width: 9, height: 13)
-                    .offset(x: 46, y: 0)
-            }
+            // Time digits (MM:SS) — colon comes from MAIN.BMP background
+            buildTimeDigits()
         }
         .at(Coords.timeDisplay)
         .contentShape(Rectangle())
@@ -396,631 +356,25 @@ struct WinampMainWindow: View {
     }
     
     @ViewBuilder
-    private func buildTransportButtons() -> some View {
-        Group {
-            // Previous
-            Button(action: { Task { await playbackCoordinator.previous() } }) {
-                SimpleSpriteImage("MAIN_PREVIOUS_BUTTON", width: 23, height: 18)
-            }
-            .buttonStyle(.plain)
-            .focusable(false)
-            .at(Coords.prevButton)
+    private func buildTimeDigits() -> some View {
+        let timeToShow = settings.timeDisplayMode == .remaining ?
+            max(0.0, audioPlayer.currentDuration - audioPlayer.currentTime) :
+            audioPlayer.currentTime
+        let digits = timeDigits(from: timeToShow)
+        let shouldShowDigits = !playbackCoordinator.isPaused || pauseBlinkVisible
 
-            // Play
-            Button(action: { playbackCoordinator.togglePlayPause() }) {
-                SimpleSpriteImage("MAIN_PLAY_BUTTON", width: 23, height: 18)
-            }
-            .buttonStyle(.plain)
-            .focusable(false)
-            .at(Coords.playButton)
-
-            // Pause
-            Button(action: { playbackCoordinator.pause() }) {
-                SimpleSpriteImage("MAIN_PAUSE_BUTTON", width: 23, height: 18)
-            }
-            .buttonStyle(.plain)
-            .focusable(false)
-            .at(Coords.pauseButton)
-
-            // Stop
-            Button(action: { playbackCoordinator.stop() }) {
-                SimpleSpriteImage("MAIN_STOP_BUTTON", width: 23, height: 18)
-            }
-            .buttonStyle(.plain)
-            .focusable(false)
-            .at(Coords.stopButton)
-
-            // Next
-            Button(action: { Task { await playbackCoordinator.next() } }) {
-                SimpleSpriteImage("MAIN_NEXT_BUTTON", width: 23, height: 18)
-            }
-            .buttonStyle(.plain)
-            .focusable(false)
-            .at(Coords.nextButton)
-
-            // Eject (handles file loading like original Winamp)
-            Button(action: {
-                openFileDialog() // File loading integrated into eject button
-            }) {
-                SimpleSpriteImage("MAIN_EJECT_BUTTON", width: 22, height: 16)
-            }
-            .buttonStyle(.plain)
-            .focusable(false)
-            .at(Coords.ejectButton)
+        if shouldShowDigits {
+            SimpleSpriteImage(.digit(digits[0]), width: 9, height: 13).offset(x: 6, y: 0)
+            SimpleSpriteImage(.digit(digits[1]), width: 9, height: 13).offset(x: 17, y: 0)
+        }
+        if shouldShowDigits {
+            SimpleSpriteImage(.digit(digits[2]), width: 9, height: 13).offset(x: 35, y: 0)
+            SimpleSpriteImage(.digit(digits[3]), width: 9, height: 13).offset(x: 46, y: 0)
         }
     }
 
-    @ViewBuilder
-    private func buildShuffleRepeatButtons() -> some View {
-        Group {
-            // Shuffle button
-            Button(action: {
-                audioPlayer.shuffleEnabled.toggle()
-            }) {
-                let spriteKey = audioPlayer.shuffleEnabled ? "MAIN_SHUFFLE_BUTTON_SELECTED" : "MAIN_SHUFFLE_BUTTON"
-                SimpleSpriteImage(spriteKey, width: 47, height: 15)
-            }
-            .buttonStyle(.plain)
-            .focusable(false)
-            .at(Coords.shuffleButton)
-
-            // Repeat button (Winamp 5 Modern: 3-state with "1" badge)
-            Button(action: {
-                audioPlayer.repeatMode = audioPlayer.repeatMode.next()
-            }) {
-                let spriteKey = audioPlayer.repeatMode.isActive
-                    ? "MAIN_REPEAT_BUTTON_SELECTED"
-                    : "MAIN_REPEAT_BUTTON"
-
-                ZStack {
-                    SimpleSpriteImage(spriteKey, width: 28, height: 15)
-
-                    // "1" badge (Winamp 5 Modern indicator for repeat-one)
-                    if audioPlayer.repeatMode == .one {
-                        Text("1")
-                            .font(.system(size: 8, weight: .bold))
-                            .foregroundColor(.white)
-                            .shadow(color: .black.opacity(0.8), radius: 1, x: 0, y: 0)
-                            .offset(x: 8, y: 0)
-                    }
-                }
-            }
-            .buttonStyle(.plain)
-            .focusable(false)
-            .help(audioPlayer.repeatMode.label)
-            .at(Coords.repeatButton)
-        }
-    }
-
-    @ViewBuilder
-    private func buildPositionSlider() -> some View {
-        // Only show position slider when a track is loaded
-        if audioPlayer.currentTrack != nil {
-            ZStack(alignment: .topLeading) {
-                // Position slider background
-                SimpleSpriteImage("MAIN_POSITION_SLIDER_BACKGROUND", width: 248, height: 10)
-                    .at(Coords.positionSlider)
-
-                // Position slider thumb (moves based on playback progress or scrubbing)
-                let currentProgress = isScrubbing ? scrubbingProgress : audioPlayer.playbackProgress
-                SimpleSpriteImage("MAIN_POSITION_SLIDER_THUMB", width: 29, height: 10)
-                    .at(CGPoint(x: Coords.positionSlider.x + (248 - 29) * currentProgress,
-                               y: Coords.positionSlider.y))
-                    .allowsHitTesting(false) // Thumb shouldn't block interaction
-
-                // Interactive scrubbing area using GeometryReader (like volume slider)
-                GeometryReader { geo in
-                    Color.clear
-                        .contentShape(Rectangle())
-                        .gesture(
-                            DragGesture(minimumDistance: 0)
-                                .onChanged { value in
-                                    handlePositionDrag(value, in: geo)
-                                }
-                                .onEnded { value in
-                                    handlePositionDragEnd(value, in: geo)
-                                }
-                        )
-                }
-                .frame(width: 248, height: 10)
-                .at(Coords.positionSlider)
-            }
-        }
-    }
-    
-    @ViewBuilder
-    private func buildVolumeSlider() -> some View {
-        // Create @Bindable for slider binding
-        @Bindable var player = audioPlayer
-        WinampVolumeSlider(volume: $player.volume)
-            .at(Coords.volumeSlider)
-    }
-
-    @ViewBuilder
-    private func buildBalanceSlider() -> some View {
-        // Create @Bindable for slider binding
-        @Bindable var player = audioPlayer
-        WinampBalanceSlider(balance: $player.balance)
-            .at(Coords.balanceSlider)
-    }
-    
-    @ViewBuilder
-    private func buildWindowToggleButtons() -> some View {
-        // Access coordinator's observable properties directly for reactive updates
-        let coordinator = WindowCoordinator.shared
-        let eqVisible = coordinator?.isEQWindowVisible ?? false
-        let playlistVisible = coordinator?.isPlaylistWindowVisible ?? false
-
-        Group {
-            // EQ button - lights when EQ window visible (bound to coordinator state)
-            let eqSprite = eqVisible
-                ? "MAIN_EQ_BUTTON_SELECTED"
-                : "MAIN_EQ_BUTTON"
-
-            Button(action: {
-                // Toggle via WindowCoordinator (AppKit bridge)
-                _ = coordinator?.toggleEQWindowVisibility()
-            }) {
-                SimpleSpriteImage(eqSprite, width: 23, height: 12)
-            }
-            .buttonStyle(.plain)
-            .focusable(false)
-            .at(Coords.eqButton)
-
-            // Playlist button - lights when Playlist window visible (bound to coordinator state)
-            let playlistSprite = playlistVisible
-                ? "MAIN_PLAYLIST_BUTTON_SELECTED"
-                : "MAIN_PLAYLIST_BUTTON"
-
-            Button(action: {
-                // Toggle via WindowCoordinator (AppKit bridge)
-                _ = coordinator?.togglePlaylistWindowVisibility()
-            }) {
-                SimpleSpriteImage(playlistSprite, width: 23, height: 12)
-            }
-            .buttonStyle(.plain)
-            .focusable(false)
-            .at(Coords.playlistButton)
-        }
-    }
-
-    @ViewBuilder
-    private func buildClutterBarButtons() -> some View {
-        // Use environment settings for reactive updates
-        Group {
-            // O - Options (FUNCTIONAL)
-            Button(action: {
-                showOptionsMenu(from: Coords.clutterButtonO)
-            }) {
-                SimpleSpriteImage("MAIN_CLUTTER_BAR_BUTTON_O", width: 8, height: 8)
-            }
-            .buttonStyle(.plain)
-            .focusable(false)
-            .help("Options menu (Ctrl+O, Ctrl+T for time)")
-            .at(Coords.clutterButtonO)
-
-            // A - Always On Top (FUNCTIONAL)
-            let aSpriteName = settings.isAlwaysOnTop
-                ? "MAIN_CLUTTER_BAR_BUTTON_A_SELECTED"
-                : "MAIN_CLUTTER_BAR_BUTTON_A"
-
-            Button(action: {
-                settings.isAlwaysOnTop.toggle()
-            }) {
-                SimpleSpriteImage(aSpriteName, width: 8, height: 7)
-            }
-            .buttonStyle(.plain)
-            .focusable(false)
-            .help("Toggle always on top (Ctrl+A)")
-            .at(Coords.clutterButtonA)
-
-            // I - Track Info (FUNCTIONAL)
-            let iSpriteName = settings.showTrackInfoDialog
-                ? "MAIN_CLUTTER_BAR_BUTTON_I_SELECTED"
-                : "MAIN_CLUTTER_BAR_BUTTON_I"
-
-            Button(action: {
-                settings.showTrackInfoDialog = true
-            }) {
-                SimpleSpriteImage(iSpriteName, width: 8, height: 7)
-            }
-            .buttonStyle(.plain)
-            .focusable(false)
-            .help("Track information (Ctrl+I)")
-            .at(Coords.clutterButtonI)
-
-            // D - Double Size (FUNCTIONAL)
-            // Compute sprite name outside closure for reactivity
-            let dSpriteName = settings.isDoubleSizeMode
-                ? "MAIN_CLUTTER_BAR_BUTTON_D_SELECTED"
-                : "MAIN_CLUTTER_BAR_BUTTON_D"
-
-            Button(action: {
-                settings.isDoubleSizeMode.toggle()
-            }) {
-                SimpleSpriteImage(dSpriteName, width: 8, height: 8)
-            }
-            .buttonStyle(.plain)
-            .focusable(false)
-            .help("Toggle window size")
-            .at(Coords.clutterButtonD)
-
-            // V - Video Window toggle (setting change triggers observer)
-            let vSpriteName = settings.showVideoWindow
-                ? "MAIN_CLUTTER_BAR_BUTTON_V_SELECTED"
-                : "MAIN_CLUTTER_BAR_BUTTON_V"
-
-            Button(action: {
-                settings.showVideoWindow.toggle()
-            }) {
-                SimpleSpriteImage(vSpriteName, width: 8, height: 7)
-            }
-            .buttonStyle(.plain)
-            .focusable(false)
-            .help("Video Window (Ctrl+V)")
-            .at(Coords.clutterButtonV)
-        }
-    }
-
-    
-    @ViewBuilder
-    private func buildTrackInfoDisplay() -> some View {
-        // Track info scrolling text display - now uses PlaybackCoordinator
-        // This shows: local tracks, stream metadata, or buffering status ("Connecting...")
-        let trackText = playbackCoordinator.displayTitle.isEmpty ? "MacAmp" : playbackCoordinator.displayTitle
-        let textWidth = trackText.count * 5 // Approximate character width in Winamp font
-        let displayWidth = Int(Coords.trackInfo.width)
-
-        if textWidth > displayWidth {
-            // Need to scroll for long text
-            HStack(spacing: 0) {
-                buildTextSprites(for: trackText)
-                    .offset(x: scrollOffset, y: -2)  // Move UP to center: 6px text in 11px area
-                    .onAppear {
-                        startScrolling()
-                    }
-                    .onChange(of: playbackCoordinator.displayTitle) { _, _ in
-                        resetScrolling()
-                    }
-            }
-            .frame(width: Coords.trackInfo.width, height: Coords.trackInfo.height)
-            .clipped()
-            .at(CGPoint(x: Coords.trackInfo.minX, y: Coords.trackInfo.minY))
-        } else {
-            // Static text for short names
-            buildTextSprites(for: trackText)
-                .offset(y: -2)  // Move UP to center: 6px text in 11px area
-                .frame(width: Coords.trackInfo.width, height: Coords.trackInfo.height, alignment: .leading)
-                .at(CGPoint(x: Coords.trackInfo.minX, y: Coords.trackInfo.minY))
-        }
-    }
-    
-    @ViewBuilder
-    private func buildTextSprites(for text: String) -> some View {
-        HStack(spacing: 0) {
-            ForEach(Array(text.uppercased().enumerated()), id: \.offset) { index, character in
-                // Convert character to proper sprite code
-                // Winamp TEXT.BMP uses lowercase ASCII codes for letters
-                let charCode: UInt8 = {
-                    if let ascii = character.asciiValue {
-                        if character.isLetter && character.isUppercase {
-                            // Convert uppercase letters to lowercase ASCII codes
-                            return ascii + 32
-                        } else {
-                            return ascii
-                        }
-                    }
-                    return 32 // Default to space
-                }()
-                
-                SimpleSpriteImage("CHARACTER_\(charCode)", width: 5, height: 6)
-            }
-        }
-    }
-    
-    @ViewBuilder
-    private func buildMonoStereoIndicator() -> some View {
-        // Mono/Stereo indicator - shows the appropriate indicator based on channel count
-        ZStack {
-            // Only show indicators when a track is loaded
-            let hasTrack = audioPlayer.currentTrack != nil
-            
-            // Show mono indicator first (at x: 212)
-            SimpleSpriteImage(hasTrack && audioPlayer.channelCount == 1 ? "MAIN_MONO_SELECTED" : "MAIN_MONO",
-                            width: 27, height: 12)
-                .at(x: 212, y: 41)
-            
-            // Show stereo indicator second (at x: 239)
-            SimpleSpriteImage(hasTrack && audioPlayer.channelCount == 2 ? "MAIN_STEREO_SELECTED" : "MAIN_STEREO", 
-                            width: 29, height: 12)
-                .at(x: 239, y: 41)
-        }
-    }
-    
-    @ViewBuilder
-    private func buildBitrateDisplay() -> some View {
-        // Only show when a track is loaded
-        if audioPlayer.currentTrack != nil && audioPlayer.bitrate > 0 {
-            let bitrateText = "\(audioPlayer.bitrate)"
-            HStack(spacing: 0) {
-                ForEach(Array(bitrateText.enumerated()), id: \.offset) { _, character in
-                    if let ascii = character.asciiValue {
-                        SimpleSpriteImage("CHARACTER_\(ascii)", width: 5, height: 6)
-                    }
-                }
-            }
-            .at(x: 111, y: 43)  // Position near the visualizer area
-        }
-    }
-    
-    @ViewBuilder
-    private func buildSampleRateDisplay() -> some View {
-        // Only show when a track is loaded
-        if audioPlayer.currentTrack != nil && audioPlayer.sampleRate > 0 {
-            let khz = audioPlayer.sampleRate / 1000
-            let sampleRateText = "\(khz)"
-            HStack(spacing: 0) {
-                ForEach(Array(sampleRateText.enumerated()), id: \.offset) { _, character in
-                    if let ascii = character.asciiValue {
-                        SimpleSpriteImage("CHARACTER_\(ascii)", width: 5, height: 6)
-                    }
-                }
-            }
-            .at(x: 156, y: 43)  // Position to the right of bitrate
-        }
-    }
-    
-    @ViewBuilder
-    private func buildSpectrumAnalyzer() -> some View {
-        // Click analyzer to cycle modes: spectrum → oscilloscope → none
-        VisualizerView()
-            .frame(width: VisualizerLayout.width, height: VisualizerLayout.height)
-            .background(Color.black.opacity(0.5))
-            .at(Coords.spectrumAnalyzer)
-    }
-    
-    private func openFileDialog() {
+    func openFileDialog() {
         PlaylistWindowActions.shared.presentAddFilesPanel(audioPlayer: audioPlayer, playbackCoordinator: playbackCoordinator)
-    }
-    
-    // MARK: - Scrolling Animation Functions
-    
-    private func startScrolling() {
-        guard scrollTimer == nil else { return }
-        guard isViewVisible else { return }
-
-        scrollTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { [playbackCoordinator] _ in
-            // Hop to main actor explicitly for UI updates
-            Task { @MainActor in
-                let trackText = playbackCoordinator.displayTitle.isEmpty ? "MacAmp" : playbackCoordinator.displayTitle
-                let textWidth = CGFloat(trackText.count * 5)
-                let displayWidth = Coords.trackInfo.width
-
-                if textWidth > displayWidth {
-                    scrollOffset -= 5 // Move left by one character width
-
-                    // Reset when we've scrolled past the end
-                    if abs(scrollOffset) >= textWidth + 20 { // Add some padding
-                        scrollOffset = displayWidth
-                    }
-                }
-            }
-        }
-        if let timer = scrollTimer {
-            RunLoop.main.add(timer, forMode: .common)
-        }
-    }
-
-    private func resetScrolling() {
-        scrollTimer?.invalidate()
-        scrollTimer = nil
-        scrollOffset = 0
-        
-        // Restart scrolling if needed
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            guard self.isViewVisible else { return }
-            self.startScrolling()
-        }
-    }
-    
-    // MARK: - Helper Functions
-
-    private func timeDigits(from seconds: Double) -> [Int] {
-        let totalSeconds = max(0, Int(seconds))
-        let minutes = totalSeconds / 60
-        let secs = totalSeconds % 60
-        
-        return [
-            minutes / 10,  // First minute digit
-            minutes % 10,  // Second minute digit  
-            secs / 10,     // First second digit
-            secs % 10      // Second second digit
-        ]
-    }
-    
-    private func handlePositionDrag(_ value: DragGesture.Value, in geometry: GeometryProxy) {
-        if !isScrubbing {
-            isScrubbing = true
-            wasPlayingPreScrub = audioPlayer.isPlaying
-            // Pause during scrubbing to avoid audio conflicts
-            if wasPlayingPreScrub {
-                audioPlayer.pause()
-            }
-        }
-        
-        // Calculate progress based on location in the geometry
-        let width = geometry.size.width
-        let x = min(max(0, value.location.x), width)
-        let progress = Double(x / width)
-        
-        // Only update visual position during scrubbing - don't seek audio yet
-        scrubbingProgress = progress
-    }
-    
-    private func handlePositionDragEnd(_ value: DragGesture.Value, in geometry: GeometryProxy) {
-        // Calculate final position
-        let width = geometry.size.width
-        let x = min(max(0, value.location.x), width)
-        let progress = Double(x / width)
-
-        // Update visual progress immediately so slider shows where user dragged
-        scrubbingProgress = progress
-
-        // Perform seek - use seekToPercent which handles file duration correctly
-        audioPlayer.seekToPercent(progress, resume: wasPlayingPreScrub)
-
-        // CRITICAL: Keep isScrubbing = true until the progress timer has had at least
-        // 2-3 cycles to update with the new seek position. This prevents the slider
-        // from jumping to an incorrect position due to stale AVAudioPlayerNode render times.
-        // The progress timer runs every 0.1s, so 0.3s gives it 3 cycles to stabilize.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            isScrubbing = false
-        }
-    }
-
-    // MARK: - Options Menu (O Button)
-
-    /// Show options menu below the O button
-    private func showOptionsMenu(from buttonPosition: CGPoint) {
-        // Create new menu and store strong reference to prevent premature deallocation
-        // NSMenu.popUp() is asynchronous - menu must stay alive until user dismisses it
-        let menu = NSMenu()
-
-        // Store strong reference BEFORE populating to prevent premature deallocation
-        activeOptionsMenu = menu
-
-        // Helper to create menu items with actions
-        @MainActor func createMenuItem(
-            title: String,
-            isChecked: Bool,
-            keyEquivalent: String = "",
-            modifiers: NSEvent.ModifierFlags = [],
-            action: @escaping () -> Void
-        ) -> NSMenuItem {
-            let item = NSMenuItem(title: title, action: nil, keyEquivalent: keyEquivalent)
-            item.state = isChecked ? .on : .off
-            item.keyEquivalentModifierMask = modifiers
-
-            // Use a custom class to hold the closure
-            let actionTarget = MenuItemTarget(action: action)
-            item.target = actionTarget
-            item.action = #selector(MenuItemTarget.execute)
-            item.representedObject = actionTarget // Keep it alive
-
-            return item
-        }
-
-        // Time display mode items
-        menu.addItem(createMenuItem(
-            title: "Time: Elapsed",
-            isChecked: settings.timeDisplayMode == .elapsed,
-            action: { [weak settings] in
-                if settings?.timeDisplayMode != .elapsed {
-                    settings?.toggleTimeDisplayMode()
-                }
-            }
-        ))
-
-        menu.addItem(createMenuItem(
-            title: "Time: Remaining",
-            isChecked: settings.timeDisplayMode == .remaining,
-            action: { [weak settings] in
-                if settings?.timeDisplayMode != .remaining {
-                    settings?.toggleTimeDisplayMode()
-                }
-            }
-        ))
-
-        menu.addItem(.separator())
-
-        // Double-size toggle
-        menu.addItem(createMenuItem(
-            title: "Double Size",
-            isChecked: settings.isDoubleSizeMode,
-            keyEquivalent: "d",
-            modifiers: .control,
-            action: { [weak settings] in
-                settings?.isDoubleSizeMode.toggle()
-            }
-        ))
-
-        // Repeat mode selector (Winamp 5: three explicit options)
-        menu.addItem(createMenuItem(
-            title: "Repeat: Off",
-            isChecked: audioPlayer.repeatMode == .off,
-            keyEquivalent: "",
-            modifiers: [],
-            action: { [weak audioPlayer] in
-                audioPlayer?.repeatMode = .off
-            }
-        ))
-
-        menu.addItem(createMenuItem(
-            title: "Repeat: All",
-            isChecked: audioPlayer.repeatMode == .all,
-            keyEquivalent: "",
-            modifiers: [],
-            action: { [weak audioPlayer] in
-                audioPlayer?.repeatMode = .all
-            }
-        ))
-
-        menu.addItem(createMenuItem(
-            title: "Repeat: One",
-            isChecked: audioPlayer.repeatMode == .one,
-            keyEquivalent: "r",
-            modifiers: .control,
-            action: { [weak audioPlayer] in
-                audioPlayer?.repeatMode = .one
-            }
-        ))
-
-        // Shuffle toggle
-        menu.addItem(createMenuItem(
-            title: "Shuffle",
-            isChecked: audioPlayer.shuffleEnabled,
-            keyEquivalent: "s",
-            modifiers: .control,
-            action: { [weak audioPlayer] in
-                audioPlayer?.shuffleEnabled.toggle()
-            }
-        ))
-
-        // Position menu below button
-        // Find the main window reliably (not just keyWindow, which might be playlist/EQ)
-        // Look for the window that contains the main Winamp view
-        let mainWindow = NSApp.windows.first { window in
-            // Main window has specific size characteristics (275 or 550 wide in double-size)
-            return window.isVisible && !window.isMiniaturized &&
-                   (window.frame.width == WinampSizes.main.width ||
-                    window.frame.width == WinampSizes.main.width * 2)
-        } ?? NSApp.keyWindow
-
-        if let window = mainWindow {
-            // Convert button position to screen coordinates
-            // O button is at Coords.clutterButtonO (x: 10, y: 25)
-            // Account for double-size mode scaling
-            let scale: CGFloat = settings.isDoubleSizeMode ? 2.0 : 1.0
-            let screenPoint = NSPoint(
-                x: window.frame.minX + (buttonPosition.x * scale),
-                y: window.frame.maxY - ((buttonPosition.y + 8) * scale) // 8 = button height
-            )
-            menu.popUp(positioning: nil, at: screenPoint, in: nil)
-        }
-    }
-}
-
-/// Helper class to bridge closures to NSMenuItem actions
-@MainActor
-private class MenuItemTarget: NSObject {
-    let action: () -> Void
-
-    init(action: @escaping () -> Void) {
-        self.action = action
-    }
-
-    @objc func execute() {
-        action()
     }
 }
 

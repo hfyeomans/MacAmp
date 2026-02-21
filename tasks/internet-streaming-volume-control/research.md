@@ -4,7 +4,7 @@
 
 ---
 
-## Status: COMPLETE - DOUBLE REVIEWED (Oracle B+ → Swift 6.2 Addendum)
+## Status: COMPLETE - TRIPLE REVIEWED (Oracle B+ → Swift 6.2 Addendum → Prerequisite Validation)
 
 ## Problem Statement
 
@@ -27,7 +27,7 @@ AVAudioFile -> AVAudioPlayerNode -> AVAudioUnitEQ (10-band) -> AVAudioMixerNode 
                                                               VisualizerPipeline
 ```
 - Full 10-band EQ (60Hz-16kHz, Winamp-accurate frequencies)
-- Real-time spectrum analysis via Goertzel + vDSP FFT
+- Real-time spectrum analysis via Goertzel + vDSP FFT (20-bar)
 - Volume control via `playerNode.volume` (0.0-1.0)
 - Balance control via `playerNode.pan` (-1.0 to 1.0)
 
@@ -244,7 +244,7 @@ Web Audio API allows connecting ANY audio source (including streaming `<audio>` 
 |----------|--------|----|----|-------------|------------|----------------|
 | A: AVPlayer.volume | YES | NO | NO | 10/10 | Low | Phase 1 |
 | B: Disable EQ UI | N/A | INDICATED | N/A | 10/10 | Low | Phase 1 |
-| C: MTAudioProcessingTap (read) | NO | NO | YES | 6-7/10 | High | Phase 2 (requires pipeline refactor) |
+| C: MTAudioProcessingTap (read) | NO | NO | YES | **8.5/10** | High | Phase 2 alt (prerequisite COMPLETE) |
 | C: MTAudioProcessingTap (write) | NO | YES | YES | 3-5/10 | Very High | Phase 3 (optional) |
 | D: Manual AVAudioEngine streaming | YES | YES | YES | 4/10 | Extreme | NOT recommended |
 | E: Third-party (AudioKit) | YES | YES | YES | 9/10 | Medium | NOT recommended (dependency) |
@@ -263,8 +263,8 @@ Web Audio API allows connecting ANY audio source (including streaming `<audio>` 
 6. Persist stream volume using same UserDefaults pattern
 
 ### Phase 2: Stream Visualization via MTAudioProcessingTap (Medium-High Risk)
-**Prerequisite:** Refactor VisualizerPipeline to eliminate allocations in callback path (lines 493, 509, 518)
-1. Make VisualizerPipeline callback zero-allocation (pre-allocated buffers, no Task dispatch)
+**Prerequisite:** ~~Refactor VisualizerPipeline to eliminate allocations in callback path~~ **COMPLETE.** SPSC shared buffer pattern implemented (VisualizerSharedBuffer + pre-allocated VisualizerScratchBuffers + static makeTapHandler). Zero allocations on audio thread confirmed.
+1. ~~Make VisualizerPipeline callback zero-allocation~~ **DONE** — SPSC pattern provides template for Phase 2 ring buffer
 2. Implement MTAudioProcessingTap READ-ONLY on StreamPlayer's AVPlayerItem
 3. Extract PCM samples in tap callback (pre-allocated buffers)
 4. Feed extracted data to VisualizerPipeline for spectrum/waveform display
@@ -302,16 +302,17 @@ Web Audio API allows connecting ANY audio source (including streaming `<audio>` 
 
 ### Additional Oracle Corrections
 
-**Feasibility recalibration:**
-| Original | Corrected | Reason |
-|----------|-----------|--------|
-| Tap-read visualization: 9/10 | **6-7/10** | VisualizerPipeline allocates in callback path (lines 493, 509), dispatches Task per buffer (line 518) — incompatible with real-time tap constraints. Must refactor pipeline first. |
-| Tap-write EQ: 6/10 | **3-5/10** | Custom biquad implementation + zero-allocation constraint + format change handling = very high complexity. |
+**Feasibility recalibration (updated post-SPSC refactor):**
+| Original | Corrected | Current (post-refactor) | Reason |
+|----------|-----------|------------------------|--------|
+| Tap-read visualization: 9/10 | 6-7/10 | **8.5/10** | VisualizerPipeline prerequisite is now COMPLETE. SPSC shared buffer, pre-allocated scratch, zero-allocation tap handler all implemented. |
+| Tap-write EQ: 6/10 | **3-5/10** | 3-5/10 | Custom biquad implementation + zero-allocation constraint + format change handling = very high complexity. Unchanged. |
+| Loopback Bridge: 5.5-6.5/10 | — | **6.0-7.0/10** | Small bump from prerequisite completion. Main hard parts remain: RT-to-RT buffering, ABR transitions, bridge lifecycle. |
 
 **Additional findings:**
 1. **VisualizerView gates on `audioPlayer.isPlaying`** (line 74) — stream visualization won't render even with tap data unless this check is rerouted to include stream playback state.
 2. **Phase 1 should include capability flags** (`supportsEQ`, `supportsBalance`, `supportsVisualizer`) on PlaybackCoordinator to cleanly gate UI features per backend.
-3. **VisualizerPipeline refactoring prerequisite** — Before Phase 2, the pipeline's callback must be made zero-allocation. Current implementation violates real-time audio thread constraints.
+3. **~~VisualizerPipeline refactoring prerequisite~~** — **RESOLVED.** Pipeline callback is now zero-allocation via SPSC shared buffer pattern (VisualizerSharedBuffer + VisualizerScratchBuffers + static makeTapHandler). See VisualizerPipeline.swift lines 36-146, 187-337, 581-675.
 
 ---
 
@@ -425,9 +426,9 @@ No new high-level DSP abstractions replacing `vDSP_biquad`. The `vDSP.Biquad<T>`
 |----------|--------|----|-----|---------|-------------|------------|----------------|
 | A: AVPlayer.volume | YES | NO | NO | NO | 10/10 | Low | **Phase 1** |
 | B: Disable EQ/Balance UI | N/A | INDICATED | N/A | INDICATED | 10/10 | Low | **Phase 1** |
-| C: MTAudioProcessingTap (read) | NO | NO | YES | NO | 6-7/10 | High | Phase 2 alt |
+| C: MTAudioProcessingTap (read) | NO | NO | YES | NO | **8.5/10** | High | Phase 2 alt (prereq COMPLETE) |
 | C: MTAudioProcessingTap (write) | NO | YES | YES | NO | 3-5/10 | Very High | Superseded by G |
-| **G: Loopback Bridge (NEW)** | **YES** | **YES** | **YES** | **YES** | **5.5-6.5/10** | **High** | **Phase 2 (recommended)** |
+| **G: Loopback Bridge (NEW)** | **YES** | **YES** | **YES** | **YES** | **6.0-7.0/10** | **High** | **Phase 2 (recommended)** |
 | H: CoreAudio Process Tap | NO | NO | YES | NO | 8/10 | Medium | Not recommended (entitlement) |
 | D: Manual AVAudioEngine streaming | YES | YES | YES | YES | 4/10 | Extreme | NOT recommended |
 | E: Third-party (AudioKit) | YES | YES | YES | YES | 9/10 | Medium | NOT recommended (dependency) |

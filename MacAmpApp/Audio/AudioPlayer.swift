@@ -96,7 +96,10 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     // Computed forwarding for backwards compatibility
     var playlist: [Track] { playlistController.playlist }
     var currentTrack: Track? // Currently playing track (owned by AudioPlayer for playback state)
-    var externalPlaybackHandler: ((Track) -> Void)?
+    /// Called when a placeholder track is replaced with loaded metadata (title/artist arrived)
+    var onTrackMetadataUpdate: ((Track) -> Void)?
+    /// Called when end-of-track auto-advance produces a track for the coordinator to play
+    var onPlaylistAdvanceRequest: ((Track) -> Void)?
     var shuffleEnabled: Bool {
         get { playlistController.shuffleEnabled }
         set { playlistController.shuffleEnabled = newValue }
@@ -267,7 +270,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
                     self.currentTrackURL = track.url
 
                     // Notify coordinator that metadata updated
-                    self.externalPlaybackHandler?(track)
+                    self.onTrackMetadataUpdate?(track)
                 }
             } else if !self.playlistController.containsTrack(url: normalizedURL) {
                 self.playlistController.addTrack(track)
@@ -989,7 +992,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
             let action = self.nextTrack()
             switch action {
             case .requestCoordinatorPlayback(let track), .playLocally(let track):
-                self.externalPlaybackHandler?(track)
+                self.onPlaylistAdvanceRequest?(track)
             default:
                 break
             }
@@ -1033,6 +1036,18 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
         return handlePlaylistAction(action)
     }
 
+    /// Advance to next track with external position context.
+    /// Used by PlaybackCoordinator when audioPlayer.currentTrack is nil (e.g., during stream playback).
+    /// - Parameters:
+    ///   - track: External track for position resolution (typically coordinator's currentTrack)
+    ///   - isManualSkip: Whether this is a user-initiated skip
+    /// - Returns: Action for PlaybackCoordinator to handle
+    @discardableResult
+    func nextTrack(from track: Track?, isManualSkip: Bool = false) -> PlaylistAdvanceAction {
+        let action = playlistController.nextTrack(from: track, isManualSkip: isManualSkip)
+        return handlePlaylistAction(action)
+    }
+
     /// Go to previous track in playlist
     /// - Returns: Action for PlaybackCoordinator to handle
     @discardableResult
@@ -1041,6 +1056,16 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
         playlistController.updatePosition(with: currentTrack)
 
         let action = playlistController.previousTrack()
+        return handlePlaylistAction(action)
+    }
+
+    /// Go to previous track with external position context.
+    /// Used by PlaybackCoordinator when audioPlayer.currentTrack is nil (e.g., during stream playback).
+    /// - Parameter track: External track for position resolution (typically coordinator's currentTrack)
+    /// - Returns: Action for PlaybackCoordinator to handle
+    @discardableResult
+    func previousTrack(from track: Track?) -> PlaylistAdvanceAction {
+        let action = playlistController.previousTrack(from: track)
         return handlePlaylistAction(action)
     }
 
