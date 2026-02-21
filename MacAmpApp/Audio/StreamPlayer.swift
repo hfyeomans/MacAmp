@@ -79,14 +79,12 @@ final class StreamPlayer: NSObject, @preconcurrency AVPlayerItemMetadataOutputPu
             streamURL: url
         )
 
-        // Set initial metadata from Track
-        streamTitle = title
-        streamArtist = artist
-
-        // Play the stream
+        // Play the stream (play(station:) clears streamTitle/streamArtist)
         await play(station: station)
 
-        // ICY metadata will override streamTitle/streamArtist when available
+        // Reapply initial metadata if ICY hasn't arrived yet during connection
+        if streamTitle == nil { streamTitle = title }
+        if streamArtist == nil { streamArtist = artist }
     }
 
     func pause() {
