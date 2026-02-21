@@ -1,8 +1,8 @@
 # MacAmp Complete Architecture Guide
 
-**Version:** 2.4.0
-**Date:** 2026-02-09
-**Project State:** Production-Ready (5-Window System, WindowCoordinator Refactoring, Swift 6, macOS 15+/26+)
+**Version:** 2.5.0
+**Date:** 2026-02-21
+**Project State:** Production-Ready (5-Window System, WindowCoordinator Refactoring, Internet Radio N1-N6 Fixes, Swift 6, macOS 15+/26+)
 **Purpose:** Deep technical reference for developers joining or maintaining MacAmp
 
 ---
@@ -342,77 +342,115 @@ final class PlaybackCoordinator {
     // Dependencies
     private let audioPlayer: AudioPlayer       // Local files with EQ
     private let streamPlayer: StreamPlayer     // Internet radio
-    private let playlistManager: PlaylistManager
 
-    // Unified state (observed by UI)
-    private(set) var isPlaying: Bool = false
-    private(set) var isPaused: Bool = false
+    // MARK: - Computed Play State (PR #49 - N1/N2 fixes)
+    //
+    // isPlaying and isPaused are computed properties derived from the active
+    // audio source. This eliminates stale-state bugs where stored booleans
+    // would drift out of sync with the actual backend state during buffering
+    // stalls, error recovery, or rapid play/pause toggling.
+
+    /// True when audio is actively rendering to speakers.
+    /// During stream buffering stalls, returns false (audio is not being rendered).
+    var isPlaying: Bool {
+        switch currentSource {
+        case .localTrack: return audioPlayer.isPlaying
+        case .radioStation: return streamPlayer.isPlaying && !streamPlayer.isBuffering
+        case .none: return false
+        }
+    }
+
+    /// True when user has explicitly paused playback.
+    /// False during buffering stalls (not user-initiated) and error states.
+    var isPaused: Bool {
+        switch currentSource {
+        case .localTrack: return audioPlayer.isPaused
+        case .radioStation:
+            return !streamPlayer.isPlaying && !streamPlayer.isBuffering && streamPlayer.error == nil
+        case .none: return false
+        }
+    }
+
+    // Stored state
     private(set) var currentSource: PlaybackSource?
     private(set) var currentTitle: String?
-    private(set) var currentTrack: Track?
+    private(set) var currentTrack: Track?  // For playlist position tracking
 
     enum PlaybackSource {
         case localTrack(URL)
         case radioStation(RadioStation)
     }
 
-    // CRITICAL: Prevent simultaneous playback
-    private func ensureExclusivePlayback() {
-        audioPlayer.stop()
-        streamPlayer.stop()
-    }
+    // MARK: - Callback Wiring (PR #49 - N3 fix)
+    //
+    // AudioPlayer uses two separate callbacks instead of a single
+    // externalPlaybackHandler. This split eliminates ambiguity about
+    // whether a callback is for metadata refresh or track advance.
 
-    func play(track: Track) async {
-        ensureExclusivePlayback()
+    init(audioPlayer: AudioPlayer, streamPlayer: StreamPlayer) {
+        self.audioPlayer = audioPlayer
+        self.streamPlayer = streamPlayer
 
-        if track.isStream {
-            // Route to StreamPlayer (no EQ)
-            currentSource = .radioStation(RadioStation(
-                name: track.title,
-                streamURL: track.url
-            ))
-            await streamPlayer.play(url: track.url)
-            isPlaying = streamPlayer.isPlaying
-
-            // Update title from ICY metadata if available
-            if let streamTitle = streamPlayer.streamTitle {
-                currentTitle = streamTitle
-            }
-        } else {
-            // Route to AudioPlayer (with EQ)
-            currentSource = .localTrack(track.url)
-            audioPlayer.addTrack(url: track.url)
-            audioPlayer.play()
-            isPlaying = audioPlayer.isPlaying
-            currentTitle = track.title
+        // Fires when placeholder track is replaced with loaded metadata
+        self.audioPlayer.onTrackMetadataUpdate = { [weak self] track in
+            guard let self else { return }
+            self.updateTrackMetadata(track)
         }
 
-        currentTrack = track
-        isPaused = false
+        // Fires on end-of-track auto-advance
+        self.audioPlayer.onPlaylistAdvanceRequest = { [weak self] track in
+            guard let self else { return }
+            Task { @MainActor in
+                await self.handleExternalPlaylistAdvance(track: track)
+            }
+        }
     }
 
-    // Unified controls (work for both backends)
+    // MARK: - Context-Aware Navigation (PR #49 - N4 fix)
+    //
+    // next()/previous() pass coordinator's currentTrack to AudioPlayer
+    // so PlaylistController can resolve position even during stream
+    // playback when audioPlayer.currentTrack is nil.
+
+    func next() async {
+        let action = audioPlayer.nextTrack(from: currentTrack, isManualSkip: true)
+        await handlePlaylistAdvance(action: action)
+    }
+
+    func previous() async {
+        let action = audioPlayer.previousTrack(from: currentTrack)
+        await handlePlaylistAdvance(action: action)
+    }
+
+    // MARK: - Unified Playback Control
+
+    func play(url: URL) async {
+        if url.isFileURL {
+            streamPlayer.stop()
+            audioPlayer.addTrack(url: url)
+            audioPlayer.play()
+            currentSource = .localTrack(url)
+            // ... title formatting ...
+        } else {
+            audioPlayer.stop()
+            let station = RadioStation(name: url.lastPathComponent, streamURL: url)
+            await streamPlayer.play(station: station)
+            currentSource = .radioStation(station)
+            currentTitle = streamPlayer.streamTitle ?? station.name
+        }
+    }
+
     func togglePlayPause() {
         switch currentSource {
         case .localTrack:
-            if audioPlayer.isPlaying {
-                audioPlayer.pause()
-                isPaused = true
-            } else {
-                audioPlayer.play()
-                isPaused = false
-            }
-            isPlaying = audioPlayer.isPlaying
+            if audioPlayer.isPlaying { audioPlayer.pause() }
+            else { audioPlayer.play() }
+            // No manual isPlaying/isPaused sync needed - computed from backend
 
         case .radioStation:
-            if streamPlayer.isPlaying {
-                streamPlayer.pause()
-                isPaused = true
-            } else {
-                streamPlayer.resume()
-                isPaused = false
-            }
-            isPlaying = streamPlayer.isPlaying
+            if streamPlayer.isPlaying { streamPlayer.pause() }
+            else { streamPlayer.resume() }
+            // No manual isPlaying/isPaused sync needed - computed from backend
 
         case .none:
             break
@@ -420,12 +458,12 @@ final class PlaybackCoordinator {
     }
 
     func stop() {
-        ensureExclusivePlayback()
+        audioPlayer.stop()
+        streamPlayer.stop()
         currentSource = nil
         currentTitle = nil
         currentTrack = nil
-        isPlaying = false
-        isPaused = false
+        // isPlaying/isPaused automatically return false (currentSource is nil)
     }
 
     // Computed properties for UI
@@ -446,6 +484,16 @@ final class PlaybackCoordinator {
     }
 }
 ```
+
+**Key architectural changes (PR #49, February 2026):**
+
+1. **Computed play state**: `isPlaying` and `isPaused` are now computed properties that derive from the active backend, not stored booleans. This eliminates an entire class of state-synchronization bugs where stored flags would drift during buffering stalls, error recovery, or rapid user interaction.
+
+2. **Split callbacks**: The former `externalPlaybackHandler` closure on AudioPlayer was split into two purpose-specific callbacks:
+   - `onTrackMetadataUpdate: ((Track) -> Void)?` -- fires when a placeholder track is replaced with loaded metadata (title/artist arrived)
+   - `onPlaylistAdvanceRequest: ((Track) -> Void)?` -- fires on end-of-track auto-advance, requesting the coordinator to play the next track
+
+3. **Context-aware navigation**: `next()` and `previous()` pass `currentTrack` (the coordinator's track reference) to `audioPlayer.nextTrack(from:)` / `audioPlayer.previousTrack(from:)`. This resolves playlist position correctly during stream playback when `audioPlayer.currentTrack` is nil.
 
 ### Integration with UI
 
@@ -2744,6 +2792,27 @@ final class RadioStationLibrary {
     }
 }
 ```
+
+### Internet Radio Integration Fixes (PR #49, February 2026)
+
+PR #49 addressed six systematic bugs (N1-N6) in the internet radio integration layer. These bugs surfaced during real-world testing of stream playback with playlist navigation and UI state display.
+
+**N1/N2 - Computed Play State**: PlaybackCoordinator's `isPlaying` and `isPaused` were stored booleans that drifted out of sync with actual backend state during buffering stalls, error recovery, and rapid toggling. Replaced with computed properties that derive from the active audio source (see updated PlaybackCoordinator in section 4.3 above).
+
+**N3 - Split Callbacks**: AudioPlayer's single `externalPlaybackHandler` closure conflated two distinct events: metadata arrival and end-of-track auto-advance. Split into `onTrackMetadataUpdate` and `onPlaylistAdvanceRequest` callbacks, eliminating ambiguous dispatch in PlaybackCoordinator's init.
+
+**N4 - Context-Aware Playlist Navigation**: During stream playback, `audioPlayer.currentTrack` is nil because AudioPlayer is not the active backend. PlaylistController's `nextTrack(from:)` and `previousTrack(from:)` overloads accept an external track reference so the coordinator can pass its own `currentTrack` for position resolution.
+
+**N5 - TrackInfoView Stream Gating**: TrackInfoView's stream info section now gates on `case .radioStation = playbackCoordinator.currentSource` and uses `playbackCoordinator.displayTitle` for live ICY metadata display, rather than relying on AudioPlayer state which is empty during stream playback.
+
+**N6 - File Structure**: WinampMainWindow and WinampPlaylistWindow were split into main file + extension files to reduce per-file complexity:
+- `WinampMainWindow.swift` + `WinampMainWindow+Helpers.swift`
+- `WinampPlaylistWindow.swift` + `WinampPlaylistWindow+Menus.swift` + `PlaylistWindowActions.swift`
+
+This file split is documented as tactical debt. Proper view decomposition tasks have been created:
+- `tasks/mainwindow-layer-decomposition/` — Extract WinampMainWindow into child view structs + @Observable interaction state
+- `tasks/playlistwindow-layer-decomposition/` — Same pattern for WinampPlaylistWindow
+Both tasks follow the Gemini + Oracle converged architecture (Lesson #25 in BUILDING_RETRO_MACOS_APPS_SKILL.md).
 
 ---
 

@@ -4747,6 +4747,7 @@ ls -la ~/Library/Developer/Xcode/DerivedData/MacAmpApp-*/Build/Products/Debug/Ma
 22. **Placeholder.md Convention** - No `// TODO` in code; document placeholders in `tasks/<task>/placeholder.md`
 23. **SPSC Audio Thread Safety** - Zero allocations on audio thread; use os_unfair_lock_trylock() with pre-allocated shared buffers
 24. **Memory Profiling with LLDB** - Use `footprint`, `leaks`, `heap` CLI tools; subtract sanitizer overhead for actual metrics
+25. **SwiftUI View Decomposition** - Use child view structs + @Observable state, not cross-file extensions that force access widening
 
 ### This Skill Enables You To
 
@@ -4776,6 +4777,7 @@ ls -la ~/Library/Developer/Xcode/DerivedData/MacAmpApp-*/Build/Products/Debug/Ma
 - ✅ Implement SPSC shared buffers for allocation-free real-time audio thread data transfer
 - ✅ Profile and fix memory leaks with LLDB heap/leaks/footprint tools
 - ✅ Optimize peak memory with lazy extraction and independent CGContext copies
+- ✅ Decompose large SwiftUI views into layer subviews with @Observable state (not cross-file extensions)
 
 ### Next Project Improvements
 
@@ -4794,9 +4796,15 @@ When building your next retro macOS app:
 **Document Status:** Production Ready
 **Maintenance:** Update when new patterns/pitfalls discovered
 **Owner:** MacAmp Development Team
-**Last Updated:** 2026-02-14
+**Last Updated:** 2026-02-21
 
 **Recent Additions:**
+- **SwiftUI View Decomposition** (Feb 21, 2026) - Layer subviews vs cross-file extension anti-pattern (Lesson #25)
+  - Cross-file extensions widen @State visibility without creating recomposition boundaries
+  - Correct pattern: @Observable interaction state + child view structs with dependency injection
+  - Root view becomes thin composer (~120 lines); each child is a real SwiftUI recomposition boundary
+  - Both Gemini and Oracle independently converged on identical recommendation
+  - Extension split is temporary tactical fix only; layer subviews are proper architecture for 400+ line views
 - **Memory & CPU Optimization** (Feb 14, 2026) - SPSC shared buffer, zero audio-thread allocations, memory leak fixes
   - SPSC shared buffer with os_unfair_lock_trylock for audio-to-main thread data transfer (Lesson #24)
   - Goertzel coefficient precomputation and pre-allocated scratch buffers
@@ -6000,8 +6008,234 @@ The implementation was reviewed by Oracle (gpt-5.3-codex, xhigh reasoning) with 
 9. **LLDB `heap` + `leaks` + `footprint`** are essential for memory profiling (Instruments alone insufficient)
 10. **Oracle multi-review strategy** (code + architecture + Swift 6.2) catches issues that single reviews miss
 
+### 25. SwiftUI View Decomposition: Cross-File Extensions vs Layer Subviews (February 2026)
+
+**Lesson from:** AudioPlayer decomposition task (`tasks/audioplayer-decomposition/`)
+**Oracle Grade:** Both Gemini and Oracle independently converged on identical recommendation
+**Context:** WinampMainWindow (700+ lines) and WinampPlaylistWindow (848 lines) were split into cross-file extensions to satisfy SwiftLint `type_body_length`/`file_length` thresholds
+
+#### The Anti-Pattern: Cross-File Extension Splitting
+
+When a SwiftUI view struct exceeds lint thresholds, the tempting fix is to split it into `MainFile.swift` + `MainFile+Helpers.swift` using Swift extensions:
+
+```swift
+// WinampMainWindow.swift (400 lines)
+struct WinampMainWindow: View {
+    @State var isScrolling = false       // Was private, widened to internal
+    @State var isScrubbing = false       // Was private, widened to internal
+    @State var blinkPhase = false        // Was private, widened to internal
+
+    var body: some View {
+        // ... delegates to helpers in extension file
+        mainWindowContent()
+    }
+}
+
+// WinampMainWindow+Helpers.swift (300 lines)
+extension WinampMainWindow {
+    func mainWindowContent() -> some View {
+        // Can access all @State vars because same type
+        // But this is NOT a separate View -- no recomposition boundary
+    }
+}
+```
+
+**Why this is wrong:**
+
+1. **No recomposition boundaries.** Extension methods on the same struct do NOT create SwiftUI view boundaries. When ANY `@State` changes, the entire body (including all extension methods) re-evaluates. There is zero performance benefit.
+
+2. **Forced visibility widening.** `@State private var` must become `@State var` (internal) for cross-file extension access. This leaks implementation details to any file in the module.
+
+3. **Treats lint as architectural authority.** SwiftLint `type_body_length` is a heuristic, not an architecture rule. Splitting a 700-line struct into 400 + 300 still produces a single 700-line type in the compiler's view -- the lint is satisfied but the actual complexity is unchanged.
+
+4. **No dependency isolation.** Every extension method can see every `@State`, `@Environment`, and stored property. There is no way to enforce "this helper only needs volume and balance" at the type level.
+
+5. **Hides true coupling.** The extension file looks like a separate component, but it is tightly coupled to ALL internal state of the parent struct. Refactoring any `@State` var requires checking both files.
+
+#### The Correct Pattern: Layer Subviews with @Observable State
+
+Both Gemini research and Oracle code review independently recommended the same architecture:
+
+**Step 1: Extract interaction state into @Observable**
+
+```swift
+// WinampMainWindowInteractionState.swift
+@MainActor
+@Observable
+final class WinampMainWindowInteractionState {
+    var isScrolling = false
+    var isScrubbing = false
+    var blinkPhase = false
+    var isSeekBarHovering = false
+    var scrollOffset: CGFloat = 0
+
+    // Computed properties, timers, and interaction logic live here
+    func startBlinkTimer() { /* ... */ }
+    func handleScrubStart() { /* ... */ }
+}
+```
+
+**Step 2: Extract child view structs (NOT extensions)**
+
+```swift
+// MainWindowTransportLayer.swift
+struct MainWindowTransportLayer: View {
+    let skinSprites: SkinSprites
+    let isPlaying: Bool
+    let onPlay: () -> Void
+    let onPause: () -> Void
+    let onStop: () -> Void
+
+    var body: some View {
+        // This IS a separate View type -- real recomposition boundary
+        // Only re-evaluates when isPlaying or skinSprites change
+        ZStack(alignment: .topLeading) {
+            playButton.at(x: 16, y: 88)
+            pauseButton.at(x: 39, y: 88)
+            stopButton.at(x: 62, y: 88)
+            // ...
+        }
+    }
+}
+```
+
+**Step 3: Root view becomes thin composer**
+
+```swift
+// WinampMainWindow.swift (~120 lines)
+struct WinampMainWindow: View {
+    @Environment(AppSettings.self) private var appSettings
+    @Environment(AudioEngineManager.self) private var audioEngine
+    @State private var interaction = WinampMainWindowInteractionState()
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            if appSettings.isShadeMode {
+                MainWindowShadeLayer(interaction: interaction)
+            } else {
+                MainWindowFullLayer(interaction: interaction)
+            }
+        }
+    }
+}
+
+// MainWindowFullLayer.swift
+struct MainWindowFullLayer: View {
+    @Bindable var interaction: WinampMainWindowInteractionState
+    @Environment(AppSettings.self) private var appSettings
+    @Environment(SkinManager.self) private var skinManager
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            MainWindowTrackInfoLayer(
+                trackTitle: appSettings.currentTrackTitle,
+                isScrolling: $interaction.isScrolling,
+                scrollOffset: $interaction.scrollOffset
+            )
+            .at(x: 111, y: 27)
+
+            MainWindowTransportLayer(
+                skinSprites: skinManager.transportSprites,
+                isPlaying: appSettings.isPlaying,
+                onPlay: { audioEngine.play() },
+                onPause: { audioEngine.pause() },
+                onStop: { audioEngine.stop() }
+            )
+            .at(x: 16, y: 88)
+
+            MainWindowSlidersLayer(
+                volume: $appSettings.volume,
+                balance: $appSettings.balance,
+                isScrubbing: $interaction.isScrubbing
+            )
+            .at(x: 107, y: 57)
+
+            MainWindowIndicatorsLayer(
+                playState: appSettings.playState,
+                bitrate: appSettings.currentBitrate,
+                sampleRate: appSettings.currentSampleRate,
+                isMono: appSettings.isMono
+            )
+            .at(x: 24, y: 28)
+        }
+    }
+}
+```
+
+#### Target Directory Structure
+
+```
+MacAmpApp/Views/MainWindow/
+  WinampMainWindow.swift                 // Root composition + lifecycle only (~120 lines)
+  WinampMainWindowLayout.swift           // Coordinate constants
+  WinampMainWindowInteractionState.swift // @Observable: scrubbing/scrolling/blink state
+  MainWindowFullLayer.swift              // Full-mode composition
+  MainWindowShadeLayer.swift             // Shade-mode composition
+  MainWindowTransportLayer.swift         // Transport buttons
+  MainWindowTrackInfoLayer.swift         // Scrolling track text
+  MainWindowIndicatorsLayer.swift        // Play/pause, mono/stereo, bitrate
+  MainWindowSlidersLayer.swift           // Volume, balance, position
+  MainWindowOptionsMenuPresenter.swift   // AppKit NSMenu bridge
+```
+
+#### Why This Is Better: Concrete Benefits
+
+| Aspect | Cross-File Extension | Layer Subviews |
+|--------|---------------------|----------------|
+| **Recomposition boundary** | None (same type) | Real (separate View types) |
+| **@State visibility** | Internal (leaked) | Private or @Observable |
+| **Dependency isolation** | None (sees everything) | Explicit via init params |
+| **Performance** | Entire body re-evaluates | Only affected children |
+| **Testability** | Cannot test in isolation | Each layer testable alone |
+| **Refactoring safety** | Must check all files | Change is localized |
+| **Lint compliance** | Satisfies threshold | Genuinely smaller types |
+
+#### Key Architecture Rules
+
+1. **Child views receive only what they need** via init parameters or `@Binding`. No child should have access to state it does not render.
+
+2. **@Environment dependencies pass through automatically** to children. You do NOT need to forward `@Environment(AppSettings.self)` -- children declare their own `@Environment` and SwiftUI resolves it.
+
+3. **Pixel-perfect sprite rendering is preserved.** The `.at(x:y:)` absolute positioning extension works identically in child views. The root composer positions each child layer with `.at()`, and the child positions its internal sprites with `.at()`.
+
+4. **Each child view creates a real SwiftUI recomposition boundary.** When volume changes, only `MainWindowSlidersLayer` re-evaluates its body -- the transport buttons, track info, and indicators are untouched.
+
+5. **@Observable interaction state replaces scattered @State vars.** A single `@Observable` class can be shared across children via `@Bindable`, and its properties trigger fine-grained observation (only the view reading a specific property re-evaluates when it changes).
+
+#### When to Use Each Approach
+
+**Extension split (TEMPORARY tactical fix):**
+- Unblocking a lint-blocked commit when there is no time for proper refactoring
+- Must be tracked in `placeholder.md` with a follow-up task to do proper decomposition
+- Acceptable for 1-2 sprint cycles maximum before converting to layer subviews
+
+**Layer subviews (PROPER architecture):**
+- Any view exceeding ~400 lines
+- Any view with 5+ `@State` properties
+- Any view mixing multiple concerns (transport + track info + sliders + indicators)
+- Any view that will grow as features are added
+- Any view where performance profiling shows excessive body re-evaluation
+
+#### Relationship to Lesson #13 (Risk-Ordered Refactoring)
+
+This lesson complements Lesson #13's incremental extraction strategy. The difference:
+- **Lesson #13** addresses extracting *logic* (AudioPlayer god object into focused components)
+- **Lesson #25** addresses extracting *views* (SwiftUI view structs into layer subviews)
+
+Both share the same principle: extract with explicit dependency injection, not shared mutable state. Both use risk-ordered incremental migration (low risk layers first, complex interactive layers last).
+
+#### Key Takeaways
+
+1. **Cross-file extensions do NOT create SwiftUI recomposition boundaries** -- they are a lint workaround, not architecture
+2. **@State must stay private** -- if you need to widen it for cross-file access, the decomposition is wrong
+3. **Extract @Observable interaction state** to consolidate scattered @State into a single object with fine-grained observation
+4. **Child view structs with explicit init params** enforce dependency isolation and create real performance boundaries
+5. **Architecture drives lint thresholds, not the reverse** -- set `type_body_length` to 500+ if needed while migrating
+6. **Extension split is acceptable ONLY as a tracked temporary fix** with a follow-up task in placeholder.md
+7. **Root view should be ~120 lines** -- if it is longer, there are more layers to extract
+
 ---
 
 **Built with ❤️ for retro computing on modern macOS**
 
-*This skill document captures 9+ months of lessons learned building MacAmp, distilled into actionable patterns for building similar retro-styled macOS applications with modern Swift 6 patterns. Updated with memory & CPU optimization (Feb 2026), featuring SPSC shared buffer for zero-allocation audio thread data transfer, Goertzel precomputation, lazy skin loading, and CGImage memory leak fixes. Also includes WindowCoordinator Facade + Composition refactoring, demonstrating god object decomposition, phased migration strategy, Oracle-driven quality gates, and Swift 6.2 concurrency compliance.*
+*This skill document captures 9+ months of lessons learned building MacAmp, distilled into actionable patterns for building similar retro-styled macOS applications with modern Swift 6 patterns. Updated with SwiftUI view decomposition (Feb 2026), documenting the cross-file extension anti-pattern and correct layer subview architecture with @Observable interaction state. Also includes memory & CPU optimization with SPSC shared buffer for zero-allocation audio thread data transfer, Goertzel precomputation, lazy skin loading, CGImage memory leak fixes, WindowCoordinator Facade + Composition refactoring, god object decomposition, phased migration strategy, Oracle-driven quality gates, and Swift 6.2 concurrency compliance.*

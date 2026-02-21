@@ -625,6 +625,9 @@ Includes:
 | **Build configurations** | RELEASE_BUILD_COMPARISON.md | Full document |
 | **Clutter bar buttons** | MACAMP_ARCHITECTURE_GUIDE.md | §UI Controls & Features |
 | **Computed forwarding pattern** | IMPLEMENTATION_PATTERNS.md | §2 State Management Patterns |
+| **Computed play state (isPlaying/isPaused)** | MACAMP_ARCHITECTURE_GUIDE.md, IMPLEMENTATION_PATTERNS.md | §4.3, §2 Computed Properties (PR #49) |
+| **Context-aware playlist navigation** | MACAMP_ARCHITECTURE_GUIDE.md | §4.3, §9 Internet Radio (PR #49) |
+| **Cross-file SwiftUI extensions (anti-pattern)** | IMPLEMENTATION_PATTERNS.md | §9 Anti-Patterns |
 | **Code signing errors** | CODE_SIGNING_FIX.md | §Common Issues |
 | **Component integration** | MACAMP_ARCHITECTURE_GUIDE.md | §11 Integration Maps |
 | **Custom menus** | MACAMP_ARCHITECTURE_GUIDE.md | §SpriteMenuItem |
@@ -638,6 +641,7 @@ Includes:
 | **Goertzel algorithm** | MACAMP_ARCHITECTURE_GUIDE.md | §8.4 Spectrum |
 | **Hardened runtime** | CODE_SIGNING_FIX.md | §Hardened Runtime |
 | **Internet radio** | MACAMP_ARCHITECTURE_GUIDE.md | §9 Complete section |
+| **Internet radio N1-N6 fixes** | MACAMP_ARCHITECTURE_GUIDE.md | §9 Internet Radio Integration Fixes (PR #49) |
 | **Keyboard navigation** | MACAMP_ARCHITECTURE_GUIDE.md | §PlaylistMenuDelegate |
 | **Keyboard shortcuts** | MACAMP_ARCHITECTURE_GUIDE.md | §UI Controls & Features |
 | **M3UParser** | MACAMP_ARCHITECTURE_GUIDE.md | §M3U Parsing |
@@ -647,8 +651,12 @@ Includes:
 | **nonisolated(unsafe) deinit** | IMPLEMENTATION_PATTERNS.md | §4 Audio Processing Patterns |
 | **NUMBERS.bmp format** | WINAMP_SKIN_VARIATIONS.md | §Two Number Systems |
 | **NUMS_EX.bmp format** | WINAMP_SKIN_VARIATIONS.md | §Two Number Systems |
+| **onTrackMetadataUpdate callback** | IMPLEMENTATION_PATTERNS.md | §5 Callback Synchronization (PR #49) |
+| **onPlaylistAdvanceRequest callback** | IMPLEMENTATION_PATTERNS.md | §5 Callback Synchronization (PR #49) |
 | **Options menu (O button)** | MACAMP_ARCHITECTURE_GUIDE.md | §UI Controls & Features |
 | **PlaybackCoordinator** | MACAMP_ARCHITECTURE_GUIDE.md | §4.3 Orchestration |
+| **PlaybackCoordinator computed play state** | MACAMP_ARCHITECTURE_GUIDE.md | §4.3 Orchestration (PR #49) |
+| **PlaybackCoordinator callback split** | MACAMP_ARCHITECTURE_GUIDE.md, IMPLEMENTATION_PATTERNS.md | §4.3, §5 Callback Synchronization (PR #49) |
 | **PlaylistController** | MACAMP_ARCHITECTURE_GUIDE.md, IMPLEMENTATION_PATTERNS.md | §4a, §4 Audio Processing Patterns |
 | **Semantic sprites** | SPRITE_SYSTEM_COMPLETE.md | §3 Semantic Enum |
 | **Signing workflow** | CODE_SIGNING_FIX_DIAGRAM.md | Full diagram |
@@ -745,6 +753,9 @@ Includes:
 | "What's Debug vs Release difference?" | RELEASE_BUILD_COMPARISON.md |
 | "How do I fix code signing errors?" | CODE_SIGNING_FIX.md + diagram |
 | "What patterns should I follow?" | IMPLEMENTATION_PATTERNS.md |
+| "How does PlaybackCoordinator track play state?" | MACAMP_ARCHITECTURE_GUIDE.md §4.3 (computed from active backend, PR #49) |
+| "What replaced externalPlaybackHandler?" | IMPLEMENTATION_PATTERNS.md §5 Callback Synchronization (split into onTrackMetadataUpdate + onPlaylistAdvanceRequest) |
+| "How does playlist navigation work during streams?" | MACAMP_ARCHITECTURE_GUIDE.md §4.3, §9 (context-aware nextTrack(from:)/previousTrack(from:)) |
 | "How accurate is the documentation?" | All corrections applied (post-Nov 1 review) |
 | "What's the app architecture?" | MACAMP_ARCHITECTURE_GUIDE.md §3 |
 | "How do I test my changes?" | README.md Test Plan Quick Reference + IMPLEMENTATION_PATTERNS.md §7 |
@@ -1014,11 +1025,16 @@ For questions or corrections, the documentation was comprehensively reviewed on 
 
 ---
 
-**MacAmp Documentation v3.4.0 | Last Updated: 2026-02-09 | Status: Production Authoritative**
+**MacAmp Documentation v3.5.0 | Last Updated: 2026-02-21 | Status: Production Authoritative**
 
-*Master index for 19,428 lines of verified technical documentation (20 active docs)*
+*Master index for 19,428+ lines of verified technical documentation (20 active docs)*
 
-**Recent Update (v3.4.0 - 2026-02-09):**
+**Recent Update (v3.5.0 - 2026-02-21):**
+- MACAMP_ARCHITECTURE_GUIDE.md v2.5.0: Updated §4.3 PlaybackCoordinator (computed play state, split callbacks, context-aware navigation), added §9 Internet Radio N1-N6 fixes (PR #49)
+- IMPLEMENTATION_PATTERNS.md v1.5.0: Updated §5 Callback Synchronization (AudioPlayer callback split), updated §2 computed properties note, added §9 anti-pattern for cross-file SwiftUI extensions
+- README.md: Added search index entries for computed play state, context-aware navigation, callback split, N1-N6 fixes
+
+**Previous Update (v3.4.0 - 2026-02-09):**
 - MULTI_WINDOW_ARCHITECTURE.md: +323 lines (§10 WindowCoordinator Refactoring)
 - WindowCoordinator god object refactored: 1,357 → 223 lines (-84%)
 - 11 focused files created using Facade + Composition pattern

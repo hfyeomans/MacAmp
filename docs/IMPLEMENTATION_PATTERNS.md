@@ -1,7 +1,7 @@
 # MacAmp Implementation Patterns
 
-**Version:** 1.4.0
-**Date:** 2026-02-14
+**Version:** 1.5.0
+**Date:** 2026-02-21
 **Purpose:** Practical code patterns and best practices for MacAmp development
 
 ---
@@ -94,6 +94,8 @@ final class PlayerState {
 
 **Real usage**: `AudioPlayer.swift`, `StreamPlayer.swift`, `PlaybackCoordinator.swift`
 
+**Note**: PlaybackCoordinator uses this pattern but its `isPlaying`/`isPaused` are computed properties deriving from the active backend (see "Computed Properties with Dependency Tracking" pattern below), not stored booleans. AudioPlayer and StreamPlayer use stored vars as shown above.
+
 **Pitfalls**:
 - Don't forget `@MainActor` for UI state
 - Use `private(set)` for read-only properties
@@ -178,7 +180,7 @@ final class PlaylistManager {
 }
 ```
 
-**Real usage**: `PlaybackCoordinator.swift` for `displayTitle`, `canUseEQ`
+**Real usage**: `PlaybackCoordinator.swift` for `displayTitle`, `isPlaying`, `isPaused` (computed from active audio source since PR #49)
 
 ### Pattern: Computed Forwarding for API Compatibility
 
@@ -2084,13 +2086,44 @@ init() {
 3. **Flexibility**: Multiple listeners possible (though currently 1:1)
 4. **Clear data flow**: Explicit about what data crosses component boundaries
 
-**Real usage**: `VideoPlaybackController.swift` for `onPlaybackEnded`, `onTimeUpdate` callbacks
+**Real usage**:
+- `VideoPlaybackController.swift` for `onPlaybackEnded`, `onTimeUpdate` callbacks
+- `AudioPlayer.swift` for `onTrackMetadataUpdate`, `onPlaylistAdvanceRequest` callbacks (PR #49)
+
+**AudioPlayer callback split (PR #49)**: The former single `externalPlaybackHandler` on AudioPlayer was split into two purpose-specific callbacks:
+```swift
+// File: MacAmpApp/Audio/AudioPlayer.swift
+// Two distinct callbacks replace the ambiguous single handler
+
+/// Called when a placeholder track is replaced with loaded metadata (title/artist arrived)
+var onTrackMetadataUpdate: ((Track) -> Void)?
+
+/// Called when end-of-track auto-advance produces a track for the coordinator to play
+var onPlaylistAdvanceRequest: ((Track) -> Void)?
+```
+
+These are wired in `PlaybackCoordinator.init(audioPlayer:streamPlayer:)`:
+```swift
+// File: MacAmpApp/Audio/PlaybackCoordinator.swift:78-88
+self.audioPlayer.onTrackMetadataUpdate = { [weak self] track in
+    guard let self else { return }
+    self.updateTrackMetadata(track)
+}
+
+self.audioPlayer.onPlaylistAdvanceRequest = { [weak self] track in
+    guard let self else { return }
+    Task { @MainActor in
+        await self.handleExternalPlaylistAdvance(track: track)
+    }
+}
+```
 
 **Pitfalls**:
 - Always use `[weak self]` in callbacks to prevent retain cycles
 - Mark closures `@Sendable` if they cross actor boundaries
 - Don't pass non-Sendable types through callbacks in Swift 6
 - Consider using `AsyncStream` for high-frequency events
+- **Don't conflate unrelated events in a single callback** -- the `externalPlaybackHandler` anti-pattern made it ambiguous whether the coordinator should refresh metadata or advance the playlist
 
 ---
 
@@ -2613,6 +2646,40 @@ struct HeaderSection: View { ... }
 struct ContentSection: View { ... }
 struct FooterSection: View { ... }
 ```
+
+### Anti-Pattern: Cross-File SwiftUI Extensions as View Decomposition (Tactical Debt)
+
+**Context**: PR #49 split `WinampMainWindow.swift` and `WinampPlaylistWindow.swift` into main file + extension files (e.g., `WinampMainWindow+Helpers.swift`, `WinampPlaylistWindow+Menus.swift`, `PlaylistWindowActions.swift`) to reduce per-file complexity.
+
+**Why this is tactical debt, not a pattern to follow**:
+```swift
+// ❌ TACTICAL DEBT: Extensions in separate files move code but don't reduce coupling
+// File: WinampMainWindow+Helpers.swift
+extension WinampMainWindow {
+    // These methods still have full access to all properties of WinampMainWindow
+    // No isolation boundary, no reduced coupling, just fewer lines per file
+    func helperMethod() { ... }
+}
+```
+
+**The correct approach (future work)**:
+```swift
+// ✅ CORRECT: Extract into independent focused views with explicit data dependencies
+struct PlaybackControlsView: View {
+    let isPlaying: Bool
+    let onTogglePlayPause: () -> Void
+
+    var body: some View {
+        // Self-contained view with clear inputs
+    }
+}
+```
+
+**Key distinction**: Cross-file extensions reduce file size but do not reduce complexity or coupling. Proper decomposition extracts independent SwiftUI views with explicit data dependencies. The extension split in PR #49 is documented as tactical debt with specific follow-up tasks:
+- `tasks/mainwindow-layer-decomposition/` — WinampMainWindow child views + @Observable state
+- `tasks/playlistwindow-layer-decomposition/` — WinampPlaylistWindow child views + @Observable state
+
+See Lesson #25 in BUILDING_RETRO_MACOS_APPS_SKILL.md for the complete architecture pattern.
 
 ---
 
