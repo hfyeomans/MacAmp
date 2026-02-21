@@ -75,7 +75,12 @@ final class PlaybackCoordinator {
         self.audioPlayer = audioPlayer
         self.streamPlayer = streamPlayer
 
-        self.audioPlayer.externalPlaybackHandler = { [weak self] track in
+        self.audioPlayer.onTrackMetadataUpdate = { [weak self] track in
+            guard let self else { return }
+            self.updateTrackMetadata(track)
+        }
+
+        self.audioPlayer.onPlaylistAdvanceRequest = { [weak self] track in
             guard let self else { return }
             Task { @MainActor in
                 await self.handleExternalPlaylistAdvance(track: track)

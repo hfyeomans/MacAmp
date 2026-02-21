@@ -96,7 +96,10 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     // Computed forwarding for backwards compatibility
     var playlist: [Track] { playlistController.playlist }
     var currentTrack: Track? // Currently playing track (owned by AudioPlayer for playback state)
-    var externalPlaybackHandler: ((Track) -> Void)?
+    /// Called when a placeholder track is replaced with loaded metadata (title/artist arrived)
+    var onTrackMetadataUpdate: ((Track) -> Void)?
+    /// Called when end-of-track auto-advance produces a track for the coordinator to play
+    var onPlaylistAdvanceRequest: ((Track) -> Void)?
     var shuffleEnabled: Bool {
         get { playlistController.shuffleEnabled }
         set { playlistController.shuffleEnabled = newValue }
@@ -267,7 +270,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
                     self.currentTrackURL = track.url
 
                     // Notify coordinator that metadata updated
-                    self.externalPlaybackHandler?(track)
+                    self.onTrackMetadataUpdate?(track)
                 }
             } else if !self.playlistController.containsTrack(url: normalizedURL) {
                 self.playlistController.addTrack(track)
@@ -989,7 +992,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
             let action = self.nextTrack()
             switch action {
             case .requestCoordinatorPlayback(let track), .playLocally(let track):
-                self.externalPlaybackHandler?(track)
+                self.onPlaylistAdvanceRequest?(track)
             default:
                 break
             }
