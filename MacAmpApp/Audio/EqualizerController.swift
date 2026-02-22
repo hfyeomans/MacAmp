@@ -26,8 +26,8 @@ final class EqualizerController {
     }
     var eqBands: [Float] = Array(repeating: 0.0, count: 10) { // 10 bands, -12.0 to 12.0 dB
         didSet {
-            for (i, gain) in eqBands.enumerated() where i < eqNode.bands.count {
-                eqNode.bands[i].gain = gain
+            for i in 0..<eqNode.bands.count {
+                eqNode.bands[i].gain = i < eqBands.count ? eqBands[i] : 0.0
             }
         }
     }

@@ -22,7 +22,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
 
     // MARK: - Extracted Controllers
     private let equalizer = EqualizerController()
-    let visualizerPipeline = VisualizerPipeline()
+    private let visualizerPipeline = VisualizerPipeline()
 
     /// Legacy toggle - derives from AppSettings.visualizerMode (forwarded to pipeline)
     var useSpectrumVisualizer: Bool {
@@ -173,11 +173,21 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     }
 
     deinit {
-        // Ensure visualizer tap and poll timer are stopped
-        visualizerPipeline.removeTap()
-
         // Invalidate progress timer if running
         progressTimer?.invalidate()
+
+        // removeTap() asserts main queue (poll timer must invalidate on main).
+        // deinit is nonisolated, so dispatch synchronously if already on main,
+        // otherwise async (best-effort cleanup — tap will also be removed when
+        // the mixer node is deallocated).
+        let pipeline = visualizerPipeline
+        if Thread.isMainThread {
+            pipeline.removeTap()
+        } else {
+            DispatchQueue.main.async {
+                pipeline.removeTap()
+            }
+        }
 
         // Video controller has its own deinit that calls cleanup()
     }
