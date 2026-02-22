@@ -54,12 +54,19 @@ Oracle architectural audit (gpt-5.3-codex, xhigh, 2026-02-21) of commit 5f2cef2 
 - Zero playlist-related warnings
 - All @State/@Environment properties private
 - No widened access modifiers (only `body` is non-private)
+- Oracle review (gpt-5.3-codex, xhigh): 3 low-severity findings, all fixed
+  - Removed unused PlaybackCoordinator environment from root
+  - Tightened interaction state access control (private(set))
+  - Added [weak self] capture in keyboard monitor closure
+- Oracle completeness check: no dropped behavior
 
 ## Commits
 
 1. `47b5d76` - Phase 1: Add PlaylistWindowInteractionState and PlaylistMenuPresenter
 2. `f955a99` - Phase 2: Extract 5 child view structs
 3. `cf53dfd` - Phase 3: Wire child views, delete extension, update Xcode project
+4. `0ad1c9d` - docs: Update task files to reflect completed decomposition
+5. `47de639` - refactor: Address Oracle review findings
 
 ## Blockers
 

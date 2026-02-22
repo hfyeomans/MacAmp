@@ -71,6 +71,15 @@
 
 ---
 
+## Oracle Review (gpt-5.3-codex, xhigh)
+
+- [x] **O.1** Remove unused `@Environment(PlaybackCoordinator.self)` from root view
+- [x] **O.2** Tighten `PlaylistWindowInteractionState` — `private(set)` on `resizePreview`, `keyboardMonitor`
+- [x] **O.3** Add intent methods `installKeyboardMonitor`/`removeKeyboardMonitor` with `[weak self]` capture
+- [x] **O.4** Completeness check: no dropped behavior confirmed by Oracle
+
+---
+
 ## Post-Implementation
 
 - [ ] Update `docs/IMPLEMENTATION_PATTERNS.md` — document anti-pattern (cross-file SwiftUI extension splits)
