@@ -9,8 +9,21 @@ final class PlaylistWindowInteractionState {
     var scrollOffset: Int = 0
     var dragStartSize: Size2D?
     var isDragging: Bool = false
-    var resizePreview = WindowResizePreviewOverlay()
-    var keyboardMonitor: Any?
+    private(set) var resizePreview = WindowResizePreviewOverlay()
+    private(set) var keyboardMonitor: Any?
+
+    func installKeyboardMonitor(playlistCount: @escaping () -> Int) {
+        keyboardMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            return self?.handleKeyPress(event: event, playlistCount: playlistCount()) ?? event
+        }
+    }
+
+    func removeKeyboardMonitor() {
+        if let monitor = keyboardMonitor {
+            NSEvent.removeMonitor(monitor)
+            keyboardMonitor = nil
+        }
+    }
 
     func handleTrackTap(index: Int) {
         let modifiers = NSEvent.modifierFlags

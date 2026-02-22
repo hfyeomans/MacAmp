@@ -6,7 +6,6 @@ struct WinampPlaylistWindow: View {
     @Environment(AudioPlayer.self) private var audioPlayer
     @Environment(AppSettings.self) private var settings
     @Environment(RadioStationLibrary.self) private var radioLibrary
-    @Environment(PlaybackCoordinator.self) private var playbackCoordinator
     @Environment(WindowFocusState.self) private var windowFocusState
 
     @State private var ui = PlaylistWindowInteractionState()
@@ -66,9 +65,7 @@ struct WinampPlaylistWindow: View {
         .frame(width: windowWidth, height: ui.isShadeMode ? 14 : windowHeight)
         .background(Color.black)
         .onAppear {
-            ui.keyboardMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-                return ui.handleKeyPress(event: event, playlistCount: audioPlayer.playlist.count)
-            }
+            ui.installKeyboardMonitor { [audioPlayer] in audioPlayer.playlist.count }
             PlaylistWindowActions.shared.radioLibrary = radioLibrary
             WindowCoordinator.shared?.updatePlaylistWindowSize(to: sizeState.pixelSize)
         }
@@ -77,10 +74,7 @@ struct WinampPlaylistWindow: View {
             WindowCoordinator.shared?.updatePlaylistWindowSize(to: pixelSize)
         }
         .onDisappear {
-            if let monitor = ui.keyboardMonitor {
-                NSEvent.removeMonitor(monitor)
-                ui.keyboardMonitor = nil
-            }
+            ui.removeKeyboardMonitor()
         }
     }
 
