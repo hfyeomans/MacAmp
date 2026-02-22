@@ -5,24 +5,6 @@ import AVFoundation
 import Accelerate
 import Observation
 
-// Helper to convert FourCC codes to strings
-extension String {
-    init(fourCC: FourCharCode) {
-        let bytes = [
-            UInt8((fourCC >> 24) & 0xFF),
-            UInt8((fourCC >> 16) & 0xFF),
-            UInt8((fourCC >> 8) & 0xFF),
-            UInt8(fourCC & 0xFF)
-        ]
-        self = String(bytes: bytes, encoding: .ascii) ?? "????"
-    }
-}
-
-// VisualizerScratchBuffers, VisualizerSharedBuffer, and ButterchurnFrame
-// have been extracted to VisualizerPipeline.swift
-
-// Track, PlaybackStopReason, and PlaybackState have been extracted to Models/Track.swift
-
 @Observable
 @MainActor
 final class AudioPlayer { // swiftlint:disable:this type_body_length
