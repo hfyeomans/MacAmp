@@ -97,6 +97,7 @@ struct MainWindowShadeLayer: View {
                 SimpleSpriteImage(.digit(digits[3]), width: 9, height: 13).offset(x: 46, y: 0)
             }
         }
+        .at(Layout.timeDisplay)
         .scaleEffect(0.7)
         .at(CGPoint(x: 150, y: 7))
         .contentShape(Rectangle())
