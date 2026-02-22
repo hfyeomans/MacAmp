@@ -24,11 +24,29 @@
 | `isWindowActive` | `var` (internal computed) | `private var` in root |
 | `playlistStyle` | `var` (internal computed) | `private var` in root |
 
-### 3. Manual Selection State Sync — MITIGATED
+---
 
-- **Pattern:** `PlaylistWindowActions.shared.selectedIndices = selectedIndices` (manual sync before menu display)
-- **Why deprecated:** Duplicated mutable state between view and singleton, synced imperatively
-- **Current state:** Sync still happens in `PlaylistMenuPresenter.showRemMenu()` since `PlaylistWindowActions` is an `NSObject` singleton used by AppKit menu targets. Full fix deferred to separate task.
+## Remaining Debt (Deferred — Out of Scope)
+
+### 3. PlaylistWindowActions Singleton Pattern
+
+- **Pattern:** `PlaylistWindowActions.shared` singleton used as `target:` for `NSMenuItem` actions throughout `PlaylistMenuPresenter`
+- **Why debt:** Singleton with mutable `selectedIndices` creates duplicated state. The `@objc` action methods require `NSObject` target/action pattern, which is inherently imperative and doesn't compose with SwiftUI's declarative state.
+- **Current state:** 15 references to `.shared` across `PlaylistMenuPresenter` + 1 in `PlaylistBottomControlsView`
+- **Scope:** Fixing this requires rearchitecting the AppKit menu bridge (NSMenuItem target/action → SwiftUI action closures). Separate task.
+- **Files affected:**
+  - `PlaylistMenuPresenter.swift` — 14 `.shared` references as menu item targets
+  - `PlaylistBottomControlsView.swift:93` — `PlaylistWindowActions.shared.presentAddFilesPanel()`
+  - `PlaylistWindowActions.swift` — singleton definition + `selectedIndices` mutable state
+
+### 4. Manual Selection State Sync
+
+- **Pattern:** `PlaylistWindowActions.shared.selectedIndices = selectedIndices` in `PlaylistMenuPresenter.showRemMenu()` (line 64)
+- **Why debt:** Duplicated mutable state between `PlaylistWindowInteractionState.selectedIndices` and `PlaylistWindowActions.shared.selectedIndices`, synced imperatively before menu display
+- **Current state:** Mitigated (sync now happens in one place instead of scattered), but not eliminated
+- **Scope:** Blocked by singleton pattern (#3 above). When the singleton is replaced, this sync disappears.
+
+---
 
 ## Migration Map (COMPLETED)
 
