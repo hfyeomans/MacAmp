@@ -5,8 +5,9 @@
 
 ## Current Status
 
-**Phase:** Pre-implementation (Research + Planning complete)
-**Last Updated:** 2026-02-21
+**Phase:** Phase 1 — Scaffolding (IN PROGRESS)
+**Branch:** `refactor/mainwindow-decomposition`
+**Last Updated:** 2026-02-22
 
 ## Decisions Made
 
@@ -67,7 +68,7 @@ None currently.
 ## Dependencies
 
 - No external dependencies
-- No other in-flight tasks touching WinampMainWindow files
+- T5 Phase 1 (volume control) MERGED — no conflicts expected
 - Xcode project file will need directory reference update
 
 ## Risk Register
@@ -86,7 +87,7 @@ None currently.
 |----------|--------|
 | research.md | Complete |
 | plan.md | Complete |
-| todo.md | Complete |
+| todo.md | Active (tracking progress) |
 | state.md | Active (this file) |
 | depreciated.md | Complete |
-| placeholder.md | Complete (template ready) |
+| placeholder.md | Active (tracking scaffolding) |
