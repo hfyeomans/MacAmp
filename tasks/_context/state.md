@@ -2,7 +2,7 @@
 
 > **Purpose:** Single source of truth for cross-task execution status, wave progress, and coordination decisions.
 > **Date:** 2026-02-21
-> **Updated:** 2026-02-22 (Wave 1 complete, code reviews done, fixes applied)
+> **Updated:** 2026-02-22 (T5 Ph1 merged PR #53, Wave 2a complete)
 
 ### Quick Reference
 
@@ -13,14 +13,14 @@
 | Blocking actions | None — all resolved |
 | Waves | 3 |
 | Branches | 6 |
-| PRs | 5 (Wave 1: 3, Wave 2: 2; Wave 3 PR count TBD) |
-| Current wave | Wave 2a IN PROGRESS (T5 Phase 1 complete, T3 next) |
+| PRs | 5 (Wave 1: 3 merged, Wave 2a: PR #53 merged, Wave 2b+3 TBD) |
+| Current wave | Wave 2b NEXT (T5 Ph1 merged, T3 mainwindow decomp next) |
 
 ---
 
-## Current Phase: WAVE 2a — T5 Phase 1 COMPLETE
+## Current Phase: WAVE 2b — T3 MainWindow Decomposition NEXT
 
-T5 Phase 1 (stream volume routing + capability flags) implemented and Oracle-reviewed. Awaiting PR merge before T3 (mainwindow decomposition) can begin.
+T5 Phase 1 (stream volume routing + capability flags) merged in PR #53 (2026-02-22). T3 (mainwindow decomposition) is now unblocked and is the next task to begin.
 
 ---
 
@@ -30,6 +30,7 @@ T5 Phase 1 (stream volume routing + capability flags) implemented and Oracle-rev
 |-------------|-------------|--------|
 | N1-N6 internet radio fixes | PR #49 (merged 2026-02-21) | Unblocks T5 Phase 1 |
 | VisualizerPipeline SPSC refactor | PR #48 (merged 2026-02-14) | Provides template for T4 ring buffer; unblocks T5 Phase 2 |
+| T5 Phase 1 (stream volume routing) | PR #53 (merged 2026-02-22) | Unblocks T3 mainwindow decomposition |
 
 ---
 
@@ -39,9 +40,9 @@ T5 Phase 1 (stream volume routing + capability flags) implemented and Oracle-rev
 |----|------|----------------|-------------------|---------|
 | T1 | `audioplayer-decomposition` | **Ph1-3 COMPLETE**, Ph4 deferred | Wave 1 — done, awaiting PR | swiftlint suppressions remain (945 lines, needs Ph4) |
 | T2 | `playlistwindow-layer-decomposition` | **COMPLETE** | Wave 1 — done, awaiting PR | Manual testing items deferred |
-| T3 | `mainwindow-layer-decomposition` | Plan complete | Wave 2b — blocked on T5 Ph1 | T5 Phase 1 must merge first |
+| T3 | `mainwindow-layer-decomposition` | Plan complete | Wave 2b — UNBLOCKED, ready to start | None |
 | T4 | `lock-free-ring-buffer` | **COMPLETE** (benchmarks deferred) | Wave 1 — done, awaiting PR | None |
-| T5 | `internet-streaming-volume-control` | **Ph1 COMPLETE**, Ph2 deferred | Wave 2a — done, awaiting PR | Ph2: needs T5 Ph1 merge (Wave 3) |
+| T5 | `internet-streaming-volume-control` | **Ph1 COMPLETE (merged PR #53)** | Wave 2a — MERGED | Ph2: Wave 3 (needs T4 merge) |
 | T6 | `swift-testing-modernization` | **COMPLETE** (deferrals noted) | Wave 1 — done, awaiting PR | None |
 
 ---
@@ -62,7 +63,7 @@ T5 Phase 1 (stream volume routing + capability flags) implemented and Oracle-rev
 
 | Step | Task | Branch | Status | Depends On |
 |------|------|--------|--------|-----------|
-| 2a | T5 Phase 1 (Volume routing) | `feature/stream-volume-control` | **COMPLETE** (2 commits, Oracle reviewed) | Wave 1 merges (done) |
+| 2a | T5 Phase 1 (Volume routing) | `feature/stream-volume-control` | **MERGED** (PR #53, 2026-02-22) | Wave 1 merges (done) |
 | 2b | T3 (MainWindow decomp) | `refactor/mainwindow-decomposition` | Not started | T5 Phase 1 merge |
 
 **Merge strategy:** Two separate PRs. T5 Ph1 merges first; T3 merges after verification.
@@ -152,7 +153,7 @@ T5 Phase 1 (stream volume routing + capability flags) implemented and Oracle-rev
 | `docs/IMPLEMENTATION_PATTERNS.md` | Document cross-file SwiftUI extension anti-pattern + correct child-view pattern |
 | `docs/PLAYLIST_WINDOW.md` | Update for new PlaylistWindow/ subdirectory |
 | `docs/README.md` | Update test framework (XCTest → Swift Testing, swift-tools-version 6.2) |
-| `tasks/_context/tasks_index.md` | Mark T1 Ph1-3, T2, T4, T6 as complete |
+| `tasks/_context/tasks_index.md` | Mark T1 Ph1-3, T2, T4, T6, T5 Ph1 as complete |
 
 ---
 

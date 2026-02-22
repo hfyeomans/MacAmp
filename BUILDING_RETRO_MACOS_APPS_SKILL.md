@@ -4748,6 +4748,7 @@ ls -la ~/Library/Developer/Xcode/DerivedData/MacAmpApp-*/Build/Products/Debug/Ma
 23. **SPSC Audio Thread Safety** - Zero allocations on audio thread; use os_unfair_lock_trylock() with pre-allocated shared buffers
 24. **Memory Profiling with LLDB** - Use `footprint`, `leaks`, `heap` CLI tools; subtract sanitizer overhead for actual metrics
 25. **SwiftUI View Decomposition** - Use child view structs + @Observable state, not cross-file extensions that force access widening
+26. **Coordinator Volume Routing** - Fan-out volume to all backends unconditionally; use capability flags with error recovery for UI dimming
 
 ### This Skill Enables You To
 
@@ -4778,6 +4779,9 @@ ls -la ~/Library/Developer/Xcode/DerivedData/MacAmpApp-*/Build/Products/Debug/Ma
 - ✅ Profile and fix memory leaks with LLDB heap/leaks/footprint tools
 - ✅ Optimize peak memory with lazy extraction and independent CGContext copies
 - ✅ Decompose large SwiftUI views into layer subviews with @Observable state (not cross-file extensions)
+- ✅ Route volume through coordinator fan-out for multi-backend audio (local + streaming + video)
+- ✅ Implement capability flags with error recovery to dim/enable UI controls based on active backend
+- ✅ Build asymmetric SwiftUI Bindings when source of truth differs from write path
 
 ### Next Project Improvements
 
@@ -4796,9 +4800,15 @@ When building your next retro macOS app:
 **Document Status:** Production Ready
 **Maintenance:** Update when new patterns/pitfalls discovered
 **Owner:** MacAmp Development Team
-**Last Updated:** 2026-02-21
+**Last Updated:** 2026-02-22
 
 **Recent Additions:**
+- **Coordinator Volume Routing + Capability Flags** (Feb 22, 2026) - Multi-backend volume fan-out and UI capability dimming (Lesson #26)
+  - PlaybackCoordinator.setVolume() propagates unconditionally to all backends (audioPlayer, streamPlayer, videoPlaybackController)
+  - Capability flags (supportsEQ/supportsBalance/supportsVisualizer) with error recovery -- failed streams re-enable controls
+  - Asymmetric SwiftUI Binding: reads from AudioPlayer (persisted source of truth), writes through coordinator (fan-out)
+  - Init-time sync + belt-and-suspenders sync in play(station:) prevents first-use volume mismatch
+  - Oracle grade: gpt-5.3-codex, xhigh -- 1 finding fixed (stream error capability flag recovery)
 - **SwiftUI View Decomposition** (Feb 21, 2026) - Layer subviews vs cross-file extension anti-pattern (Lesson #25)
   - Cross-file extensions widen @State visibility without creating recomposition boundaries
   - Correct pattern: @Observable interaction state + child view structs with dependency injection
@@ -6234,8 +6244,107 @@ Both share the same principle: extract with explicit dependency injection, not s
 6. **Extension split is acceptable ONLY as a tracked temporary fix** with a follow-up task in placeholder.md
 7. **Root view should be ~120 lines** -- if it is longer, there are more layers to extract
 
+### 26. Coordinator Volume Routing + Capability Flags (February 2026)
+
+**Lesson from:** Internet streaming volume control task (`tasks/internet-streaming-volume-control/`)
+**Oracle Grade:** gpt-5.3-codex, xhigh -- 1 finding fixed (stream error capability flag recovery)
+
+#### Pattern 1: Coordinator Fan-Out for Multi-Backend Volume
+
+PlaybackCoordinator serves as the single entry point for volume changes across all audio backends:
+
+```swift
+@MainActor
+@Observable
+final class PlaybackCoordinator {
+    func setVolume(_ value: Float) {
+        audioPlayer.volume = value           // Local file playback
+        streamPlayer.volume = value          // Internet radio
+        videoPlaybackController.volume = value // Video playback
+    }
+}
+```
+
+**Key design decisions:**
+- **Unconditional fan-out** -- propagates to ALL backends regardless of which is active. Simpler than checking active backend, zero cost on idle players (setting a Float property on a paused/stopped player is essentially free)
+- **AudioPlayer.volume didSet** only updates `playerNode.volume` + persists to `UserDefaults` -- it does NOT propagate to other backends. This prevents circular updates
+- **All external volume changes MUST go through coordinator** -- direct `audioPlayer.volume = x` from UI code bypasses stream/video backends
+
+#### Pattern 2: Capability Flags with Error Recovery
+
+PlaybackCoordinator exposes computed properties that reflect which features are available based on the active backend:
+
+```swift
+var supportsEQ: Bool {
+    !isStreamBackendActive || streamPlayer.error != nil
+}
+var supportsBalance: Bool {
+    !isStreamBackendActive || streamPlayer.error != nil
+}
+var supportsVisualizer: Bool {
+    !isStreamBackendActive || streamPlayer.error != nil
+}
+
+private var isStreamBackendActive: Bool {
+    streamPlayer.isPlaying || streamPlayer.isBuffering
+}
+```
+
+**Critical detail:** The `|| streamPlayer.error != nil` clause handles error recovery. When a stream fails (network error, invalid URL), the error state re-enables EQ/balance/visualizer controls so the user is not stuck with permanently dimmed UI. Without this check, a failed stream would leave controls disabled until the user explicitly switches away from streaming.
+
+**UI integration:**
+```swift
+// In EQ/balance views
+.opacity(playbackCoordinator.supportsEQ ? 1.0 : 0.5)
+.allowsHitTesting(playbackCoordinator.supportsEQ)
+```
+
+#### Pattern 3: Asymmetric SwiftUI Binding
+
+Volume UI controls use an asymmetric `Binding` -- reads from one source, writes through another:
+
+```swift
+Binding<Float>(
+    get: { audioPlayer.volume },              // Source of truth (persisted in UserDefaults)
+    set: { playbackCoordinator.setVolume($0) } // Fan-out to all backends
+)
+```
+
+**Why asymmetric:**
+- **Read path:** `audioPlayer.volume` is the persisted source of truth (loaded from UserDefaults on init). Reading from coordinator would add an unnecessary indirection layer
+- **Write path:** `playbackCoordinator.setVolume()` ensures all backends receive the update. Writing directly to `audioPlayer.volume` would skip stream/video backends
+- This is NOT a standard `@Bindable` pattern -- the asymmetry is intentional and correct when the source of truth differs from the write path
+
+#### Pattern 4: Init Sync for Persisted Values
+
+Two-layer sync ensures the first stream play uses the user's saved volume, not a default:
+
+```swift
+// Layer 1: PlaybackCoordinator.init
+init(audioPlayer: AudioPlayer, streamPlayer: StreamPlayer, ...) {
+    // Sync persisted volume from AudioPlayer (loaded from UserDefaults)
+    streamPlayer.volume = audioPlayer.volume
+}
+
+// Layer 2: StreamPlayer.play(station:) -- belt-and-suspenders
+func play(station: RadioStation) {
+    player.volume = volume  // Apply current volume before playback starts
+    // ... begin streaming ...
+}
+```
+
+**Why belt-and-suspenders:** Init sync handles the common case. The `play(station:)` sync handles edge cases where `StreamPlayer` might be re-created or the `AVPlayer` instance is replaced. Both are cheap (Float assignment) and prevent the jarring experience of a stream starting at default volume (0.75) instead of the user's saved volume (e.g., 0.3).
+
+#### Key Takeaways
+
+1. **Fan-out unconditionally** -- don't check which backend is active; propagate volume/mute to all backends every time
+2. **Capability flags must handle error states** -- not just active/inactive; a failed stream should re-enable controls
+3. **Asymmetric bindings are correct** when the source of truth (persisted value) differs from the write path (coordinator fan-out)
+4. **Init-time sync prevents first-use mismatch** -- always apply persisted values to all backends during initialization
+5. **Belt-and-suspenders sync** is cheap insurance for stateful backend objects that may be re-created
+
 ---
 
 **Built with ❤️ for retro computing on modern macOS**
 
-*This skill document captures 9+ months of lessons learned building MacAmp, distilled into actionable patterns for building similar retro-styled macOS applications with modern Swift 6 patterns. Updated with SwiftUI view decomposition (Feb 2026), documenting the cross-file extension anti-pattern and correct layer subview architecture with @Observable interaction state. Also includes memory & CPU optimization with SPSC shared buffer for zero-allocation audio thread data transfer, Goertzel precomputation, lazy skin loading, CGImage memory leak fixes, WindowCoordinator Facade + Composition refactoring, god object decomposition, phased migration strategy, Oracle-driven quality gates, and Swift 6.2 concurrency compliance.*
+*This skill document captures 9+ months of lessons learned building MacAmp, distilled into actionable patterns for building similar retro-styled macOS applications with modern Swift 6 patterns. Updated with coordinator volume routing and capability flags (Feb 2026), documenting multi-backend volume fan-out, asymmetric SwiftUI bindings, and error-recovery capability flags for UI dimming. Also includes SwiftUI view decomposition with layer subview architecture, memory & CPU optimization with SPSC shared buffer for zero-allocation audio thread data transfer, Goertzel precomputation, lazy skin loading, CGImage memory leak fixes, WindowCoordinator Facade + Composition refactoring, god object decomposition, phased migration strategy, Oracle-driven quality gates, and Swift 6.2 concurrency compliance.*

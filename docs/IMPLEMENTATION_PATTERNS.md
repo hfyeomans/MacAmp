@@ -1,7 +1,7 @@
 # MacAmp Implementation Patterns
 
-**Version:** 1.5.0
-**Date:** 2026-02-21
+**Version:** 1.6.0
+**Date:** 2026-02-22
 **Purpose:** Practical code patterns and best practices for MacAmp development
 
 ---
@@ -18,6 +18,9 @@
    - [UserDefaults Persistence with Centralized Keys](#pattern-userdefaults-persistence-with-centralized-keys)
    - [Window Focus State Tracking](#pattern-window-focus-state-tracking)
    - [Action-Based Bridge Pattern](#pattern-action-based-bridge-pattern) **(New - Swift 6)**
+   - [Coordinator Volume Routing](#pattern-coordinator-volume-routing) **(New - T5 Phase 1)**
+   - [Asymmetric Binding for Coordinator Routing](#pattern-asymmetric-binding-for-coordinator-routing) **(New - T5 Phase 1)**
+   - [Capability Flag Pattern](#pattern-capability-flag-pattern) **(New - T5 Phase 1)**
 3. [UI Component Patterns](#ui-component-patterns)
    - [Sprite-Based Button Component](#pattern-sprite-based-button-component)
    - [Absolute Positioning Extension](#pattern-absolute-positioning-extension)
@@ -331,9 +334,12 @@ var repeatMode: AppSettings.RepeatMode {
 
 **Implementation**:
 ```swift
-// File: MacAmpApp/Audio/AudioPlayer.swift:29-32, 79-91, 143-148
+// File: MacAmpApp/Audio/AudioPlayer.swift:29-32, 58-73
 // Purpose: Persist volume and balance settings across launches
 // Context: Keys enum centralizes string literals, didSet auto-saves
+// NOTE (T5 Phase 1): didSet only updates local playerNode + persists.
+//   Cross-backend propagation is handled by PlaybackCoordinator.setVolume()/setBalance().
+//   See "Coordinator Volume Routing" pattern below.
 
 @Observable
 @MainActor
@@ -343,10 +349,12 @@ final class AudioPlayer {
         static let balance = "balance"
     }
 
+    /// IMPORTANT: All external volume changes must go through
+    /// PlaybackCoordinator.setVolume() to ensure all backends stay in sync.
+    /// Direct assignment only updates playerNode and persists.
     var volume: Float = 0.75 {  // Default 0.75 when no saved preference
         didSet {
             playerNode.volume = volume
-            videoPlaybackController.volume = volume
             UserDefaults.standard.set(volume, forKey: Keys.volume)
         }
     }
@@ -378,6 +386,7 @@ final class AudioPlayer {
 - Keep the `Keys` enum `private` to prevent external key access
 - The default property value (e.g., 0.75) acts as the first-launch default
 - Place persistence in the mechanism layer (AudioPlayer) not the settings layer (AppSettings) when the value drives hardware state directly
+- **(T5 Phase 1)**: The `didSet` must NOT propagate to other backends (e.g., `videoPlaybackController.volume`). Cross-backend fan-out is the coordinator's job. See "Coordinator Volume Routing" pattern
 
 ### Pattern: Window Focus State Tracking
 
@@ -555,6 +564,182 @@ final class AudioPlayer {
 - Action state may be stale - check preconditions before executing
 - Don't add side effects to the logic component (PlaylistController)
 - The bridge method must handle edge cases (e.g., isPlaying already false)
+
+### Pattern: Coordinator Volume Routing
+
+**When to use**: Routing volume/balance changes through a central coordinator that fans out to ALL playback backends unconditionally
+
+**T5 Phase 1**: Introduced to solve the problem where UI volume/balance sliders only updated AudioPlayer, leaving StreamPlayer and VideoPlaybackController out of sync during internet radio playback.
+
+**Implementation**:
+```swift
+// File: MacAmpApp/Audio/PlaybackCoordinator.swift:122-137
+// Purpose: Single entry point for volume/balance changes from UI
+// Context: Replaces direct AudioPlayer.volume binding from sliders
+
+@Observable
+@MainActor
+final class PlaybackCoordinator {
+    let audioPlayer: AudioPlayer
+    let streamPlayer: StreamPlayer
+
+    // MARK: - Volume & Balance Routing
+
+    /// Propagate volume to ALL backends unconditionally.
+    /// Simpler than checking which is active, zero cost on idle players (no-op).
+    func setVolume(_ vol: Float) {
+        audioPlayer.volume = vol           // Updates playerNode + persists to UserDefaults
+        streamPlayer.volume = vol          // Updates AVPlayer.volume
+        audioPlayer.videoPlaybackController.volume = vol  // Updates video layer volume
+    }
+
+    /// Propagate balance to ALL backends unconditionally.
+    /// StreamPlayer stores balance but cannot apply it (no AVPlayer .pan property).
+    /// Stored value will be used when Phase 2 Loopback Bridge routes streams through AVAudioEngine.
+    func setBalance(_ bal: Float) {
+        audioPlayer.balance = bal          // Updates playerNode.pan + persists
+        streamPlayer.balance = bal         // Stores for Phase 2 (no AVPlayer .pan)
+    }
+}
+```
+
+**Why unconditional fan-out**: Checking which backend is active adds complexity for zero benefit. Setting volume on an idle AVPlayer or playerNode is a no-op that costs nothing. The coordinator always keeps all backends in sync so that switching between local file and internet radio playback has correct volume from the first sample.
+
+**Data flow**:
+```
+UI Slider → PlaybackCoordinator.setVolume() → AudioPlayer.volume (didSet: playerNode + UserDefaults)
+                                             → StreamPlayer.volume (didSet: AVPlayer)
+                                             → VideoPlaybackController.volume (didSet: playerLayer)
+```
+
+**Real usage**: `PlaybackCoordinator.swift` setVolume/setBalance, called from asymmetric bindings in `WinampMainWindow+Helpers.swift`
+
+**Pitfalls**:
+- AudioPlayer.volume `didSet` must NOT propagate to other backends (that is the coordinator's job)
+- Persistence (UserDefaults) stays in AudioPlayer's `didSet` since AudioPlayer owns the canonical volume value
+- During `init()`, AudioPlayer directly sets `videoPlaybackController.volume` before PlaybackCoordinator exists -- this is correct for initialization
+- StreamPlayer.balance is stored but not applied (AVPlayer has no `.pan` property); Phase 2 Loopback Bridge will apply it
+
+### Pattern: Asymmetric Binding for Coordinator Routing
+
+**When to use**: When a SwiftUI slider needs to read from one source of truth (the mechanism layer) but write through a different path (the coordinator)
+
+**T5 Phase 1**: Replaces direct `@Bindable var player = audioPlayer; $player.volume` bindings that bypassed the coordinator.
+
+**Implementation**:
+```swift
+// File: MacAmpApp/Views/WinampMainWindow+Helpers.swift:200-220
+// Purpose: Volume slider reads from AudioPlayer but writes through PlaybackCoordinator
+// Context: Ensures all backends receive volume changes, not just AudioPlayer
+
+@ViewBuilder
+func buildVolumeSlider() -> some View {
+    let volumeBinding = Binding<Float>(
+        get: { audioPlayer.volume },               // Read: source of truth
+        set: { playbackCoordinator.setVolume($0) }  // Write: fan-out to all backends
+    )
+    WinampVolumeSlider(volume: volumeBinding)
+        .at(Coords.volumeSlider)
+}
+
+@ViewBuilder
+func buildBalanceSlider() -> some View {
+    let balanceBinding = Binding<Float>(
+        get: { audioPlayer.balance },                // Read: source of truth
+        set: { playbackCoordinator.setBalance($0) }  // Write: fan-out to all backends
+    )
+    WinampBalanceSlider(balance: balanceBinding)
+        .at(Coords.balanceSlider)
+        .opacity(playbackCoordinator.supportsBalance ? 1.0 : 0.5)
+        .allowsHitTesting(playbackCoordinator.supportsBalance)
+        .help(playbackCoordinator.supportsBalance
+              ? "Balance"
+              : "Balance unavailable during streaming")
+}
+```
+
+**Why asymmetric**: The `get` path reads from `audioPlayer.volume` because AudioPlayer is the single source of truth for volume state (it persists to UserDefaults, drives playerNode). The `set` path goes through `playbackCoordinator.setVolume()` which fans out to AudioPlayer + StreamPlayer + VideoPlaybackController. A symmetric `@Bindable` binding would only update AudioPlayer, leaving other backends unsynchronized.
+
+**Replaced pattern** (deprecated T5 Phase 1):
+```swift
+// DEPRECATED: Direct binding bypasses coordinator fan-out
+@Bindable var player = audioPlayer
+WinampVolumeSlider(volume: $player.volume)  // Only updates AudioPlayer!
+```
+
+**Real usage**: `WinampMainWindow+Helpers.swift` buildVolumeSlider(), buildBalanceSlider()
+
+**Pitfalls**:
+- The `get` closure accesses `audioPlayer.volume` directly -- this is fine because `@Observable` tracks the access for SwiftUI view updates
+- Do not use `@Bindable` for properties that need coordinator routing
+- The binding captures `audioPlayer` and `playbackCoordinator` from the view's environment -- ensure both are injected
+- Balance slider also applies capability-flag-based dimming (see "Capability Flag Pattern" below)
+
+### Pattern: Capability Flag Pattern
+
+**When to use**: Exposing computed boolean flags from the coordinator to indicate which audio features are available for the current playback mode, and using them to dim/disable UI controls
+
+**T5 Phase 1**: Introduced because AVPlayer (used for internet radio streams) does not support EQ (no audio processing graph), balance/pan (no `.pan` property), or visualizer tap (no AVAudioEngine mixer to tap).
+
+**Implementation**:
+```swift
+// File: MacAmpApp/Audio/PlaybackCoordinator.swift:76-97
+// Purpose: Expose per-feature availability based on active backend
+// Context: UI dims controls that cannot function during stream playback
+
+@Observable
+@MainActor
+final class PlaybackCoordinator {
+    /// True when streams are active AND not in an error state.
+    /// Error state returns false (controls re-enabled) so user isn't stuck with dimmed UI.
+    private var isStreamBackendActive: Bool {
+        guard case .radioStation = currentSource else { return false }
+        return streamPlayer.error == nil  // Error → inactive → re-enable controls
+    }
+
+    /// EQ is only available for local file playback (AVAudioEngine).
+    var supportsEQ: Bool { !isStreamBackendActive }
+
+    /// Balance/pan requires AVAudioPlayerNode.pan (AVPlayer has no .pan property).
+    var supportsBalance: Bool { !isStreamBackendActive }
+
+    /// Visualizer requires an audio tap on AVAudioEngine's mixer node.
+    /// Phase 2 Loopback Bridge will route stream audio through AVAudioEngine,
+    /// enabling EQ, balance, and visualizer for streams.
+    var supportsVisualizer: Bool { !isStreamBackendActive }
+}
+```
+
+**UI consumption pattern** (dim + disable):
+```swift
+// File: MacAmpApp/Views/WinampMainWindow+Helpers.swift:217-219
+// File: MacAmpApp/Views/WinampEqualizerWindow.swift:105-106
+// Pattern: opacity(0.5) + allowsHitTesting(false) for unsupported features
+
+// Balance slider
+WinampBalanceSlider(balance: balanceBinding)
+    .opacity(playbackCoordinator.supportsBalance ? 1.0 : 0.5)
+    .allowsHitTesting(playbackCoordinator.supportsBalance)
+    .help(playbackCoordinator.supportsBalance
+          ? "Balance"
+          : "Balance unavailable during streaming")
+
+// EQ window content
+buildEQSliders()
+    .opacity(playbackCoordinator.supportsEQ ? 1.0 : 0.5)
+    .allowsHitTesting(playbackCoordinator.supportsEQ)
+```
+
+**Error state recovery**: When a stream enters an error state (`streamPlayer.error != nil`), `isStreamBackendActive` returns `false`, which flips all `supports*` flags back to `true`. This ensures the user is never stuck with permanently dimmed controls after a stream failure. When the user switches to a local file or starts a new stream, the flags update naturally.
+
+**Real usage**: `PlaybackCoordinator.swift` capability flags, `WinampMainWindow+Helpers.swift` balance dimming, `WinampEqualizerWindow.swift` EQ dimming
+
+**Pitfalls**:
+- All three flags derive from `isStreamBackendActive` -- keep them as separate computed properties (not a single enum) because Phase 2 may enable some features independently (e.g., visualizer via Loopback Bridge while balance remains unsupported)
+- The `supportsVisualizer` flag is currently unused by UI (visualizer naturally shows empty when no tap data arrives), but it is exposed for Phase 2 wiring
+- Use `opacity(0.5)` (not `0.0`) to indicate "unavailable" rather than "hidden" -- users should see the control exists but cannot be used
+- Always pair `.opacity()` with `.allowsHitTesting(false)` to prevent interaction with dimmed controls
+- Optional `.help()` tooltip explains why the control is disabled
 
 ---
 
@@ -2698,6 +2883,54 @@ struct PlaylistHeaderView: View {
 - `WinampMainWindow+Helpers.swift` — **Still exists** (planned for Wave 2 decomposition in `tasks/mainwindow-layer-decomposition/`)
 
 See Lesson #25 in BUILDING_RETRO_MACOS_APPS_SKILL.md for the complete architecture pattern.
+
+### Anti-Pattern: Direct Backend Volume/Balance Binding (T5 Phase 1)
+
+**Context**: Before T5 Phase 1, volume and balance sliders bound directly to `audioPlayer.volume` via `@Bindable`. This only updated AudioPlayer's `playerNode` and missed StreamPlayer and VideoPlaybackController entirely.
+
+**Wrong**:
+```swift
+// DEPRECATED (T5 Phase 1): Direct binding bypasses coordinator
+@Bindable var player = audioPlayer
+WinampVolumeSlider(volume: $player.volume)      // Only updates AudioPlayer!
+WinampBalanceSlider(balance: $player.balance)    // StreamPlayer stays out of sync!
+```
+
+Also wrong -- propagating to other backends from AudioPlayer's `didSet`:
+```swift
+// DEPRECATED (T5 Phase 1): AudioPlayer should not know about other backends
+var volume: Float = 0.75 {
+    didSet {
+        playerNode.volume = volume
+        videoPlaybackController.volume = volume  // Cross-backend coupling!
+        UserDefaults.standard.set(volume, forKey: Keys.volume)
+    }
+}
+```
+
+**Correct**:
+```swift
+// Asymmetric binding: reads from AudioPlayer, writes through coordinator
+let volumeBinding = Binding<Float>(
+    get: { audioPlayer.volume },
+    set: { playbackCoordinator.setVolume($0) }
+)
+WinampVolumeSlider(volume: volumeBinding)
+
+// Coordinator fans out to ALL backends unconditionally
+func setVolume(_ vol: Float) {
+    audioPlayer.volume = vol
+    streamPlayer.volume = vol
+    audioPlayer.videoPlaybackController.volume = vol
+}
+```
+
+**Why the direct binding was wrong**:
+- Volume changes during internet radio playback had no effect (StreamPlayer was never updated)
+- Switching from radio to local file could have mismatched volume between backends
+- AudioPlayer knowing about VideoPlaybackController violated single-responsibility (cross-backend routing belongs in the coordinator)
+
+See "Coordinator Volume Routing", "Asymmetric Binding for Coordinator Routing", and "Capability Flag Pattern" in the State Management Patterns section.
 
 ---
 
