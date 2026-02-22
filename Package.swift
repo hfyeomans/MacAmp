@@ -32,7 +32,10 @@ let package = Package(
         ),
         .testTarget(
             name: "MacAmpTests",
-            dependencies: ["MacAmp"],
+            dependencies: [
+                "MacAmp",
+                .product(name: "Atomics", package: "swift-atomics"),
+            ],
             path: "Tests/MacAmpTests"
         )
     ]

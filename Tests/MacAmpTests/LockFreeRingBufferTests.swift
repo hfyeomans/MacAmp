@@ -321,26 +321,46 @@ struct LockFreeRingBufferConcurrencyTests {
         let writerDone = ManagedAtomic<Bool>(false)
         let observedGenerationChange = ManagedAtomic<Bool>(false)
 
+        // Reader quiescence coordination for flush (mirrors production behavior:
+        // tap is uninstalled before flush, so both producer and consumer are idle).
+        let readerShouldPause = ManagedAtomic<Bool>(false)
+        let readerPaused = ManagedAtomic<Bool>(false)
+
         await withTaskGroup(of: Void.self) { group in
-            // Writer
+            // Writer (producer)
             group.addTask {
                 var source = [Float](repeating: 0.5, count: sampleCount)
                 for i in 0..<writerIterations {
                     _ = buffer.write(from: &source, frameCount: chunkSize)
-                    // Flush every 1000 iterations to simulate format change
+                    // Flush every 1000 iterations to simulate format change.
+                    // Quiesce the reader first, per flush()'s documented contract.
                     if i > 0 && i % 1000 == 0 {
+                        readerShouldPause.store(true, ordering: .releasing)
+                        while !readerPaused.load(ordering: .acquiring) {
+                            await Task.yield()
+                        }
                         buffer.flush(newGeneration: true)
+                        readerPaused.store(false, ordering: .relaxed)
+                        readerShouldPause.store(false, ordering: .releasing)
                     }
                 }
                 writerDone.store(true, ordering: .releasing)
             }
 
-            // Reader
+            // Reader (consumer)
             group.addTask {
                 var dest = [Float](repeating: 0, count: sampleCount)
                 var cachedGen: UInt64 = 0
                 var emptyReadsAfterDone = 0
                 while true {
+                    // Honor pause requests: stop reading before writer flushes.
+                    if readerShouldPause.load(ordering: .acquiring) {
+                        readerPaused.store(true, ordering: .releasing)
+                        while readerShouldPause.load(ordering: .acquiring) {
+                            await Task.yield()
+                        }
+                    }
+
                     let gen = buffer.currentGeneration()
                     if gen != cachedGen {
                         observedGenerationChange.store(true, ordering: .relaxed)

@@ -72,6 +72,9 @@ final class LockFreeRingBuffer: @unchecked Sendable {
             // Overrun: advance read head to make room.
             // NOTE: This creates a benign race with the consumer's memcpy (see class doc).
             let deficit = UInt64(boundedFrameCount - available)
+            // .relaxed is safe here: the writeHead.store(.releasing) below provides
+            // the necessary fence. The consumer acquires writeHead before reading data,
+            // so it will see the updated readHead by the time it observes new frames.
             _ = readHead.wrappingIncrementThenLoad(by: deficit, ordering: .relaxed)
             overrunCount.wrappingIncrementThenLoad(by: 1, ordering: .relaxed)
             framesToWrite = boundedFrameCount
@@ -176,7 +179,11 @@ final class LockFreeRingBuffer: @unchecked Sendable {
 
     // MARK: - Telemetry
 
-    /// Number of frames currently available for reading.
+    /// Approximate number of frames currently available for reading.
+    ///
+    /// Uses relaxed loads for both head pointers — suitable for telemetry, logging,
+    /// and UI display, but NOT for synchronization decisions. The producer and
+    /// consumer should use their own acquire/release loads on the hot path.
     var availableFrames: Int {
         let wh = writeHead.load(ordering: .relaxed)
         let rh = readHead.load(ordering: .relaxed)
