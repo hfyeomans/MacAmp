@@ -66,48 +66,54 @@ These issues were discovered during Oracle validation of the internet-radio-revi
 
 ---
 
-## Phase 2: Loopback Bridge (Blocked by `lock-free-ring-buffer` task)
+## Phase 2: Loopback Bridge — IMPLEMENTATION COMPLETE
 
 ### Prerequisites
-- [ ] **2.0a** `lock-free-ring-buffer` task completed and tested
-- [ ] **2.0b** Phase 1 completed (capability flags infrastructure in place)
-- [ ] **2.0c** (Oracle) Define bridge lifecycle state machine (starting, active, failed, teardown) — must be defined BEFORE graph switching implementation
-- [ ] **2.0d** (Oracle) ABR handling designed as part of initial bridge implementation, not a late add-on
+- [x] **2.0a** `lock-free-ring-buffer` task completed and tested (Wave 1)
+- [x] **2.0b** Phase 1 completed (capability flags infrastructure in place, PR #53)
+- [x] **2.0c** (Oracle) Bridge lifecycle defined — teardown/setup/attach sequence with identity gating
+- [x] **2.0d** (Oracle) ABR handling integrated into initial bridge implementation (generation IDs in tapPrepare + render block)
 
 ### Ring Buffer Integration
-- [ ] **2.1** Import LockFreeRingBuffer.swift from ring buffer task into MacAmpApp/Audio/
+- [x] **2.1** LockFreeRingBuffer already in MacAmpApp/Audio/ from Wave 1
 
-### MTAudioProcessingTap Implementation
-- [ ] **2.2a** Create tap callback functions (tapInit, tapFinalize, tapPrepare, tapUnprepare, tapProcess)
-- [ ] **2.2b** In tapProcess: copy PCM to ring buffer via `ringBuffer.write(samples)`, then zero `bufferListInOut` to prevent double-render (silence AVPlayer direct output). Per Apple QA1783, PreEffects tap runs before mix effects — zeroing is deterministic
-- [ ] **2.2c** In tapPrepare: capture audio format, configure ring buffer for format, increment atomic generation ID (for ABR detection)
-- [ ] **2.2d** In tapUnprepare: flush ring buffer, signal reader
-- [ ] **2.2e** Add `attachTap(to:)` method on StreamPlayer using `kMTAudioProcessingTapCreationFlag_PreEffects`
-- [ ] **2.2f** Add `detachTap()` method for clean teardown
-- [ ] **2.2g** Handle Swift 6 Sendability: `@unchecked Sendable` wrapper + `nonisolated(unsafe)` for shared state between tap and source node
-- [ ] **2.2h** (Oracle) Enforce real-time safety in ALL callbacks: zero allocations (no malloc/free), zero locks (no mutexes), zero ARC ops (no retain/release), zero logging (no print/NSLog), zero ObjC messaging, zero Task/async
+### MTAudioProcessingTap Implementation (Block 1 — commit 4194086)
+- [x] **2.2a** Top-level @convention(c) callbacks: loopbackTapInit, loopbackTapFinalize, loopbackTapPrepare, loopbackTapUnprepare, loopbackTapProcess
+- [x] **2.2b** tapProcess: copy PCM to ring buffer, zero bufferListInOut to prevent double-render
+- [x] **2.2c** tapPrepare: capture audio format, flush ring buffer with generation ID increment
+- [x] **2.2d** tapUnprepare: flush ring buffer with generation ID increment
+- [x] **2.2e** `attachLoopbackTap(ringBuffer:onFormatReady:)` on StreamPlayer with PreEffects flag
+- [x] **2.2f** `detachLoopbackTap()` for clean teardown (nil audioMix + release tap ref)
+- [x] **2.2g** LoopbackTapContext: `@unchecked Sendable` + `nonisolated(unsafe)` for shared state
+- [x] **2.2h** Real-time safety enforced in ALL callbacks: zero allocations, zero locks, zero ARC, zero logging
 
-### AVAudioEngine Integration
-- [ ] **2.3** Create `AVAudioSourceNode` in AudioPlayer that reads from ring buffer — fill silence on underrun to prevent glitches
-- [ ] **2.4a** Add engine graph source switching WITHOUT engine restart — use `disconnectNodeOutput`/`connect` while engine is running (Oracle correction #5: avoids audible gap)
-- [ ] **2.4b** Preserve existing graph: playerNode -> eqNode -> mainMixerNode for local files
-- [ ] **2.4c** Wire PlaybackCoordinator to trigger graph switching on backend change. LOCAL->STREAM: disconnect playerNode, connect streamSourceNode -> eqNode, start tap + bridge. STREAM->LOCAL: disconnect streamSourceNode, connect playerNode -> eqNode, stop tap + bridge, call `VisualizerPipeline.clearData()` to prevent stale visualizer data
+### AVAudioEngine Integration (Block 2 — commit d47da07)
+- [x] **2.3** AVAudioSourceNode in AudioPlayer reads from ring buffer, fills silence on underrun
+- [x] **2.4a** Engine graph switching via stop/reset/rewire pattern (lesson: hot-swap crashes with -10868)
+- [x] **2.4b** Existing playerNode → eqNode → mainMixerNode preserved for local files
+- [x] **2.4c** PlaybackCoordinator triggers graph switching via activateStreamBridge/deactivateStreamBridge
 
-### Capability Flag Updates
-- [ ] **2.5** Update `supportsEQ`/`supportsBalance`/`supportsVisualizer` to return `true` always when bridge is available. (Oracle correction #7: tie flags to actual bridge state transitions — starting/active/failed/teardown — not just `isStreamBackendActive`)
+### Capability Flag Updates (Block 3 — commit 0ba7b1a)
+- [x] **2.5** supportsEQ/Balance/Visualizer: `!isStreamBackendActive || audioPlayer.isBridgeActive`
 
-### Visualization Fix
-- [ ] **2.6** Update VisualizerView playback state check (line ~74) to include stream playback state from PlaybackCoordinator — with bridge active, stream audio flows through engine so existing visualization tap receives data
+### Visualization Fix (Block 4 — commit 0ba7b1a)
+- [x] **2.6** VisualizerView updated: 4 sites changed from `audioPlayer.isPlaying` → `audioPlayer.isEngineRendering`
 
-### ABR Format Change Handling (part of initial bridge implementation per Oracle ordering)
-- [ ] **2.7a** In tapPrepare: reinitialize ring buffer on format change with generation ID increment
-- [ ] **2.7b** Pre-allocate for worst-case format (48kHz stereo float32)
-- [ ] **2.7c** In source node render: check atomic generation ID, fill silence on epoch mismatch (handles race during tap detach/reattach — Oracle correction #4)
-- [ ] **2.7d** Handle brief silence during ABR transition gracefully — acceptable for radio
+### ABR Format Change Handling (integrated into Block 1+2)
+- [x] **2.7a** tapPrepare: reinitialize ring buffer on format change with generation ID increment
+- [x] **2.7b** Pre-allocate scratch buffer for worst-case (stereo interleaved output)
+- [x] **2.7c** Source node render: checks generation ID, fills silence on mismatch
+- [x] **2.7d** Brief silence during ABR transition — acceptable for radio
 
-### Telemetry (Oracle recommendation)
-- [ ] **2.8a** Add atomic underrun/overrun counters to ring buffer (AtomicUInt64, incremented in render callbacks)
-- [ ] **2.8b** Expose counters on main thread for diagnostics/logging (read periodically, not in real-time path)
+### Telemetry (already in LockFreeRingBuffer from Wave 1)
+- [x] **2.8a** Atomic underrun/overrun counters in LockFreeRingBuffer
+- [x] **2.8b** `telemetry()` method for main-thread diagnostics
+
+### Oracle Review (commit a5f96b3)
+- [x] **P2-1** Gate onFormatReady with ring buffer identity check (race prevention)
+- [x] **P2-2** Revalidate currentItem after async loadTracks (stale item prevention)
+- [x] **P3-1** Limit interleaved fast path to channels == 2 (>2 channel correctness)
+- [x] **P3-2** Explicit isSilence reset on successful read (determinism)
 
 ### Phase 2 Verification
 - [ ] **V2.1** Stream playback: EQ sliders affect audio
