@@ -4,7 +4,7 @@
 
 ---
 
-## Current Status: PHASE 1 COMPLETE — Awaiting PR + Manual Verification
+## Current Status: PHASE 2 IN PROGRESS — Wave 3 (Final Wave)
 
 ## Progress
 
@@ -29,8 +29,16 @@
 - [x] N1-N6 prerequisites resolved (PR #49 merged 2026-02-21)
 - [x] Phase 1 Implementation (commit 463c6a9)
 - [x] Oracle review of Phase 1 (gpt-5.3-codex, xhigh reasoning) — 1 finding fixed (stream error capability flags)
-- [ ] Phase 1 Manual Verification (V1.1-V1.11, requires running app with streams)
-- [ ] Phase 2 Implementation (Wave 3)
+- [x] Phase 1 Manual Verification (V1.1-V1.11, passed — user confirmed 2026-02-22)
+- [ ] Phase 2 Prerequisites (2.0a-2.0d)
+- [ ] Phase 2 Block 1: StreamPlayer MTAudioProcessingTap (2.2a-2.2h)
+- [ ] Phase 2 Block 2: AudioPlayer AVAudioSourceNode + Graph Switching (2.3, 2.4a-2.4c)
+- [ ] Phase 2 Block 3: PlaybackCoordinator Bridge Lifecycle (2.4c, 2.5)
+- [ ] Phase 2 Block 4: VisualizerView updates (2.6)
+- [ ] Phase 2 Block 5: ABR handling (2.7a-2.7d) — integrated into Block 1 per Oracle ordering
+- [ ] Phase 2 Block 6: Telemetry (2.8a-2.8b) — already in LockFreeRingBuffer
+- [ ] Phase 2 Build + Oracle Review
+- [ ] Phase 2 Verification (V2.1-V2.14)
 
 ## Key Decisions
 
@@ -100,6 +108,19 @@ AVPlayer → MTAudioProcessingTap (PreEffects, zero output) → Ring Buffer → 
 2. **Ring buffer size:** 4096 frames (~85ms) — acceptable latency for radio, margin for ABR switches
 3. **Ring buffer task:** Yes, create separate `lock-free-ring-buffer` task for prototyping
 4. **macOS targets:** macOS 15+ including macOS 26+ Tahoe — InlineArray/Span behind @available guards
+
+## Phase 2 Implementation Notes
+
+**Branch:** `feature/stream-loopback-bridge`
+**Lessons learned:** `tasks/_context/claude-mistakes-stream-loopback-bridge.md` — documents all crashes and corrections from failed first attempt. Must be consulted for every implementation decision.
+
+### Key Corrections from Lessons Learned (Applied to Plan)
+
+1. **2.4a hot-swap approach crashed** — Plan says "WITHOUT engine restart" but this caused error -10868. Corrected: follow `rewireForCurrentFile()` stop/reset pattern. Brief silence acceptable for radio.
+2. **Render block @MainActor isolation** — Must use `nonisolated private static func makeStreamRenderBlock()` pattern, NOT inline closures. Crash: EXC_BREAKPOINT on audio thread.
+3. **Source node format** — Must use interleaved block format matching ring buffer. Non-interleaved "standard" format caused silent audio.
+4. **Mixer→output connection** — Must verify after `audioEngine.reset()`. Connection may break silently.
+5. **Stream→stream ordering** — Must ALWAYS teardown bridge before setup. Ring buffer flush requires producer quiescence.
 
 ## Created Tasks
 
