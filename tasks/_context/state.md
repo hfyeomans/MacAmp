@@ -18,9 +18,9 @@
 
 ---
 
-## Current Phase: WAVE 2b — T3 MainWindow Decomposition NEXT
+## Current Phase: WAVE 2b — T3 MainWindow Decomposition IN PROGRESS
 
-T5 Phase 1 (stream volume routing + capability flags) merged in PR #53 (2026-02-22). T3 (mainwindow decomposition) is now unblocked and is the next task to begin.
+T5 Phase 1 (stream volume routing + capability flags) merged in PR #53 (2026-02-22). T3 (mainwindow decomposition) implementation complete, PR #54 created, awaiting merge.
 
 ---
 
@@ -40,7 +40,7 @@ T5 Phase 1 (stream volume routing + capability flags) merged in PR #53 (2026-02-
 |----|------|----------------|-------------------|---------|
 | T1 | `audioplayer-decomposition` | **Ph1-3 COMPLETE**, Ph4 deferred | Wave 1 — done, awaiting PR | swiftlint suppressions remain (945 lines, needs Ph4) |
 | T2 | `playlistwindow-layer-decomposition` | **COMPLETE** | Wave 1 — done, awaiting PR | Manual testing items deferred |
-| T3 | `mainwindow-layer-decomposition` | Plan complete | Wave 2b — UNBLOCKED, ready to start | None |
+| T3 | `mainwindow-layer-decomposition` | **COMPLETE** (PR #54, awaiting merge) | Wave 2b — IN PROGRESS | Manual testing passed |
 | T4 | `lock-free-ring-buffer` | **COMPLETE** (benchmarks deferred) | Wave 1 — done, awaiting PR | None |
 | T5 | `internet-streaming-volume-control` | **Ph1 COMPLETE (merged PR #53)** | Wave 2a — MERGED | Ph2: Wave 3 (needs T4 merge) |
 | T6 | `swift-testing-modernization` | **COMPLETE** (deferrals noted) | Wave 1 — done, awaiting PR | None |
@@ -64,7 +64,7 @@ T5 Phase 1 (stream volume routing + capability flags) merged in PR #53 (2026-02-
 | Step | Task | Branch | Status | Depends On |
 |------|------|--------|--------|-----------|
 | 2a | T5 Phase 1 (Volume routing) | `feature/stream-volume-control` | **MERGED** (PR #53, 2026-02-22) | Wave 1 merges (done) |
-| 2b | T3 (MainWindow decomp) | `refactor/mainwindow-decomposition` | Not started | T5 Phase 1 merge |
+| 2b | T3 (MainWindow decomp) | `refactor/mainwindow-decomposition` | **PR #54** (awaiting merge) | T5 Phase 1 merge (done) |
 
 **Merge strategy:** Two separate PRs. T5 Ph1 merges first; T3 merges after verification.
 
@@ -126,11 +126,41 @@ T5 Phase 1 (stream volume routing + capability flags) merged in PR #53 (2026-02-
 
 ## Deferred Items Inventory
 
+### From Wave 2b — Future Optimization
+
+| Item | Source | Size | Priority | Blocks Future Waves? |
+|------|--------|------|----------|---------------------|
+| MainWindowVisualizerLayer isolation | T3 mainwindow-decomposition | Small | Medium | No — performance optimization |
+
+**Context:** During T3 manual testing, the spectrum analyzer pauses during volume slider drag. This is pre-existing behavior caused by `VisualizerView()` being rendered inline in `MainWindowFullLayer.body` — volume changes trigger full body re-evaluation including the visualizer. The fix is to extract `VisualizerView` into a dedicated `MainWindowVisualizerLayer` struct, creating a SwiftUI recomposition boundary that isolates visualizer rendering from slider state changes.
+
+**Architecture path:**
+```text
+Current (MainWindowFullLayer.body):
+  Group {
+    MainWindowSlidersLayer(...)  ← reads audioPlayer.volume (own View boundary)
+    VisualizerView()             ← INLINE, no boundary, re-evaluates with parent
+  }
+
+Target (MainWindowFullLayer.body):
+  Group {
+    MainWindowSlidersLayer(...)  ← reads audioPlayer.volume (own View boundary)
+    MainWindowVisualizerLayer()  ← NEW View struct, own recomposition boundary
+  }
+```
+
+`MainWindowVisualizerLayer` would only declare `@Environment` dependencies it actually reads (likely none — `VisualizerView` reads from the audio pipeline directly). This means volume/balance slider drags would NOT trigger its body re-evaluation.
+
+---
+
 ### From Wave 1 — Future Tasks Needed
 
 | Item | Source | Size | Priority | Blocks Future Waves? |
 |------|--------|------|----------|---------------------|
 | T1 Phase 4: Engine transport extraction | audioplayer-decomposition | Large | Medium | No — schedule after T5 Ph2 |
+| Hide Main Window not working | T3 manual testing (pre-existing) | Small | Low | No |
+
+**Context (Hide Main Window):** The "Hide Main" menu item (`AppCommands.swift:13`) calls `DockingController.toggleMain()` which only toggles an internal `panes[idx].visible` boolean. This boolean is not wired to actually hide/show the NSWindow. `WindowVisibilityController.hideMain()` exists and calls `registry.mainWindow?.orderOut(nil)` but is never invoked by the toggle path. Pre-existing — not caused by T3 decomposition.
 | PlaylistWindowActions singleton rearchitecture | playlist-decomp depreciated.md | Large | Low | No |
 | Manual selection state sync fix | playlist-decomp depreciated.md | Small | Low | No — blocked by singleton fix |
 | `async-test-determinism` (Task.sleep removal) | swift-testing todo.md | Medium | Low | No |

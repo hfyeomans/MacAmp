@@ -5,107 +5,119 @@
 
 ## Phase 1: Scaffolding
 
-- [ ] Create `MacAmpApp/Views/MainWindow/` directory
-- [ ] Create `WinampMainWindowLayout.swift` -- extract `Coords` to top-level enum
-- [ ] Add typealias `Coords = WinampMainWindowLayout` in `WinampMainWindow` for backward compat
-- [ ] Build and verify no regressions
-- [ ] Create `WinampMainWindowInteractionState.swift` -- @Observable @MainActor class
-- [ ] Migrate 7 @State vars to interaction state class properties
-- [ ] Migrate `startScrolling()` method to interaction state
-- [ ] Migrate `resetScrolling()` method to interaction state
-- [ ] Migrate `handlePositionDrag()` method to interaction state
-- [ ] Migrate `handlePositionDragEnd()` method to interaction state
-- [ ] Migrate `timeDigits(from:)` helper to interaction state or standalone
-- [ ] Build and verify no regressions
-- [ ] Create `MainWindowOptionsMenuPresenter.swift`
-- [ ] Migrate `showOptionsMenu(from:)` to presenter
-- [ ] Migrate `buildOptionsMenuItems(menu:)` to presenter
-- [ ] Migrate `buildRepeatShuffleMenuItems(menu:)` to presenter
-- [ ] Migrate `createMenuItem(...)` to presenter
-- [ ] Migrate `MenuItemTarget` class to presenter file (as nested private class)
-- [ ] Migrate `activeOptionsMenu` state to presenter
-- [ ] Build and verify no regressions
+- [x] Create `MacAmpApp/Views/MainWindow/` directory
+- [x] Create `WinampMainWindowLayout.swift` -- extract `Coords` to top-level enum
+- [x] Add typealias `Coords = WinampMainWindowLayout` in `WinampMainWindow` for backward compat
+- [x] Build and verify no regressions
+- [x] Create `WinampMainWindowInteractionState.swift` -- @Observable @MainActor class
+- [x] Migrate 7 @State vars to interaction state class properties
+- [x] Migrate `startScrolling()` method to interaction state
+- [x] Migrate `resetScrolling()` method to interaction state
+- [x] Migrate `handlePositionDrag()` method to interaction state
+- [x] Migrate `handlePositionDragEnd()` method to interaction state
+- [x] Migrate `timeDigits(from:)` helper to interaction state
+- [x] Build and verify no regressions
+- [x] Create `MainWindowOptionsMenuPresenter.swift`
+- [x] Migrate `showOptionsMenu(from:)` to presenter
+- [x] Migrate `buildOptionsMenuItems(menu:)` to presenter
+- [x] Migrate `buildRepeatShuffleMenuItems(menu:)` to presenter
+- [x] Migrate `createMenuItem(...)` to presenter
+- [x] Migrate `MenuItemTarget` class to presenter file (as nested private class)
+- [x] Migrate `activeOptionsMenu` state to presenter
+- [x] Build and verify no regressions
+
+## Phase 1 Extras (Oracle + modernization)
+
+- [x] Fix stale title capture in scrollTimer (Oracle finding: use displayTitleProvider closure)
+- [x] Modernize DispatchQueue.main.asyncAfter to Task.sleep in resetScrolling()
+- [x] Modernize DispatchQueue.main.asyncAfter to Task.sleep in handlePositionDragEnd()
+- [x] Add cancellable scrollRestartTask for rapid track changes
+- [x] Remove stale duplicate VideoWindowChromeView.swift (pre-existing build blocker)
 
 ## Phase 2: Extract Child Views
 
-- [ ] Create `MainWindowTransportLayer.swift`
-  - [ ] Move `buildTransportPlaybackButtons()` content
-  - [ ] Move `buildTransportNavButtons()` content
-  - [ ] Wire `openFileDialog` as closure parameter
-  - [ ] Build and verify
+- [x] Create `MainWindowTransportLayer.swift`
+  - [x] Move `buildTransportPlaybackButtons()` content
+  - [x] Move `buildTransportNavButtons()` content
+  - [x] Wire `openFileDialog` as closure parameter
+  - [x] Build and verify
 
-- [ ] Create `MainWindowTrackInfoLayer.swift`
-  - [ ] Move `buildTrackInfoDisplay()` content
-  - [ ] Move `buildTextSprites(for:)` content
-  - [ ] Wire interaction state for scrollOffset
-  - [ ] Build and verify
+- [x] Create `MainWindowTrackInfoLayer.swift`
+  - [x] Move `buildTrackInfoDisplay()` content
+  - [x] Move `buildTextSprites(for:)` content
+  - [x] Wire interaction state for scrollOffset
+  - [x] Build and verify
 
-- [ ] Create `MainWindowIndicatorsLayer.swift`
-  - [ ] Move `buildPlayPauseIndicator()` content
-  - [ ] Move `buildMonoStereoIndicator()` content
-  - [ ] Move `buildBitrateDisplay()` content
-  - [ ] Move `buildSampleRateDisplay()` content
-  - [ ] Wire pauseBlinkVisible from interaction state
-  - [ ] Build and verify
+- [x] Create `MainWindowIndicatorsLayer.swift`
+  - [x] Move `buildPlayPauseIndicator()` content
+  - [x] Move `buildMonoStereoIndicator()` content
+  - [x] Move `buildBitrateDisplay()` content
+  - [x] Move `buildSampleRateDisplay()` content
+  - [x] Wire pauseBlinkVisible from interaction state
+  - [x] Build and verify
 
-- [ ] Create `MainWindowSlidersLayer.swift`
-  - [ ] Move `buildPositionSlider()` content
-  - [ ] Move `buildVolumeSlider()` content
-  - [ ] Move `buildBalanceSlider()` content
-  - [ ] Wire interaction state for scrubbing
-  - [ ] Build and verify
+- [x] Create `MainWindowSlidersLayer.swift`
+  - [x] Move `buildPositionSlider()` content
+  - [x] Move `buildVolumeSlider()` content
+  - [x] Move `buildBalanceSlider()` content
+  - [x] Wire interaction state for scrubbing
+  - [x] Build and verify
 
-- [ ] Create `MainWindowFullLayer.swift`
-  - [ ] Compose all child layers
-  - [ ] Move `buildTitlebarButtons()` (or keep inline if small)
-  - [ ] Move `buildShuffleRepeatButtons()`
-  - [ ] Move `buildWindowToggleButtons()`
-  - [ ] Move `buildClutterBarOAI()` and `buildClutterBarDV()`
-  - [ ] Move `buildTimeDisplay()` and `buildTimeDigits()`
-  - [ ] Move `buildSpectrumAnalyzer()`
-  - [ ] Build and verify
+- [x] Create `MainWindowFullLayer.swift`
+  - [x] Compose all child layers
+  - [x] Move `buildTitlebarButtons()` (kept as private builder)
+  - [x] Move `buildShuffleRepeatButtons()`
+  - [x] Move `buildWindowToggleButtons()`
+  - [x] Move `buildClutterBarOAI()` and `buildClutterBarDV()`
+  - [x] Move `buildTimeDisplay()` and `buildTimeDigits()`
+  - [x] Move `buildSpectrumAnalyzer()`
+  - [x] Build and verify
 
-- [ ] Create `MainWindowShadeLayer.swift`
-  - [ ] Move `buildShadeMode()` content
-  - [ ] Move `buildShadeTransportButtons()` content
-  - [ ] Include shade-mode time display
-  - [ ] Include titlebar buttons for shade mode
-  - [ ] Build and verify
+- [x] Create `MainWindowShadeLayer.swift`
+  - [x] Move `buildShadeMode()` content
+  - [x] Move `buildShadeTransportButtons()` content
+  - [x] Include shade-mode time display
+  - [x] Include titlebar buttons for shade mode
+  - [x] Build and verify
 
 ## Phase 3: Wire Up Root View
 
-- [ ] Rewrite `WinampMainWindow.body` to compose `MainWindowFullLayer` / `MainWindowShadeLayer`
-- [ ] Replace 7 @State vars with `@State private var interactionState`
-- [ ] Replace `activeOptionsMenu` with `@State private var optionsPresenter`
-- [ ] Update `.onAppear` / `.onDisappear` to use interaction state methods
-- [ ] Update `.onReceive(pauseBlinkTimer)` to use interaction state
-- [ ] Update `.onChange(of: settings.showOptionsMenuTrigger)` to use presenter
-- [ ] Update `.sheet(isPresented:)` -- remains on root
-- [ ] Move `WinampMainWindow.swift` into `MainWindow/` directory
-- [ ] Build and verify no regressions
-- [ ] Delete `WinampMainWindow+Helpers.swift`
-- [ ] Remove `Coords` typealias if no longer needed
-- [ ] Build final: zero warnings, zero errors
+- [x] Rewrite `WinampMainWindow.body` to compose `MainWindowFullLayer` / `MainWindowShadeLayer`
+- [x] Replace 7 @State vars with `@State private var interactionState`
+- [x] Replace `activeOptionsMenu` with `@State private var optionsPresenter`
+- [x] Update `.onAppear` / `.onDisappear` to use interaction state methods
+- [x] Update `.onReceive(pauseBlinkTimer)` to use interaction state
+- [x] Update `.onChange(of: settings.showOptionsMenuTrigger)` to use presenter
+- [x] Update `.sheet(isPresented:)` -- remains on root
+- [x] Move `WinampMainWindow.swift` into `MainWindow/` directory
+- [x] Build and verify no regressions
+- [x] Delete `WinampMainWindow+Helpers.swift`
+- [x] Remove `Coords` typealias (no longer needed — child views use WinampMainWindowLayout directly)
+- [x] Build final: zero warnings, zero errors
+
+## Phase 3 Extras (Oracle review)
+
+- [x] Fix shade-mode time display double-offset regression (Oracle finding #2)
 
 ## Phase 4: Verification
 
-- [ ] Full build with Thread Sanitizer enabled
-- [ ] Visual test: full mode rendering (default skin)
-- [ ] Visual test: shade mode rendering (default skin)
-- [ ] Visual test: double-size mode
-- [ ] Visual test: 3+ different Winamp skins
-- [ ] Functional test: all transport buttons
-- [ ] Functional test: position slider scrubbing
-- [ ] Functional test: volume and balance sliders
-- [ ] Functional test: track info scrolling (long title)
-- [ ] Functional test: pause blink animation
-- [ ] Functional test: options menu (O button + Ctrl+O)
-- [ ] Functional test: time display toggle (Ctrl+T)
-- [ ] Functional test: clutter bar buttons (O, A, I, D, V)
-- [ ] Functional test: shuffle/repeat cycling
-- [ ] Functional test: EQ/Playlist window toggles
-- [ ] Functional test: minimize, shade, close titlebar buttons
-- [ ] Performance: Instruments profile body evaluation count
-- [ ] Code review: verify no `internal` @State vars remain
-- [ ] Code review: all child views have minimal dependency surface
-- [ ] Update Xcode project file if needed for new directory structure
+- [x] Full build with Thread Sanitizer enabled (swift test passes, known flaky test excluded)
+- [x] Visual test: full mode rendering (default skin) — PASSED
+- [x] Visual test: shade mode rendering (default skin) — PASSED
+- [x] Visual test: double-size mode — PASSED
+- [x] Visual test: 3+ different Winamp skins — PASSED
+- [x] Functional test: all transport buttons — PASSED
+- [x] Functional test: position slider scrubbing — PASSED
+- [x] Functional test: volume and balance sliders — PASSED (note: spectrum analyzer pauses during drag, pre-existing)
+- [x] Functional test: track info scrolling (long title) — PASSED
+- [x] Functional test: pause blink animation — PASSED
+- [x] Functional test: options menu (O button + Ctrl+O) — PASSED
+- [x] Functional test: time display toggle (Ctrl+T) — PASSED
+- [x] Functional test: clutter bar buttons (O, A, I, D, V) — PASSED
+- [x] Functional test: shuffle/repeat cycling — PASSED
+- [x] Functional test: EQ/Playlist window toggles — PASSED
+- [x] Functional test: minimize, shade, close titlebar buttons — PASSED
+- [ ] Performance: Instruments profile body evaluation count — DEFERRED (post-merge optimization)
+- [x] Code review: verify no `internal` @State vars remain
+- [x] Code review: all child views have minimal dependency surface
+- [ ] Update Xcode project file if needed for new directory structure — N/A (SwiftPM project)
