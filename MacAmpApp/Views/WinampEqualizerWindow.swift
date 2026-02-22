@@ -7,6 +7,7 @@ struct WinampEqualizerWindow: View {
     @Environment(SkinManager.self) var skinManager
     @Environment(AudioPlayer.self) var audioPlayer
     @Environment(AppSettings.self) var settings
+    @Environment(PlaybackCoordinator.self) var playbackCoordinator
     @Environment(WindowFocusState.self) var windowFocusState
 
     @State private var isShadeMode: Bool = false
@@ -81,11 +82,11 @@ struct WinampEqualizerWindow: View {
                 }
                 .at(CGPoint(x: 0, y: 0))
 
-                // Build all EQ components
-                Group {
-                    // Titlebar buttons
-                    buildTitlebarButtons()
+                // Titlebar buttons (always active, never dimmed)
+                buildTitlebarButtons()
 
+                // EQ controls (dimmed when streaming — EQ not available for AVPlayer)
+                Group {
                     // ON/AUTO buttons
                     buildControlButtons()
 
@@ -101,6 +102,8 @@ struct WinampEqualizerWindow: View {
                     // EQ curve visualization (simplified for now)
                     buildEQCurve()
                 }
+                .opacity(playbackCoordinator.supportsEQ ? 1.0 : 0.5)
+                .allowsHitTesting(playbackCoordinator.supportsEQ)
             } else {
                 // Shade mode
                 buildShadeMode()

@@ -69,11 +69,42 @@ final class PlaybackCoordinator {
         case radioStation(RadioStation)
     }
 
+    // MARK: - Capability Flags
+
+    /// Whether the stream backend is currently active (playing, paused, or buffering).
+    /// Uses `currentSource` rather than `currentTrack?.isStream` because `currentTrack`
+    /// can be nil when playing a station directly via `play(station:)`.
+    /// Returns false when the stream is in an error state (no audio rendering),
+    /// which re-enables EQ/balance controls so the user isn't stuck with dimmed UI.
+    private var isStreamBackendActive: Bool {
+        guard case .radioStation = currentSource else { return false }
+        // Stream in error state is effectively inactive — re-enable controls
+        return streamPlayer.error == nil
+    }
+
+    /// EQ is only available for local file playback (AVAudioEngine).
+    /// During stream playback, EQ sliders should be dimmed.
+    var supportsEQ: Bool { !isStreamBackendActive }
+
+    /// Balance/pan requires AVAudioPlayerNode.pan (AVPlayer has no .pan property).
+    /// During stream playback, balance slider should be dimmed.
+    var supportsBalance: Bool { !isStreamBackendActive }
+
+    /// Visualizer requires an audio tap on AVAudioEngine's mixer node.
+    /// During stream playback, no tap data is available (Phase 2 Loopback Bridge will fix this).
+    /// Currently unused by UI — the visualizer shows empty naturally when no tap data arrives.
+    /// Phase 2 will update capability flags and wire UI dimming.
+    var supportsVisualizer: Bool { !isStreamBackendActive }
+
     // MARK: - Initialization
 
     init(audioPlayer: AudioPlayer, streamPlayer: StreamPlayer) {
         self.audioPlayer = audioPlayer
         self.streamPlayer = streamPlayer
+
+        // Sync persisted volume/balance to stream player so first stream play uses saved values
+        streamPlayer.volume = audioPlayer.volume
+        streamPlayer.balance = audioPlayer.balance
 
         self.audioPlayer.onTrackMetadataUpdate = { [weak self] track in
             guard let self else { return }
@@ -86,6 +117,23 @@ final class PlaybackCoordinator {
                 await self.handleExternalPlaylistAdvance(track: track)
             }
         }
+    }
+
+    // MARK: - Volume & Balance Routing
+
+    /// Propagate volume to ALL backends unconditionally.
+    /// Simpler than checking which is active, zero cost on idle players (no-op).
+    func setVolume(_ vol: Float) {
+        audioPlayer.volume = vol
+        streamPlayer.volume = vol
+        audioPlayer.videoPlaybackController.volume = vol
+    }
+
+    /// Propagate balance to ALL backends unconditionally.
+    /// StreamPlayer stores balance but cannot apply it (no AVPlayer .pan property).
+    func setBalance(_ bal: Float) {
+        audioPlayer.balance = bal
+        streamPlayer.balance = bal
     }
 
     // MARK: - Unified Playback Control

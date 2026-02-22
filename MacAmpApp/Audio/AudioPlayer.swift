@@ -55,10 +55,13 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     var currentTime: Double = 0.0
     var playbackProgress: Double = 0.0 // New: 0.0 to 1.0
 
-    var volume: Float = 0.75 { // 0.0 to 1.0
+    /// Audio volume (0.0-1.0 linear amplitude).
+    /// IMPORTANT: All external volume changes must go through PlaybackCoordinator.setVolume()
+    /// to ensure all backends (audio, stream, video) stay in sync. Direct assignment to this
+    /// property only updates playerNode and persists — it does NOT propagate to other backends.
+    var volume: Float = 0.75 {
         didSet {
             playerNode.volume = volume
-            videoPlaybackController.volume = volume
             UserDefaults.standard.set(volume, forKey: Keys.volume)
         }
     }

@@ -4,7 +4,7 @@
 
 ---
 
-## Current Status: BLOCKED — Waiting on N1-N6 prerequisite fixes (internet-radio-review)
+## Current Status: PHASE 1 COMPLETE — Awaiting PR + Manual Verification
 
 ## Progress
 
@@ -25,9 +25,12 @@
 - [x] Ring buffer task created (tasks/lock-free-ring-buffer/)
 - [x] Prerequisite validation complete (VisualizerPipeline SPSC refactor confirmed)
 - [x] Oracle comprehensive validation (gpt-5.3-codex, xhigh reasoning, 2026-02-14)
-- [ ] Plan approved by user
-- [ ] Implementation
-- [ ] Verification
+- [x] Plan approved by user (2026-02-22, cross-task Wave 2 approval)
+- [x] N1-N6 prerequisites resolved (PR #49 merged 2026-02-21)
+- [x] Phase 1 Implementation (commit 463c6a9)
+- [x] Oracle review of Phase 1 (gpt-5.3-codex, xhigh reasoning) — 1 finding fixed (stream error capability flags)
+- [ ] Phase 1 Manual Verification (V1.1-V1.11, requires running app with streams)
+- [ ] Phase 2 Implementation (Wave 3)
 
 ## Key Decisions
 
@@ -43,6 +46,27 @@
 10. **Ring buffer size:** 4096 frames (~85ms @ 48kHz) initial, tunable after stability proven
 11. **Ring buffer prototyping:** Separate task recommended — self-contained, highest-risk component, independently testable
 12. **Target platforms:** macOS 15+ including macOS 26+ Tahoe
+
+## Phase 1 Commits
+
+1. `463c6a9` — feat: Stream volume control + capability flags (T5 Phase 1)
+   - StreamPlayer volume/balance properties, PlaybackCoordinator routing, capability flags
+   - UI dimming for EQ and balance during stream playback
+   - Oracle fix: stream error recovery for capability flags
+
+## Oracle Review (Phase 1)
+
+**Reviewer:** gpt-5.3-codex (xhigh reasoning), 2026-02-22
+
+### Finding (Fixed)
+- **P2 — Stream error capability flag regression:** `isStreamBackendActive` only checked `currentSource`, not stream error state. After a stream error, EQ/balance controls stayed dimmed. Fixed: check `streamPlayer.error == nil` — error state re-enables controls.
+
+### Verified Correct
+- Thread safety: all mutations on @MainActor
+- Volume routing: unconditional fan-out to all backends
+- Startup sync: init sync + pre-play apply (belt-and-suspenders)
+- No local file regression: playerNode.volume/pan paths unchanged
+- Binding pattern: asymmetric Binding(get:set:) is correct for coordinator routing
 
 ## Blockers
 

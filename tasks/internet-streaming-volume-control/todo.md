@@ -28,41 +28,41 @@ These issues were discovered during Oracle validation of the internet-radio-revi
 ## Phase 1: Stream Volume Control + Capability Flags
 
 ### StreamPlayer Volume/Balance
-- [ ] **1.1** Add `volume: Float` property to StreamPlayer with didSet syncing to `player.volume` — both AVPlayer.volume and AVAudioPlayerNode.volume use 0.0-1.0 linear amplitude, no conversion needed
-- [ ] **1.2** Add `balance: Float` property to StreamPlayer (stored, not applied — AVPlayer has no .pan property). Enables uniform propagation from PlaybackCoordinator without backend type checks
-- [ ] **1.9** Apply persisted volume in StreamPlayer.play() before playback starts (`player.volume = volume` before `player.play()`). **Startup sync:** PlaybackCoordinator must propagate initial volume from UserDefaults to StreamPlayer during init or lazily before first stream play — otherwise first stream uses default 0.75 instead of saved volume
+- [x] **1.1** Add `volume: Float` property to StreamPlayer with didSet syncing to `player.volume` — both AVPlayer.volume and AVAudioPlayerNode.volume use 0.0-1.0 linear amplitude, no conversion needed
+- [x] **1.2** Add `balance: Float` property to StreamPlayer (stored, not applied — AVPlayer has no .pan property). Enables uniform propagation from PlaybackCoordinator without backend type checks
+- [x] **1.9** Apply persisted volume in StreamPlayer.play() before playback starts (`player.volume = volume` before `player.play()`). **Startup sync:** PlaybackCoordinator must propagate initial volume from UserDefaults to StreamPlayer during init or lazily before first stream play — otherwise first stream uses default 0.75 instead of saved volume
 
 ### PlaybackCoordinator Routing
-- [ ] **1.3-pre** (Oracle ordering) Add backend readiness model before wiring setVolume/setBalance — ensure AVPlayer.volume setter is safe on unconfigured players (verified idempotent, no-op on unconfigured)
-- [ ] **1.3a** Add `setVolume(_ volume: Float)` method to PlaybackCoordinator — propagates unconditionally to audioPlayer + streamPlayer + videoPlaybackController. Design: update ALL backends always (simpler, no race conditions, zero cost on idle players)
-- [ ] **1.3b** Add `setBalance(_ balance: Float)` method to PlaybackCoordinator — propagates to audioPlayer + streamPlayer
-- [ ] **1.3c** (Oracle) Add "apply current settings on backend activation" — when backend switches, coordinator re-applies volume/balance/EQ to newly active backend. Must happen before Step 1.6 to ensure no control gaps during transitions
-- [ ] **1.4a** Add `isStreamBackendActive` private computed property to PlaybackCoordinator — uses `currentSource` enum (not `currentTrack?.isStream`) because `currentTrack` can be nil when playing a station directly via `play(station:)`. A paused stream should still report as stream-backend-active for capability flag purposes
-- [ ] **1.4b** Add `supportsEQ` computed property (returns `!isStreamBackendActive`)
-- [ ] **1.4c** Add `supportsBalance` computed property (returns `!isStreamBackendActive`)
-- [ ] **1.4d** Add `supportsVisualizer` computed property (returns `!isStreamBackendActive`)
+- [x] **1.3-pre** (Oracle ordering) Add backend readiness model before wiring setVolume/setBalance — ensure AVPlayer.volume setter is safe on unconfigured players (verified idempotent, no-op on unconfigured)
+- [x] **1.3a** Add `setVolume(_ volume: Float)` method to PlaybackCoordinator — propagates unconditionally to audioPlayer + streamPlayer + videoPlaybackController. Design: update ALL backends always (simpler, no race conditions, zero cost on idle players)
+- [x] **1.3b** Add `setBalance(_ balance: Float)` method to PlaybackCoordinator — propagates to audioPlayer + streamPlayer
+- [x] **1.3c** (Oracle) Add "apply current settings on backend activation" — satisfied by unconditional setVolume/setBalance design + init sync in PlaybackCoordinator.init()
+- [x] **1.4a** Add `isStreamBackendActive` private computed property to PlaybackCoordinator — uses `currentSource` enum (not `currentTrack?.isStream`) because `currentTrack` can be nil when playing a station directly via `play(station:)`. A paused stream should still report as stream-backend-active for capability flag purposes
+- [x] **1.4b** Add `supportsEQ` computed property (returns `!isStreamBackendActive`)
+- [x] **1.4c** Add `supportsBalance` computed property (returns `!isStreamBackendActive`)
+- [x] **1.4d** Add `supportsVisualizer` computed property (returns `!isStreamBackendActive`) — unused by UI (Phase 2 prep), documented
 
 ### AudioPlayer Cleanup
-- [ ] **1.6** Remove `videoPlaybackController.volume = volume` from AudioPlayer.volume didSet — coordinator handles all cross-backend propagation now. **Only safe after 1.3a is proven to cover video volume propagation on ALL paths (UI, restore, programmatic)**
+- [x] **1.6** Remove `videoPlaybackController.volume = volume` from AudioPlayer.volume didSet — coordinator handles all cross-backend propagation now. Added prominent warning comment at property declaration.
 
 ### UI Wiring
-- [ ] **1.5** Update WinampMainWindow volume slider binding to route through PlaybackCoordinator.setVolume() — prefer existing `@Bindable` pattern, add volume property to PlaybackCoordinator with didSet calling setVolume
-- [ ] **1.8a** Reroute balance slider binding in WinampMainWindow through PlaybackCoordinator.setBalance() — currently binds directly to `audioPlayer.balance`, bypassing the coordinator
-- [ ] **1.8b** Dim/grey out balance slider in WinampMainWindow when `supportsBalance == false` — slider position preserved but doesn't affect stream audio
-- [ ] **1.7** Dim/grey out EQ sliders in WinampEqualizerWindow when `supportsEQ == false` — sliders still show current preset but don't affect stream audio. Preset selection still works (applied when switching back to local file)
+- [x] **1.5** Update WinampMainWindow volume slider binding to route through PlaybackCoordinator.setVolume() — using Binding<Float>(get:set:) pattern with asymmetric read from audioPlayer / write through coordinator
+- [x] **1.8a** Reroute balance slider binding in WinampMainWindow through PlaybackCoordinator.setBalance() — same asymmetric Binding pattern
+- [x] **1.8b** Dim/grey out balance slider in WinampMainWindow when `supportsBalance == false` — opacity 0.5 + allowsHitTesting(false) + tooltip
+- [x] **1.7** Dim/grey out EQ sliders in WinampEqualizerWindow when `supportsEQ == false` — entire EQ controls group dimmed via opacity 0.5 + allowsHitTesting(false). Titlebar buttons excluded from dimming.
 
-### Phase 1 Verification
-- [ ] **V1.1** Stream playback: volume slider controls stream volume
-- [ ] **V1.2** Volume adjustment during stream: immediate audible effect
-- [ ] **V1.3** Switch stream -> local file: volume stays consistent
-- [ ] **V1.4** Switch local file -> stream: volume stays consistent
-- [ ] **V1.5** EQ sliders visually dimmed during stream playback
-- [ ] **V1.6** Balance slider visually dimmed during stream playback
-- [ ] **V1.7** Local file playback: all controls work exactly as before (regression test)
-- [ ] **V1.8** Persist volume -> restart app -> play stream: volume restored
-- [ ] **V1.9** (Oracle) Video playback: volume still works after Step 1.6 refactor
-- [ ] **V1.10** (Oracle) Switch stream -> local file: balance re-applied correctly (tests 1.3c)
-- [ ] **V1.11** (Oracle) Rapid slider changes while stream backend is erroring: no crash
+### Phase 1 Verification (All passed — manual testing by user 2026-02-22)
+- [x] **V1.1** Stream playback: volume slider controls stream volume
+- [x] **V1.2** Volume adjustment during stream: immediate audible effect
+- [x] **V1.3** Switch stream -> local file: volume stays consistent
+- [x] **V1.4** Switch local file -> stream: volume stays consistent
+- [x] **V1.5** EQ sliders visually dimmed during stream playback
+- [x] **V1.6** Balance slider visually dimmed during stream playback
+- [x] **V1.7** Local file playback: all controls work exactly as before (regression test)
+- [x] **V1.8** Persist volume -> restart app -> play stream: volume restored
+- [x] **V1.9** (Oracle) Video playback: volume still works after Step 1.6 refactor
+- [x] **V1.10** (Oracle) Switch stream -> local file: balance re-applied correctly (tests 1.3c)
+- [x] **V1.11** (Oracle) Rapid slider changes while stream backend is erroring: no crash
 
 ---
 

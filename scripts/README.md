@@ -47,6 +47,42 @@ cd /Users/hank/dev/src/MacAmp
 
 ---
 
+## PR Comment Resolution
+
+**`resolve-pr-comments.sh`** - List, reply to, and resolve PR review comments from automated reviewers (CodeRabbit, Gemini-bot, etc.)
+
+### Usage:
+
+```bash
+# List unresolved review threads
+./scripts/resolve-pr-comments.sh 53 list
+
+# List ALL threads (including resolved)
+./scripts/resolve-pr-comments.sh 53 list-all
+
+# Reply to thread #2 with a message and resolve it
+./scripts/resolve-pr-comments.sh 53 reply 2 "False positive. This is a project convention."
+
+# Resolve thread #2 without replying
+./scripts/resolve-pr-comments.sh 53 resolve 2
+
+# Resolve ALL unresolved threads at once
+./scripts/resolve-pr-comments.sh 53 resolve-all
+```
+
+### What it does:
+
+1. Fetches review threads via GitHub GraphQL API
+2. Displays thread index, author, file:line, and comment preview
+3. Posts replies via REST API (for `reply` command)
+4. Resolves threads via GraphQL mutation
+
+**Requires:** `gh` CLI authenticated with repo access
+
+**Perfect for:** Responding to CodeRabbit/Gemini-bot automated review comments
+
+---
+
 ## See Also
 
 - **[DEVELOPMENT_TESTING.md](../DEVELOPMENT_TESTING.md)** - Complete testing workflow guide
