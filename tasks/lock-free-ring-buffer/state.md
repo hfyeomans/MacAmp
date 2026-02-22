@@ -13,17 +13,20 @@
 - [x] Plan written
 - [x] Plan approved (cross-task plan approved 2026-02-21)
 - [x] Implementation (`MacAmpApp/Audio/LockFreeRingBuffer.swift`)
-- [x] Unit tests (11 tests in `LockFreeRingBufferTests` suite)
+- [x] Unit tests (14 tests in `LockFreeRingBufferTests` suite)
 - [x] Concurrent stress tests (3 tests in `LockFreeRingBufferConcurrencyTests` suite)
-- [x] Oracle review + fixes (overrun race, flush monotonicity, safe UInt64→Int)
-- [x] TSan verification (serial execution, all 14 ring buffer tests pass)
+- [x] Oracle review — 2 rounds (initial concurrency review + end-to-end code review)
+- [x] TSan verification (serial execution, 40/40 tests pass)
+- [x] Pre-existing test failures fixed (DockingController + PlaylistNavigation)
+- [ ] Performance benchmarks (deferred — see todo.md)
 - [ ] Integration into parent task (deferred to `internet-streaming-volume-control`)
 
 ## Commits
 
 1. `3acf75e` — Package.swift bump to swift-tools-version 6.2 + swift-atomics dependency
 2. `a6e73e4` — LockFreeRingBuffer implementation + initial test suite
-3. Phase 4-6 commit — pbxproj membership, test tags, Oracle fixes, #expect macro workaround
+3. `55cc422` — Phase 4-6: pbxproj, tags, Oracle fixes, edge case tests, #expect workaround
+4. `3bd5bec` — Fix two pre-existing test failures (DockingController + PlaylistNavigation)
 
 ## Key Decisions
 
@@ -38,17 +41,25 @@
 9. **Flush:** Monotonic head counters (readHead = writeHead, never reset to zero)
 10. **Oversized writes:** Bounded to capacity, keep newest tail frames
 
-## Oracle Review Findings (2026-02-21)
+## Oracle Review Findings
 
-1. **High (accepted):** Overrun path can race with reader `memcpy` on storage. This is by-design for real-time audio — stale data may be garbled but buffer never crashes.
-2. **Medium (mitigated):** `flush()` is safe because it's called from setup callbacks, not real-time threads. Documented in code comments.
-3. **Low (fixed):** Tautological `UInt64 >= 0` assertion replaced with meaningful bound check.
-4. **Test coverage:** Edge cases for ABL overloads and zero-frame calls deferred.
+### Round 1 (Concurrency Review, 2026-02-21)
+1. **High (accepted):** Overrun path can race with reader `memcpy` on storage. By-design for real-time audio — documented in class-level doc comment.
+2. **Medium (mitigated):** `flush()` only safe if producer quiesced. Documented in method doc comment.
+3. **Low (fixed):** Tautological `UInt64 >= 0` assertion → meaningful bound check.
+4. **Low (fixed):** `capacity * channelCount` overflow → `multipliedReportingOverflow` precondition.
+
+### Round 2 (End-to-End Review, 2026-02-21)
+1. **High (fixed):** DockingControllerTests crash — `togglePlaylist()` asserts windowCoordinator. Fixed: use `toggleVisibility(.playlist)`.
+2. **High (fixed):** PlaylistNavigationTests assertion — wrong `currentTrack` setup. Fixed: set `currentTrack = streamTrack`.
+3. **Medium:** Debounce cancellation in DockingController can persist stale state (`try?` swallows cancellation). Not fixed — separate concern.
+4. **Medium:** Overrun head adjustment can over-advance under contention. Accepted — SPSC contract means single producer.
+5. **Low:** `highThroughput` test potentially flaky under scheduler pressure. Accepted — bound is generous (`< chunks/2`).
 
 ## Files
 
-- `MacAmpApp/Audio/LockFreeRingBuffer.swift` — Implementation
-- `Tests/MacAmpTests/LockFreeRingBufferTests.swift` — Test suite (14 tests)
+- `MacAmpApp/Audio/LockFreeRingBuffer.swift` — Implementation (17 tests covering it)
+- `Tests/MacAmpTests/LockFreeRingBufferTests.swift` — Test suite (14 unit + 3 concurrency)
 - `Tests/MacAmpTests/TestTags.swift` — Shared `.audio` and `.concurrency` tags
 
 ## Parent Task

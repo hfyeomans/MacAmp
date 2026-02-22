@@ -7,20 +7,26 @@
 
 ## Current Placeholders
 
-None yet. This file will be updated as implementation proceeds.
+### 1. `Task.sleep` Waits in Async Tests — STILL PRESENT
 
-### Expected Placeholders
+**Files:**
+- `Tests/MacAmpTests/DockingControllerTests.swift:23` — `Task.sleep(nanoseconds: 300_000_000)` waiting for debounce
+- `Tests/MacAmpTests/SkinManagerTests.swift:53-61` — `waitUntilNotLoading` polling loop with 50ms sleep
 
-During implementation, the following may be temporarily introduced:
+**Purpose:** Temporary synchronization while waiting for async state changes. Works but is brittle under CI load.
+**Status:** Deferred to `async-test-determinism` follow-up task.
+**Action:** Replace with deterministic async patterns:
+- DockingController: Expose a `persistenceComplete` async signal or use `confirmation`
+- SkinManager: Publish loading state changes via `AsyncStream` or add `onLoadComplete` callback
 
-1. **Mixed `import XCTest` + `import Testing`** in Phase 2 (coexistence period)
-   - Files: All 8 test files
-   - Purpose: Allow incremental assertion migration while keeping `XCTestCase` structure
-   - Status: Will be resolved in Phase 3 when `XCTestCase` classes are removed
-   - Action: Remove `import XCTest` in Phase 3
+## Resolved Placeholders
 
-2. **`Task.sleep` waits** will remain through Phases 2-4
-   - Files: `DockingControllerTests.swift`, `SkinManagerTests.swift`
-   - Purpose: Existing async waits kept until Phase 5 replaces them
-   - Status: Will be resolved in Phase 5
-   - Action: Replace with deterministic async patterns in Phase 5
+### 2. Mixed `import XCTest` + `import Testing` (Phase 2 coexistence) — RESOLVED
+
+**What:** Both imports present during incremental migration.
+**Status:** Resolved in Phase 3. All `import XCTest` removed.
+
+### 3. `.timeLimit(.minutes(1))` Granularity — ACCEPTED
+
+**What:** Swift Testing only supports `.minutes()` granularity for time limits, not `.seconds()`.
+**Status:** Accepted as framework limitation. Tests that previously had `.seconds(5)` or `.seconds(10)` now use `.minutes(1)`.
