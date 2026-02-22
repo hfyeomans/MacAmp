@@ -809,69 +809,22 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
         }
     }
     
-    // MARK: - Visualizer Support
+    // MARK: - Visualizer Forwarding (backed by VisualizerPipeline)
 
     func getFrequencyData(bands: Int) -> [Float] {
-        // Return normalized frequency data for spectrum analyzer
-        // Map our 20 visualizer levels to the requested number of bands
-        guard bands > 0 else { return [] }
-        
-        var result = [Float](repeating: 0, count: bands)
-        
-        if isPlaying && !visualizerLevels.isEmpty {
-            // Map visualizer levels to requested bands with logarithmic scaling
-            let sourceCount = visualizerLevels.count
-            
-            for i in 0..<bands {
-                // Map band index to source index
-                let sourceIndex = (i * sourceCount) / bands
-                let nextIndex = min(sourceIndex + 1, sourceCount - 1)
-                
-                // Interpolate between source values for smoother visualization
-                let fraction = Float(i * sourceCount % bands) / Float(bands)
-                let value1 = visualizerLevels[sourceIndex]
-                let value2 = visualizerLevels[nextIndex]
-                
-                // Interpolate and apply logarithmic scaling for better perception
-                let interpolated = value1 * (1 - fraction) + value2 * fraction
-                
-                // Apply logarithmic scaling to make quiet sounds more visible
-                // This mimics how human hearing perceives sound levels
-                let scaled = log10(1.0 + interpolated * 9.0) // Maps 0-1 to log scale
-                
-                // Normalize to 0-1 range with slight boost
-                result[i] = min(1.0, max(0.0, scaled * 0.8))
-            }
-        } else if isPlaying {
-            // Provide some minimal random movement when no data available
-            for i in 0..<bands {
-                result[i] = Float.random(in: 0.0...0.1)
-            }
-        }
-        
-        return result
+        visualizerPipeline.getFrequencyData(bands: bands, isPlaying: isPlaying)
     }
 
-    /// Get RMS data mapped to requested number of bands (forwarded to VisualizerPipeline)
     func getRMSData(bands: Int) -> [Float] {
         visualizerPipeline.getRMSData(bands: bands)
     }
 
-    /// Get waveform samples resampled to requested count (forwarded to VisualizerPipeline)
     func getWaveformSamples(count: Int) -> [Float] {
         visualizerPipeline.getWaveformSamples(count: count)
     }
 
-    // MARK: - Butterchurn Audio Data
-
-    /// Thread-safe snapshot of current Butterchurn audio data
-    /// Returns nil if not playing local audio (video or stream playback)
-    /// Called by ButterchurnBridge at 30 FPS to push data to JavaScript
     func snapshotButterchurnFrame() -> ButterchurnFrame? {
-        // Only return data for local audio playback via AVAudioEngine
-        // Video uses AVPlayer (no tap), streams use StreamPlayer (no PCM access)
         guard currentMediaType == .audio && isPlaying else { return nil }
-
         return visualizerPipeline.snapshotButterchurnFrame()
     }
 

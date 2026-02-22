@@ -535,6 +535,41 @@ final class VisualizerPipeline {
         return result
     }
 
+    /// Get frequency data mapped to requested number of bands with logarithmic scaling
+    /// - Parameters:
+    ///   - bands: Number of output bands
+    ///   - isPlaying: Whether audio is currently playing (controls output behavior)
+    /// - Returns: Array of normalized frequency values (0.0-1.0)
+    func getFrequencyData(bands: Int, isPlaying: Bool) -> [Float] {
+        guard bands > 0 else { return [] }
+
+        var result = [Float](repeating: 0, count: bands)
+
+        if isPlaying && !levels.isEmpty {
+            let sourceCount = levels.count
+
+            for i in 0..<bands {
+                let sourceIndex = (i * sourceCount) / bands
+                let nextIndex = min(sourceIndex + 1, sourceCount - 1)
+
+                let fraction = Float(i * sourceCount % bands) / Float(bands)
+                let value1 = levels[sourceIndex]
+                let value2 = levels[nextIndex]
+
+                let interpolated = value1 * (1 - fraction) + value2 * fraction
+                let scaled = log10(1.0 + interpolated * 9.0)
+
+                result[i] = min(1.0, max(0.0, scaled * 0.8))
+            }
+        } else if isPlaying {
+            for i in 0..<bands {
+                result[i] = Float.random(in: 0.0...0.1)
+            }
+        }
+
+        return result
+    }
+
     // MARK: - Data Update (called from poll timer)
 
     /// Update visualizer levels with new data from shared buffer
