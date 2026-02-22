@@ -158,6 +158,9 @@ Target (MainWindowFullLayer.body):
 | Item | Source | Size | Priority | Blocks Future Waves? |
 |------|--------|------|----------|---------------------|
 | T1 Phase 4: Engine transport extraction | audioplayer-decomposition | Large | Medium | No — schedule after T5 Ph2 |
+| Hide Main Window not working | T3 manual testing (pre-existing) | Small | Low | No |
+
+**Context (Hide Main Window):** The "Hide Main" menu item (`AppCommands.swift:13`) calls `DockingController.toggleMain()` which only toggles an internal `panes[idx].visible` boolean. This boolean is not wired to actually hide/show the NSWindow. `WindowVisibilityController.hideMain()` exists and calls `registry.mainWindow?.orderOut(nil)` but is never invoked by the toggle path. Pre-existing — not caused by T3 decomposition.
 | PlaylistWindowActions singleton rearchitecture | playlist-decomp depreciated.md | Large | Low | No |
 | Manual selection state sync fix | playlist-decomp depreciated.md | Small | Low | No — blocked by singleton fix |
 | `async-test-determinism` (Task.sleep removal) | swift-testing todo.md | Medium | Low | No |
