@@ -1,8 +1,6 @@
 // swiftlint:disable file_length
 import Foundation
-import Combine
 import AVFoundation
-import Accelerate
 import Observation
 
 @Observable

@@ -166,7 +166,7 @@ final class EqualizerController {
     // MARK: - EQ Configuration
 
     /// Configure the 10-band EQ with Winamp frequency centers
-    func configureEQ() {
+    private func configureEQ() {
         // Winamp 10-band centers (Hz): 60,170,310,600,1k,3k,6k,12k,14k,16k
         let freqs: [Float] = [60, 170, 310, 600, 1000, 3000, 6000, 12000, 14000, 16000]
         for i in 0..<min(eqNode.bands.count, freqs.count) {
