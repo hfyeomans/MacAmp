@@ -135,7 +135,7 @@ T5 Phase 1 (stream volume routing + capability flags) merged in PR #53 (2026-02-
 **Context:** During T3 manual testing, the spectrum analyzer pauses during volume slider drag. This is pre-existing behavior caused by `VisualizerView()` being rendered inline in `MainWindowFullLayer.body` — volume changes trigger full body re-evaluation including the visualizer. The fix is to extract `VisualizerView` into a dedicated `MainWindowVisualizerLayer` struct, creating a SwiftUI recomposition boundary that isolates visualizer rendering from slider state changes.
 
 **Architecture path:**
-```
+```text
 Current (MainWindowFullLayer.body):
   Group {
     MainWindowSlidersLayer(...)  ← reads audioPlayer.volume (own View boundary)

@@ -53,6 +53,7 @@ final class WinampMainWindowInteractionState {
     }
 
     private var scrollRestartTask: Task<Void, Never>?
+    private var scrubResetTask: Task<Void, Never>?
 
     func resetScrolling() {
         scrollTimer?.invalidate()
@@ -71,6 +72,7 @@ final class WinampMainWindowInteractionState {
     // MARK: - Position Slider Scrubbing
 
     func handlePositionDrag(_ value: DragGesture.Value, in geometry: GeometryProxy, audioPlayer: AudioPlayer) {
+        scrubResetTask?.cancel()
         if !isScrubbing {
             isScrubbing = true
             wasPlayingPreScrub = audioPlayer.isPlaying
@@ -94,7 +96,8 @@ final class WinampMainWindowInteractionState {
         scrubbingProgress = progress
         audioPlayer.seekToPercent(progress, resume: wasPlayingPreScrub)
 
-        Task { @MainActor [weak self] in
+        scrubResetTask?.cancel()
+        scrubResetTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(0.3))
             guard !Task.isCancelled else { return }
             self?.isScrubbing = false
@@ -123,5 +126,7 @@ final class WinampMainWindowInteractionState {
         scrollTimer = nil
         scrollRestartTask?.cancel()
         scrollRestartTask = nil
+        scrubResetTask?.cancel()
+        scrubResetTask = nil
     }
 }

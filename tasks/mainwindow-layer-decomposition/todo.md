@@ -102,21 +102,21 @@
 ## Phase 4: Verification
 
 - [x] Full build with Thread Sanitizer enabled (swift test passes, known flaky test excluded)
-- [ ] Visual test: full mode rendering (default skin) — NEEDS MANUAL VERIFICATION
-- [ ] Visual test: shade mode rendering (default skin) — NEEDS MANUAL VERIFICATION
-- [ ] Visual test: double-size mode — NEEDS MANUAL VERIFICATION
-- [ ] Visual test: 3+ different Winamp skins — NEEDS MANUAL VERIFICATION
-- [ ] Functional test: all transport buttons — NEEDS MANUAL VERIFICATION
-- [ ] Functional test: position slider scrubbing — NEEDS MANUAL VERIFICATION
-- [ ] Functional test: volume and balance sliders — NEEDS MANUAL VERIFICATION
-- [ ] Functional test: track info scrolling (long title) — NEEDS MANUAL VERIFICATION
-- [ ] Functional test: pause blink animation — NEEDS MANUAL VERIFICATION
-- [ ] Functional test: options menu (O button + Ctrl+O) — NEEDS MANUAL VERIFICATION
-- [ ] Functional test: time display toggle (Ctrl+T) — NEEDS MANUAL VERIFICATION
-- [ ] Functional test: clutter bar buttons (O, A, I, D, V) — NEEDS MANUAL VERIFICATION
-- [ ] Functional test: shuffle/repeat cycling — NEEDS MANUAL VERIFICATION
-- [ ] Functional test: EQ/Playlist window toggles — NEEDS MANUAL VERIFICATION
-- [ ] Functional test: minimize, shade, close titlebar buttons — NEEDS MANUAL VERIFICATION
+- [x] Visual test: full mode rendering (default skin) — PASSED
+- [x] Visual test: shade mode rendering (default skin) — PASSED
+- [x] Visual test: double-size mode — PASSED
+- [x] Visual test: 3+ different Winamp skins — PASSED
+- [x] Functional test: all transport buttons — PASSED
+- [x] Functional test: position slider scrubbing — PASSED
+- [x] Functional test: volume and balance sliders — PASSED (note: spectrum analyzer pauses during drag, pre-existing)
+- [x] Functional test: track info scrolling (long title) — PASSED
+- [x] Functional test: pause blink animation — PASSED
+- [x] Functional test: options menu (O button + Ctrl+O) — PASSED
+- [x] Functional test: time display toggle (Ctrl+T) — PASSED
+- [x] Functional test: clutter bar buttons (O, A, I, D, V) — PASSED
+- [x] Functional test: shuffle/repeat cycling — PASSED
+- [x] Functional test: EQ/Playlist window toggles — PASSED
+- [x] Functional test: minimize, shade, close titlebar buttons — PASSED
 - [ ] Performance: Instruments profile body evaluation count — DEFERRED (post-merge optimization)
 - [x] Code review: verify no `internal` @State vars remain
 - [x] Code review: all child views have minimal dependency surface
