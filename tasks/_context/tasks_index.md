@@ -26,7 +26,7 @@
 | Task | Purpose | Created | Last Activity | Days Idle | Status |
 |------|---------|---------|---------------|-----------|--------|
 | `internet-radio-n1-n6-fixes` | Fix 6 issues (1 HIGH, 2 MEDIUM, 3 LOW) in internet radio streaming infrastructure discovered during Oracle validation | 2026-02-21 | 2026-02-21 | 0 | ✅ COMPLETE — All 6 fixes implemented, Oracle-verified, merged in PR #49 |
-| `mainwindow-layer-decomposition` | Decompose WinampMainWindow from cross-file extension pattern to proper layer subview decomposition with @Observable interaction state object | 2026-02-21 | 2026-02-22 | 0 | 📋 PLANNED — Research complete (Gemini + Oracle converged), 4-phase plan written. Unblocked by T5 Ph1 merge (PR #53). Ready to start. |
+| `mainwindow-layer-decomposition` | Decompose WinampMainWindow from cross-file extension pattern to proper layer subview decomposition with @Observable interaction state object | 2026-02-21 | 2026-02-22 | 0 | ✅ COMPLETE — 4 phases done, 2 Oracle reviews (gpt-5.3-codex xhigh), PR #54 created. 10 files in MainWindow/, old extension deleted. Manual testing passed. |
 | `playlistwindow-layer-decomposition` | Decompose WinampPlaylistWindow from cross-file extension pattern to proper layer subview decomposition; same architectural pattern as mainwindow task | 2026-02-21 | 2026-02-22 | 0 | ✅ COMPLETE — Wave 1. 4 phases done, Oracle reviewed, PR merged. Extension deleted, 7 child views created. |
 | `swift-testing-modernization` | Migrate all 9 test files (40 tests) from XCTest to Swift Testing framework; bump Package.swift to 6.2; add parameterized tests, tags, time limits | 2026-02-21 | 2026-02-22 | 0 | ✅ COMPLETE — Wave 1. 6 phases done, Oracle reviewed, PR merged. Task.sleep removal deferred. |
 | `audioplayer-decomposition` | Extract EqualizerController from AudioPlayer.swift using facade pattern (Phases 1-3) | 2026-02-07 | 2026-02-22 | 0 | ✅ COMPLETE — Wave 1. Phases 1-3 done (1,070→945 lines), Phase 4 deferred (seek state machine risk). PR merged. |
@@ -166,7 +166,7 @@
 
 These tasks are ready to act on and have the most impact:
 
-1. **`mainwindow-layer-decomposition`** — Research complete, 4-phase plan written. Unblocked by T5 Ph1 merge (PR #53). **Next task to start.**
+1. **`mainwindow-layer-decomposition`** — COMPLETE. PR #54 awaiting merge. Visualizer isolation deferred as future optimization.
 2. **`internet-streaming-volume-control` Phase 2** — Ph1 merged (PR #53). Ph2 (Loopback Bridge) deferred to Wave 3.
 3. **`airplay-integration`** — Research done, awaiting user approval to begin.
 4. **`oracle-validation-audioplayer-refactor`** — API naming mismatch needs resolution.
