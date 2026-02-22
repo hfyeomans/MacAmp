@@ -21,7 +21,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     @ObservationIgnored private var playheadOffset: Double = 0 // seconds offset for current scheduled segment
 
     // MARK: - Extracted Controllers
-    let equalizer = EqualizerController()
+    private let equalizer = EqualizerController()
     let visualizerPipeline = VisualizerPipeline()
 
     /// Legacy toggle - derives from AppSettings.visualizerMode (forwarded to pipeline)

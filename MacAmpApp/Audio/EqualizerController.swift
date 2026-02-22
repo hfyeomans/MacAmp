@@ -18,10 +18,22 @@ final class EqualizerController {
     let eqNode = AVAudioUnitEQ(numberOfBands: 10)
 
     // MARK: - Observable State
+    // didSet handlers keep the eqNode in sync regardless of assignment path
+    // (direct property write or behavioral method like setPreamp/toggleEq).
 
-    var preamp: Float = 0.0 // -12.0 to 12.0 dB (typical range)
-    var eqBands: [Float] = Array(repeating: 0.0, count: 10) // 10 bands, -12.0 to 12.0 dB
-    var isEqOn: Bool = false
+    var preamp: Float = 0.0 { // -12.0 to 12.0 dB (typical range)
+        didSet { eqNode.globalGain = preamp }
+    }
+    var eqBands: [Float] = Array(repeating: 0.0, count: 10) { // 10 bands, -12.0 to 12.0 dB
+        didSet {
+            for (i, gain) in eqBands.enumerated() where i < eqNode.bands.count {
+                eqNode.bands[i].gain = gain
+            }
+        }
+    }
+    var isEqOn: Bool = false {
+        didSet { eqNode.bypass = !isEqOn }
+    }
     var eqAutoEnabled: Bool = false
     var useLogScaleBands: Bool = true
     var appliedAutoPresetTrack: String?
@@ -46,9 +58,7 @@ final class EqualizerController {
     // MARK: - EQ Control Methods
 
     func setPreamp(value: Float) {
-        preamp = value
-        eqNode.globalGain = value
-        // Ensure EQ is enabled when adjusting preamp
+        preamp = value // didSet syncs eqNode.globalGain
         if !isEqOn && value != 0 {
             toggleEq(isOn: true)
         }
@@ -57,14 +67,12 @@ final class EqualizerController {
 
     func setEqBand(index: Int, value: Float) {
         guard index >= 0 && index < eqBands.count else { return }
-        eqBands[index] = value
-        eqNode.bands[index].gain = value
+        eqBands[index] = value // didSet syncs eqNode.bands
         AppLog.debug(.audio, "Set EQ Band \(index) to \(value)")
     }
 
     func toggleEq(isOn: Bool) {
-        isEqOn = isOn
-        eqNode.bypass = !isOn
+        isEqOn = isOn // didSet syncs eqNode.bypass
         AppLog.debug(.audio, "EQ is now \(isOn ? "On" : "Off")")
     }
 
