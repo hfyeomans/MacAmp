@@ -5,81 +5,94 @@
 
 ## Current Status
 
-**Phase:** Phase 1 — Scaffolding (IN PROGRESS)
+**Phase:** Phase 4 — Verification (AWAITING MANUAL TESTING)
 **Branch:** `refactor/mainwindow-decomposition`
 **Last Updated:** 2026-02-22
 
+## Implementation Summary
+
+| Phase | Status | Commit |
+|-------|--------|--------|
+| Phase 1: Scaffolding | COMPLETE | 997e4d6 |
+| Phase 2: Child Views | COMPLETE | 3b1543b |
+| Phase 3: Root Wiring | COMPLETE | 223f594 |
+| Phase 4: Verification | IN PROGRESS | — |
+
+### Files Created (10 total in MainWindow/)
+- `WinampMainWindow.swift` — root composition (~100 lines)
+- `WinampMainWindowLayout.swift` — Coords constants enum (~50 lines)
+- `WinampMainWindowInteractionState.swift` — @Observable state class (~120 lines)
+- `MainWindowOptionsMenuPresenter.swift` — NSMenu bridge (~130 lines)
+- `MainWindowFullLayer.swift` — full-mode composition (~250 lines)
+- `MainWindowShadeLayer.swift` — shade-mode composition (~140 lines)
+- `MainWindowTransportLayer.swift` — transport buttons (~60 lines)
+- `MainWindowTrackInfoLayer.swift` — scrolling text (~50 lines)
+- `MainWindowIndicatorsLayer.swift` — indicators (~85 lines)
+- `MainWindowSlidersLayer.swift` — sliders (~75 lines)
+
+### Files Deleted
+- `MacAmpApp/Views/WinampMainWindow.swift` (339 lines)
+- `MacAmpApp/Views/WinampMainWindow+Helpers.swift` (518 lines)
+- `MacAmpApp/Views/VideoWindowChromeView.swift` (125 lines, stale duplicate)
+
+### Net Change: -857 lines old → +1,060 lines new (10 focused files vs 2 monolithic)
+
+## Oracle Reviews
+
+### Review 1: Phase 1 Scaffolding (gpt-5.3-codex, xhigh)
+- **Finding 1 (High):** Build fails — xcodeproj missing entries → FALSE POSITIVE (SwiftPM project)
+- **Finding 2 (Medium):** Interaction state is unused scaffolding → EXPECTED (Phase 1 scaffolding)
+- **Finding 3 (Medium):** Stale title capture in scroll timer → FIXED (displayTitleProvider closure)
+- **Finding 4 (Low):** DispatchQueue.main.asyncAfter → FIXED (modernized to Task.sleep)
+
+### Review 2: Phase 3 Root Wiring (gpt-5.3-codex, xhigh)
+- **Finding 1 (High):** xcodeproj missing entries → FALSE POSITIVE (SwiftPM project)
+- **Finding 2 (Medium):** Shade time display double-offset regression → FIXED
+- **Finding 3 (Low):** displayTitleProvider stale if coordinator swapped → ACKNOWLEDGED (singleton, no risk)
+
 ## Decisions Made
 
-### D1: Architecture Pattern -- @Observable + Child View Structs
+### D1-D6: (unchanged from research phase — see below)
 
+### D7: Task.sleep Modernization
+**Decision:** Replace DispatchQueue.main.asyncAfter with Task.sleep in interaction state.
+**Rationale:** Structured cancellation, explicit @MainActor isolation, no GCD dependency.
+**Status:** Implemented
+
+### D8: displayTitleProvider Pattern
+**Decision:** Use closure that reads live title instead of captured string parameter.
+**Rationale:** Oracle identified stale title bug — timer would use captured title for its lifetime.
+**Status:** Implemented
+
+## Decisions D1-D6 (from research phase)
+
+### D1: Architecture Pattern -- @Observable + Child View Structs
 **Decision:** Use `@Observable` interaction state class + separate `View` structs (not extensions).
-**Rationale:** Both Gemini and Oracle converged on this independently. Extensions do not create
-recomposition boundaries. Separate view types do.
 **Status:** Confirmed
 
 ### D2: Coords Extraction Strategy
-
-**Decision:** Extract `Coords` to a top-level `WinampMainWindowLayout` enum in its own file.
-**Alternatives considered:**
-- (a) Pass coordinates as init params -- too verbose, 30+ constants
-- (b) Keep nested, reference as `WinampMainWindow.Coords` -- couples children to parent type
-- (c) Global enum in own file -- clean, no coupling (chosen)
+**Decision:** Extract `Coords` to a top-level `WinampMainWindowLayout` enum.
 **Status:** Confirmed
 
 ### D3: Timer Ownership
-
-**Decision:** `scrollTimer` lifecycle managed by `WinampMainWindowInteractionState`. The `pauseBlinkTimer`
-(Timer.publish) stays on the root view as `.onReceive` modifier, writing to interaction state.
-**Rationale:** `Timer.publish` is a Combine publisher that SwiftUI manages via `.onReceive`. It belongs
-on the view. The mutable `scrollTimer` (manual Timer) is state, so it belongs in the state class.
+**Decision:** `scrollTimer` in interaction state, `pauseBlinkTimer` on root view.
 **Status:** Confirmed
 
 ### D4: Options Menu Isolation
-
-**Decision:** Dedicated `MainWindowOptionsMenuPresenter` class, not part of interaction state.
-**Rationale:** NSMenu is AppKit-specific bridging concern, not view interaction state. Keeping it
-separate follows single-responsibility principle and keeps the interaction state class focused.
+**Decision:** Dedicated `MainWindowOptionsMenuPresenter` class.
 **Status:** Confirmed
 
-### D5: @Environment Passthrough vs Init Injection
-
-**Decision:** Child views declare their own `@Environment` properties for objects they need.
-**Rationale:** SwiftUI automatically injects environment objects to all descendants. Passing via init
-would be redundant and add boilerplate. The exception is the interaction state class, which is passed
-explicitly since it is not in the environment.
+### D5: @Environment Passthrough
+**Decision:** Child views declare their own `@Environment` properties.
 **Status:** Confirmed
 
 ### D6: File Location
-
-**Decision:** New `MacAmpApp/Views/MainWindow/` subdirectory.
-**Rationale:** 10 files for one window is too many for a flat Views/ directory. Subdirectory groups
-related files and matches the pattern that could be used for Playlist/EQ windows later.
+**Decision:** `MacAmpApp/Views/MainWindow/` subdirectory.
 **Status:** Confirmed
-
-## Open Questions
-
-None currently. All architectural questions resolved during research phase.
 
 ## Blockers
 
-None currently.
-
-## Dependencies
-
-- No external dependencies
-- T5 Phase 1 (volume control) MERGED — no conflicts expected
-- Xcode project file will need directory reference update
-
-## Risk Register
-
-| Risk | Likelihood | Impact | Mitigation |
-|------|-----------|--------|------------|
-| Pixel regression | Medium | High | Screenshot comparison before/after each phase |
-| Timer lifecycle bug | Low | Medium | TSan enabled, manual test pause/scroll behavior |
-| NSMenu deallocation | Low | High | Presenter holds strong reference (same as current pattern) |
-| Xcode project breakage | Low | Low | Build after every file move/create |
-| SwiftUI environment not reaching children | Low | Medium | Children are in view hierarchy, auto-inherits |
+None. Awaiting manual visual/functional verification.
 
 ## Artifact Inventory
 
@@ -87,7 +100,7 @@ None currently.
 |----------|--------|
 | research.md | Complete |
 | plan.md | Complete |
-| todo.md | Active (tracking progress) |
+| todo.md | Active (Phase 4 manual items pending) |
 | state.md | Active (this file) |
 | depreciated.md | Complete |
-| placeholder.md | Active (tracking scaffolding) |
+| placeholder.md | Needs update (Coords typealias resolved) |

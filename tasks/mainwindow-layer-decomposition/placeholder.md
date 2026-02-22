@@ -3,44 +3,30 @@
 > **Purpose:** Document any intentional placeholder or scaffolding code introduced during this task.
 > Per project conventions, we use centralized placeholder.md files instead of in-code TODO comments.
 
-## Active Placeholders
+## Resolved Placeholders
 
-*None yet. This file will be updated during implementation if any scaffolding code is introduced.*
-
-## Template
-
-When adding a placeholder entry during implementation, use this format:
-
-```
-### [Short Description]
-- **File:** `MacAmpApp/Views/MainWindow/[filename].swift`
-- **Line:** [approximate line number]
-- **Purpose:** [Why this placeholder exists]
-- **Status:** Pending | In Progress | Resolved
-- **Action:** [What needs to happen to resolve this]
-- **Added:** [date]
-- **Resolved:** [date, if applicable]
-```
-
-## Expected Placeholders
-
-These may arise during phased implementation:
-
-### Coords Typealias (Phase 1)
+### Coords Typealias (Phase 1 → Phase 3)
 
 - **File:** `MacAmpApp/Views/MainWindow/WinampMainWindow.swift`
 - **Purpose:** Temporary `typealias Coords = WinampMainWindowLayout` for backward compatibility
-  during incremental migration. Allows existing code to compile while child views are extracted.
-- **Status:** Pending
-- **Action:** Remove typealias after all references are updated to use `WinampMainWindowLayout` directly.
+  during incremental migration.
+- **Status:** Resolved
+- **Action:** Typealias removed when old WinampMainWindow.swift was deleted in Phase 3.
+  All child views reference `WinampMainWindowLayout` directly.
+- **Added:** 2026-02-22
+- **Resolved:** 2026-02-22
 
 ### Parallel Builder Methods (Phase 2)
 
-- **File:** Various child view files
-- **Purpose:** During extraction, some builder methods may temporarily exist in both the old extension
-  file and the new child view file while wiring is tested.
-- **Status:** Pending
-- **Action:** Delete duplicates from extension file once child view is verified working.
+- **Purpose:** During extraction, builder methods existed in both old extension and new child views.
+- **Status:** Resolved
+- **Action:** Old extension file deleted in Phase 3. No duplicate code remains.
+- **Added:** 2026-02-22
+- **Resolved:** 2026-02-22
+
+## Active Placeholders
+
+None. All scaffolding has been resolved.
 
 ## Rules
 
