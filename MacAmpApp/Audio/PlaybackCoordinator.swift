@@ -144,10 +144,14 @@ final class PlaybackCoordinator {
 
         await streamPlayer.attachLoopbackTap(
             ringBuffer: ringBuffer,
-            onFormatReady: { [weak self] sampleRate in
+            onFormatReady: { [weak self, weak ringBuffer] sampleRate in
                 // tapPrepare is NOT real-time — safe to dispatch to main
                 Task { @MainActor [weak self] in
-                    guard let self, let rb = self.bridgeRingBuffer else { return }
+                    // Gate: verify this callback's ring buffer is still the active one
+                    // (prevents stale stream A callback from activating on stream B's buffer)
+                    guard let self,
+                          let rb = self.bridgeRingBuffer,
+                          rb === ringBuffer else { return }
                     self.audioPlayer.activateStreamBridge(ringBuffer: rb, sampleRate: sampleRate)
                 }
             }

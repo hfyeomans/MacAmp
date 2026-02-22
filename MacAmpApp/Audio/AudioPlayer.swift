@@ -643,15 +643,13 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
             }
 
             let framesRead = ringBuffer.read(into: data, frameCount: Int(frameCount))
+            isSilence.pointee = ObjCBool(framesRead == 0)
 
             if framesRead < Int(frameCount) {
                 // Fill remaining with silence to prevent glitches
                 let silenceStart = framesRead * ringBuffer.channelCount
                 let silenceCount = (Int(frameCount) - framesRead) * ringBuffer.channelCount
                 memset(data + silenceStart, 0, silenceCount * MemoryLayout<Float>.size)
-                if framesRead == 0 {
-                    isSilence.pointee = true
-                }
             }
 
             return noErr

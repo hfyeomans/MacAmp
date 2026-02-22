@@ -119,7 +119,7 @@ private func loopbackTapProcess(
     let channels = context.channelCount
 
     // Write to ring buffer — always as interleaved stereo
-    if channels >= 2 && !context.isNonInterleaved && ablPtr.count == 1 {
+    if channels == 2 && !context.isNonInterleaved && ablPtr.count == 1 {
         // Fast path: already interleaved stereo — write directly
         if let data = ablPtr[0].mData?.assumingMemoryBound(to: Float.self) {
             _ = context.ringBuffer.write(from: data, frameCount: frameCount)
@@ -326,6 +326,10 @@ final class StreamPlayer: NSObject, @preconcurrency AVPlayerItemMetadataOutputPu
         guard let tracks = try? await currentItem.asset.loadTracks(withMediaType: .audio) else {
             return
         }
+
+        // Revalidate: item may have changed during async loadTracks
+        // (e.g., user switched streams while tracks were loading)
+        guard player.currentItem === currentItem else { return }
 
         // Create audio mix with tap on all audio tracks
         let audioMix = AVMutableAudioMix()
