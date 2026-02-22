@@ -13,14 +13,14 @@
 | Blocking actions | None — all resolved |
 | Waves | 3 |
 | Branches | 6 |
-| PRs | 5 (Wave 1: 3 merged, Wave 2a: PR #53 merged, Wave 2b+3 TBD) |
-| Current wave | Wave 2b NEXT (T5 Ph1 merged, T3 mainwindow decomp next) |
+| PRs | 6 (Wave 1: 3 merged, Wave 2a: PR #53 merged, Wave 2b: PR #54 merged, Wave 3 TBD) |
+| Current wave | Wave 3 NEXT (T5 Ph2 Loopback Bridge + optional T1 Ph4) |
 
 ---
 
-## Current Phase: WAVE 2b — T3 MainWindow Decomposition IN PROGRESS
+## Current Phase: WAVE 2 COMPLETE — Wave 3 Next
 
-T5 Phase 1 (stream volume routing + capability flags) merged in PR #53 (2026-02-22). T3 (mainwindow decomposition) implementation complete, PR #54 created, awaiting merge.
+Wave 2 complete: T5 Phase 1 merged PR #53 (2026-02-22), T3 merged PR #54 (2026-02-22). Wave 3 (T5 Phase 2 Loopback Bridge + optional T1 Phase 4) is next.
 
 ---
 
@@ -31,6 +31,7 @@ T5 Phase 1 (stream volume routing + capability flags) merged in PR #53 (2026-02-
 | N1-N6 internet radio fixes | PR #49 (merged 2026-02-21) | Unblocks T5 Phase 1 |
 | VisualizerPipeline SPSC refactor | PR #48 (merged 2026-02-14) | Provides template for T4 ring buffer; unblocks T5 Phase 2 |
 | T5 Phase 1 (stream volume routing) | PR #53 (merged 2026-02-22) | Unblocks T3 mainwindow decomposition |
+| T3 (mainwindow layer decomposition) | PR #54 (merged 2026-02-22) | Wave 2 complete; unblocks Wave 3 |
 
 ---
 
@@ -40,7 +41,7 @@ T5 Phase 1 (stream volume routing + capability flags) merged in PR #53 (2026-02-
 |----|------|----------------|-------------------|---------|
 | T1 | `audioplayer-decomposition` | **Ph1-3 COMPLETE**, Ph4 deferred | Wave 1 — done, awaiting PR | swiftlint suppressions remain (945 lines, needs Ph4) |
 | T2 | `playlistwindow-layer-decomposition` | **COMPLETE** | Wave 1 — done, awaiting PR | Manual testing items deferred |
-| T3 | `mainwindow-layer-decomposition` | **COMPLETE** (PR #54, awaiting merge) | Wave 2b — IN PROGRESS | Manual testing passed |
+| T3 | `mainwindow-layer-decomposition` | **COMPLETE** (PR #54 merged) | Wave 2b — MERGED | None |
 | T4 | `lock-free-ring-buffer` | **COMPLETE** (benchmarks deferred) | Wave 1 — done, awaiting PR | None |
 | T5 | `internet-streaming-volume-control` | **Ph1 COMPLETE (merged PR #53)** | Wave 2a — MERGED | Ph2: Wave 3 (needs T4 merge) |
 | T6 | `swift-testing-modernization` | **COMPLETE** (deferrals noted) | Wave 1 — done, awaiting PR | None |
@@ -64,7 +65,7 @@ T5 Phase 1 (stream volume routing + capability flags) merged in PR #53 (2026-02-
 | Step | Task | Branch | Status | Depends On |
 |------|------|--------|--------|-----------|
 | 2a | T5 Phase 1 (Volume routing) | `feature/stream-volume-control` | **MERGED** (PR #53, 2026-02-22) | Wave 1 merges (done) |
-| 2b | T3 (MainWindow decomp) | `refactor/mainwindow-decomposition` | **PR #54** (awaiting merge) | T5 Phase 1 merge (done) |
+| 2b | T3 (MainWindow decomp) | `refactor/mainwindow-decomposition` | **MERGED** (PR #54, 2026-02-22) | T5 Phase 1 merge (done) |
 
 **Merge strategy:** Two separate PRs. T5 Ph1 merges first; T3 merges after verification.
 

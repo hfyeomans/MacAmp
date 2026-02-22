@@ -5,8 +5,9 @@
 
 ## Current Status
 
-**Phase:** Phase 4 — Verification (MANUAL TESTING PASSED)
-**Branch:** `refactor/mainwindow-decomposition`
+**Phase:** COMPLETE — MERGED
+**Branch:** `refactor/mainwindow-decomposition` (merged, deleted)
+**PR:** #54 (merged 2026-02-22)
 **Last Updated:** 2026-02-22
 
 ## Implementation Summary
