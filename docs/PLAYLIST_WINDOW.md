@@ -1,10 +1,15 @@
 # MacAmp Playlist Window Documentation
 
-**Version:** 1.0.0
-**Last Updated:** December 2025
+**Version:** 1.1.0
+**Last Updated:** February 2026
 **Status:** Production Ready
 **Author:** MacAmp Development Team
 **Oracle Grade:** A- (Architecture Aligned)
+
+> **Note (Wave 1 Decomposition, Feb 2026):** Line references such as `WinampPlaylistWindow.swift:390-417`
+> throughout this document predate the playlist window decomposition and may be stale. Verify against
+> current source files in `MacAmpApp/Views/PlaylistWindow/`. See [Architecture Overview](#architecture-overview)
+> for the updated file structure.
 
 ---
 
@@ -133,6 +138,21 @@ var visibleTrackCount: Int {
 
 ## Architecture Overview
 
+### File Structure (Post-Decomposition)
+
+The playlist window was decomposed from a monolithic view + extension into focused child view structs (Wave 1, Feb 2026). `WinampPlaylistWindow.swift` is now ~230 lines (root composer only), down from ~530 lines. The menu extension `WinampPlaylistWindow+Menus.swift` was **deleted** -- its code moved to child views and `PlaylistMenuPresenter`.
+
+```
+MacAmpApp/Views/PlaylistWindow/
+  PlaylistWindowInteractionState.swift  (47 lines, @Observable state)
+  PlaylistMenuPresenter.swift           (197 lines, AppKit NSMenu bridge)
+  PlaylistTrackListView.swift           (84 lines, track list + selection)
+  PlaylistBottomControlsView.swift      (120 lines, transport + time)
+  PlaylistShadeView.swift               (42 lines, shade mode)
+  PlaylistResizeHandle.swift            (65 lines, resize drag gesture)
+  PlaylistTitleBarButtons.swift         (33 lines, titlebar buttons)
+```
+
 ### Three-Layer Pattern
 
 Following MacAmp's documented architecture (MACAMP_ARCHITECTURE_GUIDE.md §3):
@@ -140,10 +160,11 @@ Following MacAmp's documented architecture (MACAMP_ARCHITECTURE_GUIDE.md §3):
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    PRESENTATION LAYER                        │
-│  WinampPlaylistWindow.swift (SwiftUI View)                  │
+│  WinampPlaylistWindow.swift (~230 lines, root composer)     │
+│  + PlaylistWindow/ child views (7 files, see above)         │
 │  - Renders chrome sprites                                    │
-│  - Handles resize gesture                                    │
-│  - Displays track list                                       │
+│  - Handles resize gesture (PlaylistResizeHandle)             │
+│  - Displays track list (PlaylistTrackListView)               │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -853,6 +874,7 @@ xcodebuild -scheme MacAmpApp -configuration Debug -enableThreadSanitizer YES bui
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.1.0 | February 2026 | Wave 1 decomposition: child view structs, deleted Menus extension, staleness note |
 | 1.0.0 | December 2025 | Initial release with full resize system |
 
 ---

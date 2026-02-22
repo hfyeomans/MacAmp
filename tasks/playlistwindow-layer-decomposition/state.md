@@ -4,7 +4,7 @@
 
 ---
 
-## Current Status: COMPLETE
+## Current Status: MERGED (PR #51)
 
 ## Origin
 
@@ -67,10 +67,17 @@ Oracle architectural audit (gpt-5.3-codex, xhigh, 2026-02-21) of commit 5f2cef2 
 3. `cf53dfd` - Phase 3: Wire child views, delete extension, update Xcode project
 4. `0ad1c9d` - docs: Update task files to reflect completed decomposition
 5. `47de639` - refactor: Address Oracle review findings
+6. `da04d2c` - fix: Address actionable PR review comments (escape key constant, visualizer comment)
+
+## PR
+
+- PR #51: https://github.com/hfyeomans/MacAmp/pull/51
+- Status: **MERGED**
+- PR review: 6 of 8 automated comments assessed as false positive or out of scope by Oracle, 2 actionable items fixed
 
 ## Blockers
 
-None. Task complete.
+None. Task complete and merged.
 
 ## Sibling Task
 

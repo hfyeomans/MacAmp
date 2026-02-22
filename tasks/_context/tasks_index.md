@@ -2,7 +2,7 @@
 
 > **Purpose:** Index of all currently open (non-done) tasks in `tasks/`. Each entry notes the task name, purpose, creation date, last activity, and current status.
 >
-> **Today:** 2026-02-21
+> **Today:** 2026-02-22
 > **Excludes:** `tasks/done/` and `tasks/depreciated/`
 
 ---
@@ -27,16 +27,16 @@
 |------|---------|---------|---------------|-----------|--------|
 | `internet-radio-n1-n6-fixes` | Fix 6 issues (1 HIGH, 2 MEDIUM, 3 LOW) in internet radio streaming infrastructure discovered during Oracle validation | 2026-02-21 | 2026-02-21 | 0 | ✅ COMPLETE — All 6 fixes implemented, Oracle-verified, merged in PR #49 |
 | `mainwindow-layer-decomposition` | Decompose WinampMainWindow from cross-file extension pattern to proper layer subview decomposition with @Observable interaction state object | 2026-02-21 | 2026-02-21 | 0 | 📋 PLANNED — Research complete (Gemini + Oracle converged), 4-phase plan written, awaiting implementation approval |
-| `playlistwindow-layer-decomposition` | Decompose WinampPlaylistWindow from cross-file extension pattern to proper layer subview decomposition; same architectural pattern as mainwindow task | 2026-02-21 | 2026-02-21 | 0 | 📋 PLANNED — Research complete (Oracle audit), 4-phase plan written, awaiting implementation approval |
-| `swift-testing-modernization` | Migrate all 8 test files (23 tests) from XCTest to Swift Testing framework; bump Package.swift to Swift 6.0+; add parameterized tests, tags, and async fixes | 2026-02-21 | 2026-02-21 | 0 | 📋 PLANNED — Full audit complete, 6-phase plan written, awaiting implementation approval |
-| `audioplayer-decomposition` | Decompose monolithic `AudioPlayer.swift` into focused layers (Mechanism/Bridge/Presentation) | 2026-02-07 | 2026-02-18 | 1 | 📋 PLANNED — Research + plan approved, awaiting implementation start |
-| `internet-streaming-volume-control` | Add volume control + EQ capability for internet radio streams; includes Loopback Bridge architecture for Phase 2 | 2026-02-09 | 2026-02-21 | 0 | 📋 PLANNED — N1-N6 blockers resolved (PR #49), ready for Phase 1 implementation |
-| `internet-radio-review` | Oracle code review of internet radio streaming infrastructure; produces N1-N6 issue list | 2026-11-01 | 2026-02-21 | 0 | 📄 REFERENCE — Validation complete post-memory-optimization; findings drive `internet-streaming-volume-control` |
-| `memory-cpu-optimization` | Reduce memory usage and CPU overhead; SPSC audio thread, lazy skin loading, peak-memory reduction | 2026-02-14 | 2026-02-14 | 5 | ✅ COMPLETE — All phases verified, committed in PR #48 |
-| `window-coordinator-cleanup` | Clean up `WindowCoordinator.swift` — remove dead code, fix threading, improve structure | 2026-02-09 | 2026-02-09 | 10 | ✅ COMPLETE — Pending manual testing + commit |
-| `window-coordinator-refactor` | Extract `WindowRegistry`, `WindowFramePersistence`, `WindowVisibilityController` from `WindowCoordinator` | 2026-02-09 | 2026-02-09 | 10 | ✅ COMPLETE — All 4 phases committed, production-ready |
-| `window-coordinator-di-migration` | Migrate `WindowCoordinator` to dependency-injection pattern | 2026-02-09 | 2026-02-09 | 10 | 🟡 DEFERRED — Research + plan done; blocked on prerequisite task completion |
-| `lock-free-ring-buffer` | Implement a lock-free SPSC ring buffer for audio thread safety; prerequisite for `internet-streaming-volume-control` Phase 2 | 2026-02-09 | 2026-02-08 | 11 | 📋 PLANNED — Research complete, ready for planning phase |
+| `playlistwindow-layer-decomposition` | Decompose WinampPlaylistWindow from cross-file extension pattern to proper layer subview decomposition; same architectural pattern as mainwindow task | 2026-02-21 | 2026-02-22 | 0 | ✅ COMPLETE — Wave 1. 4 phases done, Oracle reviewed, PR merged. Extension deleted, 7 child views created. |
+| `swift-testing-modernization` | Migrate all 9 test files (40 tests) from XCTest to Swift Testing framework; bump Package.swift to 6.2; add parameterized tests, tags, time limits | 2026-02-21 | 2026-02-22 | 0 | ✅ COMPLETE — Wave 1. 6 phases done, Oracle reviewed, PR merged. Task.sleep removal deferred. |
+| `audioplayer-decomposition` | Extract EqualizerController from AudioPlayer.swift using facade pattern (Phases 1-3) | 2026-02-07 | 2026-02-22 | 0 | ✅ COMPLETE — Wave 1. Phases 1-3 done (1,070→945 lines), Phase 4 deferred (seek state machine risk). PR merged. |
+| `internet-streaming-volume-control` | Add volume control + EQ capability for internet radio streams; includes Loopback Bridge architecture for Phase 2 | 2026-02-09 | 2026-02-21 | 1 | 📋 PLANNED — Wave 2 (Ph1) + Wave 3 (Ph2). N1-N6 resolved, Wave 1 prereqs merged. Ready for Phase 1. |
+| `internet-radio-review` | Oracle code review of internet radio streaming infrastructure; produces N1-N6 issue list | 2026-11-01 | 2026-02-21 | 1 | 📄 REFERENCE — Validation complete post-memory-optimization; findings drive `internet-streaming-volume-control` |
+| `memory-cpu-optimization` | Reduce memory usage and CPU overhead; SPSC audio thread, lazy skin loading, peak-memory reduction | 2026-02-14 | 2026-02-14 | 8 | ✅ COMPLETE — All phases verified, committed in PR #48 |
+| `window-coordinator-cleanup` | Clean up `WindowCoordinator.swift` — remove dead code, fix threading, improve structure | 2026-02-09 | 2026-02-09 | 13 | ✅ COMPLETE — Pending manual testing + commit |
+| `window-coordinator-refactor` | Extract `WindowRegistry`, `WindowFramePersistence`, `WindowVisibilityController` from `WindowCoordinator` | 2026-02-09 | 2026-02-09 | 13 | ✅ COMPLETE — All 4 phases committed, production-ready |
+| `window-coordinator-di-migration` | Migrate `WindowCoordinator` to dependency-injection pattern | 2026-02-09 | 2026-02-09 | 13 | 🟡 DEFERRED — Research + plan done; blocked on prerequisite task completion |
+| `lock-free-ring-buffer` | Implement a lock-free SPSC ring buffer for audio thread safety; prerequisite for `internet-streaming-volume-control` Phase 2 | 2026-02-09 | 2026-02-22 | 0 | ✅ COMPLETE — Wave 1. 17 tests (14 unit + 3 concurrency), Oracle reviewed x2, PR merged. Benchmarks deferred. |
 | `airplay-integration` | Add AirPlay audio output routing + Now Playing integration | 2026-02-07 | 2026-02-07 | 12 | 📋 PLANNED — Research complete, Oracle reviewed (8.5/10), awaiting user approval |
 
 ---

@@ -2,7 +2,7 @@
 
 > **Purpose:** Single source of truth for cross-task execution status, wave progress, and coordination decisions.
 > **Date:** 2026-02-21
-> **Updated:** 2026-02-21 (post-Oracle verification — all findings applied)
+> **Updated:** 2026-02-22 (Wave 1 complete, code reviews done, fixes applied)
 
 ### Quick Reference
 
@@ -14,13 +14,13 @@
 | Waves | 3 |
 | Branches | 6 |
 | PRs | 5 (Wave 1: 3, Wave 2: 2; Wave 3 PR count TBD) |
-| Current wave | Not started (approved, ready to launch) |
+| Current wave | Wave 1 COMPLETE — awaiting PR creation + sequential merge |
 
 ---
 
-## Current Phase: ALL PRE-FLIGHT COMPLETE — READY TO LAUNCH
+## Current Phase: WAVE 1 COMPLETE — AWAITING MERGE
 
-All 6 tasks have completed research and planning. All pre-flight items resolved. Awaiting worktree creation and Claude instance launch.
+All 3 Wave 1 worktrees have finished implementation + code review fixes. Ready for PR creation and sequential merge (A -> C -> B).
 
 ---
 
@@ -37,44 +37,42 @@ All 6 tasks have completed research and planning. All pre-flight items resolved.
 
 | ID | Task | Internal Status | Cross-Task Status | Blocker |
 |----|------|----------------|-------------------|---------|
-| T1 | `audioplayer-decomposition` | Plan complete (Ph1-3) | Wave 1 — ready | None |
-| T2 | `playlistwindow-layer-decomposition` | Plan complete | Wave 1 — ready | None |
+| T1 | `audioplayer-decomposition` | **Ph1-3 COMPLETE**, Ph4 deferred | Wave 1 — done, awaiting PR | swiftlint suppressions remain (945 lines, needs Ph4) |
+| T2 | `playlistwindow-layer-decomposition` | **COMPLETE** | Wave 1 — done, awaiting PR | Manual testing items deferred |
 | T3 | `mainwindow-layer-decomposition` | Plan complete | Wave 2b — blocked on T5 Ph1 | T5 Phase 1 must merge first |
-| T4 | `lock-free-ring-buffer` | Plan complete | Wave 1 — ready | None |
-| T5 | `internet-streaming-volume-control` | Plan complete | Wave 2a (Ph1), Wave 3 (Ph2) | Ph1: needs T1 merge preferred; Ph2: needs T4 merge |
-| T6 | `swift-testing-modernization` | Plan complete | Wave 1 — ready | None (swift-tools-version: 6.2) |
+| T4 | `lock-free-ring-buffer` | **COMPLETE** (benchmarks deferred) | Wave 1 — done, awaiting PR | None |
+| T5 | `internet-streaming-volume-control` | Plan complete | Wave 2a (Ph1), Wave 3 (Ph2) | Ph1: needs Wave 1 merge; Ph2: needs T4 merge |
+| T6 | `swift-testing-modernization` | **COMPLETE** (deferrals noted) | Wave 1 — done, awaiting PR | None |
 
 ---
 
 ## Wave Execution Status
 
-### Wave 1: Parallel Refactoring (3 worktrees)
+### Wave 1: Parallel Refactoring (3 worktrees) — COMPLETE
 
-| Worktree | Task(s) | Branch | Status | Claude Instance |
-|----------|---------|--------|--------|----------------|
-| A | T1 Phases 1-3 (AudioPlayer decomp) | `refactor/audioplayer-decomposition` | Not started | Instance 1 |
-| B | T2 (PlaylistWindow decomp) | `refactor/playlistwindow-decomposition` | Not started | Instance 2 |
-| C | T4 + T6 (Ring buffer + Swift Testing) | `infra/ring-buffer-and-testing` | Not started | Instance 3 |
+| Worktree | Task(s) | Branch | Status | Commits | Code Review |
+|----------|---------|--------|--------|---------|-------------|
+| A | T1 Phases 1-3 | `worktree-audioplayer-decomp` | **COMPLETE** | 5 (3 phases + 2 Oracle fixes) | 2 issues fixed |
+| B | T2 | `worktree-playlist-decomp` | **COMPLETE** | 7 (3 phases + Oracle fixes + docs) | Clean |
+| C | T4 + T6 | `worktree-infra-ring-testing` | **COMPLETE** | 6 (Package + ring buffer + testing migration + fixes) | 4 issues fixed |
 
-**Merge order:** Sequential (T1 first, T4+T6 second, T2 third) — required for clean `project.pbxproj` resolution. See research.md Section 7.
+**Merge order:** Sequential (A first, C second, B third) — for clean `project.pbxproj` resolution.
 
-**Pre-flight:** All items complete. T4 plan.md written. T6 swift-tools-version decided: **6.2**.
-
-### Wave 2: Sequential Feature + Refactoring
+### Wave 2: Sequential Feature + Refactoring — NOT STARTED
 
 | Step | Task | Branch | Status | Depends On |
 |------|------|--------|--------|-----------|
-| 2a | T5 Phase 1 (Volume routing) | `feature/stream-volume-control` | Not started | Wave 1 merges (T1 especially) |
+| 2a | T5 Phase 1 (Volume routing) | `feature/stream-volume-control` | Not started | Wave 1 merges |
 | 2b | T3 (MainWindow decomp) | `refactor/mainwindow-decomposition` | Not started | T5 Phase 1 merge |
 
-**Merge strategy:** Two separate PRs for traceability and revertability. T5 Ph1 merges first; T3 merges after verification that T5 Ph1 is not regressed.
+**Merge strategy:** Two separate PRs. T5 Ph1 merges first; T3 merges after verification.
 
-### Wave 3: Advanced Audio Pipeline
+### Wave 3: Advanced Audio Pipeline — NOT STARTED
 
 | Step | Task | Branch | Status | Depends On |
 |------|------|--------|--------|-----------|
 | 3a | T5 Phase 2 (Loopback Bridge) | `feature/stream-loopback-bridge` | Not started | T4 merge + T5 Ph1 merge |
-| 3b | T1 Phase 4 (optional) | Combine with T5 Ph2 or defer | Not started | T1 Ph1-3 merge + T5 Ph2 |
+| 3b | T1 Phase 4 (engine transport) | After T5 Ph2 | Not started | T5 Ph2 complete |
 
 ---
 
@@ -92,41 +90,79 @@ All 6 tasks have completed research and planning. All pre-flight items resolved.
 
 **Rationale:** Both modify Package.swift (T4 adds swift-atomics dependency, T6 bumps tools-version). Combining avoids merge conflicts. Trade-off: couples two unrelated risk domains. Mitigated by internal sequencing (T6 Ph1 -> T4 -> T6 Ph2-6).
 
-**Alternative considered:** Tiny shared prep PR for Package.swift, then separate branches. Rejected — adds process overhead for minimal gain.
-
-### D3: T1 Phase 4 deferred
+### D3: T1 Phase 4 deferred — swiftlint suppressions remain
 
 **Decision:** AudioPlayer engine transport extraction (Phase 4, medium-high risk) is deferred until after T5 Phase 2 or combined with it.
 
-**Rationale:** Both T1 Phase 4 and T5 Phase 2 restructure AudioPlayer's engine internals. Doing Phase 4 first would invalidate Phase 2's plan. Doing Phase 2 first makes Phase 4's extraction scope clearer.
+**Rationale:** The seek state machine has three interlocking guards (`currentSeekID`, `seekGuardActive`, `isHandlingCompletion`) that were extensively debugged across multiple PRs. The transport methods (`play`/`pause`/`stop`/`seek`/`scheduleFrom`) share tight mutable state coupling, and completion handlers use seekID matching to ignore stale completions. Multiple timing-sensitive `Task.sleep` delays coordinate guard clearing.
+
+**Impact:** AudioPlayer.swift remains at 945 lines (above 600-line warning, below 1,200-line error). Two swiftlint inline suppressions (`file_length` + `type_body_length`) cannot be removed until Phase 4. Phase 4 should only be pursued after unit tests for the seek state machine are added first.
+
+**Does NOT block Waves 2-3:**
+- Wave 2 (T5 Ph1): Modifies `volume` didSet and coordinator routing — does not touch engine transport
+- Wave 2 (T3): Restructures WinampMainWindow — unrelated to AudioPlayer
+- Wave 3 (T5 Ph2): Adds `streamSourceNode` and engine graph switching. Phase 4 would extract the same internals, so Phase 4 must come AFTER T5 Ph2 to get clearer extraction boundaries
 
 ### D4: Sequential pbxproj merge order
 
 **Decision:** Wave 1 worktrees merge in order: T1 (smallest) -> T4+T6 (medium) -> T2 (largest).
 
-**Rationale:** All file-creating tasks modify `project.pbxproj` (explicit file references, 1,017-line file). Sequential merge with smallest-first minimizes conflict surface at each step. Conflicts are mechanical (file reference additions), not semantic.
+**Rationale:** All file-creating tasks modify `project.pbxproj` (explicit file references, 1,017-line file). Sequential merge with smallest-first minimizes conflict surface at each step.
 
 ### D5: Separate PRs for Wave 2
 
 **Decision:** T5 Phase 1 and T3 are separate PRs, not combined.
 
-**Rationale:** T3 is a massive structural refactor. T5 Ph1 is a feature change. Combining them into one PR makes reversion difficult if T3 introduces regressions. Separate PRs preserve revertability and make review tractable.
+**Rationale:** T3 is a massive structural refactor. T5 Ph1 is a feature change. Separate PRs preserve revertability.
 
 ### D6: T4+T6 as single PR
 
 **Decision:** T4 and T6 ship as a single PR from the combined branch.
 
-**Rationale:** Both are infrastructure changes (no production behavior change). Package.swift changes are interdependent. Single PR reduces review overhead and merge complexity.
+**Rationale:** Both are infrastructure changes. Package.swift changes are interdependent.
 
 ---
 
-## Resolved Questions (from initial planning)
+## Deferred Items Inventory
+
+### From Wave 1 — Future Tasks Needed
+
+| Item | Source | Size | Priority | Blocks Future Waves? |
+|------|--------|------|----------|---------------------|
+| T1 Phase 4: Engine transport extraction | audioplayer-decomposition | Large | Medium | No — schedule after T5 Ph2 |
+| PlaylistWindowActions singleton rearchitecture | playlist-decomp depreciated.md | Large | Low | No |
+| Manual selection state sync fix | playlist-decomp depreciated.md | Small | Low | No — blocked by singleton fix |
+| `async-test-determinism` (Task.sleep removal) | swift-testing todo.md | Medium | Low | No |
+| `spm-multiple-producers-fix` | infra-ring-testing todo.md | Small-Medium | Medium | Blocks `swift test` via CLI |
+| Ring buffer performance benchmarks | lock-free-ring-buffer todo.md | Small | Low | No |
+| Ring buffer AudioBufferList overload tests | lock-free-ring-buffer todo.md | Small | Low | No — add during T5 Ph2 |
+| DockingController debounce `try?` fix | lock-free-ring-buffer deprecated.md | Small | Low | No |
+
+### Manual Testing (Pre-Merge Recommended)
+
+| Item | Source |
+|------|--------|
+| Playlist: visual rendering, track selection, menus, shade, resize, scroll, keyboard | playlist-decomp todo.md 4.4-4.11 |
+
+### Doc Updates Needed (Post-Merge)
+
+| Doc | Update |
+|-----|--------|
+| `docs/MACAMP_ARCHITECTURE_GUIDE.md` | Add EqualizerController.swift + LockFreeRingBuffer.swift to Audio/ listing; note facade pattern |
+| `docs/IMPLEMENTATION_PATTERNS.md` | Document cross-file SwiftUI extension anti-pattern + correct child-view pattern |
+| `docs/PLAYLIST_WINDOW.md` | Update for new PlaylistWindow/ subdirectory |
+| `docs/README.md` | Update test framework (XCTest → Swift Testing, swift-tools-version 6.2) |
+| `tasks/_context/tasks_index.md` | Mark T1 Ph1-3, T2, T4, T6 as complete |
+
+---
+
+## Resolved Questions
 
 | # | Question | Resolution |
 |---|----------|------------|
-| 1 | Should T4+T6 be single or separate PRs? | **Single PR** (D6) — infrastructure changes, shared Package.swift |
-| 2 | Is T1 Phase 4 in scope? | **Deferred** (D3) — revisit after T5 Phase 2 |
-| 3 | Wave 2: one or two Claude instances? | **One instance, two sequential PRs** (D5) — same instance carries context |
+| 1 | Should T4+T6 be single or separate PRs? | **Single PR** (D6) |
+| 2 | Is T1 Phase 4 in scope? | **Deferred** (D3) — after T5 Ph2; swiftlint suppressions remain at 945 lines |
+| 3 | Wave 2: one or two Claude instances? | **One instance, two sequential PRs** (D5) |
 | 4 | swift-tools-version 6.0 or 6.2? | **6.2** — matches installed toolchain (6.2.4) |
 
 ---
@@ -137,4 +173,4 @@ All 6 tasks have completed research and planning. All pre-flight items resolved.
 |------|--------|
 | `_context/research.md` | Complete (verified, corrections applied) |
 | `_context/plan.md` | Complete (verified, corrections applied) |
-| `_context/state.md` | Active (this file, verified) |
+| `_context/state.md` | Active (this file — updated 2026-02-22) |

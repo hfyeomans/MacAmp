@@ -54,23 +54,20 @@ The MacAmp documentation serves multiple critical functions:
 
 ## Test Plan Quick Reference
 
-MacAmp tests run through the `MacAmpApp` scheme using the shared test plan `MacAmpApp.xctestplan`.
+MacAmp tests use the **Swift Testing** framework (`swift-tools-version: 6.2`) and run through the `MacAmpApp` scheme using a single shared test plan.
 
 **Locations**:
 - Test target: `Tests/MacAmpTests`
 - Test plan: `MacAmpApp.xcodeproj/xcshareddata/xctestplans/MacAmpApp.xctestplan`
+- Framework: Swift Testing (migrated from XCTest)
 
-**Configurations**:
-- Core: AppSettingsTests, EQCodecTests, SpriteResolverTests
-- Concurrency: AudioPlayerStateTests, DockingControllerTests, PlaylistNavigationTests, SkinManagerTests
-- All: full MacAmpTests target
+**Configuration**:
+- Single "All" configuration covering all test suites
 
 **CLI**:
 ```bash
-xcodebuild test -project MacAmpApp.xcodeproj -scheme MacAmpApp -destination 'platform=macOS' -testPlan MacAmpApp -only-test-configuration Core -derivedDataPath build/DerivedDataTests
+xcodebuild test -project MacAmpApp.xcodeproj -scheme MacAmpApp -destination 'platform=macOS' -testPlan MacAmpApp -derivedDataPath build/DerivedDataTests
 ```
-
-Swap `Core` for `Concurrency` or `All` as needed.
 
 ---
 
@@ -1025,11 +1022,19 @@ For questions or corrections, the documentation was comprehensively reviewed on 
 
 ---
 
-**MacAmp Documentation v3.5.0 | Last Updated: 2026-02-21 | Status: Production Authoritative**
+**MacAmp Documentation v3.6.0 | Last Updated: 2026-02-22 | Status: Production Authoritative**
 
 *Master index for 19,428+ lines of verified technical documentation (20 active docs)*
 
-**Recent Update (v3.5.0 - 2026-02-21):**
+**Recent Update (v3.6.0 - 2026-02-22): Wave 1 Completion**
+- AudioPlayer decomposition: EqualizerController extracted as standalone controller
+- PlaylistWindow child view decomposition: monolithic view split into 7 focused child structs (~530 → ~230 lines root), `WinampPlaylistWindow+Menus.swift` deleted
+- Lock-free ring buffer: SPSC audio thread buffer using swift-atomics
+- Swift Testing migration: XCTest → Swift Testing framework, swift-tools-version 6.2, test plan simplified to single "All" configuration
+- PLAYLIST_WINDOW.md v1.1.0: Updated file structure, decomposition notes, staleness warning for line references
+- README.md: Updated test plan section for Swift Testing
+
+**Previous Update (v3.5.0 - 2026-02-21):**
 - MACAMP_ARCHITECTURE_GUIDE.md v2.5.0: Updated §4.3 PlaybackCoordinator (computed play state, split callbacks, context-aware navigation), added §9 Internet Radio N1-N6 fixes (PR #49)
 - IMPLEMENTATION_PATTERNS.md v1.5.0: Updated §5 Callback Synchronization (AudioPlayer callback split), updated §2 computed properties note, added §9 anti-pattern for cross-file SwiftUI extensions
 - README.md: Added search index entries for computed play state, context-aware navigation, callback split, N1-N6 fixes

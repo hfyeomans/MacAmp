@@ -242,7 +242,7 @@ final class AudioPlayer {
 - Views should use the facade (AudioPlayer), not reach into sub-components
 - Don't forward every property - only those needed by external callers
 
-**Real usage**: `AudioPlayer.swift` maintains API compatibility after extracting `PlaylistController`, `EQPresetStore`, `VideoPlaybackController`, and `VisualizerPipeline`
+**Real usage**: `AudioPlayer.swift` maintains API compatibility after extracting `PlaylistController`, `EQPresetStore`, `VideoPlaybackController`, `VisualizerPipeline`, and `EqualizerController` (EQ bands, preamp, presets, auto-EQ — extracted in Wave 1)
 
 **Pitfalls**:
 - Don't duplicate state - always delegate to the source component
@@ -2250,17 +2250,12 @@ struct VisualizationView: View {
 **Test target**: `MacAmpTests` (`Tests/MacAmpTests`)
 **Test plan**: `MacAmpApp.xcodeproj/xcshareddata/xctestplans/MacAmpApp.xctestplan`
 
-**Configurations**:
-- Core: AppSettingsTests, EQCodecTests, SpriteResolverTests
-- Concurrency: AudioPlayerStateTests, DockingControllerTests, PlaylistNavigationTests, SkinManagerTests
-- All: full MacAmpTests target
+**Configuration**: Single "All" configuration running the full `MacAmpTests` target (simplified from the previous 3-configuration layout with per-test `selectedTests`).
 
 **CLI**:
 ```bash
-xcodebuild test -project MacAmpApp.xcodeproj -scheme MacAmpApp -destination 'platform=macOS' -testPlan MacAmpApp -only-test-configuration Core -derivedDataPath build/DerivedDataTests
+xcodebuild test -project MacAmpApp.xcodeproj -scheme MacAmpApp -destination 'platform=macOS' -testPlan MacAmpApp -derivedDataPath build/DerivedDataTests
 ```
-
-Swap `Core` for `Concurrency` or `All` as needed.
 
 ### Pattern: Mock Injection for Testing
 
@@ -2330,10 +2325,13 @@ func testPlayButton() {
 
 ### Pattern: Async Test Helpers
 
-**When to use**: Testing async operations
+> **Note:** MacAmp tests have been migrated to Swift Testing (`struct` suites, `#expect` macros, `@Test` attributes). The `XCTestCase` extension below is a **legacy pattern** retained for reference. New tests should use Swift Testing's built-in concurrency support (e.g., `await confirmation()`, `#expect(throws:)`) instead.
+
+**When to use**: Testing async operations (legacy XCTest pattern)
 
 **Implementation**:
 ```swift
+// LEGACY: XCTestCase-based pattern. New tests use Swift Testing struct suites.
 extension XCTestCase {
     func asyncTest<T>(
         timeout: TimeInterval = 5,
@@ -2647,37 +2645,57 @@ struct ContentSection: View { ... }
 struct FooterSection: View { ... }
 ```
 
-### Anti-Pattern: Cross-File SwiftUI Extensions as View Decomposition (Tactical Debt)
+### Anti-Pattern: Cross-File SwiftUI Extensions as View Decomposition
 
-**Context**: PR #49 split `WinampMainWindow.swift` and `WinampPlaylistWindow.swift` into main file + extension files (e.g., `WinampMainWindow+Helpers.swift`, `WinampPlaylistWindow+Menus.swift`, `PlaylistWindowActions.swift`) to reduce per-file complexity.
+**Context**: PR #49 split `WinampMainWindow.swift` and `WinampPlaylistWindow.swift` into main file + extension files (e.g., `WinampMainWindow+Helpers.swift`, `WinampPlaylistWindow+Menus.swift`, `PlaylistWindowActions.swift`) to reduce per-file complexity. This was **subsequently corrected** for `WinampPlaylistWindow` in Wave 1 of the layer decomposition work.
 
-**Why this is tactical debt, not a pattern to follow**:
+**Why this is an anti-pattern** (not just tactical debt):
+1. **Forces access widening**: Properties that should be `private` must become `internal` so the extension file can reach them
+2. **No SwiftUI recomposition boundaries**: Extensions share the parent view's `body` evaluation scope, so changes to any state invalidate the entire view
+3. **No real isolation**: Extensions have full access to all properties — they move code but do not reduce coupling
+
 ```swift
-// ❌ TACTICAL DEBT: Extensions in separate files move code but don't reduce coupling
-// File: WinampMainWindow+Helpers.swift
-extension WinampMainWindow {
-    // These methods still have full access to all properties of WinampMainWindow
-    // No isolation boundary, no reduced coupling, just fewer lines per file
+// ❌ ANTI-PATTERN: Extensions in separate files widen access and share body scope
+// File: WinampPlaylistWindow+Menus.swift (REMOVED in Wave 1)
+extension WinampPlaylistWindow {
+    // All properties must be internal (not private) for this to compile
+    // No SwiftUI recomposition boundary — entire parent body re-evaluates
     func helperMethod() { ... }
 }
 ```
 
-**The correct approach (future work)**:
+**The correct approach** (implemented for WinampPlaylistWindow in Wave 1):
 ```swift
-// ✅ CORRECT: Extract into independent focused views with explicit data dependencies
-struct PlaybackControlsView: View {
-    let isPlaying: Bool
-    let onTogglePlayPause: () -> Void
+// ✅ CORRECT: @Observable interaction state + child View structs with explicit deps
+
+// 1. Extract interaction state into a dedicated @Observable class
+@MainActor @Observable
+final class PlaylistInteractionState {
+    var isEditing = false
+    var selectionAnchor: Int?
+    // ... focused, testable state
+}
+
+// 2. Child views declare only the dependencies they need
+struct PlaylistHeaderView: View {
+    let skinManager: SkinManager
+    let interactionState: PlaylistInteractionState
 
     var body: some View {
-        // Self-contained view with clear inputs
+        // Self-contained: only re-evaluates when its inputs change
     }
 }
 ```
 
-**Key distinction**: Cross-file extensions reduce file size but do not reduce complexity or coupling. Proper decomposition extracts independent SwiftUI views with explicit data dependencies. The extension split in PR #49 is documented as tactical debt with specific follow-up tasks:
-- `tasks/mainwindow-layer-decomposition/` — WinampMainWindow child views + @Observable state
-- `tasks/playlistwindow-layer-decomposition/` — WinampPlaylistWindow child views + @Observable state
+**Why the correct pattern is better**:
+- `private` stays `private` — no access widening
+- Each child view is an independent SwiftUI recomposition boundary
+- Explicit dependency lists make data flow visible and testable
+- `@Observable` interaction state classes are unit-testable without views
+
+**Current status**:
+- `WinampPlaylistWindow+Menus.swift` / `PlaylistWindowActions.swift` — **REMOVED** (replaced by child view structs in Wave 1; see `tasks/playlistwindow-layer-decomposition/research.md`)
+- `WinampMainWindow+Helpers.swift` — **Still exists** (planned for Wave 2 decomposition in `tasks/mainwindow-layer-decomposition/`)
 
 See Lesson #25 in BUILDING_RETRO_MACOS_APPS_SKILL.md for the complete architecture pattern.
 

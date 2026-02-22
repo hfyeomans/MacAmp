@@ -2,7 +2,7 @@
 
 **Version:** 2.5.0
 **Date:** 2026-02-21
-**Project State:** Production-Ready (5-Window System, WindowCoordinator Refactoring, Internet Radio N1-N6 Fixes, Swift 6, macOS 15+/26+)
+**Project State:** Production-Ready (5-Window System, WindowCoordinator Refactoring, Internet Radio N1-N6 Fixes, AudioPlayer Decomposition, PlaylistWindow Decomposition, Swift Testing Migration, Swift 6, macOS 15+/26+)
 **Purpose:** Deep technical reference for developers joining or maintaining MacAmp
 
 ---
@@ -70,8 +70,10 @@ Deployment:               Developer ID signed, notarization-ready
 ┌────────────────────────────────────────────────────────┐
 │ Component               │ Files │ LoC   │ Status       │
 ├────────────────────────┼───────┼───────┼──────────────┤
-│ Audio Engine           │   8   │ 3,047 │ Production   │
-│   - AudioPlayer.swift  │   1   │ 1,043 │ Mechanism    │
+│ Audio Engine           │  10   │ 3,457 │ Production   │
+│   - AudioPlayer.swift  │   1   │   945 │ Mechanism    │
+│   - EqualizerController│   1   │   198 │ Mechanism    │
+│   - LockFreeRingBuffer │   1   │   212 │ Mechanism    │
 │   - EQPresetStore      │   1   │   187 │ Mechanism    │
 │   - MetadataLoader     │   1   │   171 │ Mechanism    │
 │   - PlaylistController │   1   │   273 │ Mechanism    │
@@ -1001,7 +1003,9 @@ private final class VisualizerScratchBuffers: @unchecked Sendable { ... }
 ```
 MacAmpApp/
 ├── Audio/
-│   ├── AudioPlayer.swift              (1,043 lines) - Engine Core + Facade
+│   ├── AudioPlayer.swift              (~945 lines) - Engine Core + Facade
+│   ├── EqualizerController.swift      (~198 lines) - EQ facade (extracted from AudioPlayer)
+│   ├── LockFreeRingBuffer.swift       (~212 lines) - SPSC ring buffer for stream audio
 │   ├── EQPresetStore.swift            (187 lines) - Preset persistence
 │   ├── MetadataLoader.swift           (171 lines) - Track metadata
 │   ├── PlaylistController.swift       (273 lines) - Playlist logic
@@ -2396,10 +2400,13 @@ private final class VisualizerScratchBuffers: @unchecked Sendable {
 
 ### EQ Implementation
 
-The 10-band parametric EQ remains in AudioPlayer.swift (engine-level concern):
+The 10-band parametric EQ has been extracted from AudioPlayer into `EqualizerController.swift` (facade pattern). AudioPlayer now forwards EQ operations to `equalizer.eqNode`:
 
 ```swift
-// AudioPlayer.swift:612-631
+// EqualizerController.swift - EQ facade (extracted from AudioPlayer)
+// AudioPlayer holds: let equalizer = EqualizerController()
+// AudioPlayer forwards: var isEqOn { equalizer.isEqOn }
+
 private func configureEQ() {
     // Winamp 10-band centers (Hz): 60,170,310,600,1k,3k,6k,12k,14k,16k
     let freqs: [Float] = [60, 170, 310, 600, 1000, 3000, 6000, 12000, 14000, 16000]
@@ -2805,14 +2812,12 @@ PR #49 addressed six systematic bugs (N1-N6) in the internet radio integration l
 
 **N5 - TrackInfoView Stream Gating**: TrackInfoView's stream info section now gates on `case .radioStation = playbackCoordinator.currentSource` and uses `playbackCoordinator.displayTitle` for live ICY metadata display, rather than relying on AudioPlayer state which is empty during stream playback.
 
-**N6 - File Structure**: WinampMainWindow and WinampPlaylistWindow were split into main file + extension files to reduce per-file complexity:
-- `WinampMainWindow.swift` + `WinampMainWindow+Helpers.swift`
-- `WinampPlaylistWindow.swift` + `WinampPlaylistWindow+Menus.swift` + `PlaylistWindowActions.swift`
+**N6 - File Structure**: WinampMainWindow and WinampPlaylistWindow were initially split into main file + extension files to reduce per-file complexity. The WinampPlaylistWindow extension pattern (`WinampPlaylistWindow+Menus.swift`) was subsequently identified as an anti-pattern (access widening via `internal` properties, no SwiftUI recomposition boundaries) and replaced with proper child-view decomposition:
+- `WinampPlaylistWindow+Menus.swift` was DELETED and replaced by child view structs in `PlaylistWindow/` subdirectory (PR merged, decomposition COMPLETE)
+- `WinampMainWindow.swift` + `WinampMainWindow+Helpers.swift` remain as-is; proper decomposition is PLANNED for Wave 2
+- `tasks/mainwindow-layer-decomposition/` — Extract WinampMainWindow into child view structs + @Observable interaction state (Wave 2)
 
-This file split is documented as tactical debt. Proper view decomposition tasks have been created:
-- `tasks/mainwindow-layer-decomposition/` — Extract WinampMainWindow into child view structs + @Observable interaction state
-- `tasks/playlistwindow-layer-decomposition/` — Same pattern for WinampPlaylistWindow
-Both tasks follow the Gemini + Oracle converged architecture (Lesson #25 in BUILDING_RETRO_MACOS_APPS_SKILL.md).
+The PlaylistWindow decomposition follows the Gemini + Oracle converged architecture (Lesson #25 in BUILDING_RETRO_MACOS_APPS_SKILL.md).
 
 ---
 
@@ -4364,30 +4369,31 @@ Swap `Core` for `Concurrency` or `All` as needed.
 
 ```swift
 // Tests/MacAmpTests/SpriteResolverTests.swift
-import XCTest
+// Uses Swift Testing framework (swift-tools-version 6.2)
+import Testing
 @testable import MacAmpApp
 
-final class SpriteResolverTests: XCTestCase {
-    func testSemanticResolution() {
+@Suite struct SpriteResolverTests {
+    @Test func semanticResolution() {
         let skin = MockSkin()
         let resolver = SpriteResolver(skin: skin)
 
         // Test primary mapping
         let playButton = resolver.resolve(.playButton)
-        XCTAssertEqual(playButton.source, .skin("CBUTTONS_PLAY_NORM"))
+        #expect(playButton.source == .skin("CBUTTONS_PLAY_NORM"))
 
         // Test fallback generation
         let missing = resolver.resolve(.customButton)
-        XCTAssertEqual(missing.source, .generated)
+        #expect(missing.source == .generated)
     }
 
-    func testAlternativeMapping() {
+    @Test func alternativeMapping() {
         let skin = MockSkin(sprites: ["PLAY_BUTTON": mockSprite])
         let resolver = SpriteResolver(skin: skin)
 
         // Should find alternative name
         let playButton = resolver.resolve(.playButton)
-        XCTAssertEqual(playButton.source, .skin("PLAY_BUTTON"))
+        #expect(playButton.source == .skin("PLAY_BUTTON"))
     }
 }
 ```
@@ -4396,9 +4402,12 @@ final class SpriteResolverTests: XCTestCase {
 
 ```swift
 // Tests/MacAmpTests/PlaybackCoordinatorTests.swift
-@MainActor
-final class PlaybackCoordinatorTests: XCTestCase {
-    func testExclusivePlayback() async {
+// Uses Swift Testing framework (swift-tools-version 6.2)
+import Testing
+@testable import MacAmpApp
+
+@Suite @MainActor struct PlaybackCoordinatorTests {
+    @Test func exclusivePlayback() async {
         let audioPlayer = MockAudioPlayer()
         let streamPlayer = MockStreamPlayer()
         let coordinator = PlaybackCoordinator(
@@ -4410,15 +4419,15 @@ final class PlaybackCoordinatorTests: XCTestCase {
         let localTrack = Track(url: URL(fileURLWithPath: "/test.mp3"))
         await coordinator.play(track: localTrack)
 
-        XCTAssertTrue(audioPlayer.isPlaying)
-        XCTAssertFalse(streamPlayer.isPlaying)
+        #expect(audioPlayer.isPlaying)
+        #expect(!streamPlayer.isPlaying)
 
         // Switch to stream
         let streamTrack = Track(url: URL(string: "http://stream.mp3")!)
         await coordinator.play(track: streamTrack)
 
-        XCTAssertFalse(audioPlayer.isPlaying)
-        XCTAssertTrue(streamPlayer.isPlaying)
+        #expect(!audioPlayer.isPlaying)
+        #expect(streamPlayer.isPlaying)
     }
 }
 ```
@@ -4427,6 +4436,7 @@ final class PlaybackCoordinatorTests: XCTestCase {
 
 ```swift
 // UITests/MacAmpUITests.swift
+// UI tests still use XCTest (XCUIApplication requires it)
 import XCTest
 
 final class MacAmpUITests: XCTestCase {
@@ -4579,7 +4589,9 @@ struct TimeDisplayContainer: View {
 ```
 MacAmpApp/
 ├── Audio/
-│   ├── AudioPlayer.swift           # AVAudioEngine, EQ, local playback, volume/balance persistence
+│   ├── AudioPlayer.swift           # AVAudioEngine facade, local playback, volume/balance (~945 lines)
+│   ├── EqualizerController.swift   # EQ facade (extracted from AudioPlayer, ~198 lines)
+│   ├── LockFreeRingBuffer.swift    # SPSC ring buffer for stream audio (~212 lines)
 │   ├── EQPresetStore.swift         # EQ preset persistence (187 lines)
 │   ├── MetadataLoader.swift        # Async track/video metadata (171 lines)
 │   ├── PlaylistController.swift    # Playlist state and navigation (273 lines)
