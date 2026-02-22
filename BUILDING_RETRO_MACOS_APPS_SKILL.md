@@ -4669,7 +4669,17 @@ MacAmp/
 │   │   ├── SkinManager.swift           # Skin loading & hot-swap
 │   │   └── DockingController.swift     # Multi-window coordination
 │   ├── Views/
-│   │   ├── WinampMainWindow.swift      # Main player UI
+│   │   ├── MainWindow/                 # Decomposed main player UI (10 files)
+│   │   │   ├── WinampMainWindow.swift          # Root composer
+│   │   │   ├── WinampMainWindowInteractionState.swift # @Observable state
+│   │   │   ├── WinampMainWindowLayout.swift    # Coordinate constants
+│   │   │   ├── MainWindowFullLayer.swift       # Full-mode composition
+│   │   │   ├── MainWindowShadeLayer.swift      # Shade-mode composition
+│   │   │   ├── MainWindowTransportLayer.swift  # Play/pause/stop/prev/next
+│   │   │   ├── MainWindowTrackInfoLayer.swift  # Scrolling title + time
+│   │   │   ├── MainWindowIndicatorsLayer.swift # Status indicators
+│   │   │   ├── MainWindowSlidersLayer.swift    # Volume/balance/position
+│   │   │   └── MainWindowOptionsMenuPresenter.swift # NSMenu bridge
 │   │   ├── WinampEqualizerWindow.swift # EQ UI
 │   │   ├── WinampPlaylistWindow.swift  # Playlist UI
 │   │   └── SimpleSpriteImage.swift     # Sprite rendering component
@@ -4747,7 +4757,7 @@ ls -la ~/Library/Developer/Xcode/DerivedData/MacAmpApp-*/Build/Products/Debug/Ma
 22. **Placeholder.md Convention** - No `// TODO` in code; document placeholders in `tasks/<task>/placeholder.md`
 23. **SPSC Audio Thread Safety** - Zero allocations on audio thread; use os_unfair_lock_trylock() with pre-allocated shared buffers
 24. **Memory Profiling with LLDB** - Use `footprint`, `leaks`, `heap` CLI tools; subtract sanitizer overhead for actual metrics
-25. **SwiftUI View Decomposition** - Use child view structs + @Observable state, not cross-file extensions that force access widening
+25. **SwiftUI View Decomposition** - Use child view structs + @Observable state, not cross-file extensions; validated by T3 MainWindow decomposition (10 files, PR #54)
 26. **Coordinator Volume Routing** - Fan-out volume to all backends unconditionally; use capability flags with error recovery for UI dimming
 
 ### This Skill Enables You To
@@ -4778,7 +4788,8 @@ ls -la ~/Library/Developer/Xcode/DerivedData/MacAmpApp-*/Build/Products/Debug/Ma
 - ✅ Implement SPSC shared buffers for allocation-free real-time audio thread data transfer
 - ✅ Profile and fix memory leaks with LLDB heap/leaks/footprint tools
 - ✅ Optimize peak memory with lazy extraction and independent CGContext copies
-- ✅ Decompose large SwiftUI views into layer subviews with @Observable state (not cross-file extensions)
+- ✅ Decompose large SwiftUI views into layer subviews with @Observable state (proven: MainWindow 700+ lines into 10 focused files)
+- ✅ Regenerate Xcode projects from Package.swift when file structure changes (`rm -rf *.xcodeproj && open Package.swift`)
 - ✅ Route volume through coordinator fan-out for multi-backend audio (local + streaming + video)
 - ✅ Implement capability flags with error recovery to dim/enable UI controls based on active backend
 - ✅ Build asymmetric SwiftUI Bindings when source of truth differs from write path
@@ -4809,6 +4820,16 @@ When building your next retro macOS app:
   - Asymmetric SwiftUI Binding: reads from AudioPlayer (persisted source of truth), writes through coordinator (fan-out)
   - Init-time sync + belt-and-suspenders sync in play(station:) prevents first-use volume mismatch
   - Oracle grade: gpt-5.3-codex, xhigh -- 1 finding fixed (stream error capability flag recovery)
+- **T3 MainWindow Layer Decomposition** (Feb 22, 2026) - Full implementation of layer subview pattern (PR #54, merged)
+  - WinampMainWindow decomposed into 10 files in `MacAmpApp/Views/MainWindow/`
+  - displayTitleProvider closure pattern avoids stale title capture (Oracle fix)
+  - Task.sleep modernization replacing all DispatchQueue.main.asyncAfter calls
+  - scrubResetTask cancellation pattern prevents overlapping delayed resets (CodeRabbit finding, actionable)
+  - Shade time display double-offset fix (Oracle finding)
+  - 3 Oracle reviews (Phase 1 scaffolding, Phase 3 wiring, full diff)
+  - 10 PR comments resolved (2 false positive, 6 nitpick, 2 actionable fixed)
+  - MainWindowVisualizerLayer isolation identified as future optimization
+  - Xcodeproj regeneration workflow: `rm -rf *.xcodeproj && open Package.swift`
 - **SwiftUI View Decomposition** (Feb 21, 2026) - Layer subviews vs cross-file extension anti-pattern (Lesson #25)
   - Cross-file extensions widen @State visibility without creating recomposition boundaries
   - Correct pattern: @Observable interaction state + child view structs with dependency injection
@@ -6020,9 +6041,10 @@ The implementation was reviewed by Oracle (gpt-5.3-codex, xhigh reasoning) with 
 
 ### 25. SwiftUI View Decomposition: Cross-File Extensions vs Layer Subviews (February 2026)
 
-**Lesson from:** AudioPlayer decomposition task (`tasks/audioplayer-decomposition/`)
-**Oracle Grade:** Both Gemini and Oracle independently converged on identical recommendation
+**Lesson from:** AudioPlayer decomposition task (`tasks/audioplayer-decomposition/`) and T3 MainWindow Layer Decomposition (PR #54)
+**Oracle Grade:** Both Gemini and Oracle independently converged on identical recommendation; 3 Oracle reviews performed during T3 implementation (Phase 1 scaffolding, Phase 3 wiring, full diff review)
 **Context:** WinampMainWindow (700+ lines) and WinampPlaylistWindow (848 lines) were split into cross-file extensions to satisfy SwiftLint `type_body_length`/`file_length` thresholds
+**Status:** Pattern validated and **COMPLETE** for MainWindow (PR #54, merged Feb 22, 2026). 10 files created in `MacAmpApp/Views/MainWindow/`. WinampPlaylistWindow remains as future candidate.
 
 #### The Anti-Pattern: Cross-File Extension Splitting
 
@@ -6172,19 +6194,19 @@ struct MainWindowFullLayer: View {
 }
 ```
 
-#### Target Directory Structure
+#### Implemented Directory Structure (PR #54, Merged)
 
 ```
-MacAmpApp/Views/MainWindow/
-  WinampMainWindow.swift                 // Root composition + lifecycle only (~120 lines)
+MacAmpApp/Views/MainWindow/              # 10 files, all implemented
+  WinampMainWindow.swift                 // Root composition + lifecycle only
   WinampMainWindowLayout.swift           // Coordinate constants
   WinampMainWindowInteractionState.swift // @Observable: scrubbing/scrolling/blink state
   MainWindowFullLayer.swift              // Full-mode composition
   MainWindowShadeLayer.swift             // Shade-mode composition
   MainWindowTransportLayer.swift         // Transport buttons
-  MainWindowTrackInfoLayer.swift         // Scrolling track text
+  MainWindowTrackInfoLayer.swift         // Scrolling track text + displayTitleProvider closure
   MainWindowIndicatorsLayer.swift        // Play/pause, mono/stereo, bitrate
-  MainWindowSlidersLayer.swift           // Volume, balance, position
+  MainWindowSlidersLayer.swift           // Volume, balance, position + scrubResetTask cancellation
   MainWindowOptionsMenuPresenter.swift   // AppKit NSMenu bridge
 ```
 
@@ -6234,6 +6256,42 @@ This lesson complements Lesson #13's incremental extraction strategy. The differ
 
 Both share the same principle: extract with explicit dependency injection, not shared mutable state. Both use risk-ordered incremental migration (low risk layers first, complex interactive layers last).
 
+#### T3 Implementation Details (PR #54, Feb 22, 2026)
+
+The MainWindow decomposition was executed as a 5-phase migration with 3 Oracle reviews and 10 PR comments resolved:
+
+**Patterns discovered during implementation:**
+
+1. **`displayTitleProvider` closure pattern** (Oracle fix): The track info layer receives a `() -> String` closure instead of capturing `appSettings.currentTrackTitle` directly. This avoids stale title capture -- without the closure, the title string would be captured by value at layer creation time, and subsequent track changes would not be reflected until the layer was recreated. The closure ensures the title is always read fresh from AppSettings.
+
+2. **`Task.sleep` modernization**: All `DispatchQueue.main.asyncAfter` calls were replaced with structured `Task { try? await Task.sleep(for: .seconds(N)) }` patterns. This integrates with Swift Concurrency cancellation and avoids dispatch queue retain cycles.
+
+3. **`scrubResetTask` cancellation pattern** (CodeRabbit finding, actionable): When the user starts a new scrub gesture, the previous scrub-reset task must be explicitly cancelled before creating a new one. Without cancellation, overlapping delayed resets race against each other, causing the scrub indicator to flicker between active/inactive states:
+   ```swift
+   // In MainWindowSlidersLayer
+   scrubResetTask?.cancel()
+   scrubResetTask = Task {
+       try? await Task.sleep(for: .seconds(0.5))
+       guard !Task.isCancelled else { return }
+       interaction.isScrubbing = false
+   }
+   ```
+
+4. **Shade time display double-offset fix** (Oracle finding): The shade-mode time display had a double-offset bug -- the parent layer applied `.at(x:y:)` positioning, and the time display view internally applied its own offset, resulting in the display being shifted twice. Fixed by removing the internal offset from the shade layer's time display.
+
+5. **MainWindowVisualizerLayer isolation**: Identified as a future optimization opportunity. The visualizer updates at ~30 FPS and currently lives within MainWindowFullLayer. Extracting it to its own layer struct would create a recomposition boundary that prevents visualizer redraws from triggering the rest of the full layer.
+
+**Review & PR statistics:**
+- 3 Oracle reviews: Phase 1 scaffolding review, Phase 3 wiring review, full diff review
+- 10 PR comments resolved: 2 false positive (redundant UserDefaults write, read from UserDefaults directly), 6 nitpick (cosmetic/style), 2 actionable (scrubResetTask cancellation, shade time offset)
+- Zero regressions: all existing behavior preserved through decomposition
+
+**Xcodeproj regeneration workflow** (discovered during T3): When adding/removing/renaming files in a SwiftPM-based Xcode project, the `.xcodeproj` can get out of sync. The reliable fix:
+```bash
+rm -rf MacAmpApp.xcodeproj && open Package.swift
+```
+Xcode regenerates the project file from `Package.swift`, picking up all file additions/removals/renames. This is faster and more reliable than manually adding files through Xcode's navigator.
+
 #### Key Takeaways
 
 1. **Cross-file extensions do NOT create SwiftUI recomposition boundaries** -- they are a lint workaround, not architecture
@@ -6243,6 +6301,9 @@ Both share the same principle: extract with explicit dependency injection, not s
 5. **Architecture drives lint thresholds, not the reverse** -- set `type_body_length` to 500+ if needed while migrating
 6. **Extension split is acceptable ONLY as a tracked temporary fix** with a follow-up task in placeholder.md
 7. **Root view should be ~120 lines** -- if it is longer, there are more layers to extract
+8. **Use closures for dynamic data** (`displayTitleProvider`) to avoid stale captures in layer subviews
+9. **Cancel previous async tasks** before creating new ones (scrubResetTask pattern) to prevent race conditions
+10. **Regenerate xcodeproj from Package.swift** (`rm -rf *.xcodeproj && open Package.swift`) when file structure changes
 
 ### 26. Coordinator Volume Routing + Capability Flags (February 2026)
 
@@ -6347,4 +6408,4 @@ func play(station: RadioStation) {
 
 **Built with ❤️ for retro computing on modern macOS**
 
-*This skill document captures 9+ months of lessons learned building MacAmp, distilled into actionable patterns for building similar retro-styled macOS applications with modern Swift 6 patterns. Updated with coordinator volume routing and capability flags (Feb 2026), documenting multi-backend volume fan-out, asymmetric SwiftUI bindings, and error-recovery capability flags for UI dimming. Also includes SwiftUI view decomposition with layer subview architecture, memory & CPU optimization with SPSC shared buffer for zero-allocation audio thread data transfer, Goertzel precomputation, lazy skin loading, CGImage memory leak fixes, WindowCoordinator Facade + Composition refactoring, god object decomposition, phased migration strategy, Oracle-driven quality gates, and Swift 6.2 concurrency compliance.*
+*This skill document captures 9+ months of lessons learned building MacAmp, distilled into actionable patterns for building similar retro-styled macOS applications with modern Swift 6 patterns. Updated with T3 MainWindow Layer Decomposition (PR #54, Feb 2026) -- full implementation of the layer subview pattern: 10 files, displayTitleProvider closure, Task.sleep modernization, scrubResetTask cancellation, xcodeproj regeneration workflow. Also includes coordinator volume routing and capability flags, multi-backend volume fan-out, asymmetric SwiftUI bindings, error-recovery capability flags, SwiftUI view decomposition architecture, memory & CPU optimization with SPSC shared buffer for zero-allocation audio thread data transfer, Goertzel precomputation, lazy skin loading, CGImage memory leak fixes, WindowCoordinator Facade + Composition refactoring, god object decomposition, phased migration strategy, Oracle-driven quality gates, and Swift 6.2 concurrency compliance.*

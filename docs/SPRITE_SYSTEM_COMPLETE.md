@@ -577,9 +577,9 @@ struct WinampSpriteCoordinates {
 How views use the sprite system:
 
 ```swift
-// WinampMainWindow.swift
+// MacAmpApp/Views/MainWindow/WinampMainWindow.swift
 struct WinampMainWindow: View {
-    @Environment(SkinManager.self) var skinManager
+    @Environment(SkinManager.self) private var skinManager
 
     var body: some View {
         ZStack {

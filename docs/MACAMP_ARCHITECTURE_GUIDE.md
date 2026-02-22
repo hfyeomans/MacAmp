@@ -1,8 +1,8 @@
 # MacAmp Complete Architecture Guide
 
-**Version:** 2.6.0
+**Version:** 2.7.0
 **Date:** 2026-02-22
-**Project State:** Production-Ready (5-Window System, WindowCoordinator Refactoring, Internet Radio N1-N6 Fixes, Stream Volume/Balance (T5 Phase 1), AudioPlayer Decomposition, PlaylistWindow Decomposition, Swift Testing Migration, Swift 6, macOS 15+/26+)
+**Project State:** Production-Ready (5-Window System, WindowCoordinator Refactoring, MainWindow Layer Decomposition (T3), Internet Radio N1-N6 Fixes, Stream Volume/Balance (T5 Phase 1), AudioPlayer Decomposition, PlaylistWindow Decomposition, Swift Testing Migration, Swift 6, macOS 15+/26+)
 **Purpose:** Deep technical reference for developers joining or maintaining MacAmp
 
 ---
@@ -64,7 +64,7 @@ Architecture:             SwiftUI + AVFoundation
 Deployment:               Developer ID signed, notarization-ready
 ```
 
-### Component Breakdown (January 2026 - Post AudioPlayer Refactoring)
+### Component Breakdown (February 2026 - Post MainWindow Decomposition)
 
 ```
 ┌────────────────────────────────────────────────────────┐
@@ -94,7 +94,9 @@ Deployment:               Developer ID signed, notarization-ready
 │   - DockingGeometry    │   1   │   109 │ Mechanism    │
 │   - FrameStore         │   1   │    65 │ Mechanism    │
 │ Skin System            │   6   │ 2,134 │ Production   │
-│ UI Views               │  12   │ 3,456 │ Production   │
+│ UI Views               │  20   │ 3,456 │ Production   │
+│   - MainWindow/        │  10   │  ~850 │ Decomposed   │
+│   - PlaylistWindow/    │   7   │  ~600 │ Decomposed   │
 │ State Management       │   4   │   987 │ Production   │
 │ Models                 │  16   │ 2,389 │ Production   │
 │   - Track.swift        │   1   │    42 │ Extracted    │
@@ -102,10 +104,10 @@ Deployment:               Developer ID signed, notarization-ready
 └────────────────────────────────────────────────────────┘
 ```
 
-**Metrics Improvement:**
+**Recent Metrics Improvements:**
+- MainWindow: monolithic ~650-line file → 10 files in MainWindow/ subdirectory (T3)
+- PlaylistWindow: monolithic + extension file → 7 files in PlaylistWindow/ subdirectory
 - AudioPlayer.swift: 1,805 → 1,043 lines (-42.2%)
-- 5 new focused components extracted
-- Zero SwiftLint violations in extracted files
 - Full Sendable conformance for Swift 6 readiness
 
 ### Recent Architectural Changes (October 2025 - February 2026)
@@ -169,6 +171,27 @@ Deployment:               Developer ID signed, notarization-ready
    - 10 unit tests added for pure types
    - See MULTI_WINDOW_ARCHITECTURE.md §10 for complete details
 
+11. **MainWindow Layer Decomposition (T3, PR #54, February 2026)**: Full child-view decomposition
+   - Decomposed monolithic `WinampMainWindow.swift` + `WinampMainWindow+Helpers.swift` into 10 files in `MainWindow/` subdirectory
+   - Root composition `WinampMainWindow.swift` (~110 lines) delegates to child layer structs
+   - `WinampMainWindowLayout.swift`: Coords constants enum (pixel-perfect absolute positions)
+   - `WinampMainWindowInteractionState.swift`: @Observable class replacing 7 internal @State vars
+   - `MainWindowOptionsMenuPresenter.swift`: NSMenu bridge (isolated from interaction state)
+   - `MainWindowFullLayer.swift`: Full-mode composition assembling all child layers
+   - `MainWindowShadeLayer.swift`: Shade (collapsed) mode composition
+   - `MainWindowTransportLayer.swift`: Transport buttons (prev/play/pause/stop/next/eject)
+   - `MainWindowTrackInfoLayer.swift`: Scrolling text with TEXT.bmp character sprites
+   - `MainWindowIndicatorsLayer.swift`: Play/pause indicator, mono/stereo, bitrate, sample rate
+   - `MainWindowSlidersLayer.swift`: Volume, balance, and position sliders
+   - Key architecture patterns:
+     - Child view structs create real SwiftUI recomposition boundaries (only re-evaluate when their specific @Environment state changes)
+     - `displayTitleProvider` closure for live title reads in scroll timer (avoids stale captures)
+     - `Task.sleep` replacing `DispatchQueue.main.asyncAfter` (structured cancellation)
+     - Cancellable `scrubResetTask` for rapid position slider drag handling
+     - NSMenu presenter isolated in its own class (separate lifecycle from interaction state)
+   - Deleted files: `WinampMainWindow.swift` (old root), `WinampMainWindow+Helpers.swift` (cross-file extension), `VideoWindowChromeView.swift` (stale duplicate)
+   - Follows same decomposition pattern as PlaylistWindow/ (PR #49 N6)
+
 ---
 
 ## Three-Layer Architecture Deep Dive
@@ -226,7 +249,7 @@ MacAmp's architecture follows a strict three-layer separation, inspired by web f
 ```swift
 // USER CLICKS PLAY BUTTON IN UI
 
-// 1. PRESENTATION LAYER (WinampMainWindow.swift)
+// 1. PRESENTATION LAYER (MainWindow/MainWindowTransportLayer.swift)
 SimpleSpriteImage(
     sprite: skinManager.resolvedSprites.playButton,  // Visual sprite
     action: .button(
@@ -564,33 +587,21 @@ final class PlaybackCoordinator {
 The UI uses PlaybackCoordinator's capability flags to enable/disable controls based on the active backend:
 
 ```swift
-// File: MacAmpApp/Views/WinampMainWindow.swift (simplified excerpt)
-// Purpose: Main window UI with coordinator-routed controls
+// File: MacAmpApp/Views/MainWindow/MainWindowSlidersLayer.swift (simplified excerpt)
+// Purpose: Volume/balance sliders with coordinator-routed controls
 // Context: Volume/balance route through PlaybackCoordinator; capability flags dim controls
 
-struct WinampMainWindow: View {
-    @Environment(PlaybackCoordinator.self) var playbackCoordinator
-    @Environment(AudioPlayer.self) var audioPlayer
-    @Environment(StreamPlayer.self) var streamPlayer
+struct MainWindowSlidersLayer: View {
+    @Environment(AudioPlayer.self) private var audioPlayer
+    @Environment(PlaybackCoordinator.self) private var playbackCoordinator
+    let interactionState: WinampMainWindowInteractionState
+
+    private typealias Layout = WinampMainWindowLayout
 
     var body: some View {
-        ZStack {
-            // Title display (works for both local and streams)
-            Text(playbackCoordinator.displayTitle)
-                .at(x: 111, y: 27)
-
-            // Play button (works for both)
-            SimpleSpriteImage(
-                sprite: skinManager.resolvedSprites.playButton,
-                action: .button(onClick: {
-                    playbackCoordinator.togglePlayPause()
-                })
-            ).at(x: 39, y: 88)
-
-            // Volume slider - reads from AudioPlayer, writes through coordinator
-            buildVolumeSlider()
-            buildBalanceSlider()
-        }
+        buildPositionSlider()
+        buildVolumeSlider()
+        buildBalanceSlider()
     }
 
     // MARK: - Volume & Balance (T5 Phase 1)
@@ -602,7 +613,7 @@ struct WinampMainWindow: View {
             set: { playbackCoordinator.setVolume($0) }
         )
         WinampVolumeSlider(volume: volumeBinding)
-            .at(Coords.volumeSlider)
+            .at(Layout.volumeSlider)
     }
 
     func buildBalanceSlider() -> some View {
@@ -611,7 +622,7 @@ struct WinampMainWindow: View {
             set: { playbackCoordinator.setBalance($0) }
         )
         WinampBalanceSlider(balance: balanceBinding)
-            .at(Coords.balanceSlider)
+            .at(Layout.balanceSlider)
             .opacity(playbackCoordinator.supportsBalance ? 1.0 : 0.5)
             .allowsHitTesting(playbackCoordinator.supportsBalance)
             .help(playbackCoordinator.supportsBalance
@@ -804,9 +815,9 @@ The AudioPlayer class was refactored in January 2026 following the Option C incr
 │                                                                          │
 │  Views access AudioPlayer only (never extracted components directly):    │
 │                                                                          │
-│  • WinampMainWindow      → audioPlayer.play/pause/stop                   │
+│  • MainWindow/ (10 files) → audioPlayer.play/pause/stop (via layers)     │
 │  • EqualizerView         → audioPlayer.eqBands, audioPlayer.preamp       │
-│  • PlaylistView          → audioPlayer.playlist, audioPlayer.nextTrack   │
+│  • PlaylistWindow/ (7 files) → audioPlayer.playlist, nextTrack           │
 │  • SpectrumAnalyzerView  → audioPlayer.getFrequencyData()                │
 │  • VideoWindowView       → audioPlayer.videoMetadataString               │
 │                                                                          │
@@ -1099,6 +1110,33 @@ MacAmpApp/
 │   ├── WindowCoordinator+Layout.swift (153 lines) - Layout/presentation extension
 │   ├── SkinManager.swift              (existing) - Skin loading
 │   └── DockingController.swift        (existing) - Window docking
+│
+├── Views/
+│   ├── MainWindow/                    (T3 Decomposition, PR #54)
+│   │   ├── WinampMainWindow.swift            (~110 lines) - Root composition
+│   │   ├── WinampMainWindowLayout.swift      (~53 lines) - Coords constants enum
+│   │   ├── WinampMainWindowInteractionState.swift (~132 lines) - @Observable state
+│   │   ├── MainWindowOptionsMenuPresenter.swift (~143 lines) - NSMenu bridge
+│   │   ├── MainWindowFullLayer.swift         (~266 lines) - Full-mode composition
+│   │   ├── MainWindowShadeLayer.swift        (~142 lines) - Shade-mode composition
+│   │   ├── MainWindowTransportLayer.swift    (~57 lines) - Transport buttons
+│   │   ├── MainWindowTrackInfoLayer.swift    (~48 lines) - Scrolling text
+│   │   ├── MainWindowIndicatorsLayer.swift   (~82 lines) - Status indicators
+│   │   └── MainWindowSlidersLayer.swift      (~68 lines) - Volume/balance/position
+│   │
+│   ├── PlaylistWindow/                (N6 Decomposition, PR #49)
+│   │   ├── PlaylistBottomControlsView.swift  - Bottom control buttons
+│   │   ├── PlaylistMenuPresenter.swift       - NSMenu bridge
+│   │   ├── PlaylistResizeHandle.swift        - Resize handle
+│   │   ├── PlaylistShadeView.swift           - Shade mode
+│   │   ├── PlaylistTitleBarButtons.swift     - Titlebar controls
+│   │   ├── PlaylistTrackListView.swift       - Track list rendering
+│   │   └── PlaylistWindowInteractionState.swift - @Observable state
+│   │
+│   ├── WinampEqualizerWindow.swift    - EQ window (not yet decomposed)
+│   ├── WinampPlaylistWindow.swift     - Playlist root composition
+│   ├── WinampVideoWindow.swift        - Video window
+│   └── WinampMilkdropWindow.swift     - Milkdrop window
 │
 ├── Windows/
 │   ├── WindowRegistry.swift           (83 lines) - Window ownership
@@ -1732,16 +1770,24 @@ struct MacAmpApp: App {
     }
 }
 
-// Child view usage
+// Child view usage (root composition reads environment, passes to children)
 struct WinampMainWindow: View {
     // Automatic injection from environment
-    @Environment(PlaybackCoordinator.self) var playbackCoordinator
-    @Environment(SkinManager.self) var skinManager
-    @Environment(AppSettings.self) var settings
+    @Environment(SkinManager.self) private var skinManager
+    @Environment(AudioPlayer.self) private var audioPlayer
+    @Environment(AppSettings.self) private var settings
+    @Environment(PlaybackCoordinator.self) private var playbackCoordinator
+    @Environment(WindowFocusState.self) private var windowFocusState
+
+    // Owned interaction state passed to child layers
+    @State private var interactionState = WinampMainWindowInteractionState()
+    @State private var optionsPresenter = MainWindowOptionsMenuPresenter()
 
     var body: some View {
-        // Direct usage, no property wrappers needed
-        Text(playbackCoordinator.displayTitle)
+        ZStack(alignment: .topLeading) {
+            // Background + titlebar + child layers (full or shade mode)
+            // Child layers read @Environment themselves for fine-grained updates
+        }
     }
 }
 ```
@@ -1829,24 +1875,26 @@ final class WindowFocusDelegate: NSObject, NSWindowDelegate {
 ### View Layer Usage
 
 ```swift
-// File: MacAmpApp/Views/Windows/VideoWindowChromeView.swift
+// File: MacAmpApp/Views/MainWindow/WinampMainWindow.swift
 // Example: Using focus state for active/inactive titlebar
 
-struct VideoWindowChromeView: View {
+struct WinampMainWindow: View {
     @Environment(WindowFocusState.self) private var windowFocusState
-    @Environment(SkinManager.self) private var skinManager
 
     private var isWindowActive: Bool {
-        windowFocusState.isVideoKey
+        windowFocusState.isMainKey
     }
 
     var body: some View {
-        SimpleSpriteImage(
-            sprite: skinManager.sprite(
-                for: .videoTitleBar,
-                state: isWindowActive ? .active : .inactive
-            )
-        )
+        ZStack(alignment: .topLeading) {
+            // ...
+            WinampTitlebarDragHandle(windowKind: .main, ...) {
+                SimpleSpriteImage(isWindowActive
+                    ? "MAIN_TITLE_BAR_SELECTED"
+                    : "MAIN_TITLE_BAR",
+                    width: 275, height: 14)
+            }
+        }
     }
 }
 ```
@@ -2145,45 +2193,74 @@ struct SimpleSpriteImage: View {
 }
 ```
 
-### Z-Layer Background Masking
+### Z-Layer Background Masking and Child-View Recomposition Boundaries
 
-Prevent unnecessary redraws of static backgrounds:
+MacAmp's main window uses child view structs as recomposition boundaries. Each child layer only re-evaluates its `body` when the specific `@Environment` properties it reads change. This prevents unnecessary redraws of static or unrelated elements.
 
 ```swift
+// File: MacAmpApp/Views/MainWindow/WinampMainWindow.swift (~110 lines)
+// Root composition — delegates to child layer structs
 struct WinampMainWindow: View {
+    @Environment(SkinManager.self) private var skinManager
+    @Environment(AudioPlayer.self) private var audioPlayer
+    @Environment(AppSettings.self) private var settings
+    @Environment(PlaybackCoordinator.self) private var playbackCoordinator
+    @Environment(WindowFocusState.self) private var windowFocusState
+
+    @State private var interactionState = WinampMainWindowInteractionState()
+    @State private var optionsPresenter = MainWindowOptionsMenuPresenter()
+
     var body: some View {
-        ZStack {
+        ZStack(alignment: .topLeading) {
             // Layer 0: Static background (never changes)
-            SimpleSpriteImage(sprite: mainBackground)
-                .allowsHitTesting(false)  // Pass through clicks
-                .zIndex(0)
+            SimpleSpriteImage("MAIN_WINDOW_BACKGROUND",
+                            width: WinampSizes.main.width,
+                            height: WinampSizes.main.height)
 
-            // Layer 1: Dynamic elements (can change)
-            Group {
-                TimeDisplay()
-                    .at(x: 39, y: 26)
-                    .zIndex(1)
+            // Titlebar
+            WinampTitlebarDragHandle(windowKind: .main, ...) { ... }
 
-                SpectrumAnalyzer()
-                    .at(x: 24, y: 43)
-                    .zIndex(1)
-            }
-
-            // Layer 2: Interactive controls (top layer)
-            Group {
-                PlayButton()
-                    .at(x: 39, y: 88)
-                    .zIndex(2)
-
-                VolumeSlider()
-                    .at(x: 107, y: 57)
-                    .zIndex(2)
+            // Mode switching: full vs shade
+            if !settings.isMainWindowShaded {
+                MainWindowFullLayer(           // Full-mode child layers
+                    interactionState: interactionState,
+                    optionsPresenter: optionsPresenter,
+                    openFileDialog: openFileDialog
+                )
+            } else {
+                MainWindowShadeLayer(interactionState: interactionState)
             }
         }
         .frame(width: 275, height: 116)  // Exact Winamp size
         .fixedSize()  // Prevent any resizing
     }
 }
+```
+
+**MainWindowFullLayer** (the full-mode composition) assembles all child layers:
+
+```swift
+// File: MacAmpApp/Views/MainWindow/MainWindowFullLayer.swift
+struct MainWindowFullLayer: View {
+    var body: some View {
+        Group {
+            buildTitlebarButtons()                               // Minimize/shade/close
+            MainWindowIndicatorsLayer(pauseBlinkVisible: ...)   // Play/pause, mono/stereo
+            buildTimeDisplay()                                   // MM:SS digits
+            MainWindowTrackInfoLayer(interactionState: ...)     // Scrolling text
+            buildSpectrumAnalyzer()                              // VisualizerView
+            MainWindowTransportLayer(openFileDialog: ...)       // Prev/play/pause/stop/next/eject
+            buildShuffleRepeatButtons()                          // Shuffle + repeat
+            MainWindowSlidersLayer(interactionState: ...)       // Position/volume/balance
+            buildWindowToggleButtons()                           // EQ/playlist toggles
+            buildClutterBarOAI()                                 // O, A, I buttons
+            buildClutterBarDV()                                  // D, V buttons
+        }
+    }
+}
+```
+
+Each child layer struct (e.g., `MainWindowTransportLayer`, `MainWindowSlidersLayer`) reads only the `@Environment` values it needs, creating natural recomposition boundaries. The transport layer only re-evaluates when `PlaybackCoordinator` changes; the sliders layer only when `AudioPlayer` volume/balance or scrubbing state changes.
 ```
 
 ### Sprite Sheet Slicing
@@ -2904,10 +2981,11 @@ PR #49 addressed six systematic bugs (N1-N6) in the internet radio integration l
 
 **N5 - TrackInfoView Stream Gating**: TrackInfoView's stream info section now gates on `case .radioStation = playbackCoordinator.currentSource` and uses `playbackCoordinator.displayTitle` for live ICY metadata display, rather than relying on AudioPlayer state which is empty during stream playback.
 
-**N6 - File Structure**: WinampMainWindow and WinampPlaylistWindow were initially split into main file + extension files to reduce per-file complexity. The WinampPlaylistWindow extension pattern (`WinampPlaylistWindow+Menus.swift`) was subsequently identified as an anti-pattern (access widening via `internal` properties, no SwiftUI recomposition boundaries) and replaced with proper child-view decomposition:
-- `WinampPlaylistWindow+Menus.swift` was DELETED and replaced by child view structs in `PlaylistWindow/` subdirectory (PR merged, decomposition COMPLETE)
-- `WinampMainWindow.swift` + `WinampMainWindow+Helpers.swift` remain as-is; proper decomposition is PLANNED for Wave 2
-- `tasks/mainwindow-layer-decomposition/` — Extract WinampMainWindow into child view structs + @Observable interaction state (Wave 2)
+**N6 - File Structure**: WinampMainWindow and WinampPlaylistWindow were initially split into main file + extension files to reduce per-file complexity. The cross-file extension pattern was subsequently identified as an anti-pattern (access widening via `internal` properties, no SwiftUI recomposition boundaries) and replaced with proper child-view decomposition:
+- `WinampPlaylistWindow+Menus.swift` was DELETED and replaced by child view structs in `PlaylistWindow/` subdirectory (decomposition COMPLETE)
+- `WinampMainWindow.swift` + `WinampMainWindow+Helpers.swift` were DELETED and replaced by 10 files in `MainWindow/` subdirectory (T3, PR #54, decomposition COMPLETE)
+- `VideoWindowChromeView.swift` (stale duplicate) was DELETED during T3 cleanup
+- Both decompositions follow the same pattern: @Observable interaction state class + child view structs as recomposition boundaries
 
 ### Stream Volume & Balance Control (T5 Phase 1, February 2026)
 
@@ -2919,7 +2997,7 @@ T5 Phase 1 addressed a fundamental gap: volume and balance changes from the UI o
 
 **Capability Flags:** Three computed properties (`supportsEQ`, `supportsBalance`, `supportsVisualizer`) gate UI controls. They return `false` when the stream backend is active (and not in error state), causing:
 - EQ sliders to dim (50% opacity, hit testing disabled) in WinampEqualizerWindow
-- Balance slider to dim in WinampMainWindow+Helpers
+- Balance slider to dim in MainWindow/MainWindowSlidersLayer
 - Controls to re-enable when stream enters error state (no stuck dimmed UI)
 
 **Depreciated Patterns (see `tasks/internet-streaming-volume-control/depreciated.md`):**
@@ -4146,7 +4224,9 @@ struct WindowAccessor: NSViewRepresentable {
 
 ```swift
 // Example: Configure window properties from SwiftUI
-struct WinampMainWindow: View {
+// Note: WindowAccessor is used from window controller hosting views,
+// not directly in the MainWindow/ child view structs.
+struct ExampleWindowView: View {
     var body: some View {
         ZStack {
             // Window configuration layer
@@ -4165,7 +4245,7 @@ struct WinampMainWindow: View {
             .frame(width: 0, height: 0)  // Invisible
 
             // Actual window content
-            MainWindowContent()
+            WinampMainWindow()  // Root composition from MainWindow/
         }
     }
 }
@@ -4264,7 +4344,7 @@ Spectrum Viz     Butterchurn.js (100+ presets)
 
 The clutter bar is a vertical strip of 5 control buttons on the left side of the main window, providing quick access to player settings and information. As of v0.7.8, 4 of 5 buttons are functional.
 
-**Button Locations** (WinampMainWindow.swift Coords):
+**Button Locations** (WinampMainWindowLayout.swift):
 ```swift
 static let clutterButtonO = CGPoint(x: 10, y: 25)  // top: 3px relative
 static let clutterButtonA = CGPoint(x: 10, y: 33)  // top: 11px relative
@@ -4283,7 +4363,7 @@ static let clutterButtonV = CGPoint(x: 10, y: 55)  // top: 33px relative
     - Repeat: All ✓ (when all)
     - Repeat: One ✓ (when one)
   - Shuffle mode toggle
-- **Implementation**: NSMenu via MenuItemTarget bridge
+- **Implementation**: NSMenu via MainWindowOptionsMenuPresenter (isolated class)
 - **Keyboard Shortcuts**: Ctrl+O (menu), Ctrl+T (time toggle), Ctrl+R (cycle repeat)
 - **State**: AppSettings.timeDisplayMode, AppSettings.repeatMode with UserDefaults persistence
 - **Sprites**: MAIN_CLUTTER_BAR_BUTTON_O / BUTTON_O_SELECTED
@@ -4335,18 +4415,18 @@ final class AppSettings {
     }
 }
 
-// In WinampMainWindow.swift:
-let dSpriteName = settings.isDoubleSizeMode
+// In MainWindow/MainWindowFullLayer.swift (buildClutterBarDV):
+let dSprite = settings.isDoubleSizeMode
     ? "MAIN_CLUTTER_BAR_BUTTON_D_SELECTED"
     : "MAIN_CLUTTER_BAR_BUTTON_D"
 
-Button(action: {
-    settings.isDoubleSizeMode.toggle()
-}) {
-    SimpleSpriteImage(dSpriteName, width: 8, height: 8)
-}
+Button(action: { settings.isDoubleSizeMode.toggle() }, label: {
+    SimpleSpriteImage(dSprite, width: 8, height: 8)
+})
 .buttonStyle(.plain)
+.focusable(false)
 .help("Toggle window size")
+.at(Layout.clutterButtonD)
 ```
 
 ### Repeat Mode Button (Winamp 5 Modern Pattern)
@@ -4362,30 +4442,28 @@ Button(action: {
 
 **UI Implementation Pattern**:
 ```swift
-// File: MacAmpApp/Views/WinampMainWindow.swift
+// File: MacAmpApp/Views/MainWindow/MainWindowFullLayer.swift (buildShuffleRepeatButtons)
 // Repeat button with "1" badge overlay (Winamp 5 Modern fidelity)
-ZStack(alignment: .center) {
-    // Base repeat button
-    SimpleSpriteImage(
-        source: .legacy(settings.repeatMode.isActive ?
-                       "REPEAT_BUTTON_ACTIVE_NORM" :
-                       "REPEAT_BUTTON_INACTIVE_NORM"),
-        action: .button(onClick: {
-            settings.repeatMode = settings.repeatMode.next()
-        })
-    )
-
-    // "1" badge overlay (only for repeat-one mode)
-    if settings.repeatMode == .one {
-        Text("1")
-            .font(.system(size: 8, weight: .bold))
-            .foregroundColor(.white)
-            .shadow(color: .black.opacity(0.9), radius: 1, x: 0, y: 1)
-            .allowsHitTesting(false)  // Pass clicks through
+Button(action: { audioPlayer.repeatMode = audioPlayer.repeatMode.next() }, label: {
+    let spriteKey = audioPlayer.repeatMode.isActive
+        ? "MAIN_REPEAT_BUTTON_SELECTED"
+        : "MAIN_REPEAT_BUTTON"
+    ZStack {
+        SimpleSpriteImage(spriteKey, width: 28, height: 15)
+        // "1" badge overlay (only for repeat-one mode)
+        if audioPlayer.repeatMode == .one {
+            Text("1")
+                .font(.system(size: 8, weight: .bold))
+                .foregroundColor(.white)
+                .shadow(color: .black.opacity(0.8), radius: 1, x: 0, y: 0)
+                .offset(x: 8, y: 0)
+        }
     }
-}
-.help(settings.repeatMode.label)
-.at(x: 210, y: 89)
+})
+.buttonStyle(.plain)
+.focusable(false)
+.help(audioPlayer.repeatMode.label)
+.at(Layout.repeatButton)
 ```
 
 ### Time Display System
@@ -4471,7 +4549,7 @@ func setBalance(_ bal: Float) {
 }
 ```
 
-**UI Binding Pattern** (WinampMainWindow+Helpers.swift):
+**UI Binding Pattern** (MainWindow/MainWindowSlidersLayer.swift):
 ```swift
 // Asymmetric binding: read from AudioPlayer, write through coordinator
 let volumeBinding = Binding<Float>(
@@ -4479,12 +4557,14 @@ let volumeBinding = Binding<Float>(
     set: { playbackCoordinator.setVolume($0) }
 )
 WinampVolumeSlider(volume: volumeBinding)
+    .at(Layout.volumeSlider)
 
 let balanceBinding = Binding<Float>(
     get: { audioPlayer.balance },
     set: { playbackCoordinator.setBalance($0) }
 )
 WinampBalanceSlider(balance: balanceBinding)
+    .at(Layout.balanceSlider)
     .opacity(playbackCoordinator.supportsBalance ? 1.0 : 0.5)
     .allowsHitTesting(playbackCoordinator.supportsBalance)
 ```
@@ -4706,39 +4786,45 @@ Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] timer i
 
 **Problem**: Entire view hierarchy redraws on state change
 ```swift
-// ❌ Everything redraws when time updates
-struct PlayerView: View {
-    @ObservedObject var player: AudioPlayer  // Updates every 100ms
+// ❌ Everything redraws when time updates (pre-decomposition monolithic body)
+struct WinampMainWindow: View {
+    @Environment(AudioPlayer.self) var audioPlayer  // Updates every 100ms
 
     var body: some View {
-        VStack {
-            ExpensiveView()  // Redraws unnecessarily
-            TimeDisplay(time: player.currentTime)
-            AnotherExpensiveView()  // Also redraws
+        ZStack {
+            TransportButtons()       // Redraws unnecessarily
+            TimeDisplay()            // Needs update
+            SpectrumAnalyzer()       // Redraws unnecessarily
+            VolumeSlider()           // Redraws unnecessarily
         }
     }
 }
 ```
 
-**Solution**: Isolate frequently updating state
+**Solution**: Extract child view structs as recomposition boundaries (T3 pattern)
 ```swift
-// ✅ Only TimeDisplay redraws
-struct PlayerView: View {
+// ✅ Only the child layer that reads the changed @Environment re-evaluates
+// File: MainWindow/WinampMainWindow.swift (root composition)
+struct WinampMainWindow: View {
     var body: some View {
-        VStack {
-            ExpensiveView()
-            TimeDisplayContainer()  // Isolated updates
-            AnotherExpensiveView()
+        ZStack(alignment: .topLeading) {
+            MainWindowFullLayer(...)  // Delegates to child layers
         }
     }
 }
 
-struct TimeDisplayContainer: View {
-    @ObservedObject var player: AudioPlayer
+// File: MainWindow/MainWindowTransportLayer.swift
+// Only re-evaluates when PlaybackCoordinator state changes
+struct MainWindowTransportLayer: View {
+    @Environment(PlaybackCoordinator.self) private var playbackCoordinator
+    // Does NOT read AudioPlayer → unaffected by volume/time changes
+}
 
-    var body: some View {
-        TimeDisplay(time: player.currentTime)
-    }
+// File: MainWindow/MainWindowSlidersLayer.swift
+// Only re-evaluates when AudioPlayer volume/balance or scrubbing changes
+struct MainWindowSlidersLayer: View {
+    @Environment(AudioPlayer.self) private var audioPlayer
+    let interactionState: WinampMainWindowInteractionState
 }
 ```
 
@@ -4774,9 +4860,29 @@ MacAmpApp/
 │   └── PlaylistManager.swift       # Playlist and queue management
 │
 ├── Views/
-│   ├── WinampMainWindow.swift      # Main player window
+│   ├── MainWindow/                 # Main player window (T3 decomposition, 10 files)
+│   │   ├── WinampMainWindow.swift            # Root composition (~110 lines)
+│   │   ├── WinampMainWindowLayout.swift      # Coords constants enum
+│   │   ├── WinampMainWindowInteractionState.swift # @Observable interaction state
+│   │   ├── MainWindowOptionsMenuPresenter.swift # NSMenu bridge for O button
+│   │   ├── MainWindowFullLayer.swift         # Full-mode composition
+│   │   ├── MainWindowShadeLayer.swift        # Shade-mode composition
+│   │   ├── MainWindowTransportLayer.swift    # Prev/play/pause/stop/next/eject
+│   │   ├── MainWindowTrackInfoLayer.swift    # Scrolling text display
+│   │   ├── MainWindowIndicatorsLayer.swift   # Play/pause, mono/stereo, bitrate, sample rate
+│   │   └── MainWindowSlidersLayer.swift      # Volume, balance, position sliders
+│   │
+│   ├── PlaylistWindow/             # Playlist window (N6 decomposition, 7 files)
+│   │   ├── PlaylistBottomControlsView.swift  # Bottom control buttons
+│   │   ├── PlaylistMenuPresenter.swift       # NSMenu bridge
+│   │   ├── PlaylistResizeHandle.swift        # Resize handle
+│   │   ├── PlaylistShadeView.swift           # Shade mode
+│   │   ├── PlaylistTitleBarButtons.swift     # Titlebar controls
+│   │   ├── PlaylistTrackListView.swift       # Track list rendering
+│   │   └── PlaylistWindowInteractionState.swift # @Observable state
+│   │
 │   ├── WinampEqualizerWindow.swift # 10-band EQ window
-│   ├── WinampPlaylistWindow.swift  # Playlist window
+│   ├── WinampPlaylistWindow.swift  # Playlist root composition
 │   ├── WinampVideoWindow.swift     # Video playback window
 │   ├── WinampMilkdropWindow.swift  # Visualization window
 │   └── Components/
@@ -4940,15 +5046,26 @@ MacAmp demonstrates that retro UI aesthetics and modern development practices ar
 
 The key insight: **The skin is not the app**. This separation enables MacAmp to be simultaneously a faithful Winamp clone and a modern macOS application built with 2025's best practices.
 
-For developers joining the project: start with `PlaybackCoordinator.swift` to understand the orchestration pattern, explore `SpriteResolver.swift` for the semantic mapping system, and examine `WinampMainWindow.swift` to see how it all comes together in SwiftUI.
+For developers joining the project: start with `PlaybackCoordinator.swift` to understand the orchestration pattern, explore `SpriteResolver.swift` for the semantic mapping system, and examine the `MainWindow/` subdirectory to see how it all comes together in SwiftUI -- `WinampMainWindow.swift` is the root composition, `MainWindowFullLayer.swift` assembles child layers, and each layer struct (Transport, Sliders, Indicators, TrackInfo) creates a focused recomposition boundary.
 
 Welcome to MacAmp. May your audio be crisp and your skins be pixel-perfect.
 
 ---
 
-*Document Version: 2.4.0 | Last Updated: 2026-02-09 | Lines: 4,555*
+*Document Version: 2.7.0 | Last Updated: 2026-02-22 | Lines: ~5,100*
 
-**Recent Updates (v2.4.0 - 2026-02-09):**
+**Recent Updates (v2.7.0 - 2026-02-22):**
+- Added MainWindow Layer Decomposition (T3, PR #54) to Recent Architectural Changes (#11)
+- Updated Component Breakdown table with MainWindow/ (10 files) and PlaylistWindow/ (7 files)
+- Updated File Structure with Views/MainWindow/ and Views/PlaylistWindow/ subdirectories
+- Updated SwiftUI Rendering Techniques with child-view recomposition boundary pattern
+- Updated all file path references from deleted files (WinampMainWindow.swift, WinampMainWindow+Helpers.swift, VideoWindowChromeView.swift)
+- Updated Clutter Bar, Repeat Mode, Volume/Balance, and Capability Dimming sections with new file paths
+- Updated N6 section to reflect both MainWindow and PlaylistWindow decompositions as COMPLETE
+- Updated Quick Reference directory listing with full MainWindow/ and PlaylistWindow/ breakdown
+- Updated onboarding guidance in Conclusion to reference decomposed MainWindow/ structure
+
+**Previous Updates (v2.4.0 - 2026-02-09):**
 - Added WindowCoordinator refactoring to Recent Architectural Changes (#10)
 - Updated Component Breakdown table with Window Management section (11 files, 1,470 lines)
 - Updated Five-Window NSWindowController Stack with post-refactoring architecture

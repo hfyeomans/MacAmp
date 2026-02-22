@@ -292,21 +292,30 @@ MacAmpApp/
 │   │   ├── SimpleSpriteImage.swift             # Pixel-perfect sprite rendering (.interpolation(.none))
 │   │   ├── SpriteMenuItem.swift                # Sprite-based popup menu items
 │   │   └── WinampVolumeSlider.swift            # Frame-based volume/balance sliders
+│   ├── MainWindow/                         # 🎵 Decomposed Main Player Window (10 files)
+│   │   ├── WinampMainWindow.swift              # Root composition + lifecycle (~110 lines)
+│   │   ├── WinampMainWindowLayout.swift        # Coordinate constants enum
+│   │   ├── WinampMainWindowInteractionState.swift # @Observable scroll/scrub/blink state
+│   │   ├── MainWindowOptionsMenuPresenter.swift # NSMenu bridge for O button
+│   │   ├── MainWindowFullLayer.swift           # Full-mode composition
+│   │   ├── MainWindowShadeLayer.swift          # Shade-mode composition
+│   │   ├── MainWindowTransportLayer.swift      # Transport buttons (prev/play/pause/stop/next/eject)
+│   │   ├── MainWindowTrackInfoLayer.swift      # Scrolling track title text
+│   │   ├── MainWindowIndicatorsLayer.swift     # Play/pause, mono/stereo, bitrate, sample rate
+│   │   └── MainWindowSlidersLayer.swift        # Volume, balance, position sliders
 │   ├── Windows/                            # Window Chrome Components
 │   │   ├── VideoWindowChromeView.swift         # VIDEO.bmp chrome with dynamic sizing
 │   │   ├── MilkdropWindowChromeView.swift      # GEN.bmp chrome with two-piece letters
 │   │   ├── AVPlayerViewRepresentable.swift     # NSViewRepresentable for AVPlayerView
-│   │   └── WindowResizePreviewOverlay.swift    # AppKit overlay for resize preview
+│   │   └── ButterchurnWebView.swift            # WKWebView for Butterchurn visualizations
 │   ├── EqGraphView.swift                   # Equalizer frequency response graph
 │   ├── PreferencesView.swift               # Settings and preferences window
 │   ├── PresetsButton.swift                 # EQ preset selector button
 │   ├── SkinnedBanner.swift                 # Scrolling banner text component
 │   ├── SkinnedText.swift                   # Skinned text rendering
-│   ├── UnifiedDockView.swift               # Multi-window container with double-size scaling
 │   ├── VisualizerOptions.swift             # Visualizer mode switching UI
 │   ├── VisualizerView.swift                # Spectrum analyzer & oscilloscope rendering
 │   ├── WinampEqualizerWindow.swift         # 10-band equalizer window
-│   ├── WinampMainWindow.swift              # Main player window with transport controls
 │   ├── WinampPlaylistWindow.swift          # Playlist window with sprite-based menus
 │   ├── WinampVideoWindow.swift             # Video window with AVPlayer
 │   └── WinampMilkdropWindow.swift          # Milkdrop visualization window

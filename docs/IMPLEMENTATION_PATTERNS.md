@@ -1,6 +1,6 @@
 # MacAmp Implementation Patterns
 
-**Version:** 1.6.0
+**Version:** 1.7.0
 **Date:** 2026-02-22
 **Purpose:** Practical code patterns and best practices for MacAmp development
 
@@ -21,6 +21,9 @@
    - [Coordinator Volume Routing](#pattern-coordinator-volume-routing) **(New - T5 Phase 1)**
    - [Asymmetric Binding for Coordinator Routing](#pattern-asymmetric-binding-for-coordinator-routing) **(New - T5 Phase 1)**
    - [Capability Flag Pattern](#pattern-capability-flag-pattern) **(New - T5 Phase 1)**
+   - [Display Title Provider Closure](#pattern-display-title-provider-closure) **(New - T3 Decomposition)**
+   - [Task.sleep with Cancellation](#pattern-tasksleep-with-cancellation) **(New - T3 Decomposition)**
+   - [NSMenu Presenter Isolation](#pattern-nsmenu-presenter-isolation) **(New - T3 Decomposition)**
 3. [UI Component Patterns](#ui-component-patterns)
    - [Sprite-Based Button Component](#pattern-sprite-based-button-component)
    - [Absolute Positioning Extension](#pattern-absolute-positioning-extension)
@@ -28,6 +31,7 @@
    - [VIDEO.bmp Chrome Composition](#pattern-videobmp-chrome-composition)
    - [GEN.bmp Chrome & Two-Piece Sprites](#pattern-genbmp-chrome--two-piece-sprites)
    - [Video Playback Embedding](#pattern-video-playback-embedding)
+   - [View Layer Decomposition (MainWindow)](#pattern-view-layer-decomposition-mainwindow) **(New - T3 Decomposition)**
 4. [Audio Processing Patterns](#audio-processing-patterns)
    - [Safe Audio Buffer Processing](#pattern-safe-audio-buffer-processing)
    - [Thread-Safe Audio State](#pattern-thread-safe-audio-state)
@@ -612,7 +616,7 @@ UI Slider → PlaybackCoordinator.setVolume() → AudioPlayer.volume (didSet: pl
                                              → VideoPlaybackController.volume (didSet: playerLayer)
 ```
 
-**Real usage**: `PlaybackCoordinator.swift` setVolume/setBalance, called from asymmetric bindings in `WinampMainWindow+Helpers.swift`
+**Real usage**: `PlaybackCoordinator.swift` setVolume/setBalance, called from asymmetric bindings in `MainWindowSlidersLayer.swift`
 
 **Pitfalls**:
 - AudioPlayer.volume `didSet` must NOT propagate to other backends (that is the coordinator's job)
@@ -628,28 +632,28 @@ UI Slider → PlaybackCoordinator.setVolume() → AudioPlayer.volume (didSet: pl
 
 **Implementation**:
 ```swift
-// File: MacAmpApp/Views/WinampMainWindow+Helpers.swift:200-220
+// File: MacAmpApp/Views/MainWindow/MainWindowSlidersLayer.swift
 // Purpose: Volume slider reads from AudioPlayer but writes through PlaybackCoordinator
 // Context: Ensures all backends receive volume changes, not just AudioPlayer
 
 @ViewBuilder
-func buildVolumeSlider() -> some View {
+private func buildVolumeSlider() -> some View {
     let volumeBinding = Binding<Float>(
         get: { audioPlayer.volume },               // Read: source of truth
         set: { playbackCoordinator.setVolume($0) }  // Write: fan-out to all backends
     )
     WinampVolumeSlider(volume: volumeBinding)
-        .at(Coords.volumeSlider)
+        .at(Layout.volumeSlider)
 }
 
 @ViewBuilder
-func buildBalanceSlider() -> some View {
+private func buildBalanceSlider() -> some View {
     let balanceBinding = Binding<Float>(
         get: { audioPlayer.balance },                // Read: source of truth
         set: { playbackCoordinator.setBalance($0) }  // Write: fan-out to all backends
     )
     WinampBalanceSlider(balance: balanceBinding)
-        .at(Coords.balanceSlider)
+        .at(Layout.balanceSlider)
         .opacity(playbackCoordinator.supportsBalance ? 1.0 : 0.5)
         .allowsHitTesting(playbackCoordinator.supportsBalance)
         .help(playbackCoordinator.supportsBalance
@@ -667,7 +671,7 @@ func buildBalanceSlider() -> some View {
 WinampVolumeSlider(volume: $player.volume)  // Only updates AudioPlayer!
 ```
 
-**Real usage**: `WinampMainWindow+Helpers.swift` buildVolumeSlider(), buildBalanceSlider()
+**Real usage**: `MainWindowSlidersLayer.swift` buildVolumeSlider(), buildBalanceSlider()
 
 **Pitfalls**:
 - The `get` closure accesses `audioPlayer.volume` directly -- this is fine because `@Observable` tracks the access for SwiftUI view updates
@@ -712,7 +716,7 @@ final class PlaybackCoordinator {
 
 **UI consumption pattern** (dim + disable):
 ```swift
-// File: MacAmpApp/Views/WinampMainWindow+Helpers.swift:217-219
+// File: MacAmpApp/Views/MainWindow/MainWindowSlidersLayer.swift
 // File: MacAmpApp/Views/WinampEqualizerWindow.swift:105-106
 // Pattern: opacity(0.5) + allowsHitTesting(false) for unsupported features
 
@@ -732,7 +736,7 @@ buildEQSliders()
 
 **Error state recovery**: When a stream enters an error state (`streamPlayer.error != nil`), `isStreamBackendActive` returns `false`, which flips all `supports*` flags back to `true`. This ensures the user is never stuck with permanently dimmed controls after a stream failure. When the user switches to a local file or starts a new stream, the flags update naturally.
 
-**Real usage**: `PlaybackCoordinator.swift` capability flags, `WinampMainWindow+Helpers.swift` balance dimming, `WinampEqualizerWindow.swift` EQ dimming
+**Real usage**: `PlaybackCoordinator.swift` capability flags, `MainWindowSlidersLayer.swift` balance dimming, `WinampEqualizerWindow.swift` EQ dimming
 
 **Pitfalls**:
 - All three flags derive from `isStreamBackendActive` -- keep them as separate computed properties (not a single enum) because Phase 2 may enable some features independently (e.g., visualizer via Loopback Bridge while balance remains unsupported)
@@ -740,6 +744,199 @@ buildEQSliders()
 - Use `opacity(0.5)` (not `0.0`) to indicate "unavailable" rather than "hidden" -- users should see the control exists but cannot be used
 - Always pair `.opacity()` with `.allowsHitTesting(false)` to prevent interaction with dimmed controls
 - Optional `.help()` tooltip explains why the control is disabled
+
+### Pattern: Display Title Provider Closure
+
+**When to use**: When a Timer or periodic callback needs to read the current value of an external property, but the callback's closure would capture a stale value at creation time
+
+**T3 Decomposition**: Introduced in PR #54 to solve a bug where the scrolling title timer captured `displayTitle` at timer creation time and never picked up track changes.
+
+**Implementation**:
+```swift
+// File: MacAmpApp/Views/MainWindow/WinampMainWindowInteractionState.swift
+// Purpose: Timer reads live title value instead of stale capture
+// Context: Scroll timer runs at 0.15s intervals, must track title changes
+
+@MainActor
+@Observable
+final class WinampMainWindowInteractionState {
+    /// Closure that returns the current display title. Set by the view layer so the timer
+    /// always reads the live value instead of a stale capture.
+    var displayTitleProvider: () -> String = { "MacAmp" }
+
+    func startScrolling() {
+        scrollTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                // CORRECT: Calls closure which reads live value from PlaybackCoordinator
+                let trackText = self.displayTitleProvider()
+                // ... scroll logic using trackText ...
+            }
+        }
+    }
+}
+
+// File: MacAmpApp/Views/MainWindow/WinampMainWindow.swift
+// Purpose: Wire the closure to read from PlaybackCoordinator at call time
+
+.onAppear {
+    interactionState.displayTitleProvider = { [playbackCoordinator] in
+        playbackCoordinator.displayTitle.isEmpty ? "MacAmp" : playbackCoordinator.displayTitle
+    }
+}
+```
+
+**Why a closure instead of passing the string directly**:
+- Passing `playbackCoordinator.displayTitle` directly to the interaction state would capture the value at assignment time
+- Timer callbacks created with `Timer.scheduledTimer` capture variables at closure creation, not at invocation
+- The closure indirection ensures the timer always reads the **current** value from the coordinator
+
+**Real usage**: `WinampMainWindowInteractionState.swift` `displayTitleProvider`, wired in `WinampMainWindow.swift` `.onAppear`
+
+**Pitfalls**:
+- The closure must capture the coordinator weakly or as unowned to avoid retain cycles
+- The closure is set in `.onAppear` and must be updated if the coordinator changes (unlikely with environment injection)
+- Prefer this pattern over storing a reference to the coordinator in the interaction state (keeps the state class view-agnostic)
+
+### Pattern: Task.sleep with Cancellation
+
+**When to use**: Replacing `DispatchQueue.main.asyncAfter` with structured concurrency for delayed state changes that may need cancellation
+
+**T3 Decomposition**: Introduced in PR #54 for scroll restart delays and scrub reset delays in the MainWindow interaction state. The key improvement is that cancelling a `Task` prevents the delayed action from firing, whereas cancelling a `DispatchQueue.main.asyncAfter` requires tracking `DispatchWorkItem` references.
+
+**Implementation**:
+```swift
+// File: MacAmpApp/Views/MainWindow/WinampMainWindowInteractionState.swift
+// Purpose: Delayed scroll restart after title change, cancellable on new title change
+
+private var scrollRestartTask: Task<Void, Never>?
+private var scrubResetTask: Task<Void, Never>?
+
+func resetScrolling() {
+    scrollTimer?.invalidate()
+    scrollTimer = nil
+    scrollOffset = 0
+    scrollRestartTask?.cancel()  // Cancel any pending restart
+
+    scrollRestartTask = Task { @MainActor [weak self] in
+        try? await Task.sleep(for: .seconds(1))      // Cancellable delay
+        guard !Task.isCancelled else { return }       // Bail if cancelled
+        guard let self, self.isViewVisible else { return }
+        self.startScrolling()
+    }
+}
+
+// Scrub reset: prevents isScrubbing from flipping mid-drag
+func handlePositionDragEnd(...) {
+    // ... seek logic ...
+
+    scrubResetTask?.cancel()  // Cancel prior reset if drag restarts
+    scrubResetTask = Task { @MainActor [weak self] in
+        try? await Task.sleep(for: .seconds(0.3))
+        guard !Task.isCancelled else { return }
+        self?.isScrubbing = false
+    }
+}
+
+func handlePositionDrag(...) {
+    scrubResetTask?.cancel()  // CRITICAL: Cancel reset on new drag start
+    if !isScrubbing {
+        isScrubbing = true
+        // ... pause logic ...
+    }
+    // ... update progress ...
+}
+```
+
+**Why Task.sleep over DispatchQueue.main.asyncAfter**:
+- `Task.cancel()` is a single call vs. tracking `DispatchWorkItem` references
+- `Task.isCancelled` provides a clear guard before executing the delayed action
+- `try? await Task.sleep` throws `CancellationError` on cancel, which `try?` absorbs cleanly
+- Tasks are `@MainActor`-isolated, so no need for dispatch to main queue
+
+**The scrubResetTask cancellation pattern** deserves special attention: when the user starts a new drag, `handlePositionDrag` cancels any pending `scrubResetTask`. Without this, a previous drag-end's reset task could flip `isScrubbing = false` in the middle of a new drag, causing the slider thumb to jump.
+
+**Real usage**: `WinampMainWindowInteractionState.swift` for `scrollRestartTask` and `scrubResetTask`
+
+**Pitfalls**:
+- Always check `Task.isCancelled` after `Task.sleep` returns -- the sleep can complete before cancellation is checked
+- Store the `Task` reference to enable cancellation; anonymous `Task { }` blocks cannot be cancelled
+- Cancel in `cleanup()` / `onDisappear` to prevent orphaned tasks from executing on deallocated state
+- Use `[weak self]` in the task closure to prevent retain cycles during the sleep period
+
+### Pattern: NSMenu Presenter Isolation
+
+**When to use**: When a SwiftUI view needs to present an `NSMenu` (AppKit menu) and the menu lifecycle (construction, item targets, popup positioning) is complex enough to warrant its own class
+
+**T3 Decomposition**: Introduced in PR #54 to extract the Options (O button) menu from the monolithic `WinampMainWindow+Helpers.swift` extension. The menu is **not** interaction state -- it is a presentation concern that bridges AppKit to SwiftUI.
+
+**Implementation**:
+```swift
+// File: MacAmpApp/Views/MainWindow/MainWindowOptionsMenuPresenter.swift
+// Purpose: Bridges AppKit NSMenu to SwiftUI for the Options (O) button menu
+// Context: Absorbs MenuItemTarget and menu lifecycle from the old extension
+
+@MainActor
+final class MainWindowOptionsMenuPresenter {
+    private var activeMenu: NSMenu?  // Retains menu during display
+
+    func showOptionsMenu(from buttonPosition: CGPoint, settings: AppSettings,
+                         audioPlayer: AudioPlayer, isDoubleSizeMode: Bool) {
+        let menu = NSMenu()
+        activeMenu = menu  // CRITICAL: retain menu
+
+        buildOptionsMenuItems(menu: menu, settings: settings, audioPlayer: audioPlayer)
+
+        // Position calculation accounting for double-size mode
+        if let window = findMainWindow() {
+            let scale: CGFloat = isDoubleSizeMode ? 2.0 : 1.0
+            let screenPoint = NSPoint(
+                x: window.frame.minX + (buttonPosition.x * scale),
+                y: window.frame.maxY - ((buttonPosition.y + 8) * scale)
+            )
+            menu.popUp(positioning: nil, at: screenPoint, in: nil)
+        }
+    }
+
+    private func createMenuItem(title: String, isChecked: Bool,
+                                action: @escaping () -> Void) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+        item.state = isChecked ? .on : .off
+
+        // MenuItemActionTarget bridges closure → @objc selector
+        let actionTarget = MenuItemActionTarget(action: action)
+        item.target = actionTarget
+        item.action = #selector(MenuItemActionTarget.execute)
+        item.representedObject = actionTarget  // Retains target during menu lifecycle
+
+        return item
+    }
+}
+
+/// Bridges closures to NSMenuItem @objc action selectors.
+@MainActor
+private class MenuItemActionTarget: NSObject {
+    let action: () -> Void
+    init(action: @escaping () -> Void) { self.action = action }
+    @objc func execute() { action() }
+}
+
+// In WinampMainWindow.swift -- owned as @State, not part of interaction state
+@State private var optionsPresenter = MainWindowOptionsMenuPresenter()
+```
+
+**Why a separate class (not in interaction state)**:
+- `WinampMainWindowInteractionState` manages drag state, scroll offsets, timers -- **user interaction state**
+- Menu presentation is a **presentation concern** that bridges AppKit APIs
+- The menu must retain `NSMenu` and `MenuItemActionTarget` objects during display -- this lifecycle is orthogonal to interaction state
+- Separating them keeps both classes focused and testable
+
+**Real usage**: `MainWindowOptionsMenuPresenter.swift`, instantiated in `WinampMainWindow.swift` as `@State`
+
+**Pitfalls**:
+- `activeMenu` must be retained as an instance property -- if the NSMenu is only a local variable, it is deallocated before `popUp` returns (menu items stop working)
+- `MenuItemActionTarget` must be stored in `representedObject` -- the `target` property is a weak reference, so without `representedObject` the target is released before the user clicks
+- Menu items use `[weak settings]` / `[weak audioPlayer]` in action closures to avoid retaining environment objects beyond the menu's lifetime
 
 ---
 
@@ -826,7 +1023,7 @@ struct SimpleSpriteImage: View {
 }
 ```
 
-**Real usage**: All buttons in `WinampMainWindow.swift`, `WinampEqualizerWindow.swift`
+**Real usage**: All buttons in `MainWindow/MainWindowFullLayer.swift`, `MainWindow/MainWindowTransportLayer.swift`, `WinampEqualizerWindow.swift`
 
 ### Pattern: Absolute Positioning Extension
 
@@ -846,20 +1043,21 @@ extension View {
 }
 
 // Usage examples from actual code:
-// File: MacAmpApp/Views/WinampMainWindow.swift
-SimpleSpriteImage(
-    source: .legacy("MAIN_PLAY_BUTTON"),
-    action: .button(onClick: { playbackCoordinator.play() })
-)
-.at(x: 39, y: 88)  // Exact Winamp coordinates
+// File: MacAmpApp/Views/MainWindow/MainWindowTransportLayer.swift
+// Coordinates are defined in WinampMainWindowLayout enum
+Button(action: { playbackCoordinator.togglePlayPause() }, label: {
+    SimpleSpriteImage("MAIN_PLAY_BUTTON", width: 23, height: 18)
+})
+.at(Layout.playButton)  // CGPoint(x: 39, y: 88)
 
-// Time display positioning
-TimeDisplay()
-    .at(x: 39, y: 26)
+// File: MacAmpApp/Views/MainWindow/MainWindowFullLayer.swift
+// Time display positioning via Layout constants
+buildTimeDisplay()
+    .at(Layout.timeDisplay)  // CGPoint(x: 39, y: 26)
 
 // Visualizer positioning
 VisualizerView()
-    .at(x: 24, y: 43)
+    .at(Layout.spectrumAnalyzer)  // CGPoint(x: 24, y: 43)
 ```
 
 **Real usage**: Every component placement in window views
@@ -1439,6 +1637,73 @@ let isStream = url.scheme?.hasPrefix("http") == true
 - AVPlayer doesn't support all audio features (EQ, visualization)
 - Some video files may only have audio tracks - detect properly
 - Controls visibility should reflect playback state
+
+### Pattern: View Layer Decomposition (MainWindow)
+
+**When to use**: Decomposing a monolithic SwiftUI view (500+ lines) into child view structs that create independent recomposition boundaries
+
+**T3 Decomposition**: PR #54 decomposed `WinampMainWindow.swift` (originally ~650 lines with its extension) into 10 focused files in `MacAmpApp/Views/MainWindow/`. This is the canonical example of the layer decomposition pattern established in Wave 1 (PlaylistWindow) and refined in T3.
+
+**Directory structure**:
+```
+MacAmpApp/Views/MainWindow/
+  WinampMainWindow.swift              # Root composition (103 lines)
+  WinampMainWindowInteractionState.swift  # @Observable interaction state
+  WinampMainWindowLayout.swift        # Coordinate constants enum
+  MainWindowOptionsMenuPresenter.swift # NSMenu bridge (presentation)
+  MainWindowFullLayer.swift           # Full-mode composition (~267 lines)
+  MainWindowShadeLayer.swift          # Shade-mode composition
+  MainWindowTransportLayer.swift      # Prev/Play/Pause/Stop/Next/Eject
+  MainWindowSlidersLayer.swift        # Volume/Balance/Position sliders
+  MainWindowIndicatorsLayer.swift     # Play state, mono/stereo, bitrate
+  MainWindowTrackInfoLayer.swift      # Scrolling track title
+```
+
+**Key architectural decisions**:
+
+1. **Root view is thin**: `WinampMainWindow.swift` is ~100 lines -- it owns `@State` for interaction state and presenter, switches between full/shade mode, and wires lifecycle callbacks. No UI building logic.
+
+2. **Interaction state is a class, not scattered @State vars**: All scrubbing, scrolling, and blinking state lives in `WinampMainWindowInteractionState` -- a single `@Observable` class owned via `@State` in the root and passed to children.
+
+3. **Layout constants are a separate enum**: `WinampMainWindowLayout` centralizes all pixel coordinates, preventing magic numbers in child views. Children use `typealias Layout = WinampMainWindowLayout`.
+
+4. **NSMenu presenter is separate from interaction state**: Menu presentation is a bridge concern (AppKit ↔ SwiftUI), not interaction state. See [NSMenu Presenter Isolation](#pattern-nsmenu-presenter-isolation).
+
+5. **Each child view is a recomposition boundary**: When `audioPlayer.volume` changes, only `MainWindowSlidersLayer` re-evaluates -- transport buttons, indicators, and track info are untouched.
+
+**Implementation pattern for child layers**:
+```swift
+// File: MacAmpApp/Views/MainWindow/MainWindowTransportLayer.swift
+// Each child: environment deps + passed state + typealias Layout
+
+struct MainWindowTransportLayer: View {
+    @Environment(PlaybackCoordinator.self) private var playbackCoordinator
+    let openFileDialog: () -> Void  // Injected action, not environment
+
+    private typealias Layout = WinampMainWindowLayout
+
+    var body: some View {
+        Button(action: { playbackCoordinator.togglePlayPause() }, label: {
+            SimpleSpriteImage("MAIN_PLAY_BUTTON", width: 23, height: 18)
+        })
+        .buttonStyle(.plain)
+        .focusable(false)
+        .at(Layout.playButton)
+
+        // ... other buttons ...
+    }
+}
+```
+
+**Real usage**: `MacAmpApp/Views/MainWindow/` (all 10 files), following the same pattern established in `MacAmpApp/Views/PlaylistWindow/`
+
+**Known optimization opportunity**: `VisualizerView` is currently inlined in `MainWindowFullLayer` via `buildSpectrumAnalyzer()`. This means the spectrum analyzer shares `MainWindowFullLayer`'s recomposition scope -- a volume drag causes the visualizer to re-evaluate even though its data has not changed. Extracting a `MainWindowVisualizerLayer` struct would create an independent recomposition boundary. This is documented as a future optimization.
+
+**Pitfalls**:
+- Children should declare `@Environment` for only the services they actually read -- avoid pulling in unused environments
+- The `interactionState` is passed as a plain property (not environment) because it is view-local, not app-wide
+- `MainWindowFullLayer` still contains several `@ViewBuilder` helper methods (time digits, shuffle/repeat, clutter bar) that could become separate child views for further recomposition isolation
+- When adding new UI elements, add them to the appropriate child layer, not to the root `WinampMainWindow`
 
 ---
 
@@ -2832,7 +3097,7 @@ struct FooterSection: View { ... }
 
 ### Anti-Pattern: Cross-File SwiftUI Extensions as View Decomposition
 
-**Context**: PR #49 split `WinampMainWindow.swift` and `WinampPlaylistWindow.swift` into main file + extension files (e.g., `WinampMainWindow+Helpers.swift`, `WinampPlaylistWindow+Menus.swift`, `PlaylistWindowActions.swift`) to reduce per-file complexity. This was **subsequently corrected** for `WinampPlaylistWindow` in Wave 1 of the layer decomposition work.
+**Context**: PR #49 split `WinampMainWindow.swift` and `WinampPlaylistWindow.swift` into main file + extension files (e.g., `WinampMainWindow+Helpers.swift`, `WinampPlaylistWindow+Menus.swift`, `PlaylistWindowActions.swift`) to reduce per-file complexity. This was **subsequently corrected** for `WinampPlaylistWindow` in Wave 1, and for `WinampMainWindow` in PR #54 (T3 MainWindow Layer Decomposition).
 
 **Why this is an anti-pattern** (not just tactical debt):
 1. **Forces access widening**: Properties that should be `private` must become `internal` so the extension file can reach them
@@ -2842,6 +3107,7 @@ struct FooterSection: View { ... }
 ```swift
 // ❌ ANTI-PATTERN: Extensions in separate files widen access and share body scope
 // File: WinampPlaylistWindow+Menus.swift (REMOVED in Wave 1)
+// File: WinampMainWindow+Helpers.swift (REMOVED in PR #54)
 extension WinampPlaylistWindow {
     // All properties must be internal (not private) for this to compile
     // No SwiftUI recomposition boundary — entire parent body re-evaluates
@@ -2849,7 +3115,7 @@ extension WinampPlaylistWindow {
 }
 ```
 
-**The correct approach** (implemented for WinampPlaylistWindow in Wave 1):
+**The correct approach** (implemented for both windows):
 ```swift
 // ✅ CORRECT: @Observable interaction state + child View structs with explicit deps
 
@@ -2878,11 +3144,13 @@ struct PlaylistHeaderView: View {
 - Explicit dependency lists make data flow visible and testable
 - `@Observable` interaction state classes are unit-testable without views
 
-**Current status**:
-- `WinampPlaylistWindow+Menus.swift` / `PlaylistWindowActions.swift` — **REMOVED** (replaced by child view structs in Wave 1; see `tasks/playlistwindow-layer-decomposition/research.md`)
-- `WinampMainWindow+Helpers.swift` — **Still exists** (planned for Wave 2 decomposition in `tasks/mainwindow-layer-decomposition/`)
+**Current status** (all RESOLVED):
+- `WinampPlaylistWindow+Menus.swift` / `PlaylistWindowActions.swift` -- **REMOVED** (replaced by child view structs in Wave 1; see `tasks/playlistwindow-layer-decomposition/research.md`)
+- `WinampMainWindow+Helpers.swift` -- **REMOVED** (replaced by child layer structs in PR #54 T3 MainWindow Layer Decomposition; see `tasks/mainwindow-layer-decomposition/`)
+- `WinampMainWindow.swift` moved from `MacAmpApp/Views/WinampMainWindow.swift` to `MacAmpApp/Views/MainWindow/WinampMainWindow.swift` with 10 files in the `MainWindow/` directory
 
 See Lesson #25 in BUILDING_RETRO_MACOS_APPS_SKILL.md for the complete architecture pattern.
+See [View Layer Decomposition (MainWindow)](#pattern-view-layer-decomposition-mainwindow) in the UI Component Patterns section for the MainWindow-specific implementation.
 
 ### Anti-Pattern: Direct Backend Volume/Balance Binding (T5 Phase 1)
 
@@ -3025,4 +3293,4 @@ When implementing new features, prefer these established patterns. When you disc
 
 ---
 
-*Document Version: 1.4.0 | Last Updated: 2026-02-14*
+*Document Version: 1.7.0 | Last Updated: 2026-02-22*
