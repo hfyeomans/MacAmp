@@ -198,16 +198,25 @@ extension WinampMainWindow {
 
     @ViewBuilder
     func buildVolumeSlider() -> some View {
-        @Bindable var player = audioPlayer
-        WinampVolumeSlider(volume: $player.volume)
+        let volumeBinding = Binding<Float>(
+            get: { audioPlayer.volume },
+            set: { playbackCoordinator.setVolume($0) }
+        )
+        WinampVolumeSlider(volume: volumeBinding)
             .at(Coords.volumeSlider)
     }
 
     @ViewBuilder
     func buildBalanceSlider() -> some View {
-        @Bindable var player = audioPlayer
-        WinampBalanceSlider(balance: $player.balance)
+        let balanceBinding = Binding<Float>(
+            get: { audioPlayer.balance },
+            set: { playbackCoordinator.setBalance($0) }
+        )
+        WinampBalanceSlider(balance: balanceBinding)
             .at(Coords.balanceSlider)
+            .opacity(playbackCoordinator.supportsBalance ? 1.0 : 0.5)
+            .allowsHitTesting(playbackCoordinator.supportsBalance)
+            .help(playbackCoordinator.supportsBalance ? "Balance" : "Balance unavailable during streaming")
     }
 
     @ViewBuilder

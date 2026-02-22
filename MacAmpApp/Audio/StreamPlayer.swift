@@ -37,6 +37,18 @@ final class StreamPlayer: NSObject, @preconcurrency AVPlayerItemMetadataOutputPu
     private(set) var streamArtist: String?
     private(set) var error: String?
 
+    /// Stream volume (0.0-1.0 linear amplitude, same scale as AVAudioPlayerNode.volume).
+    /// Synced to the internal AVPlayer on every change.
+    var volume: Float = 0.75 {
+        didSet { player.volume = volume }
+    }
+
+    /// Stream balance (-1.0 left to 1.0 right). Stored but NOT applied —
+    /// AVPlayer has no .pan property. Enables uniform propagation from
+    /// PlaybackCoordinator without backend type checks. Will be applied
+    /// when Phase 2 Loopback Bridge routes streams through AVAudioEngine.
+    var balance: Float = 0.0
+
     // MARK: - AVPlayer
 
     let player = AVPlayer()  // Internal for PlaybackCoordinator resume access
@@ -65,6 +77,9 @@ final class StreamPlayer: NSObject, @preconcurrency AVPlayerItemMetadataOutputPu
 
         setupMetadataObserver(for: playerItem)
         setupItemStatusObserver(for: playerItem)
+
+        // Apply current volume before playback starts (persisted volume from UserDefaults)
+        player.volume = volume
 
         player.play()
         isPlaying = true
