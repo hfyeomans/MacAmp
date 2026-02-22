@@ -48,6 +48,8 @@ final class EqualizerController {
     // MARK: - Private State
 
     @ObservationIgnored private var autoEQTask: Task<Void, Never>?
+    @ObservationIgnored private var autoPresetClearTask: Task<Void, Never>?
+    @ObservationIgnored private var appliedAutoPresetURL: String?
 
     // MARK: - Initialization
 
@@ -131,13 +133,17 @@ final class EqualizerController {
         if let preset = eqPresetStore.preset(forTrackURL: track.url.absoluteString) {
             applyPreset(preset)
             appliedAutoPresetTrack = track.title
-            Task { @MainActor [weak self] in
+            autoPresetClearTask?.cancel()
+            let trackURL = track.url.absoluteString
+            autoPresetClearTask = Task { @MainActor [weak self] in
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
-                guard let self else { return }
-                if self.appliedAutoPresetTrack == track.title {
+                guard let self, !Task.isCancelled else { return }
+                if self.appliedAutoPresetURL == trackURL {
                     self.appliedAutoPresetTrack = nil
+                    self.appliedAutoPresetURL = nil
                 }
             }
+            appliedAutoPresetURL = trackURL
             AppLog.debug(.audio, "Applied per-track EQ preset for \(track.title)")
         } else {
             generateAutoPreset(for: track)
@@ -153,7 +159,10 @@ final class EqualizerController {
         } else {
             autoEQTask?.cancel()
             autoEQTask = nil
+            autoPresetClearTask?.cancel()
+            autoPresetClearTask = nil
             appliedAutoPresetTrack = nil
+            appliedAutoPresetURL = nil
         }
     }
 
