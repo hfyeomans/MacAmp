@@ -60,14 +60,14 @@
 - [x] **4.1** Clean build with Thread Sanitizer — zero errors, zero warnings
 - [x] **4.2** All @State/@Environment properties private
 - [x] **4.3** No widened access modifiers remaining
-- [ ] **4.4** Visual: playlist window renders identically (requires manual testing)
-- [ ] **4.5** Track selection: single click selects, shift-click multi-selects (requires manual testing)
-- [ ] **4.6** Double-click plays track via PlaybackCoordinator (requires manual testing)
-- [ ] **4.7** All 4 menus open and function (Add, Rem, Misc, List) (requires manual testing)
-- [ ] **4.8** Shade mode toggle works (requires manual testing)
-- [ ] **4.9** Resize drag works with quantized segments (requires manual testing)
-- [ ] **4.10** Scroll slider syncs with track list (requires manual testing)
-- [ ] **4.11** Keyboard shortcuts: Cmd+A select all, Esc deselect (requires manual testing)
+- [x] **4.4** Visual: playlist window renders identically (requires manual testing)
+- [x] **4.5** Track selection: single click selects, shift-click multi-selects (requires manual testing)
+- [x] **4.6** Double-click plays track via PlaybackCoordinator (requires manual testing)
+- [x] **4.7** All 4 menus open and function (Add, Rem, Misc, List) (requires manual testing)
+- [x] **4.8** Shade mode toggle works (requires manual testing)
+- [x] **4.9** Resize drag works with quantized segments (requires manual testing)
+- [x] **4.10** Scroll slider syncs with track list (requires manual testing)
+- [x] **4.11** Keyboard shortcuts: Cmd+A select all, Esc deselect (requires manual testing)
 
 ---
 
