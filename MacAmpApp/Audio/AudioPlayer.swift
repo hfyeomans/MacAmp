@@ -34,12 +34,12 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     // AVAudioEngine-based playback - NOT observable (engine implementation details)
     @ObservationIgnored private let audioEngine = AVAudioEngine()
     @ObservationIgnored private let playerNode = AVAudioPlayerNode()
-    @ObservationIgnored private let eqNode = AVAudioUnitEQ(numberOfBands: 10)
     @ObservationIgnored private var audioFile: AVAudioFile?
     @ObservationIgnored nonisolated(unsafe) private var progressTimer: Timer?  // nonisolated(unsafe) for deinit access
     @ObservationIgnored private var playheadOffset: Double = 0 // seconds offset for current scheduled segment
 
     // MARK: - Extracted Controllers
+    let equalizer = EqualizerController()
     let visualizerPipeline = VisualizerPipeline()
 
     /// Legacy toggle - derives from AppSettings.visualizerMode (forwarded to pipeline)
@@ -69,7 +69,6 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     @ObservationIgnored private var currentSeekID: UUID = UUID() // Identifies which seek operation scheduled the current audio
     @ObservationIgnored private var isHandlingCompletion = false // Prevents re-entrant onPlaybackEnded calls
     @ObservationIgnored private var seekGuardActive = false
-    @ObservationIgnored private var autoEQTask: Task<Void, Never>?
     var currentTrackURL: URL? // Placeholder for the currently playing track
     var currentTitle: String = "No Track Loaded"
     var currentDuration: Double = 0.0
@@ -125,19 +124,34 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
         set { AppSettings.instance().repeatMode = newValue }
     }
 
-    // Equalizer properties
-    var preamp: Float = 0.0 // -12.0 to 12.0 dB (typical range)
-    var eqBands: [Float] = Array(repeating: 0.0, count: 10) // 10 bands, -12.0 to 12.0 dB
-    var isEqOn: Bool = false // New: EQ On/Off state
-    var eqAutoEnabled: Bool = false
-    var useLogScaleBands: Bool = true
-    // EQ preset persistence (extracted to separate store)
-    let eqPresetStore = EQPresetStore()
-
-    // Computed forwarding for backwards compatibility
-    var userPresets: [EQPreset] { eqPresetStore.userPresets }
+    // Equalizer forwarding (backed by EqualizerController)
+    var preamp: Float {
+        get { equalizer.preamp }
+        set { equalizer.preamp = newValue }
+    }
+    var eqBands: [Float] {
+        get { equalizer.eqBands }
+        set { equalizer.eqBands = newValue }
+    }
+    var isEqOn: Bool {
+        get { equalizer.isEqOn }
+        set { equalizer.isEqOn = newValue }
+    }
+    var eqAutoEnabled: Bool {
+        get { equalizer.eqAutoEnabled }
+        set { equalizer.eqAutoEnabled = newValue }
+    }
+    var useLogScaleBands: Bool {
+        get { equalizer.useLogScaleBands }
+        set { equalizer.useLogScaleBands = newValue }
+    }
+    var eqPresetStore: EQPresetStore { equalizer.eqPresetStore }
+    var userPresets: [EQPreset] { equalizer.userPresets }
     var visualizerLevels: [Float] { visualizerPipeline.levels }
-    var appliedAutoPresetTrack: String?
+    var appliedAutoPresetTrack: String? {
+        get { equalizer.appliedAutoPresetTrack }
+        set { equalizer.appliedAutoPresetTrack = newValue }
+    }
     var channelCount: Int = 2 // 1 = mono, 2 = stereo
     var bitrate: Int = 0 // in kbps
     var sampleRate: Int = 0 // in Hz (will display as kHz)
@@ -151,8 +165,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
         }
 
         setupEngine()
-        configureEQ()
-        // Note: eqPresetStore loads presets in its own init
+        // Note: EQ configuration handled by EqualizerController's init
 
         // Apply restored volume/balance to audio nodes
         playerNode.volume = volume
@@ -369,8 +382,8 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
         }
 
         // Apply EQ auto preset if enabled
-        if eqAutoEnabled {
-            applyAutoPreset(for: track)
+        if equalizer.eqAutoEnabled {
+            equalizer.applyAutoPreset(for: track)
         }
 
         // Start playback
@@ -522,139 +535,33 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
         AppLog.info(.audio, "Eject - cleared playlist and reset playback state")
     }
 
-    // Equalizer control methods
-    func setPreamp(value: Float) {
-        preamp = value
-        eqNode.globalGain = value
-        // Ensure EQ is enabled when adjusting preamp
-        if !isEqOn && value != 0 {
-            toggleEq(isOn: true)
-        }
-        AppLog.debug(.audio, "Set Preamp to \(value), EQ is \(isEqOn ? "ON" : "OFF")")
-    }
+    // MARK: - Equalizer Forwarding (backed by EqualizerController)
 
-    func setEqBand(index: Int, value: Float) {
-        guard index >= 0 && index < eqBands.count else { return }
-        eqBands[index] = value
-        eqNode.bands[index].gain = value
-        AppLog.debug(.audio, "Set EQ Band \(index) to \(value)")
-    }
-
-    func toggleEq(isOn: Bool) {
-        isEqOn = isOn
-        eqNode.bypass = !isOn
-        AppLog.debug(.audio, "EQ is now \(isOn ? "On" : "Off")")
-    }
-
-    // Presets
-    func applyPreset(_ preset: EqfPreset) {
-        setPreamp(value: preset.preampDB)
-        for (i, g) in preset.bandsDB.enumerated() { setEqBand(index: i, value: g) }
-        toggleEq(isOn: true)
-    }
-
-    func applyEQPreset(_ preset: EQPreset) {
-        setPreamp(value: preset.preamp)
-        for (i, g) in preset.bands.enumerated() { setEqBand(index: i, value: g) }
-        toggleEq(isOn: true)
-        AppLog.info(.audio, "Applied EQ preset: \(preset.name)")
-    }
-
-    func getCurrentEQPreset(name: String) -> EQPreset {
-        return EQPreset(name: name, preamp: preamp, bands: Array(eqBands))
-    }
-
-    func saveUserPreset(named rawName: String) {
-        let trimmedName = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedName.isEmpty else { return }
-        let preset = getCurrentEQPreset(name: trimmedName)
-        eqPresetStore.storeUserPreset(preset)
-        AppLog.info(.audio, "Saved user EQ preset '\(trimmedName)'")
-    }
-
-    func deleteUserPreset(id: UUID) {
-        eqPresetStore.deleteUserPreset(id: id)
-    }
-
-    func importEqfPreset(from url: URL) {
-        Task { [weak self] in
-            guard let self = self else { return }
-            if let preset = await self.eqPresetStore.importEqfPreset(from: url) {
-                self.applyEQPreset(preset)
-            }
-        }
-    }
+    func setPreamp(value: Float) { equalizer.setPreamp(value: value) }
+    func setEqBand(index: Int, value: Float) { equalizer.setEqBand(index: index, value: value) }
+    func toggleEq(isOn: Bool) { equalizer.toggleEq(isOn: isOn) }
+    func applyPreset(_ preset: EqfPreset) { equalizer.applyPreset(preset) }
+    func applyEQPreset(_ preset: EQPreset) { equalizer.applyEQPreset(preset) }
+    func getCurrentEQPreset(name: String) -> EQPreset { equalizer.getCurrentEQPreset(name: name) }
+    func saveUserPreset(named name: String) { equalizer.saveUserPreset(named: name) }
+    func deleteUserPreset(id: UUID) { equalizer.deleteUserPreset(id: id) }
+    func importEqfPreset(from url: URL) { equalizer.importEqfPreset(from: url) }
 
     func savePresetForCurrentTrack() {
         guard let t = currentTrack else { return }
-        let p = EqfPreset(name: t.title, preampDB: preamp, bandsDB: eqBands)
-        eqPresetStore.savePreset(p, forTrackURL: t.url.absoluteString)
-        AppLog.debug(.audio, "Saved per-track EQ preset for \(t.title)")
-    }
-
-    private func applyAutoPreset(for track: Track) {
-        guard eqAutoEnabled else { return }
-        if let preset = eqPresetStore.preset(forTrackURL: track.url.absoluteString) {
-            applyPreset(preset)
-            appliedAutoPresetTrack = track.title
-            Task { @MainActor [weak self] in
-                try? await Task.sleep(nanoseconds: 2_000_000_000)
-                guard let self = self else { return }
-                if self.appliedAutoPresetTrack == track.title {
-                    self.appliedAutoPresetTrack = nil
-                }
-            }
-            AppLog.debug(.audio, "Applied per-track EQ preset for \(track.title)")
-        } else {
-            generateAutoPreset(for: track)
-        }
+        equalizer.savePresetForCurrentTrack(t)
     }
 
     func setAutoEQEnabled(_ isEnabled: Bool) {
-        guard eqAutoEnabled != isEnabled else { return }
-        eqAutoEnabled = isEnabled
-        if isEnabled, let current = currentTrack {
-            applyAutoPreset(for: current)
-        } else {
-            autoEQTask?.cancel()
-            autoEQTask = nil
-            appliedAutoPresetTrack = nil
-        }
-    }
-
-    private func generateAutoPreset(for track: Track) {
-        autoEQTask?.cancel()
-        autoEQTask = nil
-        AppLog.debug(.audio, "AutoEQ: automatic analysis disabled, no preset generated for \(track.title)")
+        equalizer.setAutoEQEnabled(isEnabled, currentTrack: currentTrack)
     }
 
     // MARK: - Engine Wiring
     private func setupEngine() {
         audioEngine.attach(playerNode)
-        audioEngine.attach(eqNode)
+        audioEngine.attach(equalizer.eqNode)
         // Do not start the engine here; start after the graph is connected
         // to avoid AVAudioEngineGraph initialize assertions on some macOS versions.
-    }
-
-    private func configureEQ() {
-        // Winamp 10-band centers (Hz): 60,170,310,600,1k,3k,6k,12k,14k,16k
-        let freqs: [Float] = [60, 170, 310, 600, 1000, 3000, 6000, 12000, 14000, 16000]
-        for i in 0..<min(eqNode.bands.count, freqs.count) {
-            let band = eqNode.bands[i]
-            if i == 0 {
-                band.filterType = .lowShelf
-            } else if i == freqs.count - 1 {
-                band.filterType = .highShelf
-            } else {
-                band.filterType = .parametric
-            }
-            band.frequency = freqs[i]
-            band.bandwidth = 1.0 // Octaves for parametric; harmless for shelves
-            band.gain = eqBands[i]
-            band.bypass = false
-        }
-        eqNode.globalGain = preamp
-        eqNode.bypass = !isEqOn
     }
 
     private func rewireForCurrentFile() {
@@ -666,13 +573,13 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
         
         // Disconnect and reconnect graph for the file's format
         audioEngine.disconnectNodeOutput(playerNode)
-        audioEngine.disconnectNodeOutput(eqNode)
-        
+        audioEngine.disconnectNodeOutput(equalizer.eqNode)
+
         guard audioFile != nil else { return }
-        
+
         // Connect with the new format - use nil format to let the engine determine the best format
-        audioEngine.connect(playerNode, to: eqNode, format: nil)
-        audioEngine.connect(eqNode, to: audioEngine.mainMixerNode, format: nil)
+        audioEngine.connect(playerNode, to: equalizer.eqNode, format: nil)
+        audioEngine.connect(equalizer.eqNode, to: audioEngine.mainMixerNode, format: nil)
         
         // Prepare the engine with the new configuration
         audioEngine.prepare()
