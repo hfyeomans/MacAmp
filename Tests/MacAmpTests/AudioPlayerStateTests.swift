@@ -1,17 +1,20 @@
-import XCTest
+import Testing
 @testable import MacAmp
 
 @MainActor
-final class AudioPlayerStateTests: XCTestCase {
-    func testStopTransitionsToManualStopped() async throws {
+@Suite("AudioPlayer State Transitions")
+struct AudioPlayerStateTests {
+    @Test("stop() transitions to .stopped(.manual)")
+    func stopTransitionsToManualStopped() {
         let player = AudioPlayer()
         player.stop()
-        XCTAssertEqual(player.playbackState, PlaybackState.stopped(.manual))
+        #expect(player.playbackState == PlaybackState.stopped(.manual))
     }
 
-    func testEjectTransitionsToEjectedStopped() async throws {
+    @Test("eject() transitions to .stopped(.ejected)")
+    func ejectTransitionsToEjectedStopped() {
         let player = AudioPlayer()
         player.eject()
-        XCTAssertEqual(player.playbackState, PlaybackState.stopped(.ejected))
+        #expect(player.playbackState == PlaybackState.stopped(.ejected))
     }
 }

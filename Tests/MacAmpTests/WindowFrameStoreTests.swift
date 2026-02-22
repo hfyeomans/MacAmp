@@ -1,51 +1,49 @@
-import XCTest
+import Testing
+import AppKit
 @testable import MacAmp
 
-final class WindowFrameStoreTests: XCTestCase {
+@Suite("WindowFrameStore")
+struct WindowFrameStoreTests {
 
-    func testPersistedWindowFrameRoundtrip() throws {
+    @Test("PersistedWindowFrame roundtrips through JSON encode/decode")
+    func persistedWindowFrameRoundtrip() throws {
         let original = NSRect(x: 123.5, y: 456.75, width: 275, height: 116)
         let persisted = PersistedWindowFrame(frame: original)
 
-        let encoder = JSONEncoder()
-        let data = try encoder.encode(persisted)
-
-        let decoder = JSONDecoder()
-        let decoded = try decoder.decode(PersistedWindowFrame.self, from: data)
+        let data = try JSONEncoder().encode(persisted)
+        let decoded = try JSONDecoder().decode(PersistedWindowFrame.self, from: data)
 
         let restored = decoded.asRect()
-        XCTAssertEqual(restored.origin.x, original.origin.x, accuracy: 0.01)
-        XCTAssertEqual(restored.origin.y, original.origin.y, accuracy: 0.01)
-        XCTAssertEqual(restored.size.width, original.size.width, accuracy: 0.01)
-        XCTAssertEqual(restored.size.height, original.size.height, accuracy: 0.01)
+        #expect(abs(restored.origin.x - original.origin.x) < 0.01)
+        #expect(abs(restored.origin.y - original.origin.y) < 0.01)
+        #expect(abs(restored.size.width - original.size.width) < 0.01)
+        #expect(abs(restored.size.height - original.size.height) < 0.01)
     }
 
-    func testWindowFrameStoreSaveAndLoad() throws {
+    @Test("WindowFrameStore save and load roundtrip")
+    func windowFrameStoreSaveAndLoad() throws {
         let suiteName = "WindowFrameStoreTests-\(UUID().uuidString)"
-        guard let defaults = UserDefaults(suiteName: suiteName) else {
-            throw XCTSkip("Unable to create test suite defaults")
-        }
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
         let store = WindowFrameStore(defaults: defaults)
         let frame = NSRect(x: 200, y: 300, width: 275, height: 116)
 
         store.save(frame: frame, for: .main)
-        let loaded = store.frame(for: .main)
-
-        let unwrapped = try XCTUnwrap(loaded)
-        XCTAssertEqual(unwrapped.origin.x, 200, accuracy: 0.01)
-        XCTAssertEqual(unwrapped.origin.y, 300, accuracy: 0.01)
-        XCTAssertEqual(unwrapped.size.width, 275, accuracy: 0.01)
-        XCTAssertEqual(unwrapped.size.height, 116, accuracy: 0.01)
+        let loaded = try #require(store.frame(for: .main))
+        #expect(abs(loaded.origin.x - 200) < 0.01)
+        #expect(abs(loaded.origin.y - 300) < 0.01)
+        #expect(abs(loaded.size.width - 275) < 0.01)
+        #expect(abs(loaded.size.height - 116) < 0.01)
     }
 
-    func testWindowFrameStoreReturnsNilForUnknownKey() {
+    @Test("WindowFrameStore returns nil for unknown key")
+    func windowFrameStoreReturnsNilForUnknownKey() throws {
         let suiteName = "WindowFrameStoreTests-\(UUID().uuidString)"
-        guard let defaults = UserDefaults(suiteName: suiteName) else { return }
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
         let store = WindowFrameStore(defaults: defaults)
-        XCTAssertNil(store.frame(for: .playlist))
+        #expect(store.frame(for: .playlist) == nil)
     }
 }

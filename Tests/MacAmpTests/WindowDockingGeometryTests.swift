@@ -1,11 +1,14 @@
-import XCTest
+import Testing
+import AppKit
 @testable import MacAmp
 
-final class WindowDockingGeometryTests: XCTestCase {
+@Suite("WindowDockingGeometry")
+struct WindowDockingGeometryTests {
 
     // MARK: - determineAttachment
 
-    func testBelowAttachmentDetected() {
+    @Test("Below attachment detected when playlist is directly below anchor")
+    func belowAttachmentDetected() throws {
         let anchor = NSRect(x: 100, y: 500, width: 275, height: 116)
         let playlist = NSRect(x: 100, y: 384, width: 275, height: 116)
 
@@ -15,13 +18,14 @@ final class WindowDockingGeometryTests: XCTestCase {
         )
 
         guard case .below(let xOffset) = attachment else {
-            XCTFail("Expected .below attachment, got \(String(describing: attachment))")
+            Issue.record("Expected .below attachment, got \(String(describing: attachment))")
             return
         }
-        XCTAssertEqual(xOffset, 0, accuracy: 0.01)
+        #expect(abs(xOffset) < 0.01)
     }
 
-    func testAboveAttachmentDetected() {
+    @Test("Above attachment detected when playlist is directly above anchor")
+    func aboveAttachmentDetected() throws {
         let anchor = NSRect(x: 100, y: 384, width: 275, height: 116)
         let playlist = NSRect(x: 100, y: 500, width: 275, height: 116)
 
@@ -31,13 +35,14 @@ final class WindowDockingGeometryTests: XCTestCase {
         )
 
         guard case .above(let xOffset) = attachment else {
-            XCTFail("Expected .above attachment, got \(String(describing: attachment))")
+            Issue.record("Expected .above attachment, got \(String(describing: attachment))")
             return
         }
-        XCTAssertEqual(xOffset, 0, accuracy: 0.01)
+        #expect(abs(xOffset) < 0.01)
     }
 
-    func testRightAttachmentDetected() {
+    @Test("Right attachment detected when playlist is directly to the right of anchor")
+    func rightAttachmentDetected() throws {
         let anchor = NSRect(x: 100, y: 500, width: 275, height: 116)
         let playlist = NSRect(x: 375, y: 500, width: 275, height: 116)
 
@@ -47,13 +52,14 @@ final class WindowDockingGeometryTests: XCTestCase {
         )
 
         guard case .right(let yOffset) = attachment else {
-            XCTFail("Expected .right attachment, got \(String(describing: attachment))")
+            Issue.record("Expected .right attachment, got \(String(describing: attachment))")
             return
         }
-        XCTAssertEqual(yOffset, 0, accuracy: 0.01)
+        #expect(abs(yOffset) < 0.01)
     }
 
-    func testNoAttachmentWhenFarApart() {
+    @Test("No attachment when windows are far apart")
+    func noAttachmentWhenFarApart() {
         let anchor = NSRect(x: 100, y: 500, width: 275, height: 116)
         let playlist = NSRect(x: 800, y: 100, width: 275, height: 116)
 
@@ -62,12 +68,13 @@ final class WindowDockingGeometryTests: XCTestCase {
             playlistFrame: playlist
         )
 
-        XCTAssertNil(attachment, "Windows far apart should not produce an attachment")
+        #expect(attachment == nil, "Windows far apart should not produce an attachment")
     }
 
     // MARK: - playlistOrigin
 
-    func testPlaylistOriginBelow() {
+    @Test("Playlist origin computed correctly for below attachment")
+    func playlistOriginBelow() {
         let anchor = NSRect(x: 100, y: 500, width: 275, height: 116)
         let size = NSSize(width: 275, height: 116)
 
@@ -77,25 +84,27 @@ final class WindowDockingGeometryTests: XCTestCase {
             playlistSize: size
         )
 
-        XCTAssertEqual(origin.x, 100, accuracy: 0.01)
-        XCTAssertEqual(origin.y, 384, accuracy: 0.01)
+        #expect(abs(origin.x - 100) < 0.01)
+        #expect(abs(origin.y - 384) < 0.01)
     }
 
     // MARK: - anchorFrame
 
-    func testAnchorFrameReturnsMain() {
+    @Test("anchorFrame returns main frame for .main anchor")
+    func anchorFrameReturnsMain() {
         let main = NSRect(x: 100, y: 500, width: 275, height: 116)
         let eq = NSRect(x: 100, y: 384, width: 275, height: 116)
 
         let result = WindowDockingGeometry.anchorFrame(.main, mainFrame: main, eqFrame: eq)
-        XCTAssertEqual(result, main)
+        #expect(result == main)
     }
 
-    func testAnchorFrameReturnsNilForVideo() {
+    @Test("anchorFrame returns nil for .video anchor")
+    func anchorFrameReturnsNilForVideo() {
         let main = NSRect(x: 100, y: 500, width: 275, height: 116)
         let eq = NSRect(x: 100, y: 384, width: 275, height: 116)
 
         let result = WindowDockingGeometry.anchorFrame(.video, mainFrame: main, eqFrame: eq)
-        XCTAssertNil(result)
+        #expect(result == nil)
     }
 }
