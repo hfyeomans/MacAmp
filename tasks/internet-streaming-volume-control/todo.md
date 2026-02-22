@@ -51,18 +51,18 @@ These issues were discovered during Oracle validation of the internet-radio-revi
 - [x] **1.8b** Dim/grey out balance slider in WinampMainWindow when `supportsBalance == false` — opacity 0.5 + allowsHitTesting(false) + tooltip
 - [x] **1.7** Dim/grey out EQ sliders in WinampEqualizerWindow when `supportsEQ == false` — entire EQ controls group dimmed via opacity 0.5 + allowsHitTesting(false). Titlebar buttons excluded from dimming.
 
-### Phase 1 Verification
-- [ ] **V1.1** Stream playback: volume slider controls stream volume
-- [ ] **V1.2** Volume adjustment during stream: immediate audible effect
-- [ ] **V1.3** Switch stream -> local file: volume stays consistent
-- [ ] **V1.4** Switch local file -> stream: volume stays consistent
-- [ ] **V1.5** EQ sliders visually dimmed during stream playback
-- [ ] **V1.6** Balance slider visually dimmed during stream playback
-- [ ] **V1.7** Local file playback: all controls work exactly as before (regression test)
-- [ ] **V1.8** Persist volume -> restart app -> play stream: volume restored
-- [ ] **V1.9** (Oracle) Video playback: volume still works after Step 1.6 refactor
-- [ ] **V1.10** (Oracle) Switch stream -> local file: balance re-applied correctly (tests 1.3c)
-- [ ] **V1.11** (Oracle) Rapid slider changes while stream backend is erroring: no crash
+### Phase 1 Verification (All passed — manual testing by user 2026-02-22)
+- [x] **V1.1** Stream playback: volume slider controls stream volume
+- [x] **V1.2** Volume adjustment during stream: immediate audible effect
+- [x] **V1.3** Switch stream -> local file: volume stays consistent
+- [x] **V1.4** Switch local file -> stream: volume stays consistent
+- [x] **V1.5** EQ sliders visually dimmed during stream playback
+- [x] **V1.6** Balance slider visually dimmed during stream playback
+- [x] **V1.7** Local file playback: all controls work exactly as before (regression test)
+- [x] **V1.8** Persist volume -> restart app -> play stream: volume restored
+- [x] **V1.9** (Oracle) Video playback: volume still works after Step 1.6 refactor
+- [x] **V1.10** (Oracle) Switch stream -> local file: balance re-applied correctly (tests 1.3c)
+- [x] **V1.11** (Oracle) Rapid slider changes while stream backend is erroring: no crash
 
 ---
 
