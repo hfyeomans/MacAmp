@@ -1,90 +1,23 @@
 import SwiftUI
 import AppKit
 
-// MARK: - Playlist Context Menus
-// Extracted from WinampPlaylistWindow to reduce type/file body length.
+@MainActor
+struct PlaylistMenuPresenter {
+    let skinManager: SkinManager
+    let audioPlayer: AudioPlayer
+    let menuDelegate: PlaylistMenuDelegate
+    let windowHeight: CGFloat
+    let windowWidth: CGFloat
+    let selectedIndices: Set<Int>
 
-extension WinampPlaylistWindow {
-
-    // MARK: - View Builders (extracted for type_body_length)
-
-    @ViewBuilder
-    func buildShadeMode() -> some View {
-        ZStack {
-            let suffix = isWindowActive ? "_SELECTED" : ""
-            SimpleSpriteImage("PLAYLIST_TITLE_BAR\(suffix)", width: 275, height: 14)
-                .frame(width: windowWidth, height: 14)
-                .position(x: windowWidth / 2, y: 7)
-
-            if let currentTrack = playbackCoordinator.currentTrack {
-                Text("\(currentTrack.title) - \(currentTrack.artist)")
-                    .font(.system(size: 8))
-                    .foregroundColor(.white)
-                    .lineLimit(1)
-                    .frame(width: windowWidth - 75)
-                    .position(x: (windowWidth - 75) / 2, y: 7)
-            } else {
-                Text("Winamp Playlist")
-                    .font(.system(size: 8))
-                    .foregroundColor(.white)
-                    .position(x: (windowWidth - 75) / 2, y: 7)
-            }
-
-            buildTitleBarButtons()
-        }
-        .frame(width: windowWidth, height: 14)
-    }
-
-    // MARK: - Helpers
-
-    func trackTextColor(track: Track) -> Color {
-        if let currentTrack = playbackCoordinator.currentTrack, currentTrack.url == track.url {
-            return playlistStyle.currentTextColor
-        }
-        return playlistStyle.normalTextColor
-    }
-
-    func trackBackground(track: Track, index: Int) -> Color {
-        if selectedIndices.contains(index) {
-            return playlistStyle.selectedBackgroundColor.opacity(0.6)
-        }
-        return Color.clear
-    }
-
-    func formatDuration(_ duration: Double) -> String {
-        let totalSeconds = Int(duration)
-        let minutes = totalSeconds / 60
-        let seconds = totalSeconds % 60
-        return String(format: "%d:%02d", minutes, seconds)
-    }
-
-    func openFileDialog() {
-        PlaylistWindowActions.shared.presentAddFilesPanel(audioPlayer: audioPlayer, playbackCoordinator: playbackCoordinator)
-    }
-
-    func handleTrackTap(index: Int) {
-        let modifiers = NSEvent.modifierFlags
-        if modifiers.contains(.shift) {
-            if selectedIndices.contains(index) {
-                selectedIndices.remove(index)
-            } else {
-                selectedIndices.insert(index)
-            }
-        } else {
-            selectedIndices = [index]
-        }
-    }
-
-    // MARK: - Context Menus
-
-    func playlistContentView() -> NSView? {
+    private func playlistContentView() -> NSView? {
         if let view = WindowCoordinator.shared?.playlistWindow?.contentView {
             return view
         }
         return NSApp.keyWindow?.contentView
     }
 
-    func presentPlaylistMenu(_ menu: NSMenu, at point: NSPoint) {
+    private func presentPlaylistMenu(_ menu: NSMenu, at point: NSPoint) {
         guard let contentView = playlistContentView() else { return }
         menu.popUp(positioning: nil, at: point, in: contentView)
     }
