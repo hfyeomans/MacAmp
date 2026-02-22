@@ -14,13 +14,13 @@
 | Waves | 3 |
 | Branches | 6 |
 | PRs | 5 (Wave 1: 3, Wave 2: 2; Wave 3 PR count TBD) |
-| Current wave | Wave 1 COMPLETE — awaiting PR creation + sequential merge |
+| Current wave | Wave 2a IN PROGRESS (T5 Phase 1 complete, T3 next) |
 
 ---
 
-## Current Phase: WAVE 1 COMPLETE — AWAITING MERGE
+## Current Phase: WAVE 2a — T5 Phase 1 COMPLETE
 
-All 3 Wave 1 worktrees have finished implementation + code review fixes. Ready for PR creation and sequential merge (A -> C -> B).
+T5 Phase 1 (stream volume routing + capability flags) implemented and Oracle-reviewed. Awaiting PR merge before T3 (mainwindow decomposition) can begin.
 
 ---
 
@@ -41,7 +41,7 @@ All 3 Wave 1 worktrees have finished implementation + code review fixes. Ready f
 | T2 | `playlistwindow-layer-decomposition` | **COMPLETE** | Wave 1 — done, awaiting PR | Manual testing items deferred |
 | T3 | `mainwindow-layer-decomposition` | Plan complete | Wave 2b — blocked on T5 Ph1 | T5 Phase 1 must merge first |
 | T4 | `lock-free-ring-buffer` | **COMPLETE** (benchmarks deferred) | Wave 1 — done, awaiting PR | None |
-| T5 | `internet-streaming-volume-control` | Plan complete | Wave 2a (Ph1), Wave 3 (Ph2) | Ph1: needs Wave 1 merge; Ph2: needs T4 merge |
+| T5 | `internet-streaming-volume-control` | **Ph1 COMPLETE**, Ph2 deferred | Wave 2a — done, awaiting PR | Ph2: needs T5 Ph1 merge (Wave 3) |
 | T6 | `swift-testing-modernization` | **COMPLETE** (deferrals noted) | Wave 1 — done, awaiting PR | None |
 
 ---
@@ -58,11 +58,11 @@ All 3 Wave 1 worktrees have finished implementation + code review fixes. Ready f
 
 **Merge order:** Sequential (A first, C second, B third) — for clean `project.pbxproj` resolution.
 
-### Wave 2: Sequential Feature + Refactoring — NOT STARTED
+### Wave 2: Sequential Feature + Refactoring — IN PROGRESS
 
 | Step | Task | Branch | Status | Depends On |
 |------|------|--------|--------|-----------|
-| 2a | T5 Phase 1 (Volume routing) | `feature/stream-volume-control` | Not started | Wave 1 merges |
+| 2a | T5 Phase 1 (Volume routing) | `feature/stream-volume-control` | **COMPLETE** (2 commits, Oracle reviewed) | Wave 1 merges (done) |
 | 2b | T3 (MainWindow decomp) | `refactor/mainwindow-decomposition` | Not started | T5 Phase 1 merge |
 
 **Merge strategy:** Two separate PRs. T5 Ph1 merges first; T3 merges after verification.
