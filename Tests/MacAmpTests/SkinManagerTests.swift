@@ -54,8 +54,7 @@ struct SkinManagerTests {
         let deadline = Date().addingTimeInterval(timeout)
         while manager.isLoading {
             if Date() > deadline {
-                Issue.record("Timed out waiting for SkinManager to finish loading")
-                return
+                throw WaitTimeoutError(message: "Timed out waiting for SkinManager to finish loading")
             }
             try await Task.sleep(nanoseconds: 50_000_000) // 50ms
         }
@@ -65,4 +64,9 @@ struct SkinManagerTests {
 private struct SkinNotFoundError: Error, CustomStringConvertible {
     let path: String
     var description: String { "Missing bundled skin at \(path)" }
+}
+
+private struct WaitTimeoutError: Error, CustomStringConvertible {
+    let message: String
+    var description: String { message }
 }
