@@ -4,6 +4,7 @@ import AppKit
 @MainActor
 @Observable
 final class PlaylistWindowInteractionState {
+    private static let escapeKeyCode: UInt16 = 53
     var selectedIndices: Set<Int> = []
     var isShadeMode: Bool = false
     var scrollOffset: Int = 0
@@ -44,7 +45,7 @@ final class PlaylistWindowInteractionState {
             return nil
         }
 
-        if event.keyCode == 53 || (event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers == "d") {
+        if event.keyCode == Self.escapeKeyCode || (event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers == "d") {
             selectedIndices = []
             return nil
         }

@@ -197,6 +197,7 @@ struct WinampPlaylistWindow: View {
                 .position(x: windowWidth - 187.5, y: windowHeight - 19)
 
             if settings.isMainWindowShaded {
+                // Render at 76px native width, clip to 72px to match Winamp's visualizer inset
                 VisualizerView()
                     .frame(width: 76, height: 16)
                     .frame(width: 72, alignment: .leading)
