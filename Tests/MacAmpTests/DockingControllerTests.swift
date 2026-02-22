@@ -17,7 +17,9 @@ struct DockingControllerTests {
         let controller = DockingController(defaults: defaults)
         #expect(!controller.showPlaylist)
 
-        controller.togglePlaylist()
+        // Use toggleVisibility directly — togglePlaylist() asserts windowCoordinator
+        // is injected, which isn't needed for persistence-only testing.
+        controller.toggleVisibility(.playlist)
 
         // Wait for debounce
         try await Task.sleep(nanoseconds: 300_000_000)

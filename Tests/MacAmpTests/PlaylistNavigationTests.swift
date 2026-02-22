@@ -51,8 +51,9 @@ struct PlaylistNavigationTests {
 
         player.playlistController.addTrack(localTrack)
         player.playlistController.addTrack(streamTrack)
+        // Position at stream track (index 1) — "currently playing stream"
         player.updatePlaylistPosition(with: streamTrack)
-        player.currentTrack = localTrack
+        player.currentTrack = streamTrack
 
         let action = player.previousTrack()
         guard case .playLocally(let selectedTrack) = action else {
