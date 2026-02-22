@@ -1,20 +1,6 @@
 {
   "configurations" : [
     {
-      "id" : "8A9A9E2C-0F24-4F5B-AB1E-2E9B67A9E001",
-      "name" : "Core",
-      "options" : {
-        "codeCoverage" : false
-      }
-    },
-    {
-      "id" : "8A9A9E2C-0F24-4F5B-AB1E-2E9B67A9E002",
-      "name" : "Concurrency",
-      "options" : {
-        "codeCoverage" : false
-      }
-    },
-    {
       "id" : "8A9A9E2C-0F24-4F5B-AB1E-2E9B67A9E003",
       "name" : "All",
       "options" : {
@@ -28,48 +14,11 @@
   "testTargets" : [
     {
       "parallelizable" : true,
-      "selectedTests" : [
-      ],
-      "skippedTests" : [
-      ],
       "target" : {
         "containerPath" : "container:MacAmpApp.xcodeproj",
         "identifier" : "A8F1C1A0F5D7413A9A0B0301",
         "name" : "MacAmpTests"
-      },
-      "testConfigurations" : [
-        {
-          "id" : "8A9A9E2C-0F24-4F5B-AB1E-2E9B67A9E001",
-          "name" : "Core",
-          "selectedTests" : [
-            "MacAmpTests/AppSettingsTests",
-            "MacAmpTests/EQCodecTests",
-            "MacAmpTests/SpriteResolverTests"
-          ],
-          "skippedTests" : [
-          ]
-        },
-        {
-          "id" : "8A9A9E2C-0F24-4F5B-AB1E-2E9B67A9E002",
-          "name" : "Concurrency",
-          "selectedTests" : [
-            "MacAmpTests/AudioPlayerStateTests",
-            "MacAmpTests/DockingControllerTests",
-            "MacAmpTests/PlaylistNavigationTests",
-            "MacAmpTests/SkinManagerTests"
-          ],
-          "skippedTests" : [
-          ]
-        },
-        {
-          "id" : "8A9A9E2C-0F24-4F5B-AB1E-2E9B67A9E003",
-          "name" : "All",
-          "selectedTests" : [
-          ],
-          "skippedTests" : [
-          ]
-        }
-      ]
+      }
     }
   ],
   "version" : 1

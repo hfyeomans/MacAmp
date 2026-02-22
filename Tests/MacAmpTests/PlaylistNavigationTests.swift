@@ -3,7 +3,7 @@ import Foundation
 @testable import MacAmp
 
 @MainActor
-@Suite("Playlist Navigation")
+@Suite("Playlist Navigation", .tags(.audio))
 struct PlaylistNavigationTests {
     private let testRoot: URL
 

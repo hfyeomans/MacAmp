@@ -3,9 +3,10 @@ import Foundation
 @testable import MacAmp
 
 @MainActor
-@Suite("DockingController")
+@Suite("DockingController", .tags(.window, .persistence))
 struct DockingControllerTests {
-    @Test("Persistence roundtrip — toggle playlist saves and rehydrates")
+    @Test("Persistence roundtrip — toggle playlist saves and rehydrates",
+          .timeLimit(.minutes(1)))
     func persistenceRoundtrip() async throws {
         let suiteName = "DockingControllerTests-\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))

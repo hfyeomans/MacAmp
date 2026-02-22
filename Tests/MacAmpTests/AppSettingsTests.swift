@@ -3,7 +3,7 @@ import Foundation
 @testable import MacAmp
 
 @MainActor
-@Suite("AppSettings")
+@Suite("AppSettings", .tags(.persistence))
 struct AppSettingsTests {
     @Test("ensureSkinsDirectory creates expected directory structure")
     func ensureSkinsDirectoryCreatesStructure() throws {

@@ -2,7 +2,7 @@ import Testing
 @testable import MacAmp
 
 @MainActor
-@Suite("AudioPlayer State Transitions")
+@Suite("AudioPlayer State Transitions", .tags(.audio))
 struct AudioPlayerStateTests {
     @Test("stop() transitions to .stopped(.manual)")
     func stopTransitionsToManualStopped() {

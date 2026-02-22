@@ -2,7 +2,7 @@ import Testing
 import AppKit
 @testable import MacAmp
 
-@Suite("SpriteResolver")
+@Suite("SpriteResolver", .tags(.skin))
 struct SpriteResolverTests {
     private let emptySkin: Skin
 
@@ -22,11 +22,10 @@ struct SpriteResolverTests {
         )
     }
 
-    @Test("Out-of-range digits return nil")
-    func digitOutOfRangeReturnsNil() {
+    @Test("Out-of-range digits return nil", arguments: [-1, 10, 99, -100])
+    func digitOutOfRange(_ digit: Int) {
         let resolver = SpriteResolver(skin: emptySkin)
-        #expect(resolver.resolve(.digit(-1)) == nil)
-        #expect(resolver.resolve(.digit(10)) == nil)
+        #expect(resolver.resolve(.digit(digit)) == nil)
     }
 
     @Test("Valid digit resolves when image is available")

@@ -2,7 +2,7 @@ import Testing
 import Foundation
 @testable import MacAmp
 
-@Suite("EQ Codec")
+@Suite("EQ Codec", .tags(.audio, .parsing))
 struct EQCodecTests {
     @Test("EQPreset clamps out-of-range preamp and band values")
     func eqPresetClampsBands() {

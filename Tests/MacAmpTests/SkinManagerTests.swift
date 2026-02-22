@@ -3,9 +3,10 @@ import Foundation
 @testable import MacAmp
 
 @MainActor
-@Suite("SkinManager")
+@Suite("SkinManager", .tags(.skin))
 struct SkinManagerTests {
-    @Test("loadSkin clears error and sets currentSkin on success")
+    @Test("loadSkin clears error and sets currentSkin on success",
+          .timeLimit(.minutes(1)))
     func loadSkinClearsErrorAndSetsCurrentSkin() async throws {
         let manager = SkinManager()
         manager.loadingError = "Previous error"
@@ -19,7 +20,8 @@ struct SkinManagerTests {
         #expect(manager.currentSkin != nil)
     }
 
-    @Test("loadSkin sets error for invalid skin URL")
+    @Test("loadSkin sets error for invalid skin URL",
+          .timeLimit(.minutes(1)))
     func loadSkinFailureSetsError() async throws {
         let manager = SkinManager()
         let invalidURL = URL(fileURLWithPath: NSTemporaryDirectory())

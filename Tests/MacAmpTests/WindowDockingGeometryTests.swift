@@ -2,7 +2,7 @@ import Testing
 import AppKit
 @testable import MacAmp
 
-@Suite("WindowDockingGeometry")
+@Suite("WindowDockingGeometry", .tags(.window))
 struct WindowDockingGeometryTests {
 
     // MARK: - determineAttachment

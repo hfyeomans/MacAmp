@@ -8,6 +8,12 @@ import CoreAudio
 ///
 /// Storage is a flat interleaved float buffer: `[L0, R0, L1, R1, ...]`.
 /// Pre-allocated once in `init`, never reallocated.
+///
+/// **Known race (accepted):** During an overrun, the producer advances `readHead`
+/// then writes to storage regions the consumer may be reading. This is a deliberate
+/// trade-off for real-time audio: a brief glitch (garbled samples) is preferable to
+/// blocking either thread. TSan may flag this; it is safe because both accesses are
+/// plain `memcpy` on `Float` values and the worst outcome is a few corrupted samples.
 final class LockFreeRingBuffer: @unchecked Sendable {
     let capacity: Int
     let channelCount: Int
@@ -24,9 +30,11 @@ final class LockFreeRingBuffer: @unchecked Sendable {
     init(capacity: Int = 4096, channelCount: Int = 2) {
         precondition(capacity > 0, "Capacity must be positive")
         precondition(channelCount > 0, "Channel count must be positive")
+        let (product, overflow) = capacity.multipliedReportingOverflow(by: channelCount)
+        precondition(!overflow, "capacity * channelCount overflows Int")
         self.capacity = capacity
         self.channelCount = channelCount
-        self.sampleCount = capacity * channelCount
+        self.sampleCount = product
         self.storage = .allocate(capacity: sampleCount)
         storage.initialize(repeating: 0, count: sampleCount)
     }
@@ -41,20 +49,32 @@ final class LockFreeRingBuffer: @unchecked Sendable {
     /// Called from the producer (tap) thread. Returns the number of frames actually written.
     @inline(__always)
     func write(from source: UnsafePointer<Float>, frameCount: Int) -> Int {
+        guard frameCount > 0 else { return 0 }
+
+        // The backing store can hold at most `capacity` frames in one write cycle.
+        // If caller submits more, keep the newest tail to match drop-oldest behavior.
+        let boundedFrameCount = min(frameCount, capacity)
+        let droppedPrefixFrames = frameCount - boundedFrameCount
+        let droppedPrefixSamples = droppedPrefixFrames * channelCount
+        let boundedSource = source + droppedPrefixSamples
+
         let wh = writeHead.load(ordering: .relaxed)
         let rh = readHead.load(ordering: .acquiring)
 
-        let available = capacity - Int(wh &- rh)
+        let usedDistance = wh &- rh
+        let usedFrames = usedDistance > UInt64(capacity) ? capacity : Int(usedDistance)
+        let available = capacity - usedFrames
         let framesToWrite: Int
 
-        if frameCount <= available {
-            framesToWrite = frameCount
+        if boundedFrameCount <= available {
+            framesToWrite = boundedFrameCount
         } else {
-            // Overrun: advance read head to make room
-            let deficit = UInt64(frameCount - available)
-            readHead.wrappingIncrementThenLoad(by: deficit, ordering: .relaxed)
+            // Overrun: advance read head to make room.
+            // NOTE: This creates a benign race with the consumer's memcpy (see class doc).
+            let deficit = UInt64(boundedFrameCount - available)
+            _ = readHead.wrappingIncrementThenLoad(by: deficit, ordering: .relaxed)
             overrunCount.wrappingIncrementThenLoad(by: 1, ordering: .relaxed)
-            framesToWrite = frameCount
+            framesToWrite = boundedFrameCount
         }
 
         let startIndex = Int(wh % UInt64(capacity))
@@ -64,9 +84,9 @@ final class LockFreeRingBuffer: @unchecked Sendable {
         let firstChunk = min(samplesToWrite, sampleCount - startSample)
         let secondChunk = samplesToWrite - firstChunk
 
-        memcpy(storage + startSample, source, firstChunk * MemoryLayout<Float>.size)
+        memcpy(storage + startSample, boundedSource, firstChunk * MemoryLayout<Float>.size)
         if secondChunk > 0 {
-            memcpy(storage, source + firstChunk, secondChunk * MemoryLayout<Float>.size)
+            memcpy(storage, boundedSource + firstChunk, secondChunk * MemoryLayout<Float>.size)
         }
 
         writeHead.store(wh &+ UInt64(framesToWrite), ordering: .releasing)
@@ -92,15 +112,18 @@ final class LockFreeRingBuffer: @unchecked Sendable {
     /// Returns the number of frames actually read. Caller fills remaining with silence.
     @inline(__always)
     func read(into destination: UnsafeMutablePointer<Float>, frameCount: Int) -> Int {
+        guard frameCount > 0 else { return 0 }
+
         let rh = readHead.load(ordering: .relaxed)
         let wh = writeHead.load(ordering: .acquiring)
 
-        let available = Int(wh &- rh)
-        if available == 0 {
+        let availableDistance = wh &- rh
+        if availableDistance == 0 || availableDistance > UInt64(capacity) {
             underrunCount.wrappingIncrementThenLoad(by: 1, ordering: .relaxed)
             return 0
         }
 
+        let available = Int(availableDistance)
         let framesToRead = min(frameCount, available)
         let startIndex = Int(rh % UInt64(capacity))
         let samplesToRead = framesToRead * channelCount
@@ -111,10 +134,10 @@ final class LockFreeRingBuffer: @unchecked Sendable {
 
         memcpy(destination, storage + startSample, firstChunk * MemoryLayout<Float>.size)
         if secondChunk > 0 {
-            memcpy(destination + firstChunk, storage + startSample + firstChunk, secondChunk * MemoryLayout<Float>.size)
+            memcpy(destination + firstChunk, storage, secondChunk * MemoryLayout<Float>.size)
         }
 
-        readHead.store(rh &+ UInt64(framesToRead), ordering: .releasing)
+        _ = readHead.wrappingIncrementThenLoad(by: UInt64(framesToRead), ordering: .releasing)
         return framesToRead
     }
 
@@ -133,9 +156,14 @@ final class LockFreeRingBuffer: @unchecked Sendable {
 
     /// Flush all buffered data, optionally incrementing the generation counter.
     /// Called from setup callbacks (NOT real-time).
+    /// Caller must ensure the producer is quiesced before calling; concurrent writes
+    /// during flush may cause readHead to appear to move backward.
     func flush(newGeneration: Bool = true) {
-        writeHead.store(0, ordering: .relaxed)
-        readHead.store(0, ordering: .relaxed)
+        // Preserve monotonic head counters: an empty buffer is represented by
+        // readHead == writeHead, not by resetting either counter to zero.
+        // This avoids transient wh<rh observations across threads.
+        let wh = writeHead.load(ordering: .acquiring)
+        readHead.store(wh, ordering: .releasing)
         if newGeneration {
             generation.wrappingIncrementThenLoad(by: 1, ordering: .releasing)
         }
@@ -152,7 +180,11 @@ final class LockFreeRingBuffer: @unchecked Sendable {
     var availableFrames: Int {
         let wh = writeHead.load(ordering: .relaxed)
         let rh = readHead.load(ordering: .relaxed)
-        return Int(wh &- rh)
+        let distance = wh &- rh
+        if distance > UInt64(capacity) {
+            return 0
+        }
+        return Int(distance)
     }
 
     /// Read telemetry counters (safe to call from any thread).

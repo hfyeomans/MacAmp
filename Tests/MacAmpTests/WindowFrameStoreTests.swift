@@ -2,7 +2,7 @@ import Testing
 import AppKit
 @testable import MacAmp
 
-@Suite("WindowFrameStore")
+@Suite("WindowFrameStore", .tags(.window, .persistence))
 struct WindowFrameStoreTests {
 
     @Test("PersistedWindowFrame roundtrips through JSON encode/decode")
