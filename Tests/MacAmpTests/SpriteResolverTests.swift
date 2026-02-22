@@ -1,10 +1,13 @@
-import XCTest
+import Testing
 import AppKit
 @testable import MacAmp
 
-final class SpriteResolverTests: XCTestCase {
-    private func makeEmptySkin() -> Skin {
-        Skin(
+@Suite("SpriteResolver", .tags(.skin))
+struct SpriteResolverTests {
+    private let emptySkin: Skin
+
+    init() {
+        emptySkin = Skin(
             visualizerColors: [],
             playlistStyle: PlaylistStyle(
                 normalTextColor: .white,
@@ -19,22 +22,22 @@ final class SpriteResolverTests: XCTestCase {
         )
     }
 
-    func testDigitOutOfRangeReturnsNil() {
-        let resolver = SpriteResolver(skin: makeEmptySkin())
-        XCTAssertNil(resolver.resolve(.digit(-1)))
-        XCTAssertNil(resolver.resolve(.digit(10)))
+    @Test("Out-of-range digits return nil", arguments: [-1, 10, 99, -100])
+    func digitOutOfRange(_ digit: Int) {
+        let resolver = SpriteResolver(skin: emptySkin)
+        #expect(resolver.resolve(.digit(digit)) == nil)
     }
 
-    func testDigitResolvesWhenAvailable() {
-        var skin = makeEmptySkin()
-        skin = Skin(
-            visualizerColors: skin.visualizerColors,
-            playlistStyle: skin.playlistStyle,
+    @Test("Valid digit resolves when image is available")
+    func digitResolvesWhenAvailable() {
+        let skin = Skin(
+            visualizerColors: emptySkin.visualizerColors,
+            playlistStyle: emptySkin.playlistStyle,
             images: ["DIGIT_3": NSImage(size: NSSize(width: 9, height: 13))],
             cursors: [:],
             loadedSheets: []
         )
         let resolver = SpriteResolver(skin: skin)
-        XCTAssertEqual(resolver.resolve(.digit(3)), "DIGIT_3")
+        #expect(resolver.resolve(.digit(3)) == "DIGIT_3")
     }
 }

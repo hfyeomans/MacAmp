@@ -1,4 +1,4 @@
-// swift-tools-version: 5.9
+// swift-tools-version: 6.2
 import PackageDescription
 
 let package = Package(
@@ -10,13 +10,15 @@ let package = Package(
         .executable(name: "MacAmp", targets: ["MacAmp"])
     ],
     dependencies: [
-        .package(url: "https://github.com/weichsel/ZIPFoundation.git", from: "0.9.0")
+        .package(url: "https://github.com/weichsel/ZIPFoundation.git", from: "0.9.0"),
+        .package(url: "https://github.com/apple/swift-atomics.git", from: "1.2.0"),
     ],
     targets: [
         .executableTarget(
             name: "MacAmp",
             dependencies: [
-                .product(name: "ZIPFoundation", package: "ZIPFoundation")
+                .product(name: "ZIPFoundation", package: "ZIPFoundation"),
+                .product(name: "Atomics", package: "swift-atomics"),
             ],
             path: "MacAmpApp",
             exclude: [
@@ -30,7 +32,10 @@ let package = Package(
         ),
         .testTarget(
             name: "MacAmpTests",
-            dependencies: ["MacAmp"],
+            dependencies: [
+                "MacAmp",
+                .product(name: "Atomics", package: "swift-atomics"),
+            ],
             path: "Tests/MacAmpTests"
         )
     ]

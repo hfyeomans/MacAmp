@@ -1,22 +1,26 @@
-import XCTest
+import Testing
+import Foundation
 @testable import MacAmp
 
 @MainActor
-final class AppSettingsTests: XCTestCase {
-    func testEnsureSkinsDirectoryCreatesStructure() throws {
+@Suite("AppSettings", .tags(.persistence))
+struct AppSettingsTests {
+    @Test("ensureSkinsDirectory creates expected directory structure")
+    func ensureSkinsDirectoryCreatesStructure() throws {
         let fileManager = FileManager.default
         let tempBase = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try fileManager.createDirectory(at: tempBase, withIntermediateDirectories: true)
         defer { try? fileManager.removeItem(at: tempBase) }
 
         let skinsDir = try AppSettings.ensureSkinsDirectory(fileManager: fileManager, base: tempBase)
-        XCTAssertTrue(fileManager.fileExists(atPath: skinsDir.path))
+        #expect(fileManager.fileExists(atPath: skinsDir.path))
 
         let expectedPath = tempBase.appendingPathComponent("MacAmp/Skins")
-        XCTAssertEqual(skinsDir.standardizedFileURL.path, expectedPath.standardizedFileURL.path)
+        #expect(skinsDir.standardizedFileURL.path == expectedPath.standardizedFileURL.path)
     }
 
-    func testEnsureSkinsDirectoryThrowsWhenBaseBlocked() throws {
+    @Test("ensureSkinsDirectory throws when base path is blocked by a file")
+    func ensureSkinsDirectoryThrowsWhenBaseBlocked() throws {
         let fileManager = FileManager.default
         let tempBase = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try fileManager.createDirectory(at: tempBase, withIntermediateDirectories: true)
@@ -25,8 +29,8 @@ final class AppSettingsTests: XCTestCase {
         let blockingFile = tempBase.appendingPathComponent("MacAmp")
         try Data().write(to: blockingFile)
 
-        XCTAssertThrowsError(
+        #expect(throws: (any Error).self) {
             try AppSettings.ensureSkinsDirectory(fileManager: fileManager, base: tempBase)
-        )
+        }
     }
 }

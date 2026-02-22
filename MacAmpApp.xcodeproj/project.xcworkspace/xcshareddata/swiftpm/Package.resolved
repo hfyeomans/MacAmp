@@ -1,6 +1,15 @@
 {
-  "originHash" : "b26c070fd1f0b029780331f3cefa3909a6d58ea6b3ae242bffe49d6011fe06fe",
+  "originHash" : "84b1019eb5530bed56c349b5e0ad52dc490ab47cfdbe397c4cefdfe58fd4acb5",
   "pins" : [
+    {
+      "identity" : "swift-atomics",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-atomics.git",
+      "state" : {
+        "revision" : "b601256eab081c0f92f059e12818ac1d4f178ff7",
+        "version" : "1.3.0"
+      }
+    },
     {
       "identity" : "zipfoundation",
       "kind" : "remoteSourceControl",

@@ -1,24 +1,29 @@
-import XCTest
+import Testing
+import Foundation
 @testable import MacAmp
 
-final class EQCodecTests: XCTestCase {
-    func testEQPresetClampsBands() {
+@Suite("EQ Codec", .tags(.audio, .parsing))
+struct EQCodecTests {
+    @Test("EQPreset clamps out-of-range preamp and band values")
+    func eqPresetClampsBands() {
         let preset = EQPreset(
             name: "Test",
             preamp: 20,
             bands: Array(repeating: -20, count: 12)
         )
-        XCTAssertEqual(preset.preamp, 12)
-        XCTAssertEqual(preset.bands.count, 10)
-        XCTAssertTrue(preset.bands.allSatisfy { $0 == -12 })
+        #expect(preset.preamp == 12)
+        #expect(preset.bands.count == 10)
+        #expect(preset.bands.allSatisfy { $0 == -12 })
     }
 
-    func testEQFParsingRejectsShortData() {
+    @Test("EQF parsing rejects empty/short data")
+    func eqfParsingRejectsShortData() {
         let data = Data()
-        XCTAssertNil(EQFCodec.parse(data: data))
+        #expect(EQFCodec.parse(data: data) == nil)
     }
 
-    func testEQFParsingClampsValues() throws {
+    @Test("EQF parsing clamps out-of-range stored values")
+    func eqfParsingClampsValues() throws {
         var payload = Data()
         payload.append(contentsOf: Array("Winamp EQ library file v1.1".utf8))
         payload.append(26)
@@ -30,10 +35,9 @@ final class EQCodecTests: XCTestCase {
         for _ in 0..<11 {
             payload.append(UInt8(255))
         }
-        let preset = EQFCodec.parse(data: payload)
-        XCTAssertNotNil(preset)
-        XCTAssertEqual(preset?.bandsDB.count, 10)
-        XCTAssertTrue(preset?.bandsDB.allSatisfy { $0 >= -12 && $0 <= 12 } ?? false)
-        XCTAssertTrue((preset?.preampDB ?? 0) <= 12 && (preset?.preampDB ?? 0) >= -12)
+        let preset = try #require(EQFCodec.parse(data: payload))
+        #expect(preset.bandsDB.count == 10)
+        #expect(preset.bandsDB.allSatisfy { $0 >= -12 && $0 <= 12 })
+        #expect(preset.preampDB <= 12 && preset.preampDB >= -12)
     }
 }

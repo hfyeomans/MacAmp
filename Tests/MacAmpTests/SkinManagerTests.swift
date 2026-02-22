@@ -1,9 +1,13 @@
-import XCTest
+import Testing
+import Foundation
 @testable import MacAmp
 
 @MainActor
-final class SkinManagerTests: XCTestCase {
-    func testLoadSkinClearsErrorAndSetsCurrentSkin() async throws {
+@Suite("SkinManager", .tags(.skin))
+struct SkinManagerTests {
+    @Test("loadSkin clears error and sets currentSkin on success",
+          .timeLimit(.minutes(1)))
+    func loadSkinClearsErrorAndSetsCurrentSkin() async throws {
         let manager = SkinManager()
         manager.loadingError = "Previous error"
 
@@ -12,11 +16,13 @@ final class SkinManagerTests: XCTestCase {
 
         try await waitUntilNotLoading(manager)
 
-        XCTAssertNil(manager.loadingError)
-        XCTAssertNotNil(manager.currentSkin)
+        #expect(manager.loadingError == nil)
+        #expect(manager.currentSkin != nil)
     }
 
-    func testLoadSkinFailureSetsError() async throws {
+    @Test("loadSkin sets error for invalid skin URL",
+          .timeLimit(.minutes(1)))
+    func loadSkinFailureSetsError() async throws {
         let manager = SkinManager()
         let invalidURL = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent(UUID().uuidString)
@@ -24,7 +30,7 @@ final class SkinManagerTests: XCTestCase {
 
         manager.loadSkin(from: invalidURL)
         try await waitUntilNotLoading(manager)
-        XCTAssertNotNil(manager.loadingError)
+        #expect(manager.loadingError != nil)
     }
 
     private func bundledSkinURL(named name: String) throws -> URL {
@@ -39,9 +45,7 @@ final class SkinManagerTests: XCTestCase {
             .appendingPathComponent("\(name).wsz")
 
         guard FileManager.default.fileExists(atPath: skinsURL.path) else {
-            throw NSError(domain: "SkinManagerTests", code: 1, userInfo: [
-                NSLocalizedDescriptionKey: "Missing bundled skin at \(skinsURL.path)"
-            ])
+            throw SkinNotFoundError(path: skinsURL.path)
         }
         return skinsURL
     }
@@ -50,9 +54,19 @@ final class SkinManagerTests: XCTestCase {
         let deadline = Date().addingTimeInterval(timeout)
         while manager.isLoading {
             if Date() > deadline {
-                throw XCTSkip("Timed out waiting for SkinManager to finish loading")
+                throw WaitTimeoutError(message: "Timed out waiting for SkinManager to finish loading")
             }
             try await Task.sleep(nanoseconds: 50_000_000) // 50ms
         }
     }
+}
+
+private struct SkinNotFoundError: Error, CustomStringConvertible {
+    let path: String
+    var description: String { "Missing bundled skin at \(path)" }
+}
+
+private struct WaitTimeoutError: Error, CustomStringConvertible {
+    let message: String
+    var description: String { message }
 }

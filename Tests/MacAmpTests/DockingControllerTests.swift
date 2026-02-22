@@ -1,29 +1,30 @@
-import XCTest
+import Testing
+import Foundation
 @testable import MacAmp
 
 @MainActor
-final class DockingControllerTests: XCTestCase {
-    func testPersistenceRoundtrip() async throws {
+@Suite("DockingController", .tags(.window, .persistence))
+struct DockingControllerTests {
+    @Test("Persistence roundtrip — toggle playlist saves and rehydrates",
+          .timeLimit(.minutes(1)))
+    func persistenceRoundtrip() async throws {
         let suiteName = "DockingControllerTests-\(UUID().uuidString)"
-        guard let defaults = UserDefaults(suiteName: suiteName) else {
-            throw XCTSkip("Unable to create test suite defaults")
-        }
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
         defer {
             defaults.removePersistentDomain(forName: suiteName)
         }
 
         let controller = DockingController(defaults: defaults)
-        XCTAssertFalse(controller.showPlaylist)
+        #expect(!controller.showPlaylist)
 
-        controller.togglePlaylist()
+        // Use toggleVisibility directly — togglePlaylist() asserts windowCoordinator
+        // is injected, which isn't needed for persistence-only testing.
+        controller.toggleVisibility(.playlist)
 
-        try await waitForDebounce()
+        // Wait for debounce
+        try await Task.sleep(nanoseconds: 300_000_000)
 
         let rehydrated = DockingController(defaults: defaults)
-        XCTAssertTrue(rehydrated.showPlaylist)
-    }
-
-    private func waitForDebounce() async throws {
-        try await Task.sleep(nanoseconds: 300_000_000) // 0.3s
+        #expect(rehydrated.showPlaylist)
     }
 }

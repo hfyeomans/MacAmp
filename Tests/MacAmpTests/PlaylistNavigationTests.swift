@@ -1,21 +1,27 @@
+import Testing
 import Foundation
-import XCTest
 @testable import MacAmp
 
 @MainActor
-final class PlaylistNavigationTests: XCTestCase {
-    func testNextTrackReturnsStreamActionForMixedPlaylist() async throws {
+@Suite("Playlist Navigation", .tags(.audio))
+struct PlaylistNavigationTests {
+    private let testRoot: URL
+
+    init() {
+        testRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+    }
+
+    @Test("nextTrack returns stream handoff for mixed playlist")
+    func nextTrackReturnsStreamActionForMixedPlaylist() throws {
         let player = AudioPlayer()
         defer { player.stop() }
 
-        let testRoot = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-
         let localURL = testRoot.appendingPathComponent("mono_test.wav")
         let localTrack = Track(url: localURL, title: "Local", artist: "Artist", duration: 10)
-        let streamURL = try XCTUnwrap(URL(string: "https://example.com/stream"))
+        let streamURL = try #require(URL(string: "https://example.com/stream"))
         let streamTrack = Track(url: streamURL, title: "Stream", artist: "", duration: 0)
 
         player.playlistController.addTrack(localTrack)
@@ -25,40 +31,37 @@ final class PlaylistNavigationTests: XCTestCase {
 
         let action = player.nextTrack()
         guard case .requestCoordinatorPlayback(let handoffTrack) = action else {
-            XCTFail("Expected stream handoff from nextTrack")
+            Issue.record("Expected stream handoff from nextTrack, got \(action)")
             return
         }
 
-        XCTAssertEqual(handoffTrack.id, streamTrack.id)
-        XCTAssertEqual(player.playlist.count, 2)
+        #expect(handoffTrack.id == streamTrack.id)
+        #expect(player.playlist.count == 2)
     }
 
-    func testPreviousTrackReturnsLocalWhenBackingUpFromStream() async throws {
+    @Test("previousTrack returns local playback when backing up from stream")
+    func previousTrackReturnsLocalWhenBackingUpFromStream() throws {
         let player = AudioPlayer()
         defer { player.stop() }
 
-        let testRoot = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-
         let localURL = testRoot.appendingPathComponent("mono_test.wav")
         let localTrack = Track(url: localURL, title: "Local", artist: "Artist", duration: 10)
-        let streamURL = try XCTUnwrap(URL(string: "https://example.com/stream"))
+        let streamURL = try #require(URL(string: "https://example.com/stream"))
         let streamTrack = Track(url: streamURL, title: "Stream", artist: "", duration: 0)
 
         player.playlistController.addTrack(localTrack)
         player.playlistController.addTrack(streamTrack)
+        // Position at stream track (index 1) — "currently playing stream"
         player.updatePlaylistPosition(with: streamTrack)
-        player.currentTrack = localTrack
+        player.currentTrack = streamTrack
 
         let action = player.previousTrack()
         guard case .playLocally(let selectedTrack) = action else {
-            XCTFail("Expected local playback when rewinding from stream")
+            Issue.record("Expected local playback when rewinding from stream, got \(action)")
             return
         }
 
-        XCTAssertEqual(selectedTrack.id, localTrack.id)
-        XCTAssertEqual(player.playlist.count, 2)
+        #expect(selectedTrack.id == localTrack.id)
+        #expect(player.playlist.count == 2)
     }
 }
