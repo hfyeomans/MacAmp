@@ -4,7 +4,10 @@
 
 ---
 
-## Current Status: PHASE 2 IMPLEMENTATION COMPLETE — Awaiting Manual Verification
+## Current Status: PHASE 1 COMPLETE (PR #53 merged) — Phase 2 PIVOTED to unified-audio-pipeline task
+
+Phase 2 MTAudioProcessingTap approach failed (tapPrepare never fires for streaming content).
+Code reverted to main (commit 987b2f3). New approach: custom decode pipeline in `tasks/unified-audio-pipeline/`.
 
 ## Progress
 

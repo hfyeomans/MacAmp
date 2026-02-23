@@ -96,18 +96,30 @@ Wraps Apple's AudioConverter for decoding compressed packets to Float32 PCM.
 - Handle format changes: dispose old converter, create new, flush ring buffer with generation increment
 - Pre-allocate decode output buffer (no allocation during decode loop)
 
+**C API lifetime management (Oracle P2-2):**
+- Packet data must be copied before returning from AudioFileStream callback (data pointer only valid during callback)
+- Packet descriptions must be copied alongside packet data (same lifetime)
+- `AudioConverterDispose()` MUST be called before `AudioFileStreamClose()` (converter may reference parser state)
+- After `stop()`, invalidate all callback context pointers before disposing C objects
+- Use `Unmanaged.passRetained/release` pattern for callback context (same as VisualizerPipeline)
+
 #### 1.4 StreamDecodePipeline (new file: `MacAmpApp/Audio/Streaming/StreamDecodePipeline.swift`)
 
-Actor orchestrating the full pipeline.
+Orchestrates the full pipeline. **Note (Oracle P1-1):** Cannot be a Swift `actor` directly because `URLSessionDataDelegate` requires `NSObject` conformance. Use an `NSObject` delegate proxy that forwards bytes to the pipeline, or use `URLSession.asyncBytes` (async sequence, no delegate needed).
+
+**Recommended approach:** `@MainActor` class (not actor) with internal serial decode DispatchQueue. URLSession delegate is a lightweight `NSObject` proxy that forwards `didReceive(data:)` to the decode queue. This matches the existing PlaybackCoordinator/@MainActor pattern.
 
 - Manages URLSession data task with `Icy-MetaData: 1` header
+- NSObject delegate proxy forwards bytes to decode serial queue
 - Routes bytes through ICYFramer → AudioFileStreamParser → AudioConverterDecoder
-- Decode work on dedicated serial DispatchQueue (deterministic ordering)
 - Ring buffer write happens on decode queue (non-RT, can allocate)
+- **Stream generation token (Oracle P1-3):** Each `start()` call increments a generation counter. Callbacks check generation before activating bridge or writing to ring buffer. Prevents stale callbacks from previous streams.
+- **Prebuffer threshold (Oracle P2-4):** Don't call `onFormatReady` until ring buffer has minimum ~2048 frames buffered. Prevents startup underruns.
 - Publishes state changes to StreamPlayer via @Sendable callbacks:
   - `onStateChange: (StreamState) -> Void` (playing/buffering/error)
   - `onFormatReady: (Float64) -> Void` (triggers activateStreamBridge)
   - `onMetadata: (ICYMetadata) -> Void` (StreamTitle/StreamArtist)
+- **Format hint handling (Oracle P2-3):** Map Content-Type broadly: `audio/mpeg` → MP3, `audio/aac`/`audio/aacp`/`audio/x-aac` → AAC, `application/octet-stream` → auto-detect (pass 0 to AudioFileStreamOpen)
 
 #### 1.5 StreamPlayer Modification
 
@@ -128,6 +140,12 @@ Replace AVPlayer internals with StreamDecodePipeline.
 - `isPlaying`, `isBuffering`, `streamTitle`, `streamArtist`, `error`
 - `volume`, `balance` properties
 - `play(station:)`, `play(url:)`, `pause()`, `stop()`
+
+**Add (Oracle P1-2):**
+- `resume()` method for PlaybackCoordinator's `togglePlayPause()` resume path (currently calls `streamPlayer.player.play()` — must be replaced with pipeline resume)
+
+**Remove:**
+- `let player = AVPlayer()` property (was `internal` for PlaybackCoordinator resume access — no longer needed)
 
 #### 1.6 PlaybackCoordinator Bridge Lifecycle
 
@@ -198,14 +216,16 @@ Re-apply `|| audioPlayer.isBridgeActive` to supportsEQ/Balance/Visualizer.
 | `Audio/PlaybackCoordinator.swift` | MODIFY | Simplified bridge lifecycle + flags |
 | `Views/VisualizerView.swift` | MODIFY | isPlaying → isEngineRendering |
 
-## What Gets Reused (No Re-implementation Needed)
+## What Gets Reused
 
-| Component | Source | Status |
-|-----------|--------|--------|
-| LockFreeRingBuffer | `Audio/LockFreeRingBuffer.swift` | As-is, no changes |
-| VisualizerPipeline | `Audio/VisualizerPipeline.swift` | As-is, gets data from engine tap |
-| PlaybackCoordinator orchestration pattern | Existing | Simplified |
-| Phase 1 volume routing | PR #53 (merged) | As-is |
+| Component | Source | Status | Notes |
+|-----------|--------|--------|-------|
+| LockFreeRingBuffer | `Audio/LockFreeRingBuffer.swift` (in main) | As-is, no changes | Already in main from PR #50 |
+| VisualizerPipeline | `Audio/VisualizerPipeline.swift` (in main) | As-is | Gets data from engine tap automatically |
+| PlaybackCoordinator orchestration pattern | In main | Modified in Phase 1.6 | Add bridge lifecycle, update flags |
+| Phase 1 volume routing | PR #53 (in main) | As-is | setVolume/setBalance routing stays |
+
+**Clarification (Oracle P2-5):** The consumer-side code (AVAudioSourceNode, makeStreamRenderBlock, activateStreamBridge, etc.) is NOT in main — it was reverted in commit `987b2f3`. These patterns must be **re-implemented** during Phase 1.7, using the documented code patterns in the "Prior Work Reference" section below. The patterns are proven (were Oracle-reviewed before revert) but the actual code must be written fresh.
 
 ## What Gets Removed (Depreciated)
 

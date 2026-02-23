@@ -38,14 +38,18 @@
 - [ ] **1.3h** Handle `AudioConverterFillComplexBuffer` error codes gracefully
 
 ### 1.4 StreamDecodePipeline
-- [ ] **1.4a** Create `MacAmpApp/Audio/Streaming/StreamDecodePipeline.swift` as Swift `actor`
-- [ ] **1.4b** Implement URLSession data task with `Icy-MetaData: 1` header
-- [ ] **1.4c** Route `didReceive(data:)` through ICYFramer → AudioFileStreamParser → AudioConverterDecoder
-- [ ] **1.4d** Write decoded PCM to LockFreeRingBuffer on decode serial queue
-- [ ] **1.4e** Implement @Sendable callbacks: `onStateChange`, `onFormatReady`, `onMetadata`
-- [ ] **1.4f** Implement `start(url:)`, `pause()`, `stop()` lifecycle
-- [ ] **1.4g** Handle stream Content-Type for format hint selection (audio/mpeg → MP3, audio/aac → AAC)
-- [ ] **1.4h** Manage URLSession delegate on dedicated OperationQueue
+- [ ] **1.4a** Create `MacAmpApp/Audio/Streaming/StreamDecodePipeline.swift` as `@MainActor` class (NOT actor — URLSessionDataDelegate requires NSObject)
+- [ ] **1.4b** Create NSObject delegate proxy for URLSession (forwards bytes to decode queue)
+- [ ] **1.4c** Implement URLSession data task with `Icy-MetaData: 1` header
+- [ ] **1.4d** Route `didReceive(data:)` through ICYFramer → AudioFileStreamParser → AudioConverterDecoder on decode serial queue
+- [ ] **1.4e** Write decoded PCM to LockFreeRingBuffer on decode serial queue
+- [ ] **1.4f** Implement stream generation token — increment on each `start()`, check in all callbacks before bridge activation or ring buffer writes
+- [ ] **1.4g** Implement prebuffer threshold — don't fire `onFormatReady` until ~2048 frames buffered in ring buffer
+- [ ] **1.4h** Implement @Sendable callbacks: `onStateChange`, `onFormatReady`, `onMetadata`
+- [ ] **1.4i** Implement `start(url:)`, `pause()`, `resume()`, `stop()` lifecycle
+- [ ] **1.4j** Handle stream Content-Type broadly: audio/mpeg → MP3, audio/aac|aacp|x-aac → AAC, application/octet-stream → auto-detect
+- [ ] **1.4k** Manage URLSession delegate on dedicated OperationQueue
+- [ ] **1.4l** C API dispose ordering: AudioConverterDispose BEFORE AudioFileStreamClose
 
 ### 1.5 StreamPlayer Modification
 - [ ] **1.5a** Remove AVPlayer, AVPlayerItem, AVPlayerItemMetadataOutput from StreamPlayer
@@ -53,8 +57,10 @@
 - [ ] **1.5c** Add StreamDecodePipeline as dependency (init parameter or lazy creation)
 - [ ] **1.5d** Wire pipeline callbacks to @Observable state (isPlaying, isBuffering, streamTitle, streamArtist, error)
 - [ ] **1.5e** Forward play(station:)/play(url:)/pause()/stop() to pipeline
-- [ ] **1.5f** Preserve volume/balance properties (volume applied via AVAudioSourceNode.volume in AudioPlayer)
-- [ ] **1.5g** Remove `import CoreMedia`, `import MediaToolbox` (no longer needed)
+- [ ] **1.5f** Add `resume()` method (for PlaybackCoordinator togglePlayPause — replaces `streamPlayer.player.play()`)
+- [ ] **1.5g** Remove `let player = AVPlayer()` property (was internal for coordinator resume access)
+- [ ] **1.5h** Preserve volume/balance properties (volume applied via AVAudioSourceNode.volume in AudioPlayer)
+- [ ] **1.5i** Remove `import CoreMedia`, `import MediaToolbox` (no longer needed)
 
 ### 1.6 PlaybackCoordinator Bridge Lifecycle
 - [ ] **1.6a** Add `private var streamRingBuffer: LockFreeRingBuffer?` property
@@ -64,6 +70,7 @@
 - [ ] **1.6e** Update all stream play methods: teardown → stop → setup → start pipeline
 - [ ] **1.6f** Update `stop()` to call teardownStreamBridge()
 - [ ] **1.6g** Update capability flags: `!isStreamBackendActive || audioPlayer.isBridgeActive`
+- [ ] **1.6h** Update `resume()` method to call `streamPlayer.resume()` instead of `streamPlayer.player.play()`
 
 ### 1.7 AudioPlayer Consumer Side
 - [ ] **1.7a** Add `streamSourceNode: AVAudioSourceNode?` property (@ObservationIgnored)
