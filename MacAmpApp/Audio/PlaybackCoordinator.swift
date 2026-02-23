@@ -69,12 +69,6 @@ final class PlaybackCoordinator {
         case radioStation(RadioStation)
     }
 
-    // MARK: - Loopback Bridge (Phase 2)
-
-    /// Shared ring buffer for MTAudioProcessingTap → AVAudioSourceNode transfer.
-    /// Created during setupLoopbackBridge(), released during teardownLoopbackBridge().
-    private var bridgeRingBuffer: LockFreeRingBuffer?
-
     // MARK: - Capability Flags
 
     /// Whether the stream backend is currently active (playing, paused, or buffering).
@@ -88,14 +82,19 @@ final class PlaybackCoordinator {
         return streamPlayer.error == nil
     }
 
-    /// EQ available for local files always, and for streams when bridge is active (2.5).
-    var supportsEQ: Bool { !isStreamBackendActive || audioPlayer.isBridgeActive }
+    /// EQ is only available for local file playback (AVAudioEngine).
+    /// During stream playback, EQ sliders should be dimmed.
+    var supportsEQ: Bool { !isStreamBackendActive }
 
-    /// Balance available for local files always, and for streams when bridge is active (2.5).
-    var supportsBalance: Bool { !isStreamBackendActive || audioPlayer.isBridgeActive }
+    /// Balance/pan requires AVAudioPlayerNode.pan (AVPlayer has no .pan property).
+    /// During stream playback, balance slider should be dimmed.
+    var supportsBalance: Bool { !isStreamBackendActive }
 
-    /// Visualizer available for local files always, and for streams when bridge is active (2.5).
-    var supportsVisualizer: Bool { !isStreamBackendActive || audioPlayer.isBridgeActive }
+    /// Visualizer requires an audio tap on AVAudioEngine's mixer node.
+    /// During stream playback, no tap data is available (Phase 2 Loopback Bridge will fix this).
+    /// Currently unused by UI — the visualizer shows empty naturally when no tap data arrives.
+    /// Phase 2 will update capability flags and wire UI dimming.
+    var supportsVisualizer: Bool { !isStreamBackendActive }
 
     // MARK: - Initialization
 
@@ -120,44 +119,6 @@ final class PlaybackCoordinator {
         }
     }
 
-    // MARK: - Loopback Bridge Lifecycle (2.4c)
-
-    /// Tear down the loopback bridge. MUST be called BEFORE setupLoopbackBridge()
-    /// to quiesce the producer before flushing the ring buffer (lesson #5).
-    private func teardownLoopbackBridge() {
-        streamPlayer.detachLoopbackTap()
-        audioPlayer.deactivateStreamBridge()
-        bridgeRingBuffer = nil
-    }
-
-    /// Set up the loopback bridge ring buffer. The tap is attached separately
-    /// after stream play starts, and the engine bridge activates when tapPrepare fires.
-    private func setupLoopbackBridge() {
-        let ringBuffer = LockFreeRingBuffer(capacity: 4096, channelCount: 2)
-        bridgeRingBuffer = ringBuffer
-    }
-
-    /// Attach the loopback tap to the current stream and wire up format-ready callback.
-    /// Called after stream play() and setupLoopbackBridge().
-    private func attachBridgeTap() async {
-        guard let ringBuffer = bridgeRingBuffer else { return }
-
-        await streamPlayer.attachLoopbackTap(
-            ringBuffer: ringBuffer,
-            onFormatReady: { [weak self, weak ringBuffer] sampleRate in
-                // tapPrepare is NOT real-time — safe to dispatch to main
-                Task { @MainActor [weak self] in
-                    // Gate: verify this callback's ring buffer is still the active one
-                    // (prevents stale stream A callback from activating on stream B's buffer)
-                    guard let self,
-                          let rb = self.bridgeRingBuffer,
-                          rb === ringBuffer else { return }
-                    self.audioPlayer.activateStreamBridge(ringBuffer: rb, sampleRate: sampleRate)
-                }
-            }
-        )
-    }
-
     // MARK: - Volume & Balance Routing
 
     /// Propagate volume to ALL backends unconditionally.
@@ -179,8 +140,7 @@ final class PlaybackCoordinator {
 
     func play(url: URL) async {
         if url.isFileURL {
-            // STREAM → LOCAL: tear down bridge, stop stream
-            teardownLoopbackBridge()
+            // Stop stream if playing
             streamPlayer.stop()
 
             // Play local file with EQ
@@ -193,18 +153,14 @@ final class PlaybackCoordinator {
                 url: url
             )
         } else {
-            // ALWAYS teardown before setup (lesson #5: ring buffer race)
-            teardownLoopbackBridge()
+            // Stop local file if playing
             audioPlayer.stop()
-            streamPlayer.stop()
 
-            // Setup bridge → play stream → attach tap
-            setupLoopbackBridge()
+            // Play stream (no EQ)
             let station = RadioStation(name: url.lastPathComponent, streamURL: url)
             await streamPlayer.play(station: station)
             currentSource = .radioStation(station)
             currentTitle = streamPlayer.streamTitle ?? station.name
-            await attachBridgeTap()
         }
     }
 
@@ -214,20 +170,15 @@ final class PlaybackCoordinator {
         currentTrack = track
 
         if track.isStream {
-            // ALWAYS teardown before setup (lesson #5: ring buffer race)
-            teardownLoopbackBridge()
+            // Stop local file if playing
             audioPlayer.stop()
-            streamPlayer.stop()
 
-            // Setup bridge → play stream → attach tap
-            setupLoopbackBridge()
+            // Play stream via StreamPlayer
             await streamPlayer.play(url: track.url, title: track.title, artist: track.artist)
             currentSource = .radioStation(RadioStation(name: track.title, streamURL: track.url))
             currentTitle = track.title
-            await attachBridgeTap()
         } else {
-            // STREAM → LOCAL: tear down bridge, stop stream
-            teardownLoopbackBridge()
+            // Stop stream if playing
             streamPlayer.stop()
 
             // Play local file via AudioPlayer
@@ -238,18 +189,14 @@ final class PlaybackCoordinator {
 
     /// Play a radio station from favorites menu
     func play(station: RadioStation) async {
-        // ALWAYS teardown before setup (lesson #5: ring buffer race)
-        teardownLoopbackBridge()
+        // Stop local file if playing
         audioPlayer.stop()
-        streamPlayer.stop()
 
-        // Setup bridge → play stream → attach tap
-        setupLoopbackBridge()
+        // Play stream
         await streamPlayer.play(station: station)
         currentSource = .radioStation(station)
         currentTitle = streamPlayer.streamTitle ?? station.name
         currentTrack = nil  // Not from playlist
-        await attachBridgeTap()
     }
 
     func pause() {
@@ -264,7 +211,6 @@ final class PlaybackCoordinator {
     }
 
     func stop() {
-        teardownLoopbackBridge()
         audioPlayer.stop()
         streamPlayer.stop()
         currentSource = nil
@@ -350,7 +296,6 @@ final class PlaybackCoordinator {
                 updateLocalPlaybackState(for: track)
             }
         case .playLocally(let track):
-            teardownLoopbackBridge()
             streamPlayer.stop()
             updateLocalPlaybackState(for: track)
         case .requestCoordinatorPlayback(let track):

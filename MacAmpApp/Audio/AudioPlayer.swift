@@ -18,12 +18,6 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     @ObservationIgnored nonisolated(unsafe) private var progressTimer: Timer?  // nonisolated(unsafe) for deinit access
     @ObservationIgnored private var playheadOffset: Double = 0 // seconds offset for current scheduled segment
 
-    // MARK: - Stream Loopback Bridge (Phase 2)
-    @ObservationIgnored private var streamSourceNode: AVAudioSourceNode?
-    @ObservationIgnored private var streamRingBuffer: LockFreeRingBuffer?
-    /// Whether the stream loopback bridge is active (streamSourceNode connected to engine graph)
-    private(set) var isBridgeActive: Bool = false
-
     // MARK: - Extracted Controllers
     private let equalizer = EqualizerController()
     private let visualizerPipeline = VisualizerPipeline()
@@ -52,9 +46,6 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     private(set) var playbackState: PlaybackState = .idle
     private(set) var isPlaying: Bool = false
     private(set) var isPaused: Bool = false
-    /// True when the engine is running with either source (local file or stream bridge).
-    /// Used by VisualizerView to gate visualization — replaces isPlaying for viz checks.
-    var isEngineRendering: Bool { audioEngine.isRunning && (isPlaying || isBridgeActive) }
     @ObservationIgnored private var currentSeekID: UUID = UUID() // Identifies which seek operation scheduled the current audio
     @ObservationIgnored private var isHandlingCompletion = false // Prevents re-entrant onPlaybackEnded calls
     @ObservationIgnored private var seekGuardActive = false
@@ -71,14 +62,12 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     var volume: Float = 0.75 {
         didSet {
             playerNode.volume = volume
-            streamSourceNode?.volume = volume
             UserDefaults.standard.set(volume, forKey: Keys.volume)
         }
     }
     var balance: Float = 0.0 { // -1.0 (left) to 1.0 (right)
         didSet {
             playerNode.pan = balance
-            streamSourceNode?.pan = balance
             UserDefaults.standard.set(balance, forKey: Keys.balance)
         }
     }
@@ -574,187 +563,23 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
             audioEngine.stop()
             audioEngine.reset()
         }
-
+        
         // Disconnect and reconnect graph for the file's format
         audioEngine.disconnectNodeOutput(playerNode)
         audioEngine.disconnectNodeOutput(equalizer.eqNode)
-        // Also disconnect stream source node if it was connected
-        if let node = streamSourceNode {
-            audioEngine.disconnectNodeOutput(node)
-        }
 
         guard audioFile != nil else { return }
 
         // Connect with the new format - use nil format to let the engine determine the best format
         audioEngine.connect(playerNode, to: equalizer.eqNode, format: nil)
         audioEngine.connect(equalizer.eqNode, to: audioEngine.mainMixerNode, format: nil)
-
-        // Verify mixer→output connection after reset (lesson #4: may break silently)
-        if audioEngine.outputConnectionPoints(for: audioEngine.mainMixerNode, outputBus: 0).isEmpty {
-            audioEngine.connect(audioEngine.mainMixerNode, to: audioEngine.outputNode, format: nil)
-        }
-
+        
         // Prepare the engine with the new configuration
         audioEngine.prepare()
-
+        
         // Restart the engine with the new configuration
         startEngineIfNeeded()
         installVisualizerTapIfNeeded()
-        isBridgeActive = false
-    }
-
-    // MARK: - Stream Loopback Bridge (2.3, 2.4a-c)
-
-    /// Build the render block in a nonisolated context to avoid @MainActor isolation on audio thread.
-    /// Follows VisualizerPipeline.makeTapHandler() pattern — lesson learned #1.
-    private nonisolated static func makeStreamRenderBlock(
-        ringBuffer: LockFreeRingBuffer
-    ) -> AVAudioSourceNodeRenderBlock {
-        // 2.7c: Capture generation at creation for ABR detection
-        let lastGeneration = ringBuffer.currentGeneration()
-        // Use nonisolated(unsafe) var for the mutable generation tracker
-        // This is safe: only accessed from the single render thread (SPSC consumer)
-        nonisolated(unsafe) var cachedGeneration = lastGeneration
-
-        return { isSilence, _, frameCount, audioBufferList -> OSStatus in
-            // 2.2h + 2.7c: Real-time safe — zero allocations, zero locks, zero ARC, zero logging
-
-            // Check generation ID for ABR format changes (2.7c)
-            let currentGen = ringBuffer.currentGeneration()
-            if currentGen != cachedGeneration {
-                // Format changed — fill silence during transition (2.7d: acceptable for radio)
-                cachedGeneration = currentGen
-                let ablPtr = UnsafeMutableAudioBufferListPointer(audioBufferList)
-                for i in 0..<ablPtr.count {
-                    if let data = ablPtr[i].mData {
-                        memset(data, 0, Int(ablPtr[i].mDataByteSize))
-                    }
-                }
-                isSilence.pointee = true
-                return noErr
-            }
-
-            // Read from ring buffer directly into audioBufferList (interleaved format match)
-            let ablPtr = UnsafeMutableAudioBufferListPointer(audioBufferList)
-            guard ablPtr.count == 1,
-                  let data = ablPtr[0].mData?.assumingMemoryBound(to: Float.self) else {
-                isSilence.pointee = true
-                return noErr
-            }
-
-            let framesRead = ringBuffer.read(into: data, frameCount: Int(frameCount))
-            isSilence.pointee = ObjCBool(framesRead == 0)
-
-            if framesRead < Int(frameCount) {
-                // Fill remaining with silence to prevent glitches
-                let silenceStart = framesRead * ringBuffer.channelCount
-                let silenceCount = (Int(frameCount) - framesRead) * ringBuffer.channelCount
-                memset(data + silenceStart, 0, silenceCount * MemoryLayout<Float>.size)
-            }
-
-            return noErr
-        }
-    }
-
-    /// Activate stream bridge: wire streamSourceNode into engine graph.
-    /// Called by PlaybackCoordinator when starting stream playback.
-    /// Follows rewireForCurrentFile() stop/reset pattern (lesson #3).
-    func activateStreamBridge(ringBuffer: LockFreeRingBuffer, sampleRate: Float64) {
-        streamRingBuffer = ringBuffer
-
-        // Build render block via nonisolated static func (lesson #1: no @MainActor isolation)
-        let renderBlock = Self.makeStreamRenderBlock(ringBuffer: ringBuffer)
-
-        // Source node block format: interleaved at stream sample rate (lesson #2)
-        guard let blockFormat = AVAudioFormat(
-            commonFormat: .pcmFormatFloat32,
-            sampleRate: sampleRate,
-            channels: 2,
-            interleaved: true
-        ) else { return }
-
-        let sourceNode = AVAudioSourceNode(format: blockFormat, renderBlock: renderBlock)
-
-        // Stop/reset engine before rewiring (lesson #3: hot-swap causes -10868)
-        if audioEngine.isRunning {
-            audioEngine.stop()
-            audioEngine.reset()
-        }
-
-        // Disconnect old source nodes
-        audioEngine.disconnectNodeOutput(playerNode)
-        audioEngine.disconnectNodeOutput(equalizer.eqNode)
-        if let oldNode = streamSourceNode {
-            audioEngine.disconnectNodeOutput(oldNode)
-            audioEngine.detach(oldNode)
-        }
-
-        // Attach and connect new source node
-        audioEngine.attach(sourceNode)
-
-        // Graph format: non-interleaved at device sample rate (lesson #2)
-        let deviceFormat = audioEngine.outputNode.inputFormat(forBus: 0)
-        let graphFormat = AVAudioFormat(
-            commonFormat: .pcmFormatFloat32,
-            sampleRate: deviceFormat.sampleRate,
-            channels: 2,
-            interleaved: false
-        )
-
-        audioEngine.connect(sourceNode, to: equalizer.eqNode, format: graphFormat)
-        audioEngine.connect(equalizer.eqNode, to: audioEngine.mainMixerNode, format: nil)
-
-        // Verify mixer→output connection after reset (lesson #4)
-        if audioEngine.outputConnectionPoints(for: audioEngine.mainMixerNode, outputBus: 0).isEmpty {
-            audioEngine.connect(audioEngine.mainMixerNode, to: audioEngine.outputNode, format: nil)
-        }
-
-        streamSourceNode = sourceNode
-
-        // Apply current volume and balance to stream source node
-        sourceNode.volume = volume
-        sourceNode.pan = balance
-
-        // Start engine
-        audioEngine.prepare()
-        startEngineIfNeeded()
-        installVisualizerTapIfNeeded()
-        isBridgeActive = true
-    }
-
-    /// Deactivate stream bridge: disconnect streamSourceNode, rewire playerNode back.
-    /// Called by PlaybackCoordinator when stopping stream or switching to local file.
-    func deactivateStreamBridge() {
-        guard isBridgeActive else { return }
-
-        if audioEngine.isRunning {
-            audioEngine.stop()
-            audioEngine.reset()
-        }
-
-        if let node = streamSourceNode {
-            audioEngine.disconnectNodeOutput(node)
-            audioEngine.detach(node)
-        }
-        audioEngine.disconnectNodeOutput(equalizer.eqNode)
-
-        // Reconnect playerNode → eqNode → mixer for local file path
-        audioEngine.connect(playerNode, to: equalizer.eqNode, format: nil)
-        audioEngine.connect(equalizer.eqNode, to: audioEngine.mainMixerNode, format: nil)
-
-        // Verify mixer→output connection after reset (lesson #4)
-        if audioEngine.outputConnectionPoints(for: audioEngine.mainMixerNode, outputBus: 0).isEmpty {
-            audioEngine.connect(audioEngine.mainMixerNode, to: audioEngine.outputNode, format: nil)
-        }
-
-        audioEngine.prepare()
-
-        streamSourceNode = nil
-        streamRingBuffer = nil
-        isBridgeActive = false
-
-        removeVisualizerTapIfNeeded()
-        visualizerPipeline.clearData()
     }
 
     /// Schedules audio playback from a specific time
@@ -980,7 +805,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     // MARK: - Visualizer Forwarding (backed by VisualizerPipeline)
 
     func getFrequencyData(bands: Int) -> [Float] {
-        visualizerPipeline.getFrequencyData(bands: bands, isPlaying: isEngineRendering)
+        visualizerPipeline.getFrequencyData(bands: bands, isPlaying: isPlaying)
     }
 
     func getRMSData(bands: Int) -> [Float] {
@@ -992,7 +817,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     }
 
     func snapshotButterchurnFrame() -> ButterchurnFrame? {
-        guard currentMediaType == .audio && isEngineRendering else { return nil }
+        guard currentMediaType == .audio && isPlaying else { return nil }
         return visualizerPipeline.snapshotButterchurnFrame()
     }
 
