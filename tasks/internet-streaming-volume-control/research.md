@@ -557,6 +557,36 @@ AVPlayer → [audioOutputDeviceUniqueID: isolatedUID] → CATapDescription (self
 3. **App Store review:** Will self-process tap pass App Store review for a music player app? Need to test.
 4. **macOS 26 specifics:** Any Tahoe-specific improvements to the Process Tap API? Any new higher-level API (`AudioProcessTap` class)?
 
+### Webamp Reference Implementation (JavaScript/TypeScript)
+
+Webamp (Jordan Eldredge's Winamp clone) solves the same problem using Web Audio API:
+
+**File:** `webamp_clone/packages/webamp/js/media/elementSource.ts`
+```typescript
+// Key line: captures HTMLAudioElement output into AudioContext graph
+this._source = this._context.createMediaElementSource(this._audio);
+this._source.connect(destination);
+```
+
+**Audio graph** (`webamp_clone/packages/webamp/js/media/index.ts`):
+```
+HTMLAudioElement → createMediaElementSource() → preamp(GainNode) → [10x BiquadFilterNode EQ] → balance(StereoBalanceNode) → analyser + gain → destination
+```
+
+**Key insight:** `createMediaElementSource()` is the Web Audio API's native bridge between a media element (player) and an AudioContext (processing graph). **macOS has NO equivalent API** — no way to connect AVPlayer's output to AVAudioEngine's input. This is the fundamental gap all approaches are trying to bridge.
+
+### Oracle vs Gemini Alignment
+
+| Topic | Oracle (gpt-5.3-codex) | Gemini |
+|-------|----------------------|--------|
+| Best approach | CoreAudio Process Tap (8/10) | CoreAudio Process Tap ("gold standard") |
+| Pure Swift? | Yes, but "C-in-Swift" | Yes, no bridging header needed |
+| Breaks Swift arch? | No, if isolated in mechanism layer | No, use @convention(c) + Sendable wrapper |
+| Feedback loop | "Not reliable with device UID alone" — HIGH RISK | "Use deviceUID + isPrivate + isExclusive" — solvable |
+| macOS 26 new APIs? | No new high-level bridge API | CATapDescription.bundleIDs new, but no fundamental change |
+| MTAudioProcessingTap | Confirmed dead for streams | Confirmed dead for streams |
+| Fallback | URLSession + AudioFileStream (5/10) | ScreenCaptureKit (higher latency) |
+
 ### Sources
 
 - Apple QA1716: AVAudioMix was file-based only
@@ -564,3 +594,4 @@ AVPlayer → [audioOutputDeviceUniqueID: isolatedUID] → CATapDescription (self
 - CoreAudio headers: `AudioHardwareTapping.h`, `CATapDescription.h`, `AudioHardware.h`
 - Oracle consultation: gpt-5.3-codex (xhigh reasoning), 2026-02-22
 - Gemini deep research: CoreAudio Process Tap architecture, 2026-02-22
+- Webamp source: `webamp_clone/packages/webamp/js/media/` (Web Audio API pattern reference)
