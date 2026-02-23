@@ -69,12 +69,17 @@ Wave 2 complete: T5 Phase 1 merged PR #53 (2026-02-22), T3 merged PR #54 (2026-0
 
 **Merge strategy:** Two separate PRs. T5 Ph1 merges first; T3 merges after verification.
 
-### Wave 3: Advanced Audio Pipeline — NOT STARTED
+### Wave 3: Advanced Audio Pipeline — PIVOTING
 
 | Step | Task | Branch | Status | Depends On |
 |------|------|--------|--------|-----------|
-| 3a | T5 Phase 2 (Loopback Bridge) | `feature/stream-loopback-bridge` | Not started | T4 merge + T5 Ph1 merge |
-| 3b | T1 Phase 4 (engine transport) | After T5 Ph2 | Not started | T5 Ph2 complete |
+| 3a | T5 Phase 2 (Loopback Bridge) | `feature/stream-loopback-bridge` | **PIVOTED** — MTAudioProcessingTap dead for streams | T4 merge + T5 Ph1 merge |
+| 3a-new | **Unified Audio Pipeline** (custom stream decode) | TBD | RESEARCH COMPLETE | Replaces 3a |
+| 3b | T1 Phase 4 (engine transport) | After unified pipeline | DEFERRED | Re-evaluate after 3a-new — engine boundaries will change |
+
+**Wave 3 Pivot:** MTAudioProcessingTap does not work with streaming AVPlayerItems (Apple QA1716). CoreAudio Process Tap rejected (feedback loop). New approach: replace AVPlayer with custom URLSession + AudioFileStream + AudioConverter pipeline feeding PCM into existing AVAudioEngine graph. See: `tasks/unified-audio-pipeline/` and `tasks/_context/lessons-dual-backend-dead-end.md`.
+
+**T1 Phase 4 status:** Still desired but must wait until unified pipeline lands. The engine transport boundaries will change when streamSourceNode receives PCM from a custom decode pipeline instead of a loopback tap. Extracting transport BEFORE the pipeline change would require re-extraction afterward.
 
 ---
 

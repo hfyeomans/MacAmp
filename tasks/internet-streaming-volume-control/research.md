@@ -595,3 +595,165 @@ HTMLAudioElement → createMediaElementSource() → preamp(GainNode) → [10x Bi
 - Oracle consultation: gpt-5.3-codex (xhigh reasoning), 2026-02-22
 - Gemini deep research: CoreAudio Process Tap architecture, 2026-02-22
 - Webamp source: `webamp_clone/packages/webamp/js/media/` (Web Audio API pattern reference)
+
+---
+
+## Addendum: Phase 2 Pivot v2 — Custom Stream Decode Pipeline (2026-02-22)
+
+### Why AVPlayer Must Be Replaced (Converged Finding)
+
+Three independent research sources all converged on the same conclusion:
+
+1. **Winamp architecture analysis** (Gemini): Winamp used a SINGLE unified PCM pipeline. `in_mp3.dll` decoded both local files AND network streams to raw PCM, feeding the same EQ/DSP/visualization chain. There was no "dual backend."
+
+2. **Deep research system** (user's external tool): "AVPlayer must be completely replaced for the internet radio streaming backend. The most optimal technical path is to construct a custom media engine."
+
+3. **Oracle** (gpt-5.3-codex, xhigh): "Use custom progressive decoder pipeline for internet radio. Replace StreamPlayer's AVPlayer internals."
+
+**Root cause:** AVPlayer is a black-box high-level player. It handles its own decoding and output to hardware, bypassing any internal processing chain. This is architecturally incompatible with routing audio through AVAudioEngine for EQ/visualization/balance.
+
+### CoreAudio Process Tap: Downgraded from Recommended to Rejected
+
+The CoreAudio Process Tap approach (AudioHardwareCreateProcessTap) was evaluated as an alternative but rejected:
+- **Feedback loop:** Tapping own process captures ALL audio output (AVPlayer + AVAudioEngine + VideoPlaybackController), creating feedback
+- **Device isolation:** CATapDescription.deviceUID scoping unreliable for same-process isolation (Oracle confirmed)
+- **Complexity:** Requires aggregate device creation, device change monitoring, entitlement concerns
+- **Not Winamp-like:** Winamp decoded streams itself — it never needed to "tap" an opaque player
+
+### Recommended Architecture: Custom Stream Decode Pipeline
+
+**Model:** Winamp's `in_mp3.dll` pattern — decode network bytes to PCM, feed shared engine.
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    CUSTOM STREAM DECODE PIPELINE                     │
+│                                                                       │
+│  URLSession ──► ICYFramer ──► AudioFileStream ──► AudioConverter     │
+│  (HTTP transport)  (strip     (parse MP3/AAC    (decode to         │
+│                   metadata)    packets)           Float32 PCM)       │
+│                     │                                  │             │
+│                     ▼                                  ▼             │
+│              StreamTitle/Artist              LockFreeRingBuffer      │
+│              (ICY metadata)                  (existing, reused)     │
+│                                                       │             │
+└───────────────────────────────────────────────────────│─────────────┘
+                                                        │
+                                                        ▼
+                                              AVAudioSourceNode
+                                              (existing, reused)
+                                                        │
+                                                        ▼
+                                               AVAudioEngine
+                                          (EQ + Visualizer + Balance)
+                                                        │
+                                                        ▼
+                                                    Speakers
+```
+
+### Component Breakdown
+
+#### 1. ICYFramer (new, ~100 lines)
+Strips ICY metadata from the byte stream before audio data reaches the parser.
+- Parses `icy-metaint` from HTTP response headers
+- Counts audio bytes, extracts metadata blocks at intervals
+- Emits `.audio(Data)` and `.metadata(Data)` chunks
+- Parses `StreamTitle='...'` from metadata blocks
+
+#### 2. AudioFileStream Parser (new, ~150 lines)
+Wraps Apple's `AudioFileStreamOpen` / `AudioFileStreamParseBytes` / `AudioFileStreamClose`.
+- Property callback: captures `kAudioFileStreamProperty_DataFormat`, `kAudioFileStreamProperty_MagicCookie`, `kAudioFileStreamProperty_ReadyToProducePackets`
+- Packets callback: enqueues compressed audio packets for converter
+- Handles MP3, AAC natively. OGG requires external decoder (defer to future).
+
+#### 3. AudioConverter Decoder (new, ~150 lines)
+Wraps Apple's `AudioConverterNew` / `AudioConverterFillComplexBuffer` / `AudioConverterDispose`.
+- Input: compressed packets from AudioFileStream
+- Output: Float32 interleaved stereo PCM at fixed sample rate
+- Handles magic cookie for AAC
+- On format change (ABR): rebuild converter, flush ring buffer with generation increment
+
+#### 4. StreamDecodePipeline (new, actor, ~200 lines)
+Orchestrates the full pipeline. Uses `actor` isolation for thread safety.
+- Manages URLSession data task
+- Routes bytes through ICYFramer → AudioFileStream → AudioConverter → ring buffer
+- Decode work on dedicated serial DispatchQueue (NOT async/await — deterministic ordering)
+- Publishes state changes to StreamPlayer via callbacks
+
+#### 5. StreamPlayer (modified, simplified)
+- Removes AVPlayer, AVPlayerItem, AVPlayerItemMetadataOutput, MTAudioProcessingTap
+- Becomes a thin @Observable wrapper around StreamDecodePipeline
+- Exposes same public API: play(station:), play(url:), pause(), stop()
+- ICY metadata comes from pipeline callbacks instead of AVPlayerItemMetadataOutput
+
+### What Gets Reused (No Changes)
+
+| Component | Status |
+|-----------|--------|
+| `LockFreeRingBuffer` | Reuse as-is — same SPSC bridge |
+| `AVAudioSourceNode` + `makeStreamRenderBlock()` | Reuse as-is — same consumer |
+| `activateStreamBridge()` / `deactivateStreamBridge()` | Reuse as-is — same engine graph switching |
+| `PlaybackCoordinator` bridge lifecycle | Simplified — no more tap attach/detach |
+| Capability flags | Reuse as-is — check `isBridgeActive` |
+| `VisualizerView` `isEngineRendering` | Reuse as-is |
+| `VisualizerPipeline` | Reuse as-is — gets data from same engine tap |
+
+### What Gets Removed (Depreciated)
+
+| Component | Reason |
+|-----------|--------|
+| `LoopbackTapContext` | MTAudioProcessingTap approach abandoned |
+| Top-level tap callbacks (`loopbackTapInit/Finalize/Prepare/Unprepare/Process`) | No longer needed |
+| `StreamPlayer.attachLoopbackTap()` / `detachLoopbackTap()` | Replaced by pipeline |
+| `StreamPlayer.currentTapRef` | No tap to reference |
+| `PlaybackCoordinator.attachBridgeTap()` | Pipeline handles format callback directly |
+| `bridgeLog()` function | Temporary diagnostic, remove |
+
+### Threading Model
+
+```
+Main Thread (@MainActor):
+  StreamPlayer (state), PlaybackCoordinator, UI
+
+URLSession Delegate Queue (background):
+  didReceive(data:) → passes bytes to decode queue
+
+Decode Serial Queue (background, non-RT):
+  ICYFramer → AudioFileStream → AudioConverter → ringBuffer.write()
+  (Can allocate, can log, not real-time constrained)
+
+AVAudioEngine IO Thread (real-time):
+  AVAudioSourceNode render block → ringBuffer.read()
+  (Zero allocations, existing pattern)
+```
+
+### Format Handling
+
+- **Target output:** Float32 interleaved stereo at 44100 Hz (normalize all streams)
+- **Sample rate conversion:** AudioConverter handles this natively
+- **Channel upmix:** AudioConverter handles mono→stereo
+- **ABR switches:** Rebuild converter, increment ring buffer generation, brief silence (acceptable for radio)
+
+### HLS Support Assessment
+
+**Oracle's assessment:** "For live HLS radio, do not rely on AVAssetReader. Use AudioFileStream for progressive."
+
+**Reality:** Most internet radio uses progressive HTTP streams (SHOUTcast/Icecast). HLS radio stations are less common. The AudioFileStream approach works for all progressive streams. For HLS, we have two options:
+1. **Defer HLS:** Focus on progressive streams first (90%+ of internet radio)
+2. **HLS later:** Add AVAssetReader or custom M3U8 parser as Phase 3
+
+**Recommendation:** Phase 2 targets progressive streams. HLS support deferred.
+
+### Open Questions
+
+1. **OGG Vorbis:** AudioFileStream may not fully support OGG containers. Need external decoder (libogg/libvorbis) or defer OGG support.
+2. **Reconnection:** How to handle network drops — auto-reconnect with backoff?
+3. **Buffer sizing:** How much network buffer before starting decode? Currently LockFreeRingBuffer is 4096 frames (~85ms). May need a separate network jitter buffer.
+4. **Volume during transition:** When switching from old AVPlayer StreamPlayer to new pipeline, how to handle volume/balance sync?
+
+### Sources
+
+- Winamp architecture analysis: Gemini deep research, 2026-02-22
+- Oracle (gpt-5.3-codex, xhigh): Custom stream decode pipeline design, 2026-02-22
+- User's deep research system: AVSampleBufferAudioRenderer recommendation, 2026-02-22
+- Apple SDK headers: AudioFileStream.h, AudioConverter.h, AVAssetReader.h
+- Webamp source: elementSource.ts (createMediaElementSource pattern)
