@@ -66,7 +66,7 @@ These issues were discovered during Oracle validation of the internet-radio-revi
 
 ---
 
-## Phase 2: Loopback Bridge — IMPLEMENTATION COMPLETE
+## Phase 2: Loopback Bridge — ATTEMPTED (PIVOTED to unified-audio-pipeline)
 
 ### Prerequisites
 - [x] **2.0a** `lock-free-ring-buffer` task completed and tested (Wave 1)
