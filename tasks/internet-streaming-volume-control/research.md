@@ -469,3 +469,98 @@ No new high-level DSP abstractions replacing `vDSP_biquad`. The `vDSP.Biquad<T>`
 - **Apple SDK headers (Xcode 26):** AVPlayer.h, AVAudioMix.h, MTAudioProcessingTap.h, AVAudioSourceNode.h, AVAudioSinkNode.h, AudioHardwareTapping.h, CATapDescription.h
 - **Swift Evolution:** SE-0453 (InlineArray), SE-0466 (default actor isolation), SE-0412 (strict concurrency)
 - **WWDC 2025:** Session 251 (audio recording capabilities), Session 268 (AVFoundation metrics)
+
+---
+
+## Addendum: Phase 2 Pivot — CoreAudio Process Tap (2026-02-22)
+
+### MTAudioProcessingTap: Confirmed Dead End for Streaming
+
+**Finding:** MTAudioProcessingTap does NOT work with internet radio streams (SHOUTcast/Icecast) via AVPlayer.
+
+- `MTAudioProcessingTapCreate` succeeds (noErr)
+- `AVMutableAudioMix` set on `AVPlayerItem` with correct `AVAssetTrack`
+- `tapPrepare` and `tapProcess` callbacks **NEVER fire**
+- Tested: play-first-then-attach, defer-play-then-attach, `AVAsset.loadTracks`, `AVPlayerItem.tracks.compactMap(\.assetTrack)` — all fail
+- **Root cause:** Apple QA1716 states `AVAudioMix` was designed for file-based content only. CoreMedia does not invoke tap callbacks for streaming/live `AVPlayerItem`s.
+- Oracle (gpt-5.3-codex, xhigh) independently confirmed this limitation.
+
+### Alternative Approaches Evaluated
+
+| Approach | Feasibility | Complexity | ICY Metadata | SHOUTcast + HLS | Notes |
+|----------|------------|------------|--------------|-----------------|-------|
+| A: URLSession + AudioFileStream + AVAudioEngine | 5/10 | Very High | Must reimplement | SHOUTcast yes, HLS needs extra demux | Bypasses AVPlayer entirely |
+| **B: CoreAudio Process Tap + AVPlayer** | **8/10** | High | Preserved (AVPlayer) | **Yes** | **Recommended by Oracle** |
+| C: ScreenCaptureKit audio capture | 4/10 | Medium-High | Preserved | Yes | User permission friction, higher latency |
+| D: System-level audio routing | 2/10 | N/A | N/A | Only via B/C | Not a standalone solution |
+
+### CoreAudio Process Tap: Architecture (Oracle + Gemini Aligned)
+
+**API:** `AudioHardwareCreateProcessTap` — macOS 14.2+ (works on macOS 15+)
+
+**Architecture:**
+```
+AVPlayer → [audioOutputDeviceUniqueID: isolatedUID] → CATapDescription (self-process, CATapMutedWhenTapped)
+  → Aggregate Device (input stream) → AudioDeviceIOProc (RT callback)
+  → LockFreeRingBuffer → AVAudioSourceNode → AVAudioEngine (EQ + Viz + Balance) → Speakers
+```
+
+**Key Design Decisions:**
+
+1. **Feedback Loop Prevention** (Gemini finding, critical):
+   - Route AVPlayer to an isolated device UID via `AVPlayer.audioOutputDeviceUniqueID`
+   - Tap captures only AVPlayer's output (not AVAudioEngine's)
+   - AVAudioEngine outputs to actual hardware speakers
+   - No feedback loop possible because tap and output target different UIDs
+
+2. **Mute Behavior:** `CATapMutedWhenTapped` — mutes original AVPlayer output at destination while tap is active. Prevents double audio during bridge operation.
+
+3. **No entitlements for self-capture** — capturing own process audio doesn't require special entitlements on macOS 15+. May need `com.apple.security.device.audio-input` and `NSAudioCaptureUsageDescription` for sandboxed apps.
+
+4. **Aggregate Device:** Required to receive tapped audio as an input stream. Created via `AudioHardwareCreateAggregateDevice` with the tap UID in `kAudioAggregateDeviceTapListKey`.
+
+5. **Real-time callback:** `AudioDeviceIOProc` runs on `com.apple.audio.IOThread` — same RT safety requirements as AVAudioSourceNode render block. Zero allocations, locks, ARC, logging.
+
+6. **Data format:** Tap delivers Float32 interleaved PCM. Configurable via `kAudioStreamPropertyVirtualFormat` on aggregate device input stream.
+
+7. **Device switching:** If user changes audio output device, the tap may need to be recreated. Monitor `kAudioHardwarePropertyDefaultOutputDevice` for changes.
+
+### What Gets Reused from Current Implementation
+
+| Component | Status | Changes Needed |
+|-----------|--------|---------------|
+| `LockFreeRingBuffer` | Reuse as-is | None |
+| `AVAudioSourceNode` + `makeStreamRenderBlock()` | Reuse as-is | None — same ring buffer consumer |
+| `activateStreamBridge()` / `deactivateStreamBridge()` | Reuse with minor changes | Sample rate from tap format, not tapPrepare callback |
+| `PlaybackCoordinator` bridge lifecycle | Reuse pattern | Replace `attachBridgeTap()` with process tap start |
+| Capability flags (`supportsEQ`/`Balance`/`Visualizer`) | Reuse as-is | None |
+| `VisualizerView` `isEngineRendering` changes | Reuse as-is | None |
+| `LoopbackTapContext` + MTAudioProcessingTap callbacks | **Remove** | Replaced by `ProcessTapCapture` |
+
+### New Components Needed
+
+1. **`ProcessTapCapture`** — new class managing:
+   - `CATapDescription` creation for self-process
+   - `AudioHardwareCreateProcessTap` / `AudioHardwareDestroyProcessTap`
+   - Aggregate device creation/destruction
+   - `AudioDeviceIOProc` registration + start/stop
+   - Ring buffer write in RT callback
+
+2. **AVPlayer device isolation** — set `AVPlayer.audioOutputDeviceUniqueID` to route output to a target UID that the tap captures from
+
+3. **Device change monitoring** — observe `kAudioHardwarePropertyDefaultOutputDevice` to handle output device switches
+
+### Open Questions
+
+1. **Virtual/null device for AVPlayer isolation:** Does macOS provide a built-in null/virtual device UID, or do we need to create one? Can we use the aggregate device's output as AVPlayer's target?
+2. **Latency:** What is the end-to-end latency through the tap → ring buffer → AVAudioEngine pipeline? Is it perceptible for radio?
+3. **App Store review:** Will self-process tap pass App Store review for a music player app? Need to test.
+4. **macOS 26 specifics:** Any Tahoe-specific improvements to the Process Tap API? Any new higher-level API (`AudioProcessTap` class)?
+
+### Sources
+
+- Apple QA1716: AVAudioMix was file-based only
+- Apple QA1783: MTAudioProcessingTap PreEffects behavior
+- CoreAudio headers: `AudioHardwareTapping.h`, `CATapDescription.h`, `AudioHardware.h`
+- Oracle consultation: gpt-5.3-codex (xhigh reasoning), 2026-02-22
+- Gemini deep research: CoreAudio Process Tap architecture, 2026-02-22
