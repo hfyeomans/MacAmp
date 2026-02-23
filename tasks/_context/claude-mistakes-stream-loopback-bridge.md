@@ -244,6 +244,34 @@ Follow the plan's execution blocks exactly:
 
 ---
 
+## CRITICAL FINDING: MTAudioProcessingTap Does NOT Work with Streaming Content
+
+**Discovery date:** 2026-02-22 (second implementation attempt)
+
+**Symptom:** `MTAudioProcessingTapCreate` succeeds (noErr), `AVMutableAudioMix` is set on
+`AVPlayerItem` with correct `AVAssetTrack`, but `tapPrepare` and `tapProcess` callbacks
+**NEVER fire** for internet radio streams (SHOUTcast/Icecast).
+
+**Tested sequences (all failed):**
+1. Play first → wait for tracks → set audioMix → tap never fires
+2. Set audioMix before play (deferPlay) → tap never fires
+3. Using `AVPlayerItem.tracks.compactMap(\.assetTrack)` (correct for streaming) → tap never fires
+4. Using `AVAsset.loadTracks(withMediaType: .audio)` → returns EMPTY for streaming content
+
+**Root cause:** Apple QA1716 states `AVAudioMix` was designed for file-based content only.
+CoreMedia does not invoke MTAudioProcessingTap callbacks for streaming/live AVPlayerItems.
+Oracle (gpt-5.3-codex, xhigh) independently confirmed this limitation.
+
+**Contradiction with first attempt:** The first attempt's lessons say spectrum analyzer was
+"blinking" and Milkdrop was working. This may have been from residual local file data in the
+visualizer pipeline, not from actual stream tap data flowing through.
+
+**Resolution:** MTAudioProcessingTap is NOT viable for stream audio capture. Alternative
+approach needed: CoreAudio Process Tap (`AudioHardwareCreateProcessTap`) or custom
+`URLSession` + `AudioFileStream` decode pipeline.
+
+---
+
 ## Oracle Consultation Summary
 
 ### Review 1: Implementation Review (Grade: C)
