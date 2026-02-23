@@ -4,7 +4,10 @@
 
 ---
 
-## Current Status: PHASE 1 COMPLETE — Awaiting PR + Manual Verification
+## Current Status: PHASE 1 COMPLETE (PR #53 merged) — Phase 2 PIVOTED to unified-audio-pipeline task
+
+Phase 2 MTAudioProcessingTap approach failed (tapPrepare never fires for streaming content).
+Code reverted to main (commit 987b2f3). New approach: custom decode pipeline in `tasks/unified-audio-pipeline/`.
 
 ## Progress
 
@@ -29,8 +32,16 @@
 - [x] N1-N6 prerequisites resolved (PR #49 merged 2026-02-21)
 - [x] Phase 1 Implementation (commit 463c6a9)
 - [x] Oracle review of Phase 1 (gpt-5.3-codex, xhigh reasoning) — 1 finding fixed (stream error capability flags)
-- [ ] Phase 1 Manual Verification (V1.1-V1.11, requires running app with streams)
-- [ ] Phase 2 Implementation (Wave 3)
+- [x] Phase 1 Manual Verification (V1.1-V1.11, passed — user confirmed 2026-02-22)
+- [x] Phase 2 Prerequisites (2.0a-2.0d) — all resolved
+- [x] Phase 2 Block 1: StreamPlayer MTAudioProcessingTap (2.2a-2.2h) — commit `4194086`
+- [x] Phase 2 Block 2: AudioPlayer AVAudioSourceNode + Graph Switching (2.3, 2.4a-c) — commit `d47da07`
+- [x] Phase 2 Block 3: PlaybackCoordinator Bridge Lifecycle (2.4c, 2.5) — commit `0ba7b1a`
+- [x] Phase 2 Block 4: VisualizerView updates (2.6) — commit `0ba7b1a`
+- [x] Phase 2 Block 5: ABR handling (2.7a-2.7d) — integrated into Block 1+2
+- [x] Phase 2 Block 6: Telemetry (2.8a-2.8b) — already in LockFreeRingBuffer
+- [x] Phase 2 Build + Oracle Review — commit `a5f96b3` (0 P1, 2 P2 fixed, 2 P3 fixed)
+- [ ] Phase 2 Verification (V2.1-V2.14)
 
 ## Key Decisions
 
@@ -46,6 +57,32 @@
 10. **Ring buffer size:** 4096 frames (~85ms @ 48kHz) initial, tunable after stability proven
 11. **Ring buffer prototyping:** Separate task recommended — self-contained, highest-risk component, independently testable
 12. **Target platforms:** macOS 15+ including macOS 26+ Tahoe
+
+## Phase 2 Commits
+
+1. `4194086` — feat: MTAudioProcessingTap loopback tap on StreamPlayer (T5 Ph2 Block 1)
+   - LoopbackTapContext (@unchecked Sendable), 5 top-level @convention(c) callbacks
+   - attachLoopbackTap/detachLoopbackTap on StreamPlayer
+   - Mono→stereo upmixing, non-interleaved→interleaved conversion
+   - Pre-allocated scratch buffers, generation ID ABR handling
+
+2. `d47da07` — feat: AVAudioSourceNode stream bridge + engine graph switching (T5 Ph2 Block 2)
+   - streamSourceNode, makeStreamRenderBlock (nonisolated static), activateStreamBridge/deactivateStreamBridge
+   - Engine stop/reset/rewire pattern (lesson: hot-swap crashes)
+   - isBridgeActive, isEngineRendering computed properties
+   - Volume/balance didSet propagation to streamSourceNode
+
+3. `0ba7b1a` — feat: PlaybackCoordinator bridge lifecycle + VisualizerView engine rendering (T5 Ph2 Block 3+4)
+   - setupLoopbackBridge/teardownLoopbackBridge/attachBridgeTap on PlaybackCoordinator
+   - Bridge lifecycle in all stream play methods (always teardown before setup)
+   - Capability flags: !isStreamBackendActive || audioPlayer.isBridgeActive
+   - VisualizerView: 4 sites isPlaying → isEngineRendering
+
+4. `a5f96b3` — fix: Oracle review fixes for loopback bridge (T5 Ph2)
+   - P2: Ring buffer identity gate in onFormatReady callback
+   - P2: Revalidate currentItem after async loadTracks
+   - P3: Interleaved fast path limited to channels == 2
+   - P3: Explicit isSilence reset on successful read
 
 ## Phase 1 Commits
 
@@ -67,6 +104,27 @@
 - Startup sync: init sync + pre-play apply (belt-and-suspenders)
 - No local file regression: playerNode.volume/pan paths unchanged
 - Binding pattern: asymmetric Binding(get:set:) is correct for coordinator routing
+
+## Oracle Review (Phase 2)
+
+**Reviewer:** gpt-5.3-codex (xhigh reasoning), 2026-02-22
+
+### Findings (All Fixed — commit a5f96b3)
+- **P2-1** `onFormatReady` callback race — stale stream A callback could target stream B's ring buffer. Fixed: gate with `rb === ringBuffer` identity check.
+- **P2-2** `attachLoopbackTap()` doesn't revalidate `currentItem` after `await loadTracks`. Fixed: verify `player.currentItem === currentItem` after await.
+- **P3-1** Interleaved fast path accepted `channels >= 2`, incorrect for >2 channel input. Fixed: `channels == 2`.
+- **P3-2** Source node render block never explicitly reset `isSilence` to false. Fixed: `isSilence.pointee = ObjCBool(framesRead == 0)`.
+
+### Verified Correct
+- Thread isolation: top-level tap callbacks avoid @MainActor capture; render block from nonisolated static func
+- RT-safe hot paths: no locks/logging/tasks in process/render; ring buffer uses atomics + memcpy
+- Bridge teardown/setup ordering in all stream entry points
+- Producer quiescing before bridge disposal (detach tap → deactivate bridge)
+- Format pipeline: stereo interleaved ring buffer → interleaved source node → non-interleaved graph
+- Engine rewiring: stop/reset + mixer-output verification
+- Capability flags available when bridge active
+- Unmanaged lifetime balance correct (passRetained/release in happy + failure paths)
+- ABR generation handling wired end-to-end (prepare/unprepare flush + render silence on mismatch)
 
 ## Blockers
 
@@ -100,6 +158,19 @@ AVPlayer → MTAudioProcessingTap (PreEffects, zero output) → Ring Buffer → 
 2. **Ring buffer size:** 4096 frames (~85ms) — acceptable latency for radio, margin for ABR switches
 3. **Ring buffer task:** Yes, create separate `lock-free-ring-buffer` task for prototyping
 4. **macOS targets:** macOS 15+ including macOS 26+ Tahoe — InlineArray/Span behind @available guards
+
+## Phase 2 Implementation Notes
+
+**Branch:** `feature/stream-loopback-bridge`
+**Lessons learned:** `tasks/_context/claude-mistakes-stream-loopback-bridge.md` — documents all crashes and corrections from failed first attempt. Must be consulted for every implementation decision.
+
+### Key Corrections from Lessons Learned (Applied to Plan)
+
+1. **2.4a hot-swap approach crashed** — Plan says "WITHOUT engine restart" but this caused error -10868. Corrected: follow `rewireForCurrentFile()` stop/reset pattern. Brief silence acceptable for radio.
+2. **Render block @MainActor isolation** — Must use `nonisolated private static func makeStreamRenderBlock()` pattern, NOT inline closures. Crash: EXC_BREAKPOINT on audio thread.
+3. **Source node format** — Must use interleaved block format matching ring buffer. Non-interleaved "standard" format caused silent audio.
+4. **Mixer→output connection** — Must verify after `audioEngine.reset()`. Connection may break silently.
+5. **Stream→stream ordering** — Must ALWAYS teardown bridge before setup. Ring buffer flush requires producer quiescence.
 
 ## Created Tasks
 
