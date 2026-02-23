@@ -317,6 +317,28 @@ From `tasks/_context/claude-mistakes-stream-loopback-bridge.md`:
 - **PR #53** (merged): T5 Phase 1 — Stream volume control + capability flags. Established PlaybackCoordinator.setVolume/setBalance routing. **Still in main, no changes needed.**
 - **PR #49** (merged): N1-N6 internet radio fixes. Established PlaybackCoordinator computed state (isPlaying/isPaused). **Still in main, no changes needed.**
 
+## UI Dimming Behavior (Phase 1 → Unified Pipeline Transition)
+
+Phase 1 (PR #53, in main) added UI dimming that disables EQ, balance, and visualizer controls during stream playback. This was correct at the time because AVPlayer couldn't feed AVAudioEngine.
+
+**Current behavior (main, with AVPlayer streams):**
+- `supportsEQ` returns `false` during streams → EQ sliders dimmed (opacity 0.5, non-interactive)
+- `supportsBalance` returns `false` during streams → balance slider dimmed
+- `supportsVisualizer` returns `false` during streams → (unused by UI currently)
+
+**Locations:**
+- `PlaybackCoordinator.swift:87` — `var supportsEQ: Bool { !isStreamBackendActive }`
+- `PlaybackCoordinator.swift:91` — `var supportsBalance: Bool { !isStreamBackendActive }`
+- `PlaybackCoordinator.swift:97` — `var supportsVisualizer: Bool { !isStreamBackendActive }`
+- `WinampEqualizerWindow.swift:105-106` — `.opacity(supportsEQ ? 1.0 : 0.5)` + `.allowsHitTesting(supportsEQ)`
+- `MainWindowSlidersLayer.swift:64-66` — `.opacity(supportsBalance ? 1.0 : 0.5)` + `.allowsHitTesting(supportsBalance)` + tooltip
+
+**After unified pipeline (Phase 1.6g):**
+- Change flags to: `!isStreamBackendActive || audioPlayer.isBridgeActive`
+- When bridge is active (stream decoded through AVAudioEngine), all flags return `true`
+- EQ, balance, visualizer controls un-dim automatically — **no UI changes needed**
+- The dimming code stays in place for the error state fallback (stream fails → controls re-dim)
+
 ## T1 Phase 4 (Engine Transport Extraction)
 
 **Status:** Deferred until after this task completes. Engine transport boundaries will change when streamSourceNode is added. Phase 4 should extract transport AFTER the unified pipeline stabilizes to get correct extraction boundaries.
