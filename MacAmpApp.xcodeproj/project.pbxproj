@@ -20,8 +20,16 @@
 		B2C3D4E5F60708190A1B2C3D /* VisualizerPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1D2C3B4A5967809F0E1D2C4 /* VisualizerPipeline.swift */; };
 		2BEEA991452D4A86CD1AC9F7 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = EA5D7D010AE0DE961C9470AC /* ZIPFoundation */; };
 		342759E1558D4553A66C3AD9 /* RadioStationLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC98BCD0ED814A6F90A8021D /* RadioStationLibrary.swift */; };
-		34EEE95E7D965A0D94D12C30 /* WinampMainWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C3495B177A8BA24181B484E /* WinampMainWindow.swift */; };
-		92CB5AD1B7A572BDE3FE75DC /* WinampMainWindow+Helpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8DC578157092D705BB00E22 /* WinampMainWindow+Helpers.swift */; };
+		MW0001AA0000000000000001 /* WinampMainWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = MW0002AA0000000000000001 /* WinampMainWindow.swift */; };
+		MW0001AA0000000000000002 /* WinampMainWindowInteractionState.swift in Sources */ = {isa = PBXBuildFile; fileRef = MW0002AA0000000000000002 /* WinampMainWindowInteractionState.swift */; };
+		MW0001AA0000000000000003 /* WinampMainWindowLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = MW0002AA0000000000000003 /* WinampMainWindowLayout.swift */; };
+		MW0001AA0000000000000004 /* MainWindowFullLayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = MW0002AA0000000000000004 /* MainWindowFullLayer.swift */; };
+		MW0001AA0000000000000005 /* MainWindowShadeLayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = MW0002AA0000000000000005 /* MainWindowShadeLayer.swift */; };
+		MW0001AA0000000000000006 /* MainWindowTransportLayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = MW0002AA0000000000000006 /* MainWindowTransportLayer.swift */; };
+		MW0001AA0000000000000007 /* MainWindowTrackInfoLayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = MW0002AA0000000000000007 /* MainWindowTrackInfoLayer.swift */; };
+		MW0001AA0000000000000008 /* MainWindowIndicatorsLayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = MW0002AA0000000000000008 /* MainWindowIndicatorsLayer.swift */; };
+		MW0001AA0000000000000009 /* MainWindowSlidersLayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = MW0002AA0000000000000009 /* MainWindowSlidersLayer.swift */; };
+		MW0001AA0000000000000010 /* MainWindowOptionsMenuPresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = MW0002AA0000000000000010 /* MainWindowOptionsMenuPresenter.swift */; };
 		366BB1702EC039E6006162E2 /* WindowCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 366BB16F2EC039E6006162E2 /* WindowCoordinator.swift */; };
 		366BB1762EC03A18006162E2 /* WinampMainWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 366BB1732EC03A18006162E2 /* WinampMainWindowController.swift */; };
 		366BB1772EC03A18006162E2 /* WinampPlaylistWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 366BB1742EC03A18006162E2 /* WinampPlaylistWindowController.swift */; };
@@ -60,6 +68,7 @@
 		4B6ACCF9E12C4031AAA5DE1D /* PlaybackCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC5E2339EECD4415B1146559 /* PlaybackCoordinator.swift */; };
 		4F952CA93D32BF2FB737DFBA /* EqGraphView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 032A0DEAD316CCA0CDA2645D /* EqGraphView.swift */; };
 		592F5C98FC8B29F71341CBD8 /* WinampVolumeSlider.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAA63D879B46D5FFF6BA8BE9 /* WinampVolumeSlider.swift */; };
+		WB0001AA0000000000000001 /* WinampButtonStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = WB0002AA0000000000000001 /* WinampButtonStyle.swift */; };
 		5E12F332C6929193D1EBFB8D /* SpritePositions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7324174AA2F7231F3B2508AE /* SpritePositions.swift */; };
 		5F1472E33F7A417E8C9E4107 /* RadioStation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36C6A4148DF5415F9142A777 /* RadioStation.swift */; };
 		621529D54AB0A234E08CA9C4 /* Butterchurn in Resources */ = {isa = PBXBuildFile; fileRef = 91B0DA409EE80A209B655740 /* Butterchurn */; };
@@ -142,8 +151,16 @@
 
 /* Begin PBXFileReference section */
 		032A0DEAD316CCA0CDA2645D /* EqGraphView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EqGraphView.swift; sourceTree = "<group>"; };
-		0C3495B177A8BA24181B484E /* WinampMainWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WinampMainWindow.swift; sourceTree = "<group>"; };
-		A8DC578157092D705BB00E22 /* WinampMainWindow+Helpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WinampMainWindow+Helpers.swift"; sourceTree = "<group>"; };
+		MW0002AA0000000000000001 /* WinampMainWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WinampMainWindow.swift; sourceTree = "<group>"; };
+		MW0002AA0000000000000002 /* WinampMainWindowInteractionState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WinampMainWindowInteractionState.swift; sourceTree = "<group>"; };
+		MW0002AA0000000000000003 /* WinampMainWindowLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WinampMainWindowLayout.swift; sourceTree = "<group>"; };
+		MW0002AA0000000000000004 /* MainWindowFullLayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindowFullLayer.swift; sourceTree = "<group>"; };
+		MW0002AA0000000000000005 /* MainWindowShadeLayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindowShadeLayer.swift; sourceTree = "<group>"; };
+		MW0002AA0000000000000006 /* MainWindowTransportLayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindowTransportLayer.swift; sourceTree = "<group>"; };
+		MW0002AA0000000000000007 /* MainWindowTrackInfoLayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindowTrackInfoLayer.swift; sourceTree = "<group>"; };
+		MW0002AA0000000000000008 /* MainWindowIndicatorsLayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindowIndicatorsLayer.swift; sourceTree = "<group>"; };
+		MW0002AA0000000000000009 /* MainWindowSlidersLayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindowSlidersLayer.swift; sourceTree = "<group>"; };
+		MW0002AA0000000000000010 /* MainWindowOptionsMenuPresenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindowOptionsMenuPresenter.swift; sourceTree = "<group>"; };
 		12C0A7D97E8D3B2E715D4EA0 /* SkinnedBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkinnedBanner.swift; sourceTree = "<group>"; };
 		1883C37C0887C2C13F6C9563 /* PLEditParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PLEditParser.swift; sourceTree = "<group>"; };
 		195F00AABD5483A18861EC8A /* WindowSpec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowSpec.swift; sourceTree = "<group>"; };
@@ -225,6 +242,7 @@
 		B36F1C1954EE4A8EBB993CB6 /* MacAmp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MacAmp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B6G987CE11B9DCEF82D39E62 /* Internet-Archive.wsz */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Internet-Archive.wsz"; sourceTree = "<group>"; };
 		BAA63D879B46D5FFF6BA8BE9 /* WinampVolumeSlider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WinampVolumeSlider.swift; sourceTree = "<group>"; };
+		WB0002AA0000000000000001 /* WinampButtonStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WinampButtonStyle.swift; sourceTree = "<group>"; };
 		BC875DDD2BE621229D463CB9 /* AudioPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlayer.swift; sourceTree = "<group>"; };
 		39D077A9CAF04C95BAF984F6 /* MetadataLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataLoader.swift; sourceTree = "<group>"; };
 		BE2906FB25D545309B1FD395 /* EQPresetStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EQPresetStore.swift; sourceTree = "<group>"; };
@@ -297,6 +315,7 @@
 				F1E2D3C4B5A6978867564534 /* SpriteMenuItem.swift */,
 				6317A3F050254D92940A7202 /* TrackInfoView.swift */,
 				BAA63D879B46D5FFF6BA8BE9 /* WinampVolumeSlider.swift */,
+				WB0002AA0000000000000001 /* WinampButtonStyle.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -479,14 +498,30 @@
 				B361EDCFD1F533FD16157EC1 /* VisualizerOptions.swift */,
 				499433D5A14F2C47C9EB0931 /* VisualizerView.swift */,
 				4A489CA15E452302405E6FAE /* WinampEqualizerWindow.swift */,
-				0C3495B177A8BA24181B484E /* WinampMainWindow.swift */,
-				A8DC578157092D705BB00E22 /* WinampMainWindow+Helpers.swift */,
+				MW0003AA0000000000000001 /* MainWindow */,
 				75C52A558EFD4C84BBA21F92 /* WinampPlaylistWindow.swift */,
 				PL0003AA0000000000000001 /* PlaylistWindow */,
 				1223B201D13A96A323E467F8 /* PlaylistWindowActions.swift */,
 				0542534C840178895387FEE4 /* Components */,
 			);
 			path = Views;
+			sourceTree = "<group>";
+		};
+		MW0003AA0000000000000001 /* MainWindow */ = {
+			isa = PBXGroup;
+			children = (
+				MW0002AA0000000000000001 /* WinampMainWindow.swift */,
+				MW0002AA0000000000000002 /* WinampMainWindowInteractionState.swift */,
+				MW0002AA0000000000000003 /* WinampMainWindowLayout.swift */,
+				MW0002AA0000000000000004 /* MainWindowFullLayer.swift */,
+				MW0002AA0000000000000005 /* MainWindowShadeLayer.swift */,
+				MW0002AA0000000000000006 /* MainWindowTransportLayer.swift */,
+				MW0002AA0000000000000007 /* MainWindowTrackInfoLayer.swift */,
+				MW0002AA0000000000000008 /* MainWindowIndicatorsLayer.swift */,
+				MW0002AA0000000000000009 /* MainWindowSlidersLayer.swift */,
+				MW0002AA0000000000000010 /* MainWindowOptionsMenuPresenter.swift */,
+			);
+			path = MainWindow;
 			sourceTree = "<group>";
 		};
 		PL0003AA0000000000000001 /* PlaylistWindow */ = {
@@ -706,8 +741,16 @@
 				11C6F38CB7C5AADA7B5AFE57 /* VisualizerOptions.swift in Sources */,
 				D077337C4C05A6658475376F /* VisualizerView.swift in Sources */,
 				3D5787FD4B060D13BE690E2A /* WinampEqualizerWindow.swift in Sources */,
-				34EEE95E7D965A0D94D12C30 /* WinampMainWindow.swift in Sources */,
-				92CB5AD1B7A572BDE3FE75DC /* WinampMainWindow+Helpers.swift in Sources */,
+				MW0001AA0000000000000001 /* WinampMainWindow.swift in Sources */,
+				MW0001AA0000000000000002 /* WinampMainWindowInteractionState.swift in Sources */,
+				MW0001AA0000000000000003 /* WinampMainWindowLayout.swift in Sources */,
+				MW0001AA0000000000000004 /* MainWindowFullLayer.swift in Sources */,
+				MW0001AA0000000000000005 /* MainWindowShadeLayer.swift in Sources */,
+				MW0001AA0000000000000006 /* MainWindowTransportLayer.swift in Sources */,
+				MW0001AA0000000000000007 /* MainWindowTrackInfoLayer.swift in Sources */,
+				MW0001AA0000000000000008 /* MainWindowIndicatorsLayer.swift in Sources */,
+				MW0001AA0000000000000009 /* MainWindowSlidersLayer.swift in Sources */,
+				MW0001AA0000000000000010 /* MainWindowOptionsMenuPresenter.swift in Sources */,
 				36CABCFF2EC8016000902330 /* WindowFocusDelegate.swift in Sources */,
 				ADDBF8E53028E97A7A005307 /* WinampPlaylistWindow.swift in Sources */,
 				PL0001AA0000000000000001 /* PlaylistWindowInteractionState.swift in Sources */,
@@ -719,6 +762,7 @@
 				PL0001AA0000000000000007 /* PlaylistTitleBarButtons.swift in Sources */,
 				CE0D5E43E740A1B33A606613 /* PlaylistWindowActions.swift in Sources */,
 				592F5C98FC8B29F71341CBD8 /* WinampVolumeSlider.swift in Sources */,
+				WB0001AA0000000000000001 /* WinampButtonStyle.swift in Sources */,
 				878F770AF1608311F0C9BA09 /* WindowAccessor.swift in Sources */,
 				7C97F7855F700CA55821BFD1 /* WindowSnapManager.swift in Sources */,
 				366BB17A2EC03F9B006162E2 /* BorderlessWindow.swift in Sources */,

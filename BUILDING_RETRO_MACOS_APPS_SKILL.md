@@ -4789,7 +4789,7 @@ ls -la ~/Library/Developer/Xcode/DerivedData/MacAmpApp-*/Build/Products/Debug/Ma
 - ✅ Profile and fix memory leaks with LLDB heap/leaks/footprint tools
 - ✅ Optimize peak memory with lazy extraction and independent CGContext copies
 - ✅ Decompose large SwiftUI views into layer subviews with @Observable state (proven: MainWindow 700+ lines into 10 focused files)
-- ✅ Regenerate Xcode projects from Package.swift when file structure changes (`rm -rf *.xcodeproj && open Package.swift`)
+- ✅ Update xcodeproj pbxproj file references directly when file structure changes (do NOT delete xcodeproj)
 - ✅ Route volume through coordinator fan-out for multi-backend audio (local + streaming + video)
 - ✅ Implement capability flags with error recovery to dim/enable UI controls based on active backend
 - ✅ Build asymmetric SwiftUI Bindings when source of truth differs from write path
@@ -4829,7 +4829,7 @@ When building your next retro macOS app:
   - 3 Oracle reviews (Phase 1 scaffolding, Phase 3 wiring, full diff)
   - 10 PR comments resolved (2 false positive, 6 nitpick, 2 actionable fixed)
   - MainWindowVisualizerLayer isolation identified as future optimization
-  - Xcodeproj regeneration workflow: `rm -rf *.xcodeproj && open Package.swift`
+  - Xcodeproj fix: update pbxproj file references directly (do NOT delete xcodeproj)
 - **SwiftUI View Decomposition** (Feb 21, 2026) - Layer subviews vs cross-file extension anti-pattern (Lesson #25)
   - Cross-file extensions widen @State visibility without creating recomposition boundaries
   - Correct pattern: @Observable interaction state + child view structs with dependency injection
@@ -6286,11 +6286,11 @@ The MainWindow decomposition was executed as a 5-phase migration with 3 Oracle r
 - 10 PR comments resolved: 2 false positive (redundant UserDefaults write, read from UserDefaults directly), 6 nitpick (cosmetic/style), 2 actionable (scrubResetTask cancellation, shade time offset)
 - Zero regressions: all existing behavior preserved through decomposition
 
-**Xcodeproj regeneration workflow** (discovered during T3): When adding/removing/renaming files in a SwiftPM-based Xcode project, the `.xcodeproj` can get out of sync. The reliable fix:
-```bash
-rm -rf MacAmpApp.xcodeproj && open Package.swift
-```
-Xcode regenerates the project file from `Package.swift`, picking up all file additions/removals/renames. This is faster and more reliable than manually adding files through Xcode's navigator.
+**Xcodeproj file reference updates** (corrected after T5 Ph2): When adding/removing/renaming files in a SwiftPM-based Xcode project, the `.xcodeproj/project.pbxproj` gets out of sync.
+
+**DO NOT** delete the xcodeproj and open Package.swift — this opens in SwiftPM package mode (no app icon, no signing, no run config) and does NOT regenerate a proper xcodeproj.
+
+**Correct fix:** Update stale file references in `project.pbxproj` directly (4 sections: PBXBuildFile, PBXFileReference, PBXGroup, PBXSourcesBuildPhase). For new directories, add a PBXGroup entry with `path = DirectoryName;` and reference it from the parent group.
 
 #### Key Takeaways
 
@@ -6303,7 +6303,7 @@ Xcode regenerates the project file from `Package.swift`, picking up all file add
 7. **Root view should be ~120 lines** -- if it is longer, there are more layers to extract
 8. **Use closures for dynamic data** (`displayTitleProvider`) to avoid stale captures in layer subviews
 9. **Cancel previous async tasks** before creating new ones (scrubResetTask pattern) to prevent race conditions
-10. **Regenerate xcodeproj from Package.swift** (`rm -rf *.xcodeproj && open Package.swift`) when file structure changes
+10. **Update xcodeproj pbxproj directly** when file structure changes — do NOT delete xcodeproj (see Xcodeproj file reference updates above)
 
 ### 26. Coordinator Volume Routing + Capability Flags (February 2026)
 
