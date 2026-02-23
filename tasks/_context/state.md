@@ -162,19 +162,28 @@ Target (MainWindowFullLayer.body):
 
 ### From Wave 1 — Future Tasks Needed
 
-| Item | Source | Size | Priority | Blocks Future Waves? |
-|------|--------|------|----------|---------------------|
-| T1 Phase 4: Engine transport extraction | audioplayer-decomposition | Large | Medium | No — schedule after T7 (unified-audio-pipeline). Engine boundaries change with streamSourceNode. |
+| Item | Source | Size | Priority | Blocks Future? |
+|------|--------|------|----------|----------------|
+| T1 Phase 4: Engine transport extraction | audioplayer-decomposition todo.md | Large | Medium | No — schedule after T7 (unified-audio-pipeline). Engine boundaries change with streamSourceNode. |
+| T1 swiftlint suppressions (file_length + type_body_length) | audioplayer-decomposition todo.md | N/A | N/A | Blocked by T1 Phase 4. AudioPlayer at 945 lines. |
+| T1 manual verification (EQ bands, presets, auto-EQ, visualizers) | audioplayer-decomposition todo.md (6 items) | Small | Low | No — functional, just not formally verified post-decomposition |
 | Hide Main Window not working | T3 manual testing (pre-existing) | Small | Low | No |
-
-**Context (Hide Main Window):** The "Hide Main" menu item (`AppCommands.swift:13`) calls `DockingController.toggleMain()` which only toggles an internal `panes[idx].visible` boolean. This boolean is not wired to actually hide/show the NSWindow. `WindowVisibilityController.hideMain()` exists and calls `registry.mainWindow?.orderOut(nil)` but is never invoked by the toggle path. Pre-existing — not caused by T3 decomposition.
+| T3 Instruments body evaluation profiling | mainwindow-layer-decomposition todo.md | Small | Low | No — performance optimization |
 | PlaylistWindowActions singleton rearchitecture | playlist-decomp depreciated.md | Large | Low | No |
 | Manual selection state sync fix | playlist-decomp depreciated.md | Small | Low | No — blocked by singleton fix |
-| `async-test-determinism` (Task.sleep removal) | swift-testing todo.md | Medium | Low | No |
-| `spm-multiple-producers-fix` | infra-ring-testing todo.md | Small-Medium | Medium | Blocks `swift test` via CLI |
-| Ring buffer performance benchmarks | lock-free-ring-buffer todo.md | Small | Low | No |
-| Ring buffer AudioBufferList overload tests | lock-free-ring-buffer todo.md | Small | Low | No — add during T5 Ph2 |
+| T2 doc updates (IMPLEMENTATION_PATTERNS.md anti-pattern, tasks_index) | playlistwindow-layer-decomposition todo.md (2 items) | Small | Low | No |
+| `spm-multiple-producers-fix` | infra-ring-testing todo.md + lock-free-ring-buffer + swift-testing | Small-Medium | **Medium** | **Yes — blocks `swift test` via CLI for ALL tasks** |
+| `async-test-determinism` (Task.sleep removal from 2 test files) | swift-testing todo.md (8 items) | Medium | Low | No — tests pass but use non-deterministic waits |
+| Swift Testing parameterization improvements | swift-testing todo.md (4 items) | Small | Low | No — code quality |
+| Ring buffer performance benchmarks | lock-free-ring-buffer todo.md (3 items) | Small | Low | No |
+| Ring buffer AudioBufferList overload tests | lock-free-ring-buffer todo.md | Small | Low | No — add during T7 |
 | DockingController debounce `try?` fix | lock-free-ring-buffer deprecated.md | Small | Low | No |
+| Gate verbose sprite logging behind `#if DEBUG` | memory-cpu-optimization todo.md 4.1 | Small | Low | No |
+| Precompute spectrum band coefficients | memory-cpu-optimization todo.md 4.2 | Small | Low | No — performance optimization |
+
+**Context (Hide Main Window):** The "Hide Main" menu item (`AppCommands.swift:13`) calls `DockingController.toggleMain()` which only toggles an internal `panes[idx].visible` boolean. This boolean is not wired to actually hide/show the NSWindow. `WindowVisibilityController.hideMain()` exists and calls `registry.mainWindow?.orderOut(nil)` but is never invoked by the toggle path. Pre-existing — not caused by T3 decomposition.
+
+**Context (spm-multiple-producers-fix):** This blocks `swift test` from CLI for ALL tasks. SwiftPM reports "multiple producers" error when building tests. Tests work fine through Xcode. Root cause is SwiftPM target configuration. This should be fixed before any task that needs CLI test runs.
 
 ### From Wave 3 — Pivot + Deferred Items
 
@@ -202,7 +211,7 @@ Target (MainWindowFullLayer.body):
 | `docs/IMPLEMENTATION_PATTERNS.md` | Document cross-file SwiftUI extension anti-pattern + correct child-view pattern |
 | `docs/PLAYLIST_WINDOW.md` | Update for new PlaylistWindow/ subdirectory |
 | `docs/README.md` | Update test framework (XCTest → Swift Testing, swift-tools-version 6.2) |
-| `tasks/_context/tasks_index.md` | Mark T1 Ph1-3, T2, T4, T6, T5 Ph1 as complete; add T7 unified-audio-pipeline |
+| `tasks/_context/tasks_index.md` | Mark T1 Ph1-3, T2, T4, T6, T5 Ph1 as complete; add T7 unified-audio-pipeline; mark T5 Ph2 as PIVOTED |
 | `docs/MACAMP_ARCHITECTURE_GUIDE.md` | Update Dual Audio Backend section after T7 lands — unified pipeline replaces AVPlayer for streams |
 | `BUILDING_RETRO_MACOS_APPS_SKILL.md` | Add Lesson #27: Unified audio pipeline, custom stream decode, lessons from dual backend dead end |
 
