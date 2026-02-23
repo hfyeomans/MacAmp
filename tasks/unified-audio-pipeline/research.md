@@ -238,12 +238,94 @@ actor StreamDecodePipeline {
 4. **HLS timeline:** Phase 1 targets progressive only. When to add HLS?
 5. **AVPlayer for video:** VideoPlaybackController still uses AVPlayer for video files. No change needed there — video doesn't need EQ/visualization.
 
+## Deep Research System Findings (2026-02-22)
+
+Full document: `tasks/_context/deep-research-avplayer-bridge.md`
+
+### Definitive Rejections (All Alternative Approaches Exhausted)
+
+| Approach | Reason for Rejection | Source |
+|----------|---------------------|--------|
+| CoreAudio Process Tap (same-process) | Feedback loop unsolvable without XPC helper or virtual audio driver | Deep research §2, §3 |
+| CoreAudio Process Tap (XPC helper) | Massive architectural overhead, sandbox compliance challenges | Deep research §3 |
+| CoreAudio Process Tap (device segregation) | Requires user to install 3rd-party virtual audio driver | Deep research §3 |
+| MTAudioProcessingTap (streams) | Callbacks never fire for HLS/streaming content | Deep research §6, our testing |
+| AVSampleBufferAudioRenderer | Outputs directly to hardware HAL, cannot intercept PCM | Deep research Appendix |
+| AudioUnit render callback hijacking | AVPlayer renders out-of-process (coreaudiod). PAC prevents pointer modification on Apple Silicon | Deep research §5 |
+| ScreenCaptureKit | High latency, user permission friction | Prior research |
+
+### Validated Architecture (Custom Decode Pipeline)
+
+The deep research Appendix ("Coding Agent Blueprint") independently arrives at the exact same architecture:
+
+```
+Step 1: URLSession data tasks (HTTP transport)
+Step 2: AudioFileStreamOpen + AudioFileStreamParseBytes → AudioConverter → Float32 PCM
+Step 3: LockFreeRingBuffer (existing SPSC, 4096 frames) as bridge
+Step 4: AVAudioSourceNode render block (existing, real-time consumer)
+Step 5: AVAudioEngine graph (EQ + Viz + Balance)
+```
+
+### New Findings to Incorporate
+
+#### 1. Audio Workgroup Integration (os_workgroup)
+
+The decode thread should join the AVAudioEngine's audio workgroup to prevent priority inversion on Apple Silicon:
+
+```swift
+// Retrieve workgroup from engine output node
+let workgroup = audioEngine.outputNode.auAudioUnit.osWorkgroup
+
+// In decode thread (producer):
+os_workgroup_join_self(workgroup)
+```
+
+**Why:** On M-series chips, the hardware performance controller schedules workgroup-linked threads at the same priority as the audio IO thread. Without this, the decode thread risks CPU core parking under load, starving the ring buffer.
+
+**Priority:** MEDIUM — improves stability under CPU pressure, not required for basic functionality.
+
+#### 2. macOS 26 Passthrough Risk (AVAudioContentSource_Passthrough)
+
+macOS 26 introduces `AVAudioContentSource_Passthrough = 42` which allows apps to request raw bitstream passthrough (Dolby Digital, DTS:X) bypassing the system mixer. If our pipeline ever receives non-PCM frames, the ring buffer would fill with encoded data that AVAudioEngine can't process (white noise or crash).
+
+**Mitigation:** Explicitly lock output format when configuring AudioConverter:
+```swift
+// Always output Float32 interleaved stereo PCM
+// Never allow passthrough of encoded formats
+outputASBD.mFormatID = kAudioFormatLinearPCM
+outputASBD.mFormatFlags = kAudioFormatFlagIsFloat | kAudioFormatFlagIsPacked
+```
+
+**Priority:** LOW — only affects macOS 26 with HDMI/optical output devices. Internet radio streams are always PCM-decodable.
+
+#### 3. Open-Source Reference Implementations
+
+- **AudioCap** (github.com/insidegui/AudioCap) — Process tap implementation, confirms aggregate device requirement. No same-process feedback loop solution.
+- **AudioTee** (stronglytyped.uk) — Command-line process tap, avoids feedback by having no audio output. Confirms entitlement requirements.
+- **Chris' Coding Blog** (chritto.wordpress.com) — MTAudioProcessingTap Swift implementation, confirms HLS limitation.
+
+#### 4. AVPlayer Render Pipeline Limits
+
+Apple limits concurrent AVPlayer render pipelines to exactly 4 per application. A 5th AVPlayer causes `AVStatusFailed` crash. Not directly relevant (we're removing AVPlayer for streams) but documents why AVPlayer is constrained.
+
+#### 5. Partial Ring Buffer Writes
+
+Deep research emphasizes: "The SPSC enqueue mechanism must be mathematically robust enough to handle partial ring buffer writes, modulo arithmetic for buffer wrapping, and varying frame deliveries." Our LockFreeRingBuffer already handles this via its `write(from:frameCount:)` API with atomic head/tail pointers.
+
+### Updated Open Questions
+
+1. ~~Network jitter buffer~~ — Deep research doesn't flag this as critical. AudioFileStream + AudioConverter handle buffering internally. LockFreeRingBuffer's 4096 frames (~85ms) should suffice.
+2. **os_workgroup integration** — Add to plan as optimization step. Not blocking for initial implementation.
+3. **macOS 26 passthrough guard** — Add format validation in AudioConverter output configuration.
+4. **HLS via AudioFileStream** — Deep research says "individual .ts/.aac segments from parsed HLS .m3u8 playlists" can be fed to AudioFileStream. This means HLS IS possible without AVAssetReader — just need an M3U8 playlist parser and segment downloader. Defer to Phase 2.
+
 ## Sources
 
 - Oracle (gpt-5.3-codex, xhigh): Custom decode pipeline design, 2026-02-22
 - Gemini: Winamp unified pipeline architecture, 2026-02-22
-- Deep research system: AVSampleBufferAudioRenderer recommendation, 2026-02-22
+- Deep research system: Full analysis (46 citations), 2026-02-22 — `tasks/_context/deep-research-avplayer-bridge.md`
 - Apple SDK: AudioFileStream.h, AudioConverter.h headers
+- Open source: AudioCap, AudioTee, Chris' Coding Blog (MTAudioProcessingTap)
 - Winamp SDK: In_Module interface documentation
 - Webamp: elementSource.ts (createMediaElementSource pattern)
 - Lessons learned: `tasks/_context/lessons-dual-backend-dead-end.md`
