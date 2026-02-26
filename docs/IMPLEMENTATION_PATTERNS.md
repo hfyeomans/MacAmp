@@ -2698,13 +2698,14 @@ struct VisualizationView: View {
 ### Test Plan Quick Reference
 
 **Test target**: `MacAmpTests` (`Tests/MacAmpTests`)
-**Test plan**: `MacAmpApp.xcodeproj/xcshareddata/xctestplans/MacAmpApp.xctestplan`
+**Project spec**: `project.yml` (XcodeGen — run `xcodegen generate` to create xcodeproj)
 
 **Configuration**: Single "All" configuration running the full `MacAmpTests` target (simplified from the previous 3-configuration layout with per-test `selectedTests`).
 
 **CLI**:
 ```bash
-xcodebuild test -project MacAmpApp.xcodeproj -scheme MacAmpApp -destination 'platform=macOS' -testPlan MacAmpApp -derivedDataPath build/DerivedDataTests
+xcodegen generate  # if xcodeproj is stale or missing
+xcodebuild test -scheme MacAmpApp -destination 'platform=macOS'
 ```
 
 ### Pattern: Mock Injection for Testing

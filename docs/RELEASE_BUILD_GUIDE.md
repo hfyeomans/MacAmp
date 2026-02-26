@@ -27,8 +27,9 @@ After enrolling, create your certificates:
 
 In Xcode, configure your project:
 
-1. Open `MacAmpApp.xcodeproj`
-2. Select the **MacAmpApp** target
+1. Run `xcodegen generate` (generates xcodeproj from `project.yml`)
+2. Open `MacAmpApp.xcodeproj`
+3. Select the **MacAmp** target
 3. Go to **Signing & Capabilities** tab
 4. Set **Team** to your Apple Developer Team
 5. Set **Signing Certificate** to "Developer ID Application"

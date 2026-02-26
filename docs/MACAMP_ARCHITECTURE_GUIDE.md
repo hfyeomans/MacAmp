@@ -4593,7 +4593,7 @@ WinampBalanceSlider(balance: balanceBinding)
 ### Test Plan & Configurations
 
 **Test target**: `MacAmpTests` (`Tests/MacAmpTests`)
-**Test plan**: `MacAmpApp.xcodeproj/xcshareddata/xctestplans/MacAmpApp.xctestplan`
+**Project spec**: `project.yml` (XcodeGen — generates xcodeproj via `xcodegen generate`)
 
 **Configurations**:
 - Core: AppSettingsTests, EQCodecTests, SpriteResolverTests
@@ -4602,10 +4602,9 @@ WinampBalanceSlider(balance: balanceBinding)
 
 **CLI**:
 ```bash
-xcodebuild test -project MacAmpApp.xcodeproj -scheme MacAmpApp -destination 'platform=macOS' -testPlan MacAmpApp -only-test-configuration Core -derivedDataPath build/DerivedDataTests
+xcodegen generate  # if xcodeproj is stale or missing
+xcodebuild test -scheme MacAmpApp -destination 'platform=macOS'
 ```
-
-Swap `Core` for `Concurrency` or `All` as needed.
 
 ### Unit Tests
 

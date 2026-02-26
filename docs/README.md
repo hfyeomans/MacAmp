@@ -58,15 +58,21 @@ MacAmp tests use the **Swift Testing** framework (`swift-tools-version: 6.2`) an
 
 **Locations**:
 - Test target: `Tests/MacAmpTests`
-- Test plan: `MacAmpApp.xcodeproj/xcshareddata/xctestplans/MacAmpApp.xctestplan`
+- Project spec: `project.yml` (XcodeGen — generates xcodeproj)
 - Framework: Swift Testing (migrated from XCTest)
 
 **Configuration**:
 - Single "All" configuration covering all test suites
 
+**Setup** (one-time after clone):
+```bash
+brew install xcodegen  # if not installed
+xcodegen generate      # generates MacAmpApp.xcodeproj from project.yml
+```
+
 **CLI**:
 ```bash
-xcodebuild test -project MacAmpApp.xcodeproj -scheme MacAmpApp -destination 'platform=macOS' -testPlan MacAmpApp -derivedDataPath build/DerivedDataTests
+xcodebuild test -scheme MacAmpApp -destination 'platform=macOS'
 ```
 
 ---
