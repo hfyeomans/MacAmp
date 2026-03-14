@@ -140,9 +140,8 @@ final class WindowCoordinator {
         debugLogWindowPositions(step: "after delegate wiring")
     }
 
-    deinit {
-        // settingsObserver.stop() is not callable from nonisolated deinit;
-        // tasks hold [weak self] references so they will naturally terminate.
+    isolated deinit {
+        settingsObserver.stop()
     }
 
     // MARK: - Window Resize (forwarded to WindowResizeController)

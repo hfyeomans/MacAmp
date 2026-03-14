@@ -177,13 +177,15 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
         // Invalidate progress timer if running
         progressTimer?.invalidate()
 
-        // removeTap() asserts main queue (poll timer must invalidate on main).
-        // deinit is nonisolated, so dispatch synchronously if already on main,
-        // otherwise async (best-effort cleanup — tap will also be removed when
-        // the mixer node is deallocated).
+        // removeTap() is @MainActor-isolated (VisualizerPipeline).
+        // This deinit is nonisolated — will be converted to `isolated deinit` in PR 2
+        // (after unified-audio-pipeline adds streamSourceNode/bridge properties).
+        // For now, bridge via MainActor.assumeIsolated when on main thread.
         let pipeline = visualizerPipeline
         if Thread.isMainThread {
-            pipeline.removeTap()
+            MainActor.assumeIsolated {
+                pipeline.removeTap()
+            }
         } else {
             DispatchQueue.main.async {
                 pipeline.removeTap()

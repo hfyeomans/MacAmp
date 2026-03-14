@@ -28,10 +28,11 @@
 
 ### Phase 1 PARTIAL: `isolated deinit` (Non-AudioPlayer Files)
 
-- [ ] **1a.** VideoPlaybackController.swift — `isolated deinit`, remove 3 `nonisolated(unsafe)` + shadow `_playerForCleanup`
-- [ ] **1b.** VisualizerPipeline.swift — restore `removeTap()` to MainActor-isolated, remove 3 `nonisolated(unsafe)`, remove `dispatchPrecondition`, restore `isTapInstalled`
-- [ ] **1c.** WindowCoordinator.swift — check if deinit needs `settingsObserver.stop()`; if so, add `isolated deinit`
-- [ ] **1d.** Build with TSan — verify clean build
+- [x] **1a.** VideoPlaybackController.swift — `isolated deinit`, removed 3 `nonisolated(unsafe)` + shadow `_playerForCleanup`
+- [x] **1b.** VisualizerPipeline.swift — restored `removeTap()` to MainActor-isolated, removed 3 `nonisolated(unsafe)`, removed `dispatchPrecondition`, restored `isTapInstalled`
+- [x] **1c.** WindowCoordinator.swift — `isolated deinit` added, now calls `settingsObserver.stop()` directly
+- [x] **1c-bridge.** AudioPlayer.swift — temporary `MainActor.assumeIsolated` bridge in deinit for removeTap() call (will be replaced by `isolated deinit` in PR 2)
+- [x] **1d.** Build with TSan — clean build, zero warnings
 - [ ] **1e.** Manual test — play → close app, switch skin → close app
 
 ### PR 1 Merge

@@ -22,12 +22,9 @@ final class VideoPlaybackController {
     private(set) var metadataString: String = ""
 
     // MARK: - Observer Management
-    // Note: nonisolated(unsafe) allows deinit to access these for cleanup
-    // Safe because at deinit time there are no concurrent references
 
-    @ObservationIgnored nonisolated(unsafe) private var endObserver: NSObjectProtocol?
-    @ObservationIgnored nonisolated(unsafe) private var timeObserver: Any?
-    @ObservationIgnored nonisolated(unsafe) private var _playerForCleanup: AVPlayer?
+    @ObservationIgnored private var endObserver: NSObjectProtocol?
+    @ObservationIgnored private var timeObserver: Any?
 
     /// Task for async metadata loading (cancelled on cleanup to prevent race conditions)
     @ObservationIgnored private var metadataTask: Task<Void, Never>?
@@ -62,26 +59,15 @@ final class VideoPlaybackController {
 
     init() {}
 
-    deinit {
-        // Ensure observers are removed when controller is deallocated
-        // Note: Using nonisolated(unsafe) properties directly since deinit is nonisolated
-        // and we cannot call @MainActor cleanup() from here
-
-        // Remove time observer
-        if let observer = timeObserver, let player = _playerForCleanup {
+    isolated deinit {
+        // isolated deinit runs on @MainActor — safe to access all properties directly
+        if let observer = timeObserver, let player {
             player.removeTimeObserver(observer)
         }
-        timeObserver = nil
-
-        // Remove notification observer
         if let observer = endObserver {
             NotificationCenter.default.removeObserver(observer)
         }
-        endObserver = nil
-
-        // Pause player for clean shutdown
-        _playerForCleanup?.pause()
-        _playerForCleanup = nil
+        player?.pause()
     }
 
     // MARK: - Video Loading
@@ -97,7 +83,6 @@ final class VideoPlaybackController {
         // Create video player
         let newPlayer = AVPlayer(url: url)
         player = newPlayer
-        _playerForCleanup = newPlayer  // Keep in sync for deinit access
         player?.volume = volume
 
         // Observe video completion
@@ -274,7 +259,6 @@ final class VideoPlaybackController {
         }
         player?.pause()
         player = nil
-        _playerForCleanup = nil  // Keep in sync
 
         // Reset playback state to prevent stale values
         isPlaying = false
