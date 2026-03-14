@@ -122,9 +122,9 @@ final class EQPresetStore {
     func savePerTrackPresets() {
         guard let url = presetsFileURL() else { return }
         let presetsToSave = perTrackPresets
-        saveTask?.cancel()
+        let previousTask = saveTask
         saveTask = Task {
-            guard !Task.isCancelled else { return }
+            _ = await previousTask?.result  // serialize: wait for previous write to complete
             await Self.savePresetsToDisk(presets: presetsToSave, url: url)
         }
     }
