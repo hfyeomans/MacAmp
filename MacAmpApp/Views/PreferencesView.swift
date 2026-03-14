@@ -94,19 +94,19 @@ struct PreferencesView: View {
         withAnimation(.easeInOut(duration: 0.2)) {
             settingChangeGlow = settingKey
         }
-        Task {
+        Task { @MainActor in
             try? await Task.sleep(for: .seconds(0.6))
             withAnimation(.easeOut(duration: 0.4)) {
                 settingChangeGlow = nil
             }
         }
     }
-    
+
     private func triggerMaterialPreview() {
         withAnimation(.easeInOut(duration: 0.3)) {
             materialPreview = true
         }
-        Task {
+        Task { @MainActor in
             try? await Task.sleep(for: .seconds(1.8))
             withAnimation(.easeOut(duration: 0.3)) {
                 materialPreview = false

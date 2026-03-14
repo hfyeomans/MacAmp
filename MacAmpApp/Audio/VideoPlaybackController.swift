@@ -61,6 +61,7 @@ final class VideoPlaybackController {
 
     isolated deinit {
         // isolated deinit runs on @MainActor — safe to access all properties directly
+        metadataTask?.cancel()
         if let observer = timeObserver, let player {
             player.removeTimeObserver(observer)
         }
