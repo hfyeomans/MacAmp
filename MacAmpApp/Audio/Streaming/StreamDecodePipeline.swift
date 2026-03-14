@@ -80,7 +80,29 @@ final class StreamDecodePipeline {
         ringBuffer.flush()
         formatReadyFired = false
 
-        // Create decode context
+        // Check if URL is a playlist file — resolve to actual stream URL first
+        if Self.isPlaylistURL(url) {
+            setState(.connecting)
+            Task { @MainActor [weak self] in
+                guard let self, currentGeneration == self.generation else { return }
+                do {
+                    let streamURL = try await Self.resolvePlaylistURL(url)
+                    guard currentGeneration == self.generation else { return }
+                    AppLog.info(.audio, "StreamDecodePipeline: Resolved playlist → \(streamURL.absoluteString)")
+                    self.startDirectStream(url: streamURL, ringBuffer: ringBuffer, generation: currentGeneration)
+                } catch {
+                    guard currentGeneration == self.generation else { return }
+                    self.setState(.error("Failed to resolve playlist: \(error.localizedDescription)"))
+                }
+            }
+            return
+        }
+
+        startDirectStream(url: url, ringBuffer: ringBuffer, generation: currentGeneration)
+    }
+
+    /// Start streaming from a direct audio URL (not a playlist).
+    private func startDirectStream(url: URL, ringBuffer: LockFreeRingBuffer, generation currentGeneration: UInt64) {
         let formatHint = Self.formatHint(for: url)
         let context = DecodeContext(
             decodeQueue: decodeQueue,
@@ -268,6 +290,82 @@ final class StreamDecodePipeline {
         // If cancelled, stopInternal already set idle via generation advance
     }
 
+    // MARK: - Playlist Resolution (M3U, PLS)
+
+    /// Check if a URL points to a playlist file rather than a direct audio stream.
+    private static func isPlaylistURL(_ url: URL) -> Bool {
+        let ext = url.pathExtension.lowercased()
+        return ["m3u", "m3u8", "pls"].contains(ext)
+    }
+
+    /// Download and parse a playlist file to extract the first stream URL.
+    /// Supports M3U/M3U8 and PLS formats.
+    private static func resolvePlaylistURL(_ url: URL) async throws -> URL {
+        let (data, response) = try await URLSession.shared.data(from: url)
+
+        // Check Content-Type for format hint
+        let contentType = (response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Type") ?? ""
+
+        guard let content = String(data: data, encoding: .utf8) else {
+            throw PlaylistResolveError.encodingError
+        }
+
+        let ext = url.pathExtension.lowercased()
+
+        // Try PLS first if extension or content-type suggests it
+        if ext == "pls" || contentType.contains("scpls") {
+            if let streamURL = parsePLS(content: content) {
+                return streamURL
+            }
+        }
+
+        // Try M3U parsing (works for both .m3u and .m3u8)
+        if let entries = try? M3UParser.parse(content: content),
+           let firstStream = entries.first(where: { !$0.url.isFileURL }) {
+            return firstStream.url
+        }
+
+        // Fallback: try PLS even if extension didn't match
+        if let streamURL = parsePLS(content: content) {
+            return streamURL
+        }
+
+        throw PlaylistResolveError.noStreamFound
+    }
+
+    /// Parse a PLS playlist file to extract the first stream URL.
+    /// PLS format: `File1=http://stream.url/path`
+    private static func parsePLS(content: String) -> URL? {
+        let lines = content.components(separatedBy: .newlines)
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            // Match FileN= lines (case-insensitive)
+            if trimmed.lowercased().hasPrefix("file") && trimmed.contains("=") {
+                let parts = trimmed.split(separator: "=", maxSplits: 1)
+                if parts.count == 2 {
+                    let urlStr = String(parts[1]).trimmingCharacters(in: .whitespaces)
+                    if let url = URL(string: urlStr),
+                       urlStr.lowercased().hasPrefix("http") {
+                        return url
+                    }
+                }
+            }
+        }
+        return nil
+    }
+
+    private enum PlaylistResolveError: LocalizedError {
+        case encodingError
+        case noStreamFound
+
+        var errorDescription: String? {
+            switch self {
+            case .encodingError: return "Unable to read playlist file"
+            case .noStreamFound: return "No stream URL found in playlist"
+            }
+        }
+    }
+
     // MARK: - Format Hint
 
     private static func formatHint(for url: URL) -> AudioFileTypeID {
@@ -313,7 +411,7 @@ private final class DecodeContext: @unchecked Sendable {
     private var detectedSampleRate: Float64 = 0
     private var isShutdown: Bool = false
 
-    private static let prebufferThreshold: Int = 2048
+    private static let prebufferThreshold: Int = 8192
 
     private let onFormatReady: @Sendable (Float64, UInt64) -> Void
     private let onMetadata: @Sendable (ICYFramer.ICYMetadata, UInt64) -> Void

@@ -459,11 +459,17 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
             return
         }
 
-        startEngineIfNeeded()
+
+        guard startEngineIfNeeded() else {
+            AppLog.error(.audio, "Play aborted — engine failed to start")
+            return
+        }
+
         installVisualizerTapIfNeeded()
         if !playerNode.isPlaying {
             playerNode.play()
         }
+
         startProgressTimer()
         transition(to: .playing)
         seekGuardActive = false
@@ -571,22 +577,44 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     }
 
     private func rewireForCurrentFile() {
-        // Stop the engine and reset it before rewiring to avoid format conflicts
+        // Deactivate stream bridge if active — streamSourceNode must be removed
+        // from the graph before rewiring for local file playback.
+        // This handles ALL local play paths (including direct ones that bypass coordinator).
+        if isBridgeActive {
+            deactivateStreamBridge()
+        }
+
+        // Stop engine if running (between tracks)
         if audioEngine.isRunning {
             audioEngine.stop()
-            audioEngine.reset()
         }
-        
-        // Disconnect and reconnect graph for the file's format
+
+        // Clear all existing connections
+        audioEngine.disconnectNodeInput(equalizer.eqNode, bus: 0)
         audioEngine.disconnectNodeOutput(playerNode)
         audioEngine.disconnectNodeOutput(equalizer.eqNode)
 
         guard audioFile != nil else { return }
 
-        // Connect with the new format - use nil format to let the engine determine the best format
-        audioEngine.connect(playerNode, to: equalizer.eqNode, format: nil)
-        audioEngine.connect(equalizer.eqNode, to: audioEngine.mainMixerNode, format: nil)
-        
+        // Reconnect with EXPLICIT format — never use nil after stream bridge
+        // (nil causes EQ format stickiness from previous stream connection → -10868)
+        // Derive channel count from audio file to support both mono and stereo files.
+        let outputSampleRate = audioEngine.outputNode.inputFormat(forBus: 0).sampleRate
+        let fileChannels = audioFile?.processingFormat.channelCount ?? 2
+        let graphFormat = AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: outputSampleRate,
+            channels: fileChannels,
+            interleaved: false
+        )!
+        audioEngine.connect(playerNode, to: equalizer.eqNode, format: graphFormat)
+        audioEngine.connect(equalizer.eqNode, to: audioEngine.mainMixerNode, format: graphFormat)
+
+        // Verify mixer→output
+        if audioEngine.outputConnectionPoints(for: audioEngine.mainMixerNode, outputBus: 0).isEmpty {
+            audioEngine.connect(audioEngine.mainMixerNode, to: audioEngine.outputNode, format: nil)
+        }
+
         // Prepare the engine with the new configuration
         audioEngine.prepare()
         
@@ -661,11 +689,19 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
         }
     }
 
-    private func startEngineIfNeeded() {
+    /// Start the audio engine if not running. Returns true if engine is running after call.
+    @discardableResult
+    private func startEngineIfNeeded() -> Bool {
         if !audioEngine.isRunning {
             audioEngine.prepare()
-            do { try audioEngine.start() } catch { AppLog.error(.audio, "AudioEngine start error: \(error)") }
+            do {
+                try audioEngine.start()
+            } catch {
+                AppLog.error(.audio, "AudioEngine start error: \(error)")
+                return false
+            }
         }
+        return audioEngine.isRunning
     }
 
     private func startProgressTimer() {
@@ -803,43 +839,50 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
         AppLog.info(.audio, "AudioPlayer: Stream bridge activated — \(sampleRate)Hz")
     }
 
-    /// Deactivate the stream bridge and restore the playerNode path.
+    /// Deactivate the stream bridge — detach stream node, reset engine.
+    /// Does NOT reconnect playerNode path — the next play operation
+    /// (rewireForCurrentFile or activateStreamBridge) handles reconnection.
     /// Idempotent — safe to call when bridge is not active.
     /// Pre-planned for future `isolated deinit` (T8 PR 2).
     func deactivateStreamBridge() {
         guard isBridgeActive else { return }
 
-        if audioEngine.isRunning {
-            audioEngine.stop()
-            audioEngine.reset()
-        }
+        // 1. Stop engine and remove visualizer tap
+        audioEngine.stop()
+        removeVisualizerTapIfNeeded()
 
-        // Detach stream source node
+        // 2. Detach stream source node (detach safely disconnects it too)
         if let sourceNode = streamSourceNode {
-            audioEngine.disconnectNodeOutput(sourceNode)
             audioEngine.detach(sourceNode)
         }
 
-        // Disconnect EQ (was connected to stream source)
+        // 3. Clear stale connections on EQ (was connected to stream source with explicit format)
+        audioEngine.disconnectNodeInput(equalizer.eqNode, bus: 0)
+        audioEngine.disconnectNodeOutput(playerNode)
         audioEngine.disconnectNodeOutput(equalizer.eqNode)
 
-        // Restore playerNode path
-        audioEngine.connect(playerNode, to: equalizer.eqNode, format: nil)
-        audioEngine.connect(equalizer.eqNode, to: audioEngine.mainMixerNode, format: nil)
+        // 4. Reconnect playerNode path with EXPLICIT format (not nil!)
+        //    Using nil after stream bridge causes EQ format stickiness → -10868
+        let graphFormat = AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: audioEngine.outputNode.inputFormat(forBus: 0).sampleRate,
+            channels: 2,
+            interleaved: false
+        )!
+        audioEngine.connect(playerNode, to: equalizer.eqNode, format: graphFormat)
+        audioEngine.connect(equalizer.eqNode, to: audioEngine.mainMixerNode, format: graphFormat)
 
-        // Verify mixer→output after reset (lesson #4)
+        // 5. Verify mixer→output
         if audioEngine.outputConnectionPoints(for: audioEngine.mainMixerNode, outputBus: 0).isEmpty {
             audioEngine.connect(audioEngine.mainMixerNode, to: audioEngine.outputNode, format: nil)
         }
 
         audioEngine.prepare()
 
-        // Cleanup order for future isolated deinit
+        // 6. Cleanup for future isolated deinit
         streamSourceNode = nil
         streamRingBuffer = nil
         isBridgeActive = false
-
-        removeVisualizerTapIfNeeded()
 
         AppLog.info(.audio, "AudioPlayer: Stream bridge deactivated")
     }
