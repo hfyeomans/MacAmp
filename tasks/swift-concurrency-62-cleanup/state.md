@@ -10,8 +10,9 @@
 
 ## Current Status
 
-**Phase:** PR 1 MERGED (PR #56, 2026-03-14). PR 2 blocked on unified-audio-pipeline (T7).
-**Status:** ⏸ WAITING — PR 2 blocked on T7 merge
+**Phase:** PR 2 implementation complete — awaiting Oracle review + PR
+**Status:** 🔄 IN PROGRESS
+**Branch:** `feature/swift-concurrency-62-cleanup-pr2`
 **Last Updated:** 2026-03-14
 **PR Structure:** Split into PR 1 (pre-pipeline) + PR 2 (post-pipeline)
 
