@@ -82,19 +82,17 @@ final class PlaybackCoordinator {
         return streamPlayer.error == nil
     }
 
-    /// EQ is only available for local file playback (AVAudioEngine).
-    /// During stream playback, EQ sliders should be dimmed.
-    var supportsEQ: Bool { !isStreamBackendActive }
+    /// EQ is available when not streaming, OR when stream bridge is active
+    /// (stream decoded through AVAudioEngine). Dimmed only during stream error
+    /// or before bridge activates (prebuffering).
+    var supportsEQ: Bool { !isStreamBackendActive || audioPlayer.isBridgeActive }
 
-    /// Balance/pan requires AVAudioPlayerNode.pan (AVPlayer has no .pan property).
-    /// During stream playback, balance slider should be dimmed.
-    var supportsBalance: Bool { !isStreamBackendActive }
+    /// Balance is available when not streaming, OR when stream bridge is active.
+    var supportsBalance: Bool { !isStreamBackendActive || audioPlayer.isBridgeActive }
 
-    /// Visualizer requires an audio tap on AVAudioEngine's mixer node.
-    /// During stream playback, no tap data is available (Phase 2 Loopback Bridge will fix this).
-    /// Currently unused by UI — the visualizer shows empty naturally when no tap data arrives.
-    /// Phase 2 will update capability flags and wire UI dimming.
-    var supportsVisualizer: Bool { !isStreamBackendActive }
+    /// Visualizer is available when not streaming, OR when stream bridge is active
+    /// (audio tap on mixer receives stream PCM through the bridge).
+    var supportsVisualizer: Bool { !isStreamBackendActive || audioPlayer.isBridgeActive }
 
     // MARK: - Initialization
 
@@ -115,6 +113,21 @@ final class PlaybackCoordinator {
             guard let self else { return }
             Task { @MainActor in
                 await self.handleExternalPlaylistAdvance(track: track)
+            }
+        }
+
+        // Wire stream pipeline format-ready callback to activate engine bridge
+        self.streamPlayer.onFormatReady = { [weak self] sampleRate in
+            guard let self,
+                  let ringBuffer = self.streamPlayer.currentRingBuffer else { return }
+            self.audioPlayer.activateStreamBridge(ringBuffer: ringBuffer, sampleRate: sampleRate)
+        }
+
+        // Wire stream terminal state callback for bridge teardown
+        self.streamPlayer.onStreamTerminated = { [weak self] in
+            guard let self else { return }
+            if self.audioPlayer.isBridgeActive {
+                self.audioPlayer.deactivateStreamBridge()
             }
         }
     }
@@ -140,7 +153,8 @@ final class PlaybackCoordinator {
 
     func play(url: URL) async {
         if url.isFileURL {
-            // Stop stream if playing
+            // Stop stream + deactivate bridge if playing
+            audioPlayer.deactivateStreamBridge()
             streamPlayer.stop()
 
             // Play local file with EQ
@@ -153,10 +167,11 @@ final class PlaybackCoordinator {
                 url: url
             )
         } else {
-            // Stop local file if playing
+            // Stop local file + deactivate any existing bridge (handles stream-to-stream too)
+            audioPlayer.deactivateStreamBridge()
             audioPlayer.stop()
 
-            // Play stream (no EQ)
+            // Play stream (bridge activates via onFormatReady callback)
             let station = RadioStation(name: url.lastPathComponent, streamURL: url)
             await streamPlayer.play(station: station)
             currentSource = .radioStation(station)
@@ -171,14 +186,16 @@ final class PlaybackCoordinator {
 
         if track.isStream {
             // Stop local file if playing
+            audioPlayer.deactivateStreamBridge()
             audioPlayer.stop()
 
-            // Play stream via StreamPlayer
+            // Play stream via StreamPlayer (bridge activates via onFormatReady callback)
             await streamPlayer.play(url: track.url, title: track.title, artist: track.artist)
             currentSource = .radioStation(RadioStation(name: track.title, streamURL: track.url))
             currentTitle = track.title
         } else {
-            // Stop stream if playing
+            // Stop stream + deactivate bridge if playing
+            audioPlayer.deactivateStreamBridge()
             streamPlayer.stop()
 
             // Play local file via AudioPlayer
@@ -189,7 +206,8 @@ final class PlaybackCoordinator {
 
     /// Play a radio station from favorites menu
     func play(station: RadioStation) async {
-        // Stop local file if playing
+        // Stop local file + deactivate any existing bridge
+        audioPlayer.deactivateStreamBridge()
         audioPlayer.stop()
 
         // Play stream
@@ -211,6 +229,7 @@ final class PlaybackCoordinator {
     }
 
     func stop() {
+        audioPlayer.deactivateStreamBridge()
         audioPlayer.stop()
         streamPlayer.stop()
         currentSource = nil
@@ -246,8 +265,7 @@ final class PlaybackCoordinator {
         case .localTrack:
             audioPlayer.play()
         case .radioStation:
-            // Just resume, don't rebuild stream
-            streamPlayer.player.play()
+            streamPlayer.resume()
         case .none:
             break
         }
@@ -296,6 +314,7 @@ final class PlaybackCoordinator {
                 updateLocalPlaybackState(for: track)
             }
         case .playLocally(let track):
+            audioPlayer.deactivateStreamBridge()
             streamPlayer.stop()
             updateLocalPlaybackState(for: track)
         case .requestCoordinatorPlayback(let track):

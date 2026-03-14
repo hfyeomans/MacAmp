@@ -18,6 +18,15 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     @ObservationIgnored nonisolated(unsafe) private var progressTimer: Timer?  // nonisolated(unsafe) for deinit access
     @ObservationIgnored private var playheadOffset: Double = 0 // seconds offset for current scheduled segment
 
+    // MARK: - Stream Bridge (AVAudioSourceNode consumer for decoded stream PCM)
+    @ObservationIgnored private var streamSourceNode: AVAudioSourceNode?
+    @ObservationIgnored private var streamRingBuffer: LockFreeRingBuffer?
+    private(set) var isBridgeActive: Bool = false
+
+    /// True when the audio engine is running AND producing audio output
+    /// (either local file playback or stream bridge is active).
+    var isEngineRendering: Bool { audioEngine.isRunning && (isPlaying || isBridgeActive) }
+
     // MARK: - Extracted Controllers
     private let equalizer = EqualizerController()
     private let visualizerPipeline = VisualizerPipeline()
@@ -62,12 +71,14 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     var volume: Float = 0.75 {
         didSet {
             playerNode.volume = volume
+            streamSourceNode?.volume = volume
             UserDefaults.standard.set(volume, forKey: Keys.volume)
         }
     }
     var balance: Float = 0.0 { // -1.0 (left) to 1.0 (right)
         didSet {
             playerNode.pan = balance
+            streamSourceNode?.pan = balance
             UserDefaults.standard.set(balance, forKey: Keys.balance)
         }
     }
@@ -448,11 +459,17 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
             return
         }
 
-        startEngineIfNeeded()
+
+        guard startEngineIfNeeded() else {
+            AppLog.error(.audio, "Play aborted — engine failed to start")
+            return
+        }
+
         installVisualizerTapIfNeeded()
         if !playerNode.isPlaying {
             playerNode.play()
         }
+
         startProgressTimer()
         transition(to: .playing)
         seekGuardActive = false
@@ -560,22 +577,44 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     }
 
     private func rewireForCurrentFile() {
-        // Stop the engine and reset it before rewiring to avoid format conflicts
+        // Deactivate stream bridge if active — streamSourceNode must be removed
+        // from the graph before rewiring for local file playback.
+        // This handles ALL local play paths (including direct ones that bypass coordinator).
+        if isBridgeActive {
+            deactivateStreamBridge()
+        }
+
+        // Stop engine if running (between tracks)
         if audioEngine.isRunning {
             audioEngine.stop()
-            audioEngine.reset()
         }
-        
-        // Disconnect and reconnect graph for the file's format
+
+        // Clear all existing connections
+        audioEngine.disconnectNodeInput(equalizer.eqNode, bus: 0)
         audioEngine.disconnectNodeOutput(playerNode)
         audioEngine.disconnectNodeOutput(equalizer.eqNode)
 
         guard audioFile != nil else { return }
 
-        // Connect with the new format - use nil format to let the engine determine the best format
-        audioEngine.connect(playerNode, to: equalizer.eqNode, format: nil)
-        audioEngine.connect(equalizer.eqNode, to: audioEngine.mainMixerNode, format: nil)
-        
+        // Reconnect with EXPLICIT format — never use nil after stream bridge
+        // (nil causes EQ format stickiness from previous stream connection → -10868)
+        // Derive channel count from audio file to support both mono and stereo files.
+        let outputSampleRate = audioEngine.outputNode.inputFormat(forBus: 0).sampleRate
+        let fileChannels = audioFile?.processingFormat.channelCount ?? 2
+        let graphFormat = AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: outputSampleRate,
+            channels: fileChannels,
+            interleaved: false
+        )!
+        audioEngine.connect(playerNode, to: equalizer.eqNode, format: graphFormat)
+        audioEngine.connect(equalizer.eqNode, to: audioEngine.mainMixerNode, format: graphFormat)
+
+        // Verify mixer→output
+        if audioEngine.outputConnectionPoints(for: audioEngine.mainMixerNode, outputBus: 0).isEmpty {
+            audioEngine.connect(audioEngine.mainMixerNode, to: audioEngine.outputNode, format: nil)
+        }
+
         // Prepare the engine with the new configuration
         audioEngine.prepare()
         
@@ -650,11 +689,19 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
         }
     }
 
-    private func startEngineIfNeeded() {
+    /// Start the audio engine if not running. Returns true if engine is running after call.
+    @discardableResult
+    private func startEngineIfNeeded() -> Bool {
         if !audioEngine.isRunning {
             audioEngine.prepare()
-            do { try audioEngine.start() } catch { AppLog.error(.audio, "AudioEngine start error: \(error)") }
+            do {
+                try audioEngine.start()
+            } catch {
+                AppLog.error(.audio, "AudioEngine start error: \(error)")
+                return false
+            }
         }
+        return audioEngine.isRunning
     }
 
     private func startProgressTimer() {
@@ -690,6 +737,160 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     private func removeVisualizerTapIfNeeded() {
         visualizerPipeline.removeTap()
         visualizerPipeline.clearData()
+    }
+
+    // MARK: - Stream Bridge (AVAudioSourceNode consumer)
+
+    /// Build the render block for AVAudioSourceNode. MUST be nonisolated static
+    /// to avoid @MainActor isolation crash on the real-time audio thread.
+    /// Reads interleaved Float32 PCM from the ring buffer.
+    /// Build the render block for AVAudioSourceNode. MUST be nonisolated static
+    /// to avoid @MainActor isolation crash on the real-time audio thread.
+    /// Reads interleaved Float32 PCM from the ring buffer.
+    ///
+    /// **Diagnostic note:** Sine wave test (2026-03-14) confirmed this render block
+    /// and the engine path produce clean audio. Any warping is upstream in the decoder.
+    private nonisolated static func makeStreamRenderBlock(
+        ringBuffer: LockFreeRingBuffer
+    ) -> AVAudioSourceNodeRenderBlock {
+        { isSilence, timestamp, frameCount, outputData in
+            let ablPointer = UnsafeMutableAudioBufferListPointer(outputData)
+            guard ablPointer.count == 1,
+                  let firstBuffer = ablPointer.first,
+                  firstBuffer.mNumberChannels == 2,
+                  let data = firstBuffer.mData else {
+                isSilence.pointee = ObjCBool(true)
+                return noErr
+            }
+
+            let floatPtr = data.assumingMemoryBound(to: Float.self)
+            let framesRead = ringBuffer.read(into: floatPtr, frameCount: Int(frameCount))
+
+            // Zero-fill any remaining frames (silence for underrun)
+            if framesRead < Int(frameCount) {
+                let channelCount = Int(firstBuffer.mNumberChannels)
+                let remainingSamples = (Int(frameCount) - framesRead) * channelCount
+                let offset = framesRead * channelCount
+                memset(floatPtr + offset, 0, remainingSamples * MemoryLayout<Float>.size)
+            }
+
+            isSilence.pointee = ObjCBool(framesRead == 0)
+            return noErr
+        }
+    }
+
+    /// Activate the stream bridge: wire AVAudioSourceNode into the engine graph.
+    /// Replaces the playerNode path with streamSourceNode → EQ → mixer → output.
+    ///
+    /// **Critical lessons (from T5 Phase 2):**
+    /// - Source node format MUST be interleaved (matches ring buffer layout)
+    /// - Graph connection format MUST be non-interleaved (engine internal)
+    /// - MUST stop/reset engine before rewiring (lesson #3, avoids -10868)
+    /// - MUST verify mixer→output after reset (lesson #4)
+    func activateStreamBridge(ringBuffer: LockFreeRingBuffer, sampleRate: Float64) {
+        guard !isBridgeActive else { return }
+
+        streamRingBuffer = ringBuffer
+
+        // Source node format: interleaved Float32 stereo (matches ring buffer)
+        let sourceFormat = AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: sampleRate,
+            channels: 2,
+            interleaved: true
+        )!
+
+        let renderBlock = Self.makeStreamRenderBlock(ringBuffer: ringBuffer)
+        let sourceNode = AVAudioSourceNode(format: sourceFormat, renderBlock: renderBlock)
+        streamSourceNode = sourceNode
+
+        // Stop and reset engine before rewiring (lesson #3)
+        if audioEngine.isRunning {
+            audioEngine.stop()
+            audioEngine.reset()
+        }
+
+        // Disconnect existing playerNode path
+        audioEngine.disconnectNodeOutput(playerNode)
+        audioEngine.disconnectNodeOutput(equalizer.eqNode)
+
+        // Attach and connect stream source node
+        audioEngine.attach(sourceNode)
+
+        // Graph format: non-interleaved (engine internal requirement)
+        let graphFormat = AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: audioEngine.outputNode.inputFormat(forBus: 0).sampleRate,
+            channels: 2,
+            interleaved: false
+        )
+
+        audioEngine.connect(sourceNode, to: equalizer.eqNode, format: graphFormat)
+        audioEngine.connect(equalizer.eqNode, to: audioEngine.mainMixerNode, format: graphFormat)
+
+        // Verify mixer→output connection after reset (lesson #4)
+        if audioEngine.outputConnectionPoints(for: audioEngine.mainMixerNode, outputBus: 0).isEmpty {
+            audioEngine.connect(audioEngine.mainMixerNode, to: audioEngine.outputNode, format: nil)
+        }
+
+        audioEngine.prepare()
+        startEngineIfNeeded()
+        installVisualizerTapIfNeeded()
+
+        // Apply current volume/balance to source node
+        sourceNode.volume = volume
+        sourceNode.pan = balance
+
+        isBridgeActive = true
+        AppLog.info(.audio, "AudioPlayer: Stream bridge activated — \(sampleRate)Hz")
+    }
+
+    /// Deactivate the stream bridge — detach stream node, reset engine.
+    /// Does NOT reconnect playerNode path — the next play operation
+    /// (rewireForCurrentFile or activateStreamBridge) handles reconnection.
+    /// Idempotent — safe to call when bridge is not active.
+    /// Pre-planned for future `isolated deinit` (T8 PR 2).
+    func deactivateStreamBridge() {
+        guard isBridgeActive else { return }
+
+        // 1. Stop engine and remove visualizer tap
+        audioEngine.stop()
+        removeVisualizerTapIfNeeded()
+
+        // 2. Detach stream source node (detach safely disconnects it too)
+        if let sourceNode = streamSourceNode {
+            audioEngine.detach(sourceNode)
+        }
+
+        // 3. Clear stale connections on EQ (was connected to stream source with explicit format)
+        audioEngine.disconnectNodeInput(equalizer.eqNode, bus: 0)
+        audioEngine.disconnectNodeOutput(playerNode)
+        audioEngine.disconnectNodeOutput(equalizer.eqNode)
+
+        // 4. Reconnect playerNode path with EXPLICIT format (not nil!)
+        //    Using nil after stream bridge causes EQ format stickiness → -10868
+        let graphFormat = AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: audioEngine.outputNode.inputFormat(forBus: 0).sampleRate,
+            channels: 2,
+            interleaved: false
+        )!
+        audioEngine.connect(playerNode, to: equalizer.eqNode, format: graphFormat)
+        audioEngine.connect(equalizer.eqNode, to: audioEngine.mainMixerNode, format: graphFormat)
+
+        // 5. Verify mixer→output
+        if audioEngine.outputConnectionPoints(for: audioEngine.mainMixerNode, outputBus: 0).isEmpty {
+            audioEngine.connect(audioEngine.mainMixerNode, to: audioEngine.outputNode, format: nil)
+        }
+
+        audioEngine.prepare()
+
+        // 6. Cleanup for future isolated deinit
+        streamSourceNode = nil
+        streamRingBuffer = nil
+        isBridgeActive = false
+
+        AppLog.info(.audio, "AudioPlayer: Stream bridge deactivated")
     }
 
     // MARK: - Seeking / Scrubbing
@@ -807,7 +1008,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     // MARK: - Visualizer Forwarding (backed by VisualizerPipeline)
 
     func getFrequencyData(bands: Int) -> [Float] {
-        visualizerPipeline.getFrequencyData(bands: bands, isPlaying: isPlaying)
+        visualizerPipeline.getFrequencyData(bands: bands, isPlaying: isEngineRendering)
     }
 
     func getRMSData(bands: Int) -> [Float] {
@@ -819,7 +1020,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     }
 
     func snapshotButterchurnFrame() -> ButterchurnFrame? {
-        guard currentMediaType == .audio && isPlaying else { return nil }
+        guard currentMediaType == .audio && isEngineRendering else { return nil }
         return visualizerPipeline.snapshotButterchurnFrame()
     }
 

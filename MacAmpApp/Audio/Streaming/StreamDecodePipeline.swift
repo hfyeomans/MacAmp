@@ -1,0 +1,625 @@
+import Foundation
+import AudioToolbox
+
+/// Orchestrates the full stream decode chain:
+/// `URLSession → ICYFramer → AudioFileStreamParser → AudioConverterDecoder → LockFreeRingBuffer`
+///
+/// **Architecture:**
+/// - `@MainActor` class for lifecycle/state management (matches PlaybackCoordinator pattern)
+/// - `DecodeContext` (@unchecked Sendable, queue-confined) owns all decode-queue state
+/// - NSObject delegate proxy forwards URLSession bytes to decode queue
+/// - Callbacks to StreamPlayer are `@MainActor @Sendable`
+///
+/// **Threading:**
+/// ```
+/// Main Thread (@MainActor)     Decode Queue (serial)     Audio IO Thread (RT)
+/// ├─ start()/stop()/pause()    ├─ ICYFramer              ├─ AVAudioSourceNode
+/// ├─ state callbacks           ├─ AudioFileStreamParser   │  render block
+/// └─ UI updates                ├─ AudioConverterDecoder   │  ringBuffer.read()
+///                              └─ ringBuffer.write()  ──►│
+/// ```
+///
+/// **Layer:** Mechanism (orchestrator, owns decode chain lifecycle)
+@MainActor
+final class StreamDecodePipeline {
+
+    // MARK: - Stream State
+
+    enum StreamState: Sendable {
+        case idle
+        case connecting
+        case buffering
+        case playing
+        case paused
+        case error(String)
+    }
+
+    private(set) var state: StreamState = .idle
+
+    // MARK: - Callbacks (to StreamPlayer)
+
+    var onStateChange: (@MainActor @Sendable (StreamState) -> Void)?
+    var onFormatReady: (@MainActor @Sendable (Float64) -> Void)?
+    var onMetadata: (@MainActor @Sendable (ICYFramer.ICYMetadata) -> Void)?
+
+    // MARK: - Ring Buffer (shared with AudioPlayer's AVAudioSourceNode)
+
+    private(set) var ringBuffer: LockFreeRingBuffer?
+
+    // MARK: - Decode Context (queue-confined, NOT @MainActor)
+
+    private let decodeQueue = DispatchQueue(label: "com.macamp.stream.decode", qos: .userInitiated)
+    private var decodeContext: DecodeContext?
+
+    // MARK: - URLSession
+
+    private var urlSession: URLSession?
+    private var dataTask: URLSessionDataTask?
+    private var delegateProxy: SessionDelegateProxy?
+
+    // MARK: - Generation Token
+
+    /// Incremented on each start() AND stop(). All callbacks check generation
+    /// to reject stale data from previous streams.
+    private var generation: UInt64 = 0
+
+    // MARK: - Prebuffer Tracking
+
+    private var formatReadyFired: Bool = false
+
+
+    // MARK: - Lifecycle
+
+    func start(url: URL, ringBuffer: LockFreeRingBuffer) {
+        // Teardown previous (also advances generation)
+        stopInternal()
+
+        generation &+= 1
+        let currentGeneration = generation
+
+        self.ringBuffer = ringBuffer
+        ringBuffer.flush()
+        formatReadyFired = false
+
+        // Check if URL is a playlist file — resolve to actual stream URL first
+        if Self.isPlaylistURL(url) {
+            setState(.connecting)
+            Task { @MainActor [weak self] in
+                guard let self, currentGeneration == self.generation else { return }
+                do {
+                    let streamURL = try await Self.resolvePlaylistURL(url)
+                    guard currentGeneration == self.generation else { return }
+                    AppLog.info(.audio, "StreamDecodePipeline: Resolved playlist → \(streamURL.absoluteString)")
+                    self.startDirectStream(url: streamURL, ringBuffer: ringBuffer, generation: currentGeneration)
+                } catch {
+                    guard currentGeneration == self.generation else { return }
+                    self.setState(.error("Failed to resolve playlist: \(error.localizedDescription)"))
+                }
+            }
+            return
+        }
+
+        startDirectStream(url: url, ringBuffer: ringBuffer, generation: currentGeneration)
+    }
+
+    /// Start streaming from a direct audio URL (not a playlist).
+    private func startDirectStream(url: URL, ringBuffer: LockFreeRingBuffer, generation currentGeneration: UInt64) {
+        let formatHint = Self.formatHint(for: url)
+        let context = DecodeContext(
+            decodeQueue: decodeQueue,
+            ringBuffer: ringBuffer,
+            formatHint: formatHint,
+            generation: currentGeneration,
+            onFormatReady: { [weak self] sampleRate, gen in
+                Task { @MainActor [weak self] in
+                    guard let self, gen == self.generation, !self.formatReadyFired else { return }
+                    self.formatReadyFired = true
+                    self.setState(.playing)
+                    self.onFormatReady?(sampleRate)
+                    AppLog.info(.audio, "StreamDecodePipeline: Format ready — \(sampleRate)Hz")
+                }
+            },
+            onMetadata: { [weak self] metadata, gen in
+                Task { @MainActor [weak self] in
+                    guard let self, gen == self.generation else { return }
+                    self.onMetadata?(metadata)
+                }
+            },
+            onError: { [weak self] message, gen in
+                Task { @MainActor [weak self] in
+                    guard let self, gen == self.generation else { return }
+                    self.stopInternal()
+                    self.setState(.error(message))
+                    AppLog.error(.audio, "StreamDecodePipeline: Decode error — \(message)")
+                }
+            }
+        )
+        decodeContext = context
+
+        // Create URLSession with delegate proxy
+        // Proxy callbacks are set once before URLSession starts, then immutable.
+        let proxy = SessionDelegateProxy(
+            onResponse: { [weak self, weak context] response in
+                // Configure framer DIRECTLY on decode queue — NOT via MainActor hop.
+                // URLSession calls didReceive(data:) right after didReceive(response:).
+                // If we hop to MainActor first, data arrives on the decode queue BEFORE
+                // the framer is configured → metadata bytes injected into audio → warping.
+                // By dispatching framer config to the decode queue here, ordering with
+                // data delivery is guaranteed by the serial queue.
+                if let httpResponse = response as? HTTPURLResponse {
+                    let metaInt = StreamDecodePipeline.extractICYMetaInt(from: httpResponse.allHeaderFields) ?? 0
+                    context?.configureFramer(metaInterval: metaInt)
+                }
+                // State updates still go to MainActor
+                Task { @MainActor [weak self] in
+                    self?.handleHTTPResponse(response, generation: currentGeneration)
+                }
+            },
+            onData: { [weak context] data in
+                context?.handleIncomingData(data)
+            },
+            onComplete: { [weak self] error in
+                Task { @MainActor [weak self] in
+                    self?.handleStreamComplete(error: error, generation: currentGeneration)
+                }
+            }
+        )
+        delegateProxy = proxy
+
+        let sessionConfig = URLSessionConfiguration.default
+        sessionConfig.timeoutIntervalForRequest = 30
+        sessionConfig.timeoutIntervalForResource = 0
+        let operationQueue = OperationQueue()
+        operationQueue.maxConcurrentOperationCount = 1
+        operationQueue.qualityOfService = .userInitiated
+        urlSession = URLSession(configuration: sessionConfig, delegate: proxy, delegateQueue: operationQueue)
+
+        var request = URLRequest(url: url)
+        request.setValue("1", forHTTPHeaderField: "Icy-MetaData")
+        request.setValue("*/*", forHTTPHeaderField: "Accept")
+
+        dataTask = urlSession?.dataTask(with: request)
+        setState(.connecting)
+        dataTask?.resume()
+
+        AppLog.info(.audio, "StreamDecodePipeline: Starting — \(url.absoluteString)")
+    }
+
+    func pause() {
+        guard case .playing = state else { return }
+        dataTask?.suspend()
+        setState(.paused)
+    }
+
+    func resume() {
+        guard case .paused = state else { return }
+        dataTask?.resume()
+        setState(.playing)
+    }
+
+    func stop() {
+        stopInternal()
+        setState(.idle)
+    }
+
+    isolated deinit {
+        dataTask?.cancel()
+        urlSession?.invalidateAndCancel()
+        decodeContext?.shutdown()
+    }
+
+    // MARK: - Internal
+
+    private func stopInternal() {
+        // Advance generation FIRST — stale callbacks will be rejected
+        generation &+= 1
+
+        dataTask?.cancel()
+        dataTask = nil
+        urlSession?.invalidateAndCancel()
+        urlSession = nil
+        delegateProxy = nil
+        decodeContext?.shutdown()
+        decodeContext = nil
+        ringBuffer = nil
+        formatReadyFired = false
+    }
+
+    private func setState(_ newState: StreamState) {
+        state = newState
+        onStateChange?(newState)
+    }
+
+    // MARK: - HTTP Response (MainActor)
+
+    private func handleHTTPResponse(_ response: URLResponse, generation: UInt64) {
+        guard generation == self.generation else { return }
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            stopInternal()
+            setState(.error("Invalid HTTP response"))
+            return
+        }
+
+        guard (200...299).contains(httpResponse.statusCode) else {
+            stopInternal()
+            setState(.error("HTTP \(httpResponse.statusCode)"))
+            return
+        }
+
+        // Extract ICY metaint — case-insensitive header lookup
+        let headers = httpResponse.allHeaderFields
+        let metaInt: Int
+        if let metaIntValue = Self.extractICYMetaInt(from: headers) {
+            metaInt = metaIntValue
+            AppLog.debug(.audio, "StreamDecodePipeline: ICY metaint = \(metaInt)")
+        } else {
+            metaInt = 0
+        }
+
+        // NOTE: configureFramer is called from the onResponse callback (delegate queue)
+        // BEFORE data delivery begins. Do NOT call it again here — the MainActor hop
+        // means this runs AFTER data has already been processed, which would reset the
+        // framer's byte counter and corrupt ICY metadata boundary alignment.
+        setState(.buffering)
+    }
+
+    /// Case-insensitive lookup for icy-metaint header.
+    /// nonisolated: pure function, safe to call from any context (URLSession delegate queue).
+    private nonisolated static func extractICYMetaInt(from headers: [AnyHashable: Any]) -> Int? {
+        for (key, value) in headers {
+            if let keyStr = key as? String,
+               keyStr.caseInsensitiveCompare("icy-metaint") == .orderedSame,
+               let valueStr = value as? String,
+               let parsed = Int(valueStr) {
+                return parsed
+            }
+        }
+        return nil
+    }
+
+    // MARK: - Stream Completion (MainActor)
+
+    private func handleStreamComplete(error: Error?, generation: UInt64) {
+        guard generation == self.generation else { return }
+
+        // Teardown on error/completion (not just state change)
+        let wasError: Bool
+        if let error {
+            if (error as NSError).code == NSURLErrorCancelled {
+                wasError = false  // Normal cancellation from stop()
+            } else {
+                wasError = true
+                AppLog.error(.audio, "StreamDecodePipeline: \(error.localizedDescription)")
+            }
+        } else {
+            wasError = false
+        }
+
+        stopInternal()
+
+        if wasError {
+            setState(.error("Stream error: \(error!.localizedDescription)"))
+        } else if (error as? NSError)?.code != NSURLErrorCancelled {
+            // Natural stream end (server closed connection)
+            setState(.idle)
+            AppLog.info(.audio, "StreamDecodePipeline: Stream ended")
+        }
+        // If cancelled, stopInternal already set idle via generation advance
+    }
+
+    // MARK: - Playlist Resolution (M3U, PLS)
+
+    /// Check if a URL points to a playlist file rather than a direct audio stream.
+    private static func isPlaylistURL(_ url: URL) -> Bool {
+        let ext = url.pathExtension.lowercased()
+        return ["m3u", "m3u8", "pls"].contains(ext)
+    }
+
+    /// Download and parse a playlist file to extract the first stream URL.
+    /// Supports M3U/M3U8 and PLS formats.
+    private static func resolvePlaylistURL(_ url: URL) async throws -> URL {
+        let (data, response) = try await URLSession.shared.data(from: url)
+
+        // Check Content-Type for format hint
+        let contentType = (response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Type") ?? ""
+
+        guard let content = String(data: data, encoding: .utf8) else {
+            throw PlaylistResolveError.encodingError
+        }
+
+        let ext = url.pathExtension.lowercased()
+
+        // Try PLS first if extension or content-type suggests it
+        if ext == "pls" || contentType.contains("scpls") {
+            if let streamURL = parsePLS(content: content) {
+                return streamURL
+            }
+        }
+
+        // Try M3U parsing (works for both .m3u and .m3u8)
+        if let entries = try? M3UParser.parse(content: content),
+           let firstStream = entries.first(where: { !$0.url.isFileURL }) {
+            return firstStream.url
+        }
+
+        // Fallback: try PLS even if extension didn't match
+        if let streamURL = parsePLS(content: content) {
+            return streamURL
+        }
+
+        throw PlaylistResolveError.noStreamFound
+    }
+
+    /// Parse a PLS playlist file to extract the first stream URL.
+    /// PLS format: `File1=http://stream.url/path`
+    private static func parsePLS(content: String) -> URL? {
+        let lines = content.components(separatedBy: .newlines)
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            // Match FileN= lines (case-insensitive)
+            if trimmed.lowercased().hasPrefix("file") && trimmed.contains("=") {
+                let parts = trimmed.split(separator: "=", maxSplits: 1)
+                if parts.count == 2 {
+                    let urlStr = String(parts[1]).trimmingCharacters(in: .whitespaces)
+                    if let url = URL(string: urlStr),
+                       urlStr.lowercased().hasPrefix("http") {
+                        return url
+                    }
+                }
+            }
+        }
+        return nil
+    }
+
+    private enum PlaylistResolveError: LocalizedError {
+        case encodingError
+        case noStreamFound
+
+        var errorDescription: String? {
+            switch self {
+            case .encodingError: return "Unable to read playlist file"
+            case .noStreamFound: return "No stream URL found in playlist"
+            }
+        }
+    }
+
+    // MARK: - Format Hint
+
+    private static func formatHint(for url: URL) -> AudioFileTypeID {
+        let ext = url.pathExtension.lowercased()
+        switch ext {
+        case "mp3": return kAudioFileMP3Type
+        case "aac", "aacp": return kAudioFileAAC_ADTSType
+        default: break
+        }
+        let path = url.path.lowercased()
+        if path.contains("mp3") || path.contains("mpeg") { return kAudioFileMP3Type }
+        if path.contains("aac") { return kAudioFileAAC_ADTSType }
+        return 0
+    }
+
+    static func formatHint(forContentType contentType: String?) -> AudioFileTypeID {
+        guard let ct = contentType?.lowercased() else { return 0 }
+        if ct.contains("mpeg") || ct.contains("mp3") { return kAudioFileMP3Type }
+        if ct.contains("aac") || ct.contains("aacp") { return kAudioFileAAC_ADTSType }
+        return 0
+    }
+}
+
+// MARK: - DecodeContext (queue-confined, NOT @MainActor)
+
+/// Owns all decode-queue-confined state. Accessed ONLY from the decode serial queue.
+/// Separated from the @MainActor pipeline to avoid isolation conflicts.
+///
+/// @unchecked Sendable: All mutable state is confined to the decode serial queue.
+/// Debug assertions (dispatchPrecondition) verify confinement on internal methods.
+/// This is the same pattern as VisualizerScratchBuffers in VisualizerPipeline.swift.
+private final class DecodeContext: @unchecked Sendable {
+    private let decodeQueue: DispatchQueue
+    private let ringBuffer: LockFreeRingBuffer
+    private let generation: UInt64
+
+    private var framer = ICYFramer()
+    private var parser: AudioFileStreamParser?
+    private var decoder: AudioConverterDecoder?
+    private var magicCookie: Data?
+    private var prebufferedFrames: Int = 0
+    private var formatReadyFired: Bool = false
+    private var detectedSampleRate: Float64 = 0
+    private var isShutdown: Bool = false
+
+    private static let prebufferThreshold: Int = 16384
+
+    private let onFormatReady: @Sendable (Float64, UInt64) -> Void
+    private let onMetadata: @Sendable (ICYFramer.ICYMetadata, UInt64) -> Void
+    private let onError: @Sendable (String, UInt64) -> Void
+
+    init(
+        decodeQueue: DispatchQueue,
+        ringBuffer: LockFreeRingBuffer,
+        formatHint: AudioFileTypeID,
+        generation: UInt64,
+        onFormatReady: @escaping @Sendable (Float64, UInt64) -> Void,
+        onMetadata: @escaping @Sendable (ICYFramer.ICYMetadata, UInt64) -> Void,
+        onError: @escaping @Sendable (String, UInt64) -> Void
+    ) {
+        self.decodeQueue = decodeQueue
+        self.ringBuffer = ringBuffer
+        self.generation = generation
+        self.onFormatReady = onFormatReady
+        self.onMetadata = onMetadata
+        self.onError = onError
+
+        decodeQueue.async { [self] in
+            let parser = AudioFileStreamParser(formatHint: formatHint)
+            parser.confinementQueue = decodeQueue
+
+            parser.onFormatAvailable = { [weak self] asbd in
+                self?.handleFormatAvailable(asbd)
+            }
+            parser.onMagicCookie = { [weak self] cookie in
+                guard let self else { return }
+                dispatchPrecondition(condition: .onQueue(self.decodeQueue))
+                self.magicCookie = cookie
+            }
+            parser.onError = { [weak self] message in
+                guard let self else { return }
+                self.onError(message, self.generation)
+            }
+            parser.onPackets = { [weak self] data, descriptions in
+                self?.handlePackets(data: data, descriptions: descriptions)
+            }
+
+            self.parser = parser
+        }
+    }
+
+    /// Configure the ICY framer with metaint value.
+    /// Dispatched to decode queue — preserves ordering with data delivery.
+    func configureFramer(metaInterval: Int) {
+        decodeQueue.async { [self] in
+            guard !isShutdown else { return }
+            framer.configure(metaInterval: metaInterval)
+        }
+    }
+
+    /// Process incoming HTTP data. Dispatched to decode queue.
+    func handleIncomingData(_ data: Data) {
+        decodeQueue.async { [self] in
+            guard !isShutdown else { return }
+            let chunks = framer.consume(data)
+
+            for chunk in chunks {
+                switch chunk {
+                case .audio(let audioData):
+                    parser?.parse(audioData)
+                case .metadata(let metadata):
+                    onMetadata(metadata, generation)
+                }
+            }
+        }
+    }
+
+    /// Shutdown the decode chain. C API ordering: converter before parser.
+    /// After shutdown, all subsequent decode-queue work is rejected via isShutdown flag.
+    func shutdown() {
+        decodeQueue.async { [self] in
+            guard !isShutdown else { return }
+            isShutdown = true
+            decoder?.dispose()
+            decoder = nil
+            parser?.close()
+            parser = nil
+        }
+    }
+
+    // MARK: - Internal (decode queue only)
+
+    private func handleFormatAvailable(_ asbd: AudioStreamBasicDescription) {
+        dispatchPrecondition(condition: .onQueue(decodeQueue))
+        guard !isShutdown, decoder == nil else { return }
+
+        let newDecoder = AudioConverterDecoder(inputFormat: asbd, magicCookie: magicCookie)
+
+        // Surface converter creation failure instead of silently hanging in "buffering"
+        guard newDecoder.converter != nil else {
+            onError("AudioConverter creation failed for format \(asbd.mSampleRate)Hz", generation)
+            return
+        }
+
+        newDecoder.confinementQueue = decodeQueue
+        decoder = newDecoder
+
+        // Report the DECODER's output rate (not stream rate) so the source node format matches
+        detectedSampleRate = newDecoder.sampleRate
+
+        AppLog.info(.audio, "DecodeContext: Decoder created — \(asbd.mSampleRate)Hz → \(newDecoder.sampleRate)Hz")
+    }
+
+    private func handlePackets(data: Data, descriptions: [AudioStreamPacketDescription]) {
+        dispatchPrecondition(condition: .onQueue(decodeQueue))
+        guard !isShutdown, let decoder else { return }
+
+        // Split batched packets into individual entries.
+        // AudioFileStream delivers multiple packets in one callback (concatenated data
+        // with per-packet descriptions). If we enqueue the whole batch as one entry,
+        // the AudioConverter's input callback provides ALL packets at once. When the
+        // output buffer fills mid-batch, the remaining packets are LOST because
+        // advanceToNextPacket() moves to the next queue entry (which doesn't exist).
+        // Splitting ensures each advanceToNextPacket() gets exactly one packet.
+        if descriptions.isEmpty {
+            // CBR format — no descriptions, enqueue as-is
+            decoder.enqueue(data: data, descriptions: [])
+        } else {
+            for desc in descriptions {
+                let offset = Int(desc.mStartOffset)
+                let size = Int(desc.mDataByteSize)
+                guard offset >= 0, size > 0, offset + size <= data.count else { continue }
+                let packetData = data[offset..<(offset + size)]
+                let singleDesc = AudioStreamPacketDescription(
+                    mStartOffset: 0,  // Offset is 0 within the individual packet
+                    mVariableFramesInPacket: desc.mVariableFramesInPacket,
+                    mDataByteSize: desc.mDataByteSize
+                )
+                decoder.enqueue(data: Data(packetData), descriptions: [singleDesc])
+            }
+        }
+
+        // Decode all enqueued packets
+        while decoder.hasQueuedPackets {
+            guard !isShutdown else { break }
+            guard let (pcmBuffer, frameCount) = decoder.decode() else { break }
+
+            let framesWritten = ringBuffer.write(from: pcmBuffer, frameCount: frameCount)
+            prebufferedFrames += framesWritten
+
+            if !formatReadyFired && prebufferedFrames >= Self.prebufferThreshold {
+                formatReadyFired = true
+                onFormatReady(detectedSampleRate, generation)
+            }
+        }
+    }
+}
+
+// MARK: - URLSession Delegate Proxy
+
+/// Lightweight NSObject that forwards URLSession delegate callbacks.
+/// Required because URLSessionDataDelegate needs NSObject conformance.
+///
+/// @unchecked Sendable: Callback closures are set once in init (immutable after construction),
+/// then only read from the URLSession delegate queue. No concurrent mutation.
+private final class SessionDelegateProxy: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+
+    private let onResponse: @Sendable (URLResponse) -> Void
+    private let onData: @Sendable (Data) -> Void
+    private let onComplete: @Sendable (Error?) -> Void
+
+    init(
+        onResponse: @escaping @Sendable (URLResponse) -> Void,
+        onData: @escaping @Sendable (Data) -> Void,
+        onComplete: @escaping @Sendable (Error?) -> Void
+    ) {
+        self.onResponse = onResponse
+        self.onData = onData
+        self.onComplete = onComplete
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        dataTask: URLSessionDataTask,
+        didReceive response: URLResponse,
+        completionHandler: @escaping @Sendable (URLSession.ResponseDisposition) -> Void
+    ) {
+        onResponse(response)
+        completionHandler(.allow)
+    }
+
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        onData(data)
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        onComplete(error)
+    }
+}

@@ -6416,8 +6416,308 @@ func play(station: RadioStation) {
 4. **Init-time sync prevents first-use mismatch** -- always apply persisted values to all backends during initialization
 5. **Belt-and-suspenders sync** is cheap insurance for stateful backend objects that may be re-created
 
+### 27. Unified Audio Pipeline: Custom Stream Decode for Internet Radio (March 2026)
+
+**Lesson from:** Unified Audio Pipeline task (`tasks/unified-audio-pipeline/`)
+**Oracle Grade:** Multiple reviews (gpt-5.3-codex, xhigh) — all findings fixed
+**Total Commits:** 15+ commits over intensive debugging session
+**Branch:** `feature/unified-audio-pipeline`
+
+#### The Problem: AVPlayer is a Black Box for Streams
+
+AVPlayer handles internet radio streams but provides no access to decoded PCM. This means no EQ, no visualization, no balance control for streaming audio. The unified pipeline replaces AVPlayer's stream handling with a custom decode chain that feeds PCM directly into AVAudioEngine.
+
+#### Architecture: Custom Decode Pipeline
+
+```
+BEFORE (Dual Backend — streams had no processing):
+Internet Radio: HTTP → AVPlayer → System Audio (direct, ❌ No EQ/Viz/Balance)
+Local Files:    File → AVAudioPlayerNode → EQ → Mixer → [Tap] → Output ✅
+
+AFTER (Unified Pipeline — all audio through AVAudioEngine):
+Internet Radio: HTTP → URLSession → ICYFramer → AudioFileStreamParser
+                → AudioConverterDecoder → LockFreeRingBuffer
+                → AVAudioSourceNode → EQ → Mixer → [Tap] → Output ✅
+Local Files:    File → AVAudioPlayerNode → EQ → Mixer → [Tap] → Output ✅
+```
+
+Both paths converge at AVAudioEngine. The engine doesn't know if PCM came from a file or a decoded stream.
+
+#### Component Architecture
+
+```swift
+// 4 new files in MacAmpApp/Audio/Streaming/
+
+// 1. ICYFramer — Pure Sendable struct, strips ICY metadata from HTTP byte stream
+struct ICYFramer: Sendable {
+    mutating func configure(metaInterval: Int)
+    mutating func consume(_ data: Data) -> [Chunk]  // .audio(Data) or .metadata(ICYMetadata)
+}
+
+// 2. AudioFileStreamParser — Wraps Apple's C API, parses compressed packets
+final class AudioFileStreamParser {  // decode-queue-confined
+    var onFormatAvailable: ((AudioStreamBasicDescription) -> Void)?
+    var onPackets: ((Data, [AudioStreamPacketDescription]) -> Void)?
+    var onError: ((String) -> Void)?
+    func parse(_ data: Data)
+}
+
+// 3. AudioConverterDecoder — Wraps Apple's AudioConverter, decodes to Float32 PCM
+final class AudioConverterDecoder {  // decode-queue-confined
+    func enqueue(data: Data, descriptions: [AudioStreamPacketDescription])
+    func decode() -> (UnsafePointer<Float>, Int)?  // returns PCM buffer + frame count
+}
+
+// 4. StreamDecodePipeline — @MainActor orchestrator with queue-confined DecodeContext
+@MainActor final class StreamDecodePipeline {
+    func start(url: URL, ringBuffer: LockFreeRingBuffer)
+    func pause() / resume() / stop()
+    var onFormatReady: (@MainActor @Sendable (Float64) -> Void)?
+}
+```
+
+#### Threading Model
+
+```
+Main Thread (@MainActor)     Decode Queue (serial)     Audio IO Thread (RT)
+├─ StreamDecodePipeline      ├─ DecodeContext           ├─ AVAudioSourceNode
+├─ StreamPlayer              │  ├─ ICYFramer            │  render block
+├─ PlaybackCoordinator       │  ├─ AudioFileStreamParser│  ringBuffer.read()
+└─ UI state updates          │  ├─ AudioConverterDecoder│
+                             │  └─ ringBuffer.write()──►│
+                             └─ SessionDelegateProxy    └─ (zero allocations)
+```
+
+**Key design: three isolation domains** with clean boundaries:
+- MainActor: lifecycle, state, UI
+- Decode queue: all data processing (can allocate, not RT)
+- Audio IO thread: render block only (zero allocations, RT-safe)
+
+#### Pattern 1: Sine Wave Diagnostic for Audio Path Isolation
+
+**The most valuable debugging technique discovered in this task.**
+
+When audio output is corrupted, replace the render block with a 440Hz sine wave generator:
+
+```swift
+// Temporary diagnostic — generates pure tone instead of reading ring buffer
+for i in 0..<Int(frameCount) {
+    let sample = sinf(2.0 * .pi * 440.0 * phase / sampleRate) * 0.3
+    floatPtr[i * 2] = sample       // L
+    floatPtr[i * 2 + 1] = sample   // R
+    phase += 1
+}
+```
+
+- **Clean tone** → engine path is correct, problem is upstream (decoder/framer)
+- **Warped tone** → engine format/graph setup is wrong
+- **No sound** → source node not connected
+
+This test takes 30 seconds and immediately isolates whether corruption is in the engine or data production. **Always do this FIRST when debugging audio corruption.**
+
+#### Pattern 2: ICY Framer Race Prevention
+
+**CRITICAL:** The ICY framer must be configured EXACTLY ONCE, from the URLSession delegate queue, BEFORE any data arrives:
+
+```swift
+// CORRECT: Configure framer directly from response callback
+onResponse: { [weak context] response in
+    if let httpResponse = response as? HTTPURLResponse {
+        let metaInt = extractICYMetaInt(from: httpResponse.allHeaderFields) ?? 0
+        context?.configureFramer(metaInterval: metaInt)  // dispatches to decode queue
+    }
+    // State updates go to MainActor separately
+    Task { @MainActor in self?.handleHTTPResponse(response) }
+}
+
+// WRONG: Configure from MainActor (data arrives before config)
+// handleHTTPResponse runs on MainActor → dispatches to decode queue
+// but data already arrived on decode queue via onData → framer unconfigured
+```
+
+**Root cause of stream warping:** `configureFramer()` called twice — once from delegate queue (correct) and once from MainActor (delayed). The second call reset the byte counter mid-stream, corrupting ICY metadata boundaries for the entire session.
+
+**Prevention rule:** When moving a function call to fix a race, **grep for ALL call sites and remove the original.**
+
+#### Pattern 3: Explicit AVAudioEngine Graph Formats (No `nil`)
+
+After any graph reconfiguration (stream bridge activate/deactivate), use EXPLICIT formats for all connections:
+
+```swift
+// WRONG: nil causes EQ format stickiness from previous connection → -10868
+audioEngine.connect(playerNode, to: equalizer.eqNode, format: nil)
+
+// CORRECT: explicit format clears stale state
+let graphFormat = AVAudioFormat(
+    commonFormat: .pcmFormatFloat32,
+    sampleRate: outputNode.inputFormat(forBus: 0).sampleRate,
+    channels: fileChannels,  // from audioFile.processingFormat.channelCount
+    interleaved: false
+)!
+audioEngine.connect(playerNode, to: equalizer.eqNode, format: graphFormat)
+```
+
+Also use `disconnectNodeInput(eqNode, bus: 0)` to clear stale input connections — `disconnectNodeOutput` alone doesn't clear the receiving node's format cache.
+
+#### Pattern 4: Bridge Deactivation at the Choke Point
+
+All local file playback paths (coordinator, direct playlist click, drag-and-drop) must deactivate the stream bridge before rewiring:
+
+```swift
+private func rewireForCurrentFile() {
+    // This is the SINGLE choke point for ALL local file play paths
+    if isBridgeActive {
+        deactivateStreamBridge()
+    }
+    // ... stop, disconnect, reconnect, prepare, start
+}
+```
+
+Without this, the streamSourceNode remains attached to the engine graph, causing -10868 on the next engine start.
+
+#### Pattern 5: AudioConverter Input Callback Lifecycle
+
+Apple's `AudioConverterFillComplexBuffer` input callback has strict buffer lifetime requirements:
+
+```swift
+// The callback pulls packets from a queue, keeping previous buffer alive
+// until the NEXT callback invocation (Apple's contract)
+private func advanceToNextPacket() -> Bool {
+    freeCurrentInput()  // Safe: converter called us again = done with previous
+    guard !packetQueue.isEmpty else { return false }
+    let packet = packetQueue.removeFirst()
+    // Copy to stable allocation that persists across callback return
+    currentInputBuffer = .allocate(byteCount: packet.data.count, ...)
+    packet.data.copyBytes(to: currentInputBuffer!, count: packet.data.count)
+    return true
+}
+```
+
+**Also:** Split batched packets into individual queue entries. AudioFileStream delivers multiple packets per callback, but if the output buffer fills mid-batch, remaining packets are lost.
+
+#### Pattern 6: M3U/PLS Playlist Resolution
+
+AVPlayer handles playlist URLs natively. Custom pipelines must resolve them first:
+
+```swift
+if Self.isPlaylistURL(url) {
+    let streamURL = try await Self.resolvePlaylistURL(url)
+    startDirectStream(url: streamURL, ringBuffer: rb)
+    return
+}
+```
+
+Support both M3U (line-based URLs) and PLS (`FileN=url` format).
+
+#### Pattern 7: Engine Start as Hard Gate
+
+Never install taps or call `playerNode.play()` if the engine failed to start:
+
+```swift
+guard startEngineIfNeeded() else {
+    AppLog.error(.audio, "Play aborted — engine failed to start")
+    return
+}
+// Only reach here if engine is running
+installVisualizerTapIfNeeded()
+playerNode.play()
+```
+
+Without this gate, failed engine starts produce confusing error cascades.
+
+#### Pattern 8: Error Propagation from C API Wrappers
+
+C API failures (AudioConverterNew, AudioFileStreamOpen, AudioFileStreamParseBytes) must propagate to the UI — not just log:
+
+```swift
+// Parser surfaces errors via callback
+parser.onError = { [weak self] message in
+    self?.onError(message, self?.generation ?? 0)
+}
+
+// Pipeline transitions to .error state
+onError: { [weak self] message, gen in
+    Task { @MainActor [weak self] in
+        self?.stopInternal()
+        self?.setState(.error(message))
+    }
+}
+```
+
+Without this, failures silently leave the user stuck on "Connecting..." forever.
+
+#### Debugging Methodology (Recommended Order)
+
+1. **Sine wave test** — isolates engine path vs data production (30 seconds)
+2. **Raw pre-decoder dump** — capture MP3 bytes from ICYFramer output, play in QuickTime
+3. **Post-decoder dump** — capture PCM, convert to WAV, listen for corruption
+4. **`grep -r` for duplicate calls** — when fixing races by adding early calls
+5. **Add/remove diagnostics** — if bug changes, it's timing-related
+6. **Oracle consultation** — share actual code files, not descriptions
+7. **Agent teams** — parallel Oracle + Gemini research for complex issues
+
+#### Key Invariants
+
+- ICYFramer.configure() called EXACTLY ONCE per stream (from delegate queue)
+- AudioConverterDispose BEFORE AudioFileStreamClose (C API ordering)
+- deactivateStreamBridge in rewireForCurrentFile (catches all local play paths)
+- Explicit format (not nil) for all graph connections after bridge was active
+- Ring buffer: 32768 frames (~743ms), prebuffer: 16384 frames (~371ms)
+- No `audioEngine.reset()` for format cleanup — just disconnect/reconnect with explicit format
+- Engine start must succeed before tap install or playerNode.play()
+
+#### Swift 6.2 Concurrency Patterns
+
+```swift
+// @MainActor pipeline with queue-confined DecodeContext
+@MainActor final class StreamDecodePipeline {
+    private let decodeQueue = DispatchQueue(label: "...", qos: .userInitiated)
+    private var decodeContext: DecodeContext?  // @unchecked Sendable, queue-confined
+}
+
+// SessionDelegateProxy: immutable let closures via init (not mutable var)
+private final class SessionDelegateProxy: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+    private let onResponse: @Sendable (URLResponse) -> Void  // let, not var
+    private let onData: @Sendable (Data) -> Void
+    init(onResponse:, onData:, onComplete:)  // set once, immutable
+}
+
+// nonisolated static for real-time audio render block
+private nonisolated static func makeStreamRenderBlock(
+    ringBuffer: LockFreeRingBuffer
+) -> AVAudioSourceNodeRenderBlock { ... }
+
+// isolated deinit for StreamPlayer (Swift 6.2)
+isolated deinit {
+    pipeline.stop()  // safe: runs on @MainActor
+}
+
+// nonisolated static for pure functions called from delegate queue
+private nonisolated static func extractICYMetaInt(
+    from headers: [AnyHashable: Any]
+) -> Int? { ... }
+```
+
+#### Checklist: Building a Custom Audio Decode Pipeline
+
+- [ ] **ICYFramer** as pure Sendable struct (no shared state)
+- [ ] **AudioFileStreamParser** with debug queue confinement assertions
+- [ ] **AudioConverterDecoder** with stable input buffer lifecycle
+- [ ] **Split batched packets** into individual queue entries
+- [ ] **StreamDecodePipeline** with generation token for stale callback rejection
+- [ ] **Prebuffer threshold** before activating engine bridge (~16384 frames)
+- [ ] **M3U/PLS playlist resolution** before streaming
+- [ ] **ICY framer configured from delegate queue** (NOT via MainActor hop)
+- [ ] **Explicit graph formats** (never nil after bridge was active)
+- [ ] **Bridge deactivation at rewireForCurrentFile** choke point
+- [ ] **Engine start hard gate** (abort play if start fails)
+- [ ] **Error propagation** from C API wrappers to UI state
+- [ ] **Sine wave test** to verify engine path before debugging data chain
+- [ ] **Oracle review** of full pipeline code
+- [ ] **Swift 6.2 concurrency review** (MainActor, queue confinement, Sendable)
+
 ---
 
 **Built with ❤️ for retro computing on modern macOS**
 
-*This skill document captures 9+ months of lessons learned building MacAmp, distilled into actionable patterns for building similar retro-styled macOS applications with modern Swift 6 patterns. Updated with T3 MainWindow Layer Decomposition (PR #54, Feb 2026) -- full implementation of the layer subview pattern: 10 files, displayTitleProvider closure, Task.sleep modernization, scrubResetTask cancellation, xcodeproj regeneration workflow. Also includes coordinator volume routing and capability flags, multi-backend volume fan-out, asymmetric SwiftUI bindings, error-recovery capability flags, SwiftUI view decomposition architecture, memory & CPU optimization with SPSC shared buffer for zero-allocation audio thread data transfer, Goertzel precomputation, lazy skin loading, CGImage memory leak fixes, WindowCoordinator Facade + Composition refactoring, god object decomposition, phased migration strategy, Oracle-driven quality gates, and Swift 6.2 concurrency compliance.*
+*This skill document captures 10+ months of lessons learned building MacAmp, distilled into actionable patterns for building similar retro-styled macOS applications with modern Swift 6.2 patterns. Updated with Unified Audio Pipeline (Mar 2026) — custom stream decode replacing AVPlayer, sine wave diagnostics, ICY metadata framing, AudioConverter lifecycle, engine graph management, and comprehensive debugging methodology. Also includes T3 MainWindow Layer Decomposition (PR #54, Feb 2026), coordinator volume routing and capability flags, SwiftUI view decomposition architecture, memory & CPU optimization with SPSC shared buffer, WindowCoordinator Facade + Composition refactoring, Oracle-driven quality gates, and Swift 6.2 concurrency compliance.*
