@@ -52,11 +52,11 @@
 
 ### Phase 1d: AudioPlayer `isolated deinit` (Final Shape)
 
-- [ ] **1d-1.** AudioPlayer.swift — `isolated deinit`, remove `nonisolated(unsafe)` on `progressTimer`
-- [ ] **1d-2.** Remove `Thread.isMainThread`/`DispatchQueue.main.async`/`MainActor.assumeIsolated` deinit bridge
-- [ ] **1d-3.** Add bridge cleanup: `deactivateStreamBridge()`, nil streamSourceNode/streamRingBuffer
-- [ ] **1d-4.** Final deinit: `progressTimer?.invalidate(); deactivateStreamBridge(); visualizerPipeline.removeTap()`
-- [ ] **1d-5.** Build with TSan — test local play → close, stream play → close, switch → close
+- [x] **1d-1.** AudioPlayer.swift — `isolated deinit`, removed `nonisolated(unsafe)` on `progressTimer`
+- [x] **1d-2.** Removed entire `Thread.isMainThread`/`DispatchQueue.main.async`/`MainActor.assumeIsolated` bridge (17 lines → 3 lines)
+- [x] **1d-3.** Bridge cleanup via `deactivateStreamBridge()` (idempotent, handles nil gracefully)
+- [x] **1d-4.** Final deinit: `isolated deinit { progressTimer?.invalidate(); deactivateStreamBridge(); visualizerPipeline.removeTap() }`
+- [x] **1d-5.** Build with TSan — 40/40 pass
 
 ### Phase 4: `@concurrent` for Offloaded Work
 

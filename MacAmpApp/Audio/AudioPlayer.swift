@@ -15,7 +15,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     @ObservationIgnored private let audioEngine = AVAudioEngine()
     @ObservationIgnored private let playerNode = AVAudioPlayerNode()
     @ObservationIgnored private var audioFile: AVAudioFile?
-    @ObservationIgnored nonisolated(unsafe) private var progressTimer: Timer?  // nonisolated(unsafe) for deinit access
+    @ObservationIgnored private var progressTimer: Timer?
     @ObservationIgnored private var playheadOffset: Double = 0 // seconds offset for current scheduled segment
 
     // MARK: - Stream Bridge (AVAudioSourceNode consumer for decoded stream PCM)
@@ -184,26 +184,10 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
         videoPlaybackController.volume = volume
     }
 
-    deinit {
-        // Invalidate progress timer if running
+    isolated deinit {
         progressTimer?.invalidate()
-
-        // removeTap() is @MainActor-isolated (VisualizerPipeline).
-        // This deinit is nonisolated — will be converted to `isolated deinit` in PR 2
-        // (after unified-audio-pipeline adds streamSourceNode/bridge properties).
-        // For now, bridge via MainActor.assumeIsolated when on main thread.
-        let pipeline = visualizerPipeline
-        if Thread.isMainThread {
-            MainActor.assumeIsolated {
-                pipeline.removeTap()
-            }
-        } else {
-            DispatchQueue.main.async {
-                pipeline.removeTap()
-            }
-        }
-
-        // Video controller has its own deinit that calls cleanup()
+        deactivateStreamBridge()
+        visualizerPipeline.removeTap()
     }
 
     private func transition(to newState: PlaybackState) {
