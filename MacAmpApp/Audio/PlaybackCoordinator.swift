@@ -246,8 +246,7 @@ final class PlaybackCoordinator {
         case .localTrack:
             audioPlayer.play()
         case .radioStation:
-            // Just resume, don't rebuild stream
-            streamPlayer.player.play()
+            streamPlayer.resume()
         case .none:
             break
         }

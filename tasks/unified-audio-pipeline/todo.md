@@ -57,17 +57,18 @@
 - [x] **1.4n** Error/completion paths call stopInternal() for full teardown — Oracle MEDIUM fix
 - [x] **1.4o** isShutdown guard in decode loop prevents stale PCM after stop — Oracle HIGH fix
 
-### 1.5 StreamPlayer Modification
-- [ ] **1.5a** Remove AVPlayer, AVPlayerItem, AVPlayerItemMetadataOutput, NSObject base class from StreamPlayer
-- [ ] **1.5b** Remove Combine status/item observers, `@preconcurrency import AVFoundation`, `import Combine`
-- [ ] **1.5c** Add StreamDecodePipeline as dependency (init parameter or lazy creation)
-- [ ] **1.5d** Wire pipeline callbacks to @Observable state (isPlaying, isBuffering, streamTitle, streamArtist, error)
-- [ ] **1.5e** Forward play(station:)/play(url:)/pause()/stop() to pipeline
-- [ ] **1.5f** Add `resume()` method (for PlaybackCoordinator togglePlayPause — replaces `streamPlayer.player.play()`)
-- [ ] **1.5g** Remove `let player = AVPlayer()` property (was internal for coordinator resume access)
-- [ ] **1.5h** Preserve volume/balance properties (volume applied via AVAudioSourceNode.volume in AudioPlayer)
-- [ ] **1.5i** Remove `import CoreMedia`, `import MediaToolbox` (no longer needed)
-- [ ] **1.5j** Add `isolated deinit` if StreamPlayer does cleanup (pipeline teardown); no `nonisolated(unsafe)` needed (Swift 6.2)
+### 1.5 StreamPlayer Modification — ✅ DONE
+- [x] **1.5a** Removed AVPlayer, AVPlayerItem, AVPlayerItemMetadataOutput, NSObject base class
+- [x] **1.5b** Removed Combine, @preconcurrency import AVFoundation, all observers
+- [x] **1.5c** Added StreamDecodePipeline as owned dependency (created in init)
+- [x] **1.5d** Wired pipeline callbacks to @Observable state via setupPipelineCallbacks()
+- [x] **1.5e** Forward play(station:)/play(url:)/pause()/stop() to pipeline
+- [x] **1.5f** Added `resume()` method; updated PlaybackCoordinator to use it
+- [x] **1.5g** Removed AVPlayer property; added currentRingBuffer/currentSampleRate for bridge
+- [x] **1.5h** Preserved volume/balance properties (stored, engine applies via AudioPlayer)
+- [x] **1.5i** No AVFoundation/CoreMedia/MediaToolbox imports needed
+- [x] **1.5j** Added `isolated deinit` calling `pipeline.stop()`
+- [x] **1.5k** Added `onFormatReady` callback for PlaybackCoordinator bridge activation
 
 ### 1.6 PlaybackCoordinator Bridge Lifecycle
 - [ ] **1.6a** Add `private var streamRingBuffer: LockFreeRingBuffer?` property
