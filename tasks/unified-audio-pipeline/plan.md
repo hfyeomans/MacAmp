@@ -58,6 +58,63 @@ HTTP URL → URLSession ──► ICYFramer ──► AudioFileStream ──► 
 
 **Key insight:** Both paths converge at AVAudioEngine. The engine doesn't know or care if PCM came from a local file or a decoded stream.
 
+## Swift 6.2 Adoption Notes (Added 2026-03-13)
+
+> **Prerequisite:** `swift-concurrency-62-cleanup` PR 1 must merge before this task starts.
+> That PR upgrades `SWIFT_VERSION` from 6.0 to 6.2 and establishes `isolated deinit` patterns.
+> See `tasks/swift-concurrency-62-cleanup/plan.md` for details.
+
+### Critical Behavioral Change: nonisolated async stays on caller
+
+In Swift 6.2, `nonisolated async` functions stay on the caller's actor instead of hopping to
+the cooperative pool. This directly affects this pipeline:
+
+- **Decode work must NOT be in `nonisolated async` methods on `@MainActor` StreamDecodePipeline.**
+  If it were, decode would accidentally run on the main thread, blocking UI.
+- **Keep decode work on the serial DispatchQueue** (synchronous, non-RT). This is unaffected
+  by the 6.2 change because it's DispatchQueue-based, not async/await.
+- **If `URLSession.asyncBytes` is used**, consumption must be in a `nonisolated @concurrent`
+  helper function, not inline in the `@MainActor` class body.
+- **C callbacks (AudioFileStream, AudioConverter) are NOT affected** by this change — they run
+  on whatever thread calls them (the decode serial queue).
+
+### New 6.2 Features to Adopt
+
+| Feature | Where | How |
+|---------|-------|-----|
+| `isolated deinit` | StreamPlayer (if deinit does cleanup) | Replace deinit with `isolated deinit` |
+| `isolated deinit` | StreamDecodePipeline (if @MainActor) | Use for URLSession/timer teardown |
+| `@MainActor @Sendable` closures | Pipeline callbacks (onStateChange, onFormatReady, onMetadata) | Explicit actor boundary in signature |
+| Task naming | Pipeline tasks (read/decode/reconnect) | Aids orphan-task debugging (V12) |
+| `Task.immediate` | Control-path state transitions (play/pause/stop) | Lower latency, NOT for decode loop |
+
+### StreamPlayer: Drop NSObject
+
+The rewritten StreamPlayer removes AVPlayer and `AVPlayerItemMetadataOutputPushDelegate`.
+**NSObject conformance is no longer needed** (it was required only for the ObjC delegate protocol).
+Drop `NSObject` base class. This simplifies the type and enables `isolated deinit` without
+the ObjC runtime complications.
+
+### AudioPlayer: Pre-plan for `isolated deinit`
+
+Pipeline Phase 1.7 adds bridge state to AudioPlayer. The `isolated deinit` will be added by
+`swift-concurrency-62-cleanup` PR 2 AFTER this task merges. To avoid a second refactor:
+
+- Make `deactivateStreamBridge()` idempotent (safe to call even if bridge is not active)
+- Ensure cleanup order: `deactivateStreamBridge()` → nil streamSourceNode → nil streamRingBuffer
+- Do NOT add `nonisolated(unsafe)` to new bridge properties — they'll be covered by `isolated deinit`
+
+### Type Isolation for New Files
+
+| Type | Isolation | Rationale |
+|------|-----------|-----------|
+| `ICYFramer` | `Sendable` struct, no isolation | Pure value type, no mutable state beyond counters |
+| `AudioFileStreamParser` | No annotation (decode-queue-confined) | Accessed only from serial decode queue |
+| `AudioConverterDecoder` | No annotation (decode-queue-confined) | Accessed only from serial decode queue |
+| `StreamDecodePipeline` | `@MainActor` class | Lifecycle/state on main; decode on serial queue |
+
+---
+
 ## Implementation Phases
 
 ### Phase 1: Core Decode Pipeline (MVP)
@@ -101,7 +158,9 @@ Wraps Apple's AudioConverter for decoding compressed packets to Float32 PCM.
 - Packet descriptions must be copied alongside packet data (same lifetime)
 - `AudioConverterDispose()` MUST be called before `AudioFileStreamClose()` (converter may reference parser state)
 - After `stop()`, invalidate all callback context pointers before disposing C objects
-- Use `Unmanaged.passRetained/release` pattern for callback context (same as VisualizerPipeline)
+- Use `Unmanaged.passRetained/release` pattern for callback context (note: VisualizerPipeline
+  uses closure-based tap, not Unmanaged — this pipeline uses Unmanaged for C API callbacks)
+- No `@concurrent` needed on C callback functions themselves (they run on decode queue)
 
 #### 1.4 StreamDecodePipeline (new file: `MacAmpApp/Audio/Streaming/StreamDecodePipeline.swift`)
 
@@ -115,10 +174,10 @@ Orchestrates the full pipeline. **Note (Oracle P1-1):** Cannot be a Swift `actor
 - Ring buffer write happens on decode queue (non-RT, can allocate)
 - **Stream generation token (Oracle P1-3):** Each `start()` call increments a generation counter. Callbacks check generation before activating bridge or writing to ring buffer. Prevents stale callbacks from previous streams.
 - **Prebuffer threshold (Oracle P2-4):** Don't call `onFormatReady` until ring buffer has minimum ~2048 frames buffered. Prevents startup underruns.
-- Publishes state changes to StreamPlayer via @Sendable callbacks:
-  - `onStateChange: (StreamState) -> Void` (playing/buffering/error)
-  - `onFormatReady: (Float64) -> Void` (triggers activateStreamBridge)
-  - `onMetadata: (ICYMetadata) -> Void` (StreamTitle/StreamArtist)
+- Publishes state changes to StreamPlayer via `@MainActor @Sendable` callbacks:
+  - `onStateChange: @MainActor @Sendable (StreamState) -> Void` (playing/buffering/error)
+  - `onFormatReady: @MainActor @Sendable (Float64) -> Void` (triggers activateStreamBridge)
+  - `onMetadata: @MainActor @Sendable (ICYMetadata) -> Void` (StreamTitle/StreamArtist)
 - **Format hint handling (Oracle P2-3):** Map Content-Type broadly: `audio/mpeg` → MP3, `audio/aac`/`audio/aacp`/`audio/x-aac` → AAC, `application/octet-stream` → auto-detect (pass 0 to AudioFileStreamOpen)
 
 #### 1.5 StreamPlayer Modification
@@ -146,6 +205,13 @@ Replace AVPlayer internals with StreamDecodePipeline.
 
 **Remove:**
 - `let player = AVPlayer()` property (was `internal` for PlaybackCoordinator resume access — no longer needed)
+- `NSObject` base class (was required for `AVPlayerItemMetadataOutputPushDelegate` — no longer needed)
+- `@preconcurrency import AVFoundation` (no longer importing AVFoundation for streaming)
+- `import Combine` (observers removed)
+
+**Swift 6.2 adoption:**
+- Add `isolated deinit` if deinit performs cleanup (pipeline teardown, timer invalidation)
+- No `nonisolated(unsafe)` properties needed — `isolated deinit` handles actor-isolated cleanup
 
 #### 1.6 PlaybackCoordinator Bridge Lifecycle
 
@@ -210,7 +276,7 @@ Re-apply `|| audioPlayer.isBridgeActive` to supportsEQ/Balance/Visualizer.
 | `Audio/Streaming/ICYFramer.swift` | NEW | ICY metadata protocol parser |
 | `Audio/Streaming/AudioFileStreamParser.swift` | NEW | AudioFileStream C API wrapper |
 | `Audio/Streaming/AudioConverterDecoder.swift` | NEW | AudioConverter C API wrapper |
-| `Audio/Streaming/StreamDecodePipeline.swift` | NEW | Pipeline orchestrator (actor) |
+| `Audio/Streaming/StreamDecodePipeline.swift` | NEW | Pipeline orchestrator (`@MainActor` class + decode queue) |
 | `Audio/StreamPlayer.swift` | MODIFY | Replace AVPlayer with pipeline |
 | `Audio/AudioPlayer.swift` | MODIFY | Re-add consumer side (sourceNode, bridge) |
 | `Audio/PlaybackCoordinator.swift` | MODIFY | Simplified bridge lifecycle + flags |
@@ -234,7 +300,7 @@ All MTAudioProcessingTap code was already reverted to main in commit `987b2f3`. 
 ## Commit Strategy
 
 1. Phase 1.1-1.3: Core decode components (ICYFramer, Parser, Converter)
-2. Phase 1.4: StreamDecodePipeline actor
+2. Phase 1.4: StreamDecodePipeline (`@MainActor` class + decode queue)
 3. Phase 1.5: StreamPlayer modification
 4. Phase 1.6-1.7: PlaybackCoordinator + AudioPlayer bridge
 5. Phase 1.8-1.9: VisualizerView + capability flags
@@ -265,7 +331,7 @@ All MTAudioProcessingTap code was already reverted to main in commit `987b2f3`. 
 | AudioFileStream doesn't support stream format | MEDIUM | Format hint based on Content-Type; fallback to auto-detect |
 | AudioConverter sample rate mismatch | LOW | Normalize all output to 44100 Hz; converter handles SRC |
 | Network jitter causes ring buffer underrun | LOW | 4096 frame buffer (~85ms); AudioConverter provides steady output |
-| Swift 6.2 C callback isolation | MEDIUM | Follow VisualizerPipeline.makeTapHandler() pattern; nonisolated static |
+| Swift 6.2 nonisolated-async-stays-on-caller | MEDIUM | Keep decode on serial DispatchQueue (not nonisolated async); use @concurrent for any async helpers that must offload |
 | ICY metadata corrupts audio stream | LOW | ICYFramer strips metadata before parser sees bytes |
 
 ## Prior Work Reference (From T5 Phase 2 Branch)

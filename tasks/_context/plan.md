@@ -9,12 +9,12 @@
 
 | Metric | Value |
 |--------|-------|
-| Tasks | 6 (T1-T6) |
+| Tasks | 8 (T1-T8) |
 | Plans complete | 6 of 6 |
 | Pending before start | None — all resolved |
 | Waves | 3 |
 | Branches | 6 |
-| PRs | 5 (Wave 1: 3, Wave 2: 2, Wave 3: TBD) |
+| PRs | 8+ (Wave 1: 3 merged, Wave 2: 2 merged, Wave 3: 3+ TBD) |
 | Max parallel worktrees | 3 (Wave 1) |
 | Semantic file conflicts | T1+T5 (AudioPlayer), T3+T5 (MainWindow), T4+T6 (Package) |
 | pbxproj strategy | Sequential merge: A -> C -> B |
@@ -40,12 +40,15 @@ Wave 2 (SEQUENTIAL — 1 Claude instance, 2 separate PRs)
 
     ──── merge each PR sequentially ────
 
-Wave 3 (SEQUENTIAL — 1 Claude instance)
-└── T5 Phase 2 (Loopback Bridge)
-    └── Optional: T1 Phase 4 (Engine transport extraction)
+Wave 3 (SEQUENTIAL — strictly ordered, each step depends on previous merge)
+├── Step 3a: T8 PR 1 (Swift 6.2 foundation: SWIFT_VERSION + isolated deinit + DispatchQueue)
+├── Step 3b: T7 (Unified Audio Pipeline: custom stream decode, benefits from 6.2)
+├── Step 3c: T8 PR 2 (AudioPlayer isolated deinit + @concurrent, post-pipeline)
+└── Step 3d: T1 Phase 4 (Engine transport extraction, deferred until stable)
 ```
 
-**Total: 6 branches across 3 waves, 5 PRs**
+**Total: 8 tasks (T1-T8) across 3 waves, 8+ PRs**
+**Wave 3 note:** T8 is split across 3a/3c because AudioPlayer.swift is modified by both T7 and T8.
 
 ---
 
@@ -266,34 +269,48 @@ This order ensures all Package.swift changes happen coherently.
 
 ---
 
-## Wave 3: Advanced Audio Pipeline
+## Wave 3: Swift 6.2 Foundation + Unified Audio Pipeline (Updated 2026-03-13)
 
-### Timing: After Wave 2 merge (T4 ring buffer + T5 Ph1 both available)
+### Timing: After Wave 2 merge. Strictly sequential (3a→3b→3c→3d).
 
-### T5 Phase 2: Loopback Bridge
+**Wave 3 Pivot:** T5 Phase 2 MTAudioProcessingTap approach FAILED (callbacks never fire for
+streaming AVPlayerItems). Replaced by T7 (unified-audio-pipeline): custom decode using
+AudioFileStream + AudioConverter → LockFreeRingBuffer → AVAudioSourceNode → AVAudioEngine.
 
-**Branch:** `feature/stream-loopback-bridge`
-**Claude Instance:** Dedicated instance
-**Estimated effort:** High (new MTAudioProcessingTap, engine graph switching, real-time thread safety)
-**pbxproj impact:** Minimal (ring buffer already added in T4)
+New task T8 (swift-concurrency-62-cleanup) added as prerequisite — upgrades SWIFT_VERSION to 6.2,
+establishes `isolated deinit` pattern, and cleans up DispatchQueue usage. T8 is split across
+Steps 3a and 3c because AudioPlayer.swift is modified by both T7 and T8.
 
-| Step | What | Files |
-|------|------|-------|
-| 2.1 | Integrate LockFreeRingBuffer | Import from T4 (already in project) |
-| 2.2 | Implement MTAudioProcessingTap on StreamPlayer | StreamPlayer.swift |
-| 2.3 | Create AVAudioSourceNode for stream injection | AudioPlayer.swift |
-| 2.4 | Wire stream source node into engine graph | AudioPlayer.swift |
-| 2.5 | Update capability flags (all true with bridge) | PlaybackCoordinator.swift |
-| 2.6 | Update VisualizerView playback state check | VisualizerView.swift |
-| 2.7 | Handle ABR format changes | StreamPlayer.swift |
+### Step 3a: T8 PR 1 — Swift 6.2 Foundation
 
-**Prerequisites (all met by this point):**
-- T4 (ring buffer) merged and tested in Wave 1
+**Branch:** `feature/swift-concurrency-62-cleanup`
+**Scope:** SWIFT_VERSION 6.0→6.2, `@preconcurrency import ZIPFoundation`, LockFreeRingBuffer
+warning fixes, `isolated deinit` (VideoPlaybackController, VisualizerPipeline, WindowCoordinator),
+DispatchQueue→Task cleanup (WindowAccessor, PreferencesView)
+
+### Step 3b: T7 — Unified Audio Pipeline
+
+**Branch:** TBD (from main after 3a merges)
+**Scope:** Custom decode pipeline (ICYFramer, AudioFileStreamParser, AudioConverterDecoder,
+StreamDecodePipeline), StreamPlayer rewrite (removes AVPlayer), AudioPlayer bridge (sourceNode),
+PlaybackCoordinator bridge lifecycle, VisualizerView isEngineRendering, capability flags.
+Benefits from Swift 6.2: `isolated deinit` for StreamPlayer, `@MainActor @Sendable` callbacks,
+task naming. See `tasks/unified-audio-pipeline/plan.md` "Swift 6.2 Adoption Notes" section.
+
+### Step 3c: T8 PR 2 — Post-Pipeline Concurrency Cleanup
+
+**Branch:** TBD (from main after 3b merges)
+**Scope:** AudioPlayer `isolated deinit` (covers final shape with streamSourceNode/bridge),
+`@concurrent` static functions (EQPresetStore, SkinManager, MetadataLoader).
+
+### Step 3d: T1 Phase 4 — Engine Transport Extraction (DEFERRED)
+
+Engine boundaries change when streamSourceNode is added. Extract transport AFTER T7+T8 stabilize.
+
+**Prerequisites (all met):**
+- T4 (ring buffer) merged in Wave 1
 - T1 Phases 1-3 merged (cleaner AudioPlayer facade) in Wave 1
 - T5 Phase 1 merged (capability flags infrastructure) in Wave 2
-
-**Optional: T1 Phase 4 (Engine Transport Extraction)**
-If desired, T1 Phase 4 can be done AFTER T5 Phase 2 or combined with it. Both touch engine internals — combining gives clearer extraction boundaries since the engine graph now has two source paths (playerNode + streamSourceNode).
 
 ---
 
@@ -323,12 +340,19 @@ If desired, T1 Phase 4 can be done AFTER T5 Phase 2 or combined with it. Both to
                     └──────────────┬───────────────────────────┘
                                    │
                     ┌──────────────▼───────────────────────────┐
-                    │           WAVE 3 (sequential)            │
+                    │      WAVE 3 (strictly sequential)        │
                     │                                          │
-                    │  T5 Ph2 ──── Loopback Bridge            │
+                    │  3a: T8 PR1 ── Swift 6.2 foundation     │
                     │      │                                   │
                     │      ▼                                   │
-                    │  T1 Ph4 ──── (optional, deferred)       │
+                    │  3b: T7 ────── Unified Audio Pipeline    │
+                    │      │                                   │
+                    │      ▼                                   │
+                    │  3c: T8 PR2 ── AudioPlayer deinit +     │
+                    │                @concurrent               │
+                    │      │                                   │
+                    │      ▼                                   │
+                    │  3d: T1 Ph4 ── (deferred)               │
                     │                                          │
                     └──────────────────────────────────────────┘
 ```
@@ -339,14 +363,18 @@ If desired, T1 Phase 4 can be done AFTER T5 Phase 2 or combined with it. Both to
 
 | Relationship | Type | Detail |
 |-------------|------|--------|
-| T4 -> T5 Phase 2 | **Hard dependency** | Ring buffer is prerequisite |
-| T5 Ph1 -> T5 Ph2 | **Hard dependency** | Capability flags needed |
+| T4 -> T5 Phase 2 | **Hard dependency (resolved)** | Ring buffer is prerequisite — merged in Wave 1 |
+| T5 Ph1 -> T5 Ph2 | **Hard dependency (resolved)** | Capability flags needed — merged in Wave 2 |
 | N1-N6 -> T5 Ph1 | **Hard dependency (resolved)** | PR #49 merged |
-| T1 + T5 | **File conflict** | Both modify AudioPlayer.swift — T1 first |
-| T3 + T5 Ph1 | **File conflict** | Both modify WinampMainWindow.swift — T5 Ph1 first |
-| T4 + T6 | **File conflict** | Both modify Package.swift — combined in one branch |
-| T1 Ph4 + T5 Ph2 | **Architectural conflict** | Both restructure engine internals — Ph4 deferred |
-| T1, T2, T3, T4 | **pbxproj conflict** | All create files — sequential merge with mechanical resolution |
+| T8 PR1 -> T7 | **Hard dependency** | T7 needs SWIFT_VERSION 6.2 from T8 PR1 |
+| T7 -> T8 PR2 | **Hard dependency** | T8 PR2 needs AudioPlayer's final shape from T7 |
+| T8 + T7 | **File conflict** | Both modify AudioPlayer.swift — T8 split into PR1 (non-AudioPlayer) + PR2 (post-T7) |
+| T8 + T7 | **File conflict** | Both modify StreamPlayer.swift — T8 Phase 3 DROPPED (T7 rewrites file) |
+| T1 + T5 | **File conflict (resolved)** | Both modify AudioPlayer.swift — T1 first (Wave 1) |
+| T3 + T5 Ph1 | **File conflict (resolved)** | Both modify WinampMainWindow.swift — T5 Ph1 first (Wave 2) |
+| T4 + T6 | **File conflict (resolved)** | Both modify Package.swift — combined in one branch (Wave 1) |
+| T1 Ph4 + T7 | **Architectural conflict** | Both restructure engine internals — Ph4 deferred to Step 3d |
+| T1, T2, T3, T4 | **pbxproj conflict (resolved)** | Sequential merge in Wave 1 |
 
 ## What Makes Plans Obsolete If Done in Wrong Order
 

@@ -8,19 +8,26 @@
 
 | Metric | Value |
 |--------|-------|
-| Tasks | 6 (T1-T6) |
+| Tasks | 8 (T1-T8) |
 | Plans complete | 6 of 6 |
 | Blocking actions | None — all resolved |
 | Waves | 3 |
 | Branches | 6 |
 | PRs | 6 (Wave 1: 3 merged, Wave 2a: PR #53 merged, Wave 2b: PR #54 merged, Wave 3 TBD) |
-| Current wave | Wave 3 NEXT (T5 Ph2 Loopback Bridge + optional T1 Ph4) |
+| Current wave | Wave 3 NEXT: T8 PR1 (Swift 6.2) → T7 (Pipeline) → T8 PR2 (AudioPlayer deinit) |
 
 ---
 
-## Current Phase: WAVE 2 COMPLETE — Wave 3 Next
+## Current Phase: WAVE 3 PREPARATION — T8 PR 1 Next
 
-Wave 2 complete: T5 Phase 1 merged PR #53 (2026-02-22), T3 merged PR #54 (2026-02-22). Wave 3 (T5 Phase 2 Loopback Bridge + optional T1 Phase 4) is next.
+Wave 2 complete: T5 Phase 1 merged PR #53 (2026-02-22), T3 merged PR #54 (2026-02-22).
+Wave 3 pivoted: T5 Phase 2 MTAudioProcessingTap failed → replaced by T7 (unified-audio-pipeline).
+New task T8 (swift-concurrency-62-cleanup) added as prerequisite for T7.
+
+**Execution order (2026-03-13):**
+1. T8 PR 1: Swift 6.2 foundation (SWIFT_VERSION upgrade + isolated deinit + DispatchQueue cleanup)
+2. T7: Unified audio pipeline (custom stream decode, benefits from 6.2)
+3. T8 PR 2: AudioPlayer isolated deinit + @concurrent (post-pipeline, final shape)
 
 ---
 
@@ -44,7 +51,8 @@ Wave 2 complete: T5 Phase 1 merged PR #53 (2026-02-22), T3 merged PR #54 (2026-0
 | T3 | `mainwindow-layer-decomposition` | **COMPLETE** (PR #54 merged) | Wave 2b — MERGED | None |
 | T4 | `lock-free-ring-buffer` | **COMPLETE** (benchmarks deferred) | Wave 1 — done, awaiting PR | None |
 | T5 | `internet-streaming-volume-control` | **Ph1 COMPLETE (merged PR #53)**, Ph2 MTAudioProcessingTap FAILED | Wave 2a — MERGED | Ph2 PIVOTED → new task `unified-audio-pipeline` |
-| T7 | `unified-audio-pipeline` | PLAN + TODOS COMPLETE, awaiting Oracle review | Wave 3a-new | Replaces T5 Ph2. Custom decode pipeline. |
+| T7 | `unified-audio-pipeline` | PLAN UPDATED WITH SWIFT 6.2, awaiting T8 PR 1 merge | Wave 3b | Replaces T5 Ph2. Custom decode pipeline. Blocked on T8 PR 1. |
+| T8 | `swift-concurrency-62-cleanup` | PLAN COMPLETE, ready for implementation | Wave 3a (PR 1) + Wave 3c (PR 2) | PR 1: SWIFT_VERSION 6.2 + isolated deinit (non-AudioPlayer) + DispatchQueue. PR 2: AudioPlayer deinit + @concurrent (after T7). |
 | T6 | `swift-testing-modernization` | **COMPLETE** (deferrals noted) | Wave 1 — done, awaiting PR | None |
 
 ---
@@ -70,13 +78,17 @@ Wave 2 complete: T5 Phase 1 merged PR #53 (2026-02-22), T3 merged PR #54 (2026-0
 
 **Merge strategy:** Two separate PRs. T5 Ph1 merges first; T3 merges after verification.
 
-### Wave 3: Advanced Audio Pipeline — PIVOTING
+### Wave 3: Swift 6.2 + Unified Audio Pipeline — SEQUENTIAL
 
 | Step | Task | Branch | Status | Depends On |
 |------|------|--------|--------|-----------|
-| 3a | T5 Phase 2 (Loopback Bridge) | `feature/stream-loopback-bridge` | **PIVOTED** — MTAudioProcessingTap dead for streams | T4 merge + T5 Ph1 merge |
-| 3a-new | **Unified Audio Pipeline** (custom stream decode) | TBD | RESEARCH COMPLETE | Replaces 3a |
-| 3b | T1 Phase 4 (engine transport) | After unified pipeline | DEFERRED | Re-evaluate after 3a-new — engine boundaries will change |
+| 3a | T8 PR 1 (Swift 6.2 foundation) | `feature/swift-concurrency-62-cleanup` | 📋 PLANNED — ready for implementation | Wave 2 merges (done) |
+| 3b | T7 (Unified Audio Pipeline) | TBD (from main after 3a merges) | 📋 PLANNED — plan updated with 6.2 | T8 PR 1 merge |
+| 3c | T8 PR 2 (AudioPlayer deinit + @concurrent) | TBD (from main after 3b merges) | 📋 PLANNED | T7 merge |
+| 3d | T1 Phase 4 (engine transport) | After 3c | DEFERRED | Engine boundaries stable after T7+T8 |
+
+**Wave 3 execution is strictly sequential:** Each step depends on the previous merge.
+T8 is split across 3a and 3c because AudioPlayer.swift is modified by both T8 and T7.
 
 **Wave 3 Pivot:** MTAudioProcessingTap does not work with streaming AVPlayerItems (Apple QA1716). CoreAudio Process Tap rejected (feedback loop). New approach: replace AVPlayer with custom URLSession + AudioFileStream + AudioConverter pipeline feeding PCM into existing AVAudioEngine graph. See: `tasks/unified-audio-pipeline/` and `tasks/_context/lessons-dual-backend-dead-end.md`.
 
