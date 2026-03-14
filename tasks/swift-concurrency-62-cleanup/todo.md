@@ -22,9 +22,9 @@
 
 ### Phase 2: DispatchQueue → Swift Concurrency
 
-- [ ] **2a.** WindowAccessor.swift — `DispatchQueue.main.async` → `Task { @MainActor in }`
-- [ ] **2b.** PreferencesView.swift — `DispatchQueue.main.asyncAfter` → `Task { Task.sleep }`
-- [ ] **2c.** Build and test — verify animations, window accessor
+- [x] **2a.** WindowAccessor.swift — `DispatchQueue.main.async` → `Task { @MainActor in }`
+- [x] **2b.** PreferencesView.swift — 2x `DispatchQueue.main.asyncAfter` → `Task { Task.sleep(for:) }`
+- [x] **2c.** Build with TSan — clean, zero warnings
 
 ### Phase 1 PARTIAL: `isolated deinit` (Non-AudioPlayer Files)
 

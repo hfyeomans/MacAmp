@@ -94,7 +94,8 @@ struct PreferencesView: View {
         withAnimation(.easeInOut(duration: 0.2)) {
             settingChangeGlow = settingKey
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+        Task {
+            try? await Task.sleep(for: .seconds(0.6))
             withAnimation(.easeOut(duration: 0.4)) {
                 settingChangeGlow = nil
             }
@@ -105,7 +106,8 @@ struct PreferencesView: View {
         withAnimation(.easeInOut(duration: 0.3)) {
             materialPreview = true
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
+        Task {
+            try? await Task.sleep(for: .seconds(1.8))
             withAnimation(.easeOut(duration: 0.3)) {
                 materialPreview = false
             }
