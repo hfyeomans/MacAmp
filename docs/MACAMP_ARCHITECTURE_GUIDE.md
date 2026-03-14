@@ -1,8 +1,8 @@
 # MacAmp Complete Architecture Guide
 
-**Version:** 2.7.0
-**Date:** 2026-02-22
-**Project State:** Production-Ready (5-Window System, WindowCoordinator Refactoring, MainWindow Layer Decomposition (T3), Internet Radio N1-N6 Fixes, Stream Volume/Balance (T5 Phase 1), AudioPlayer Decomposition, PlaylistWindow Decomposition, Swift Testing Migration, Swift 6, macOS 15+/26+)
+**Version:** 2.8.0
+**Date:** 2026-03-14
+**Project State:** Production-Ready (5-Window System, WindowCoordinator Refactoring, MainWindow Layer Decomposition (T3), Internet Radio N1-N6 Fixes, Unified Audio Pipeline (T5), AudioPlayer Decomposition, PlaylistWindow Decomposition, Swift Testing Migration, Swift 6.2, macOS 15+/26+)
 **Purpose:** Deep technical reference for developers joining or maintaining MacAmp
 
 ---
@@ -12,7 +12,7 @@
 1. [Executive Summary](#executive-summary)
 2. [Project Metrics & Current State](#project-metrics--current-state)
 3. [Three-Layer Architecture Deep Dive](#three-layer-architecture-deep-dive)
-4. [Dual Audio Backend Architecture](#dual-audio-backend-architecture)
+4. [Unified Audio Pipeline Architecture](#unified-audio-pipeline-architecture)
 4a. [AudioPlayer Decomposition Architecture](#audioplayer-decomposition-architecture)
 5. [Skin System Complete Architecture](#skin-system-complete-architecture)
 6. [State Management Evolution](#state-management-evolution)
@@ -33,7 +33,7 @@ MacAmp is a pixel-perfect recreation of Winamp 2.x for macOS, built entirely wit
 
 ### What Makes MacAmp Unique
 
-1. **Dual Audio Architecture**: Solves the fundamental incompatibility between AVAudioEngine (needed for EQ) and AVPlayer (needed for streaming)
+1. **Unified Audio Pipeline**: Custom stream decode pipeline feeds all audio (local files and internet radio) through AVAudioEngine -- EQ, visualization, and balance work for all sources
 2. **Semantic Sprite System**: Decouples UI components from skin-specific graphics through semantic identifiers
 3. **Three-Layer Pattern**: Clean separation inspired by web frameworks (mechanism → bridge → presentation)
 4. **Swift 6 Migration**: Full adoption of `@Observable` macro pattern with strict concurrency
@@ -70,8 +70,8 @@ Deployment:               Developer ID signed, notarization-ready
 ┌────────────────────────────────────────────────────────┐
 │ Component               │ Files │ LoC   │ Status       │
 ├────────────────────────┼───────┼───────┼──────────────┤
-│ Audio Engine           │  10   │ 3,457 │ Production   │
-│   - AudioPlayer.swift  │   1   │   945 │ Mechanism    │
+│ Audio Engine           │  14   │ 4,800 │ Production   │
+│   - AudioPlayer.swift  │   1   │ 1,050 │ Mechanism    │
 │   - EqualizerController│   1   │   198 │ Mechanism    │
 │   - LockFreeRingBuffer │   1   │   212 │ Mechanism    │
 │   - EQPresetStore      │   1   │   187 │ Mechanism    │
@@ -79,8 +79,13 @@ Deployment:               Developer ID signed, notarization-ready
 │   - PlaylistController │   1   │   273 │ Mechanism    │
 │   - VideoPlaybackCtrl  │   1   │   297 │ Mechanism    │
 │   - VisualizerPipeline │   1   │   675 │ Mechanism    │
-│   - StreamPlayer       │   1   │   212 │ Mechanism    │
-│   - PlaybackCoord.     │   1   │   352 │ Mechanism    │
+│   - StreamPlayer       │   1   │   190 │ Mechanism    │
+│   - PlaybackCoord.     │   1   │   420 │ Mechanism    │
+│   - Streaming/         │   4   │ 1,130 │ Mechanism    │
+│     ICYFramer          │   1   │   180 │   Sendable   │
+│     AudioFileStreamPrs │   1   │   220 │   Queue-conf │
+│     AudioConverterDec  │   1   │   300 │   Queue-conf │
+│     StreamDecodePipeln │   1   │   430 │   @MainActor │
 │ Window Management      │  11   │ 1,470 │ Production   │
 │   - WindowCoordinator  │   1   │   223 │ Bridge/Facade│
 │   - Coordinator+Layout │   1   │   153 │ Bridge       │
@@ -230,7 +235,7 @@ MacAmp's architecture follows a strict three-layer separation, inspired by web f
 │  • PlaylistController (playlist state/navigation)           │
 │  • VideoPlaybackController (AVPlayer lifecycle)             │
 │  • VisualizerPipeline (audio tap/FFT processing)            │
-│  • StreamPlayer (AVPlayer for internet radio)               │
+│  • StreamPlayer (stream decode pipeline for internet radio)  │
 │  • PlaylistManager (queue management)                       │
 │  • SkinManager (skin loading/hot-swap)                      │
 │  • AppSettings (preferences persistence)                    │
@@ -314,54 +319,91 @@ final class AudioPlayer {
 
 ---
 
-## Dual Audio Backend Architecture
+## Unified Audio Pipeline Architecture
 
-MacAmp's most complex architectural challenge: supporting both local file playback with EQ and internet radio streaming. AVFoundation provides two incompatible audio systems that cannot be merged.
+MacAmp routes all audio -- local files and internet radio streams -- through a single AVAudioEngine graph. This unified pipeline provides EQ, visualization, and balance for every audio source.
 
-### The Fundamental Problem
+### Background: The Original Dual Backend (Pre-March 2026)
+
+The original architecture used AVPlayer for internet radio streams. AVPlayer is a black box with no access to decoded PCM, so streams had no EQ, no visualizer, and no balance control. In March 2026, a custom stream decode pipeline replaced AVPlayer, feeding decoded PCM into the same AVAudioEngine that handles local files.
+
+### The Unified Architecture
 
 ```
-AVAudioEngine (for local files):
-┌──────────────┐    ┌─────────┐    ┌───────────┐    ┌──────────┐
-│ AVAudioFile  │───▶│ Player  │───▶│ EQ Unit   │───▶│ Output   │
-└──────────────┘    │  Node   │    │ (10-band) │    │  Node    │
-                    └─────────┘    └───────────┘    └──────────┘
-                          │              │                 │
-                          └──────────────┴─────────────────┘
-                                         │
-                                    [Audio Tap]
-                                         │
-                                   ┌───────────┐
-                                   │Visualizer │
-                                   └───────────┘
+LOCAL FILES (AVAudioPlayerNode path):
+AVAudioFile ──► AVAudioPlayerNode ──┐
+                                     │
+                                     ▼
+                              AVAudioUnitEQ(10-band)
+                                     │
+                              mainMixerNode ──► [visualizer tap] ──► VisualizerPipeline
+                                     │
+                                outputNode ──► Speakers
 
-✅ 10-band parametric EQ
-✅ Real-time spectrum analysis
-✅ Waveform visualization
-❌ Cannot play HTTP streams
-❌ Cannot handle HLS adaptive streaming
-
-
-AVPlayer (for internet radio):
-┌──────────────┐                              ┌──────────────┐
-│  HTTP URL    │─────────────────────────────▶│ System Audio │
-└──────────────┘         (Direct path)        └──────────────┘
-                    No access to audio pipeline
-                    (AVPlayer.volume is the only control)
-
-✅ HTTP/HTTPS streaming
-✅ HLS adaptive bitrate
-✅ ICY metadata extraction
-✅ Volume control (AVPlayer.volume, T5 Phase 1)
-❌ Cannot insert AVAudioUnitEQ
-❌ Cannot tap audio for visualization
-❌ No access to raw PCM buffers
-❌ No balance/pan control (no .pan property on AVPlayer)
+INTERNET RADIO (custom decode pipeline):
+HTTP URL ──► URLSession ──► ICYFramer ──► AudioFileStreamParser
+                │               │                     │
+           [HTTP headers]  [StreamTitle]        [compressed packets]
+           [icy-metaint]   [StreamArtist]              │
+                                              AudioConverterDecoder
+                                                       │
+                                                [Float32 PCM]
+                                                       │
+                                              LockFreeRingBuffer
+                                               (SPSC, 32768 frames)
+                                                       │
+                                              AVAudioSourceNode ──┐
+                                                                   │
+                                                                   ▼
+                                                            AVAudioUnitEQ(10-band)
+                                                                   │
+                                                            mainMixerNode ──► [visualizer tap]
+                                                                   │
+                                                              outputNode ──► Speakers
 ```
 
-### The Architectural Solution
+**Key insight:** Both paths converge at AVAudioEngine. The engine does not know or care whether PCM came from a local file or a decoded stream. EQ, visualizer tap, and balance all apply uniformly.
 
-Instead of trying to force these systems together (impossible), MacAmp uses the **Orchestrator Pattern** with PlaybackCoordinator as the central controller.
+### Stream Decode Pipeline Components
+
+Four new files in `MacAmpApp/Audio/Streaming/` implement the custom decode chain:
+
+**ICYFramer** (`ICYFramer.swift`) -- Pure `Sendable` struct. Strips ICY metadata from the HTTP byte stream before audio reaches the parser. Parses `icy-metaint` from HTTP response headers, counts audio bytes, and extracts metadata blocks at intervals. Emits `.audio(Data)` and `.metadata(ICYMetadata)` chunks. No shared state beyond counters.
+
+**AudioFileStreamParser** (`AudioFileStreamParser.swift`) -- Wraps Apple's C-based `AudioFileStream` API. Accepts compressed audio chunks from ICYFramer, discovers the stream format (ASBD), extracts magic cookies (for AAC), and emits compressed packet batches. Decode-queue-confined with `dispatchPrecondition` assertions.
+
+**AudioConverterDecoder** (`AudioConverterDecoder.swift`) -- Wraps Apple's `AudioConverter` API. Converts compressed packets (MP3/AAC) to Float32 interleaved stereo PCM at 44100 Hz. Manages its own packet queue with strict buffer lifetime contracts (input buffers remain valid until the next callback invocation). Decode-queue-confined.
+
+**StreamDecodePipeline** (`StreamDecodePipeline.swift`) -- `@MainActor` orchestrator. Manages the URLSession data task, routes bytes through the decode chain, and publishes state changes to StreamPlayer via `@MainActor @Sendable` callbacks. Internally uses a `DecodeContext` (`@unchecked Sendable`, queue-confined) that owns all decode-queue state. A generation token prevents stale callbacks from previous streams.
+
+### Threading Model
+
+```
+Main Thread (@MainActor)       Decode Queue (serial)        Audio IO Thread (RT)
+├─ StreamDecodePipeline        ├─ DecodeContext              ├─ AVAudioSourceNode
+│  ├─ start()/stop()/pause()   │  ├─ ICYFramer.consume()    │  render block
+│  ├─ state callbacks          │  ├─ AudioFileStreamParser   │  ringBuffer.read()
+│  └─ generation tracking      │  │  .parse()               │  (zero allocations)
+│                              │  ├─ AudioConverterDecoder   │
+├─ StreamPlayer                │  │  .decode()              └─ isSilence flag
+│  ├─ observable state         │  └─ ringBuffer.write() ───►
+│  └─ pipeline callbacks       │
+│                              └─ SessionDelegateProxy
+├─ PlaybackCoordinator             (URLSession delegate)
+│  ├─ bridge lifecycle
+│  └─ capability flags
+│
+└─ UI state updates
+```
+
+**Three isolation domains** with clean boundaries:
+- **MainActor**: lifecycle, state, UI updates
+- **Decode queue** (serial `DispatchQueue`): all data processing -- can allocate, not real-time
+- **Audio IO thread**: render block only -- zero allocations, real-time-safe
+
+### The Orchestrator Pattern
+
+MacAmp uses the **Orchestrator Pattern** with PlaybackCoordinator as the central controller. PlaybackCoordinator manages bridge lifecycle: when a stream's format is detected and prebuffering completes, it activates the AVAudioSourceNode bridge in AudioPlayer; when playback stops, it deactivates the bridge and rewires back to the playerNode path.
 
 ```swift
 // PlaybackCoordinator.swift (Full orchestration logic)
@@ -410,11 +452,12 @@ final class PlaybackCoordinator {
         case radioStation(RadioStation)
     }
 
-    // MARK: - Capability Flags (T5 Phase 1)
+    // MARK: - Capability Flags (T5 Phase 1 → Unified Pipeline)
     //
-    // These computed flags tell the UI which controls are available for the
-    // current playback backend. AVPlayer (streams) has no EQ, no .pan, and
-    // no audio tap — so those controls should be visually dimmed.
+    // These computed flags tell the UI which controls are available.
+    // With the unified pipeline, streams feed into AVAudioEngine via the
+    // bridge (AVAudioSourceNode). When the bridge is active, EQ/balance/
+    // visualizer all work — the flags return true.
 
     /// Whether the stream backend is currently active and not in error state.
     private var isStreamBackendActive: Bool {
@@ -422,15 +465,14 @@ final class PlaybackCoordinator {
         return streamPlayer.error == nil
     }
 
-    /// EQ is only available for local file playback (AVAudioEngine).
-    var supportsEQ: Bool { !isStreamBackendActive }
+    /// EQ is available for local files always, and for streams when bridge is active.
+    var supportsEQ: Bool { !isStreamBackendActive || audioPlayer.isBridgeActive }
 
-    /// Balance/pan requires AVAudioPlayerNode.pan (AVPlayer has no .pan property).
-    var supportsBalance: Bool { !isStreamBackendActive }
+    /// Balance is available for local files always, and for streams when bridge is active.
+    var supportsBalance: Bool { !isStreamBackendActive || audioPlayer.isBridgeActive }
 
-    /// Visualizer requires an audio tap on AVAudioEngine's mixer node.
-    /// Phase 2 Loopback Bridge will enable this for streams.
-    var supportsVisualizer: Bool { !isStreamBackendActive }
+    /// Visualizer is available when engine tap receives audio (local or bridged stream).
+    var supportsVisualizer: Bool { !isStreamBackendActive || audioPlayer.isBridgeActive }
 
     // MARK: - Callback Wiring (PR #49 - N3 fix)
     //
@@ -461,26 +503,28 @@ final class PlaybackCoordinator {
         }
     }
 
-    // MARK: - Volume & Balance Routing (T5 Phase 1)
+    // MARK: - Volume & Balance Routing (T5 Phase 1 → Unified Pipeline)
     //
     // Volume and balance changes propagate to ALL backends unconditionally.
     // This is simpler and more robust than checking which backend is active —
     // idle players accept the value as a no-op. AudioPlayer persists to
-    // UserDefaults; StreamPlayer applies to AVPlayer.volume; coordinator
-    // also propagates to VideoPlaybackController.
+    // UserDefaults and applies to both playerNode and streamSourceNode;
+    // StreamPlayer stores the value for state tracking; coordinator also
+    // propagates to VideoPlaybackController.
 
     /// Propagate volume to all backends. Called by UI volume slider binding.
     func setVolume(_ vol: Float) {
-        audioPlayer.volume = vol        // Persists + sets playerNode.volume
-        streamPlayer.volume = vol       // Sets AVPlayer.volume
+        audioPlayer.volume = vol        // Persists + sets playerNode.volume + streamSourceNode.volume
+        streamPlayer.volume = vol       // Stored for state tracking
         audioPlayer.videoPlaybackController.volume = vol
     }
 
     /// Propagate balance to all backends. Called by UI balance slider binding.
-    /// StreamPlayer stores balance but cannot apply it (no AVPlayer .pan property).
+    /// With the unified pipeline, balance applies to streamSourceNode.pan
+    /// via AudioPlayer.balance didSet.
     func setBalance(_ bal: Float) {
-        audioPlayer.balance = bal       // Persists + sets playerNode.pan
-        streamPlayer.balance = bal      // Stored for Phase 2 Loopback Bridge
+        audioPlayer.balance = bal       // Persists + sets playerNode.pan + streamSourceNode.pan
+        streamPlayer.balance = bal      // Stored for state tracking
     }
 
     // MARK: - Context-Aware Navigation (PR #49 - N4 fix)
@@ -572,13 +616,13 @@ final class PlaybackCoordinator {
 
 3. **Context-aware navigation**: `next()` and `previous()` pass `currentTrack` (the coordinator's track reference) to `audioPlayer.nextTrack(from:)` / `audioPlayer.previousTrack(from:)`. This resolves playlist position correctly during stream playback when `audioPlayer.currentTrack` is nil.
 
-**Key architectural changes (T5 Phase 1, February 2026):**
+**Key architectural changes (T5 Phase 1, February 2026 / Unified Pipeline, March 2026):**
 
-4. **Centralized volume/balance routing**: `setVolume()` and `setBalance()` on PlaybackCoordinator propagate to all backends (AudioPlayer, StreamPlayer, VideoPlaybackController) unconditionally. This replaced direct `AudioPlayer.volume` didSet propagation to VideoPlaybackController and direct UI bindings to AudioPlayer properties.
+4. **Centralized volume/balance routing**: `setVolume()` and `setBalance()` on PlaybackCoordinator propagate to all backends (AudioPlayer, StreamPlayer, VideoPlaybackController) unconditionally. AudioPlayer applies volume/balance to both `playerNode` and `streamSourceNode` via `didSet`.
 
-5. **Capability flags**: `supportsEQ`, `supportsBalance`, and `supportsVisualizer` are computed properties on PlaybackCoordinator that return `false` when the stream backend is active. The UI uses these to dim EQ sliders, the balance slider, and (future) visualizer controls during stream playback. When a stream enters error state, flags re-enable so the user is not stuck with dimmed controls.
+5. **Capability flags**: `supportsEQ`, `supportsBalance`, and `supportsVisualizer` are computed properties on PlaybackCoordinator that return `true` when either (a) the stream backend is not active, or (b) the AudioPlayer bridge is active (`audioPlayer.isBridgeActive`). With the unified pipeline, all three flags return `true` during stream playback once the bridge activates. The UI dims controls only during the brief prebuffering window and on error state.
 
-6. **StreamPlayer volume/balance**: StreamPlayer now has `volume` (applied to `AVPlayer.volume`) and `balance` (stored for Phase 2 Loopback Bridge). PlaybackCoordinator syncs AudioPlayer's persisted values to StreamPlayer on init.
+6. **StreamPlayer rewrite**: StreamPlayer no longer uses AVPlayer or NSObject. It owns a `StreamDecodePipeline` that decodes streams to PCM. Volume and balance are applied via AVAudioEngine (through AudioPlayer's `streamSourceNode`). StreamPlayer stores these values for state tracking only. Uses `isolated deinit` (Swift 6.2).
 
 7. **Asymmetric slider bindings**: Volume and balance sliders use `Binding<Float>(get: { audioPlayer.volume }, set: { playbackCoordinator.setVolume($0) })` instead of direct `$audioPlayer.volume` bindings. Reads come from AudioPlayer (source of truth for persistence); writes route through the coordinator for fan-out to all backends.
 
@@ -2397,36 +2441,42 @@ struct SimpleSpriteImage: View {
 
 MacAmp's audio processing uses AVAudioEngine for sophisticated real-time audio manipulation, with visualization processing extracted to the VisualizerPipeline component.
 
-### AVAudioEngine Graph
+### AVAudioEngine Graph (Unified Pipeline)
 
 ```
-┌────────────────────────────────────────────────────────────┐
-│                   AVAudioEngine Graph                       │
-│              (AudioPlayer.swift: lines 29-31)               │
-├────────────────────────────────────────────────────────────┤
-│                                                             │
-│  AVAudioFile ──┐                                            │
-│                ▼                                            │
-│        AVAudioPlayerNode                                    │
-│                │                                            │
-│                ▼                                            │
-│        AVAudioUnitEQ (10-band)                             │
-│                │                                            │
-│                ▼                                            │
-│        AVAudioMixerNode (main)                             │
-│                │                                            │
-│          ┌─────┴─────┐                                     │
-│          ▼           ▼                                     │
-│    [Audio Tap]  OutputNode                                 │
-│          │                                                 │
-│          ▼                                                 │
-│    VisualizerPipeline                                      │
-│    • 2048-sample buffer (Butterchurn FFT)                  │
-│    • Goertzel-like DFT (20 frequency bars)                 │
-│    • RMS calculation per time bucket (20 bars)             │
-│    • Waveform downsampling (76 samples)                    │
-│                                                            │
-└────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────┐
+│                      AVAudioEngine Graph                        │
+│                 (AudioPlayer.swift: lines 29-31)                │
+├────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  LOCAL FILES:                  STREAMS:                          │
+│  AVAudioFile ──┐               LockFreeRingBuffer ──┐           │
+│                ▼                                     ▼           │
+│        AVAudioPlayerNode              AVAudioSourceNode          │
+│                │                             │                   │
+│                └──────────┬──────────────────┘                   │
+│                           ▼                                      │
+│                   AVAudioUnitEQ (10-band)                        │
+│                           │                                      │
+│                           ▼                                      │
+│                   AVAudioMixerNode (main)                        │
+│                           │                                      │
+│                     ┌─────┴─────┐                                │
+│                     ▼           ▼                                │
+│               [Audio Tap]  OutputNode                            │
+│                     │                                            │
+│                     ▼                                            │
+│               VisualizerPipeline                                 │
+│               • 2048-sample buffer (Butterchurn FFT)             │
+│               • Goertzel-like DFT (20 frequency bars)            │
+│               • RMS calculation per time bucket (20 bars)        │
+│               • Waveform downsampling (76 samples)               │
+│                                                                  │
+│  Only ONE input path is active at a time.                        │
+│  Bridge lifecycle: PlaybackCoordinator activates/deactivates     │
+│  the AVAudioSourceNode path based on playback source.            │
+│                                                                  │
+└────────────────────────────────────────────────────────────────┘
 ```
 
 ### Visualizer Pipeline Architecture
@@ -2738,172 +2788,87 @@ private nonisolated static func makeTapHandler(
 
 ## Internet Radio Streaming
 
-Internet radio support was added in October 2025, requiring significant architectural changes.
+Internet radio support was added in October 2025. In March 2026, the AVPlayer-based streaming was replaced with a custom decode pipeline that feeds PCM into AVAudioEngine (see section 4 for the full architecture).
 
 ### Stream Types Supported
 
 ```
-1. HTTP/HTTPS Audio Streams
-   - MP3 streams (audio/mpeg)
-   - AAC streams (audio/aac)
-   - OGG Vorbis (audio/ogg)
+1. HTTP/HTTPS Progressive Audio Streams
+   - MP3 streams (audio/mpeg) via AudioFileStream + AudioConverter
+   - AAC streams (audio/aac, audio/aacp) via AudioFileStream + AudioConverter
+   - Auto-detect (application/octet-stream) via AudioFileStream format hint = 0
 
-2. HLS Adaptive Streaming
-   - .m3u8 playlists
-   - Multi-bitrate support
-   - Automatic quality switching
+2. Playlist Resolution (M3U/PLS)
+   - .m3u / .m3u8 playlist files resolved to audio stream URL before streaming
+   - .pls playlist files (FileN=url format) resolved before streaming
+   - AVPlayer handled these natively; custom pipeline must resolve first
 
 3. Metadata Protocols
-   - ICY (SHOUTcast/Icecast)
-   - ID3v2 in-stream tags
-   - HLS timed metadata
+   - ICY (SHOUTcast/Icecast) via custom ICYFramer
+   - StreamTitle parsed as "Artist - Title" or plain title
 ```
 
-### StreamPlayer Architecture
+### StreamPlayer Architecture (Unified Pipeline)
+
+StreamPlayer no longer uses AVPlayer or NSObject. It owns a `StreamDecodePipeline` and exposes observable state to the UI. Volume and balance are applied via AVAudioEngine (through AudioPlayer's `streamSourceNode`), not stored on StreamPlayer.
 
 ```swift
-// StreamPlayer.swift (Complete implementation)
+// StreamPlayer.swift (Simplified view of current implementation)
 @MainActor
 @Observable
-final class StreamPlayer: NSObject {
+final class StreamPlayer {
     // Observable state
     private(set) var isPlaying: Bool = false
     private(set) var isBuffering: Bool = false
+    private(set) var currentStation: RadioStation?
     private(set) var streamTitle: String?
     private(set) var streamArtist: String?
-    private(set) var bitrate: Int?
     private(set) var error: String?
 
-    // Volume & Balance (T5 Phase 1)
-    // Volume is applied directly to AVPlayer.volume.
-    // Balance is stored but NOT applied — AVPlayer has no .pan property.
-    // Phase 2 Loopback Bridge will route streams through AVAudioEngine
-    // where playerNode.pan can apply balance.
-    var volume: Float = 0.75 {
-        didSet { player.volume = volume }
-    }
-    var balance: Float = 0.0  // Stored for Phase 2
+    // Volume & balance stored for PlaybackCoordinator propagation.
+    // Actual audio effect is applied via AudioPlayer's engine nodes.
+    var volume: Float = 0.75
+    var balance: Float = 0.0
 
-    // AVPlayer setup
-    private let player = AVPlayer()
-    private var metadataOutput: AVPlayerItemMetadataOutput?
+    // Custom decode pipeline (replaces AVPlayer)
+    private let pipeline = StreamDecodePipeline()
+    @ObservationIgnored private var ringBuffer: LockFreeRingBuffer?
 
-    // Play a station
+    // Ring buffer access for PlaybackCoordinator bridge lifecycle
+    var currentRingBuffer: LockFreeRingBuffer? { ringBuffer }
+    private(set) var currentSampleRate: Float64 = 0
+
+    // Callbacks to PlaybackCoordinator
+    var onFormatReady: (@MainActor (Float64) -> Void)?
+    var onStreamTerminated: (@MainActor () -> Void)?
+
     func play(station: RadioStation) async {
-        // Apply current volume before playback starts
-        player.volume = volume
-        reset()
+        currentStation = station
+        error = nil
 
-        // Configure for streaming
-        let asset = AVURLAsset(url: station.streamURL, options: [
-            "AVURLAssetHTTPHeaderFieldsKey": [
-                "Icy-MetaData": "1",  // Request ICY metadata
-                "User-Agent": "MacAmp/2.0"
-            ]
-        ])
+        // Create fresh ring buffer per stream (32768 frames = ~743ms at 44100Hz)
+        let rb = LockFreeRingBuffer(capacity: 32768, channelCount: 2)
+        ringBuffer = rb
 
-        let playerItem = AVPlayerItem(asset: asset)
-
-        // Setup metadata extraction
-        setupMetadataOutput(for: playerItem)
-
-        // Configure buffering
-        playerItem.preferredForwardBufferDuration = 5.0  // 5 second buffer
-
-        // Start playback
-        player.replaceCurrentItem(with: playerItem)
-        player.play()
-
-        isPlaying = true
-
-        // Monitor buffering
-        observeBuffering(for: playerItem)
+        pipeline.start(url: station.streamURL, ringBuffer: rb)
     }
 
-    private func setupMetadataOutput(for item: AVPlayerItem) {
-        let metadataOutput = AVPlayerItemMetadataOutput()
-        metadataOutput.setDelegate(self, queue: .main)
+    func pause() { pipeline.pause(); isPlaying = false }
+    func resume() { pipeline.resume(); isPlaying = true }
+    func stop() { pipeline.stop(); /* reset all state */ }
 
-        // Configure for ICY metadata
-        metadataOutput.advanceIntervalForDelegateInvocation = 1.0
-
-        item.add(metadataOutput)
-        self.metadataOutput = metadataOutput
-    }
-
-    private func observeBuffering(for item: AVPlayerItem) {
-        Task {
-            for await status in item.publisher(for: \.status).values {
-                switch status {
-                case .readyToPlay:
-                    isBuffering = false
-                case .failed:
-                    error = item.error?.localizedDescription
-                    isBuffering = false
-                    isPlaying = false
-                case .unknown:
-                    isBuffering = true
-                @unknown default:
-                    break
-                }
-            }
-        }
-    }
-}
-
-// MARK: - Metadata Extraction
-// Note: ICY metadata extraction through AVPlayerItemMetadataOutput
-// The actual implementation monitors player item metadata changes
-extension StreamPlayer: AVPlayerItemMetadataOutputPushDelegate {
-    func metadataOutput(
-        _ output: AVPlayerItemMetadataOutput,
-        didOutputTimedMetadataGroups groups: [AVTimedMetadataGroup],
-        from track: AVPlayerItemTrack?
-    ) {
-        for group in groups {
-            processMetadataGroup(group)
-        }
-    }
-
-    private func processMetadataGroup(_ group: AVTimedMetadataGroup) {
-        for item in group.items {
-            // Process common metadata keys
-            if let commonKey = item.commonKey {
-                switch commonKey {
-                case .commonKeyTitle:
-                    streamTitle = item.stringValue
-                case .commonKeyArtist:
-                    streamArtist = item.stringValue
-                default:
-                    break
-                }
-            }
-
-            // Process ICY metadata if present
-            // Note: ICY metadata comes through timed metadata groups
-            if let key = item.key as? String {
-                if key.contains("StreamTitle") {
-                    parseICYStreamTitle(item.stringValue)
-                }
-            }
-        }
-    }
-
-    private func parseICYStreamTitle(_ title: String?) {
-        guard let title = title else { return }
-
-        // ICY format: "Artist - Title"
-        let parts = title.split(separator: " - ", maxSplits: 1)
-        if parts.count == 2 {
-            streamArtist = String(parts[0])
-            streamTitle = String(parts[1])
-        } else {
-            streamTitle = title
-            streamArtist = nil
-        }
-    }
+    isolated deinit { pipeline.stop() }
 }
 ```
+
+**Key differences from the previous AVPlayer-based implementation:**
+- No `NSObject` base class (was required for `AVPlayerItemMetadataOutputPushDelegate`)
+- No `AVPlayer`, `AVPlayerItem`, or `AVPlayerItemMetadataOutput`
+- No `import Combine` (Combine observers removed)
+- Uses `isolated deinit` (Swift 6.2) for safe teardown on `@MainActor`
+- ICY metadata extracted by `ICYFramer` (custom parser), not `AVPlayerItemMetadataOutput`
+- `resume()` method for PlaybackCoordinator's `togglePlayPause()` (replaces `player.play()`)
+- Ring buffer and sample rate exposed for PlaybackCoordinator bridge lifecycle
 
 ### Radio Station Management
 
@@ -2991,14 +2956,14 @@ PR #49 addressed six systematic bugs (N1-N6) in the internet radio integration l
 
 T5 Phase 1 addressed a fundamental gap: volume and balance changes from the UI only affected AudioPlayer, leaving StreamPlayer and VideoPlaybackController unsynchronized during internet radio playback.
 
-**Problem:** Volume and balance sliders were bound directly to `$audioPlayer.volume` / `$audioPlayer.balance`. During stream playback, moving the volume slider had no effect on the audible stream because StreamPlayer (AVPlayer) was not receiving the change. VideoPlaybackController was receiving volume changes via AudioPlayer's `didSet`, coupling AudioPlayer to a sibling it should not know about.
+**Problem (pre-unified pipeline):** Volume and balance sliders were bound directly to `$audioPlayer.volume` / `$audioPlayer.balance`. During stream playback, moving the volume slider had no effect on the audible stream because StreamPlayer was not receiving the change. VideoPlaybackController was receiving volume changes via AudioPlayer's `didSet`, coupling AudioPlayer to a sibling it should not know about.
 
 **Solution:** PlaybackCoordinator gained two routing methods (`setVolume()`, `setBalance()`) that propagate to all backends unconditionally. UI sliders use asymmetric `Binding<Float>` that reads from AudioPlayer (source of truth for persistence) but writes through the coordinator.
 
-**Capability Flags:** Three computed properties (`supportsEQ`, `supportsBalance`, `supportsVisualizer`) gate UI controls. They return `false` when the stream backend is active (and not in error state), causing:
-- EQ sliders to dim (50% opacity, hit testing disabled) in WinampEqualizerWindow
-- Balance slider to dim in MainWindow/MainWindowSlidersLayer
-- Controls to re-enable when stream enters error state (no stuck dimmed UI)
+**Capability Flags:** Three computed properties (`supportsEQ`, `supportsBalance`, `supportsVisualizer`) gate UI controls. With the unified pipeline, they return `true` once the stream bridge is active (`audioPlayer.isBridgeActive`). Controls dim briefly during the prebuffering window (before bridge activates) and on error state:
+- EQ sliders dim (50% opacity, hit testing disabled) in WinampEqualizerWindow
+- Balance slider dims in MainWindow/MainWindowSlidersLayer
+- Controls re-enable when bridge activates or stream enters error state
 
 **Depreciated Patterns (see `tasks/internet-streaming-volume-control/depreciated.md`):**
 - `AudioPlayer.volume.didSet` no longer propagates to `videoPlaybackController.volume` (coordinator handles it)
@@ -3957,8 +3922,7 @@ Complete path from audio file to WebGL visualization:
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Note:** Butterchurn visualization only available for local file playback.
-Internet radio streams (AVPlayer backend) cannot provide PCM audio data.
+**Note:** With the unified audio pipeline (March 2026), Butterchurn visualization is available for both local file playback and internet radio streams. The stream decode pipeline feeds PCM into AVAudioEngine, where the visualizer tap captures data identically to local files.
 
 ### Key Implementation Details
 
@@ -4487,14 +4451,14 @@ enum TimeDisplayMode: String, Codable {
 
 **Implementation** (v1.0.6, updated T5 Phase 1):
 
-**Signal Flow (T5 Phase 1 Coordinator Routing):**
+**Signal Flow (T5 Phase 1 Coordinator Routing, updated for Unified Pipeline):**
 ```
-UI Slider → PlaybackCoordinator.setVolume() → AudioPlayer.volume (persists + playerNode)
-                                             → StreamPlayer.volume (AVPlayer.volume)
+UI Slider → PlaybackCoordinator.setVolume() → AudioPlayer.volume (persists + playerNode + streamSourceNode)
+                                             → StreamPlayer.volume (stored for state tracking)
                                              → VideoPlaybackController.volume
 
-UI Slider → PlaybackCoordinator.setBalance() → AudioPlayer.balance (persists + playerNode.pan)
-                                              → StreamPlayer.balance (stored, no AVPlayer .pan)
+UI Slider → PlaybackCoordinator.setBalance() → AudioPlayer.balance (persists + playerNode.pan + streamSourceNode.pan)
+                                              → StreamPlayer.balance (stored for state tracking)
 ```
 
 The UI uses asymmetric `Binding<Float>` -- reads from AudioPlayer (source of truth for persistence), writes through PlaybackCoordinator for fan-out to all backends. This replaced direct `$audioPlayer.volume` bindings that bypassed StreamPlayer and VideoPlaybackController.
@@ -4538,14 +4502,14 @@ init() {
 ```swift
 // PlaybackCoordinator.swift - Fan-out to all backends
 func setVolume(_ vol: Float) {
-    audioPlayer.volume = vol                      // Persists + playerNode
-    streamPlayer.volume = vol                     // AVPlayer.volume
+    audioPlayer.volume = vol                      // Persists + playerNode + streamSourceNode
+    streamPlayer.volume = vol                     // Stored for state tracking
     audioPlayer.videoPlaybackController.volume = vol
 }
 
 func setBalance(_ bal: Float) {
-    audioPlayer.balance = bal                     // Persists + playerNode.pan
-    streamPlayer.balance = bal                    // Stored for Phase 2
+    audioPlayer.balance = bal                     // Persists + playerNode.pan + streamSourceNode.pan
+    streamPlayer.balance = bal                    // Stored for state tracking
 }
 ```
 
@@ -4844,8 +4808,13 @@ MacAmpApp/
 │   ├── PlaylistController.swift    # Playlist state and navigation (273 lines)
 │   ├── VideoPlaybackController.swift # AVPlayer lifecycle (297 lines)
 │   ├── VisualizerPipeline.swift    # Audio tap, FFT, SPSC buffer, Butterchurn (675 lines)
-│   ├── StreamPlayer.swift          # AVPlayer, internet radio, volume/balance (212 lines)
-│   └── PlaybackCoordinator.swift   # Orchestrates both backends, volume/balance routing, capability flags (407 lines)
+│   ├── StreamPlayer.swift          # Stream playback, owns StreamDecodePipeline (~190 lines)
+│   ├── PlaybackCoordinator.swift   # Orchestrates both backends, bridge lifecycle, capability flags (~420 lines)
+│   └── Streaming/
+│       ├── ICYFramer.swift             # ICY metadata protocol parser, Sendable struct
+│       ├── AudioFileStreamParser.swift # AudioFileStream C API wrapper, decode-queue-confined
+│       ├── AudioConverterDecoder.swift # AudioConverter C API wrapper, decode-queue-confined
+│       └── StreamDecodePipeline.swift  # Pipeline orchestrator (@MainActor + DecodeContext)
 │
 ├── Models/
 │   ├── Track.swift                 # Track data model (42 lines, Sendable)
@@ -5041,7 +5010,7 @@ GEN_TOP_LEFT_SELECTED  # Index 1: Selected/focused state
 
 ## Conclusion
 
-MacAmp demonstrates that retro UI aesthetics and modern development practices are not mutually exclusive. By carefully architecting around platform limitations (dual audio backends), leveraging modern language features (Swift 6 concurrency), and maintaining strict architectural boundaries (three-layer pattern), we've created a maintainable, performant, and pixel-perfect recreation of a beloved classic.
+MacAmp demonstrates that retro UI aesthetics and modern development practices are not mutually exclusive. By building a unified audio pipeline (custom stream decode feeding AVAudioEngine), leveraging modern language features (Swift 6.2 concurrency), and maintaining strict architectural boundaries (three-layer pattern), we've created a maintainable, performant, and pixel-perfect recreation of a beloved classic.
 
 The key insight: **The skin is not the app**. This separation enables MacAmp to be simultaneously a faithful Winamp clone and a modern macOS application built with 2025's best practices.
 
@@ -5051,9 +5020,22 @@ Welcome to MacAmp. May your audio be crisp and your skins be pixel-perfect.
 
 ---
 
-*Document Version: 2.7.0 | Last Updated: 2026-02-22 | Lines: ~5,100*
+*Document Version: 2.8.0 | Last Updated: 2026-03-14 | Lines: ~5,200*
 
-**Recent Updates (v2.7.0 - 2026-02-22):**
+**Recent Updates (v2.8.0 - 2026-03-14):**
+- Renamed section 4 from "Dual Audio Backend Architecture" to "Unified Audio Pipeline Architecture"
+- Replaced dual backend diagrams with unified pipeline architecture showing both input paths converging at AVAudioEngine
+- Added Stream Decode Pipeline Components subsection (ICYFramer, AudioFileStreamParser, AudioConverterDecoder, StreamDecodePipeline)
+- Added Threading Model diagram (MainActor / Decode Queue / Audio IO Thread)
+- Updated capability flags to reflect `|| audioPlayer.isBridgeActive` logic
+- Updated volume/balance routing comments for unified pipeline (no more AVPlayer.volume)
+- Rewrote StreamPlayer Architecture in section 9 (no AVPlayer, no NSObject, custom pipeline, isolated deinit)
+- Updated stream types supported (removed OGG/HLS claims, added M3U/PLS playlist resolution)
+- Updated AVAudioEngine Graph diagram in section 8 to show both AVAudioPlayerNode and AVAudioSourceNode input paths
+- Updated Quick Reference file listing with Streaming/ subdirectory (4 new files)
+- Updated Executive Summary and Conclusion to reference unified pipeline instead of dual backends
+
+**Previous Updates (v2.7.0 - 2026-02-22):**
 - Added MainWindow Layer Decomposition (T3, PR #54) to Recent Architectural Changes (#11)
 - Updated Component Breakdown table with MainWindow/ (10 files) and PlaylistWindow/ (7 files)
 - Updated File Structure with Views/MainWindow/ and Views/PlaylistWindow/ subdirectories
