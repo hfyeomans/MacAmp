@@ -19,8 +19,8 @@
 
 **Replaced with:** `isolated deinit` keyword on the class.
 
-**Specific removals:**
-- `AudioPlayer.progressTimer` — `nonisolated(unsafe)` removed
+**Specific removals (PR 1):**
+- `AudioPlayer.progressTimer` — `nonisolated(unsafe)` still present (deferred to PR 2 — AudioPlayer needs `isolated deinit` after pipeline adds bridge state)
 - `VisualizerPipeline.tapInstalled` — `nonisolated(unsafe)` removed
 - `VisualizerPipeline.mixerNode` — `nonisolated(unsafe)` removed
 - `VisualizerPipeline.pollTimer` — `nonisolated(unsafe)` removed
