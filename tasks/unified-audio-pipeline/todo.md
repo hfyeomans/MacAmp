@@ -99,6 +99,17 @@
 ### 1.8 VisualizerView Update — ✅ DONE
 - [x] **1.8a-d** All 4 sites: `audioPlayer.isPlaying` → `audioPlayer.isEngineRendering`
 
+### 1.9 Build & Verify — 🔄 IN PROGRESS
+- [x] **1.9a** Build with Xcode (clean build with TSan) — passes
+- [x] **1.9b** Engine graph fix: explicit format (not nil) prevents EQ stickiness → -10868
+- [x] **1.9c** Engine start hard gate: play() aborts if engine fails
+- [x] **1.9d** M3U/PLS playlist URL resolution before streaming
+- [x] **1.9e** Ring buffer 16384 frames / prebuffer 8192 frames
+- [x] **1.9f** Mono file support: channel count from audioFile.processingFormat
+- [ ] **1.9g** Stream sputtering — decode throughput or sample rate mismatch (investigation needed)
+- [ ] **1.9h** Visualizer/Butterchurn during streams — tap installed but no data (likely sputtering-related)
+- [ ] **1.9i** Oracle review of full diff
+
 ### 1.9 Build & Verify
 - [ ] **1.9a** Build with Xcode (clean build)
 - [ ] **1.9b** Oracle review (gpt-5.3-codex, xhigh)
