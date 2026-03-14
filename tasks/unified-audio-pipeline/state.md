@@ -115,6 +115,31 @@ achieving feature parity with local file playback.
    pipeline task doesn't call removeTap() directly — it goes through AudioPlayer.deactivateStreamBridge()
    which calls removeVisualizerTapIfNeeded(). No conflict.
 
+## Post-Merge Documentation Update Required
+
+The `docs/` folder (20 files, 19,428 lines) has extensive references to the old dual-backend
+architecture that are now stale after the unified pipeline. A sub-agent should scan ALL docs
+end-to-end and update/add/remove as needed.
+
+**Key docs needing updates:**
+- `docs/MACAMP_ARCHITECTURE_GUIDE.md` §4 "Dual Audio Backend" → now unified pipeline
+- `docs/MACAMP_ARCHITECTURE_GUIDE.md` §9 "Internet Radio" → StreamPlayer rewritten
+- `docs/IMPLEMENTATION_PATTERNS.md` §4 "Audio Processing Patterns" → new decode chain
+- `docs/IMPLEMENTATION_PATTERNS.md` §5 "Callback Synchronization" → new onFormatReady/onStreamTerminated
+- `docs/README.md` search index → add pipeline components (ICYFramer, AudioFileStreamParser, etc.)
+- `docs/README.md` common questions → update "Why are there two audio players?" answer
+
+**New documentation to add:**
+- Streaming decode chain architecture diagram (URLSession → ICYFramer → Parser → Converter → RingBuffer)
+- Threading model diagram (3 isolation domains)
+- Engine graph management patterns (activate/deactivateStreamBridge, explicit formats)
+- Debugging methodology (sine wave test, raw data dumps)
+
+**Approach:** Use a sub-agent with the full `docs/` directory to do a comprehensive scan
+after the pipeline PR merges. This ensures docs reflect the final merged state.
+
+---
+
 ## Future Work Identified During This Task
 
 | Item | Description | Priority |
