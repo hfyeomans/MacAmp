@@ -19,7 +19,7 @@
 
 ## Cross-Task Execution Order
 
-```
+```text
 PR 1 (T8): Phase 0 + Phase 2 + Phase 1 partial → merge to main
     ↓
 T7: unified-audio-pipeline (all phases) → merge to main
