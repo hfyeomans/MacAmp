@@ -115,6 +115,14 @@ achieving feature parity with local file playback.
    pipeline task doesn't call removeTap() directly — it goes through AudioPlayer.deactivateStreamBridge()
    which calls removeVisualizerTapIfNeeded(). No conflict.
 
+## Future Work Identified During This Task
+
+| Item | Description | Priority |
+|------|-------------|----------|
+| Video audio through AVAudioEngine | Video files use AVPlayer → system audio (no EQ/visualizer/balance). Solution: MTAudioProcessingTap (works for local files, unlike streams). Separate task. | Medium |
+| Milkdrop/Butterchurn loading regression | Pre-existing: WebContent sandbox issues prevent Butterchurn from loading. Unrelated to pipeline. Separate investigation. | Low |
+| AVAudioEngineConfigurationChange | No handler for output device/sample rate changes mid-session. Could leave graph in stale format state. | Low |
+
 ## Branch
 
-TBD — will create from `main` after `swift-concurrency-62-cleanup` PR 1 merges.
+`feature/unified-audio-pipeline` (created from `main` after T8 PR 1 merge)
