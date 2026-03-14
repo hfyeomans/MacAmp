@@ -67,9 +67,10 @@
 
 ### PR 2 Merge
 
-- [ ] **M5.** Push branch
-- [ ] **M6.** Oracle review
-- [ ] **M7.** Create PR against `main`
+- [x] **M5.** Push branch `feature/swift-concurrency-62-cleanup-pr2`
+- [x] **M6.** Oracle review — clean (1 LOW fixed: overlapping async writes)
+- [x] **M6b.** Swift 6.2 concurrency audit — CLEAN (zero nonisolated(unsafe), zero Task.detached, zero DispatchQueue.main.async)
+- [x] **M7.** Create PR #58 against `main`
 - [ ] **M8.** Merge PR
 
 ---

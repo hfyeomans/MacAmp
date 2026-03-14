@@ -10,8 +10,8 @@
 
 ## Current Status
 
-**Phase:** PR 2 implementation complete — awaiting Oracle review + PR
-**Status:** 🔄 IN PROGRESS
+**Phase:** PR 2 complete (PR #58) — awaiting merge
+**Status:** ✅ COMPLETE (pending merge)
 **Branch:** `feature/swift-concurrency-62-cleanup-pr2`
 **Last Updated:** 2026-03-14
 **PR Structure:** Split into PR 1 (pre-pipeline) + PR 2 (post-pipeline)
@@ -72,8 +72,8 @@ PR 2 (T8): Phase 1d (AudioPlayer) + Phase 4 → merge to main
 | 1 partial | PR 1 | `isolated deinit` (VPC, VisPipeline, WinCoord) | ✅ Merged | Phase 0 |
 | — | — | **PR 1 MERGED** (PR #56, 2026-03-14) | ✅ | Phases 0, 2, 1 partial |
 | — | — | **unified-audio-pipeline executes** | — | PR 1 merged |
-| 1d | PR 2 | AudioPlayer `isolated deinit` (final shape) | Not started | Pipeline merged |
-| 4 | PR 2 | `@concurrent` static functions | Not started | Pipeline merged |
+| 1d | PR 2 | AudioPlayer `isolated deinit` (final shape) | ✅ Complete | Pipeline merged |
+| 4 | PR 2 | `@concurrent` static functions | ✅ Complete | Pipeline merged |
 | 3 | — | ~~@preconcurrency audit~~ | DROPPED | StreamPlayer rewritten |
 | 5 | — | Default MainActor isolation | DEFERRED | — |
 

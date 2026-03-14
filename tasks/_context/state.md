@@ -52,7 +52,7 @@ New task T8 (swift-concurrency-62-cleanup) added as prerequisite for T7.
 | T4 | `lock-free-ring-buffer` | **COMPLETE** (benchmarks deferred) | Wave 1 — done, awaiting PR | None |
 | T5 | `internet-streaming-volume-control` | **Ph1 COMPLETE (merged PR #53)**, Ph2 MTAudioProcessingTap FAILED | Wave 2a — MERGED | Ph2 PIVOTED → new task `unified-audio-pipeline` |
 | T7 | `unified-audio-pipeline` | **COMPLETE** (PR #57 merged + hotfix) | Wave 3b — MERGED | Custom decode pipeline. All V1-V14 verified. Post-merge hotfix for P1/P3/P4. |
-| T8 | `swift-concurrency-62-cleanup` | **PR 1 MERGED (PR #56)**, PR 2 blocked on T7 | Wave 3a (PR 1) + Wave 3c (PR 2) | PR 1: SWIFT_VERSION 6.2 + isolated deinit (non-AudioPlayer) + DispatchQueue. PR 2: AudioPlayer deinit + @concurrent (after T7). |
+| T8 | `swift-concurrency-62-cleanup` | **PR 1 MERGED (PR #56)**, PR 2 IN REVIEW (PR #58) | Wave 3a (PR 1) + Wave 3c (PR 2) | PR 1: SWIFT_VERSION 6.2 + isolated deinit. PR 2: AudioPlayer isolated deinit + @concurrent. Final concurrency audit: CLEAN. |
 | T6 | `swift-testing-modernization` | **COMPLETE** (deferrals noted) | Wave 1 — done, awaiting PR | None |
 
 ---
@@ -84,7 +84,7 @@ New task T8 (swift-concurrency-62-cleanup) added as prerequisite for T7.
 |------|------|--------|--------|-----------|
 | 3a | T8 PR 1 (Swift 6.2 foundation) | `feature/swift-concurrency-62-cleanup` | ✅ MERGED — PR #56 (2026-03-14) | Wave 2 merges (done) |
 | 3b | T7 (Unified Audio Pipeline) | `feature/unified-audio-pipeline` | ✅ MERGED — PR #57 + hotfix | T8 PR 1 merge (done) |
-| 3c | T8 PR 2 (AudioPlayer deinit + @concurrent) | TBD (from main after 3b merges) | 📋 PLANNED | T7 merge |
+| 3c | T8 PR 2 (AudioPlayer deinit + @concurrent) | `feature/swift-concurrency-62-cleanup-pr2` | 🔍 IN REVIEW — PR #58 | T7 merge (done) |
 | 3d | T1 Phase 4 (engine transport) | After 3c | DEFERRED | Engine boundaries stable after T7+T8 |
 
 **Wave 3 execution is strictly sequential:** Each step depends on the previous merge.
