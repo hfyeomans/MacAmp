@@ -67,26 +67,7 @@ final class StreamDecodePipeline {
 
     private var formatReadyFired: Bool = false
 
-    // MARK: - Telemetry
-
-    @ObservationIgnored private var telemetryTimer: Timer?
-
-    private func startTelemetry() {
-        telemetryTimer?.invalidate()
-        let rb = ringBuffer
-        telemetryTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { _ in
-            guard let rb else { return }
-            let t = rb.telemetry()
-            let fill = rb.availableFrames
-            let pct = Double(fill) / Double(rb.capacity) * 100
-            print("[StreamTelemetry] fill=\(fill)/\(rb.capacity) (\(String(format: "%.0f", pct))%) underruns=\(t.underruns) overruns=\(t.overruns)")
-        }
-    }
-
-    private func stopTelemetry() {
-        telemetryTimer?.invalidate()
-        telemetryTimer = nil
-    }
+    // MARK: - Telemetry (placeholder — LockFreeRingBuffer.telemetry() available for future use)
 
     // MARK: - Lifecycle
 
@@ -151,16 +132,23 @@ final class StreamDecodePipeline {
         // Create URLSession with delegate proxy
         // Proxy callbacks are set once before URLSession starts, then immutable.
         let proxy = SessionDelegateProxy(
-            onResponse: { [weak self] response in
+            onResponse: { [weak self, weak context] response in
+                // Configure framer DIRECTLY on decode queue — NOT via MainActor hop.
+                // URLSession calls didReceive(data:) right after didReceive(response:).
+                // If we hop to MainActor first, data arrives on the decode queue BEFORE
+                // the framer is configured → metadata bytes injected into audio → warping.
+                // By dispatching framer config to the decode queue here, ordering with
+                // data delivery is guaranteed by the serial queue.
+                if let httpResponse = response as? HTTPURLResponse {
+                    let metaInt = StreamDecodePipeline.extractICYMetaInt(from: httpResponse.allHeaderFields) ?? 0
+                    context?.configureFramer(metaInterval: metaInt)
+                }
+                // State updates still go to MainActor
                 Task { @MainActor [weak self] in
                     self?.handleHTTPResponse(response, generation: currentGeneration)
                 }
             },
             onData: { [weak context] data in
-                // Direct dispatch to decode queue — no MainActor hop needed.
-                // This avoids the race where data arrives before response handler
-                // configures the framer (configureFramer also dispatches to decode queue,
-                // so ordering is preserved by the serial queue).
                 context?.handleIncomingData(data)
             },
             onComplete: { [weak self] error in
@@ -186,7 +174,6 @@ final class StreamDecodePipeline {
         dataTask = urlSession?.dataTask(with: request)
         setState(.connecting)
         dataTask?.resume()
-        startTelemetry()
 
         AppLog.info(.audio, "StreamDecodePipeline: Starting — \(url.absoluteString)")
     }
@@ -220,7 +207,6 @@ final class StreamDecodePipeline {
         // Advance generation FIRST — stale callbacks will be rejected
         generation &+= 1
 
-        stopTelemetry()
         dataTask?.cancel()
         dataTask = nil
         urlSession?.invalidateAndCancel()
@@ -264,14 +250,16 @@ final class StreamDecodePipeline {
             metaInt = 0
         }
 
-        // configureFramer dispatches to decode queue — ordering is preserved
-        // because data delivery also dispatches to the same serial queue.
-        decodeContext?.configureFramer(metaInterval: metaInt)
+        // NOTE: configureFramer is called from the onResponse callback (delegate queue)
+        // BEFORE data delivery begins. Do NOT call it again here — the MainActor hop
+        // means this runs AFTER data has already been processed, which would reset the
+        // framer's byte counter and corrupt ICY metadata boundary alignment.
         setState(.buffering)
     }
 
     /// Case-insensitive lookup for icy-metaint header.
-    private static func extractICYMetaInt(from headers: [AnyHashable: Any]) -> Int? {
+    /// nonisolated: pure function, safe to call from any context (URLSession delegate queue).
+    private nonisolated static func extractICYMetaInt(from headers: [AnyHashable: Any]) -> Int? {
         for (key, value) in headers {
             if let keyStr = key as? String,
                keyStr.caseInsensitiveCompare("icy-metaint") == .orderedSame,
@@ -516,9 +504,7 @@ private final class DecodeContext: @unchecked Sendable {
         dispatchPrecondition(condition: .onQueue(decodeQueue))
         guard !isShutdown, decoder == nil else { return }
 
-        // Query system output rate for decoder SRC (avoids engine SRC warping)
-        let outputRate: Float64 = 48000.0  // TODO: query from AVAudioEngine.outputNode dynamically
-        let newDecoder = AudioConverterDecoder(inputFormat: asbd, outputSampleRate: outputRate, magicCookie: magicCookie)
+        let newDecoder = AudioConverterDecoder(inputFormat: asbd, magicCookie: magicCookie)
         newDecoder.confinementQueue = decodeQueue
         decoder = newDecoder
 

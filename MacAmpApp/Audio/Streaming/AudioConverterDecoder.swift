@@ -52,10 +52,6 @@ final class AudioConverterDecoder {
     private var currentInputDescs: UnsafeMutablePointer<AudioStreamPacketDescription>?
     private var currentInputDescCount: Int = 0
 
-    /// Previously used input buffers — kept alive during the entire FillComplexBuffer call
-    /// because AudioConverter may perform look-ahead/overlap-add that references prior data.
-    /// Freed after FillComplexBuffer returns.
-    private var retainedBuffers: [(UnsafeMutableRawPointer, UnsafeMutablePointer<AudioStreamPacketDescription>?)] = []
 
     /// The decode queue this decoder is confined to (set by owner, checked in debug builds).
     var confinementQueue: DispatchQueue?
@@ -77,13 +73,11 @@ final class AudioConverterDecoder {
 
     /// - Parameters:
     ///   - inputFormat: Compressed audio format (ASBD from AudioFileStreamParser)
-    ///   - outputSampleRate: Target output sample rate (use device rate to avoid engine SRC)
     ///   - magicCookie: AAC magic cookie data (nil for MP3)
-    init(inputFormat: AudioStreamBasicDescription, outputSampleRate: Float64 = 48000.0, magicCookie: Data? = nil) {
+    init(inputFormat: AudioStreamBasicDescription, magicCookie: Data? = nil) {
         self.inputFormat = inputFormat
 
-        // Output at stream's native sample rate — let the engine mixer handle SRC
-        // to device output rate. This avoids AudioConverter SRC artifacts.
+        // Output at stream's native sample rate — engine handles SRC to device rate
         let sampleRate = inputFormat.mSampleRate > 0 ? inputFormat.mSampleRate : 44100.0
         let channels: UInt32 = 2
         self.outputFormat = AudioStreamBasicDescription(
