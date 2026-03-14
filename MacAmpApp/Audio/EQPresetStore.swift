@@ -117,10 +117,16 @@ final class EQPresetStore {
         perTrackPresetsLoaded = true
     }
 
+    @ObservationIgnored private var saveTask: Task<Void, Never>?
+
     func savePerTrackPresets() {
         guard let url = presetsFileURL() else { return }
         let presetsToSave = perTrackPresets
-        Task { await Self.savePresetsToDisk(presets: presetsToSave, url: url) }
+        saveTask?.cancel()
+        saveTask = Task {
+            guard !Task.isCancelled else { return }
+            await Self.savePresetsToDisk(presets: presetsToSave, url: url)
+        }
     }
 
     func preset(forTrackURL urlString: String) -> EqfPreset? {
