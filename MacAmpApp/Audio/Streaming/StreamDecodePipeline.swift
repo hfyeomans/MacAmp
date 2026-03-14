@@ -338,7 +338,8 @@ final class StreamDecodePipeline {
         }
 
         // Try M3U parsing (works for both .m3u and .m3u8)
-        if let entries = try? M3UParser.parse(content: content),
+        // Pass relativeTo: url so relative entries resolve against the playlist URL
+        if let entries = try? M3UParser.parse(content: content, relativeTo: url),
            let firstStream = entries.first(where: { !$0.url.isFileURL }) {
             return firstStream.url
         }
@@ -472,6 +473,11 @@ private final class DecodeContext: @unchecked Sendable {
             }
 
             self.parser = parser
+
+            // Check for deferred init error (AudioFileStreamOpen failed before callbacks were wired)
+            if let error = parser.initError {
+                self.onError(error, self.generation)
+            }
         }
     }
 

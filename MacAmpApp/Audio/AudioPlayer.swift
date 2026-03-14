@@ -834,7 +834,15 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
         }
 
         audioEngine.prepare()
-        startEngineIfNeeded()
+        guard startEngineIfNeeded() else {
+            // Engine failed to start — clean up the source node we just attached
+            audioEngine.disconnectNodeOutput(sourceNode)
+            audioEngine.detach(sourceNode)
+            streamSourceNode = nil
+            streamRingBuffer = nil
+            AppLog.error(.audio, "AudioPlayer: Stream bridge activation aborted — engine failed to start")
+            return
+        }
         installVisualizerTapIfNeeded()
 
         // Apply current volume/balance to source node

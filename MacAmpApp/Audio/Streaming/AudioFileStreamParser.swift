@@ -40,6 +40,9 @@ final class AudioFileStreamParser {
     private var streamID: AudioFileStreamID?
     private var inputFormat: AudioStreamBasicDescription?
 
+    /// Deferred error from init — checked after callbacks are wired
+    private(set) var initError: String?
+
     /// The decode queue this parser is confined to (set by owner, checked in debug builds).
     var confinementQueue: DispatchQueue?
 
@@ -68,7 +71,10 @@ final class AudioFileStreamParser {
 
         if status != noErr {
             AppLog.error(.audio, "AudioFileStreamParser: Failed to open stream (status: \(status))")
-            onError?("AudioFileStream open failed (status: \(status))")
+            // Store error for deferred propagation — onError is nil during init,
+            // callbacks are assigned after construction. Caller checks initError
+            // after wiring callbacks.
+            initError = "AudioFileStream open failed (status: \(status))"
         }
     }
 
