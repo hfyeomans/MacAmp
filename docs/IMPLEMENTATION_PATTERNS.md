@@ -1,7 +1,7 @@
 # MacAmp Implementation Patterns
 
-**Version:** 1.7.0
-**Date:** 2026-02-22
+**Version:** 1.8.0
+**Date:** 2026-03-14
 **Purpose:** Practical code patterns and best practices for MacAmp development
 
 ---
@@ -37,11 +37,15 @@
    - [Thread-Safe Audio State](#pattern-thread-safe-audio-state)
    - [nonisolated(unsafe) Deinit Safety](#pattern-nonisolatedunsafe-deinit-safety-swift-6) **(New - Swift 6)**
    - [SPSC Shared Buffer for Audio-to-Main Thread Transfer](#pattern-spsc-shared-buffer-for-audio-to-main-thread-transfer) **(Updated - Swift 6)**
+   - [Stream Decode Pipeline (Unified Audio)](#pattern-stream-decode-pipeline-unified-audio) **(New - Unified Pipeline)**
+   - [AudioConverter Input Buffer Lifecycle](#pattern-audioconverter-input-buffer-lifecycle) **(New - Unified Pipeline)**
+   - [Engine Graph Explicit Format](#pattern-engine-graph-explicit-format) **(New - Unified Pipeline)**
 5. [Async/Await Patterns](#asyncawait-patterns)
    - [Async Stream Events](#pattern-async-stream-events)
    - [Cancellable Tasks](#pattern-cancellable-tasks)
    - [Background I/O Fire-and-Forget](#pattern-background-io-fire-and-forget-swift-6) **(New - Swift 6)**
    - [Callback Synchronization for Cross-Component Communication](#pattern-callback-synchronization-for-cross-component-communication) **(New - Swift 6)**
+   - [Stream Bridge Lifecycle Callbacks](#pattern-stream-bridge-lifecycle-callbacks) **(New - Unified Pipeline)**
 6. [Error Handling Patterns](#error-handling-patterns)
 7. [Testing Patterns](#testing-patterns)
 8. [Migration Guides](#migration-guides)
@@ -593,26 +597,25 @@ final class PlaybackCoordinator {
     /// Simpler than checking which is active, zero cost on idle players (no-op).
     func setVolume(_ vol: Float) {
         audioPlayer.volume = vol           // Updates playerNode + persists to UserDefaults
-        streamPlayer.volume = vol          // Updates AVPlayer.volume
+        streamPlayer.volume = vol          // Stored; applied via AVAudioEngine bridge
         audioPlayer.videoPlaybackController.volume = vol  // Updates video layer volume
     }
 
     /// Propagate balance to ALL backends unconditionally.
-    /// StreamPlayer stores balance but cannot apply it (no AVPlayer .pan property).
-    /// Stored value will be used when Phase 2 Loopback Bridge routes streams through AVAudioEngine.
+    /// With the unified pipeline, balance is applied via AVAudioEngine's streamSourceNode.pan.
     func setBalance(_ bal: Float) {
         audioPlayer.balance = bal          // Updates playerNode.pan + persists
-        streamPlayer.balance = bal         // Stores for Phase 2 (no AVPlayer .pan)
+        streamPlayer.balance = bal         // Applied via AVAudioEngine bridge
     }
 }
 ```
 
-**Why unconditional fan-out**: Checking which backend is active adds complexity for zero benefit. Setting volume on an idle AVPlayer or playerNode is a no-op that costs nothing. The coordinator always keeps all backends in sync so that switching between local file and internet radio playback has correct volume from the first sample.
+**Why unconditional fan-out**: Checking which backend is active adds complexity for zero benefit. Setting volume on an idle playerNode is a no-op that costs nothing. The coordinator always keeps all backends in sync so that switching between local file and internet radio playback has correct volume from the first sample.
 
 **Data flow**:
 ```
-UI Slider → PlaybackCoordinator.setVolume() → AudioPlayer.volume (didSet: playerNode + UserDefaults)
-                                             → StreamPlayer.volume (didSet: AVPlayer)
+UI Slider → PlaybackCoordinator.setVolume() → AudioPlayer.volume (didSet: playerNode/streamSourceNode + UserDefaults)
+                                             → StreamPlayer.volume (stored for coordinator sync)
                                              → VideoPlaybackController.volume (didSet: playerLayer)
 ```
 
@@ -622,7 +625,7 @@ UI Slider → PlaybackCoordinator.setVolume() → AudioPlayer.volume (didSet: pl
 - AudioPlayer.volume `didSet` must NOT propagate to other backends (that is the coordinator's job)
 - Persistence (UserDefaults) stays in AudioPlayer's `didSet` since AudioPlayer owns the canonical volume value
 - During `init()`, AudioPlayer directly sets `videoPlaybackController.volume` before PlaybackCoordinator exists -- this is correct for initialization
-- StreamPlayer.balance is stored but not applied (AVPlayer has no `.pan` property); Phase 2 Loopback Bridge will apply it
+- StreamPlayer.balance is stored and applied via AVAudioEngine's streamSourceNode.pan when the bridge is active
 
 ### Pattern: Asymmetric Binding for Coordinator Routing
 
@@ -683,13 +686,13 @@ WinampVolumeSlider(volume: $player.volume)  // Only updates AudioPlayer!
 
 **When to use**: Exposing computed boolean flags from the coordinator to indicate which audio features are available for the current playback mode, and using them to dim/disable UI controls
 
-**T5 Phase 1**: Introduced because AVPlayer (used for internet radio streams) does not support EQ (no audio processing graph), balance/pan (no `.pan` property), or visualizer tap (no AVAudioEngine mixer to tap).
+**T5 Phase 1**: Originally introduced because AVPlayer (used for internet radio streams) did not support EQ, balance, or visualizer. **Updated (Unified Pipeline)**: With the custom stream decode pipeline, streams now route through AVAudioEngine via the stream bridge, enabling all features when the bridge is active.
 
 **Implementation**:
 ```swift
 // File: MacAmpApp/Audio/PlaybackCoordinator.swift:76-97
-// Purpose: Expose per-feature availability based on active backend
-// Context: UI dims controls that cannot function during stream playback
+// Purpose: Expose per-feature availability based on active backend + bridge state
+// Context: UI dims controls only during stream prebuffering or error states
 
 @Observable
 @MainActor
@@ -701,16 +704,17 @@ final class PlaybackCoordinator {
         return streamPlayer.error == nil  // Error → inactive → re-enable controls
     }
 
-    /// EQ is only available for local file playback (AVAudioEngine).
-    var supportsEQ: Bool { !isStreamBackendActive }
+    /// EQ is available when not streaming, OR when stream bridge is active
+    /// (stream decoded through AVAudioEngine). Dimmed only during stream error
+    /// or before bridge activates (prebuffering).
+    var supportsEQ: Bool { !isStreamBackendActive || audioPlayer.isBridgeActive }
 
-    /// Balance/pan requires AVAudioPlayerNode.pan (AVPlayer has no .pan property).
-    var supportsBalance: Bool { !isStreamBackendActive }
+    /// Balance is available when not streaming, OR when stream bridge is active.
+    var supportsBalance: Bool { !isStreamBackendActive || audioPlayer.isBridgeActive }
 
-    /// Visualizer requires an audio tap on AVAudioEngine's mixer node.
-    /// Phase 2 Loopback Bridge will route stream audio through AVAudioEngine,
-    /// enabling EQ, balance, and visualizer for streams.
-    var supportsVisualizer: Bool { !isStreamBackendActive }
+    /// Visualizer is available when not streaming, OR when stream bridge is active
+    /// (audio tap on mixer receives stream PCM through the bridge).
+    var supportsVisualizer: Bool { !isStreamBackendActive || audioPlayer.isBridgeActive }
 }
 ```
 
@@ -739,8 +743,8 @@ buildEQSliders()
 **Real usage**: `PlaybackCoordinator.swift` capability flags, `MainWindowSlidersLayer.swift` balance dimming, `WinampEqualizerWindow.swift` EQ dimming
 
 **Pitfalls**:
-- All three flags derive from `isStreamBackendActive` -- keep them as separate computed properties (not a single enum) because Phase 2 may enable some features independently (e.g., visualizer via Loopback Bridge while balance remains unsupported)
-- The `supportsVisualizer` flag is currently unused by UI (visualizer naturally shows empty when no tap data arrives), but it is exposed for Phase 2 wiring
+- All three flags now check `!isStreamBackendActive || audioPlayer.isBridgeActive` -- they are separate computed properties (not a single enum) for clarity, though all currently follow the same logic
+- Controls dim briefly during stream prebuffering (before bridge activates) and re-enable once `onFormatReady` fires and the bridge is active
 - Use `opacity(0.5)` (not `0.0`) to indicate "unavailable" rather than "hidden" -- users should see the control exists but cannot be used
 - Always pair `.opacity()` with `.allowsHitTesting(false)` to prevent interaction with dimmed controls
 - Optional `.help()` tooltip explains why the control is disabled
@@ -1623,7 +1627,7 @@ extension PlaybackCoordinator {
 // Video formats (use AVPlayer)
 let videoFormats = ["mp4", "mov", "m4v", "avi", "mkv", "webm"]
 
-// Audio formats (use AVAudioEngine for local, AVPlayer for streams)
+// Audio formats (use AVAudioEngine for local + streams via unified pipeline)
 let audioFormats = ["mp3", "flac", "wav", "m4a", "ogg", "aac"]
 
 // Stream detection
@@ -1634,7 +1638,7 @@ let isStream = url.scheme?.hasPrefix("http") == true
 - Must clear player reference in dismantleNSView to prevent memory leaks
 - Don't create new AVPlayer instances on every update
 - Check media type before attaching player
-- AVPlayer doesn't support all audio features (EQ, visualization)
+- AVPlayer (video only) doesn't support audio features (EQ, visualization); streams use unified pipeline
 - Some video files may only have audio tracks - detect properly
 - Controls visibility should reflect playback state
 
@@ -2311,6 +2315,159 @@ stop()  → removeVisualizerTapIfNeeded()
 
 **Result**: Removes visualizer tap on pause, saving CPU during paused playback. Previously the tap continued running at 21.5 Hz even when paused, consuming ~1-2% CPU for unused visualization data.
 
+### Pattern: Stream Decode Pipeline (Unified Audio)
+
+**When to use**: Decoding internet radio streams (SHOUTcast/Icecast) into PCM for playback through AVAudioEngine, enabling EQ, visualization, and balance for streams — feature parity with local files.
+
+**Unified Pipeline**: Replaces the previous AVPlayer-based StreamPlayer. AVPlayer was a black box that provided no access to decoded PCM, preventing EQ, visualization, and balance for streams. The custom decode pipeline feeds PCM directly into AVAudioEngine via AVAudioSourceNode.
+
+**Architecture**:
+```
+URLSession (delegate queue)
+    → SessionDelegateProxy (onResponse configures framer on decode queue)
+    → SessionDelegateProxy (onData dispatches to DecodeContext)
+
+DecodeContext (serial decode queue, @unchecked Sendable)
+    → ICYFramer.consume() → .audio/.metadata chunks
+    → AudioFileStreamParser.parse() → onPackets callback
+    → handlePackets: split batch → individual enqueue
+    → AudioConverterDecoder.decode() → Float32 PCM
+    → LockFreeRingBuffer.write()
+
+AVAudioSourceNode (real-time audio thread)
+    → render block reads from LockFreeRingBuffer
+    → interleaved Float32 at stream sample rate (44100Hz)
+    → engine handles SRC to device rate (48000Hz)
+```
+
+**Key component — DecodeContext**:
+```swift
+// File: MacAmpApp/Audio/StreamDecodePipeline.swift
+// Purpose: Queue-confined mutable state for the decode pipeline
+// Context: @unchecked Sendable because all access is on the serial decode queue
+
+final class DecodeContext: @unchecked Sendable {
+    let framer: ICYFramer
+    let parser: AudioFileStreamParser
+    let decoder: AudioConverterDecoder
+    let ringBuffer: LockFreeRingBuffer
+
+    // All mutation happens on decodeQueue — no locks needed
+}
+```
+
+**Key component — StreamDecodePipeline**:
+```swift
+// File: MacAmpApp/Audio/StreamDecodePipeline.swift
+// Purpose: @MainActor orchestrator that owns the decode queue and DecodeContext
+// Context: Observable state (playing/buffering/error) published to UI
+
+@MainActor final class StreamDecodePipeline {
+    private let decodeQueue = DispatchQueue(label: "...", qos: .userInitiated)
+    private var decodeContext: DecodeContext?  // @unchecked Sendable, queue-confined
+
+    // Callbacks to StreamPlayer (dispatched to MainActor)
+    var onStateChange: ((StreamState) -> Void)?
+    var onFormatReady: ((Float64) -> Void)?
+    var onMetadata: ((ICYFramer.ICYMetadata) -> Void)?
+}
+```
+
+**Packet splitting for batch callbacks**:
+```swift
+// AudioFileStream delivers multiple packets in one callback (concatenated buffer).
+// Each packet must be enqueued individually to prevent data loss when the
+// AudioConverter's output buffer fills mid-batch.
+for desc in descriptions {
+    let packetData = data[offset..<(offset + size)]
+    decoder.enqueue(data: Data(packetData), descriptions: [singleDesc])
+}
+```
+
+**Real usage**: `StreamDecodePipeline.swift`, `StreamPlayer.swift`, `DecodeContext` (internal to pipeline)
+
+**Pitfalls**:
+- ICYFramer must be configured EXACTLY ONCE per stream (from the delegate queue, NOT MainActor) — see `tasks/unified-audio-pipeline/lessons-learned.md` Lesson 2
+- M3U/PLS playlist URLs must be resolved before streaming (download and parse first)
+- Diagnostic code (file I/O on decode queue) can mask timing bugs by adding latency
+
+**Reference**: See `BUILDING_RETRO_MACOS_APPS_SKILL.md` Lesson #27 for the complete pipeline architecture, debugging methodology, and implementation checklist.
+
+### Pattern: AudioConverter Input Buffer Lifecycle
+
+**When to use**: Implementing the input callback for `AudioConverterFillComplexBuffer` when decoding compressed audio (MP3, AAC) to PCM.
+
+**Unified Pipeline**: This pattern was discovered during the stream decode pipeline implementation. AudioConverter's input callback has a strict contract: the buffer provided to the converter must remain valid until the NEXT callback invocation.
+
+**Implementation**:
+```swift
+// File: MacAmpApp/Audio/AudioConverterDecoder.swift
+// Purpose: Manage packet queue and buffer lifetime for AudioConverter input callback
+// Context: The input callback is called repeatedly within one FillComplexBuffer invocation
+
+// WRONG: Free previous buffer at START of decode()
+func decode() {
+    prepareInputBuffer()  // Frees previous — but converter may still be using it!
+    AudioConverterFillComplexBuffer(converter, inputCallback, ...)
+}
+
+// RIGHT: Free previous buffer inside the callback itself
+let inputCallback: AudioConverterComplexInputDataProc = { ..., context in
+    let decoder = context.decoder
+    decoder.advanceToNextPacket()  // Frees PREVIOUS buffer (converter is done with it)
+    // Provide NEXT packet's data pointer
+    bufferList.pointee.mBuffers.mData = decoder.currentPacketData
+    return noErr
+}
+```
+
+**Key insight**: `AudioConverterFillComplexBuffer` calls the input callback repeatedly within a single invocation. The callback must manage its own packet queue — advancing to the next packet frees the previous one (safe because the converter is requesting new data = done with old data).
+
+**Real usage**: `AudioConverterDecoder.swift` input callback
+
+**Pitfalls**:
+- Never free the input buffer outside the callback — the converter may still reference it
+- The output buffer size limits how many input packets are consumed per call; remaining packets stay queued
+- Test with various MP3 frame sizes (128kbps = ~417 bytes/frame, 320kbps = ~1044 bytes/frame)
+
+### Pattern: Engine Graph Explicit Format
+
+**When to use**: Reconnecting AVAudioEngine nodes after the stream bridge has been active, or any time graph topology changes between different audio source formats.
+
+**Unified Pipeline**: After the stream bridge sets an explicit non-interleaved format on graph connections, reconnecting with `format: nil` causes EQ node format stickiness (error -10868). Always use explicit `AVAudioFormat` for all graph connections.
+
+**Implementation**:
+```swift
+// File: MacAmpApp/Audio/AudioPlayer.swift
+// Purpose: Prevent format stickiness when rewiring between stream and local playback
+// Context: format: nil means "use previously negotiated format" — wrong after bridge
+
+// WRONG: Relies on implicit format negotiation
+engine.connect(playerNode, to: eqNode, format: nil)  // Uses stale stream format!
+
+// RIGHT: Always specify explicit format
+let graphFormat = AVAudioFormat(
+    commonFormat: .pcmFormatFloat32,
+    sampleRate: outputNode.inputFormat(forBus: 0).sampleRate,
+    channels: fileChannels,
+    interleaved: false
+)!
+engine.connect(playerNode, to: eqNode, format: graphFormat)
+```
+
+**Key rules**:
+1. **Never use `format: nil`** after a stream bridge has been active
+2. **Disconnect inputs explicitly**: `disconnectNodeInput(eqNode, bus: 0)` clears stale input format cache; `disconnectNodeOutput` alone is insufficient
+3. **Don't use `audioEngine.reset()`** for format cleanup — it does not scrub cached formats
+4. **`deactivateStreamBridge()` in `rewireForCurrentFile()`** — this is the single choke point for ALL local file playback paths (drag-and-drop, playlist double-click, etc.)
+
+**Real usage**: `AudioPlayer.swift` `rewireForCurrentFile()`, `activateStreamBridge()`, `deactivateStreamBridge()`
+
+**Pitfalls**:
+- Error -10868 (`kAudioUnitErr_FormatNotSupported`) almost always means a stale format from a previous graph configuration
+- Direct playback paths that bypass PlaybackCoordinator must still deactivate the bridge — guard this in `rewireForCurrentFile()`
+- Engine start must be a hard gate: if `audioEngine.start()` fails, abort immediately (don't install taps or call `playerNode.play()`)
+
 ---
 
 ## Async/Await Patterns
@@ -2574,6 +2731,79 @@ self.audioPlayer.onPlaylistAdvanceRequest = { [weak self] track in
 - Don't pass non-Sendable types through callbacks in Swift 6
 - Consider using `AsyncStream` for high-frequency events
 - **Don't conflate unrelated events in a single callback** -- the `externalPlaybackHandler` anti-pattern made it ambiguous whether the coordinator should refresh metadata or advance the playlist
+
+### Pattern: Stream Bridge Lifecycle Callbacks
+
+**When to use**: Coordinating stream decode pipeline state with AVAudioEngine graph topology changes. The stream bridge (AVAudioSourceNode reading from LockFreeRingBuffer) must be activated when audio format is detected and deactivated when the stream terminates.
+
+**Unified Pipeline**: These callbacks replace the previous AVPlayer-based approach where streams were fully self-contained. With the unified pipeline, StreamPlayer produces PCM into a ring buffer, and AudioPlayer consumes it via AVAudioSourceNode — requiring explicit bridge lifecycle management.
+
+**Implementation**:
+```swift
+// File: MacAmpApp/Audio/StreamPlayer.swift
+// Purpose: Expose lifecycle events to PlaybackCoordinator
+
+@MainActor @Observable
+final class StreamPlayer {
+    /// Called when audio format is detected and prebuffering is complete.
+    /// PlaybackCoordinator uses this to activate the engine bridge.
+    var onFormatReady: (@MainActor (Float64) -> Void)?
+
+    /// Called when stream reaches a terminal state (idle or error).
+    /// PlaybackCoordinator uses this to deactivate the engine bridge.
+    var onStreamTerminated: (@MainActor () -> Void)?
+}
+
+// File: MacAmpApp/Audio/PlaybackCoordinator.swift
+// Purpose: Wire callbacks during init to manage bridge lifecycle
+
+init(audioPlayer: AudioPlayer, streamPlayer: StreamPlayer) {
+    // ... other setup ...
+
+    // Wire stream pipeline format-ready callback to activate engine bridge
+    self.streamPlayer.onFormatReady = { [weak self] sampleRate in
+        guard let self,
+              let ringBuffer = self.streamPlayer.currentRingBuffer else { return }
+        self.audioPlayer.activateStreamBridge(ringBuffer: ringBuffer, sampleRate: sampleRate)
+    }
+
+    // Wire stream terminal state callback for bridge teardown
+    self.streamPlayer.onStreamTerminated = { [weak self] in
+        guard let self else { return }
+        if self.audioPlayer.isBridgeActive {
+            self.audioPlayer.deactivateStreamBridge()
+        }
+    }
+}
+```
+
+**ICY framer race prevention**:
+```swift
+// WRONG: Configure framer from MainActor (delayed, races with incoming data)
+func handleHTTPResponse(_ response: HTTPURLResponse) {  // @MainActor
+    configureFramer(response)  // Too late — data already arriving
+}
+
+// RIGHT: Configure framer from URLSession delegate queue (immediate)
+sessionDelegate.onResponse = { [weak self] response in  // delegate queue
+    self?.decodeQueue.async {
+        self?.decodeContext?.framer.configure(from: response)  // Before any data
+    }
+}
+```
+
+**Key invariants**:
+- `onFormatReady` fires ONCE per stream, after prebuffer threshold is reached (~16384 frames / ~371ms)
+- `onStreamTerminated` fires on idle or error states — PlaybackCoordinator checks `isBridgeActive` before deactivating
+- ICYFramer.configure() must be called EXACTLY ONCE per stream, from the delegate queue (NOT MainActor)
+- Bridge deactivation must occur in ALL playback transition paths (stream-to-local, stream-to-stream, stop)
+
+**Real usage**: `StreamPlayer.swift` callbacks, `PlaybackCoordinator.swift` init wiring
+
+**Pitfalls**:
+- Calling `configureFramer` from both delegate queue AND MainActor causes double-configure — the second call resets `audioByteCount`, corrupting ICY metadata alignment for the entire stream
+- When adding an "early" call to fix a race, ALWAYS search for and remove the "late" call (`grep -r "configureFramer"`)
+- Diagnostic code (file I/O) on the decode queue can mask this timing bug by adding latency
 
 ---
 

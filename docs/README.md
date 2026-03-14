@@ -387,10 +387,11 @@ xcodebuild test -scheme MacAmpApp -destination 'platform=macOS'
 ### By Technical Domain
 
 **Audio System:**
-- MACAMP_ARCHITECTURE_GUIDE.md §4 - Dual audio backend
+- MACAMP_ARCHITECTURE_GUIDE.md §4 - Unified audio pipeline (AVAudioEngine for both local and streaming)
 - MACAMP_ARCHITECTURE_GUIDE.md §8 - Audio processing pipeline
-- MACAMP_ARCHITECTURE_GUIDE.md §9 - Internet radio streaming
+- MACAMP_ARCHITECTURE_GUIDE.md §9 - Internet radio streaming (custom decode pipeline: ICYFramer, AudioFileStreamParser, AudioConverterDecoder, StreamDecodePipeline)
 - IMPLEMENTATION_PATTERNS.md §4 - Audio processing patterns
+- BUILDING_RETRO_MACOS_APPS_SKILL.md Lesson #27 - Sine wave diagnostic for audio debugging
 
 **UI/Visual System:**
 - SPRITE_SYSTEM_COMPLETE.md - Complete sprite system
@@ -622,7 +623,10 @@ Includes:
 | **Always On Top (A button)** | MACAMP_ARCHITECTURE_GUIDE.md | §UI Controls & Features |
 | **App notarization** | RELEASE_BUILD_GUIDE.md | §Notarization |
 | **Audio backend switching** | MACAMP_ARCHITECTURE_GUIDE.md | §4 Dual Audio Backend |
+| **AudioConverterDecoder** | MACAMP_ARCHITECTURE_GUIDE.md | §9 Internet Radio |
+| **AudioFileStreamParser** | MACAMP_ARCHITECTURE_GUIDE.md | §9 Internet Radio |
 | **AVAudioEngine setup** | MACAMP_ARCHITECTURE_GUIDE.md | §8 Audio Processing |
+| **AVAudioSourceNode** | MACAMP_ARCHITECTURE_GUIDE.md | §4 Unified Audio Pipeline |
 | **AVPlayer streaming** | MACAMP_ARCHITECTURE_GUIDE.md | §9 Internet Radio |
 | **Background I/O fire-and-forget** | IMPLEMENTATION_PATTERNS.md | §5 Async/Await Patterns |
 | **Build configurations** | RELEASE_BUILD_COMPARISON.md | Full document |
@@ -643,10 +647,13 @@ Includes:
 | **Fallback sprites** | SPRITE_SYSTEM_COMPLETE.md | §6 Fallback Generation |
 | **Goertzel algorithm** | MACAMP_ARCHITECTURE_GUIDE.md | §8.4 Spectrum |
 | **Hardened runtime** | CODE_SIGNING_FIX.md | §Hardened Runtime |
+| **ICY metadata protocol** | MACAMP_ARCHITECTURE_GUIDE.md | §9 Internet Radio |
+| **ICYFramer** | MACAMP_ARCHITECTURE_GUIDE.md | §9 Internet Radio |
 | **Internet radio** | MACAMP_ARCHITECTURE_GUIDE.md | §9 Complete section |
 | **Internet radio N1-N6 fixes** | MACAMP_ARCHITECTURE_GUIDE.md | §9 Internet Radio Integration Fixes (PR #49) |
 | **Keyboard navigation** | MACAMP_ARCHITECTURE_GUIDE.md | §PlaylistMenuDelegate |
 | **Keyboard shortcuts** | MACAMP_ARCHITECTURE_GUIDE.md | §UI Controls & Features |
+| **M3U/PLS playlist resolution** | MACAMP_ARCHITECTURE_GUIDE.md | §9 Internet Radio |
 | **M3UParser** | MACAMP_ARCHITECTURE_GUIDE.md | §M3U Parsing |
 | **Magnetic snapping** | MACAMP_ARCHITECTURE_GUIDE.md | §WindowSnapManager |
 | **MetadataLoader** | MACAMP_ARCHITECTURE_GUIDE.md | §4a AudioPlayer Decomposition |
@@ -662,11 +669,14 @@ Includes:
 | **PlaybackCoordinator callback split** | MACAMP_ARCHITECTURE_GUIDE.md, IMPLEMENTATION_PATTERNS.md | §4.3, §5 Callback Synchronization (PR #49) |
 | **PlaylistController** | MACAMP_ARCHITECTURE_GUIDE.md, IMPLEMENTATION_PATTERNS.md | §4a, §4 Audio Processing Patterns |
 | **Semantic sprites** | SPRITE_SYSTEM_COMPLETE.md | §3 Semantic Enum |
+| **Sine wave diagnostic** | BUILDING_RETRO_MACOS_APPS_SKILL.md | Lesson #27 |
 | **Signing workflow** | CODE_SIGNING_FIX_DIAGRAM.md | Full diagram |
 | **Skin compatibility** | WINAMP_SKIN_VARIATIONS.md | Full document |
 | **Skin file structure** | SPRITE_SYSTEM_COMPLETE.md | §7 Skin Structure |
 | **SpriteResolver** | SPRITE_SYSTEM_COMPLETE.md | §4 Implementation |
 | **State management** | IMPLEMENTATION_PATTERNS.md | §2 State Patterns |
+| **Stream bridge (activateStreamBridge)** | MACAMP_ARCHITECTURE_GUIDE.md | §4 Unified Audio Pipeline |
+| **StreamDecodePipeline** | MACAMP_ARCHITECTURE_GUIDE.md | §9 Internet Radio |
 | **StreamPlayer** | MACAMP_ARCHITECTURE_GUIDE.md | §9.2 StreamPlayer |
 | **Swift 6 patterns** | MACAMP_ARCHITECTURE_GUIDE.md | §10 Swift 6 |
 | **SwiftUI techniques** | MACAMP_ARCHITECTURE_GUIDE.md | §7 SwiftUI |
@@ -675,6 +685,7 @@ Includes:
 | **Three-layer architecture** | MACAMP_ARCHITECTURE_GUIDE.md | §3 Three-Layer |
 | **Thread safety** | IMPLEMENTATION_PATTERNS.md | §5 Async/Await |
 | **Time display system** | MACAMP_ARCHITECTURE_GUIDE.md | §UI Controls & Features |
+| **Unified audio pipeline** | MACAMP_ARCHITECTURE_GUIDE.md | §4 Unified Audio Pipeline |
 | **Unmanaged pointer pattern** | IMPLEMENTATION_PATTERNS.md | §4 Audio Processing Patterns |
 | **VisualizerSharedBuffer (SPSC)** | IMPLEMENTATION_PATTERNS.md, MACAMP_ARCHITECTURE_GUIDE.md | §4 Audio Processing Patterns, §8.4 |
 | **SPSC shared buffer pattern** | IMPLEMENTATION_PATTERNS.md | §4 Audio Processing Patterns |
@@ -751,7 +762,9 @@ Includes:
 | Question | Answer |
 |----------|--------|
 | "How do I add a new UI component?" | SPRITE_SYSTEM_COMPLETE.md §8 + IMPLEMENTATION_PATTERNS.md §3 |
-| "Why are there two audio players?" | MACAMP_ARCHITECTURE_GUIDE.md §4 Dual Audio Backend |
+| "Why are there two audio players?" | There is now ONE unified engine path. Both local files and streams route through AVAudioEngine. See MACAMP_ARCHITECTURE_GUIDE.md §4 |
+| "How does internet radio streaming work now?" | MACAMP_ARCHITECTURE_GUIDE.md §9 (custom decode pipeline: ICYFramer → AudioFileStreamParser → AudioConverterDecoder → AVAudioSourceNode) |
+| "How to debug audio corruption?" | BUILDING_RETRO_MACOS_APPS_SKILL.md Lesson #27 (sine wave diagnostic test) |
 | "How does skin loading work?" | SPRITE_SYSTEM_COMPLETE.md + WINAMP_SKIN_VARIATIONS.md |
 | "What's Debug vs Release difference?" | RELEASE_BUILD_COMPARISON.md |
 | "How do I fix code signing errors?" | CODE_SIGNING_FIX.md + diagram |
