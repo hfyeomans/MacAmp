@@ -1,7 +1,6 @@
 # Placeholder: Unified Audio Pipeline
 
 > **Purpose:** Documents intentional placeholder/scaffolding/diagnostic code in the codebase.
-> Items here MUST be removed before the PR is created.
 
 ---
 
@@ -9,11 +8,11 @@
 
 All diagnostic code (PCM dump, MP3 dump, sine wave generator, telemetry timer) has been removed.
 
-## Temporary Architectural Code (tracked in T8 PR 2)
+## Temporary Architectural Code — ✅ ALL RESOLVED
 
-| File | Code | Purpose | Remove When |
-|------|------|---------|-------------|
-| `AudioPlayer.swift:185` | `MainActor.assumeIsolated` bridge in deinit | Temporary bridge for `removeTap()` call from nonisolated deinit | T8 PR 2: replaced by `isolated deinit` |
+| Item | Status | Resolution |
+|------|--------|------------|
+| `AudioPlayer.swift` `MainActor.assumeIsolated` bridge | ✅ RESOLVED | Replaced with `isolated deinit` in T8 PR 2 (PR #58) |
 
 ## Defensive Fallbacks (acceptable)
 

@@ -7,8 +7,8 @@
 
 ---
 
-## Active Placeholders
+## Active Placeholders — ✅ ALL RESOLVED
 
-| File:Line | Purpose | Status | Action |
-|-----------|---------|--------|--------|
-| `AudioPlayer.swift:185` | `MainActor.assumeIsolated` bridge in nonisolated deinit — calls `removeTap()` which is now @MainActor-isolated. Uses `Thread.isMainThread` guard. Oracle flagged as "brittle — relies on thread check, not formal executor provenance." | Temporary (PR 1) | Replace with `isolated deinit` in PR 2 (Step 7), after pipeline adds streamSourceNode/bridge state. Final deinit: `progressTimer?.invalidate(); deactivateStreamBridge(); visualizerPipeline.removeTap()` |
+| Item | Status | Resolution |
+|------|--------|------------|
+| `AudioPlayer.swift` `MainActor.assumeIsolated` bridge | ✅ RESOLVED | Replaced with `isolated deinit` in PR 2 (PR #58) |

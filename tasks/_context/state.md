@@ -209,6 +209,7 @@ Target (MainWindowFullLayer.body):
 | macOS 26 passthrough guard | unified-audio-pipeline Phase 2.3 | Small | Low | No — only affects HDMI/optical output devices. |
 | Network auto-reconnect | unified-audio-pipeline Phase 2.1 | Medium | Medium | No — graceful error state sufficient for MVP. |
 | Stream pause audio tail | Post-merge Oracle P2 (deferred) | Small | Low | No — ~0.7s prebuffer plays out after pause. Needs ring buffer flush + resume strategy. |
+| Default MainActor isolation (T8 Phase 5) | swift-concurrency-62-cleanup research.md | Medium | Low | No — removes ~30 @MainActor but adds ~37-41 nonisolated. Questionable ROI. Revisit only if team wants "opt-out" mental model. |
 | Video audio through AVAudioEngine | unified-audio-pipeline/state.md | Medium | Medium | No — video uses AVPlayer (needs MTAudioProcessingTap for audio interception). Separate task. |
 | docs/ folder update for unified pipeline | unified-audio-pipeline/state.md | Medium | Medium | No — 20 files reference stale dual-backend architecture. Post-merge sub-agent scan. |
 

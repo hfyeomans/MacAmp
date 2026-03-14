@@ -19,8 +19,8 @@
 
 **Replaced with:** `isolated deinit` keyword on the class.
 
-**Specific removals (PR 1):**
-- `AudioPlayer.progressTimer` — `nonisolated(unsafe)` still present (deferred to PR 2 — AudioPlayer needs `isolated deinit` after pipeline adds bridge state)
+**Specific removals:**
+- `AudioPlayer.progressTimer` — `nonisolated(unsafe)` removed in PR 2 (PR #58) with `isolated deinit`
 - `VisualizerPipeline.tapInstalled` — `nonisolated(unsafe)` removed
 - `VisualizerPipeline.mixerNode` — `nonisolated(unsafe)` removed
 - `VisualizerPipeline.pollTimer` — `nonisolated(unsafe)` removed
@@ -54,18 +54,17 @@
 
 **Why removed:** `Task { try? await Task.sleep(for:) }` is the Swift concurrency equivalent, supports cancellation, and keeps the codebase uniform.
 
-### 5. `@preconcurrency import AVFoundation` (if removable)
+### 5. `@preconcurrency import AVFoundation` — N/A (StreamPlayer rewritten)
 
 **File:** StreamPlayer.swift:1
 
-**What:** Pre-concurrency import annotation suppressing Sendable warnings from AVFoundation types.
+**Status:** N/A — StreamPlayer was completely rewritten by the unified audio pipeline (T7).
+No longer uses AVFoundation for streaming. The `@preconcurrency import` was removed along
+with AVPlayer, NSObject, and Combine.
 
-**Why removed (if applicable):** Xcode 26 SDK may have added proper Sendable annotations. If removal causes compiler errors, this entry will be marked as "kept — still needed."
+### 6. Redundant `@MainActor` annotations (Phase 5) — DEFERRED
 
-### 6. Redundant `@MainActor` annotations (Phase 5)
-
-**Files:** ~30+ types across the codebase
-
-**What:** Explicit `@MainActor` annotations on types that would inherit isolation from the module default.
-
-**Why removed:** Default main actor isolation (`SWIFT_DEFAULT_ISOLATION: MainActor`) makes these implicit. Removing them reduces annotation noise and makes `nonisolated` opt-outs more visible.
+**Status:** DEFERRED — Phase 5 was evaluated and determined to have questionable ROI.
+Removes ~30 `@MainActor` annotations but adds ~37-41 `nonisolated` annotations.
+See research.md "Phase 5 Blast Radius" for full analysis.
+Tracked in `_context/state.md` as deferred item for future triage.
