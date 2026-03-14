@@ -10,9 +10,9 @@
 
 ## Current Status
 
-**Phase:** PR 1 implementation complete — awaiting manual test + Oracle review + PR
-**Status:** 🔄 IN PROGRESS
-**Last Updated:** 2026-03-13
+**Phase:** PR 1 MERGED (PR #56, 2026-03-14). PR 2 blocked on unified-audio-pipeline (T7).
+**Status:** ⏸ WAITING — PR 2 blocked on T7 merge
+**Last Updated:** 2026-03-14
 **PR Structure:** Split into PR 1 (pre-pipeline) + PR 2 (post-pipeline)
 
 ---
@@ -66,10 +66,10 @@ PR 2 (T8): Phase 1d (AudioPlayer) + Phase 4 → merge to main
 
 | Phase | PR | Description | Status | Depends On |
 |-------|----|-------------|--------|------------|
-| 0 | PR 1 | SWIFT_VERSION 6.0 → 6.2 | ✅ Complete | — |
-| 2 | PR 1 | DispatchQueue → Swift Concurrency | ✅ Complete | Independent |
-| 1 partial | PR 1 | `isolated deinit` (VPC, VisPipeline, WinCoord) | ✅ Complete | Phase 0 |
-| — | — | **PR 1 MERGE** | — | Phases 0, 2, 1 partial |
+| 0 | PR 1 | SWIFT_VERSION 6.0 → 6.2 | ✅ Merged | — |
+| 2 | PR 1 | DispatchQueue → Swift Concurrency | ✅ Merged | Independent |
+| 1 partial | PR 1 | `isolated deinit` (VPC, VisPipeline, WinCoord) | ✅ Merged | Phase 0 |
+| — | — | **PR 1 MERGED** (PR #56, 2026-03-14) | ✅ | Phases 0, 2, 1 partial |
 | — | — | **unified-audio-pipeline executes** | — | PR 1 merged |
 | 1d | PR 2 | AudioPlayer `isolated deinit` (final shape) | Not started | Pipeline merged |
 | 4 | PR 2 | `@concurrent` static functions | Not started | Pipeline merged |

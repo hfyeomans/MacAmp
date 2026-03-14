@@ -25,7 +25,7 @@
 
 | Task | Purpose | Created | Last Activity | Days Idle | Status |
 |------|---------|---------|---------------|-----------|--------|
-| `swift-concurrency-62-cleanup` | Adopt Swift 6.2 concurrency features: `isolated deinit`, `@concurrent`, default MainActor isolation, `@preconcurrency` audit, DispatchQueue migration | 2026-03-13 | 2026-03-13 | 0 | 📋 PLANNED — Research + plan + todos complete, 5 phases, branch `feature/swift-concurrency-62-cleanup` |
+| `swift-concurrency-62-cleanup` | Adopt Swift 6.2 concurrency features: `isolated deinit`, `@concurrent`, default MainActor isolation, `@preconcurrency` audit, DispatchQueue migration | 2026-03-13 | 2026-03-14 | 0 | ✅ PR 1 MERGED (PR #56). PR 2 blocked on T7 (unified-audio-pipeline). |
 | `internet-radio-n1-n6-fixes` | Fix 6 issues (1 HIGH, 2 MEDIUM, 3 LOW) in internet radio streaming infrastructure discovered during Oracle validation | 2026-02-21 | 2026-02-21 | 0 | ✅ COMPLETE — All 6 fixes implemented, Oracle-verified, merged in PR #49 |
 | `mainwindow-layer-decomposition` | Decompose WinampMainWindow from cross-file extension pattern to proper layer subview decomposition with @Observable interaction state object | 2026-02-21 | 2026-02-22 | 0 | ✅ COMPLETE — PR #54 merged. Wave 2b. 4 phases, 3 Oracle reviews, 10 PR comments resolved. 10 files in MainWindow/, old extension deleted. |
 | `playlistwindow-layer-decomposition` | Decompose WinampPlaylistWindow from cross-file extension pattern to proper layer subview decomposition; same architectural pattern as mainwindow task | 2026-02-21 | 2026-02-22 | 0 | ✅ COMPLETE — Wave 1. 4 phases done, Oracle reviewed, PR merged. Extension deleted, 7 child views created. |

@@ -18,7 +18,7 @@
 
 ---
 
-## Current Phase: WAVE 3 IN PROGRESS — T8 PR 1 In Review (PR #56)
+## Current Phase: WAVE 3 IN PROGRESS — T8 PR 1 Merged, T7 Next
 
 Wave 2 complete: T5 Phase 1 merged PR #53 (2026-02-22), T3 merged PR #54 (2026-02-22).
 Wave 3 pivoted: T5 Phase 2 MTAudioProcessingTap failed → replaced by T7 (unified-audio-pipeline).
@@ -52,7 +52,7 @@ New task T8 (swift-concurrency-62-cleanup) added as prerequisite for T7.
 | T4 | `lock-free-ring-buffer` | **COMPLETE** (benchmarks deferred) | Wave 1 — done, awaiting PR | None |
 | T5 | `internet-streaming-volume-control` | **Ph1 COMPLETE (merged PR #53)**, Ph2 MTAudioProcessingTap FAILED | Wave 2a — MERGED | Ph2 PIVOTED → new task `unified-audio-pipeline` |
 | T7 | `unified-audio-pipeline` | PLAN UPDATED WITH SWIFT 6.2, awaiting T8 PR 1 merge | Wave 3b | Replaces T5 Ph2. Custom decode pipeline. Blocked on T8 PR 1. |
-| T8 | `swift-concurrency-62-cleanup` | PR 1 IN REVIEW (PR #56), PR 2 planned | Wave 3a (PR 1) + Wave 3c (PR 2) | PR 1: SWIFT_VERSION 6.2 + isolated deinit (non-AudioPlayer) + DispatchQueue. PR 2: AudioPlayer deinit + @concurrent (after T7). |
+| T8 | `swift-concurrency-62-cleanup` | **PR 1 MERGED (PR #56)**, PR 2 blocked on T7 | Wave 3a (PR 1) + Wave 3c (PR 2) | PR 1: SWIFT_VERSION 6.2 + isolated deinit (non-AudioPlayer) + DispatchQueue. PR 2: AudioPlayer deinit + @concurrent (after T7). |
 | T6 | `swift-testing-modernization` | **COMPLETE** (deferrals noted) | Wave 1 — done, awaiting PR | None |
 
 ---
@@ -82,7 +82,7 @@ New task T8 (swift-concurrency-62-cleanup) added as prerequisite for T7.
 
 | Step | Task | Branch | Status | Depends On |
 |------|------|--------|--------|-----------|
-| 3a | T8 PR 1 (Swift 6.2 foundation) | `feature/swift-concurrency-62-cleanup` | 🔍 IN REVIEW — PR #56 | Wave 2 merges (done) |
+| 3a | T8 PR 1 (Swift 6.2 foundation) | `feature/swift-concurrency-62-cleanup` | ✅ MERGED — PR #56 (2026-03-14) | Wave 2 merges (done) |
 | 3b | T7 (Unified Audio Pipeline) | TBD (from main after 3a merges) | 📋 PLANNED — plan updated with 6.2 | T8 PR 1 merge |
 | 3c | T8 PR 2 (AudioPlayer deinit + @concurrent) | TBD (from main after 3b merges) | 📋 PLANNED | T7 merge |
 | 3d | T1 Phase 4 (engine transport) | After 3c | DEFERRED | Engine boundaries stable after T7+T8 |
