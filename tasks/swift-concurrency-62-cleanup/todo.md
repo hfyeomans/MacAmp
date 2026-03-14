@@ -12,13 +12,13 @@
 
 ### Phase 0: Upgrade Swift Language Mode to 6.2
 
-- [ ] **0a.** SkinManager.swift — add `@preconcurrency import ZIPFoundation`
-- [ ] **0b.** project.yml — change `SWIFT_VERSION: '6.0'` → `SWIFT_VERSION: '6.2'` (both targets)
-- [ ] **0c.** Run `xcodegen generate`
-- [ ] **0d.** Fix LockFreeRingBuffer.swift unused return values (lines 78, 129, 179)
-- [ ] **0e.** Clean build with TSan — fix any new diagnostics
-- [ ] **0f.** Audit MetadataLoader async functions for nonisolated-async-stays-on-caller impact
-- [ ] **0g.** Run test suite — verify no regressions
+- [x] **0a.** SkinManager.swift — add `@preconcurrency import ZIPFoundation`
+- [x] **0b.** project.yml — change `SWIFT_VERSION: '6.0'` → `SWIFT_VERSION: '6.2'` (both targets)
+- [x] **0c.** Run `xcodegen generate`
+- [x] **0d.** Fix LockFreeRingBuffer.swift unused return values (lines 79, 129, 179)
+- [x] **0e.** Clean build with TSan — no new diagnostics, zero warnings
+- [x] **0f.** Audit MetadataLoader — safe: all methods await immediately, no blocking I/O before first suspension
+- [x] **0g.** Run test suite — 40/40 pass with TSan
 
 ### Phase 2: DispatchQueue → Swift Concurrency
 

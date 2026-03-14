@@ -1,6 +1,6 @@
 import Foundation
 import Combine
-import ZIPFoundation
+@preconcurrency import ZIPFoundation
 import AppKit
 import CoreGraphics // For CGRect
 import SwiftUI
