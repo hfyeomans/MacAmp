@@ -449,7 +449,9 @@ private final class DecodeContext: @unchecked Sendable {
                 self?.handleFormatAvailable(asbd)
             }
             parser.onMagicCookie = { [weak self] cookie in
-                self?.magicCookie = cookie
+                guard let self else { return }
+                dispatchPrecondition(condition: .onQueue(self.decodeQueue))
+                self.magicCookie = cookie
             }
             parser.onPackets = { [weak self] data, descriptions in
                 self?.handlePackets(data: data, descriptions: descriptions)
