@@ -32,6 +32,9 @@ final class AudioFileStreamParser {
     /// Called when compressed audio packets are available for decoding.
     var onPackets: ((Data, [AudioStreamPacketDescription]) -> Void)?
 
+    /// Called when a parse error occurs. Allows pipeline to surface errors to UI.
+    var onError: ((String) -> Void)?
+
     // MARK: - State
 
     private var streamID: AudioFileStreamID?
@@ -65,6 +68,7 @@ final class AudioFileStreamParser {
 
         if status != noErr {
             AppLog.error(.audio, "AudioFileStreamParser: Failed to open stream (status: \(status))")
+            onError?("AudioFileStream open failed (status: \(status))")
         }
     }
 
@@ -92,6 +96,7 @@ final class AudioFileStreamParser {
 
         if status != noErr && status != kAudioFileStreamError_NotOptimized {
             AppLog.warn(.audio, "AudioFileStreamParser: Parse error (status: \(status))")
+            onError?("AudioFileStream parse error (status: \(status))")
         }
     }
 

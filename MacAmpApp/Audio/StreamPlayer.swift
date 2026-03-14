@@ -120,6 +120,7 @@ final class StreamPlayer {
         streamArtist = nil
         error = nil
         ringBuffer = nil
+        currentSampleRate = 0
     }
 
     // MARK: - Ring Buffer Access (for PlaybackCoordinator bridge lifecycle)
@@ -129,7 +130,8 @@ final class StreamPlayer {
     var currentRingBuffer: LockFreeRingBuffer? { ringBuffer }
 
     /// The detected sample rate from the current stream (for engine format configuration).
-    var currentSampleRate: Float64 { pipeline.ringBuffer != nil ? 44100.0 : 0 }
+    /// The detected sample rate from the current stream's decoder output.
+    private(set) var currentSampleRate: Float64 = 0
 
     // MARK: - Pipeline Callbacks
 
@@ -160,8 +162,7 @@ final class StreamPlayer {
 
         pipeline.onFormatReady = { [weak self] (sampleRate: Float64) in
             guard let self else { return }
-            // PlaybackCoordinator will pick this up via onFormatReady callback
-            // and call audioPlayer.activateStreamBridge(ringBuffer:sampleRate:)
+            self.currentSampleRate = sampleRate
             self.onFormatReady?(sampleRate)
         }
 

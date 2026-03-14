@@ -67,7 +67,6 @@ final class StreamDecodePipeline {
 
     private var formatReadyFired: Bool = false
 
-    // MARK: - Telemetry (placeholder — LockFreeRingBuffer.telemetry() available for future use)
 
     // MARK: - Lifecycle
 
@@ -124,6 +123,14 @@ final class StreamDecodePipeline {
                 Task { @MainActor [weak self] in
                     guard let self, gen == self.generation else { return }
                     self.onMetadata?(metadata)
+                }
+            },
+            onError: { [weak self] message, gen in
+                Task { @MainActor [weak self] in
+                    guard let self, gen == self.generation else { return }
+                    self.stopInternal()
+                    self.setState(.error(message))
+                    AppLog.error(.audio, "StreamDecodePipeline: Decode error — \(message)")
                 }
             }
         )
@@ -426,6 +433,7 @@ private final class DecodeContext: @unchecked Sendable {
 
     private let onFormatReady: @Sendable (Float64, UInt64) -> Void
     private let onMetadata: @Sendable (ICYFramer.ICYMetadata, UInt64) -> Void
+    private let onError: @Sendable (String, UInt64) -> Void
 
     init(
         decodeQueue: DispatchQueue,
@@ -433,13 +441,15 @@ private final class DecodeContext: @unchecked Sendable {
         formatHint: AudioFileTypeID,
         generation: UInt64,
         onFormatReady: @escaping @Sendable (Float64, UInt64) -> Void,
-        onMetadata: @escaping @Sendable (ICYFramer.ICYMetadata, UInt64) -> Void
+        onMetadata: @escaping @Sendable (ICYFramer.ICYMetadata, UInt64) -> Void,
+        onError: @escaping @Sendable (String, UInt64) -> Void
     ) {
         self.decodeQueue = decodeQueue
         self.ringBuffer = ringBuffer
         self.generation = generation
         self.onFormatReady = onFormatReady
         self.onMetadata = onMetadata
+        self.onError = onError
 
         decodeQueue.async { [self] in
             let parser = AudioFileStreamParser(formatHint: formatHint)
@@ -452,6 +462,10 @@ private final class DecodeContext: @unchecked Sendable {
                 guard let self else { return }
                 dispatchPrecondition(condition: .onQueue(self.decodeQueue))
                 self.magicCookie = cookie
+            }
+            parser.onError = { [weak self] message in
+                guard let self else { return }
+                self.onError(message, self.generation)
             }
             parser.onPackets = { [weak self] data, descriptions in
                 self?.handlePackets(data: data, descriptions: descriptions)
@@ -507,6 +521,13 @@ private final class DecodeContext: @unchecked Sendable {
         guard !isShutdown, decoder == nil else { return }
 
         let newDecoder = AudioConverterDecoder(inputFormat: asbd, magicCookie: magicCookie)
+
+        // Surface converter creation failure instead of silently hanging in "buffering"
+        guard newDecoder.converter != nil else {
+            onError("AudioConverter creation failed for format \(asbd.mSampleRate)Hz", generation)
+            return
+        }
+
         newDecoder.confinementQueue = decodeQueue
         decoder = newDecoder
 

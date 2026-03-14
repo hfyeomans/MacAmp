@@ -40,7 +40,7 @@ final class AudioConverterDecoder {
 
     // MARK: - State
 
-    private var converter: AudioConverterRef?
+    private(set) var converter: AudioConverterRef?
 
     /// Queued compressed packets waiting to be decoded.
     /// The input callback pulls from this queue directly.
