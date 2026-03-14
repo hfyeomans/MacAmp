@@ -60,10 +60,10 @@
 
 ### Phase 4: `@concurrent` for Offloaded Work
 
-- [ ] **4a.** EQPresetStore.swift — extract `@concurrent nonisolated static` functions (3 call sites)
-- [ ] **4b.** SkinManager.swift — annotate `SkinArchiveLoader.load()` with `@concurrent`
-- [ ] **4c.** MetadataLoader.swift — audit async functions, add `@concurrent` if blocking I/O
-- [ ] **4d.** Build and test — verify skin loading, EQ presets, metadata loading
+- [x] **4a.** EQPresetStore.swift — 3 `Task.detached` → `@concurrent` static functions (loadPresetsFromDisk, savePresetsToDisk, parseEqfFile)
+- [x] **4b.** SkinManager.swift — `@concurrent` async wrapper `SkinArchiveLoader.loadAsync()`, replaced `Task.detached`
+- [x] **4c.** MetadataLoader.swift — audited: all methods await immediately, no blocking I/O, `@concurrent` not needed
+- [x] **4d.** Build with TSan — 40/40 pass
 
 ### PR 2 Merge
 

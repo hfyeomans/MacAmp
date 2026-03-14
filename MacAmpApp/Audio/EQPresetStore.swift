@@ -102,17 +102,7 @@ final class EQPresetStore {
             return
         }
 
-        // Perform file I/O off main thread
-        let result: [String: EqfPreset]? = await Task.detached(priority: .userInitiated) {
-            guard FileManager.default.fileExists(atPath: url.path) else { return nil }
-            do {
-                let data = try Data(contentsOf: url)
-                return try JSONDecoder().decode([String: EqfPreset].self, from: data)
-            } catch {
-                AppLog.warn(.audio, "Failed to load per-track presets: \(error)")
-                return nil
-            }
-        }.value
+        let result = await Self.loadPresetsFromDisk(url: url)
 
         // Merge loaded data with any changes made during load (preserves early saves)
         if let loaded = result {
@@ -129,20 +119,8 @@ final class EQPresetStore {
 
     func savePerTrackPresets() {
         guard let url = presetsFileURL() else { return }
-
-        // Capture current state for background write
         let presetsToSave = perTrackPresets
-
-        // Perform file I/O off main thread (fire-and-forget with error logging)
-        Task.detached(priority: .utility) {
-            do {
-                let data = try JSONEncoder().encode(presetsToSave)
-                try data.write(to: url, options: .atomic)
-                AppLog.debug(.audio, "Saved \(presetsToSave.count) per-track presets")
-            } catch {
-                AppLog.warn(.audio, "Failed to save per-track presets: \(error)")
-            }
-        }
+        Task { await Self.savePresetsToDisk(presets: presetsToSave, url: url) }
     }
 
     func preset(forTrackURL urlString: String) -> EqfPreset? {
@@ -159,29 +137,55 @@ final class EQPresetStore {
     /// Parses an EQF file and stores it as a user preset.
     /// Returns the parsed preset for the caller to apply if desired.
     func importEqfPreset(from url: URL) async -> EQPreset? {
-        // Perform file I/O off main thread
-        let result: EQPreset? = await Task.detached(priority: .userInitiated) {
-            do {
-                let data = try Data(contentsOf: url)
-                guard let eqfPreset = EQFCodec.parse(data: data) else {
-                    AppLog.warn(.audio, "Failed to parse EQF preset at \(url.lastPathComponent)")
-                    return nil
-                }
-                let suggestedName = eqfPreset.name?.trimmingCharacters(in: .whitespacesAndNewlines)
-                let fallbackName = url.deletingPathExtension().lastPathComponent
-                let finalName = suggestedName.flatMap { $0.isEmpty ? nil : $0 } ?? fallbackName
-                return EQPreset(name: finalName, preamp: eqfPreset.preampDB, bands: eqfPreset.bandsDB)
-            } catch {
-                AppLog.error(.audio, "Failed to load EQF preset: \(error)")
-                return nil
-            }
-        }.value
-
-        // Store on main actor
+        let result = await Self.parseEqfFile(url: url)
         if let preset = result {
             storeUserPreset(preset)
             AppLog.info(.audio, "Imported EQ preset '\(preset.name)' from EQF")
         }
         return result
+    }
+
+    // MARK: - @concurrent Static I/O Functions (Swift 6.2)
+    // These run off the caller's actor to avoid blocking MainActor with file I/O.
+
+    @concurrent
+    private static func loadPresetsFromDisk(url: URL) async -> [String: EqfPreset]? {
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        do {
+            let data = try Data(contentsOf: url)
+            return try JSONDecoder().decode([String: EqfPreset].self, from: data)
+        } catch {
+            AppLog.warn(.audio, "Failed to load per-track presets: \(error)")
+            return nil
+        }
+    }
+
+    @concurrent
+    private static func savePresetsToDisk(presets: [String: EqfPreset], url: URL) async {
+        do {
+            let data = try JSONEncoder().encode(presets)
+            try data.write(to: url, options: .atomic)
+            AppLog.debug(.audio, "Saved \(presets.count) per-track presets")
+        } catch {
+            AppLog.warn(.audio, "Failed to save per-track presets: \(error)")
+        }
+    }
+
+    @concurrent
+    private static func parseEqfFile(url: URL) async -> EQPreset? {
+        do {
+            let data = try Data(contentsOf: url)
+            guard let eqfPreset = EQFCodec.parse(data: data) else {
+                AppLog.warn(.audio, "Failed to parse EQF preset at \(url.lastPathComponent)")
+                return nil
+            }
+            let suggestedName = eqfPreset.name?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let fallbackName = url.deletingPathExtension().lastPathComponent
+            let finalName = suggestedName.flatMap { $0.isEmpty ? nil : $0 } ?? fallbackName
+            return EQPreset(name: finalName, preamp: eqfPreset.preampDB, bands: eqfPreset.bandsDB)
+        } catch {
+            AppLog.error(.audio, "Failed to load EQF preset: \(error)")
+            return nil
+        }
     }
 }
