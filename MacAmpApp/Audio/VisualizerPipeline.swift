@@ -351,14 +351,11 @@ private final class VisualizerScratchBuffers: @unchecked Sendable {
 @Observable
 final class VisualizerPipeline {
     // MARK: - Tap State
-    // Note: nonisolated(unsafe) allows removeTap() to be called from deinit
-    // Safe because AVAudioMixerNode.removeTap is thread-safe and at deinit
-    // there are no concurrent references
 
-    @ObservationIgnored nonisolated(unsafe) private var tapInstalled = false
-    @ObservationIgnored nonisolated(unsafe) private weak var mixerNode: AVAudioMixerNode?
+    @ObservationIgnored private var tapInstalled = false
+    @ObservationIgnored private weak var mixerNode: AVAudioMixerNode?
     @ObservationIgnored private let sharedBuffer = VisualizerSharedBuffer()
-    @ObservationIgnored nonisolated(unsafe) private var pollTimer: Timer?
+    @ObservationIgnored private var pollTimer: Timer?
 
     // MARK: - Visualizer Data Storage
 
@@ -400,12 +397,6 @@ final class VisualizerPipeline {
 
     init() {}
 
-    deinit {
-        // Note: removeTap() is nonisolated to allow calling from AudioPlayer.deinit
-        // AudioPlayer.deinit (@MainActor) calls removeTap() which requires main thread
-        // (enforced by dispatchPrecondition in removeTap)
-    }
-
     // MARK: - Tap Management
 
     /// Install visualizer tap on the given mixer node
@@ -431,14 +422,10 @@ final class VisualizerPipeline {
     }
 
     /// Remove visualizer tap if installed
-    /// Nonisolated to allow calling from deinit (AVAudioMixerNode.removeTap is thread-safe)
-    nonisolated func removeTap() {
+    func removeTap() {
         guard tapInstalled else { return }
-        // pollTimer was scheduled on main run loop — must invalidate from main thread
-        dispatchPrecondition(condition: .onQueue(.main))
         pollTimer?.invalidate()
         pollTimer = nil
-        // mixerNode may be nil if the AVAudioMixerNode was deallocated first
         if let mixer = mixerNode {
             mixer.removeTap(onBus: 0)
         }
@@ -460,7 +447,7 @@ final class VisualizerPipeline {
     }
 
     /// Check if tap is currently installed
-    nonisolated var isTapInstalled: Bool {
+    var isTapInstalled: Bool {
         tapInstalled
     }
 

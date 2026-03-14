@@ -32,7 +32,7 @@ targets:
         CODE_SIGN_ENTITLEMENTS: MacAmpApp/MacAmp.entitlements
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: AC3LGVEJJ8
-        SWIFT_VERSION: '6.0'
+        SWIFT_VERSION: '6.2'
         PRODUCT_NAME: MacAmp
         ENABLE_HARDENED_RUNTIME: true
         SWIFT_STRICT_CONCURRENCY: complete
@@ -57,7 +57,7 @@ targets:
         product: Atomics
     settings:
       base:
-        SWIFT_VERSION: '6.0'
+        SWIFT_VERSION: '6.2'
         GENERATE_INFOPLIST_FILE: true
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: AC3LGVEJJ8

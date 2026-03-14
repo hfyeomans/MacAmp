@@ -5,6 +5,9 @@
 ---
 
 ## Status: PENDING ORACLE REVIEW
+>
+> **Prerequisite:** `swift-concurrency-62-cleanup` PR 1 must be merged (SWIFT_VERSION 6.2 established).
+> **Post-task:** `swift-concurrency-62-cleanup` PR 2 adds AudioPlayer `isolated deinit` + `@concurrent`.
 
 ---
 
@@ -25,7 +28,7 @@
 - [ ] **1.2d** Implement packets callback: enqueue compressed packets with descriptions
 - [ ] **1.2e** Implement `parse(_ data: Data)` method feeding `AudioFileStreamParseBytes`
 - [ ] **1.2f** Implement `close()` for cleanup
-- [ ] **1.2g** Handle @convention(c) callbacks with Unmanaged context pointer (follow VisualizerPipeline pattern)
+- [ ] **1.2g** Handle @convention(c) callbacks with Unmanaged context pointer (note: VisualizerPipeline uses closure-based taps, not Unmanaged — this pipeline uses Unmanaged for C API callbacks)
 
 ### 1.3 AudioConverterDecoder
 - [ ] **1.3a** Create `MacAmpApp/Audio/Streaming/AudioConverterDecoder.swift`
@@ -38,22 +41,22 @@
 - [ ] **1.3h** Handle `AudioConverterFillComplexBuffer` error codes gracefully
 
 ### 1.4 StreamDecodePipeline
-- [ ] **1.4a** Create `MacAmpApp/Audio/Streaming/StreamDecodePipeline.swift` as `@MainActor` class (NOT actor — URLSessionDataDelegate requires NSObject)
+- [ ] **1.4a** Create `MacAmpApp/Audio/Streaming/StreamDecodePipeline.swift` as `@MainActor` class (NOT actor — URLSessionDataDelegate requires NSObject proxy). Decode work stays on serial DispatchQueue, NOT in nonisolated async methods (Swift 6.2: nonisolated async stays on caller's actor).
 - [ ] **1.4b** Create NSObject delegate proxy for URLSession (forwards bytes to decode queue)
 - [ ] **1.4c** Implement URLSession data task with `Icy-MetaData: 1` header
 - [ ] **1.4d** Route `didReceive(data:)` through ICYFramer → AudioFileStreamParser → AudioConverterDecoder on decode serial queue
 - [ ] **1.4e** Write decoded PCM to LockFreeRingBuffer on decode serial queue
 - [ ] **1.4f** Implement stream generation token — increment on each `start()`, check in all callbacks before bridge activation or ring buffer writes
 - [ ] **1.4g** Implement prebuffer threshold — don't fire `onFormatReady` until ~2048 frames buffered in ring buffer
-- [ ] **1.4h** Implement @Sendable callbacks: `onStateChange`, `onFormatReady`, `onMetadata`
+- [ ] **1.4h** Implement `@MainActor @Sendable` callbacks: `onStateChange`, `onFormatReady`, `onMetadata`
 - [ ] **1.4i** Implement `start(url:)`, `pause()`, `resume()`, `stop()` lifecycle
 - [ ] **1.4j** Handle stream Content-Type broadly: audio/mpeg → MP3, audio/aac|aacp|x-aac → AAC, application/octet-stream → auto-detect
 - [ ] **1.4k** Manage URLSession delegate on dedicated OperationQueue
 - [ ] **1.4l** C API dispose ordering: AudioConverterDispose BEFORE AudioFileStreamClose
 
 ### 1.5 StreamPlayer Modification
-- [ ] **1.5a** Remove AVPlayer, AVPlayerItem, AVPlayerItemMetadataOutput from StreamPlayer
-- [ ] **1.5b** Remove Combine status/item observers
+- [ ] **1.5a** Remove AVPlayer, AVPlayerItem, AVPlayerItemMetadataOutput, NSObject base class from StreamPlayer
+- [ ] **1.5b** Remove Combine status/item observers, `@preconcurrency import AVFoundation`, `import Combine`
 - [ ] **1.5c** Add StreamDecodePipeline as dependency (init parameter or lazy creation)
 - [ ] **1.5d** Wire pipeline callbacks to @Observable state (isPlaying, isBuffering, streamTitle, streamArtist, error)
 - [ ] **1.5e** Forward play(station:)/play(url:)/pause()/stop() to pipeline
@@ -61,6 +64,7 @@
 - [ ] **1.5g** Remove `let player = AVPlayer()` property (was internal for coordinator resume access)
 - [ ] **1.5h** Preserve volume/balance properties (volume applied via AVAudioSourceNode.volume in AudioPlayer)
 - [ ] **1.5i** Remove `import CoreMedia`, `import MediaToolbox` (no longer needed)
+- [ ] **1.5j** Add `isolated deinit` if StreamPlayer does cleanup (pipeline teardown); no `nonisolated(unsafe)` needed (Swift 6.2)
 
 ### 1.6 PlaybackCoordinator Bridge Lifecycle
 - [ ] **1.6a** Add `private var streamRingBuffer: LockFreeRingBuffer?` property
@@ -84,6 +88,7 @@
 - [ ] **1.7i** Update volume/balance didSet to also set streamSourceNode?.volume/.pan
 - [ ] **1.7j** Update getFrequencyData guard to use isEngineRendering
 - [ ] **1.7k** Update snapshotButterchurnFrame guard to use isEngineRendering
+- [ ] **1.7l** Ensure `deactivateStreamBridge()` is idempotent — pre-plan for `isolated deinit` (added by swift-concurrency-62-cleanup PR 2). Cleanup order: deactivate bridge → nil streamSourceNode → nil streamRingBuffer → reset flags. Do NOT add `nonisolated(unsafe)` to bridge properties.
 
 ### 1.8 VisualizerView Update
 - [ ] **1.8a** Replace `audioPlayer.isPlaying` with `audioPlayer.isEngineRendering` (line 74)
@@ -111,7 +116,7 @@
 - [ ] **V9** Switch stream ↔ local file: no crash, controls update
 - [ ] **V10** Local file playback unchanged (regression test)
 - [ ] **V11** Volume persists across stream/local switches
-- [ ] **V12** Stop stream: clean teardown, no orphan tasks
+- [ ] **V12** Stop stream: clean teardown, no orphan tasks (use Swift 6.2 task naming for diagnosis)
 - [ ] **V13** Extended playback (30+ min): no drift, no memory growth
 - [ ] **V14** Network drop during stream: graceful error state
 

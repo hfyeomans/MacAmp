@@ -6,7 +6,7 @@ struct WindowAccessor: NSViewRepresentable {
 
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
-        DispatchQueue.main.async { [weak view] in
+        Task { @MainActor [weak view] in
             if let window = view?.window {
                 onWindow(window)
             }

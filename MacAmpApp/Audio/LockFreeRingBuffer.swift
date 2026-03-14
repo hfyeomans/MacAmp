@@ -76,7 +76,7 @@ final class LockFreeRingBuffer: @unchecked Sendable {
             // the necessary fence. The consumer acquires writeHead before reading data,
             // so it will see the updated readHead by the time it observes new frames.
             _ = readHead.wrappingIncrementThenLoad(by: deficit, ordering: .relaxed)
-            overrunCount.wrappingIncrementThenLoad(by: 1, ordering: .relaxed)
+            overrunCount.wrappingIncrement(by: 1, ordering: .relaxed)
             framesToWrite = boundedFrameCount
         }
 
@@ -126,7 +126,7 @@ final class LockFreeRingBuffer: @unchecked Sendable {
 
         let availableDistance = wh &- rh
         if availableDistance == 0 || availableDistance > UInt64(capacity) {
-            underrunCount.wrappingIncrementThenLoad(by: 1, ordering: .relaxed)
+            underrunCount.wrappingIncrement(by: 1, ordering: .relaxed)
             return 0
         }
 
@@ -176,7 +176,7 @@ final class LockFreeRingBuffer: @unchecked Sendable {
         let wh = writeHead.load(ordering: .acquiring)
         readHead.store(wh, ordering: .releasing)
         if newGeneration {
-            generation.wrappingIncrementThenLoad(by: 1, ordering: .releasing)
+            generation.wrappingIncrement(by: 1, ordering: .releasing)
         }
     }
 
