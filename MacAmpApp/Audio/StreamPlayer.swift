@@ -78,8 +78,8 @@ final class StreamPlayer {
         streamArtist = nil
 
         // Create a fresh ring buffer for this stream
-        // 16384 frames = ~370ms at 44100Hz — enough to absorb network jitter
-        let rb = LockFreeRingBuffer(capacity: 16384, channelCount: 2)
+        // 32768 frames = ~743ms at 44100Hz — absorbs network jitter and decode latency
+        let rb = LockFreeRingBuffer(capacity: 32768, channelCount: 2)
         ringBuffer = rb
 
         pipeline.start(url: station.streamURL, ringBuffer: rb)

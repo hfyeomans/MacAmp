@@ -67,6 +67,27 @@ final class StreamDecodePipeline {
 
     private var formatReadyFired: Bool = false
 
+    // MARK: - Telemetry
+
+    @ObservationIgnored private var telemetryTimer: Timer?
+
+    private func startTelemetry() {
+        telemetryTimer?.invalidate()
+        let rb = ringBuffer
+        telemetryTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { _ in
+            guard let rb else { return }
+            let t = rb.telemetry()
+            let fill = rb.availableFrames
+            let pct = Double(fill) / Double(rb.capacity) * 100
+            print("[StreamTelemetry] fill=\(fill)/\(rb.capacity) (\(String(format: "%.0f", pct))%) underruns=\(t.underruns) overruns=\(t.overruns)")
+        }
+    }
+
+    private func stopTelemetry() {
+        telemetryTimer?.invalidate()
+        telemetryTimer = nil
+    }
+
     // MARK: - Lifecycle
 
     func start(url: URL, ringBuffer: LockFreeRingBuffer) {
@@ -165,6 +186,7 @@ final class StreamDecodePipeline {
         dataTask = urlSession?.dataTask(with: request)
         setState(.connecting)
         dataTask?.resume()
+        startTelemetry()
 
         AppLog.info(.audio, "StreamDecodePipeline: Starting — \(url.absoluteString)")
     }
@@ -198,6 +220,7 @@ final class StreamDecodePipeline {
         // Advance generation FIRST — stale callbacks will be rejected
         generation &+= 1
 
+        stopTelemetry()
         dataTask?.cancel()
         dataTask = nil
         urlSession?.invalidateAndCancel()
@@ -411,7 +434,7 @@ private final class DecodeContext: @unchecked Sendable {
     private var detectedSampleRate: Float64 = 0
     private var isShutdown: Bool = false
 
-    private static let prebufferThreshold: Int = 8192
+    private static let prebufferThreshold: Int = 16384
 
     private let onFormatReady: @Sendable (Float64, UInt64) -> Void
     private let onMetadata: @Sendable (ICYFramer.ICYMetadata, UInt64) -> Void
@@ -493,22 +516,50 @@ private final class DecodeContext: @unchecked Sendable {
         dispatchPrecondition(condition: .onQueue(decodeQueue))
         guard !isShutdown, decoder == nil else { return }
 
-        detectedSampleRate = asbd.mSampleRate
-        let newDecoder = AudioConverterDecoder(inputFormat: asbd, magicCookie: magicCookie)
+        // Query system output rate for decoder SRC (avoids engine SRC warping)
+        let outputRate: Float64 = 48000.0  // TODO: query from AVAudioEngine.outputNode dynamically
+        let newDecoder = AudioConverterDecoder(inputFormat: asbd, outputSampleRate: outputRate, magicCookie: magicCookie)
         newDecoder.confinementQueue = decodeQueue
         decoder = newDecoder
 
-        AppLog.info(.audio, "DecodeContext: Decoder created — \(asbd.mSampleRate)Hz")
+        // Report the DECODER's output rate (not stream rate) so the source node format matches
+        detectedSampleRate = newDecoder.sampleRate
+
+        AppLog.info(.audio, "DecodeContext: Decoder created — \(asbd.mSampleRate)Hz → \(newDecoder.sampleRate)Hz")
     }
 
     private func handlePackets(data: Data, descriptions: [AudioStreamPacketDescription]) {
         dispatchPrecondition(condition: .onQueue(decodeQueue))
         guard !isShutdown, let decoder else { return }
 
-        decoder.enqueue(data: data, descriptions: descriptions)
+        // Split batched packets into individual entries.
+        // AudioFileStream delivers multiple packets in one callback (concatenated data
+        // with per-packet descriptions). If we enqueue the whole batch as one entry,
+        // the AudioConverter's input callback provides ALL packets at once. When the
+        // output buffer fills mid-batch, the remaining packets are LOST because
+        // advanceToNextPacket() moves to the next queue entry (which doesn't exist).
+        // Splitting ensures each advanceToNextPacket() gets exactly one packet.
+        if descriptions.isEmpty {
+            // CBR format — no descriptions, enqueue as-is
+            decoder.enqueue(data: data, descriptions: [])
+        } else {
+            for desc in descriptions {
+                let offset = Int(desc.mStartOffset)
+                let size = Int(desc.mDataByteSize)
+                guard offset >= 0, size > 0, offset + size <= data.count else { continue }
+                let packetData = data[offset..<(offset + size)]
+                let singleDesc = AudioStreamPacketDescription(
+                    mStartOffset: 0,  // Offset is 0 within the individual packet
+                    mVariableFramesInPacket: desc.mVariableFramesInPacket,
+                    mDataByteSize: desc.mDataByteSize
+                )
+                decoder.enqueue(data: Data(packetData), descriptions: [singleDesc])
+            }
+        }
 
+        // Decode all enqueued packets
         while decoder.hasQueuedPackets {
-            guard !isShutdown else { break }  // Check between decode iterations
+            guard !isShutdown else { break }
             guard let (pcmBuffer, frameCount) = decoder.decode() else { break }
 
             let framesWritten = ringBuffer.write(from: pcmBuffer, frameCount: frameCount)

@@ -744,10 +744,19 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     /// Build the render block for AVAudioSourceNode. MUST be nonisolated static
     /// to avoid @MainActor isolation crash on the real-time audio thread.
     /// Reads interleaved Float32 PCM from the ring buffer.
+    // DIAGNOSTIC: Set to true to generate sine wave instead of reading ring buffer.
+    // If sine wave sounds clean, engine path is correct and issue is in decoder.
+    // If sine wave sounds warped, engine format setup is wrong.
+    private nonisolated(unsafe) static let diagnosticSineWave = true
+
     private nonisolated static func makeStreamRenderBlock(
         ringBuffer: LockFreeRingBuffer
     ) -> AVAudioSourceNodeRenderBlock {
-        { isSilence, timestamp, frameCount, outputData in
+        var sinePhase: Float = 0
+        let sineFreq: Float = 440.0
+        let sineSampleRate: Float = 44100.0
+
+        return { isSilence, timestamp, frameCount, outputData in
             let ablPointer = UnsafeMutableAudioBufferListPointer(outputData)
             guard ablPointer.count == 1,
                   let firstBuffer = ablPointer.first,
@@ -758,17 +767,32 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
             }
 
             let floatPtr = data.assumingMemoryBound(to: Float.self)
-            let framesRead = ringBuffer.read(into: floatPtr, frameCount: Int(frameCount))
 
-            // Zero-fill any remaining frames (silence for underrun)
-            if framesRead < Int(frameCount) {
-                let channelCount = Int(firstBuffer.mNumberChannels)
-                let remainingSamples = (Int(frameCount) - framesRead) * channelCount
-                let offset = framesRead * channelCount
-                memset(floatPtr + offset, 0, remainingSamples * MemoryLayout<Float>.size)
+            if diagnosticSineWave {
+                // Generate 440Hz sine wave for diagnostics
+                let twoPi = Float.pi * 2.0
+                for i in 0..<Int(frameCount) {
+                    let sample = sinf(twoPi * sineFreq * sinePhase / sineSampleRate) * 0.3
+                    floatPtr[i * 2] = sample       // L
+                    floatPtr[i * 2 + 1] = sample   // R
+                    sinePhase += 1
+                    if sinePhase >= sineSampleRate { sinePhase -= sineSampleRate }
+                }
+                isSilence.pointee = ObjCBool(false)
+            } else {
+                let framesRead = ringBuffer.read(into: floatPtr, frameCount: Int(frameCount))
+
+                // Zero-fill any remaining frames (silence for underrun)
+                if framesRead < Int(frameCount) {
+                    let channelCount = Int(firstBuffer.mNumberChannels)
+                    let remainingSamples = (Int(frameCount) - framesRead) * channelCount
+                    let offset = framesRead * channelCount
+                    memset(floatPtr + offset, 0, remainingSamples * MemoryLayout<Float>.size)
+                }
+
+                isSilence.pointee = ObjCBool(framesRead == 0)
             }
 
-            isSilence.pointee = ObjCBool(framesRead == 0)
             return noErr
         }
     }

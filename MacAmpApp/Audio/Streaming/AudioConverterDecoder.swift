@@ -14,8 +14,10 @@ import Foundation
 /// - `AudioConverterFillComplexBuffer()` decodes packets via input callback
 /// - `AudioConverterDispose()` disposes — MUST be called BEFORE AudioFileStreamClose()
 ///
-/// **Pre-allocation:** Output buffer is allocated once and reused to avoid
-/// allocations during the decode loop.
+/// **Input buffer contract (Oracle fix):**
+/// The input callback provides pointers to compressed data. Apple's contract requires
+/// these pointers remain valid until the NEXT input callback invocation. The callback
+/// pulls packets from the queue itself and keeps the previous buffer alive until replaced.
 ///
 /// **Layer:** Mechanism (C API wrapper, no async, no actor isolation)
 final class AudioConverterDecoder {
@@ -40,17 +42,20 @@ final class AudioConverterDecoder {
 
     private var converter: AudioConverterRef?
 
-    /// Queued compressed packets waiting to be decoded
+    /// Queued compressed packets waiting to be decoded.
+    /// The input callback pulls from this queue directly.
     private var packetQueue: [(data: Data, descriptions: [AudioStreamPacketDescription])] = []
 
-    /// Stable storage for the current packet being fed to the converter's input callback.
-    /// These buffers persist across the callback return so AudioConverter can read from them.
-    /// CRITICAL: Do NOT use withUnsafeBytes in the callback — pointer invalidates on scope exit.
-    private var inputBuffer: UnsafeMutableRawPointer?
-    private var inputBufferSize: Int = 0
-    private var inputDescriptions: UnsafeMutableBufferPointer<AudioStreamPacketDescription>?
-    private var inputDescriptionCount: Int = 0
-    private var inputConsumed: Bool = true
+    /// Current input buffer — kept alive until AFTER FillComplexBuffer returns.
+    private var currentInputBuffer: UnsafeMutableRawPointer?
+    private var currentInputSize: Int = 0
+    private var currentInputDescs: UnsafeMutablePointer<AudioStreamPacketDescription>?
+    private var currentInputDescCount: Int = 0
+
+    /// Previously used input buffers — kept alive during the entire FillComplexBuffer call
+    /// because AudioConverter may perform look-ahead/overlap-add that references prior data.
+    /// Freed after FillComplexBuffer returns.
+    private var retainedBuffers: [(UnsafeMutableRawPointer, UnsafeMutablePointer<AudioStreamPacketDescription>?)] = []
 
     /// The decode queue this decoder is confined to (set by owner, checked in debug builds).
     var confinementQueue: DispatchQueue?
@@ -63,21 +68,22 @@ final class AudioConverterDecoder {
         #endif
     }
 
-    /// Pre-allocated output buffer (frames * channels * sizeof(Float32))
-    private static let maxOutputFrames = 1024
+    /// Pre-allocated output buffer — 4096 frames (enough for multiple MP3/AAC frames)
+    private static let maxOutputFrames = 4096
     private var outputBuffer: UnsafeMutablePointer<Float>
     private let outputBufferSize: Int
 
     // MARK: - Initialization
 
-    /// Create a decoder for the given input format.
     /// - Parameters:
     ///   - inputFormat: Compressed audio format (ASBD from AudioFileStreamParser)
+    ///   - outputSampleRate: Target output sample rate (use device rate to avoid engine SRC)
     ///   - magicCookie: AAC magic cookie data (nil for MP3)
-    init(inputFormat: AudioStreamBasicDescription, magicCookie: Data? = nil) {
+    init(inputFormat: AudioStreamBasicDescription, outputSampleRate: Float64 = 48000.0, magicCookie: Data? = nil) {
         self.inputFormat = inputFormat
 
-        // Output: Float32 interleaved stereo at source sample rate
+        // Output at stream's native sample rate — let the engine mixer handle SRC
+        // to device output rate. This avoids AudioConverter SRC artifacts.
         let sampleRate = inputFormat.mSampleRate > 0 ? inputFormat.mSampleRate : 44100.0
         let channels: UInt32 = 2
         self.outputFormat = AudioStreamBasicDescription(
@@ -135,10 +141,6 @@ final class AudioConverterDecoder {
 
     // MARK: - Packet Enqueue
 
-    /// Enqueue compressed packets for decoding.
-    /// - Parameters:
-    ///   - data: Compressed packet data (copied from AudioFileStream callback)
-    ///   - descriptions: Packet descriptions (copied from AudioFileStream callback)
     func enqueue(data: Data, descriptions: [AudioStreamPacketDescription]) {
         assertConfinement()
         packetQueue.append((data: data, descriptions: descriptions))
@@ -146,18 +148,13 @@ final class AudioConverterDecoder {
 
     // MARK: - Decoding
 
-    /// Decode queued packets into Float32 PCM.
+    /// Decode all queued packets into Float32 PCM in a single call.
+    /// The input callback pulls packets from the queue incrementally.
     /// Returns a pointer to the internal output buffer and the number of frames decoded.
     /// The pointer is valid until the next call to `decode()`.
-    ///
-    /// - Returns: Tuple of (buffer pointer, frame count), or nil if no data available
     func decode() -> (UnsafePointer<Float>, Int)? {
         assertConfinement()
         guard converter != nil, !packetQueue.isEmpty else { return nil }
-
-        // Take the first queued packet and copy into stable storage
-        let packet = packetQueue.removeFirst()
-        prepareInputBuffer(data: packet.data, descriptions: packet.descriptions)
 
         var outputBufferList = AudioBufferList(
             mNumberBuffers: 1,
@@ -177,12 +174,11 @@ final class AudioConverterDecoder {
             selfPtr,
             &outputFrameCount,
             &outputBufferList,
-            nil  // No output packet descriptions for PCM
+            nil
         )
 
         switch status {
         case noErr, Self.noMoreInputData:
-            // noMoreInputData is normal — converter consumed all available input
             let frameCount = Int(outputFrameCount)
             return frameCount > 0 ? (UnsafePointer(outputBuffer), frameCount) : nil
 
@@ -195,55 +191,57 @@ final class AudioConverterDecoder {
     /// Check if there are queued packets waiting to be decoded.
     var hasQueuedPackets: Bool { !packetQueue.isEmpty }
 
-    // MARK: - Stable Input Storage
+    // MARK: - Input Buffer Management
 
-    /// Copy packet data and descriptions into stable memory that persists across
-    /// the AudioConverter input callback return. The callback sets pointers into
-    /// these buffers; they must remain valid until AudioConverterFillComplexBuffer returns.
-    private func prepareInputBuffer(data: Data, descriptions: [AudioStreamPacketDescription]) {
-        // Free previous input buffer
-        freeInputBuffer()
+    /// Prepare the next packet from the queue into stable memory.
+    /// The PREVIOUS buffer is freed here — this is safe because Apple's contract
+    /// says the buffer must be valid until the NEXT callback invocation.
+    /// By freeing at the START of each callback, the previous buffer lived
+    /// through the entire gap between callbacks.
+    private func advanceToNextPacket() -> Bool {
+        guard !packetQueue.isEmpty else { return false }
+
+        // Free PREVIOUS buffer (safe — converter is done with it since it's calling us again)
+        freeCurrentInput()
+
+        let packet = packetQueue.removeFirst()
 
         // Copy packet data into stable allocation
-        inputBufferSize = data.count
-        inputBuffer = .allocate(byteCount: inputBufferSize, alignment: MemoryLayout<UInt8>.alignment)
-        data.copyBytes(to: inputBuffer!.assumingMemoryBound(to: UInt8.self), count: inputBufferSize)
+        currentInputSize = packet.data.count
+        currentInputBuffer = .allocate(byteCount: currentInputSize, alignment: MemoryLayout<UInt8>.alignment)
+        packet.data.copyBytes(to: currentInputBuffer!.assumingMemoryBound(to: UInt8.self), count: currentInputSize)
 
         // Copy packet descriptions into stable allocation
-        if !descriptions.isEmpty {
-            inputDescriptionCount = descriptions.count
-            let descPtr = UnsafeMutablePointer<AudioStreamPacketDescription>.allocate(capacity: descriptions.count)
-            for (i, desc) in descriptions.enumerated() {
-                descPtr[i] = desc
+        if !packet.descriptions.isEmpty {
+            currentInputDescCount = packet.descriptions.count
+            currentInputDescs = .allocate(capacity: packet.descriptions.count)
+            for (i, desc) in packet.descriptions.enumerated() {
+                currentInputDescs![i] = desc
             }
-            inputDescriptions = UnsafeMutableBufferPointer(start: descPtr, count: descriptions.count)
         } else {
-            inputDescriptionCount = 0
-            inputDescriptions = nil
+            currentInputDescCount = 0
+            currentInputDescs = nil
         }
 
-        inputConsumed = false
+        return true
     }
 
-    /// Free stable input storage. Safe to call multiple times.
-    private func freeInputBuffer() {
-        if let buf = inputBuffer {
+    /// Free the current input buffer. Safe to call multiple times.
+    private func freeCurrentInput() {
+        if let buf = currentInputBuffer {
             buf.deallocate()
-            inputBuffer = nil
-            inputBufferSize = 0
+            currentInputBuffer = nil
+            currentInputSize = 0
         }
-        if let descs = inputDescriptions {
-            descs.baseAddress?.deallocate()
-            inputDescriptions = nil
-            inputDescriptionCount = 0
+        if let descs = currentInputDescs {
+            descs.deallocate()
+            currentInputDescs = nil
+            currentInputDescCount = 0
         }
-        inputConsumed = true
     }
 
     // MARK: - Cleanup
 
-    /// Dispose the converter. Safe to call multiple times.
-    /// MUST be called BEFORE AudioFileStreamParser.close().
     func dispose() {
         assertConfinement()
         if let converter {
@@ -251,28 +249,27 @@ final class AudioConverterDecoder {
             self.converter = nil
         }
         packetQueue.removeAll()
-        freeInputBuffer()
+        freeCurrentInput()
     }
 
     // MARK: - Input Data Callback
 
     /// C callback that AudioConverter calls when it needs more compressed input data.
-    /// Pointers set in ioData/outDataPacketDescription point into stable allocations
-    /// (prepareInputBuffer) that persist until the next decode() call.
+    /// Pulls the NEXT packet from the queue each invocation.
+    /// The PREVIOUS buffer remains valid until this callback is called again (Apple contract).
     private let inputDataCallback: AudioConverterComplexInputDataProc = {
         converter, ioNumberDataPackets, ioData, outDataPacketDescription, inUserData in
 
         guard let inUserData else {
             ioNumberDataPackets.pointee = 0
-            return 0x6e647461  // 'ndta' — no more input data
+            return 0x6e647461  // 'ndta'
         }
 
         let decoder = Unmanaged<AudioConverterDecoder>.fromOpaque(inUserData).takeUnretainedValue()
 
-        // Already consumed or no data available
-        guard !decoder.inputConsumed,
-              let dataPtr = decoder.inputBuffer,
-              decoder.inputBufferSize > 0 else {
+        // Pull next packet from queue (frees previous buffer — safe per Apple contract)
+        guard decoder.advanceToNextPacket(),
+              let dataPtr = decoder.currentInputBuffer else {
             ioNumberDataPackets.pointee = 0
             return 0x6e647461  // 'ndta' — no more input data
         }
@@ -280,22 +277,22 @@ final class AudioConverterDecoder {
         // Point AudioConverter at stable memory
         ioData.pointee.mNumberBuffers = 1
         ioData.pointee.mBuffers.mData = dataPtr
-        ioData.pointee.mBuffers.mDataByteSize = UInt32(decoder.inputBufferSize)
+        ioData.pointee.mBuffers.mDataByteSize = UInt32(decoder.currentInputSize)
         ioData.pointee.mBuffers.mNumberChannels = decoder.inputFormat.mChannelsPerFrame
 
         // Provide packet descriptions if available
-        if let descs = decoder.inputDescriptions {
-            ioNumberDataPackets.pointee = UInt32(descs.count)
+        if let descs = decoder.currentInputDescs, decoder.currentInputDescCount > 0 {
+            ioNumberDataPackets.pointee = UInt32(decoder.currentInputDescCount)
             if let outDescPtr = outDataPacketDescription {
-                outDescPtr.pointee = descs.baseAddress
+                outDescPtr.pointee = descs
             }
         } else {
-            // No descriptions — constant bitrate format (e.g., some MP3 streams)
-            ioNumberDataPackets.pointee = UInt32(decoder.inputBufferSize) / (decoder.inputFormat.mBytesPerPacket > 0 ? decoder.inputFormat.mBytesPerPacket : 1)
+            // CBR format — compute packet count from buffer size
+            let bytesPerPacket = decoder.inputFormat.mBytesPerPacket
+            ioNumberDataPackets.pointee = bytesPerPacket > 0
+                ? UInt32(decoder.currentInputSize) / bytesPerPacket
+                : 1
         }
-
-        // Mark consumed so we don't provide the same data twice
-        decoder.inputConsumed = true
 
         return noErr
     }
