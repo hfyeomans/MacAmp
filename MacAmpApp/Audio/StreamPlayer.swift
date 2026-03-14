@@ -139,6 +139,7 @@ final class StreamPlayer {
             case .idle:
                 self.isPlaying = false
                 self.isBuffering = false
+                self.onStreamTerminated?()
             case .connecting, .buffering:
                 self.isPlaying = false
                 self.isBuffering = true
@@ -152,6 +153,7 @@ final class StreamPlayer {
                 self.isPlaying = false
                 self.isBuffering = false
                 self.error = message
+                self.onStreamTerminated?()
             }
         }
 
@@ -178,4 +180,8 @@ final class StreamPlayer {
     /// Called when audio format is detected and prebuffering is complete.
     /// PlaybackCoordinator uses this to activate the engine bridge.
     var onFormatReady: (@MainActor (Float64) -> Void)?
+
+    /// Called when stream reaches a terminal state (idle or error).
+    /// PlaybackCoordinator uses this to deactivate the engine bridge.
+    var onStreamTerminated: (@MainActor () -> Void)?
 }

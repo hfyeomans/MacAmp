@@ -70,35 +70,34 @@
 - [x] **1.5j** Added `isolated deinit` calling `pipeline.stop()`
 - [x] **1.5k** Added `onFormatReady` callback for PlaybackCoordinator bridge activation
 
-### 1.6 PlaybackCoordinator Bridge Lifecycle
-- [ ] **1.6a** Add `private var streamRingBuffer: LockFreeRingBuffer?` property
-- [ ] **1.6b** Implement `setupStreamBridge()`: create ring buffer, configure pipeline
-- [ ] **1.6c** Implement `teardownStreamBridge()`: stop pipeline, deactivate engine bridge, nil buffer
-- [ ] **1.6d** Wire pipeline's `onFormatReady` to `audioPlayer.activateStreamBridge()`
-- [ ] **1.6e** Update all stream play methods: teardown → stop → setup → start pipeline
-- [ ] **1.6f** Update `stop()` to call teardownStreamBridge()
-- [ ] **1.6g** Update capability flags: `!isStreamBackendActive || audioPlayer.isBridgeActive`
-- [ ] **1.6h** Update `resume()` method to call `streamPlayer.resume()` instead of `streamPlayer.player.play()`
+### 1.6 PlaybackCoordinator Bridge Lifecycle — ✅ DONE
+- [x] **1.6a** Ring buffer created per-stream in StreamPlayer, passed via onFormatReady
+- [x] **1.6b** Bridge setup via onFormatReady → audioPlayer.activateStreamBridge()
+- [x] **1.6c** Bridge teardown via audioPlayer.deactivateStreamBridge() in all transition paths
+- [x] **1.6d** Wired streamPlayer.onFormatReady → activateStreamBridge in init
+- [x] **1.6e** Added deactivateStreamBridge in play(url:), play(track:), play(station:) — Oracle HIGH fix: stream-to-stream path
+- [x] **1.6f** Added deactivateStreamBridge in stop()
+- [x] **1.6g** Capability flags: `!isStreamBackendActive || audioPlayer.isBridgeActive`
+- [x] **1.6h** resume() calls streamPlayer.resume()
+- [x] **1.6i** Wired streamPlayer.onStreamTerminated → deactivateStreamBridge for error/idle states — Oracle MEDIUM fix
+- [x] **1.6j** Added deactivateStreamBridge in handlePlaylistAdvance .playLocally — Oracle HIGH fix
 
-### 1.7 AudioPlayer Consumer Side
-- [ ] **1.7a** Add `streamSourceNode: AVAudioSourceNode?` property (@ObservationIgnored)
-- [ ] **1.7b** Add `streamRingBuffer: LockFreeRingBuffer?` property (@ObservationIgnored)
-- [ ] **1.7c** Add `isBridgeActive: Bool` property (private(set))
-- [ ] **1.7d** Add `isEngineRendering: Bool` computed property
-- [ ] **1.7e** Implement `nonisolated private static func makeStreamRenderBlock()` — RT-safe, follow VisualizerPipeline pattern
-- [ ] **1.7f** Implement `activateStreamBridge(ringBuffer:sampleRate:)` — stop/reset/rewire engine (lesson #3)
-- [ ] **1.7g** Implement `deactivateStreamBridge()` — disconnect stream node, rewire playerNode
-- [ ] **1.7h** Verify mixer→output connection after reset (lesson #4)
-- [ ] **1.7i** Update volume/balance didSet to also set streamSourceNode?.volume/.pan
-- [ ] **1.7j** Update getFrequencyData guard to use isEngineRendering
-- [ ] **1.7k** Update snapshotButterchurnFrame guard to use isEngineRendering
-- [ ] **1.7l** Ensure `deactivateStreamBridge()` is idempotent — pre-plan for `isolated deinit` (added by swift-concurrency-62-cleanup PR 2). Cleanup order: deactivate bridge → nil streamSourceNode → nil streamRingBuffer → reset flags. Do NOT add `nonisolated(unsafe)` to bridge properties.
+### 1.7 AudioPlayer Consumer Side — ✅ DONE
+- [x] **1.7a** Added streamSourceNode: AVAudioSourceNode? (@ObservationIgnored)
+- [x] **1.7b** Added streamRingBuffer: LockFreeRingBuffer? (@ObservationIgnored)
+- [x] **1.7c** Added isBridgeActive: Bool (private(set))
+- [x] **1.7d** Added isEngineRendering: Bool computed property
+- [x] **1.7e** makeStreamRenderBlock() — nonisolated static, RT-safe, buffer layout validation — Oracle MEDIUM fix
+- [x] **1.7f** activateStreamBridge(ringBuffer:sampleRate:) — interleaved source, non-interleaved graph, stop/reset/rewire
+- [x] **1.7g** deactivateStreamBridge() — idempotent, disconnect/detach/restore playerNode
+- [x] **1.7h** Mixer→output verify after reset (lesson #4)
+- [x] **1.7i** volume/balance didSet propagates to streamSourceNode?.volume/.pan
+- [x] **1.7j** getFrequencyData uses isEngineRendering
+- [x] **1.7k** snapshotButterchurnFrame uses isEngineRendering
+- [x] **1.7l** deactivateStreamBridge is idempotent — cleanup order: bridge → nil sourceNode → nil ringBuffer → reset flag
 
-### 1.8 VisualizerView Update
-- [ ] **1.8a** Replace `audioPlayer.isPlaying` with `audioPlayer.isEngineRendering` (line 74)
-- [ ] **1.8b** Replace `audioPlayer.isPlaying` with `audioPlayer.isEngineRendering` (line 78)
-- [ ] **1.8c** Replace `audioPlayer.isPlaying` with `audioPlayer.isEngineRendering` (line 103)
-- [ ] **1.8d** Replace `audioPlayer.isPlaying` with `audioPlayer.isEngineRendering` (line 263)
+### 1.8 VisualizerView Update — ✅ DONE
+- [x] **1.8a-d** All 4 sites: `audioPlayer.isPlaying` → `audioPlayer.isEngineRendering`
 
 ### 1.9 Build & Verify
 - [ ] **1.9a** Build with Xcode (clean build)
