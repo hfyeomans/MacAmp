@@ -12,7 +12,7 @@ import CoreMedia
 /// - Load video metadata (resolution, format)
 ///
 /// Design: nonisolated struct with static async methods.
-/// Swift 6.2 ready: Methods can be marked @concurrent when available.
+/// @concurrent not needed: methods await immediately (AVAsset.load), no blocking I/O before suspension.
 struct MetadataLoader {
 
     // MARK: - Result Types

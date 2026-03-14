@@ -14,6 +14,12 @@ private struct SkinArchivePayload {
 }
 
 private enum SkinArchiveLoader {
+    /// Async wrapper for off-MainActor skin loading (Swift 6.2 @concurrent)
+    @concurrent
+    static func loadAsync(from url: URL, expectedSheets: Set<String>) async throws -> SkinArchivePayload {
+        try load(from: url, expectedSheets: expectedSheets)
+    }
+
     static func load(from url: URL, expectedSheets: Set<String>) throws -> SkinArchivePayload {
         let archive = try Archive(url: url, accessMode: .read)
 
@@ -603,9 +609,7 @@ final class SkinManager {
         Task { @MainActor [weak self] in
             guard let self else { return }
             do {
-                let payload = try await Task.detached(priority: .userInitiated) {
-                    try SkinArchiveLoader.load(from: url, expectedSheets: expectedSheets)
-                }.value
+                let payload = try await SkinArchiveLoader.loadAsync(from: url, expectedSheets: expectedSheets)
                 guard self.loadGeneration == generation else { return }
                 try self.applySkinPayload(payload, sourceURL: url)
                 self.loadingError = nil

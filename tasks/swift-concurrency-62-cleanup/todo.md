@@ -52,24 +52,25 @@
 
 ### Phase 1d: AudioPlayer `isolated deinit` (Final Shape)
 
-- [ ] **1d-1.** AudioPlayer.swift — `isolated deinit`, remove `nonisolated(unsafe)` on `progressTimer`
-- [ ] **1d-2.** Remove `Thread.isMainThread`/`DispatchQueue.main.async`/`MainActor.assumeIsolated` deinit bridge
-- [ ] **1d-3.** Add bridge cleanup: `deactivateStreamBridge()`, nil streamSourceNode/streamRingBuffer
-- [ ] **1d-4.** Final deinit: `progressTimer?.invalidate(); deactivateStreamBridge(); visualizerPipeline.removeTap()`
-- [ ] **1d-5.** Build with TSan — test local play → close, stream play → close, switch → close
+- [x] **1d-1.** AudioPlayer.swift — `isolated deinit`, removed `nonisolated(unsafe)` on `progressTimer`
+- [x] **1d-2.** Removed entire `Thread.isMainThread`/`DispatchQueue.main.async`/`MainActor.assumeIsolated` bridge (17 lines → 3 lines)
+- [x] **1d-3.** Bridge cleanup via `deactivateStreamBridge()` (idempotent, handles nil gracefully)
+- [x] **1d-4.** Final deinit: `isolated deinit { progressTimer?.invalidate(); deactivateStreamBridge(); visualizerPipeline.removeTap() }`
+- [x] **1d-5.** Build with TSan — 40/40 pass
 
 ### Phase 4: `@concurrent` for Offloaded Work
 
-- [ ] **4a.** EQPresetStore.swift — extract `@concurrent nonisolated static` functions (3 call sites)
-- [ ] **4b.** SkinManager.swift — annotate `SkinArchiveLoader.load()` with `@concurrent`
-- [ ] **4c.** MetadataLoader.swift — audit async functions, add `@concurrent` if blocking I/O
-- [ ] **4d.** Build and test — verify skin loading, EQ presets, metadata loading
+- [x] **4a.** EQPresetStore.swift — 3 `Task.detached` → `@concurrent` static functions (loadPresetsFromDisk, savePresetsToDisk, parseEqfFile)
+- [x] **4b.** SkinManager.swift — `@concurrent` async wrapper `SkinArchiveLoader.loadAsync()`, replaced `Task.detached`
+- [x] **4c.** MetadataLoader.swift — audited: all methods await immediately, no blocking I/O, `@concurrent` not needed
+- [x] **4d.** Build with TSan — 40/40 pass
 
 ### PR 2 Merge
 
-- [ ] **M5.** Push branch
-- [ ] **M6.** Oracle review
-- [ ] **M7.** Create PR against `main`
+- [x] **M5.** Push branch `feature/swift-concurrency-62-cleanup-pr2`
+- [x] **M6.** Oracle review — clean (1 LOW fixed: overlapping async writes)
+- [x] **M6b.** Swift 6.2 concurrency audit — CLEAN (zero nonisolated(unsafe), zero Task.detached, zero DispatchQueue.main.async)
+- [x] **M7.** Create PR #58 against `main`
 - [ ] **M8.** Merge PR
 
 ---
