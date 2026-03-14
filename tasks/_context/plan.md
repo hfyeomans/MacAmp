@@ -380,9 +380,10 @@ Engine boundaries change when streamSourceNode is added. Extract transport AFTER
 
 | If this runs first | This plan becomes stale | Reason | Severity |
 |-------------------|------------------------|--------|----------|
-| T3 (MainWindow decomp) | T5 Ph1 plan | Volume/balance binding locations move to child view files | HIGH — plan update required |
-| T5 Ph2 (Loopback Bridge) | T1 Ph4 plan | Engine graph has new source routing Ph4 doesn't account for | MEDIUM — Ph4 already deferred |
-| T5 (any phase) | T1 Ph1 plan symbol locations | T5 modifies `AudioPlayer.volume` didSet; surrounding code shifts | LOW — symbols findable by name |
+| T3 (MainWindow decomp) | T5 Ph1 plan | Volume/balance binding locations move to child view files | HIGH — resolved (T5 Ph1 merged first) |
+| T7 (Unified Pipeline) | T1 Ph4 plan | Engine graph has new source routing Ph4 doesn't account for | MEDIUM — Ph4 deferred to Step 3d |
+| T7 (Unified Pipeline) | T8 PR 2 plan | AudioPlayer gains bridge state; isolated deinit must cover final shape | MEDIUM — T8 split into PR1 (pre-T7) + PR2 (post-T7) |
+| T8 PR 1 (Swift 6.2) | T7 plan | T7 must use 6.2 patterns (isolated deinit, @concurrent, nonisolated-async behavior) | HIGH — T7 plan updated with 10 Swift 6.2 findings |
 
 ---
 
