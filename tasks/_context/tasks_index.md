@@ -2,7 +2,7 @@
 
 > **Purpose:** Index of all currently open (non-done) tasks in `tasks/`. Each entry notes the task name, purpose, creation date, last activity, and current status.
 >
-> **Today:** 2026-03-13
+> **Today:** 2026-03-14
 > **Excludes:** `tasks/done/` and `tasks/depreciated/`
 
 ---
