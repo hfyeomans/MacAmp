@@ -121,7 +121,7 @@ xcodebuild test -scheme MacAmpApp -destination 'platform=macOS'
 - **Purpose**: Complete architectural reference for MacAmp
 - **Key Sections**:
   - Three-layer architecture (mechanism → bridge → presentation)
-  - Dual audio backend (AVAudioEngine + AVPlayer)
+  - Unified audio pipeline (all audio through AVAudioEngine)
   - State management with Swift 6 @Observable
   - Internet radio streaming implementation
   - Component integration maps
@@ -140,7 +140,7 @@ xcodebuild test -scheme MacAmpApp -destination 'platform=macOS'
 - **Key Sections**:
   - State management patterns (@Observable, @MainActor)
   - UI component patterns (sprites, buttons, sliders)
-  - Audio processing patterns (dual backend, streaming)
+  - Audio processing patterns (unified pipeline, streaming)
   - Async/await patterns with Swift concurrency
   - Error handling with Result builders
   - Testing patterns (mocks, async tests, test plan commands)
@@ -622,12 +622,12 @@ Includes:
 | **20-bar spectrum analyzer** | MACAMP_ARCHITECTURE_GUIDE.md | §8.4 Audio Processing |
 | **Always On Top (A button)** | MACAMP_ARCHITECTURE_GUIDE.md | §UI Controls & Features |
 | **App notarization** | RELEASE_BUILD_GUIDE.md | §Notarization |
-| **Audio backend switching** | MACAMP_ARCHITECTURE_GUIDE.md | §4 Dual Audio Backend |
+| **Audio backend switching** | MACAMP_ARCHITECTURE_GUIDE.md | §4 Unified Audio Pipeline |
 | **AudioConverterDecoder** | MACAMP_ARCHITECTURE_GUIDE.md | §9 Internet Radio |
 | **AudioFileStreamParser** | MACAMP_ARCHITECTURE_GUIDE.md | §9 Internet Radio |
 | **AVAudioEngine setup** | MACAMP_ARCHITECTURE_GUIDE.md | §8 Audio Processing |
 | **AVAudioSourceNode** | MACAMP_ARCHITECTURE_GUIDE.md | §4 Unified Audio Pipeline |
-| **AVPlayer streaming** | MACAMP_ARCHITECTURE_GUIDE.md | §9 Internet Radio |
+| **Stream decode pipeline** | MACAMP_ARCHITECTURE_GUIDE.md | §9 Internet Radio |
 | **Background I/O fire-and-forget** | IMPLEMENTATION_PATTERNS.md | §5 Async/Await Patterns |
 | **Build configurations** | RELEASE_BUILD_COMPARISON.md | Full document |
 | **Clutter bar buttons** | MACAMP_ARCHITECTURE_GUIDE.md | §UI Controls & Features |
@@ -640,7 +640,7 @@ Includes:
 | **Custom menus** | MACAMP_ARCHITECTURE_GUIDE.md | §SpriteMenuItem |
 | **Double Size (D button)** | MACAMP_ARCHITECTURE_GUIDE.md | §UI Controls & Features |
 | **Developer ID setup** | RELEASE_BUILD_GUIDE.md | §Prerequisites |
-| **Dual audio backend** | MACAMP_ARCHITECTURE_GUIDE.md | §4 Complete section |
+| **Unified audio pipeline** | MACAMP_ARCHITECTURE_GUIDE.md | §4 Complete section |
 | **EQ implementation** | MACAMP_ARCHITECTURE_GUIDE.md | §8.3 EQ Processing |
 | **EQPresetStore** | MACAMP_ARCHITECTURE_GUIDE.md, IMPLEMENTATION_PATTERNS.md | §4a, §4 Audio Processing Patterns |
 | **Error handling** | IMPLEMENTATION_PATTERNS.md | §6 Error Handling |

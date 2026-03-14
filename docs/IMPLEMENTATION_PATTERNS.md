@@ -1638,7 +1638,7 @@ let isStream = url.scheme?.hasPrefix("http") == true
 - Must clear player reference in dismantleNSView to prevent memory leaks
 - Don't create new AVPlayer instances on every update
 - Check media type before attaching player
-- AVPlayer (video only) doesn't support audio features (EQ, visualization); streams use unified pipeline
+- AVPlayer (video only) doesn't support audio features (EQ, visualization); streams route through AVAudioEngine via the unified pipeline and have full feature parity with local files
 - Some video files may only have audio tracks - detect properly
 - Controls visibility should reflect playback state
 
