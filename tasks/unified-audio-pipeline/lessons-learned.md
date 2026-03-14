@@ -208,6 +208,28 @@ AVAudioSourceNode (real-time audio thread)
     → engine handles SRC to device rate (48000Hz)
 ```
 
+### What We Missed: Double Configure Root Cause Analysis
+
+**Timeline of the bug:**
+1. Added ICY race fix: `configureFramer` called from `onResponse` delegate callback
+2. Forgot to REMOVE the original `configureFramer` call in `handleHTTPResponse` (MainActor)
+3. Both calls ran — first configured correctly, second reset byte counter mid-stream
+4. Result: ICY metadata leaked into audio at every boundary → warped audio
+
+**How we could have caught it faster:**
+- `grep -r "configureFramer"` across the entire codebase would show 2 call sites
+- When adding an "early" call to fix a race, ALWAYS search for and remove the "late" call
+- The diagnostic file writes accidentally masked the timing, adding confusion
+- Should have done the sine wave test FIRST (would have proved engine path clean immediately)
+- Should have captured raw MP3 data EARLIER (would have shown corruption was pre-decoder)
+
+**Process improvement for next time:**
+1. Sine wave test FIRST — isolates engine vs data in 30 seconds
+2. Raw pre-decoder dump SECOND — isolates framer vs decoder
+3. `grep -r` for ALL call sites when moving function calls between isolation contexts
+4. When a bug disappears with logging added, it's ALWAYS timing-related
+5. Never assume a fix is complete without searching for duplicate call sites
+
 ### Key Invariants
 - ICYFramer.configure() called EXACTLY ONCE per stream (from delegate queue)
 - AudioConverterDispose BEFORE AudioFileStreamClose
