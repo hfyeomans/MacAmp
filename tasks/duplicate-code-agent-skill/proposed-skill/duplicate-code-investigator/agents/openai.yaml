@@ -1,0 +1,6 @@
+interface:
+  display_name: "Duplicate Code Investigator"
+  short_description: "Find duplicate code and duplicate execution paths"
+  default_prompt: "Use $duplicate-code-investigator to scan this repo for duplicate code and duplicate execution paths."
+policy:
+  allow_implicit_invocation: true

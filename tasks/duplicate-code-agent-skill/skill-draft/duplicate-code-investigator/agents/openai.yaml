@@ -1,0 +1,4 @@
+interface:
+  display_name: "Duplicate Investigator"
+  short_description: "Find duplicate code and execution paths"
+  default_prompt: "Use $duplicate-code-investigator to audit this branch for duplicate code and duplicate execution paths."
