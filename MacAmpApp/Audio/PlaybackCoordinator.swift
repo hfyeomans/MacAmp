@@ -143,7 +143,7 @@ final class PlaybackCoordinator {
     }
 
     /// Propagate balance to ALL backends unconditionally.
-    /// Balance is applied via AVAudioEngine's streamSourceNode.pan when the bridge is active.
+    /// StreamPlayer stores balance but cannot apply it (no AVPlayer .pan property).
     func setBalance(_ bal: Float) {
         audioPlayer.balance = bal
         streamPlayer.balance = bal
