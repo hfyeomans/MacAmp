@@ -2,7 +2,7 @@
 
 > **Purpose:** Index of all currently open (non-done) tasks in `tasks/`. Each entry notes the task name, purpose, creation date, last activity, and current status.
 >
-> **Today:** 2026-03-14
+> **Today:** 2026-03-15
 > **Excludes:** `tasks/done/` and `tasks/depreciated/`
 
 ---
@@ -46,6 +46,10 @@
 | `swift-project-structure-research` | Evaluate MacAmp Swift file/project organization and define an approved ownership model plus backlog strategy | 2026-03-14 | 2026-03-14 | 0 | 📄 REFERENCE — Research complete. Approved structure policy for active/future tasks; not a standalone implementation sprint. |
 | `windowing-structure-consolidation` | Consolidate generic window infrastructure under the target `Windowing/` ownership model | 2026-03-14 | 2026-03-14 | 0 | 📋 PLANNED — Post-S1 architecture follow-on. Create source-to-target mapping after Sprint S1 stabilizes. |
 | `milkdrop-feature-consolidation` | Consolidate Milkdrop / Butterchurn files and resources under the target `Features/Milkdrop/` ownership model | 2026-03-14 | 2026-03-14 | 0 | 📋 PLANNED — Post-S1 architecture follow-on. Do not mix with the Xcode runtime fix unless file moves become necessary. |
+| `skinmanager-decomposition` | Decompose `SkinManager.swift` and align skin ownership with the approved structure | 2026-03-15 | 2026-03-15 | 0 | 📋 PLANNED — Post-S2 / pre-S3 architecture follow-on. Existing `audioplayer-decomposition` remains the AudioPlayer owner. |
+| `visualizerpipeline-decomposition` | Decompose `VisualizerPipeline.swift` inside the `Audio/Visualization` boundary | 2026-03-15 | 2026-03-15 | 0 | 📋 PLANNED — Post-S2 / pre-S3 architecture follow-on. Preserve current visualizer and Butterchurn behavior. |
+| `streamdecodepipeline-decomposition` | Decompose `StreamDecodePipeline.swift` inside the `Audio/Streaming` boundary | 2026-03-15 | 2026-03-15 | 0 | 📋 PLANNED — Post-S2 / pre-S3 architecture follow-on. Keep unified pipeline semantics stable. |
+| `winamp-equalizer-window-decomposition` | Decompose `WinampEqualizerWindow.swift` into clearer equalizer feature-owned UI pieces | 2026-03-15 | 2026-03-15 | 0 | 📋 PLANNED — Post-S2 / pre-S3 architecture follow-on. UI structure cleanup only, no EQ behavior change. |
 | `os-workgroup-integration` | Apple Silicon os_workgroup for audio render thread | 2026-03-14 | 2026-03-14 | 0 | 📋 PLANNED — Sprint S2 (MEDIUM). Performance optimization. |
 | `video-audio-engine-routing` | Route video audio through AVAudioEngine (MTAudioProcessingTap) | 2026-03-14 | 2026-03-14 | 0 | 📋 PLANNED — Sprint S2 (MEDIUM). Unify all audio through engine. |
 | `stream-track-counter` | Track position counter in main window + playlist window for streams | 2026-03-14 | 2026-03-14 | 0 | 📋 PLANNED — Sprint S2 (MEDIUM). Winamp fidelity. |

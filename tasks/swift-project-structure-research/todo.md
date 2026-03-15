@@ -23,13 +23,13 @@
 - [ ] Create a source-to-target mapping for current files that should move into `Windowing/`
 - [ ] Create a source-to-target mapping for current files that should move into `Features/Milkdrop/`
 
-## After Sprint S2
+## After Sprint S2 / Before Sprint S3
 
-- [ ] Plan a dedicated decomposition task for `AudioPlayer.swift`
-- [ ] Plan a dedicated decomposition task for `SkinManager.swift`
-- [ ] Plan a dedicated decomposition task for `VisualizerPipeline.swift`
-- [ ] Plan a dedicated decomposition task for `StreamDecodePipeline.swift`
-- [ ] Plan a dedicated decomposition task for `WinampEqualizerWindow.swift`
+- [x] Keep `AudioPlayer.swift` follow-on work under the existing `audioplayer-decomposition` Phase 4 task
+- [x] Create a dedicated decomposition task: `skinmanager-decomposition`
+- [x] Create a dedicated decomposition task: `visualizerpipeline-decomposition`
+- [x] Create a dedicated decomposition task: `streamdecodepipeline-decomposition`
+- [x] Create a dedicated decomposition task: `winamp-equalizer-window-decomposition`
 
 ## Later / Optional
 

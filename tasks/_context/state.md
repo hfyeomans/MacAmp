@@ -2,7 +2,7 @@
 
 > **Purpose:** Single source of truth for cross-task execution status, wave progress, and coordination decisions.
 > **Date:** 2026-02-21
-> **Updated:** 2026-03-14 (Wave 3 complete — T7 PR #57, T8 PR #56 + PR #58 all merged)
+> **Updated:** 2026-03-15 (Wave 3 complete; architecture rollout tasks extended through post-S2 / pre-S3)
 
 ### Quick Reference
 
@@ -280,18 +280,18 @@ All doc updates verified complete by sub-agent scan:
 | `windowing-structure-consolidation` | Consolidate generic window infrastructure under the target `Windowing/` ownership model | Medium | PLANNED | Start after Sprint S1 stabilizes |
 | `milkdrop-feature-consolidation` | Consolidate Milkdrop / Butterchurn files and resources under the target `Features/Milkdrop/` ownership model | Medium | PLANNED | Start after Sprint S1 stabilizes |
 
-### Post-S2 Planning Gate
+### Post-S2 / Pre-S3 Architecture Follow-Ons (Created, Not Yet Sprinted)
 
-- After Sprint S2, plan dedicated decomposition follow-ons for:
-  - `AudioPlayer.swift`
-  - `SkinManager.swift`
-  - `VisualizerPipeline.swift`
-  - `StreamDecodePipeline.swift`
-  - `WinampEqualizerWindow.swift`
+| Task Folder | Description | Size | Status | Dependency |
+|-------------|-------------|------|--------|------------|
+| `skinmanager-decomposition` | Decompose `SkinManager.swift` and align skin ownership with the approved structure | Medium | PLANNED | Start after Sprint S2 stabilizes |
+| `visualizerpipeline-decomposition` | Decompose `VisualizerPipeline.swift` inside the `Audio/Visualization` boundary | Medium | PLANNED | Start after Sprint S2 stabilizes |
+| `streamdecodepipeline-decomposition` | Decompose `StreamDecodePipeline.swift` inside the `Audio/Streaming` boundary | Medium | PLANNED | Start after Sprint S2 stabilizes |
+| `winamp-equalizer-window-decomposition` | Decompose `WinampEqualizerWindow.swift` into clearer equalizer feature-owned UI pieces | Medium | PLANNED | Start after Sprint S2 stabilizes |
 
-**Total: 16 tracked follow-on tasks (14 currently sprinted + 2 post-S1 architecture follow-ons)**
-**Existing tasks reused: 3 (audioplayer-decomposition, xcode-butterchurn-webcontent-diagnosis, airplay-integration)**
-**New task folders: 12**
+**AudioPlayer note:** `AudioPlayer.swift` remains owned by the existing `audioplayer-decomposition` Phase 4 task and is not a separate post-S2 task folder.
+
+**Architecture rollout status:** post-S1 and post-S2 follow-on tasks now both exist as concrete task folders.
 
 ---
 
@@ -312,4 +312,4 @@ All doc updates verified complete by sub-agent scan:
 |------|--------|
 | `_context/research.md` | Complete (verified, corrections applied) |
 | `_context/plan.md` | Complete (verified, corrections applied) |
-| `_context/state.md` | Active (this file — updated 2026-03-14) |
+| `_context/state.md` | Active (this file — updated 2026-03-15) |

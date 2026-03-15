@@ -5,7 +5,7 @@
 
 ## Status
 
-Research complete. Policy approved. Backlog shaping in progress.
+Research complete. Policy approved. Backlog shaping complete.
 
 ## Current Position
 
@@ -39,7 +39,7 @@ Research complete. Policy approved. Backlog shaping in progress.
 
 - Big-bang implementation now: High risk, high churn
 - Policy + incremental adoption now: Medium and realistic
-- Full architecture improvement over 2-3 follow-on tasks: Medium-Large, but tractable
+- Full architecture improvement over several follow-on tasks: Medium-Large, but tractable
 
 ## Approved Decisions
 
@@ -48,4 +48,5 @@ Research complete. Policy approved. Backlog shaping in progress.
 - Two focused follow-on tasks will carry the first real source-tree consolidations after Sprint S1:
   - `windowing-structure-consolidation`
   - `milkdrop-feature-consolidation`
-- Large-file decomposition follow-ons remain a post-S2 planning gate, not an immediate restructure track.
+- Large-file decomposition follow-ons are now explicitly represented as post-S2 / pre-S3 tasks rather than a vague planning gate.
+- `AudioPlayer.swift` remains covered by the existing `audioplayer-decomposition` task; the other large files now have their own task folders.

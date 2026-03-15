@@ -237,14 +237,14 @@ These are bounded and much safer than a repo-wide move.
 
 **Status:** Task folders created; not yet sprinted for implementation.
 
-### Step 3: After S2, decompose remaining oversized files
+### Step 3: After S2 / before S3, make the remaining oversized files explicit architecture owners
 
-Target files:
-- `AudioPlayer.swift`
-- `SkinManager.swift`
-- `VisualizerPipeline.swift`
-- `StreamDecodePipeline.swift`
-- `WinampEqualizerWindow.swift`
+Use dedicated task ownership instead of leaving the next wave implicit:
+- existing task: `audioplayer-decomposition` Phase 4 remains the owner for `AudioPlayer.swift`
+- new task: `skinmanager-decomposition`
+- new task: `visualizerpipeline-decomposition`
+- new task: `streamdecodepipeline-decomposition`
+- new task: `winamp-equalizer-window-decomposition`
 
 ### Step 4: Re-evaluate package extraction
 
