@@ -33,7 +33,7 @@ MacAmp is a pixel-perfect recreation of the classic Winamp audio player for macO
 - ✅ **Pixel-perfect rendering** with .interpolation(.none)
 - ✅ **Dynamic skin loading** from ZIP archives (.wsz files)
 - ✅ **Real-time audio processing** with AVAudioEngine
-- ✅ **75-bar spectrum analyzer** matching Winamp behavior
+- ✅ **20-bar spectrum analyzer** matching Winamp behavior
 - ✅ **10-band EQ** with 17 built-in presets
 - ✅ **Zero crashes** with graceful fallback systems
 - ✅ **Developer ID signing** and notarization ready
@@ -43,7 +43,7 @@ MacAmp is a pixel-perfect recreation of the classic Winamp audio player for macO
 
 ```
 Platform: macOS 15+ (Sequoia), macOS 26+ (Tahoe)
-Language: Swift 5.9+
+Language: Swift 6.2
 UI Framework: SwiftUI
 Audio: AVFoundation (AVAudioEngine)
 Archive: ZIPFoundation
@@ -90,6 +90,8 @@ MacAmp uses a clean separation between mechanism, bridge, and presentation layer
 ```
 
 ### Dual-Backend Pattern (For Multiple Audio Systems)
+
+> **SUPERSEDED (March 2026):** The dual-backend architecture described below was replaced by a unified audio pipeline (Lesson #27). ALL audio now routes through AVAudioEngine. StreamPlayer uses a custom URLSession + AudioFileStream + AudioConverter pipeline instead of AVPlayer. The section below is preserved as historical context explaining WHY the unified pipeline was built.
 
 **When You Need It:** Supporting both local files (with EQ) and internet radio streams
 
@@ -194,7 +196,7 @@ extension EnvironmentValues {
 
 // @MainActor isolation for thread safety
 @MainActor
-class SkinManager: ObservableObject {
+class SkinManager: ObservableObject {  // NOTE: SkinManager is now @Observable (not ObservableObject)
     @Published var currentSkin: Skin?
 }
 ```
@@ -234,6 +236,8 @@ func shouldIgnoreCompletion(from seekID: UUID?) -> Bool {
 }
 
 // 2. Spectrum analyzer with off-thread processing
+// NOTE: SUPERSEDED by SPSC shared buffer pattern (Lesson #24). Audio tap now writes
+// to lock-free ring buffer, main thread polls via timer. DispatchQueue.main.async removed.
 mixer.installTap(onBus: 0, bufferSize: 1024, format: nil) { [weak self] buffer, _ in
     // Audio thread (NOT main thread)
     let spectrum = computeSpectrum(buffer)
@@ -330,7 +334,7 @@ struct SpriteResolver {
 1. User selects skin
    ↓
 2. Background thread: Load ZIP
-   Task.detached(priority: .userInitiated) {
+   Task.detached(priority: .userInitiated) {  // SUPERSEDED: now uses @concurrent via SkinManager.SkinArchiveLoader.loadAsync()
        let payload = try SkinArchiveLoader.load(from: url)
    }
    ↓
@@ -429,8 +433,8 @@ MacAmp implements a **webamp-style spectrum analyzer** with balanced frequency d
 // CRITICAL: Use hybrid log-linear scaling (91% log, 9% linear)
 let scale: Float = 0.91
 
-for bar in 0..<targetBars {  // targetBars = 75
-    let normalized = Float(bar) / Float(max(1, targetBars - 1))
+for bar in 0..<maxBars {  // maxBars = 20 (Goertzel algorithm, not FFT bin interpolation)
+    let normalized = Float(bar) / Float(max(1, maxBars - 1))
 
     // Linear interpolation
     let linearIndex = normalized * Float(maxFreqIndex)
@@ -453,9 +457,9 @@ for bar in 0..<targetBars {  // targetBars = 75
 ```
 
 **Frequency distribution:**
-- Bass (50-500 Hz): ~15-20 bars
-- Mids (500-5000 Hz): ~30-40 bars
-- Treble (5000-16000 Hz): ~20-30 bars
+- Bass (50-500 Hz): ~5-6 bars
+- Mids (500-5000 Hz): ~8-10 bars
+- Treble (5000-16000 Hz): ~4-6 bars
 
 ### EQ Implementation
 
@@ -788,6 +792,8 @@ struct WinampVerticalSlider: View {
 
 ### ObservableObject Pattern
 
+> **NOTE:** The examples below use the legacy `ObservableObject`/`@Published` pattern. Modern MacAmp code uses `@Observable`/`@State`/`.environment()`. See [Migration Patterns](#migration-patterns) in the Modern Swift Patterns section for the current approach.
+
 **Central state management with @Published properties:**
 
 ```swift
@@ -804,7 +810,7 @@ class AudioPlayer: ObservableObject {
     @Published var eqBands: [Float] = Array(repeating: 0.0, count: 10) {
         didSet { applyEQ() }
     }
-    @Published var visualizerLevels: [Float] = Array(repeating: 0.0, count: 75)
+    @Published var visualizerLevels: [Float] = Array(repeating: 0.0, count: 20)
     @Published var playlist: [Track] = []
 
     // Private state
@@ -2292,7 +2298,7 @@ When implementing similar WKWebView JavaScript integrations:
 - ✅ 10-20% fewer view updates (fine-grained observation)
 - ✅ Less boilerplate (no @Published wrappers)
 - ✅ Better performance with large playlists
-- ✅ Swift 6 ready (strict concurrency compatible)
+- ✅ Swift 6.2 (strict concurrency, isolated deinit, @concurrent)
 
 ### Critical Pattern: Body-Scoped @Bindable
 
@@ -2611,7 +2617,7 @@ Target → Build Settings → Swift Compiler - Language
 - Catches actor isolation bugs at compile time
 - Forces correct MainActor patterns
 - Prevents data races
-- Swift 6 preparation
+- Swift 6.2 (project IS Swift 6.2 as of March 2026)
 
 **When to enable:** BEFORE starting @Observable migration to catch issues early.
 
@@ -3714,6 +3720,8 @@ private func preprocessBackground(image: NSImage, skin: Skin) -> NSImage {
 
 ### 2. Off-Main-Thread Audio Processing
 
+> **SUPERSEDED:** The `DispatchQueue.main.async` pattern below has been replaced by the SPSC shared buffer pattern (Lesson #24). The audio tap now writes to a lock-free ring buffer; the main thread polls via a 30 Hz timer.
+
 ```swift
 mixer.installTap(onBus: 0, bufferSize: 1024, format: nil) { [weak self] buffer, _ in
     // Audio thread (NOT main thread)
@@ -3721,7 +3729,7 @@ mixer.installTap(onBus: 0, bufferSize: 1024, format: nil) { [weak self] buffer, 
 
     // Only marshal small result to main thread
     DispatchQueue.main.async {
-        self?.visualizerLevels = spectrum  // ~75 floats
+        self?.visualizerLevels = spectrum  // ~20 floats
     }
 }
 ```
@@ -4258,7 +4266,7 @@ videoController.onTimeUpdate = { [weak self] time, duration in
 5. Defer highest-risk extractions until lower-risk ones prove stable
 6. Re-evaluate deferred extractions—sometimes "good enough" IS the answer
 
-### 14. Swift 6 Readiness: Sendable and Concurrency Patterns
+### 14. Swift 6/6.2 Readiness: Sendable and Concurrency Patterns
 
 **The Problem:** Swift 6 strict concurrency requires data crossing actor boundaries to be `Sendable`. Retrofitting later is painful.
 
@@ -4288,9 +4296,11 @@ struct ButterchurnFrame: Sendable {
 **When to add Sendable:** Any struct/enum that:
 - Passes between actors
 - Goes into async closures
-- Gets captured by `Task.detached`
+- Gets captured by `Task.detached` or `@concurrent` functions
 
 **Pattern 2: nonisolated(unsafe) for deinit Cleanup**
+
+> **SUPERSEDED (Swift 6.2):** This pattern has been replaced by `isolated deinit` (Swift 6.2). The `isolated deinit` runs on the class's actor executor, allowing safe access to all `@MainActor` properties without `nonisolated(unsafe)`. See Lesson #27 (line 6691). Zero `nonisolated(unsafe)` usages remain in the codebase.
 
 ```swift
 @MainActor
@@ -4311,7 +4321,7 @@ final class VideoPlaybackController {
 }
 ```
 
-**Key Insight:** `deinit` runs in a nonisolated context even for `@MainActor` classes. Use `nonisolated(unsafe)` for cleanup-only properties.
+**Key Insight:** `deinit` runs in a nonisolated context even for `@MainActor` classes. In Swift 6.2+, use `isolated deinit` instead of `nonisolated(unsafe)` -- it runs the deinitializer on the actor's executor, eliminating the need for unsafe workarounds.
 
 **Pattern 3: @Sendable Closures for Completion Handlers**
 
@@ -4327,6 +4337,8 @@ func seek(to time: Double, completion: (@Sendable () -> Void)? = nil) {
 ```
 
 ### 15. Background I/O with Task.detached
+
+> **SUPERSEDED (Swift 6.2):** `Task.detached` has been replaced by `@concurrent` static functions. The `@concurrent` attribute on a `nonisolated static func` tells Swift to run it off the calling actor's executor. Zero `Task.detached` calls remain in the codebase. See EQPresetStore.swift for the current pattern.
 
 **The Problem:** File I/O on `@MainActor` blocks the UI thread, causing stutter during playlist load or preset save.
 
@@ -4552,7 +4564,7 @@ final class AudioPlayer {
 
 final class VisualizerPipeline {
     // Must be nonisolated for deinit access
-    nonisolated(unsafe) private var tapInstalled = false
+    nonisolated(unsafe) private var tapInstalled = false  // NOTE: VisualizerPipeline no longer uses nonisolated(unsafe) — replaced by isolated deinit (Swift 6.2)
     nonisolated(unsafe) private weak var mixerNode: AVAudioMixerNode?
 
     nonisolated func removeTap() {
@@ -4654,12 +4666,21 @@ Rate 1-10 with specific issues to fix."
 MacAmp/
 ├── MacAmpApp/
 │   ├── Audio/
-│   │   ├── AudioPlayer.swift           # Orchestrator (~1,059 lines after refactor)
-│   │   ├── EQPresetStore.swift         # EQ preset persistence (96 lines)
+│   │   ├── AudioPlayer.swift           # Orchestrator (~1,143 lines)
+│   │   ├── EQPresetStore.swift         # EQ preset persistence (~197 lines)
 │   │   ├── MetadataLoader.swift        # Async track metadata (171 lines)
-│   │   ├── PlaylistController.swift    # Navigation & shuffle (260 lines)
-│   │   ├── VideoPlaybackController.swift # AVPlayer lifecycle (259 lines)
-│   │   └── VisualizerPipeline.swift    # Audio tap & FFT (512 lines)
+│   │   ├── PlaylistController.swift    # Navigation & shuffle (297 lines)
+│   │   ├── VideoPlaybackController.swift # AVPlayer lifecycle (282 lines)
+│   │   ├── VisualizerPipeline.swift    # Audio tap & SPSC buffer (~699 lines)
+│   │   ├── EqualizerController.swift   # EQ band management
+│   │   ├── PlaybackCoordinator.swift   # Multi-backend orchestrator
+│   │   ├── StreamPlayer.swift          # Unified stream playback
+│   │   ├── LockFreeRingBuffer.swift    # RT-safe audio buffer
+│   │   └── Streaming/                  # Custom stream decode pipeline
+│   │       ├── ICYFramer.swift             # ICY metadata extraction
+│   │       ├── AudioFileStreamParser.swift # Compressed audio parsing
+│   │       ├── AudioConverterDecoder.swift # PCM decode
+│   │       └── StreamDecodePipeline.swift  # Decode orchestrator
 │   ├── Models/
 │   │   ├── SpriteResolver.swift        # Semantic → actual sprite mapping
 │   │   ├── Skin.swift                  # Skin data model
@@ -4736,7 +4757,7 @@ ls -la ~/Library/Developer/Xcode/DerivedData/MacAmpApp-*/Build/Products/Debug/Ma
 1. **Three-Layer Architecture** - Decouple mechanism (functional), bridge (semantic), and presentation (visual) layers
 2. **Semantic Sprite Resolution** - Never hardcode sprite names, use semantic requests that adapt to skin variants
 3. **Robust Fallback Systems** - Generate transparent placeholders for missing/corrupted sprites
-4. **@MainActor Isolation** - Ensure all UI updates happen on main thread, use Task.detached for background work
+4. **@MainActor Isolation** - Ensure all UI updates happen on main thread, use Task.detached for background work (superseded by @concurrent in Swift 6.2)
 5. **Pixel-Perfect Rendering** - Use `.interpolation(.none)` and `.antialiased(false)` for crisp pixel art
 6. **Absolute Positioning** - Create `.at(x:y:)` extension for absolute offset-based positioning
 7. **Code Signing Order** - Use Scheme Post-Actions (not Build Phases) for signed app distribution
@@ -4751,7 +4772,7 @@ ls -la ~/Library/Developer/Xcode/DerivedData/MacAmpApp-*/Build/Products/Debug/Ma
 16. **NSMenu Closure Bridge** - Store menu in @State, use representedObject to keep target classes alive
 17. **Force Unwrap Elimination** - Use `Optional.map { } ?? default` and `flatMap` patterns; never force unwrap
 18. **Risk-Ordered Refactoring** - Extract components incrementally: low risk → medium → high; verify after each
-19. **Swift 6 Sendable Readiness** - Mark all data transfer structs as `Sendable` now; use `nonisolated(unsafe)` for deinit
+19. **Swift 6 Sendable Readiness** - Mark all data transfer structs as `Sendable` now; use `nonisolated(unsafe)` for deinit (superseded by isolated deinit in Swift 6.2)
 20. **Pre-allocated Audio Buffers** - Zero allocations on audio thread; pre-allocate FFT buffers in init
 21. **Quality Gate Methodology** - Use Oracle reviews with 10/10 target; fix all high/medium issues before shipping
 22. **Placeholder.md Convention** - No `// TODO` in code; document placeholders in `tasks/<task>/placeholder.md`
@@ -4811,9 +4832,10 @@ When building your next retro macOS app:
 **Document Status:** Production Ready
 **Maintenance:** Update when new patterns/pitfalls discovered
 **Owner:** MacAmp Development Team
-**Last Updated:** 2026-02-22
+**Last Updated:** 2026-03-14
 
 **Recent Additions:**
+- **Stale Content Audit** (Mar 14, 2026) - Updated March 2026: Swift 6.2 patterns (isolated deinit, @concurrent), stale dual-backend/DispatchQueue patterns marked as superseded, file structure updated with Streaming/ subdirectory and current line counts.
 - **Coordinator Volume Routing + Capability Flags** (Feb 22, 2026) - Multi-backend volume fan-out and UI capability dimming (Lesson #26)
   - PlaybackCoordinator.setVolume() propagates unconditionally to all backends (audioPlayer, streamPlayer, videoPlaybackController)
   - Capability flags (supportsEQ/supportsBalance/supportsVisualizer) with error recovery -- failed streams re-enable controls
@@ -4913,7 +4935,7 @@ When building your next retro macOS app:
   - Options menu with explicit choices + checkmarks (3 items vs single toggle)
   - Cross-skin visual compatibility (shadow technique for all backgrounds)
   - Oracle-validated pattern consistency (Grade A)
-- **Internet Radio Streaming** (Oct 31, 2025) - Dual-backend audio architecture
+- **Internet Radio Streaming** (Oct 31, 2025) - Dual-backend audio architecture (superseded by unified pipeline, Lesson #27)
   - PlaybackCoordinator pattern for multiple audio systems
   - @preconcurrency for non-Sendable frameworks
   - Modern AVPlayerItemMetadataOutput (not deprecated timedMetadata)
@@ -6007,7 +6029,7 @@ The implementation was reviewed by Oracle (gpt-5.3-codex, xhigh reasoning) with 
 
 1. **Code Review:** Found 2 HIGH findings (both fixed), 4 MEDIUM (2 fixed, 2 accepted), 2 LOW (accepted). Final verdict: "SPSC design sound, allocation-free in steady state, tap lifecycle correct."
 2. **Architecture Alignment Review:** Confirmed three-layer pattern compliance, @Observable usage, and noted SPSC is a "clean architectural upgrade over old Unmanaged pointer pattern."
-3. **Swift 6.2 Compliance Review:** Verified all 4 `nonisolated(unsafe)` usages justified, both `@unchecked Sendable` justified, `MainActor.assumeIsolated` with `dispatchPrecondition` correct.
+3. **Swift 6.2 Compliance Review:** Verified all 4 `nonisolated(unsafe)` usages justified (NOTE: these were subsequently eliminated via isolated deinit in Swift 6.2), both `@unchecked Sendable` justified, `MainActor.assumeIsolated` with `dispatchPrecondition` correct.
 
 #### When to Use This Pattern
 

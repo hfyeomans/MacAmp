@@ -1,7 +1,7 @@
 # MacAmp Sprite System Complete Documentation
 
-**Version:** 2.0.0 (Consolidated)
-**Date:** 2025-11-01
+**Version:** 2.1.0 (Synced with SpriteResolver.swift)
+**Date:** 2026-03-14
 **Status:** Production - Fully Implemented
 **Purpose:** Complete reference for MacAmp's semantic sprite resolution system
 
@@ -92,7 +92,7 @@ The sprite system follows webamp's three-layer architecture:
 Complete enumeration of all semantic sprites from actual implementation:
 
 ```swift
-// File: MacAmpApp/Models/SpriteResolver.swift:14-78
+// File: MacAmpApp/Models/SpriteResolver.swift
 // Purpose: Semantic sprite identifiers that decouple UI from skin presentation
 // Context: Following webamp's architecture: mechanism → bridge → presentation
 
@@ -160,59 +160,6 @@ enum SemanticSprite {
     case mainShadeBackgroundSelected
     case eqButton
     case playlistButton
-    case eqSliderThumb
-    case eqSliderThumbPressed
-    case eqPreampBackground
-    case eqPreampThumb
-    case eqOnButton
-    case eqOnButtonPressed
-    case eqAutoButton
-    case eqAutoButtonPressed
-    case eqPresetsButton
-    case eqPresetsButtonPressed
-    case eqCloseButton
-    case eqShadeButton
-
-    // MARK: - Playlist
-    case playlistBackground
-    case playlistTitleBar
-    case playlistTitleBarActive
-    case playlistScrollbar
-    case playlistScrollbarThumb
-    case playlistAddButton
-    case playlistRemoveButton
-    case playlistSelectButton
-    case playlistMiscButton
-    case playlistListButton
-    case playlistCloseButton
-    case playlistShadeButton
-    case playlistItem(selected: Bool)
-    case playlistCurrentItem
-
-    // MARK: - Main Window
-    case mainWindowBackground
-    case mainWindowBackgroundShaded
-    case mainTitleBar
-    case mainTitleBarActive
-    case mainTitleBarShaded
-    case mainTitleBarShadedActive
-    case clutterBar
-    case clutterBarButton(Character)  // O=Options, A=AlwaysOnTop, I=TrackInfo, D=DoubleSize, V=Visualizer
-
-    // MARK: - Visualization
-    case spectrumBar
-    case oscilloscopeLine
-    case visualizationBackground
-
-    // MARK: - Options/Toggles
-    case repeatButton
-    case repeatButtonActive
-    case shuffleButton
-    case shuffleButtonActive
-    case eqButton
-    case eqButtonActive
-    case playlistButton
-    case playlistButtonActive
 }
 ```
 
@@ -223,7 +170,7 @@ enum SemanticSprite {
 The core resolution engine from actual codebase:
 
 ```swift
-// File: MacAmpApp/Models/SpriteResolver.swift:97-402
+// File: MacAmpApp/Models/SpriteResolver.swift
 // Purpose: Resolves semantic sprite requests to actual sprite names
 // Context: Decouples UI mechanism from skin presentation
 
@@ -257,77 +204,91 @@ struct SpriteResolver: Sendable {
     /// 3. Fall back to base variants
     private func candidates(for semantic: SemanticSprite) -> [String] {
         switch semantic {
-        // MARK: - Time Display
         case .digit(let n):
-            guard (0...9).contains(n) else {
-                NSLog("SpriteResolver: digit out of range (\(n)). Expected 0-9.")
-                return []
-            }
-            return [
-                "DIGIT_\(n)_EX",      // Prefer extended digits (NUMS_EX.BMP)
-                "DIGIT_\(n)"          // Fall back to standard digits (NUMBERS.BMP)
-            ]
-
+            guard (0...9).contains(n) else { return [] }
+            return ["DIGIT_\(n)_EX", "DIGIT_\(n)"]
         case .minusSign:
             return ["MINUS_SIGN_EX", "MINUS_SIGN"]
-
         case .noMinusSign:
             return ["NO_MINUS_SIGN_EX", "NO_MINUS_SIGN"]
-
         case .character(let ascii):
             return ["CHARACTER_\(ascii)"]
 
-        // MARK: - Transport Controls
+        // Transport Controls
         case .playButton:
             return ["MAIN_PLAY_BUTTON_ACTIVE", "MAIN_PLAY_BUTTON"]
-
         case .pauseButton:
             return ["MAIN_PAUSE_BUTTON_ACTIVE", "MAIN_PAUSE_BUTTON"]
-
         case .stopButton:
             return ["MAIN_STOP_BUTTON_ACTIVE", "MAIN_STOP_BUTTON"]
-
         case .nextButton:
             return ["MAIN_NEXT_BUTTON_ACTIVE", "MAIN_NEXT_BUTTON"]
-
         case .previousButton:
             return ["MAIN_PREVIOUS_BUTTON_ACTIVE", "MAIN_PREVIOUS_BUTTON"]
-
         case .ejectButton:
             return ["MAIN_EJECT_BUTTON_ACTIVE", "MAIN_EJECT_BUTTON"]
 
-        // MARK: - Sliders
+        // Window Controls
+        case .closeButton:
+            return ["MAIN_CLOSE_BUTTON_DEPRESSED", "MAIN_CLOSE_BUTTON"]
+        case .minimizeButton:
+            return ["MAIN_MINIMIZE_BUTTON_DEPRESSED", "MAIN_MINIMIZE_BUTTON"]
+        case .shadeButton:
+            return ["MAIN_SHADE_BUTTON_DEPRESSED", "MAIN_SHADE_BUTTON"]
+
+        // Sliders
         case .volumeBackground:
             return ["MAIN_VOLUME_BACKGROUND"]
-
         case .volumeThumb:
             return ["MAIN_VOLUME_THUMB_SELECTED", "MAIN_VOLUME_THUMB"]
-
         case .volumeThumbSelected:
             return ["MAIN_VOLUME_THUMB_SELECTED", "MAIN_VOLUME_THUMB"]
-
         case .balanceBackground:
             return ["MAIN_BALANCE_BACKGROUND"]
-
         case .balanceThumb:
             return ["MAIN_BALANCE_THUMB_ACTIVE", "MAIN_BALANCE_THUMB"]
-
         case .balanceThumbActive:
             return ["MAIN_BALANCE_THUMB_ACTIVE", "MAIN_BALANCE_THUMB"]
+        case .positionSliderBackground:
+            return ["MAIN_POSITION_SLIDER_BACKGROUND"]
+        case .positionSliderThumb:
+            return ["MAIN_POSITION_SLIDER_THUMB_SELECTED", "MAIN_POSITION_SLIDER_THUMB"]
+        case .positionSliderThumbSelected:
+            return ["MAIN_POSITION_SLIDER_THUMB_SELECTED", "MAIN_POSITION_SLIDER_THUMB"]
 
-        // MARK: - Equalizer
-        case .eqSliderBackground:
-            return ["EQ_SLIDER_BACKGROUND"]
+        // Indicators
+        case .playingIndicator:  return ["MAIN_PLAYING_INDICATOR"]
+        case .pausedIndicator:   return ["MAIN_PAUSED_INDICATOR"]
+        case .stoppedIndicator:  return ["MAIN_STOPPED_INDICATOR"]
+        case .monoIndicator:     return ["MAIN_MONO"]
+        case .monoIndicatorSelected:   return ["MAIN_MONO_SELECTED", "MAIN_MONO"]
+        case .stereoIndicator:         return ["MAIN_STEREO"]
+        case .stereoIndicatorSelected: return ["MAIN_STEREO_SELECTED", "MAIN_STEREO"]
 
-        case .eqSliderThumb:
-            return ["EQ_SLIDER_THUMB_SELECTED", "EQ_SLIDER_THUMB"]
+        // Equalizer
+        case .eqWindowBackground:  return ["EQ_WINDOW_BACKGROUND"]
+        case .eqTitleBar:          return ["EQ_TITLE_BAR"]
+        case .eqTitleBarSelected:  return ["EQ_TITLE_BAR_SELECTED", "EQ_TITLE_BAR"]
+        case .eqSliderBackground:  return ["EQ_SLIDER_BACKGROUND"]
+        case .eqSliderThumb:       return ["EQ_SLIDER_THUMB_SELECTED", "EQ_SLIDER_THUMB"]
+        case .eqSliderThumbSelected: return ["EQ_SLIDER_THUMB_SELECTED", "EQ_SLIDER_THUMB"]
+        case .eqOnButton:          return ["EQ_ON_BUTTON_SELECTED", "EQ_ON_BUTTON"]
+        case .eqAutoButton:        return ["EQ_AUTO_BUTTON_SELECTED", "EQ_AUTO_BUTTON"]
 
-        case .eqSliderThumbSelected:
-            return ["EQ_SLIDER_THUMB_SELECTED", "EQ_SLIDER_THUMB"]
+        // Playlist
+        case .playlistTopTile:        return ["PLAYLIST_TOP_TILE"]
+        case .playlistTopLeftCorner:  return ["PLAYLIST_TOP_LEFT_CORNER"]
+        case .playlistTitleBar:       return ["PLAYLIST_TITLE_BAR"]
+        case .playlistTopRightCorner: return ["PLAYLIST_TOP_RIGHT_CORNER"]
 
-        // ... continued for all semantic sprites
-        default:
-            return []
+        // Main Window
+        case .mainWindowBackground:        return ["MAIN_WINDOW_BACKGROUND"]
+        case .mainTitleBar:                return ["MAIN_TITLE_BAR"]
+        case .mainTitleBarSelected:        return ["MAIN_TITLE_BAR_SELECTED", "MAIN_TITLE_BAR"]
+        case .mainShadeBackground:         return ["MAIN_SHADE_BACKGROUND"]
+        case .mainShadeBackgroundSelected: return ["MAIN_SHADE_BACKGROUND_SELECTED", "MAIN_SHADE_BACKGROUND"]
+        case .eqButton:       return ["MAIN_EQ_BUTTON_SELECTED", "MAIN_EQ_BUTTON"]
+        case .playlistButton: return ["MAIN_PLAYLIST_BUTTON_SELECTED", "MAIN_PLAYLIST_BUTTON"]
         }
     }
 
@@ -336,33 +297,14 @@ struct SpriteResolver: Sendable {
         guard let spriteName = resolve(semantic) else { return nil }
         return skin.images[spriteName]
     }
-}
 
-        default:
-            break
+    /// Get dimensions for a semantic sprite without loading the image.
+    func dimensions(for semantic: SemanticSprite) -> CGSize? {
+        guard let spriteName = resolve(semantic),
+              let image = skin.images[spriteName] else {
+            return nil
         }
-
-        return nil
-    }
-
-    private func tryDerivedMapping(_ semantic: SemanticSprite) -> ResolvedSprite? {
-        // Generate pressed states from normal states
-        switch semantic {
-        case .playButtonPressed:
-            if let normal = tryPrimaryMapping(.playButton) {
-                return derivePressed(from: normal)
-            }
-
-        case .volumeThumbPressed:
-            if let normal = tryPrimaryMapping(.volumeThumb) {
-                return deriveHighlighted(from: normal)
-            }
-
-        default:
-            break
-        }
-
-        return nil
+        return image.size
     }
 }
 ```
@@ -371,50 +313,31 @@ struct SpriteResolver: Sendable {
 
 ## Resolution Algorithm
 
-The complete resolution flow:
+The resolution flow is straightforward -- no caching or derived mappings.
+`candidates(for:)` returns an ordered list of sprite names, and `resolve(_:)`
+picks the first one that exists in the skin. If none match, it returns `nil`
+and the caller (typically `SkinManager`) handles the fallback.
 
 ```
 resolve(.playButton)
          │
          ▼
-┌──────────────────┐
-│  Check Cache     │──────▶ Found? Return cached sprite
-└──────────────────┘
-         │ Not found
-         ▼
-┌──────────────────┐
-│ Try Primary Names│
-│ - CBUTTONS_PLAY_NORM
-│ - PLAY_BUTTON
-│ - MAIN_PLAY
-└──────────────────┘
-         │ Not found
-         ▼
-┌──────────────────┐
-│ Try Alternatives │
-│ - Case variants
-│ - Underscore/dash
-│ - Common typos
-└──────────────────┘
-         │ Not found
-         ▼
-┌──────────────────┐
-│  Try Derived     │
-│ - From similar
-│ - Color shifted
-│ - Resized
-└──────────────────┘
-         │ Not found
-         ▼
-┌──────────────────┐
-│Generate Fallback │
-│ - Solid color
-│ - Text label
-│ - Standard size
-└──────────────────┘
+┌───────────────────────────┐
+│ candidates(for:) returns  │
+│ priority-ordered names:   │
+│  1. MAIN_PLAY_BUTTON_ACTIVE
+│  2. MAIN_PLAY_BUTTON      │
+└───────────────────────────┘
          │
          ▼
-    Cache & Return
+┌───────────────────────────┐
+│ Iterate candidates        │
+│ Check skin.images[name]   │──▶ Found? Return sprite name
+└───────────────────────────┘
+         │ None found
+         ▼
+    Return nil
+    (caller generates transparent fallback)
 ```
 
 ---
@@ -489,16 +412,6 @@ private func loadSkinImages(from directory: URL) -> [String: NSImage] {
     }
 
     return images
-}
-
-        text.draw(at: point, withAttributes: attributes)
-
-        return ResolvedSprite(
-            image: image,
-            rect: NSRect(origin: .zero, size: size),
-            source: .generated
-        )
-    }
 }
 ```
 
@@ -647,19 +560,15 @@ User clicks play button:
 
 1. Component requests: .playButton
                             │
-2. Resolver checks:         ▼
+2. Resolver calls            ▼
+   candidates(for: .playButton):
    ┌──────────────────────────────────┐
-   │ Cache?                  No        │
-   │ "CBUTTONS_PLAY_NORM"?  No        │
-   │ "PLAY_BUTTON"?         Yes! ✓    │
+   │ "MAIN_PLAY_BUTTON_ACTIVE"? Yes! │
    └──────────────────────────────────┘
                             │
 3. Returns:                 ▼
-   ResolvedSprite {
-     image: NSImage(23x18)
-     rect: NSRect(0,0,23,18)
-     source: .skin("PLAY_BUTTON")
-   }
+   "MAIN_PLAY_BUTTON_ACTIVE"  (String?)
+   Caller uses skin.images[name] to get NSImage
 ```
 
 ### Fallback Generation Example
@@ -689,35 +598,31 @@ func testDigitResolution() {
     let skin = loadTestSkin("standard.wsz")
     let resolver = SpriteResolver(skin: skin)
 
-    // Test standard digit
+    // Test standard digit -- returns sprite name string or nil
     let digit5 = resolver.resolve(.digit(5))
-    XCTAssertEqual(digit5.source, .skin("NUM_5"))
+    XCTAssertEqual(digit5, "DIGIT_5")
 
-    // Test extended digit skin
+    // Test extended digit skin (has NUMS_EX.BMP)
     let extendedSkin = loadTestSkin("extended.wsz")
     let extResolver = SpriteResolver(skin: extendedSkin)
     let extDigit5 = extResolver.resolve(.digit(5))
-    XCTAssertEqual(extDigit5.source, .skin("DIGIT_5_EX"))
+    XCTAssertEqual(extDigit5, "DIGIT_5_EX")
 }
 
-func testFallbackGeneration() {
-    let emptySkin = Skin(sprites: [:])
+func testMissingSpriteReturnsNil() {
+    let emptySkin = Skin(images: [:])
     let resolver = SpriteResolver(skin: emptySkin)
 
     let playButton = resolver.resolve(.playButton)
-    XCTAssertEqual(playButton.source, .generated)
-    XCTAssertEqual(playButton.rect.size, CGSize(width: 23, height: 18))
+    XCTAssertNil(playButton)
 }
 
-func testCaching() {
+func testImageConvenience() {
     let skin = loadTestSkin("standard.wsz")
     let resolver = SpriteResolver(skin: skin)
 
-    let first = resolver.resolve(.volumeThumb)
-    let second = resolver.resolve(.volumeThumb)
-
-    // Should return same cached instance
-    XCTAssertTrue(first === second)
+    let image = resolver.image(for: .volumeThumb)
+    XCTAssertNotNil(image)
 }
 ```
 
@@ -750,13 +655,14 @@ SimpleSpriteImage(sprite: resolver.resolve(.playButton))
 | Old Hard-Coded | Semantic Enum | Notes |
 |----------------|---------------|-------|
 | "DIGIT_0" | `.digit(0)` | Auto-detects extended |
-| "MAIN_PLAY_BUTTON_NORMAL" | `.playButton` | |
-| "MAIN_PLAY_BUTTON_PRESSED" | `.playButtonPressed` | |
+| "MAIN_PLAY_BUTTON" | `.playButton` | |
 | "MAIN_VOLUME_THUMB" | `.volumeThumb` | |
-| "MAIN_VOLUME_THUMB_SELECTED" | `.volumeThumbPressed` | |
-| "EQ_SLIDER" | `.eqSliderThumb` | |
-| "TITLEBAR" | `.mainTitleBar` | |
-| "TITLEBAR_ACTIVE" | `.mainTitleBarActive` | |
+| "MAIN_VOLUME_THUMB_SELECTED" | `.volumeThumbSelected` | |
+| "EQ_SLIDER_THUMB" | `.eqSliderThumb` | |
+| "MAIN_TITLE_BAR" | `.mainTitleBar` | |
+| "MAIN_TITLE_BAR_SELECTED" | `.mainTitleBarSelected` | |
+| "MAIN_EQ_BUTTON" | `.eqButton` | |
+| "MAIN_PLAYLIST_BUTTON" | `.playlistButton` | |
 
 ---
 
@@ -792,17 +698,17 @@ resolver.resolve(.playingIndicator)
 
 ### Adding New Semantic Sprites
 
-1. Add to `SemanticSprite` enum
-2. Add primary mappings in `mapSemanticToPrimary()`
-3. Add fallback generation if needed
+1. Add a new case to the `SemanticSprite` enum
+2. Add a corresponding case in `candidates(for:)` returning priority-ordered sprite names
+3. Ensure `SkinManager` generates a transparent fallback for the new sprite if missing
 4. Update tests
 
-### Performance Tips
+### Design Notes
 
-- Resolution is cached after first lookup
-- Batch resolve at skin load time for frequently used sprites
-- Use `@State` for resolver instance to persist cache
-- Pre-warm cache for time-critical sprites
+- Resolution is stateless -- no caching layer; `resolve(_:)` iterates candidates each call
+- The `Skin.images` dictionary lookup is O(1), so repeated resolution is cheap
+- `SpriteResolver` is `Sendable` and safe to share across concurrency domains
+- Fallback generation lives in `SkinManager`, not in the resolver itself
 
 ---
 
@@ -814,10 +720,10 @@ The sprite system is the foundation of MacAmp's skin compatibility. By separatin
 - **Graceful degradation** when sprites are missing
 - **Clean component code** without hard-coded names
 - **Type safety** through Swift enums
-- **Performance** through intelligent caching
+- **Sendable** and safe across concurrency domains
 
 The system embodies the principle: "The skin is not the app, the app is not the skin."
 
 ---
 
-*Document Version: 2.0.0 | Last Updated: 2025-11-01 | Lines: 812*
+*Document Version: 2.1.0 | Last Updated: 2026-03-14*

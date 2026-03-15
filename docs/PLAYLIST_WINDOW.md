@@ -879,4 +879,4 @@ xcodebuild -scheme MacAmpApp -configuration Debug -enableThreadSanitizer YES bui
 
 ---
 
-**MacAmp Playlist Window Documentation v1.0.0 | Status: Production Ready | Oracle Grade: A-**
+**MacAmp Playlist Window Documentation v1.1.0 | Status: Production Ready | Oracle Grade: A-**

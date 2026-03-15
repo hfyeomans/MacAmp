@@ -1,6 +1,6 @@
 # MacAmp Implementation Patterns
 
-**Version:** 1.8.0
+**Version:** 1.9.0
 **Date:** 2026-03-14
 **Purpose:** Practical code patterns and best practices for MacAmp development
 
@@ -43,7 +43,7 @@
 5. [Async/Await Patterns](#asyncawait-patterns)
    - [Async Stream Events](#pattern-async-stream-events)
    - [Cancellable Tasks](#pattern-cancellable-tasks)
-   - [Background I/O Fire-and-Forget](#pattern-background-io-fire-and-forget-swift-6) **(New - Swift 6)**
+   - [Background I/O with @concurrent Static Functions](#pattern-background-io-with-concurrent-static-functions-swift-62) **(Updated - Swift 6.2)**
    - [Callback Synchronization for Cross-Component Communication](#pattern-callback-synchronization-for-cross-component-communication) **(New - Swift 6)**
    - [Stream Bridge Lifecycle Callbacks](#pattern-stream-bridge-lifecycle-callbacks) **(New - Unified Pipeline)**
 6. [Error Handling Patterns](#error-handling-patterns)
@@ -363,6 +363,7 @@ final class AudioPlayer {
     var volume: Float = 0.75 {  // Default 0.75 when no saved preference
         didSet {
             playerNode.volume = volume
+            streamSourceNode?.volume = volume
             UserDefaults.standard.set(volume, forKey: Keys.volume)
         }
     }
@@ -370,6 +371,7 @@ final class AudioPlayer {
     var balance: Float = 0.0 {  // -1.0 (left) to 1.0 (right)
         didSet {
             playerNode.pan = balance
+            streamSourceNode?.pan = balance
             UserDefaults.standard.set(balance, forKey: Keys.balance)
         }
     }
@@ -604,8 +606,8 @@ final class PlaybackCoordinator {
     /// Propagate balance to ALL backends unconditionally.
     /// With the unified pipeline, balance is applied via AVAudioEngine's streamSourceNode.pan.
     func setBalance(_ bal: Float) {
-        audioPlayer.balance = bal          // Updates playerNode.pan + persists
-        streamPlayer.balance = bal         // Applied via AVAudioEngine bridge
+        audioPlayer.balance = bal          // Updates playerNode.pan + streamSourceNode.pan + persists
+        streamPlayer.balance = bal         // Applied via AVAudioEngine bridge (streamSourceNode.pan)
     }
 }
 ```
@@ -1798,7 +1800,7 @@ actor AudioState {
 }
 
 // Usage from audio tap (background thread)
-Task.detached {
+Task {
     let spectrum = processFFT(buffer)
     await audioState.updateSpectrum(spectrum)
 }
@@ -1813,6 +1815,8 @@ Task { @MainActor in
 **Real usage**: Visualization data flow in `AudioPlayer.swift`
 
 ### Pattern: nonisolated(unsafe) Deinit Safety (Swift 6)
+
+> **SUPERSEDED (Swift 6.2):** Use `isolated deinit` instead. Zero `nonisolated(unsafe)` usages remain in the codebase.
 
 **When to use**: Accessing @MainActor properties in deinit for cleanup
 
@@ -2558,15 +2562,17 @@ struct DataLoadingView: View {
 
 **Real usage**: Stream metadata loading in `StreamPlayer.swift`
 
-### Pattern: Background I/O Fire-and-Forget (Swift 6)
+### Pattern: Background I/O with @concurrent Static Functions (Swift 6.2)
 
-**When to use**: File I/O operations that don't need immediate confirmation of success
+**When to use**: File I/O operations that should run off the calling actor's executor
 
-**Swift 6 Relevance**: Uses `Task.detached` with state snapshot for `@Sendable` compliance
+**Swift 6.2 Relevance**: Uses `@concurrent` static functions with serialized Task chaining, replacing the older `Task.detached` pattern
+
+> **Swift 6.2:** `@concurrent` on a static function tells Swift to run it off the calling actor's executor, replacing `Task.detached`. This provides structured concurrency with clear actor isolation boundaries.
 
 **Implementation**:
 ```swift
-// File: MacAmpApp/Audio/EQPresetStore.swift:130-146
+// File: MacAmpApp/Audio/EQPresetStore.swift
 // Purpose: Perform file writes off main thread without blocking UI
 // Context: Per-track preset persistence - writes happen on every EQ change
 
@@ -2574,35 +2580,43 @@ struct DataLoadingView: View {
 @Observable
 final class EQPresetStore {
     @ObservationIgnored var perTrackPresets: [String: EqfPreset] = [:]
+    @ObservationIgnored private var saveTask: Task<Void, Never>?
 
-    /// Save per-track presets to JSON file (fire-and-forget)
+    /// Save per-track presets to JSON file (serialized, off-actor)
     /// State is captured before dispatch to prevent race conditions
     func savePerTrackPresets() {
         guard let url = presetsFileURL() else { return }
 
         // CRITICAL: Capture current state BEFORE dispatching
-        // This ensures we save the state at call time, not when the task runs
         let presetsToSave = perTrackPresets
+        let previousTask = saveTask
+        saveTask = Task {
+            _ = await previousTask?.result  // serialize: wait for previous write to complete
+            await Self.savePresetsToDisk(presets: presetsToSave, url: url)
+        }
+    }
 
-        // Perform file I/O off main thread (fire-and-forget with error logging)
-        Task.detached(priority: .utility) {
-            do {
-                let data = try JSONEncoder().encode(presetsToSave)
-                try data.write(to: url, options: .atomic)
-                AppLog.debug(.audio, "Saved \(presetsToSave.count) per-track presets")
-            } catch {
-                AppLog.warn(.audio, "Failed to save per-track presets: \(error)")
-            }
+    // MARK: - @concurrent Static I/O Functions (Swift 6.2)
+    // These run off the caller's actor to avoid blocking MainActor with file I/O.
+
+    @concurrent
+    private static func savePresetsToDisk(presets: [String: EqfPreset], url: URL) async {
+        do {
+            let data = try JSONEncoder().encode(presets)
+            try data.write(to: url, options: .atomic)
+            AppLog.debug(.audio, "Saved \(presets.count) per-track presets")
+        } catch {
+            AppLog.warn(.audio, "Failed to save per-track presets: \(error)")
         }
     }
 }
 ```
 
 **Key elements**:
-1. **State snapshot**: Capture state before `Task.detached` to avoid Sendable violations
-2. **Fire-and-forget**: No `await` - caller continues immediately
-3. **Error logging**: Use `AppLog` for errors since we can't propagate them
-4. **Priority**: Use `.utility` for non-urgent I/O, `.userInitiated` for user-triggered saves
+1. **State snapshot**: Capture state before dispatching to avoid Sendable violations
+2. **Serialized writes**: Task chaining via `previousTask?.result` ensures writes complete in order
+3. **`@concurrent` static func**: Runs off the MainActor executor without `Task.detached`
+4. **Error logging**: Use `AppLog` for errors since we can't propagate them
 
 **When to use**:
 - Periodic auto-saves (preference changes, EQ adjustments)
@@ -2610,17 +2624,17 @@ final class EQPresetStore {
 - High-frequency updates where blocking would cause UI lag
 
 **When NOT to use**:
-- Operations where success confirmation is needed (use `await Task.detached { }.value`)
+- Operations where success confirmation is needed (use `await` on the task)
 - Writes that must complete before app terminates (use synchronous I/O or `await`)
 - Operations with complex error recovery requirements
 
 **Real usage**: `EQPresetStore.savePerTrackPresets()`, per-track preset auto-save
 
 **Pitfalls**:
-- Always capture state BEFORE the `Task.detached` block
+- Always capture state BEFORE creating the Task
 - The captured type must be `Sendable` (value types or explicitly marked)
+- Task chaining serializes writes, preventing out-of-order persistence
 - Fire-and-forget loses error propagation - ensure adequate logging
-- Multiple rapid calls may result in out-of-order writes (use `.atomic` option)
 
 ### Pattern: Callback Synchronization for Cross-Component Communication
 
@@ -3179,6 +3193,49 @@ init() {
 
 **Real usage**: RepeatMode migration in MacAmp v0.7.9
 
+### Migrating from Task.detached to @concurrent (Swift 6.2)
+
+**When to migrate**: Any use of `Task.detached` for running work off the calling actor's executor
+
+**Why**: Swift 6.2 changed the behavior of nonisolated async functions to inherit the caller's executor by default. `@concurrent` explicitly opts into off-actor execution with structured concurrency, replacing the unstructured `Task.detached` pattern.
+
+**Before**: Unstructured `Task.detached`
+```swift
+// Old pattern: Task.detached for off-actor I/O
+func saveData() {
+    let snapshot = data
+    Task.detached(priority: .utility) {
+        await doWork(snapshot)
+    }
+}
+```
+
+**After**: `@concurrent` static function with Task chaining
+```swift
+// New pattern: @concurrent static func called from structured Task
+func saveData() {
+    let snapshot = data
+    let previousTask = saveTask
+    saveTask = Task {
+        _ = await previousTask?.result  // serialize writes
+        await Self.doWork(snapshot)
+    }
+}
+
+@concurrent
+private static func doWork(_ data: SomeData) async {
+    // Runs off the calling actor's executor
+}
+```
+
+**Key differences**:
+- `@concurrent` provides structured concurrency (the Task is owned and cancellable)
+- Task chaining via `previousTask?.result` serializes writes, preventing out-of-order execution
+- `@concurrent` on a static function is explicit about actor isolation (runs off-actor)
+- No need for `priority:` parameter -- Task inherits caller's priority by default
+
+**Real usage**: `EQPresetStore.swift` (savePresetsToDisk, loadPresetsFromDisk, parseEqfFile)
+
 ### Migrating from Timer to Task.sleep
 
 **Before**: Timer-based updates
@@ -3524,4 +3581,4 @@ When implementing new features, prefer these established patterns. When you disc
 
 ---
 
-*Document Version: 1.7.0 | Last Updated: 2026-02-22*
+*Document Version: 1.9.0 | Last Updated: 2026-03-14*

@@ -2,7 +2,7 @@
 
 > **Purpose:** Single source of truth for cross-task execution status, wave progress, and coordination decisions.
 > **Date:** 2026-02-21
-> **Updated:** 2026-02-22 (T5 Ph1 merged PR #53, Wave 2a complete)
+> **Updated:** 2026-03-14 (Wave 3 complete — T7 PR #57, T8 PR #56 + PR #58 all merged)
 
 ### Quick Reference
 
@@ -18,7 +18,7 @@
 
 ---
 
-## Current Phase: WAVE 3 IN PROGRESS — T7 MERGED, docs update + T8 PR 3 next
+## Current Phase: WAVE 3 COMPLETE — All T7/T8 tasks merged
 
 Wave 2 complete: T5 Phase 1 merged PR #53 (2026-02-22), T3 merged PR #54 (2026-02-22).
 Wave 3 pivoted: T5 Phase 2 MTAudioProcessingTap failed → replaced by T7 (unified-audio-pipeline).
@@ -52,7 +52,7 @@ New task T8 (swift-concurrency-62-cleanup) added as prerequisite for T7.
 | T4 | `lock-free-ring-buffer` | **COMPLETE** (benchmarks deferred) | Wave 1 — done, awaiting PR | None |
 | T5 | `internet-streaming-volume-control` | **Ph1 COMPLETE (merged PR #53)**, Ph2 MTAudioProcessingTap FAILED | Wave 2a — MERGED | Ph2 PIVOTED → new task `unified-audio-pipeline` |
 | T7 | `unified-audio-pipeline` | **COMPLETE** (PR #57 merged + hotfix) | Wave 3b — MERGED | Custom decode pipeline. All V1-V14 verified. Post-merge hotfix for P1/P3/P4. |
-| T8 | `swift-concurrency-62-cleanup` | **PR 1 MERGED (PR #56)**, PR 2 IN REVIEW (PR #58) | Wave 3a (PR 1) + Wave 3c (PR 2) | PR 1: SWIFT_VERSION 6.2 + isolated deinit. PR 2: AudioPlayer isolated deinit + @concurrent. Final concurrency audit: CLEAN. |
+| T8 | `swift-concurrency-62-cleanup` | **COMPLETE** — PR 1 (PR #56) + PR 2 (PR #58) both merged | Wave 3a + 3c — MERGED | Swift 6.2 complete: isolated deinit, @concurrent, zero nonisolated(unsafe), zero Task.detached. |
 | T6 | `swift-testing-modernization` | **COMPLETE** (deferrals noted) | Wave 1 — done, awaiting PR | None |
 
 ---
@@ -84,7 +84,7 @@ New task T8 (swift-concurrency-62-cleanup) added as prerequisite for T7.
 |------|------|--------|--------|-----------|
 | 3a | T8 PR 1 (Swift 6.2 foundation) | `feature/swift-concurrency-62-cleanup` | ✅ MERGED — PR #56 (2026-03-14) | Wave 2 merges (done) |
 | 3b | T7 (Unified Audio Pipeline) | `feature/unified-audio-pipeline` | ✅ MERGED — PR #57 + hotfix | T8 PR 1 merge (done) |
-| 3c | T8 PR 2 (AudioPlayer deinit + @concurrent) | `feature/swift-concurrency-62-cleanup-pr2` | 🔍 IN REVIEW — PR #58 | T7 merge (done) |
+| 3c | T8 PR 2 (AudioPlayer deinit + @concurrent) | `feature/swift-concurrency-62-cleanup-pr2` | ✅ MERGED — PR #58 | T7 merge (done) |
 | 3d | T1 Phase 4 (engine transport) | After 3c | DEFERRED | Engine boundaries stable after T7+T8 |
 
 **Wave 3 execution is strictly sequential:** Each step depends on the previous merge.
@@ -201,17 +201,17 @@ Target (MainWindowFullLayer.body):
 
 | Item | Source | Size | Priority | Blocks Future? |
 |------|--------|------|----------|----------------|
-| T5 Phase 2 MTAudioProcessingTap code — REVERTED | feature/stream-loopback-bridge commit 987b2f3 | N/A | N/A | Code reverted to main. Consumer-side patterns documented in unified-audio-pipeline/plan.md for re-use. |
-| UI dimming un-dim for streams | unified-audio-pipeline plan.md | Small | Part of T7 | Yes — Phase 1.6g changes capability flags to `\|\| audioPlayer.isBridgeActive`. EQ, balance, visualizer controls un-dim automatically when bridge activates. No UI code changes needed — just the flag formula. |
-| HLS streaming support | unified-audio-pipeline Phase 3 | Large | Low | No — 90%+ of internet radio is progressive HTTP. HLS deferred to separate task. |
-| OGG Vorbis support | unified-audio-pipeline Phase 2.4 | Medium | Low | No — most radio is MP3/AAC. May require libvorbis dependency. |
-| os_workgroup integration | unified-audio-pipeline Phase 2.2 | Small | Medium | No — optimization for Apple Silicon under CPU pressure. |
-| macOS 26 passthrough guard | unified-audio-pipeline Phase 2.3 | Small | Low | No — only affects HDMI/optical output devices. |
-| Network auto-reconnect | unified-audio-pipeline Phase 2.1 | Medium | Medium | No — graceful error state sufficient for MVP. |
-| Stream pause audio tail | Post-merge Oracle P2 (deferred) | Small | Low | No — ~0.7s prebuffer plays out after pause. Needs ring buffer flush + resume strategy. |
-| Default MainActor isolation (T8 Phase 5) | swift-concurrency-62-cleanup research.md | Medium | Low | No — removes ~30 @MainActor but adds ~37-41 nonisolated. Questionable ROI. Revisit only if team wants "opt-out" mental model. |
-| Video audio through AVAudioEngine | unified-audio-pipeline/state.md | Medium | Medium | No — video uses AVPlayer (needs MTAudioProcessingTap for audio interception). Separate task. |
-| docs/ folder update for unified pipeline | unified-audio-pipeline/state.md | Medium | Medium | No — 20 files reference stale dual-backend architecture. Post-merge sub-agent scan. |
+| ~~T5 Phase 2 MTAudioProcessingTap code — REVERTED~~ | feature/stream-loopback-bridge commit 987b2f3 | N/A | N/A | **STALE** — Code reverted. Replaced by T7 unified pipeline. No action needed. |
+| ~~UI dimming un-dim for streams~~ | unified-audio-pipeline plan.md | Small | Part of T7 | **STALE** — Completed as part of T7 merge. Capability flags already updated. |
+| HLS streaming support | unified-audio-pipeline Phase 3 | Large | Low | → Sprint S3 task: `hls-streaming-support` |
+| OGG Vorbis support | unified-audio-pipeline Phase 2.4 | Medium | Low | → Sprint S3 task: `ogg-vorbis-support` |
+| os_workgroup integration | unified-audio-pipeline Phase 2.2 | Small | Medium | → Sprint S2 task: `os-workgroup-integration` |
+| macOS 26 passthrough guard | unified-audio-pipeline Phase 2.3 | Small | Low | Remains deferred — only affects HDMI/optical output devices. |
+| Network auto-reconnect | unified-audio-pipeline Phase 2.1 | Medium | HIGH | → Sprint S1 task: `network-auto-reconnect` |
+| Stream pause audio tail | Post-merge Oracle P2 (deferred) | Small | Low | → Sprint S3 task: `stream-pause-tail` |
+| Default MainActor isolation (T8 Phase 5) | swift-concurrency-62-cleanup research.md | Medium | Low | Remains deferred — questionable ROI. |
+| Video audio through AVAudioEngine | unified-audio-pipeline/state.md | Medium | Medium | → Sprint S2 task: `video-audio-engine-routing` |
+| ~~docs/ folder update for unified pipeline~~ | unified-audio-pipeline/state.md | Medium | Medium | **DONE** — All docs updated and verified (2026-03-14). |
 
 ### Manual Testing (Pre-Merge Recommended)
 
@@ -219,17 +219,79 @@ Target (MainWindowFullLayer.body):
 |------|--------|
 | Playlist: visual rendering, track selection, menus, shade, resize, scroll, keyboard | playlist-decomp todo.md 4.4-4.11 |
 
-### Doc Updates Needed (Post-Merge)
+### Doc Updates Needed (Post-Merge) — Initial sweep complete; Oracle review found additional issues, fixes applied 2026-03-14.
 
-| Doc | Update |
-|-----|--------|
-| `docs/MACAMP_ARCHITECTURE_GUIDE.md` | Add EqualizerController.swift + LockFreeRingBuffer.swift to Audio/ listing; note facade pattern |
-| `docs/IMPLEMENTATION_PATTERNS.md` | Document cross-file SwiftUI extension anti-pattern + correct child-view pattern |
-| `docs/PLAYLIST_WINDOW.md` | Update for new PlaylistWindow/ subdirectory |
-| `docs/README.md` | Update test framework (XCTest → Swift Testing, swift-tools-version 6.2) |
-| `tasks/_context/tasks_index.md` | Mark T1 Ph1-3, T2, T4, T6, T5 Ph1 as complete; add T7 unified-audio-pipeline; mark T5 Ph2 as PIVOTED |
-| `docs/MACAMP_ARCHITECTURE_GUIDE.md` | Update Dual Audio Backend section after T7 lands — unified pipeline replaces AVPlayer for streams |
-| `BUILDING_RETRO_MACOS_APPS_SKILL.md` | Add Lesson #27: Unified audio pipeline, custom stream decode, lessons from dual backend dead end |
+All doc updates verified complete by sub-agent scan:
+- `docs/MACAMP_ARCHITECTURE_GUIDE.md` — ✅ Unified pipeline §4 + §9, EqualizerController listed
+- `docs/IMPLEMENTATION_PATTERNS.md` — ✅ 3 audio patterns + stream bridge lifecycle
+- `docs/PLAYLIST_WINDOW.md` — ✅ PlaylistWindow/ subdirectory referenced
+- `docs/README.md` — ✅ Swift Testing + swift-tools-version 6.2
+- `tasks/_context/tasks_index.md` — ✅ T7 + T8 added, statuses updated
+- `BUILDING_RETRO_MACOS_APPS_SKILL.md` — ✅ Lesson #27 present
+
+---
+
+## Sprint Plan (Post-Wave 3)
+
+> **Naming:** "Sprints" (S1-S3) to differentiate from Waves 1-3.
+> **Created:** 2026-03-14
+> **Context:** All Wave 1-3 work complete. These Sprints organize the remaining deferred items plus new feature requests.
+
+### Sprint S1: HIGH Priority — Infrastructure + Stability
+
+| Task Folder | Description | Size | Status | Dependency |
+|-------------|-------------|------|--------|------------|
+| `spm-multiple-producers-fix` | Fix SwiftPM "multiple producers" blocking `swift test` CLI | Small-Medium | PLANNED | None (independent) |
+| `audioplayer-decomposition` Phase 4 | Engine transport extraction (play/pause/stop/seek) from AudioPlayer.swift | Large | UNLOCKED | T7 merged — engine boundaries stable |
+| `network-auto-reconnect` | Auto-reconnect dropped internet radio streams with exponential backoff | Medium | PLANNED | None (independent) |
+| `xcode-butterchurn-webcontent-diagnosis` | Fix Butterchurn/MilkDrop not working in Xcode (signing/entitlements) | Medium | DIAGNOSED | None — diagnosis complete, needs implementation |
+
+**Structure policy overlay:** Use `tasks/swift-project-structure-research/` as the placement-policy reference during S1. Do not run a broad repo restructure during S1. Apply the new ownership model only where S1 tasks already touch files.
+
+### Sprint S0: DOCS FIRST — Documentation Hygiene
+
+| Task Folder | Description | Size | Status | Dependency |
+|-------------|-------------|------|--------|------------|
+| `docs-implementation-patterns-update` | Cross-file SwiftUI anti-pattern + full docs audit for staleness | Small | IN PROGRESS | None — executing first, directly on main |
+
+### Sprint S2: MEDIUM Priority — Features + Polish
+
+| Task Folder | Description | Size | Status | Dependency |
+|-------------|-------------|------|--------|------------|
+| `os-workgroup-integration` | Apple Silicon os_workgroup for audio render thread | Small | PLANNED | None |
+| `video-audio-engine-routing` | Route video audio through AVAudioEngine (MTAudioProcessingTap) | Medium | PLANNED | None |
+| `stream-track-counter` | Track position counter in main window + playlist window for streams | Small-Medium | PLANNED | None |
+| `playlist-list-operations` | NEW LIST, LOAD LIST, SAVE LIST buttons in playlist window | Medium | PLANNED | None |
+| `airplay-integration` | AirPlay output routing + Now Playing integration | Medium | RESEARCH DONE | Awaiting user approval |
+
+### Sprint S3: LOW Priority — Edge Cases + Optimization
+
+| Task Folder | Description | Size | Status | Dependency |
+|-------------|-------------|------|--------|------------|
+| `mainwindow-visualizer-isolation` | SwiftUI recomposition boundary for visualizer during slider drag | Small | PLANNED | None — demoted from Medium: small scope, pre-existing behavior, no functional impact |
+| `stream-pause-tail` | Fix ~0.7s audio tail after pausing stream (ring buffer flush) | Small | PLANNED | None |
+| `hls-streaming-support` | Add HLS protocol to stream decode pipeline | Large | PLANNED | None |
+| `ogg-vorbis-support` | Add OGG Vorbis codec (needs libvorbis or pure Swift decoder) | Medium | PLANNED | None |
+
+### Post-S1 Architecture Follow-Ons (Created, Not Yet Sprinted)
+
+| Task Folder | Description | Size | Status | Dependency |
+|-------------|-------------|------|--------|------------|
+| `windowing-structure-consolidation` | Consolidate generic window infrastructure under the target `Windowing/` ownership model | Medium | PLANNED | Start after Sprint S1 stabilizes |
+| `milkdrop-feature-consolidation` | Consolidate Milkdrop / Butterchurn files and resources under the target `Features/Milkdrop/` ownership model | Medium | PLANNED | Start after Sprint S1 stabilizes |
+
+### Post-S2 Planning Gate
+
+- After Sprint S2, plan dedicated decomposition follow-ons for:
+  - `AudioPlayer.swift`
+  - `SkinManager.swift`
+  - `VisualizerPipeline.swift`
+  - `StreamDecodePipeline.swift`
+  - `WinampEqualizerWindow.swift`
+
+**Total: 16 tracked follow-on tasks (14 currently sprinted + 2 post-S1 architecture follow-ons)**
+**Existing tasks reused: 3 (audioplayer-decomposition, xcode-butterchurn-webcontent-diagnosis, airplay-integration)**
+**New task folders: 12**
 
 ---
 
@@ -250,4 +312,4 @@ Target (MainWindowFullLayer.body):
 |------|--------|
 | `_context/research.md` | Complete (verified, corrections applied) |
 | `_context/plan.md` | Complete (verified, corrections applied) |
-| `_context/state.md` | Active (this file — updated 2026-02-22) |
+| `_context/state.md` | Active (this file — updated 2026-03-14) |
