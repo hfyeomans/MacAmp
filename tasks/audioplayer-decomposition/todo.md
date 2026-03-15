@@ -75,6 +75,8 @@
 ## Phase 4: Engine Transport Extraction (DEFERRED)
 
 - [x] Evaluate if Phases 1-3 bring file below thresholds — **No:** 945 lines, still above 600 warning. Phase 4 deferred.
+- [ ] Keep Phase 4 aligned with the approved `Audio/Playback` ownership model from `swift-project-structure-research`
+- [ ] Avoid broad repo/folder moves as part of Phase 4; keep this a scoped decomposition PR
 - [ ] If needed: create `AudioEngineTransport.swift`
 - [ ] If needed: extract `setupEngine`, `rewireForCurrentFile`, `scheduleFrom`, `startEngineIfNeeded`, `startProgressTimer`
 - [ ] If needed: refactor `play/pause/stop/seek` to use transport controller

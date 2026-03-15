@@ -1,9 +1,9 @@
 # MacAmp Documentation Guide
 
-**Version:** 3.3.0
-**Date:** 2026-01-11
+**Version:** 3.7.0
+**Date:** 2026-03-14
 **Purpose:** Master index and navigation guide for all MacAmp documentation
-**Total Documentation:** 19,428 lines across 20 current docs + 23 archived docs
+**Total Documentation:** 19,420 active lines across 18 current docs + 26 archived docs
 
 ---
 
@@ -26,7 +26,7 @@
 
 ## Executive Summary
 
-The MacAmp documentation system consists of **20 active technical documents** (19,105 lines) providing comprehensive coverage of a pixel-perfect Winamp 2.x recreation for macOS. Documentation spans from high-level architecture to implementation details, window management systems, video playback, visualization windows, build processes, and skin system specifications.
+The MacAmp documentation system consists of **18 active technical documents** (19,420 lines) providing comprehensive coverage of a pixel-perfect Winamp 2.x recreation for macOS. Documentation spans from high-level architecture to implementation details, window management systems, video playback, visualization windows, build processes, and skin system specifications.
 
 ### Documentation Purpose
 
@@ -112,11 +112,11 @@ xcodebuild test -scheme MacAmpApp -destination 'platform=macOS'
 
 ## Complete Documentation Inventory
 
-### 🏗️ Architecture & Design (12 documents, 14,200 lines)
+### 🏗️ Architecture & Design (12 documents, 16,377 lines)
 
 #### **[MACAMP_ARCHITECTURE_GUIDE.md](MACAMP_ARCHITECTURE_GUIDE.md)** ⭐
-- **Size**: 145KB, 4,555 lines
-- **Last Updated**: 2026-01-11
+- **Size**: 168KB, 5,206 lines
+- **Last Updated**: 2026-03-14
 - **Status**: ✅ AUTHORITATIVE
 - **Purpose**: Complete architectural reference for MacAmp
 - **Key Sections**:
@@ -133,8 +133,8 @@ xcodebuild test -scheme MacAmpApp -destination 'platform=macOS'
 - **Quality**: ⭐⭐⭐⭐⭐ Authoritative (post-corrections)
 
 #### **[IMPLEMENTATION_PATTERNS.md](IMPLEMENTATION_PATTERNS.md)** ⭐
-- **Size**: 74KB, 2,327 lines
-- **Last Updated**: 2026-01-11
+- **Size**: 115KB, 3,584 lines
+- **Last Updated**: 2026-03-14
 - **Status**: ✅ AUTHORITATIVE
 - **Purpose**: Practical code patterns and best practices
 - **Key Sections**:
@@ -151,7 +151,7 @@ xcodebuild test -scheme MacAmpApp -destination 'platform=macOS'
 - **Quality**: ⭐⭐⭐⭐⭐ Authoritative
 
 #### **[SPRITE_SYSTEM_COMPLETE.md](SPRITE_SYSTEM_COMPLETE.md)** ⭐
-- **Size**: 25KB, 814 lines
+- **Size**: 25KB, 728 lines
 - **Last Updated**: 2025-11-01
 - **Status**: ✅ AUTHORITATIVE
 - **Purpose**: Complete reference for semantic sprite resolution system
@@ -167,7 +167,7 @@ xcodebuild test -scheme MacAmpApp -destination 'platform=macOS'
 - **Quality**: ⭐⭐⭐⭐⭐ Authoritative
 
 #### **[MULTI_WINDOW_ARCHITECTURE.md](MULTI_WINDOW_ARCHITECTURE.md)** ⭐
-- **Size**: 43KB, 1,383 lines
+- **Size**: 43KB, 1,382 lines
 - **Last Updated**: 2026-02-09
 - **Status**: ✅ PRODUCTION
 - **Purpose**: Complete multi-window system design and implementation
@@ -206,8 +206,8 @@ xcodebuild test -scheme MacAmpApp -destination 'platform=macOS'
 - **Quality**: ⭐⭐⭐⭐⭐ Authoritative
 
 #### **[PLAYLIST_WINDOW.md](PLAYLIST_WINDOW.md)** ⭐ NEW
-- **Size**: 28KB, 860 lines
-- **Last Updated**: 2025-12-16
+- **Size**: 28KB, 882 lines
+- **Last Updated**: February 2026
 - **Status**: ✅ PRODUCTION
 - **Purpose**: Complete playlist window documentation with segment-based resize system
 - **Key Sections**:
@@ -265,7 +265,7 @@ xcodebuild test -scheme MacAmpApp -destination 'platform=macOS'
 - **Quality**: ⭐⭐⭐⭐⭐ Authoritative
 
 #### **[MULTI_WINDOW_QUICK_START.md](MULTI_WINDOW_QUICK_START.md)**
-- **Size**: 10KB, 315 lines
+- **Size**: 10KB, 326 lines
 - **Last Updated**: 2025-11-14
 - **Status**: ✅ CURRENT
 - **Purpose**: Quick reference guide for multi-window implementation
@@ -320,11 +320,11 @@ xcodebuild test -scheme MacAmpApp -destination 'platform=macOS'
 - **Related Docs**: MULTI_WINDOW_ARCHITECTURE.md
 - **Quality**: ⭐⭐⭐⭐ Reference
 
-### 🔨 Build & Distribution (4 documents, 1,310 lines)
+### 🔨 Build & Distribution (4 documents, 1,319 lines)
 
 #### **[RELEASE_BUILD_GUIDE.md](RELEASE_BUILD_GUIDE.md)**
-- **Size**: 11KB, 447 lines
-- **Last Updated**: 2025-10-23
+- **Size**: 11KB, 456 lines
+- **Last Updated**: February 2026
 - **Status**: ✅ CURRENT
 - **Purpose**: Complete guide for building, signing, and notarizing
 - **Quality**: ⭐⭐⭐⭐⭐ Authoritative
@@ -544,6 +544,9 @@ docs/
 │   ├── CODE_SIGNING_FIX_DIAGRAM.md (Visual guide)
 │   └── RELEASE_BUILD_COMPARISON.md (Configurations)
 │
+├── 📁 context/
+│   └── xcode-testing-context.md (Xcode testing reference)
+│
 └── 📦 archive/ (23 historical docs - local only, gitignored)
     ├── Architecture evolution documents
     ├── Superseded implementation attempts
@@ -566,8 +569,9 @@ docs/
 └──────┬───────┘           └──────┬───────┘  └──────┬───────┘
        │                          │                  │
        ├── MACAMP_ARCH...         ├── RELEASE       ├── MULTI_WINDOW_ARCH
-       ├── IMPLEMENTATION         ├── CODE_SIGN     ├── VIDEO_WINDOW
-       └── SPRITE_SYSTEM          └── COMPARISON    └── MILKDROP_WINDOW
+       ├── IMPLEMENTATION         ├── CODE_SIGN     ├── PLAYLIST_WINDOW
+       └── SPRITE_SYSTEM          └── COMPARISON    ├── VIDEO_WINDOW
+                                                    └── MILKDROP_WINDOW
                                                          │
                                                     ┌────┴────┐
                                                     │ Window   │
@@ -669,7 +673,7 @@ Includes:
 | **PlaybackCoordinator callback split** | MACAMP_ARCHITECTURE_GUIDE.md, IMPLEMENTATION_PATTERNS.md | §4.3, §5 Callback Synchronization (PR #49) |
 | **PlaylistController** | MACAMP_ARCHITECTURE_GUIDE.md, IMPLEMENTATION_PATTERNS.md | §4a, §4 Audio Processing Patterns |
 | **Semantic sprites** | SPRITE_SYSTEM_COMPLETE.md | §3 Semantic Enum |
-| **Sine wave diagnostic** | BUILDING_RETRO_MACOS_APPS_SKILL.md | Lesson #27 |
+| **Sine wave diagnostic** | BUILDING_RETRO_MACOS_APPS_SKILL.md (skill file, not in docs/) | Lesson #27 |
 | **Signing workflow** | CODE_SIGNING_FIX_DIAGRAM.md | Full diagram |
 | **Skin compatibility** | WINAMP_SKIN_VARIATIONS.md | Full document |
 | **Skin file structure** | SPRITE_SYSTEM_COMPLETE.md | §7 Skin Structure |
@@ -678,7 +682,7 @@ Includes:
 | **Stream bridge (activateStreamBridge)** | MACAMP_ARCHITECTURE_GUIDE.md | §4 Unified Audio Pipeline |
 | **StreamDecodePipeline** | MACAMP_ARCHITECTURE_GUIDE.md | §9 Internet Radio |
 | **StreamPlayer** | MACAMP_ARCHITECTURE_GUIDE.md | §9.2 StreamPlayer |
-| **Swift 6 patterns** | MACAMP_ARCHITECTURE_GUIDE.md | §10 Swift 6 |
+| **Swift 6.2 patterns** | MACAMP_ARCHITECTURE_GUIDE.md | §10 Swift 6.2 |
 | **SwiftUI techniques** | MACAMP_ARCHITECTURE_GUIDE.md | §7 SwiftUI |
 | **Testing patterns** | IMPLEMENTATION_PATTERNS.md | §7 Testing |
 | **Test plan configurations** | README.md | Test Plan Quick Reference |
@@ -824,30 +828,28 @@ Includes:
 ┌─────────────────────────────────────────────────────────┐
 │ Category               │ Lines  │ Docs │ Coverage      │
 ├───────────────────────┼────────┼──────┼───────────────┤
-│ Architecture & Design  │14,200  │ 12   │ █████████░ 96%│
-│ Build & Distribution   │ 1,310  │  4   │ █████████░ 95%│
+│ Architecture & Design  │16,377  │ 12   │ █████████░ 96%│
+│ Build & Distribution   │ 1,319  │  4   │ █████████░ 95%│
 │ Skin System           │   652  │  1   │ █████████░ 90%│
-│ Navigation & Index     │ 1,001  │  1   │ ██████████100%│
-│ Staging (Refactoring)  │ 1,942  │  2   │ █████████░ 90%│
-│ TOTAL                 │19,105  │ 20   │ █████████░ 95%│
+│ Navigation & Index     │ 1,072  │  1   │ ██████████100%│
+│ TOTAL                 │19,420  │ 18   │ █████████░ 95%│
 └─────────────────────────────────────────────────────────┘
 ```
 
 ### Documentation Health
 
 ```
-Total Active Docs:        20
-Total Archived Docs:      23 (local only)
-Total Lines:             19,105
-Average Doc Size:        955 lines
-Last Full Review:        2026-01-11
-Documentation Version:   3.3.0
-Recent Update:           AudioPlayer decomposition (+1,273 lines)
+Total Active Docs:        18
+Total Archived Docs:      26 (local only)
+Total Lines:             19,420
+Average Doc Size:        1,079 lines
+Last Full Review:        2026-03-14
+Documentation Version:   3.7.0
+Recent Update:           Staleness audit, removed phantom docs (v3.7.0)
 
 Quality Ratings:
-⭐⭐⭐⭐⭐ Authoritative:   10 docs (50%)
-⭐⭐⭐⭐  Reference:        8 docs (40%)
-⭐⭐⭐   Staging:          2 docs (10%)
+⭐⭐⭐⭐⭐ Authoritative:   10 docs (56%)
+⭐⭐⭐⭐  Reference:        8 docs (44%)
 ```
 
 ### Accuracy Assessment
@@ -966,7 +968,7 @@ The following documents have been **archived to docs/archive/** (local only, not
 - ✅ P0_CODE_SIGNING_FIX_SUMMARY.md (early signing work)
 - ✅ line-removal-report.md (code cleanup)
 
-**Total**: 23 archived documents (~3,500 lines) preserved for historical context
+**Total**: 26 archived documents (~9,065 lines) preserved for historical context
 
 ---
 
@@ -975,39 +977,36 @@ The following documents have been **archived to docs/archive/** (local only, not
 ### Current Active Documentation
 
 ```
-20 Core Technical Documents
+18 Core Technical Documents
 ─────────────────────────────
-MACAMP_ARCHITECTURE_GUIDE.md         4,555 lines  (23%) ⭐ UPDATED +737
-IMPLEMENTATION_PATTERNS.md           2,327 lines  (12%) ⭐ UPDATED +536
-MILKDROP_WINDOW.md                   1,623 lines  (8%)
-MULTI_WINDOW_ARCHITECTURE.md         1,383 lines  (7%)  ⭐ UPDATED +323
-VIDEO_WINDOW.md                      1,151 lines  (6%)
-README.md (this file)                1,001 lines  (5%)
-AUDIOPLAYER_REFACTORING_2026_CORRECTED.md  987 lines  (5%)
-AUDIOPLAYER_REFACTORING_2026.md        955 lines  (5%)
-PLAYLIST_WINDOW.md                     860 lines  (5%)
-SPRITE_SYSTEM_COMPLETE.md              814 lines  (4%)
+MACAMP_ARCHITECTURE_GUIDE.md         5,206 lines  (27%) ⭐ UPDATED
+IMPLEMENTATION_PATTERNS.md           3,584 lines  (18%) ⭐ UPDATED
+MILKDROP_WINDOW.md                   1,623 lines  (9%)
+MULTI_WINDOW_ARCHITECTURE.md         1,382 lines  (7%)  ⭐ UPDATED +322
+VIDEO_WINDOW.md                      1,151 lines  (7%)
+README.md (this file)                1,072 lines  (6%)
+PLAYLIST_WINDOW.md                     882 lines  (5%)
+SPRITE_SYSTEM_COMPLETE.md              728 lines  (4%)
 WINAMP_SKIN_VARIATIONS.md              652 lines  (3%)
 WINDOW_FOCUS_ARCHITECTURE.md           599 lines  (3%)
-RELEASE_BUILD_GUIDE.md                 447 lines  (2%)
+RELEASE_BUILD_GUIDE.md                 456 lines  (3%)
 CODE_SIGNING_FIX_DIAGRAM.md            433 lines  (2%)
 README_MULTI_WINDOW.md                 364 lines  (2%)
-MULTI_WINDOW_QUICK_START.md            315 lines  (2%)
-MULTI_WINDOW_RESEARCH_SUMMARY.md       278 lines  (1%)
+MULTI_WINDOW_QUICK_START.md            326 lines  (2%)
+MULTI_WINDOW_RESEARCH_SUMMARY.md       278 lines  (2%)
 CUSTOM_DRAG_FIX.md                     254 lines  (1%)
 RELEASE_BUILD_COMPARISON.md            230 lines  (1%)
 CODE_SIGNING_FIX.md                    200 lines  (1%)
 ─────────────────────────────
-TOTAL:                              19,428 lines
+TOTAL:                              19,420 lines
 ```
 
 ### Documentation by Category
 
-- **Architecture & Design**: 74% (14,523 lines)
-- **Build & Distribution**: 7% (1,310 lines)
+- **Architecture & Design**: 84% (16,377 lines)
+- **Build & Distribution**: 7% (1,319 lines)
 - **Skin System**: 3% (652 lines)
-- **Navigation & Index**: 5% (1,001 lines)
-- **Staging (Refactoring)**: 10% (1,942 lines)
+- **Navigation & Index**: 6% (1,072 lines)
 
 ---
 
@@ -1041,11 +1040,18 @@ For questions or corrections, the documentation was comprehensively reviewed on 
 
 ---
 
-**MacAmp Documentation v3.6.0 | Last Updated: 2026-02-22 | Status: Production Authoritative**
+**MacAmp Documentation v3.7.0 | Last Updated: 2026-03-14 | Status: Production Authoritative**
 
-*Master index for 19,428+ lines of verified technical documentation (20 active docs)*
+*Master index for 19,420+ lines of verified technical documentation (18 active docs)*
 
-**Recent Update (v3.6.0 - 2026-02-22): Wave 1 Completion**
+**Recent Update (v3.7.0 - 2026-03-14): Staleness Audit**
+- Removed 2 phantom doc entries (AUDIOPLAYER_REFACTORING_2026 variants) that no longer exist on disk
+- Updated all line counts, doc counts, and quality metrics to reflect 18 active docs
+- Updated PLAYLIST_WINDOW.md and RELEASE_BUILD_GUIDE.md inventory dates
+- Added docs/context/ subdirectory and PLAYLIST_WINDOW.md to relationship diagram
+- Updated Swift 6 references to Swift 6.2
+
+**Previous Update (v3.6.0 - 2026-02-22): Wave 1 Completion**
 - AudioPlayer decomposition: EqualizerController extracted as standalone controller
 - PlaylistWindow child view decomposition: monolithic view split into 7 focused child structs (~530 → ~230 lines root), `WinampPlaylistWindow+Menus.swift` deleted
 - Lock-free ring buffer: SPSC audio thread buffer using swift-atomics

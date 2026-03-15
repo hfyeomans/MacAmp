@@ -25,20 +25,35 @@
 
 | Task | Purpose | Created | Last Activity | Days Idle | Status |
 |------|---------|---------|---------------|-----------|--------|
-| `swift-concurrency-62-cleanup` | Adopt Swift 6.2 concurrency features: `isolated deinit`, `@concurrent`, default MainActor isolation, `@preconcurrency` audit, DispatchQueue migration | 2026-03-13 | 2026-03-14 | 0 | ✅ PR 1 MERGED (PR #56). PR 2 IN REVIEW (PR #58). Final concurrency audit: CLEAN. |
+| `unified-audio-pipeline` | Replace AVPlayer internet radio with custom URLSession + AudioFileStream + AudioConverter → AVAudioEngine pipeline. ICY metadata, M3U/PLS resolution, stream bridge. | 2026-03-13 | 2026-03-14 | 0 | ✅ COMPLETE — PR #57 merged + hotfix. All V1-V14 verified. Replaces AVPlayer for streams. |
+| `swift-concurrency-62-cleanup` | Adopt Swift 6.2 concurrency features: `isolated deinit`, `@concurrent`, default MainActor isolation, `@preconcurrency` audit, DispatchQueue migration | 2026-03-13 | 2026-03-14 | 0 | ✅ COMPLETE — PR 1 (PR #56) + PR 2 (PR #58) both merged. Zero nonisolated(unsafe), zero Task.detached. |
 | `internet-radio-n1-n6-fixes` | Fix 6 issues (1 HIGH, 2 MEDIUM, 3 LOW) in internet radio streaming infrastructure discovered during Oracle validation | 2026-02-21 | 2026-02-21 | 0 | ✅ COMPLETE — All 6 fixes implemented, Oracle-verified, merged in PR #49 |
 | `mainwindow-layer-decomposition` | Decompose WinampMainWindow from cross-file extension pattern to proper layer subview decomposition with @Observable interaction state object | 2026-02-21 | 2026-02-22 | 0 | ✅ COMPLETE — PR #54 merged. Wave 2b. 4 phases, 3 Oracle reviews, 10 PR comments resolved. 10 files in MainWindow/, old extension deleted. |
 | `playlistwindow-layer-decomposition` | Decompose WinampPlaylistWindow from cross-file extension pattern to proper layer subview decomposition; same architectural pattern as mainwindow task | 2026-02-21 | 2026-02-22 | 0 | ✅ COMPLETE — Wave 1. 4 phases done, Oracle reviewed, PR merged. Extension deleted, 7 child views created. |
 | `swift-testing-modernization` | Migrate all 9 test files (40 tests) from XCTest to Swift Testing framework; bump Package.swift to 6.2; add parameterized tests, tags, time limits | 2026-02-21 | 2026-02-22 | 0 | ✅ COMPLETE — Wave 1. 6 phases done, Oracle reviewed, PR merged. Task.sleep removal deferred. |
-| `audioplayer-decomposition` | Extract EqualizerController from AudioPlayer.swift using facade pattern (Phases 1-3) | 2026-02-07 | 2026-02-22 | 0 | ✅ COMPLETE — Wave 1. Phases 1-3 done (1,070→945 lines), Phase 4 deferred (seek state machine risk). PR merged. |
-| `internet-streaming-volume-control` | Add volume control + EQ capability for internet radio streams; includes Loopback Bridge architecture for Phase 2 | 2026-02-09 | 2026-02-22 | 0 | ✅ Ph1 COMPLETE — Wave 2a. Ph1 merged PR #53. Ph2 (Loopback Bridge) deferred to Wave 3. |
+| `audioplayer-decomposition` | Extract EqualizerController from AudioPlayer.swift using facade pattern (Phases 1-3); Phase 4 engine transport extraction | 2026-02-07 | 2026-03-14 | 0 | ✅ Ph1-3 COMPLETE (PR merged). **Phase 4 UNLOCKED** — Sprint S1 (HIGH). Engine boundaries stable after T7 merge. |
+| `internet-streaming-volume-control` | Add volume control + EQ capability for internet radio streams; includes Loopback Bridge architecture for Phase 2 | 2026-02-09 | 2026-03-14 | 0 | ✅ COMPLETE — Ph1 merged PR #53. Ph2 (Loopback Bridge) SUPERSEDED by T7 unified pipeline (streams now route through AVAudioEngine natively). |
 | `internet-radio-review` | Oracle code review of internet radio streaming infrastructure; produces N1-N6 issue list | 2026-11-01 | 2026-02-21 | 1 | 📄 REFERENCE — Validation complete post-memory-optimization; findings drive `internet-streaming-volume-control` |
 | `memory-cpu-optimization` | Reduce memory usage and CPU overhead; SPSC audio thread, lazy skin loading, peak-memory reduction | 2026-02-14 | 2026-02-14 | 8 | ✅ COMPLETE — All phases verified, committed in PR #48 |
 | `window-coordinator-cleanup` | Clean up `WindowCoordinator.swift` — remove dead code, fix threading, improve structure | 2026-02-09 | 2026-02-09 | 13 | ✅ COMPLETE — Pending manual testing + commit |
 | `window-coordinator-refactor` | Extract `WindowRegistry`, `WindowFramePersistence`, `WindowVisibilityController` from `WindowCoordinator` | 2026-02-09 | 2026-02-09 | 13 | ✅ COMPLETE — All 4 phases committed, production-ready |
 | `window-coordinator-di-migration` | Migrate `WindowCoordinator` to dependency-injection pattern | 2026-02-09 | 2026-02-09 | 13 | 🟡 DEFERRED — Research + plan done; blocked on prerequisite task completion |
 | `lock-free-ring-buffer` | Implement a lock-free SPSC ring buffer for audio thread safety; prerequisite for `internet-streaming-volume-control` Phase 2 | 2026-02-09 | 2026-02-22 | 0 | ✅ COMPLETE — Wave 1. 17 tests (14 unit + 3 concurrency), Oracle reviewed x2, PR merged. Benchmarks deferred. |
-| `airplay-integration` | Add AirPlay audio output routing + Now Playing integration | 2026-02-07 | 2026-02-07 | 12 | 📋 PLANNED — Research complete, Oracle reviewed (8.5/10), awaiting user approval |
+| `airplay-integration` | Add AirPlay audio output routing + Now Playing integration | 2026-02-07 | 2026-03-14 | 0 | 📋 PLANNED — Sprint S2. Research complete, Oracle reviewed (8.5/10), awaiting user approval |
+| `spm-multiple-producers-fix` | Fix SwiftPM "multiple producers" error blocking `swift test` from CLI | 2026-03-14 | 2026-03-14 | 0 | 📋 PLANNED — Sprint S1 (HIGH). Blocks CLI test runs for ALL tasks. |
+| `network-auto-reconnect` | Auto-reconnect dropped internet radio streams with exponential backoff | 2026-03-14 | 2026-03-14 | 0 | 📋 PLANNED — Sprint S1 (HIGH). User-facing reliability. |
+| `xcode-butterchurn-webcontent-diagnosis` | Fix Butterchurn/MilkDrop not working in Xcode (signing/entitlements) | 2026-03-14 | 2026-03-14 | 0 | 📋 PLANNED — Sprint S1 (HIGH). Diagnosis complete; signing/entitlements implementation is next. |
+| `swift-project-structure-research` | Evaluate MacAmp Swift file/project organization and define an approved ownership model plus backlog strategy | 2026-03-14 | 2026-03-14 | 0 | 📄 REFERENCE — Research complete. Approved structure policy for active/future tasks; not a standalone implementation sprint. |
+| `windowing-structure-consolidation` | Consolidate generic window infrastructure under the target `Windowing/` ownership model | 2026-03-14 | 2026-03-14 | 0 | 📋 PLANNED — Post-S1 architecture follow-on. Create source-to-target mapping after Sprint S1 stabilizes. |
+| `milkdrop-feature-consolidation` | Consolidate Milkdrop / Butterchurn files and resources under the target `Features/Milkdrop/` ownership model | 2026-03-14 | 2026-03-14 | 0 | 📋 PLANNED — Post-S1 architecture follow-on. Do not mix with the Xcode runtime fix unless file moves become necessary. |
+| `os-workgroup-integration` | Apple Silicon os_workgroup for audio render thread | 2026-03-14 | 2026-03-14 | 0 | 📋 PLANNED — Sprint S2 (MEDIUM). Performance optimization. |
+| `video-audio-engine-routing` | Route video audio through AVAudioEngine (MTAudioProcessingTap) | 2026-03-14 | 2026-03-14 | 0 | 📋 PLANNED — Sprint S2 (MEDIUM). Unify all audio through engine. |
+| `stream-track-counter` | Track position counter in main window + playlist window for streams | 2026-03-14 | 2026-03-14 | 0 | 📋 PLANNED — Sprint S2 (MEDIUM). Winamp fidelity. |
+| `playlist-list-operations` | NEW LIST, LOAD LIST, SAVE LIST buttons in playlist window | 2026-03-14 | 2026-03-14 | 0 | 📋 PLANNED — Sprint S2 (MEDIUM). Winamp fidelity. |
+| `mainwindow-visualizer-isolation` | SwiftUI recomposition boundary for visualizer during slider drag | 2026-03-14 | 2026-03-14 | 0 | 📋 PLANNED — Sprint S3 (LOW). Performance optimization. |
+| `stream-pause-tail` | Fix ~0.7s audio tail after pausing stream (ring buffer flush) | 2026-03-14 | 2026-03-14 | 0 | 📋 PLANNED — Sprint S3 (LOW). UX polish. |
+| `hls-streaming-support` | Add HLS protocol to stream decode pipeline | 2026-03-14 | 2026-03-14 | 0 | 📋 PLANNED — Sprint S3 (LOW). Edge case coverage. |
+| `ogg-vorbis-support` | Add OGG Vorbis codec to stream decode pipeline | 2026-03-14 | 2026-03-14 | 0 | 📋 PLANNED — Sprint S3 (LOW). Codec coverage. |
 
 ---
 
@@ -163,12 +178,13 @@
 
 ---
 
-## High Priority Actionable Tasks
+## High Priority Actionable Tasks (Sprint S1)
 
-These tasks are ready to act on and have the most impact:
+These are the Sprint S1 HIGH priority tasks, ready to act on:
 
-1. **`mainwindow-layer-decomposition`** — COMPLETE. PR #54 merged. Visualizer isolation deferred as future optimization.
-2. **`internet-streaming-volume-control` Phase 2** — Ph1 merged (PR #53). Ph2 (Loopback Bridge) deferred to Wave 3.
-3. **`airplay-integration`** — Research done, awaiting user approval to begin.
-4. **`oracle-validation-audioplayer-refactor`** — API naming mismatch needs resolution.
-5. **`window-coordinator-cleanup`** — Complete, just needs manual testing + commit.
+1. **`spm-multiple-producers-fix`** — Blocks `swift test` via CLI for ALL tasks. Do first for testability.
+2. **`audioplayer-decomposition` Phase 4** — UNLOCKED by T7. Engine transport extraction, reduces AudioPlayer to <600 lines.
+3. **`network-auto-reconnect`** — Stream resilience for unified pipeline. Medium effort.
+4. **`xcode-butterchurn-webcontent-diagnosis`** — Diagnosis complete, needs signing/entitlements implementation.
+
+**Architecture policy note:** `swift-project-structure-research` is the approved placement-policy reference for Sprint S1. Do not run a big-bang repo restructure during S1.

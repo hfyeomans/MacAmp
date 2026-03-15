@@ -61,6 +61,18 @@ The engine transport extraction (play/pause/stop/seek + engine lifecycle) is def
 
 **Recommendation:** Only pursue Phase 4 if unit tests for the seek state machine are added first.
 
+## Sprint Assignment
+
+Phase 4 UNLOCKED by T7 unified audio pipeline merge (2026-03-14). Assigned to Sprint S1 (HIGH).
+
+## Architecture Alignment Note
+
+Phase 4 does **not** conflict with `swift-project-structure-research` if scoped correctly.
+
+- Treat Phase 4 as the first decomposition step toward the target `Audio/Playback` ownership model.
+- Do **not** combine Phase 4 with a broad folder-move or repo-wide restructure.
+- If new files are created for transport/lifecycle extraction, they should align to the intended `Audio/Playback` boundary rather than introducing new generic utility buckets.
+
 ## Blockers
 
 None.

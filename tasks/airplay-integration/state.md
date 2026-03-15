@@ -3,7 +3,9 @@
 > **Purpose:** Tracks the current state of the AirPlay integration task, including what's been completed, what's in progress, and what's blocked.
 
 **Date:** 2026-02-07
+**Sprint:** S2 (MEDIUM)
 **Status:** Research Complete - Oracle Reviewed (8.5/10) - Awaiting User Approval
+**Note:** Assigned to Sprint S2. Research complete, Oracle reviewed (8.5/10). Ready for implementation pending user approval.
 
 ---
 

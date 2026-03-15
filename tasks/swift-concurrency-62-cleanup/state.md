@@ -10,11 +10,12 @@
 
 ## Current Status
 
-**Phase:** PR 2 complete (PR #58) — awaiting merge
-**Status:** ✅ COMPLETE (pending merge)
-**Branch:** `feature/swift-concurrency-62-cleanup-pr2`
+**Phase:** COMPLETE — all phases merged
+**Status:** ✅ COMPLETE
+**Branch:** `feature/swift-concurrency-62-cleanup-pr2` (merged)
 **Last Updated:** 2026-03-14
 **PR Structure:** Split into PR 1 (pre-pipeline) + PR 2 (post-pipeline)
+**PRs:** PR #56 (PR 1, merged 2026-03-14) + PR #58 (PR 2, merged 2026-03-14)
 
 ---
 

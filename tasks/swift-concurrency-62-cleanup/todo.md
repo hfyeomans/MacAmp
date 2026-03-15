@@ -71,7 +71,7 @@
 - [x] **M6.** Oracle review — clean (1 LOW fixed: overlapping async writes)
 - [x] **M6b.** Swift 6.2 concurrency audit — CLEAN (zero nonisolated(unsafe), zero Task.detached, zero DispatchQueue.main.async)
 - [x] **M7.** Create PR #58 against `main`
-- [ ] **M8.** Merge PR
+- [x] **M8.** Merge PR — squash-merged PR #58 (2026-03-14)
 
 ---
 

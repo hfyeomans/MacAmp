@@ -6,8 +6,8 @@ Fix the Xcode-only Butterchurn / Milkdrop failure without regressing the package
 
 ## Execution Strategy
 
-1. Create a dedicated worktree from `feature/swift-concurrency-62-cleanup`, not from `main`.
-   Reason: the concurrency plan already expects `project.yml` edits, so this avoids an avoidable conflict if the Butterchurn fix also touches signing/build settings.
+1. Create a dedicated worktree from `main`.
+   Reason: the Swift 6.2 cleanup work is complete and merged, so the Butterchurn fix no longer needs to stack on that branch.
 
 2. Validate the signing and entitlements path first.
    - Inspect `MacAmpApp/MacAmp.entitlements`
@@ -27,9 +27,16 @@ Fix the Xcode-only Butterchurn / Milkdrop failure without regressing the package
    - Confirm the Butterchurn assets remain in the app bundle
 
 5. Land the work with a low-conflict merge pattern.
-   - Open the Butterchurn PR against the concurrency branch first
-   - After the concurrency PR merges, rebase the Butterchurn branch onto `main`
-   - Retarget the PR to `main`
+   - Use a focused task branch from `main`
+   - Open a dedicated PR for the Butterchurn fix
+   - Keep feature-consolidation moves out of this PR unless directly required by the runtime fix
+
+## Architecture Alignment Note
+
+- This task should use the approved structure policy as guidance, not as a second objective.
+- Fix signing/runtime/WebKit behavior first.
+- Only begin `Features/Milkdrop` consolidation inside this task if a file move is directly required anyway.
+- Otherwise, defer the actual consolidation work to `milkdrop-feature-consolidation`.
 
 ## Success Criteria
 

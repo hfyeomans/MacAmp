@@ -13,7 +13,12 @@ You need an **Apple Developer Program** membership ($99/year) to:
 
 Sign up at: https://developer.apple.com/programs/
 
-### 2. Developer ID Certificates
+### 2. Build Toolchain
+
+- **Swift 6.2** — the project uses `swift-tools-version: 6.2` and requires Xcode with Swift 6.2 support
+- **XcodeGen** — the Xcode project (`MacAmpApp.xcodeproj`) is generated from `project.yml` and is gitignored. Install with `brew install xcodegen` (v2.38.0+). Run `xcodegen generate` before any build.
+
+### 3. Developer ID Certificates
 
 After enrolling, create your certificates:
 
@@ -73,6 +78,9 @@ This creates a signed, notarization-ready `.app` bundle.
 ### Method 2: Command Line Build
 
 ```bash
+# Generate Xcode project (required — xcodeproj is gitignored)
+xcodegen generate
+
 # Clean previous builds
 xcodebuild clean -project MacAmpApp.xcodeproj -scheme MacAmpApp -configuration Release
 
