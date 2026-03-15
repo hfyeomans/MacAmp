@@ -248,11 +248,11 @@ All doc updates verified complete by sub-agent scan:
 
 **Structure policy overlay:** Use `tasks/swift-project-structure-research/` as the placement-policy reference during S1. Do not run a broad repo restructure during S1. Apply the new ownership model only where S1 tasks already touch files.
 
-### Sprint S0: DOCS FIRST — Documentation Hygiene
+### Sprint S0: DOCS FIRST — Documentation Hygiene (COMPLETE)
 
 | Task Folder | Description | Size | Status | Dependency |
 |-------------|-------------|------|--------|------------|
-| `docs-implementation-patterns-update` | Cross-file SwiftUI anti-pattern + full docs audit for staleness | Small | IN PROGRESS | None — executing first, directly on main |
+| `docs-implementation-patterns-update` | Cross-file SwiftUI anti-pattern + full docs audit for staleness | Small | ✅ COMPLETE — PR #59 merged (2026-03-14) | None |
 
 ### Sprint S2: MEDIUM Priority — Features + Polish
 

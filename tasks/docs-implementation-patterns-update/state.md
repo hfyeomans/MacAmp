@@ -2,16 +2,16 @@
 
 > **Purpose:** Document cross-file SwiftUI extension anti-pattern and correct child-view pattern in IMPLEMENTATION_PATTERNS.md
 > **Created:** 2026-03-14
-> **Sprint:** S2 (MEDIUM) — executing first for docs hygiene
-> **Status:** IN PROGRESS
+> **Sprint:** S0 (DOCS FIRST)
+> **Status:** COMPLETE
 
 ---
 
 ## Current Status
 
-**Phase:** Implementation
-**Status:** IN PROGRESS
-**Last Updated:** 2026-03-14
+**Phase:** Done
+**Status:** COMPLETE — merged in PR #59 (`523bac5`, 2026-03-14)
+**Last Updated:** 2026-03-15
 
 ---
 
