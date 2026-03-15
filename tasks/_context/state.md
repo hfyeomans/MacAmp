@@ -13,8 +13,8 @@
 | Blocking actions | None — all resolved |
 | Waves | 3 |
 | Branches | 6 |
-| PRs | 6 (Wave 1: 3 merged, Wave 2a: PR #53 merged, Wave 2b: PR #54 merged, Wave 3 TBD) |
-| Current wave | Wave 3 NEXT: T8 PR1 (Swift 6.2) → T7 (Pipeline) → T8 PR2 (AudioPlayer deinit) |
+| PRs | 8 (Wave 1: 3 merged, Wave 2a: PR #53 merged, Wave 2b: PR #54 merged, Wave 3: PR #56, PR #57, PR #58 merged) |
+| Current wave | Wave 3 COMPLETE; Sprint S1 planning and follow-on tasks queued |
 
 ---
 
@@ -78,7 +78,7 @@ New task T8 (swift-concurrency-62-cleanup) added as prerequisite for T7.
 
 **Merge strategy:** Two separate PRs. T5 Ph1 merges first; T3 merges after verification.
 
-### Wave 3: Swift 6.2 + Unified Audio Pipeline — SEQUENTIAL
+### Wave 3: Swift 6.2 + Unified Audio Pipeline — COMPLETE
 
 | Step | Task | Branch | Status | Depends On |
 |------|------|--------|--------|-----------|

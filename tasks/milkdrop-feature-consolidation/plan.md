@@ -44,5 +44,8 @@ MacAmpApp/Features/Milkdrop/
 
 - Butterchurn resources still bundle correctly
 - Milkdrop window still renders and loads Butterchurn assets
+- `project.yml` resource declarations still point at the moved Butterchurn asset path
+- `Package.swift` target resources still point at the moved Butterchurn asset path
+- `ButterchurnWebView` bundle/resource lookup is updated if the `Butterchurn/` folder moves
 - Xcode build and packaged build both resolve resources from the new location
 - No feature behavior regressions are introduced by the move

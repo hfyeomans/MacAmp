@@ -25,11 +25,21 @@ In scope:
 - docking geometry/types
 - frame persistence/store
 - visibility/registry/coordinator infrastructure
+- dependency analysis for `WindowCoordinator`, `WindowRegistry`, and adjacent helpers before any move is proposed
 
 Out of scope:
 - feature-specific window views
 - feature-specific chrome
 - runtime behavior changes unrelated to ownership cleanup
+
+## Dependency Analysis Requirement
+
+- Before implementation, map which `WindowCoordinator` and `WindowRegistry` responsibilities are truly generic versus feature-coupled.
+- Identify whether a safe move requires:
+  - leaving some types in their current feature area
+  - extracting a protocol/adapter seam first
+  - splitting generic and feature-specific responsibilities into separate files
+- Reject any move plan that would introduce circular dependencies or force a broad behavior refactor under the guise of structure cleanup.
 
 ## Status
 

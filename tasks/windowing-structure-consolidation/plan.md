@@ -42,6 +42,15 @@ MacAmpApp/Windowing/
 - Do not mix this task with active S1 implementation branches.
 - Avoid introducing behavior changes except where required by the move.
 
+## Open Questions
+
+- `WindowCoordinator` and `WindowRegistry` may still carry feature-specific knowledge that prevents a clean move into a generic `Windowing/` subsystem.
+- The implementation pass must classify each candidate as:
+  - generic and safe to move
+  - generic after extracting a small abstraction
+  - feature-coupled and better left in place until a later refactor
+- Dependency analysis must happen before any file move so this task does not create circular imports or force broad API reshaping during a structure cleanup.
+
 ## Verification
 
 - Project builds after moves and XcodeGen regeneration if needed

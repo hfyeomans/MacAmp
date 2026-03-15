@@ -2568,7 +2568,7 @@ struct DataLoadingView: View {
 
 **Swift 6.2 Relevance**: Uses `@concurrent` static functions with serialized Task chaining, replacing the older `Task.detached` pattern
 
-> **Swift 6.2:** `@concurrent` on a static function tells Swift to run it off the calling actor's executor, replacing `Task.detached`. This provides structured concurrency with clear actor isolation boundaries.
+> **Swift 6.2:** `@concurrent` on a static function tells Swift to run it off the calling actor's executor, replacing `Task.detached` for this kind of off-actor helper. The surrounding `Task {}` call remains unstructured, so ownership and cancellation still need to be managed explicitly.
 
 **Implementation**:
 ```swift
@@ -3197,7 +3197,7 @@ init() {
 
 **When to migrate**: Any use of `Task.detached` for running work off the calling actor's executor
 
-**Why**: Swift 6.2 changed the behavior of nonisolated async functions to inherit the caller's executor by default. `@concurrent` explicitly opts into off-actor execution with structured concurrency, replacing the unstructured `Task.detached` pattern.
+**Why**: Swift 6.2 changed the behavior of nonisolated async functions to inherit the caller's executor by default. `@concurrent` explicitly opts into off-actor execution, replacing the old `Task.detached` escape hatch for this helper pattern while preserving explicit actor boundaries.
 
 **Before**: Unstructured `Task.detached`
 ```swift
@@ -3212,7 +3212,7 @@ func saveData() {
 
 **After**: `@concurrent` static function with Task chaining
 ```swift
-// New pattern: @concurrent static func called from structured Task
+// New pattern: @concurrent static func called from an owned Task chain
 func saveData() {
     let snapshot = data
     let previousTask = saveTask
@@ -3229,7 +3229,7 @@ private static func doWork(_ data: SomeData) async {
 ```
 
 **Key differences**:
-- `@concurrent` provides structured concurrency (the Task is owned and cancellable)
+- `@concurrent` controls executor placement; the surrounding `Task {}` remains unstructured but can still be owned and cancelled by the caller
 - Task chaining via `previousTask?.result` serializes writes, preventing out-of-order execution
 - `@concurrent` on a static function is explicit about actor isolation (runs off-actor)
 - No need for `priority:` parameter -- Task inherits caller's priority by default

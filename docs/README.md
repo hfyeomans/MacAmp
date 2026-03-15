@@ -3,7 +3,7 @@
 **Version:** 3.7.0
 **Date:** 2026-03-14
 **Purpose:** Master index and navigation guide for all MacAmp documentation
-**Total Documentation:** 17,486 lines across 18 current docs + 23 archived docs
+**Total Documentation:** 19,420 active lines across 18 current docs + 26 archived docs
 
 ---
 
@@ -26,7 +26,7 @@
 
 ## Executive Summary
 
-The MacAmp documentation system consists of **18 active technical documents** (17,163 lines) providing comprehensive coverage of a pixel-perfect Winamp 2.x recreation for macOS. Documentation spans from high-level architecture to implementation details, window management systems, video playback, visualization windows, build processes, and skin system specifications.
+The MacAmp documentation system consists of **18 active technical documents** (19,420 lines) providing comprehensive coverage of a pixel-perfect Winamp 2.x recreation for macOS. Documentation spans from high-level architecture to implementation details, window management systems, video playback, visualization windows, build processes, and skin system specifications.
 
 ### Documentation Purpose
 
@@ -112,11 +112,11 @@ xcodebuild test -scheme MacAmpApp -destination 'platform=macOS'
 
 ## Complete Documentation Inventory
 
-### 🏗️ Architecture & Design (12 documents, 14,200 lines)
+### 🏗️ Architecture & Design (12 documents, 16,377 lines)
 
 #### **[MACAMP_ARCHITECTURE_GUIDE.md](MACAMP_ARCHITECTURE_GUIDE.md)** ⭐
-- **Size**: 168KB, 5,189 lines
-- **Last Updated**: 2026-01-11
+- **Size**: 168KB, 5,206 lines
+- **Last Updated**: 2026-03-14
 - **Status**: ✅ AUTHORITATIVE
 - **Purpose**: Complete architectural reference for MacAmp
 - **Key Sections**:
@@ -133,8 +133,8 @@ xcodebuild test -scheme MacAmpApp -destination 'platform=macOS'
 - **Quality**: ⭐⭐⭐⭐⭐ Authoritative (post-corrections)
 
 #### **[IMPLEMENTATION_PATTERNS.md](IMPLEMENTATION_PATTERNS.md)** ⭐
-- **Size**: 115KB, 3,582 lines
-- **Last Updated**: 2026-01-11
+- **Size**: 115KB, 3,584 lines
+- **Last Updated**: 2026-03-14
 - **Status**: ✅ AUTHORITATIVE
 - **Purpose**: Practical code patterns and best practices
 - **Key Sections**:
@@ -151,7 +151,7 @@ xcodebuild test -scheme MacAmpApp -destination 'platform=macOS'
 - **Quality**: ⭐⭐⭐⭐⭐ Authoritative
 
 #### **[SPRITE_SYSTEM_COMPLETE.md](SPRITE_SYSTEM_COMPLETE.md)** ⭐
-- **Size**: 25KB, 814 lines
+- **Size**: 25KB, 728 lines
 - **Last Updated**: 2025-11-01
 - **Status**: ✅ AUTHORITATIVE
 - **Purpose**: Complete reference for semantic sprite resolution system
@@ -167,7 +167,7 @@ xcodebuild test -scheme MacAmpApp -destination 'platform=macOS'
 - **Quality**: ⭐⭐⭐⭐⭐ Authoritative
 
 #### **[MULTI_WINDOW_ARCHITECTURE.md](MULTI_WINDOW_ARCHITECTURE.md)** ⭐
-- **Size**: 43KB, 1,383 lines
+- **Size**: 43KB, 1,382 lines
 - **Last Updated**: 2026-02-09
 - **Status**: ✅ PRODUCTION
 - **Purpose**: Complete multi-window system design and implementation
@@ -265,7 +265,7 @@ xcodebuild test -scheme MacAmpApp -destination 'platform=macOS'
 - **Quality**: ⭐⭐⭐⭐⭐ Authoritative
 
 #### **[MULTI_WINDOW_QUICK_START.md](MULTI_WINDOW_QUICK_START.md)**
-- **Size**: 10KB, 315 lines
+- **Size**: 10KB, 326 lines
 - **Last Updated**: 2025-11-14
 - **Status**: ✅ CURRENT
 - **Purpose**: Quick reference guide for multi-window implementation
@@ -320,7 +320,7 @@ xcodebuild test -scheme MacAmpApp -destination 'platform=macOS'
 - **Related Docs**: MULTI_WINDOW_ARCHITECTURE.md
 - **Quality**: ⭐⭐⭐⭐ Reference
 
-### 🔨 Build & Distribution (4 documents, 1,310 lines)
+### 🔨 Build & Distribution (4 documents, 1,319 lines)
 
 #### **[RELEASE_BUILD_GUIDE.md](RELEASE_BUILD_GUIDE.md)**
 - **Size**: 11KB, 456 lines
@@ -828,11 +828,11 @@ Includes:
 ┌─────────────────────────────────────────────────────────┐
 │ Category               │ Lines  │ Docs │ Coverage      │
 ├───────────────────────┼────────┼──────┼───────────────┤
-│ Architecture & Design  │14,200  │ 12   │ █████████░ 96%│
-│ Build & Distribution   │ 1,310  │  4   │ █████████░ 95%│
+│ Architecture & Design  │16,377  │ 12   │ █████████░ 96%│
+│ Build & Distribution   │ 1,319  │  4   │ █████████░ 95%│
 │ Skin System           │   652  │  1   │ █████████░ 90%│
-│ Navigation & Index     │ 1,001  │  1   │ ██████████100%│
-│ TOTAL                 │17,163  │ 18   │ █████████░ 95%│
+│ Navigation & Index     │ 1,072  │  1   │ ██████████100%│
+│ TOTAL                 │19,420  │ 18   │ █████████░ 95%│
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -840,9 +840,9 @@ Includes:
 
 ```
 Total Active Docs:        18
-Total Archived Docs:      23 (local only)
-Total Lines:             17,163
-Average Doc Size:        954 lines
+Total Archived Docs:      26 (local only)
+Total Lines:             19,420
+Average Doc Size:        1,079 lines
 Last Full Review:        2026-03-14
 Documentation Version:   3.7.0
 Recent Update:           Staleness audit, removed phantom docs (v3.7.0)
@@ -968,7 +968,7 @@ The following documents have been **archived to docs/archive/** (local only, not
 - ✅ P0_CODE_SIGNING_FIX_SUMMARY.md (early signing work)
 - ✅ line-removal-report.md (code cleanup)
 
-**Total**: 23 archived documents (~3,500 lines) preserved for historical context
+**Total**: 26 archived documents (~9,065 lines) preserved for historical context
 
 ---
 
@@ -979,34 +979,34 @@ The following documents have been **archived to docs/archive/** (local only, not
 ```
 18 Core Technical Documents
 ─────────────────────────────
-MACAMP_ARCHITECTURE_GUIDE.md         5,189 lines  (28%) ⭐ UPDATED
-IMPLEMENTATION_PATTERNS.md           3,582 lines  (19%) ⭐ UPDATED
+MACAMP_ARCHITECTURE_GUIDE.md         5,206 lines  (27%) ⭐ UPDATED
+IMPLEMENTATION_PATTERNS.md           3,584 lines  (18%) ⭐ UPDATED
 MILKDROP_WINDOW.md                   1,623 lines  (9%)
-MULTI_WINDOW_ARCHITECTURE.md         1,383 lines  (8%)  ⭐ UPDATED +323
+MULTI_WINDOW_ARCHITECTURE.md         1,382 lines  (7%)  ⭐ UPDATED +322
 VIDEO_WINDOW.md                      1,151 lines  (7%)
 README.md (this file)                1,072 lines  (6%)
 PLAYLIST_WINDOW.md                     882 lines  (5%)
-SPRITE_SYSTEM_COMPLETE.md              814 lines  (5%)
+SPRITE_SYSTEM_COMPLETE.md              728 lines  (4%)
 WINAMP_SKIN_VARIATIONS.md              652 lines  (3%)
 WINDOW_FOCUS_ARCHITECTURE.md           599 lines  (3%)
 RELEASE_BUILD_GUIDE.md                 456 lines  (3%)
 CODE_SIGNING_FIX_DIAGRAM.md            433 lines  (2%)
 README_MULTI_WINDOW.md                 364 lines  (2%)
-MULTI_WINDOW_QUICK_START.md            315 lines  (2%)
+MULTI_WINDOW_QUICK_START.md            326 lines  (2%)
 MULTI_WINDOW_RESEARCH_SUMMARY.md       278 lines  (2%)
 CUSTOM_DRAG_FIX.md                     254 lines  (1%)
 RELEASE_BUILD_COMPARISON.md            230 lines  (1%)
 CODE_SIGNING_FIX.md                    200 lines  (1%)
 ─────────────────────────────
-TOTAL:                              17,486 lines
+TOTAL:                              19,420 lines
 ```
 
 ### Documentation by Category
 
-- **Architecture & Design**: 83% (14,523 lines)
-- **Build & Distribution**: 7% (1,310 lines)
-- **Skin System**: 4% (652 lines)
-- **Navigation & Index**: 6% (1,001 lines)
+- **Architecture & Design**: 84% (16,377 lines)
+- **Build & Distribution**: 7% (1,319 lines)
+- **Skin System**: 3% (652 lines)
+- **Navigation & Index**: 6% (1,072 lines)
 
 ---
 
@@ -1042,7 +1042,7 @@ For questions or corrections, the documentation was comprehensively reviewed on 
 
 **MacAmp Documentation v3.7.0 | Last Updated: 2026-03-14 | Status: Production Authoritative**
 
-*Master index for 17,486+ lines of verified technical documentation (18 active docs)*
+*Master index for 19,420+ lines of verified technical documentation (18 active docs)*
 
 **Recent Update (v3.7.0 - 2026-03-14): Staleness Audit**
 - Removed 2 phantom doc entries (AUDIOPLAYER_REFACTORING_2026 variants) that no longer exist on disk

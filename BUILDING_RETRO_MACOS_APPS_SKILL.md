@@ -433,7 +433,7 @@ MacAmp implements a **webamp-style spectrum analyzer** with balanced frequency d
 // CRITICAL: Use hybrid log-linear scaling (91% log, 9% linear)
 let scale: Float = 0.91
 
-for bar in 0..<maxBars {  // maxBars = 20 (Goertzel algorithm, not FFT bin interpolation)
+for bar in 0..<maxBars {  // maxBars = 20 (hybrid log-linear mapping over FFT bins)
     let normalized = Float(bar) / Float(max(1, maxBars - 1))
 
     // Linear interpolation
