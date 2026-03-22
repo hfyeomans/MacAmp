@@ -258,3 +258,7 @@ None.
 ## Open Questions
 
 None remaining.
+
+## Follow-On Task
+
+Seek extraction is now a dedicated task: `tasks/audioplayer-seek-extraction/` (post-S2 / pre-S3). This task (`audioplayer-decomposition`) is complete — Phase 5 lives in the new task folder.

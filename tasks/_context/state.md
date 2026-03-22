@@ -299,10 +299,11 @@ All doc updates verified complete by sub-agent scan:
 | `visualizerpipeline-decomposition` | Decompose `VisualizerPipeline.swift` (split large file) | Medium | PLANNED | Start after Sprint S2 stabilizes |
 | `streamdecodepipeline-decomposition` | Decompose `StreamDecodePipeline.swift` (split large file) | Medium | PLANNED | Start after Sprint S2 stabilizes |
 | `winamp-equalizer-window-decomposition` | Decompose `WinampEqualizerWindow.swift` (split large file) | Medium | PLANNED | Start after Sprint S2 stabilizes |
+| `audioplayer-seek-extraction` | Extract seek state machine from AudioPlayer.swift (Phase 5 — deferred from S1 per Oracle) | Medium | PLANNED | Start after Sprint S2 stabilizes. Removes last 2 swiftlint suppressions. |
 
-**AudioPlayer note:** `AudioPlayer.swift` remains owned by the existing `audioplayer-decomposition` Phase 4 task and is not a separate post-S2 task folder.
+**AudioPlayer note:** Phase 4 (PR #60, S1) extracted AudioEngineController. The seek state machine remains in AudioPlayer (719 lines, 2 suppressions). `audioplayer-seek-extraction` is now a dedicated post-S2 task to complete the decomposition. The Oracle deferred this from Phase 4 because partial move of the seek state machine across two owners was too risky.
 
-**Decomposition readiness note:** The 4 post-S2 decomposition tasks are backlog-ready (scope, constraints, verification defined) but not implementation-ready. Each task's first step is "produce a responsibility map" — the detailed symbol/method-level extraction tables will be created when S2 stabilizes and the target files have their final shape. This is intentional: S2 tasks (`os-workgroup-integration`, `video-audio-engine-routing`) may modify these files, so premature extraction planning would be wasted.
+**Decomposition readiness note:** The 5 post-S2 decomposition tasks are backlog-ready (scope, constraints, verification defined) but not implementation-ready. Each task's first step is "produce a responsibility map" — the detailed symbol/method-level extraction tables will be created when S2 stabilizes and the target files have their final shape. This is intentional: S2 tasks (`os-workgroup-integration`, `video-audio-engine-routing`) may modify these files, so premature extraction planning would be wasted.
 
 ### Post-S3 Structure Sprint: All Consolidation (D-STRUCTURE decision 2026-03-15)
 
