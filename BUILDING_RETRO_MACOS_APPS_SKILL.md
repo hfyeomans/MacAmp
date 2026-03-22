@@ -6846,7 +6846,7 @@ enum StreamTerminationReason {
 
 #### Pattern 2: Exponential Backoff with Stability Reset
 
-```
+```text
 Attempt 1: wait 1s
 Attempt 2: wait 2s
 Attempt 3: wait 4s
@@ -6864,7 +6864,7 @@ Attempt 10: wait 16s (cap, max attempts reached -- give up)
 
 **CRITICAL:** AVAudioSourceNode captures the ring buffer pointer at activation time. Between reconnect attempts, the entire bridge must be torn down and rebuilt:
 
-```
+```text
 Reconnect sequence:
 1. Pipeline.stop() -- stops URLSession, clears decode context
 2. deactivateStreamBridge() -- disconnects AVAudioSourceNode from engine graph
@@ -7029,7 +7029,7 @@ engineController.onPlaybackEnded = { [weak self] in
 
 Before extracting AudioEngineController, 13 characterization tests were added to AudioPlayer to capture existing behavior:
 
-```
+```text
 Tests added (prerequisite, before extraction):
 - testSeekIDInvalidation
 - testProgressTimerStartStop

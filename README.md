@@ -143,7 +143,7 @@ Open with **Cmd+Shift+E** or click the EQ button.
 
 - **10 Frequency Bands** - Drag sliders to adjust (60Hz to 16kHz)
 - **Preamp** - Overall gain control
-- **ON/OFF** - Toggle EQ processing (local files only, not streams)
+- **ON/OFF** - Toggle EQ processing (works for both local files and internet radio streams)
 - **Presets** - 17 built-in presets (Classical, Rock, Dance, etc.) via Presets button
 
 ### Playlist Window

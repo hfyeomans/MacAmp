@@ -200,7 +200,7 @@ Deployment:               Developer ID signed, notarization-ready
    - Follows same decomposition pattern as PlaylistWindow/ (PR #49 N6)
 
 12. **AudioEngineController Extraction (Phase 4, March 2026)**: Extracted AVAudioEngine graph lifecycle from AudioPlayer
-   - AudioPlayer reduced from 1,143 to 705 lines (-38.3%)
+   - AudioPlayer reduced from 1,143 to 705 lines in this phase (-38.3%; overall reduction from original 1,805 to 705 across all phases)
    - New `AudioEngineController.swift` (413 lines) owns engine setup, node wiring, bridge activation/deactivation
    - AudioPlayer is now a slim facade delegating engine graph concerns to AudioEngineController
    - Component count for AudioPlayer decomposition increases from 5 to 6
