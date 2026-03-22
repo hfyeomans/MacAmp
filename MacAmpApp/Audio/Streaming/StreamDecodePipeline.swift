@@ -34,6 +34,19 @@ final class StreamDecodePipeline {
         case error(String)
     }
 
+    /// Typed reason for stream termination — used by StreamPlayer for reconnect policy.
+    /// Mechanism layer classifies the cause; policy layer decides whether to retry.
+    enum StreamTerminationReason: Sendable {
+        case networkError(String)         // URLSession error — reconnectable
+        case serverClosed                 // Server closed connection — reconnectable
+        case httpClientError(Int)         // 4xx — NOT reconnectable
+        case httpServerError(Int)         // 5xx — reconnectable
+        case decodeError(String)          // Format/codec error — NOT reconnectable
+        case invalidResponse              // Not HTTP — NOT reconnectable
+        case playlistResolutionFailed(String) // M3U/PLS failure — reconnectable (may be DNS)
+        case userStopped                  // Explicit stop() — NOT reconnectable
+    }
+
     private(set) var state: StreamState = .idle
 
     // MARK: - Callbacks (to StreamPlayer)
@@ -41,6 +54,7 @@ final class StreamDecodePipeline {
     var onStateChange: (@MainActor @Sendable (StreamState) -> Void)?
     var onFormatReady: (@MainActor @Sendable (Float64) -> Void)?
     var onMetadata: (@MainActor @Sendable (ICYFramer.ICYMetadata) -> Void)?
+    var onTermination: (@MainActor @Sendable (StreamTerminationReason) -> Void)?
 
     // MARK: - Ring Buffer (shared with AudioPlayer's AVAudioSourceNode)
 
@@ -67,6 +81,9 @@ final class StreamDecodePipeline {
 
     private var formatReadyFired: Bool = false
 
+    /// Set to true when stop() is called by the user (vs pipeline error/server close).
+    /// Checked in handleStreamComplete to classify the termination reason.
+    private var userRequestedStop: Bool = false
 
     // MARK: - Lifecycle
 
@@ -74,6 +91,7 @@ final class StreamDecodePipeline {
         // Teardown previous (also advances generation)
         stopInternal()
 
+        userRequestedStop = false
         generation &+= 1
         let currentGeneration = generation
 
@@ -93,7 +111,9 @@ final class StreamDecodePipeline {
                     self.startDirectStream(url: streamURL, ringBuffer: ringBuffer, generation: currentGeneration)
                 } catch {
                     guard currentGeneration == self.generation else { return }
-                    self.setState(.error("Failed to resolve playlist: \(error.localizedDescription)"))
+                    let message = "Failed to resolve playlist: \(error.localizedDescription)"
+                    self.setState(.error(message))
+                    self.onTermination?(.playlistResolutionFailed(message))
                 }
             }
             return
@@ -130,6 +150,7 @@ final class StreamDecodePipeline {
                     guard let self, gen == self.generation else { return }
                     self.stopInternal()
                     self.setState(.error(message))
+                    self.onTermination?(.decodeError(message))
                     AppLog.error(.audio, "StreamDecodePipeline: Decode error — \(message)")
                 }
             }
@@ -198,8 +219,10 @@ final class StreamDecodePipeline {
     }
 
     func stop() {
+        userRequestedStop = true
         stopInternal()
         setState(.idle)
+        onTermination?(.userStopped)
     }
 
     isolated deinit {
@@ -238,12 +261,19 @@ final class StreamDecodePipeline {
         guard let httpResponse = response as? HTTPURLResponse else {
             stopInternal()
             setState(.error("Invalid HTTP response"))
+            onTermination?(.invalidResponse)
             return
         }
 
         guard (200...299).contains(httpResponse.statusCode) else {
+            let status = httpResponse.statusCode
             stopInternal()
-            setState(.error("HTTP \(httpResponse.statusCode)"))
+            setState(.error("HTTP \(status)"))
+            if (400...499).contains(status) {
+                onTermination?(.httpClientError(status))
+            } else {
+                onTermination?(.httpServerError(status))
+            }
             return
         }
 
@@ -283,29 +313,31 @@ final class StreamDecodePipeline {
     private func handleStreamComplete(error: Error?, generation: UInt64) {
         guard generation == self.generation else { return }
 
-        // Teardown on error/completion (not just state change)
-        let wasError: Bool
-        if let error {
-            if (error as NSError).code == NSURLErrorCancelled {
-                wasError = false  // Normal cancellation from stop()
-            } else {
-                wasError = true
-                AppLog.error(.audio, "StreamDecodePipeline: \(error.localizedDescription)")
-            }
-        } else {
-            wasError = false
+        // If user requested stop, the cancellation is expected — don't fire termination again
+        // (stop() already fired .userStopped)
+        if userRequestedStop {
+            return
         }
 
         stopInternal()
 
-        if wasError {
-            setState(.error("Stream error: \(error!.localizedDescription)"))
-        } else if (error as? NSError)?.code != NSURLErrorCancelled {
-            // Natural stream end (server closed connection)
+        if let error {
+            let nsError = error as NSError
+            if nsError.code == NSURLErrorCancelled {
+                // Cancelled but not by user — likely generation advance from a new start()
+                return
+            }
+
+            let message = "Stream error: \(error.localizedDescription)"
+            setState(.error(message))
+            onTermination?(.networkError(message))
+            AppLog.error(.audio, "StreamDecodePipeline: \(error.localizedDescription)")
+        } else {
+            // Server closed connection (no error, not user-initiated)
             setState(.idle)
-            AppLog.info(.audio, "StreamDecodePipeline: Stream ended")
+            onTermination?(.serverClosed)
+            AppLog.info(.audio, "StreamDecodePipeline: Stream ended (server closed)")
         }
-        // If cancelled, stopInternal already set idle via generation advance
     }
 
     // MARK: - Playlist Resolution (M3U, PLS)
