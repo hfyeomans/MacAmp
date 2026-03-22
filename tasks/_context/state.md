@@ -242,7 +242,7 @@ All doc updates verified complete by sub-agent scan:
 | Task Folder | Description | Size | Status | Dependency |
 |-------------|-------------|------|--------|------------|
 | `spm-multiple-producers-fix` | Fix SwiftPM "multiple producers" blocking `swift test` CLI | Small-Medium | ✅ COMPLETE — resolved by Wave 3 (2026-03-22) | None |
-| `audioplayer-decomposition` Phase 4 | Engine transport extraction (play/pause/stop/seek) from AudioPlayer.swift | Large | UNLOCKED | T7 merged — engine boundaries stable |
+| `audioplayer-decomposition` Phase 4 | Extract AudioEngineController from AudioPlayer.swift | Large | ✅ COMPLETE — PR #60 merged (2026-03-22) | AudioPlayer 1,143→705 lines. New AudioEngineController 413 lines. 53 tests. |
 | `network-auto-reconnect` | Auto-reconnect dropped internet radio streams with exponential backoff | Medium | PLANNED | None (independent) |
 | `xcode-butterchurn-webcontent-diagnosis` | Fix Butterchurn/MilkDrop not working in Xcode (signing/entitlements) | Medium | DIAGNOSED | None — diagnosis complete, needs implementation |
 
