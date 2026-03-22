@@ -20,6 +20,7 @@ Decompose `MacAmpApp/ViewModels/SkinManager.swift` into smaller, clearer units w
 
 - Preserve current skin behavior and fallback semantics.
 - Do not turn this into a full skin-system rewrite.
+- **Decompose in place:** Create new files in `ViewModels/` (current location). Do not move files to target folders — all folder-level consolidation is deferred to the post-S3 Structure Sprint (D-STRUCTURE decision 2026-03-15).
 - Keep feature-owned workflow code separate from truly reusable skin infrastructure.
 - Do not use this task to reintroduce a generic dumping-ground utility layer.
 

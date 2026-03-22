@@ -1,7 +1,7 @@
 # Research: Milkdrop Feature Consolidation
 
 > **Description:** Research task for consolidating Milkdrop / Butterchurn feature files and resources under a dedicated `Features/Milkdrop/` ownership boundary.
-> **Purpose:** Define a safe post-S1 move plan that improves ownership without interfering with the current Xcode runtime fix.
+> **Purpose:** Define a safe move plan that improves ownership without interfering with the current Xcode runtime fix. Deferred to post-S3 Structure Sprint (D-STRUCTURE decision 2026-03-15).
 
 ---
 
@@ -35,4 +35,4 @@ Out of scope:
 
 ## Status
 
-Planned. Post-S1 follow-on.
+DEFERRED to post-S3 Structure Sprint (D-STRUCTURE decision 2026-03-15). Was originally post-S1.

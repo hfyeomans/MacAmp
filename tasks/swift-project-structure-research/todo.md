@@ -16,14 +16,12 @@
 - [x] For `network-auto-reconnect`, keep new work scoped under `Audio/Streaming` and avoid adding new cross-cutting utility files
 - [ ] Avoid introducing new top-level files into `ViewModels` or `Utilities` unless there is a documented exception
 
-## After Sprint S1
+## After Sprint S1 (task folders created, implementation deferred)
 
 - [x] Create a focused implementation task: `windowing-structure-consolidation`
 - [x] Create a focused implementation task: `milkdrop-feature-consolidation`
-- [ ] Create a source-to-target mapping for current files that should move into `Windowing/`
-- [ ] Create a source-to-target mapping for current files that should move into `Features/Milkdrop/`
 
-## After Sprint S2 / Before Sprint S3
+## During Sprints S1-S3 (decomposition only, no file moves)
 
 - [x] Keep `AudioPlayer.swift` follow-on work under the existing `audioplayer-decomposition` Phase 4 task
 - [x] Create a dedicated decomposition task: `skinmanager-decomposition`
@@ -31,9 +29,19 @@
 - [x] Create a dedicated decomposition task: `streamdecodepipeline-decomposition`
 - [x] Create a dedicated decomposition task: `winamp-equalizer-window-decomposition`
 
+## Post-S3 Structure Sprint (all consolidation deferred here per D-STRUCTURE decision 2026-03-15)
+
+- [ ] Create a source-to-target mapping for ALL ownership boundaries (single document)
+- [ ] Execute `windowing-structure-consolidation` — move files into `Windowing/`
+- [ ] Execute `milkdrop-feature-consolidation` — move files into `Features/Milkdrop/`
+- [ ] Create and execute `Features/` consolidation (Video, EQ, Playlist)
+- [ ] Create and execute `Audio/` consolidation (existing files → ownership boundaries)
+- [ ] Create and execute `App/`, `Core/`, `Shared/` consolidation
+- [ ] Update `project.yml`, imports, bundle resource paths, test references
+- [ ] Reorganize tests to mirror source ownership boundaries
+
 ## Later / Optional
 
-- [ ] Reorganize tests to mirror source ownership boundaries
 - [ ] Evaluate whether `Windowing` should become a local package
 - [ ] Evaluate whether `AudioStreamingCore` should become a local package
 - [ ] Evaluate whether `SkinEngine` should become a local package

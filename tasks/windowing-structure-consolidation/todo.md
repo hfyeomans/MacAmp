@@ -1,6 +1,6 @@
 # Todo: Windowing Structure Consolidation
 
-> **Description:** Checklist for preparing and executing the post-S1 windowing ownership cleanup.
+> **Description:** Checklist for preparing and executing the windowing ownership cleanup. Deferred to post-S3 Structure Sprint (D-STRUCTURE decision 2026-03-15).
 > **Purpose:** Keep the work bounded, mechanical where possible, and easy to verify.
 
 ---

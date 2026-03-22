@@ -1,5 +1,7 @@
-# Cross-Task Research: Dependency & Conflict Analysis
+# Cross-Task Research: Dependency & Conflict Analysis (HISTORICAL)
 
+> **Status:** HISTORICAL — All tasks T1-T6 completed, T7-T8 added and completed post-research. T5 Phase 2 pivoted from MTAudioProcessingTap to T7 unified-audio-pipeline. Actual execution diverged from predictions (8 PRs vs 5 expected, sequential merges vs parallel). For current state, see `state.md`.
+>
 > **Purpose:** Documents file-level conflicts, architectural dependencies, and parallelization analysis across 6 planned MacAmp tasks.
 > **Date:** 2026-02-21
 > **Validated by:** Oracle (gpt-5.3-codex, xhigh reasoning) x2 — initial analysis + verification pass

@@ -17,4 +17,5 @@ Planned. Not started.
 ## Key Decision
 
 - This task owns the decomposition of `SkinManager.swift`.
-- It should align to the approved skin ownership model instead of leaving the file stranded under `ViewModels/`.
+- **Decompose in place:** Split the file into smaller pieces within `ViewModels/` (its current location). Do not move files to `Features/Skins/` as part of this task — all folder-level consolidation is deferred to the post-S3 Structure Sprint (D-STRUCTURE decision 2026-03-15).
+- The target `Features/Skins/` ownership model remains the long-term goal, but the actual file moves happen in a separate, dedicated pass after all sprints complete.

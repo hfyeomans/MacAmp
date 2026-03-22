@@ -57,7 +57,7 @@ The engine transport extraction (play/pause/stop/seek + engine lifecycle) is def
 2. **Tight coupling** — `scheduleFrom()`, `seek()`, `play()`, `pause()`, `stop()` all share mutable state
 3. **Completion handler wiring** — `scheduleFrom` uses `seekID` matching to ignore stale completions
 4. **Timing-sensitive guards** — Multiple `Task.sleep` delays coordinate guard clearing
-5. **Cost/benefit** — 945 lines is above 600 warning but well below 1,200 error
+5. **Cost/benefit** — At Phase 1-3 completion: 945 lines. After T7+T8 (stream handling + concurrency): **1,143 lines** (current). Now above the 600-line warning and approaching the 1,200-line error threshold.
 
 **Recommendation:** Only pursue Phase 4 if unit tests for the seek state machine are added first.
 
@@ -65,13 +65,15 @@ The engine transport extraction (play/pause/stop/seek + engine lifecycle) is def
 
 Phase 4 UNLOCKED by T7 unified audio pipeline merge (2026-03-14). Assigned to Sprint S1 (HIGH).
 
+**Line count update (2026-03-15):** AudioPlayer.swift grew from 945 → 1,143 lines after T7 (unified-audio-pipeline, PR #57) added stream source node handling and T8 (Swift 6.2, PR #58) added isolated deinit + @concurrent changes. Phase 4 extraction is now more urgent (closer to 1,200-line threshold) and the extraction surface is larger.
+
 ## Architecture Alignment Note
 
 Phase 4 does **not** conflict with `swift-project-structure-research` if scoped correctly.
 
-- Treat Phase 4 as the first decomposition step toward the target `Audio/Playback` ownership model.
+- Decompose in place: extract new files into `Audio/` (where AudioPlayer.swift already lives). Do not move to target folders during S1 — all folder-level consolidation is deferred to the post-S3 Structure Sprint (D-STRUCTURE decision 2026-03-15).
 - Do **not** combine Phase 4 with a broad folder-move or repo-wide restructure.
-- If new files are created for transport/lifecycle extraction, they should align to the intended `Audio/Playback` boundary rather than introducing new generic utility buckets.
+- If new files are created for transport/lifecycle extraction, keep them in `Audio/` alongside AudioPlayer.swift. The eventual move to `Audio/Playback/` happens in the post-S3 Structure Sprint.
 
 ## Blockers
 

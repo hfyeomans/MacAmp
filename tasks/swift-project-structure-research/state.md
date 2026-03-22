@@ -45,8 +45,23 @@ Research complete. Policy approved. Backlog shaping complete.
 
 - The target ownership model is approved.
 - This task is the structure policy reference for Sprint S1.
-- Two focused follow-on tasks will carry the first real source-tree consolidations after Sprint S1:
-  - `windowing-structure-consolidation`
-  - `milkdrop-feature-consolidation`
 - Large-file decomposition follow-ons are now explicitly represented as post-S2 / pre-S3 tasks rather than a vague planning gate.
 - `AudioPlayer.swift` remains covered by the existing `audioplayer-decomposition` task; the other large files now have their own task folders.
+
+### D-STRUCTURE: All file-move consolidation deferred to post-S3 Structure Sprint (2026-03-15)
+
+**Decision:** All folder-structure consolidation work (file moves into `Features/`, `Audio/`, `Windowing/`, `Core/`, `Shared/`, `App/`) is deferred to a single dedicated "Structure Sprint" after S3 completes. This replaces the previous plan of weaving consolidation incrementally through post-S1 and post-S2 phases.
+
+**What stays in S1-S3:**
+
+- Placement policy remains active — new files go to the right place, don't make things worse
+- Decomposition tasks (split large files) remain in their current sprint slots (S1: AudioPlayer Ph4, post-S2: SkinManager, VisualizerPipeline, StreamDecodePipeline, WinampEqualizerWindow)
+
+**What moves to post-S3:**
+
+- `windowing-structure-consolidation` — deferred from post-S1 to post-S3
+- `milkdrop-feature-consolidation` — deferred from post-S1 to post-S3
+- Source-to-target mappings for all ownership boundaries
+- Creation of remaining consolidation tasks (Features/ for Video/EQ/Playlist, Audio/ boundaries, App/Core/Shared/)
+
+**Rationale:** The incremental weave through 5 sprint phases was over-engineered and already incomplete. File moves touch `project.yml`, imports, bundle resource paths, and test references — inherently a "stop the world" operation that conflicts with active feature branches. Decomposition first makes files smaller and easier to move. One focused post-S3 pass is lower risk and higher coherence than scattered moves interleaved with feature work.

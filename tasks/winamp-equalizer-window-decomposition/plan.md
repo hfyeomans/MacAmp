@@ -21,7 +21,8 @@ Decompose `MacAmpApp/Views/WinampEqualizerWindow.swift` so the root view becomes
 
 - Preserve current equalizer window behavior and appearance.
 - Do not mix audio-engine changes into this UI decomposition task.
-- Keep extracted views feature-owned rather than pushing them into generic global view buckets.
+- **Decompose in place:** Create new files in `Views/` (current location). Do not move files to `Features/Equalizer/` — all folder-level consolidation is deferred to the post-S3 Structure Sprint (D-STRUCTURE decision 2026-03-15).
+- Keep extracted views colocated rather than pushing them into generic global view buckets.
 
 ## Verification
 

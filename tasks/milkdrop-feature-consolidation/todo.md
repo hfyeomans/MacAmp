@@ -1,6 +1,6 @@
 # Todo: Milkdrop Feature Consolidation
 
-> **Description:** Checklist for preparing and executing the post-S1 Milkdrop / Butterchurn ownership cleanup.
+> **Description:** Checklist for preparing and executing the Milkdrop / Butterchurn ownership cleanup. Deferred to post-S3 Structure Sprint (D-STRUCTURE decision 2026-03-15).
 > **Purpose:** Keep the feature move deliberate, verifiable, and separate from the urgent runtime fix.
 
 ---

@@ -31,4 +31,4 @@ HIGH — user-facing reliability
 
 - This task is one of the Sprint S1 adoption points for the approved structure policy.
 - New code should remain scoped to `Audio/Streaming`.
-- Any broader streaming-folder cleanup should be deferred until after Sprint S1 unless it is directly required by implementation.
+- Any broader streaming-folder cleanup should be deferred to the post-S3 Structure Sprint (D-STRUCTURE decision 2026-03-15) unless directly required by implementation.

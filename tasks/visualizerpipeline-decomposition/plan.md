@@ -20,6 +20,7 @@ Decompose `MacAmpApp/Audio/VisualizerPipeline.swift` so the top-level pipeline f
 
 - Preserve current visualizer and Butterchurn behavior.
 - Preserve audio-thread safety and existing confinement assumptions.
+- **Decompose in place:** Create new files in `Audio/` (current location). Do not move files to `Audio/Visualization/` — all folder-level consolidation is deferred to the post-S3 Structure Sprint (D-STRUCTURE decision 2026-03-15).
 - Avoid introducing churn into unrelated audio files during the split.
 
 ## Verification

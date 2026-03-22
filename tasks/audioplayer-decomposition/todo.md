@@ -72,22 +72,30 @@
 - [x] Cancel stale clear tasks when new preset is applied
 - [x] Build with Thread Sanitizer — **PASSED** (commit `b1d8700`)
 
-## Phase 4: Engine Transport Extraction (DEFERRED)
+## Phase 4: Engine Transport Extraction (UNLOCKED — Sprint S1)
 
-- [x] Evaluate if Phases 1-3 bring file below thresholds — **No:** 945 lines, still above 600 warning. Phase 4 deferred.
-- [ ] Keep Phase 4 aligned with the approved `Audio/Playback` ownership model from `swift-project-structure-research`
-- [ ] Avoid broad repo/folder moves as part of Phase 4; keep this a scoped decomposition PR
+- [x] Evaluate if Phases 1-3 bring file below thresholds — **No:** 945 lines at Ph1-3 completion, now **1,143 lines** post-T7/T8. Approaching 1,200-line error threshold.
+- [ ] **PREREQUISITE:** Add seek state machine unit tests before starting extraction. Current `AudioPlayerStateTests.swift` has only 2 tests (stop + eject) — no coverage of play/pause/seek/scheduleFrom state transitions, seekID matching, or guard interactions.
+- [ ] Re-baseline Phase 4 plan against current 1,143-line file (T7 added stream source node, T8 added isolated deinit + @concurrent)
+- [ ] Decompose in place: new files stay in `Audio/` (current location). Folder moves to `Audio/Playback/` are deferred to post-S3 Structure Sprint (D-STRUCTURE decision 2026-03-15).
 - [ ] If needed: create `AudioEngineTransport.swift`
 - [ ] If needed: extract `setupEngine`, `rewireForCurrentFile`, `scheduleFrom`, `startEngineIfNeeded`, `startProgressTimer`
 - [ ] If needed: refactor `play/pause/stop/seek` to use transport controller
+- [ ] Consider stream bridge methods (`activateStreamBridge`, `deactivateStreamBridge`, `streamSourceNode`) — these were added by T7 and may belong with transport or in a separate stream-bridge extract
 - [ ] Oracle review on seek state machine changes
 
-## Post-Implementation
+## Post-Implementation (Phases 1-3 — COMPLETE)
 
-- [ ] Remove `// swiftlint:disable file_length` if file is under 600 lines (currently 945 — NOT YET, requires Phase 4)
-- [ ] Remove `// swiftlint:disable:this type_body_length` if type body is under 400 lines (currently ~905 — NOT YET, requires Phase 4)
 - [x] Run full swiftlint check: no new warnings — **0 violations**
 - [x] Update state.md with final line counts
 - [x] Update deprecated.md with removed patterns
 - [x] Commits with descriptive messages (7 commits across 3 phases + 4 review rounds)
 - [x] PR #52 created and **merged**
+
+## Post-Implementation (Phase 4 — after Phase 4 lands)
+
+- [ ] Remove `// swiftlint:disable file_length` if file is under 600 lines (currently 1,143 — requires Phase 4)
+- [ ] Remove `// swiftlint:disable:this type_body_length` if type body is under 400 lines (currently ~1,100 — requires Phase 4)
+- [ ] Run full swiftlint check with Thread Sanitizer
+- [ ] Update state.md with post-Phase 4 line counts
+- [ ] Update deprecated.md with any removed patterns

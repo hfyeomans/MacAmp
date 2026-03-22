@@ -1,5 +1,7 @@
-# Cross-Task Execution Plan
+# Cross-Task Execution Plan (HISTORICAL)
 
+> **Status:** HISTORICAL — All Waves 1-3 complete (8 PRs merged as of 2026-03-14). This document preserves the original execution plan for reference. For current sprint planning (S0-S3) and post-Wave-3 work, see `state.md`.
+>
 > **Purpose:** Master plan coordinating 6 MacAmp tasks across waves, worktrees, and Claude instances.
 > Answers: what order, what's parallel, what blocks what, and what invalidates what.
 > **Date:** 2026-02-21

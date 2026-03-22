@@ -3,7 +3,7 @@ import CoreAudio
 
 /// Lock-free single-producer single-consumer ring buffer for real-time audio.
 ///
-/// Writer: MTAudioProcessingTap thread. Reader: AVAudioSourceNode render thread.
+/// Writer: StreamDecodePipeline decode queue. Reader: AVAudioSourceNode render thread.
 /// Both threads are real-time — zero allocations, zero locks, zero ARC on the hot path.
 ///
 /// Storage is a flat interleaved float buffer: `[L0, R0, L1, R1, ...]`.
