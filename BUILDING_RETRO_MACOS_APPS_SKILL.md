@@ -4666,7 +4666,8 @@ Rate 1-10 with specific issues to fix."
 MacAmp/
 ├── MacAmpApp/
 │   ├── Audio/
-│   │   ├── AudioPlayer.swift           # Orchestrator (~1,143 lines)
+│   │   ├── AudioPlayer.swift           # Orchestrator (~705 lines)
+│   │   ├── AudioEngineController.swift # Engine graph + stream bridge (413 lines)
 │   │   ├── EQPresetStore.swift         # EQ preset persistence (~197 lines)
 │   │   ├── MetadataLoader.swift        # Async track metadata (171 lines)
 │   │   ├── PlaylistController.swift    # Navigation & shuffle (297 lines)
@@ -4674,7 +4675,7 @@ MacAmp/
 │   │   ├── VisualizerPipeline.swift    # Audio tap & SPSC buffer (~699 lines)
 │   │   ├── EqualizerController.swift   # EQ band management
 │   │   ├── PlaybackCoordinator.swift   # Multi-backend orchestrator
-│   │   ├── StreamPlayer.swift          # Unified stream playback
+│   │   ├── StreamPlayer.swift          # Unified stream playback (334 lines)
 │   │   ├── LockFreeRingBuffer.swift    # RT-safe audio buffer
 │   │   └── Streaming/                  # Custom stream decode pipeline
 │   │       ├── ICYFramer.swift             # ICY metadata extraction
@@ -4780,6 +4781,9 @@ ls -la ~/Library/Developer/Xcode/DerivedData/MacAmpApp-*/Build/Products/Debug/Ma
 24. **Memory Profiling with LLDB** - Use `footprint`, `leaks`, `heap` CLI tools; subtract sanitizer overhead for actual metrics
 25. **SwiftUI View Decomposition** - Use child view structs + @Observable state, not cross-file extensions; validated by T3 MainWindow decomposition (10 files, PR #54)
 26. **Coordinator Volume Routing** - Fan-out volume to all backends unconditionally; use capability flags with error recovery for UI dimming
+27. **XcodeGen Resource Migration Audit** - Audit ALL "Copy Bundle Resources" entries when migrating to XcodeGen; non-code resources are silently dropped
+28. **Auto-Reconnect with Exponential Backoff** - Typed error classification, 1s/2s/4s/8s/16s cap, bridge teardown between attempts, mechanism vs policy separation
+29. **AudioEngineController Extraction** - Engine graph + stream bridge as single unit; keep seek state machine co-located; characterization tests before extraction
 
 ### This Skill Enables You To
 
@@ -4814,6 +4818,9 @@ ls -la ~/Library/Developer/Xcode/DerivedData/MacAmpApp-*/Build/Products/Debug/Ma
 - ✅ Route volume through coordinator fan-out for multi-backend audio (local + streaming + video)
 - ✅ Implement capability flags with error recovery to dim/enable UI controls based on active backend
 - ✅ Build asymmetric SwiftUI Bindings when source of truth differs from write path
+- ✅ Audit and migrate XcodeGen projects without silently dropping non-code resources
+- ✅ Implement auto-reconnect with exponential backoff for internet radio streams
+- ✅ Extract engine graph management into AudioEngineController with proper state machine boundaries
 
 ### Next Project Improvements
 
@@ -4832,9 +4839,14 @@ When building your next retro macOS app:
 **Document Status:** Production Ready
 **Maintenance:** Update when new patterns/pitfalls discovered
 **Owner:** MacAmp Development Team
-**Last Updated:** 2026-03-14
+**Last Updated:** 2026-03-22
 
 **Recent Additions:**
+- **Sprint S1 Lessons Learned** (Mar 22, 2026) - Three new lessons from Sprint S1:
+  - Lesson #28: XcodeGen Resource Migration Audit -- Butterchurn folder silently dropped during XcodeGen migration; non-code resources not auto-discovered; `type: folder` + `buildPhase: resources` fix; migration audit checklist
+  - Lesson #29: Auto-Reconnect with Exponential Backoff -- typed StreamTerminationReason enum, 1s/2s/4s/8s/16s cap with max 10 attempts, bridge teardown between attempts, mechanism vs policy separation, userRequestedStop flag, stability reset after 5s
+  - Lesson #30: AudioEngineController Extraction -- engine graph + stream bridge as single unit (413 lines), AudioPlayer reduced from ~1,143 to 705 lines, seek state machine kept co-located (Oracle-validated), transport follows node ownership, 13 characterization tests as prerequisite, VBR duration lesson
+  - File structure updated: AudioPlayer.swift (~705 lines), AudioEngineController.swift (413 lines), StreamPlayer.swift (334 lines)
 - **Stale Content Audit** (Mar 14, 2026) - Updated March 2026: Swift 6.2 patterns (isolated deinit, @concurrent), stale dual-backend/DispatchQueue patterns marked as superseded, file structure updated with Streaming/ subdirectory and current line counts.
 - **Coordinator Volume Routing + Capability Flags** (Feb 22, 2026) - Multi-backend volume fan-out and UI capability dimming (Lesson #26)
   - PlaybackCoordinator.setVolume() propagates unconditionally to all backends (audioPlayer, streamPlayer, videoPlaybackController)
@@ -6738,8 +6750,325 @@ private nonisolated static func extractICYMetaInt(
 - [ ] **Oracle review** of full pipeline code
 - [ ] **Swift 6.2 concurrency review** (MainActor, queue confinement, Sendable)
 
+### 28. XcodeGen Resource Migration Audit (March 2026)
+
+**Lesson from:** Butterchurn webcontent diagnosis task (`tasks/xcode-butterchurn-webcontent-diagnosis/`)
+**Context:** Milkdrop window showed "loading" indefinitely after migrating from manual `.xcodeproj` to XcodeGen-generated project. The Butterchurn folder (containing HTML, JS, and WASM resources) was silently dropped.
+
+#### The Problem: Non-Code Resources Silently Dropped
+
+XcodeGen auto-discovers Swift source files within `sources:` paths, but it does NOT auto-discover non-code resources (HTML, JS, CSS, WASM, folders of web content). When migrating from a hand-maintained `.xcodeproj` to XcodeGen, any "Copy Bundle Resources" build phase entries for non-code assets must be explicitly declared in `project.yml`.
+
+**Symptom:** App built successfully, all Swift code compiled, tests passed -- but Butterchurn visualizer showed "loading" forever because the web content folder was missing from the app bundle.
+
+**Root cause:** The manual `.xcodeproj` had a folder reference for `Butterchurn/` in "Copy Bundle Resources." XcodeGen's `sources:` directive only discovers `.swift` files. The folder was silently excluded from the generated project.
+
+**Why it was hard to catch:**
+- `swift build` / `swift test` use SwiftPM's own resource handling (separate from Xcode build phases), so the issue was invisible in CI
+- The Xcode build succeeded with zero errors and zero warnings
+- The missing resources only manifested at runtime when WKWebView tried to load the bundled HTML
+
+#### The Fix
+
+Declare non-code resource folders explicitly in `project.yml`:
+
+```yaml
+targets:
+  MacAmpApp:
+    sources:
+      - path: MacAmpApp
+    resources:
+      - path: MacAmpApp/Resources/Butterchurn
+        type: folder
+        buildPhase: resources
+```
+
+**`type: folder`** preserves the directory structure in the app bundle (required for web content that references relative paths). **`buildPhase: resources`** ensures the folder is included in "Copy Bundle Resources."
+
+#### Prevention: Migration Audit Checklist
+
+When migrating from manual `.xcodeproj` to XcodeGen:
+
+1. **Before migration:** List ALL "Copy Bundle Resources" entries in the current project:
+   ```bash
+   # Extract resource entries from existing pbxproj
+   grep -A1 'PBXResourcesBuildPhase' MacAmpApp.xcodeproj/project.pbxproj
+   ```
+
+2. **After `xcodegen generate`:** Compare the generated project's resource entries against the baseline. Any missing entries must be added to `project.yml` under `resources:`.
+
+3. **Always verify with a full build + manual app launch.** Do NOT rely on `swift build` or `swift test` -- they use SwiftPM resource handling, not Xcode build phases.
+
+4. **Use `type: folder`** and `buildPhase: resources` for non-code folder resources (web content, asset bundles, data directories).
+
+5. **Consider using XcodeGen from project start** to avoid this class of migration issue entirely. Retroactive migration always risks dropping non-obvious build phase entries.
+
+#### Key Takeaways
+
+1. **XcodeGen only auto-discovers Swift sources**, not non-code resources -- declare them explicitly in `project.yml`
+2. **`swift build`/`swift test` hide resource issues** because SwiftPM has its own resource handling separate from Xcode build phases
+3. **Always verify with XcodeBuildMCP build + manual app launch** after XcodeGen migration
+4. **Audit ALL "Copy Bundle Resources"** entries from the original `.xcodeproj` before deleting it
+5. **Silent failures are the worst failures** -- the build succeeds, tests pass, but the app is broken at runtime
+6. **Starting with XcodeGen** avoids this entire class of migration issue
+
+---
+
+### 29. Auto-Reconnect with Exponential Backoff for Streams (March 2026)
+
+**Lesson from:** Network auto-reconnect task (`tasks/network-auto-reconnect/`)
+**Context:** Network blips (WiFi handoff, brief signal loss, server restart) permanently killed internet radio streams. The user had to manually click play again. Added automatic reconnection with exponential backoff.
+
+#### The Problem: Transient Failures Kill Streams Permanently
+
+A brief network interruption (even 1 second) would terminate the stream with an `NSURLErrorNetworkConnectionLost` error. The pipeline transitioned to `.error` state and stopped. The user saw "Connection lost" and had to manually restart playback -- frustrating for background listening.
+
+#### Pattern 1: Typed Error Classification (StreamTerminationReason)
+
+Use a typed enum to classify stream termination causes rather than string matching on error messages:
+
+```swift
+enum StreamTerminationReason {
+    case userRequestedStop           // User hit stop/pause -- never reconnect
+    case transientNetworkError       // WiFi blip, timeout -- reconnect with backoff
+    case serverClosed                // Server-side disconnect -- reconnect with backoff
+    case terminalError(String)       // DNS failure, bad URL -- never reconnect
+}
+```
+
+**Classification rules:**
+- `NSURLErrorNetworkConnectionLost`, `NSURLErrorTimedOut`, `NSURLErrorNotConnectedToInternet` (when transient) --> transient
+- `NSURLErrorCannotFindHost`, `NSURLErrorUnsupportedURL` --> terminal (no amount of retrying fixes a bad hostname)
+- HTTP 404, 410 --> terminal
+- HTTP 503 --> transient (server overloaded, may recover)
+
+**Key insight: Distinguish user-stop from server-close.** A `userRequestedStop` flag set by `stop()` prevents reconnection when the user intentionally stops playback. Without this, stopping a stream would trigger reconnection attempts.
+
+#### Pattern 2: Exponential Backoff with Stability Reset
+
+```
+Attempt 1: wait 1s
+Attempt 2: wait 2s
+Attempt 3: wait 4s
+Attempt 4: wait 8s
+Attempt 5: wait 16s (cap)
+...
+Attempt 10: wait 16s (cap, max attempts reached -- give up)
+```
+
+**Stability reset:** After 5 seconds of stable playback (receiving audio data continuously), reset the attempt counter to 0. This means a stream that recovers and plays for 5+ seconds gets a full fresh set of retry attempts if it drops again later.
+
+**Cap and max:** 16-second maximum delay prevents absurdly long waits. 10 maximum attempts prevents infinite retry loops against a permanently dead server.
+
+#### Pattern 3: Bridge Teardown Between Attempts
+
+**CRITICAL:** AVAudioSourceNode captures the ring buffer pointer at activation time. Between reconnect attempts, the entire bridge must be torn down and rebuilt:
+
+```
+Reconnect sequence:
+1. Pipeline.stop() -- stops URLSession, clears decode context
+2. deactivateStreamBridge() -- disconnects AVAudioSourceNode from engine graph
+3. Wait (exponential backoff)
+4. Pipeline.start() -- new URLSession, new decode context
+5. activateStreamBridge() -- new AVAudioSourceNode connected to engine
+```
+
+Without step 2, the old AVAudioSourceNode reads from the old ring buffer position, producing silence or corruption when the new stream starts writing from position 0.
+
+#### Pattern 4: Mechanism vs Policy Separation
+
+The pipeline classifies errors (mechanism), but the player decides whether to retry (policy):
+
+```swift
+// Mechanism: StreamDecodePipeline reports what happened
+pipeline.onTermination = { reason in
+    // Just reports: .transientNetworkError, .serverClosed, etc.
+}
+
+// Policy: StreamPlayer/PlaybackCoordinator decides action
+func handleTermination(_ reason: StreamTerminationReason) {
+    switch reason {
+    case .userRequestedStop:
+        // Do nothing -- user wants it stopped
+    case .transientNetworkError, .serverClosed:
+        scheduleReconnect()  // Policy: retry with backoff
+    case .terminalError(let message):
+        showUserError(message)  // Policy: show friendly error, no retry
+    }
+}
+```
+
+This separation means the pipeline never needs to know about retry logic, and the retry policy can be changed without touching the decode pipeline.
+
+#### Pattern 5: User-Friendly Error Messages
+
+Map raw `NSURLError` codes to messages users can understand:
+
+```swift
+// WRONG: "NSURLErrorDomain error -1003"
+// RIGHT: "Host not found -- check the station URL"
+
+// WRONG: "NSURLErrorNetworkConnectionLost"
+// RIGHT: "Connection lost -- reconnecting..."
+
+// WRONG: "NSURLErrorCannotFindHost"
+// RIGHT: "Station not found -- the URL may be incorrect"
+```
+
+Show "Reconnecting (attempt 3/10)..." during backoff so the user knows the app is actively trying.
+
+#### Key Takeaways
+
+1. **Typed error classification** (`StreamTerminationReason`) over string matching -- exhaustive switch prevents unhandled cases
+2. **Exponential backoff: 1s, 2s, 4s, 8s, 16s cap, max 10 attempts** -- standard pattern, proven reliable
+3. **Bridge must tear down between attempts** -- AVAudioSourceNode captures ring buffer at activation, stale references cause corruption
+4. **Mechanism vs policy separation** -- pipeline classifies errors, player decides retry strategy
+5. **Distinguish user-stop from server-close** -- `userRequestedStop` flag prevents unwanted reconnection
+6. **DNS/bad-URL errors are terminal** -- `NSURLErrorCannotFindHost` will never succeed on retry
+7. **Reset attempt counter after 5s stable playback** -- recovered streams get fresh retry budget
+8. **User-friendly error messages** -- translate raw NSURLError codes to actionable text
+
+---
+
+### 30. AudioEngineController Extraction: Extending the Facade Pattern (March 2026)
+
+**Lesson from:** AudioPlayer decomposition task (`tasks/audioplayer-decomposition/`)
+**Oracle Grade:** gpt-5.3-codex, xhigh -- validated extraction boundaries
+**Context:** AudioPlayer grew to ~1,143 lines after the unified pipeline added stream bridge management. Engine graph wiring, format negotiation, and stream bridge activation/deactivation were extracted into a dedicated controller.
+
+#### The Problem: AudioPlayer Accumulated Engine Graph Management
+
+After the unified audio pipeline (Lesson #27), AudioPlayer contained two distinct responsibilities:
+1. **Playback orchestration** -- seek state machine, progress timer, track lifecycle, playlist coordination
+2. **Engine graph management** -- node connections, format negotiation, stream bridge activate/deactivate, EQ wiring
+
+These responsibilities had different change frequencies (graph wiring changes rarely; playback logic changes often) and different testing profiles (graph wiring needs format-specific tests; playback needs interaction tests).
+
+#### The Extraction: AudioEngineController (413 lines)
+
+AudioEngineController owns the AVAudioEngine graph topology and the stream bridge lifecycle:
+
+```swift
+@MainActor
+final class AudioEngineController {
+    private let audioEngine: AVAudioEngine
+    private let playerNode: AVAudioPlayerNode
+    private let equalizer: EqualizerController
+    private var streamSourceNode: AVAudioSourceNode?
+    private(set) var isBridgeActive = false
+
+    // Engine lifecycle
+    func startEngineIfNeeded() -> Bool
+    func stopEngine()
+
+    // Local file graph wiring
+    func rewireForLocalFile(format: AVAudioFormat)
+
+    // Stream bridge
+    func activateStreamBridge(ringBuffer: LockFreeRingBuffer, format: AVAudioFormat)
+    func deactivateStreamBridge()
+
+    // Callbacks for AudioPlayer
+    var onProgressUpdate: ((Double, Double) -> Void)?
+    var onPlaybackEnded: (() -> Void)?
+    var onBridgeStateChanged: ((Bool) -> Void)?
+}
+```
+
+**AudioPlayer (705 lines)** retains:
+- Seek state machine (`currentSeekID`, `scheduleSegment`, `handleCompletion`)
+- Progress timer management
+- Track lifecycle (load, play, pause, stop, next, previous)
+- Playlist coordination with `PlaybackCoordinator`
+- Volume/balance persistence via `didSet`
+
+#### Key Design Decision: Keep Seek State Machine in AudioPlayer
+
+Oracle review specifically validated this boundary: **do not split state machines across owners.** The seek state machine (`currentSeekID` + `scheduleSegment` + completion handler) must stay in the same type that decides when to seek and what to do on completion. Moving `scheduleSegment` to AudioEngineController while keeping `currentSeekID` in AudioPlayer creates a split-brain state machine -- one type generates IDs, another checks them, and bugs are invisible because they manifest as race conditions, not compile errors.
+
+**Rule:** If a state machine has generate-check-act steps, all three must be in the same owner.
+
+#### Pattern: Transport Follows Node Ownership
+
+`playerNode.play()`, `playerNode.pause()`, and `playerNode.stop()` must be called by the same type that owns `playerNode`. Since AudioEngineController owns the engine graph (including `playerNode`), transport control methods live on AudioEngineController:
+
+```swift
+// AudioEngineController
+func playPlayerNode() { playerNode.play() }
+func pausePlayerNode() { playerNode.pause() }
+func stopPlayerNode() { playerNode.stop() }
+func scheduleSegment(file: AVAudioFile, from: AVAudioFramePosition,
+                     count: AVAudioFrameCount, seekID: UUID)
+```
+
+AudioPlayer calls these through composition rather than reaching into the engine controller's internal nodes.
+
+#### Pattern: Callback Wiring (Extends Lesson #21)
+
+AudioEngineController uses the same callback pattern established in Lesson #21 for VideoPlaybackController:
+
+```swift
+// AudioEngineController defines callbacks
+var onProgressUpdate: ((Double, Double) -> Void)?
+var onPlaybackEnded: (() -> Void)?
+var onBridgeStateChanged: ((Bool) -> Void)?
+
+// AudioPlayer wires callbacks during init
+engineController.onProgressUpdate = { [weak self] time, duration in
+    self?.currentTime = time
+    self?.currentDuration = duration
+    self?.playbackProgress = duration > 0 ? time / duration : 0
+}
+
+engineController.onPlaybackEnded = { [weak self] in
+    self?.handlePlaybackEnded()
+}
+```
+
+#### Characterization Tests: The Prerequisite
+
+Before extracting AudioEngineController, 13 characterization tests were added to AudioPlayer to capture existing behavior:
+
+```
+Tests added (prerequisite, before extraction):
+- testSeekIDInvalidation
+- testProgressTimerStartStop
+- testVolumeDidSetPersistence
+- testBridgeActivationDeactivation
+- testRewireForLocalFileFormat
+- testEngineStartFailureGate
+- ... (8 more)
+```
+
+These tests serve as a safety net: if extraction changes behavior, at least one test fails. Without them, extraction bugs would be invisible until manual testing.
+
+**Rule from Lesson #13 applies:** Characterization tests BEFORE extraction, not after. Writing tests after extraction risks encoding the new (potentially wrong) behavior instead of the old (known correct) behavior.
+
+#### VBR Lesson: Engine File Duration is Authoritative
+
+During extraction, a subtle bug was discovered: for variable bitrate (VBR) files, the metadata duration (from ID3 tags) can differ significantly from the engine file duration (computed from actual sample count / sample rate). The engine duration is always authoritative:
+
+```swift
+// WRONG: Use metadata duration
+let duration = track.duration ?? 0  // ID3 tag says 3:42, actual is 3:38
+
+// CORRECT: Use engine file duration
+let duration = Double(audioFile.length) / audioFile.processingFormat.sampleRate
+```
+
+This matters for seek accuracy -- seeking to 95% of a wrong duration overshoots the actual end, causing premature track-end detection.
+
+#### Key Takeaways
+
+1. **One controller for engine wiring + stream bridge** -- shared format invariants make them a natural unit
+2. **Keep seek state machine in AudioPlayer** -- Oracle: don't split state machines across owners (generate-check-act must be co-located)
+3. **Transport follows node ownership** -- `playerNode.play()`/`.stop()` called by the type that owns the engine graph
+4. **Callback wiring** (`onProgressUpdate`, `onPlaybackEnded`, `onBridgeStateChanged`) -- same pattern as Lesson #21
+5. **Characterization tests BEFORE extraction** -- 13 tests added as prerequisite, captures existing behavior as safety net
+6. **VBR lesson: engine file duration is authoritative**, not metadata duration -- matters for seek accuracy
+
 ---
 
 **Built with ❤️ for retro computing on modern macOS**
 
-*This skill document captures 10+ months of lessons learned building MacAmp, distilled into actionable patterns for building similar retro-styled macOS applications with modern Swift 6.2 patterns. Updated with Unified Audio Pipeline (Mar 2026) — custom stream decode replacing AVPlayer, sine wave diagnostics, ICY metadata framing, AudioConverter lifecycle, engine graph management, and comprehensive debugging methodology. Also includes T3 MainWindow Layer Decomposition (PR #54, Feb 2026), coordinator volume routing and capability flags, SwiftUI view decomposition architecture, memory & CPU optimization with SPSC shared buffer, WindowCoordinator Facade + Composition refactoring, Oracle-driven quality gates, and Swift 6.2 concurrency compliance.*
+*This skill document captures 10+ months of lessons learned building MacAmp, distilled into actionable patterns for building similar retro-styled macOS applications with modern Swift 6.2 patterns. Updated with Sprint S1 lessons (Mar 2026) — XcodeGen resource migration audit, auto-reconnect with exponential backoff for streams, and AudioEngineController extraction extending the facade pattern. Also includes Unified Audio Pipeline (Mar 2026), T3 MainWindow Layer Decomposition (PR #54, Feb 2026), coordinator volume routing and capability flags, SwiftUI view decomposition architecture, memory & CPU optimization with SPSC shared buffer, WindowCoordinator Facade + Composition refactoring, Oracle-driven quality gates, and Swift 6.2 concurrency compliance.*
