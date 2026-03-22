@@ -46,7 +46,7 @@ New task T8 (swift-concurrency-62-cleanup) added as prerequisite for T7.
 
 | ID | Task | Internal Status | Cross-Task Status | Blocker |
 |----|------|----------------|-------------------|---------|
-| T1 | `audioplayer-decomposition` | **Ph1-3 COMPLETE**, Ph4 UNLOCKED for S1 | Wave 1 — done, awaiting PR | swiftlint suppressions remain (1,143 lines post-T7/T8, needs Ph4) |
+| T1 | `audioplayer-decomposition` | **Ph1-4 COMPLETE** (PR #52 + PR #60) | Wave 1 + S1 — MERGED | AudioPlayer 1,143→705 lines. AudioEngineController 413 lines. Suppressions remain (705 > 600 warning). Phase 5 (seek) deferred. |
 | T2 | `playlistwindow-layer-decomposition` | **COMPLETE** | Wave 1 — done, awaiting PR | Manual testing items deferred |
 | T3 | `mainwindow-layer-decomposition` | **COMPLETE** (PR #54 merged) | Wave 2b — MERGED | None |
 | T4 | `lock-free-ring-buffer` | **COMPLETE** (benchmarks deferred) | Wave 1 — done, awaiting PR | None |
@@ -176,8 +176,8 @@ Target (MainWindowFullLayer.body):
 
 | Item | Source | Size | Priority | Blocks Future? |
 |------|--------|------|----------|----------------|
-| T1 Phase 4: Engine transport extraction | audioplayer-decomposition todo.md | Large | HIGH | **UNLOCKED** — T7 merged. Assigned to Sprint S1. AudioPlayer now 1,143 lines (post-T7/T8). Plan needs re-baselining against current file. |
-| T1 swiftlint suppressions (file_length + type_body_length) | audioplayer-decomposition todo.md | N/A | N/A | Blocked by T1 Phase 4. AudioPlayer at 1,143 lines (approaching 1,200-line error threshold). |
+| ~~T1 Phase 4: Engine transport extraction~~ | audioplayer-decomposition todo.md | Large | **DONE** | ✅ COMPLETE — PR #60 merged (2026-03-22). AudioPlayer 1,143→705 lines. AudioEngineController 413 lines. |
+| T1 swiftlint suppressions (file_length + type_body_length) | audioplayer-decomposition todo.md | N/A | N/A | Still needed at 705 lines (above 600 warning). Requires Phase 5 (seek extraction) to remove. |
 | T1 manual verification (EQ bands, presets, auto-EQ, visualizers) | audioplayer-decomposition todo.md (6 items) | Small | Low | No — functional, just not formally verified post-decomposition |
 | Hide Main Window not working | T3 manual testing (pre-existing) | Small | Low | No |
 | T3 Instruments body evaluation profiling | mainwindow-layer-decomposition todo.md | Small | Low | No — performance optimization |

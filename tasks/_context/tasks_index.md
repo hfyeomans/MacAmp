@@ -184,11 +184,11 @@
 
 ## High Priority Actionable Tasks (Sprint S1)
 
-These are the Sprint S1 HIGH priority tasks, ready to act on:
+Sprint S1 status (updated 2026-03-22):
 
-1. **`spm-multiple-producers-fix`** — Blocks `swift test` via CLI for ALL tasks. Do first for testability.
-2. **`audioplayer-decomposition` Phase 4** — UNLOCKED by T7. Engine transport extraction, reduces AudioPlayer to <600 lines.
-3. **`network-auto-reconnect`** — Stream resilience for unified pipeline. Medium effort.
-4. **`xcode-butterchurn-webcontent-diagnosis`** — Diagnosis complete, needs signing/entitlements implementation.
+1. ~~**`spm-multiple-producers-fix`**~~ — ✅ COMPLETE. Resolved by Wave 3 (swift-tools-version 6.2).
+2. ~~**`audioplayer-decomposition` Phase 4**~~ — ✅ COMPLETE. PR #60 merged. AudioPlayer 1,143→705 lines.
+3. ~~**`network-auto-reconnect`**~~ — ✅ COMPLETE. PR #61 merged. Exponential backoff, error classification, user-friendly display.
+4. **`xcode-butterchurn-webcontent-diagnosis`** — NEXT. Diagnosis complete, needs signing/entitlements implementation.
 
 **Architecture policy note:** `swift-project-structure-research` is the approved placement-policy reference for Sprints S1-S3. All file-move consolidation (Windowing/, Features/, Audio/, Core/, Shared/, App/) is deferred to a dedicated post-S3 Structure Sprint per D-STRUCTURE decision (2026-03-15). Decomposition tasks remain in their current sprint slots. See `swift-project-structure-research/state.md` for full decision rationale.

@@ -44,14 +44,15 @@
 - [x] [LOW] Noted: completion-ID defensiveness acceptable (all callers pass non-nil)
 - [x] Commit: `924bc1e` "fix: address Oracle review findings for Phase 4 extraction"
 
-### Step 7: Verification — COMPLETE
+### Step 7: Verification + PR — COMPLETE
 - [x] Line counts: AudioPlayer 705, AudioEngineController 413 (total 1,118)
 - [x] `swift test` passes — 53 tests, 0 failures
 - [x] Facade preserved — all AudioPlayer public API signatures unchanged
-- [ ] Create PR for user review
+- [x] XcodeBuildMCP build + test with Thread Sanitizer — PASSES
+- [x] PR #60 created, user reviewed + manual tested, merged (2026-03-22)
 
 ## Post-Phase 4
 
-- [ ] Remove `// swiftlint:disable file_length` if AudioPlayer under 600 (unlikely without Phase 5)
-- [ ] Remove `// swiftlint:disable:this type_body_length` if type body under 600 (unlikely without Phase 5)
-- [ ] Update shared `_context/state.md` and `_context/tasks_index.md`
+- [ ] Remove `// swiftlint:disable file_length` if AudioPlayer under 600 (requires Phase 5 seek extraction)
+- [ ] Remove `// swiftlint:disable:this type_body_length` if type body under 600 (requires Phase 5 seek extraction)
+- [x] Update shared `_context/state.md` and `_context/tasks_index.md` — done (2026-03-22)
