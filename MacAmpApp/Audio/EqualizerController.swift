@@ -32,7 +32,10 @@ final class EqualizerController {
         }
     }
     var isEqOn: Bool = false {
-        didSet { eqNode.bypass = !isEqOn }
+        didSet {
+            eqNode.bypass = !isEqOn
+            UserDefaults.standard.set(isEqOn, forKey: "isEqOn")
+        }
     }
     var eqAutoEnabled: Bool = false
     var useLogScaleBands: Bool = true
@@ -55,6 +58,10 @@ final class EqualizerController {
 
     init() {
         configureEQ()
+        // Restore EQ on/off state
+        if UserDefaults.standard.object(forKey: "isEqOn") != nil {
+            isEqOn = UserDefaults.standard.bool(forKey: "isEqOn")
+        }
     }
 
     // MARK: - EQ Control Methods
