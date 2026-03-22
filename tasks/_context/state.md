@@ -184,7 +184,7 @@ Target (MainWindowFullLayer.body):
 | PlaylistWindowActions singleton rearchitecture | playlist-decomp depreciated.md | Large | Low | No |
 | Manual selection state sync fix | playlist-decomp depreciated.md | Small | Low | No — blocked by singleton fix |
 | T2 doc updates (IMPLEMENTATION_PATTERNS.md anti-pattern, tasks_index) | playlistwindow-layer-decomposition todo.md (2 items) | Small | Low | No |
-| `spm-multiple-producers-fix` | infra-ring-testing todo.md + lock-free-ring-buffer + swift-testing | Small-Medium | **Medium** | **Yes — blocks `swift test` via CLI for ALL tasks** |
+| ~~`spm-multiple-producers-fix`~~ | infra-ring-testing todo.md + lock-free-ring-buffer + swift-testing | Small-Medium | **RESOLVED** | ~~**Yes — blocks `swift test` via CLI for ALL tasks**~~ Resolved by Wave 3 (swift-tools-version 6.2). CLI tests pass. |
 | `async-test-determinism` (Task.sleep removal from 2 test files) | swift-testing todo.md (8 items) | Medium | Low | No — tests pass but use non-deterministic waits |
 | Swift Testing parameterization improvements | swift-testing todo.md (4 items) | Small | Low | No — code quality |
 | Ring buffer performance benchmarks | lock-free-ring-buffer todo.md (3 items) | Small | Low | No |
@@ -195,7 +195,7 @@ Target (MainWindowFullLayer.body):
 
 **Context (Hide Main Window):** The "Hide Main" menu item (`AppCommands.swift:13`) calls `DockingController.toggleMain()` which only toggles an internal `panes[idx].visible` boolean. This boolean is not wired to actually hide/show the NSWindow. `WindowVisibilityController.hideMain()` exists and calls `registry.mainWindow?.orderOut(nil)` but is never invoked by the toggle path. Pre-existing — not caused by T3 decomposition.
 
-**Context (spm-multiple-producers-fix):** This blocks `swift test` from CLI for ALL tasks. SwiftPM reports "multiple producers" error when building tests. Tests work fine through Xcode. Root cause is SwiftPM target configuration. This should be fixed before any task that needs CLI test runs.
+**Context (spm-multiple-producers-fix):** ✅ RESOLVED (2026-03-22). The error no longer reproduces — resolved by Wave 3 swift-tools-version 6.2 upgrade. `swift test` passes (40 tests, 11 suites). CLI test runs are unblocked.
 
 ### From Wave 3 — Pivot + Deferred Items
 
@@ -241,7 +241,7 @@ All doc updates verified complete by sub-agent scan:
 
 | Task Folder | Description | Size | Status | Dependency |
 |-------------|-------------|------|--------|------------|
-| `spm-multiple-producers-fix` | Fix SwiftPM "multiple producers" blocking `swift test` CLI | Small-Medium | PLANNED | None (independent) |
+| `spm-multiple-producers-fix` | Fix SwiftPM "multiple producers" blocking `swift test` CLI | Small-Medium | ✅ COMPLETE — resolved by Wave 3 (2026-03-22) | None |
 | `audioplayer-decomposition` Phase 4 | Engine transport extraction (play/pause/stop/seek) from AudioPlayer.swift | Large | UNLOCKED | T7 merged — engine boundaries stable |
 | `network-auto-reconnect` | Auto-reconnect dropped internet radio streams with exponential backoff | Medium | PLANNED | None (independent) |
 | `xcode-butterchurn-webcontent-diagnosis` | Fix Butterchurn/MilkDrop not working in Xcode (signing/entitlements) | Medium | DIAGNOSED | None — diagnosis complete, needs implementation |
