@@ -1,7 +1,7 @@
 # Milkdrop Window Implementation Guide
 
-**Document Version**: 2.1.0
-**Last Updated**: 2026-01-06
+**Document Version**: 2.2.0
+**Last Updated**: 2026-03-22
 **Implementation**: Days 7-8 of TASK 2 (milk-drop-video-support) + Butterchurn Integration + Window Resize
 **Status**: ✅ PRODUCTION - Complete with Butterchurn visualization and resizable window
 
@@ -591,12 +591,19 @@ MacAmpApp/Windows/WinampMilkdropWindowController.swift
 // Main view with context menu
 MacAmpApp/Views/WinampMilkdropWindow.swift
 
-// JavaScript resources
-MacAmpApp/Resources/butterchurn/
-├── butterchurn.min.js       # ES module bundle
-├── butterchurnPresets.min.js # Preset library
-├── bridge.js                 # Swift↔JS interface
-└── index.html                # Canvas + initialization
+// JavaScript resources (project root, bundled as folder resource via XcodeGen)
+Butterchurn/
+├── butterchurn.min.js            # ES module bundle
+├── butterchurnPresets.min.js     # Preset library
+├── butterchurnPresetsExtra.min.js # Extended preset library
+├── bridge.js                      # Swift↔JS interface
+└── index.html                     # Canvas + initialization
+
+// XcodeGen configuration (project.yml) for Butterchurn resources:
+//   sources:
+//     - path: Butterchurn
+//       type: folder
+//       buildPhase: resources
 ```
 
 ### 9.3 WKUserScript Injection Strategy
@@ -678,6 +685,13 @@ private func createUserScripts() -> [WKUserScript] {
 │                                                                               │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
+
+**Note (S1 update):** The visualizer tap install/remove lifecycle is now managed by
+`AudioEngineController` (see `MacAmpApp/Audio/AudioEngineController.swift`).
+`AudioPlayer` delegates to `AudioEngineController.installVisualizerTapIfNeeded()` and
+`AudioEngineController.removeVisualizerTapIfNeeded()`, which in turn call through to
+`VisualizerPipeline`. The diagram above shows the logical data flow; the ownership chain
+is `AudioPlayer` -> `AudioEngineController` -> `VisualizerPipeline`.
 
 **Frame Rates:**
 - **AVAudioEngine tap:** 48kHz continuous (2048 samples per buffer)
@@ -1101,6 +1115,29 @@ Test with various skins to ensure GEN sprite compatibility:
 - Drag via titlebar works
 - Close button works
 ```
+
+### 11.5 macOS 26 Tahoe WKWebView Console Errors (Non-Fatal)
+
+On macOS 26 (Tahoe), the WKWebView hosting Butterchurn produces several non-fatal console
+errors during normal operation. These are WebKit/system-level issues unrelated to MacAmp and
+do not affect rendering. Butterchurn visualizations display correctly despite these messages.
+
+**Common console errors observed:**
+
+| Error Source | Message (excerpt) | Impact |
+|---|---|---|
+| pasteboard | `Failed to get or set pasteboard data` | None -- no clipboard use |
+| launchservicesd | `LSApplicationProxy ... requires update` | None -- system service noise |
+| RunningBoard | `Connection to service ... interrupted` | None -- process management noise |
+| Metal | `Shader compilation warning` / `GPU validation` | None -- WebGL shaders compile successfully |
+
+**Root Cause:** WebKit bug [302212](https://bugs.webkit.org/show_bug.cgi?id=302212) -- the
+WebContent process on macOS 26 emits spurious diagnostics for pasteboard access, launch
+services queries, and Metal shader compilation that do not occur on macOS 15 (Sequoia).
+
+**Recommendation:** These errors can be safely ignored. They appear in Xcode's console output
+and `Console.app` but do not affect Butterchurn's WebGL rendering pipeline or audio data
+reception. No code changes are needed.
 
 ---
 
