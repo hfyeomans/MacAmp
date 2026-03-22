@@ -208,7 +208,15 @@ final class StreamPlayer {
 
     private func isReconnectable(_ reason: StreamDecodePipeline.StreamTerminationReason) -> Bool {
         switch reason {
-        case .networkError, .serverClosed, .httpServerError, .playlistResolutionFailed:
+        case .networkError(_, let code):
+            // DNS resolution failure, bad URL — terminal (will never succeed on retry)
+            let terminalCodes = [
+                NSURLErrorCannotFindHost,     // -1003: hostname doesn't exist
+                NSURLErrorUnsupportedURL,     // -1002: malformed URL
+                NSURLErrorBadURL,             // -1000: invalid URL
+            ]
+            return !terminalCodes.contains(code)
+        case .serverClosed, .httpServerError, .playlistResolutionFailed:
             return true
         case .httpClientError, .decodeError, .invalidResponse, .userStopped:
             return false
@@ -293,7 +301,7 @@ final class StreamPlayer {
 extension StreamDecodePipeline.StreamTerminationReason {
     var userMessage: String {
         switch self {
-        case .networkError(let msg): return msg
+        case .networkError(let msg, _): return msg
         case .serverClosed: return "Stream ended (server closed connection)"
         case .httpClientError(let code): return "HTTP error \(code)"
         case .httpServerError(let code): return "Server error \(code)"

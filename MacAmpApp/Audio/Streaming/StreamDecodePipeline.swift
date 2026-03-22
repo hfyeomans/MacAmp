@@ -37,7 +37,7 @@ final class StreamDecodePipeline {
     /// Typed reason for stream termination — used by StreamPlayer for reconnect policy.
     /// Mechanism layer classifies the cause; policy layer decides whether to retry.
     enum StreamTerminationReason: Sendable {
-        case networkError(String)         // URLSession error — reconnectable
+        case networkError(String, Int)     // URLSession error (message + NSURLError code) — reconnectable for transient errors
         case serverClosed                 // Server closed connection — reconnectable
         case httpClientError(Int)         // 4xx — NOT reconnectable
         case httpServerError(Int)         // 5xx — reconnectable
@@ -329,8 +329,9 @@ final class StreamDecodePipeline {
             }
 
             let message = "Stream error: \(error.localizedDescription)"
+            let code = (error as NSError).code
             setState(.error(message))
-            onTermination?(.networkError(message))
+            onTermination?(.networkError(message, code))
             AppLog.error(.audio, "StreamDecodePipeline: \(error.localizedDescription)")
         } else {
             // Server closed connection (no error, not user-initiated)
