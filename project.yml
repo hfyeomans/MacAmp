@@ -37,6 +37,8 @@ targets:
         DEVELOPMENT_TEAM: AC3LGVEJJ8
         SWIFT_VERSION: '6.2'
         PRODUCT_NAME: MacAmp
+        MARKETING_VERSION: '1.2'
+        CURRENT_PROJECT_VERSION: '12'
         ENABLE_HARDENED_RUNTIME: true
         SWIFT_STRICT_CONCURRENCY: complete
       configs:
