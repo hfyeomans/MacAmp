@@ -2,43 +2,7 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- Hardened Runtime Entitlements -->
-	<!-- JIT REQUIRED for WKWebView JavaScript (Butterchurn) -->
 	<key>com.apple.security.cs.allow-jit</key>
 	<true/>
-	<key>com.apple.security.cs.allow-unsigned-executable-memory</key>
-	<true/>
-	<key>com.apple.security.cs.allow-dyld-environment-variables</key>
-	<false/>
-	<key>com.apple.security.cs.disable-library-validation</key>
-	<false/>
-	<key>com.apple.security.cs.disable-executable-page-protection</key>
-	<false/>
-
-	<!-- Audio Device Access -->
-	<key>com.apple.security.device.audio-input</key>
-	<false/>
-
-	<!-- Audio Playback (output device access) -->
-	<key>com.apple.security.device.audio-output</key>
-	<true/>
-
-	<!-- User Selected File Access (for opening music files) -->
-	<key>com.apple.security.files.user-selected.read-only</key>
-	<true/>
-	<key>com.apple.security.files.user-selected.read-write</key>
-	<true/>
-
-	<!-- Network (for streaming, skin downloads, album art, etc.) -->
-	<key>com.apple.security.network.client</key>
-	<true/>
-
-	<!-- Downloads Folder Access (for saving downloaded skins) -->
-	<key>com.apple.security.files.downloads.read-write</key>
-	<true/>
-
-	<!-- Apple Events (for system integration if needed) -->
-	<key>com.apple.security.automation.apple-events</key>
-	<false/>
 </dict>
 </plist>
