@@ -95,9 +95,7 @@ struct ButterchurnWebView: NSViewRepresentable {
         // WKPreferences for JavaScript features
         let wkPrefs = WKPreferences()
         wkPrefs.javaScriptCanOpenWindowsAutomatically = false
-        #if DEBUG
         wkPrefs.setValue(true, forKey: "developerExtrasEnabled")
-        #endif
         config.preferences = wkPrefs
 
         let webView = WKWebView(frame: .zero, configuration: config)
@@ -105,11 +103,9 @@ struct ButterchurnWebView: NSViewRepresentable {
         webView.setValue(false, forKey: "drawsBackground")  // Transparent background
 
         // Enable Web Inspector for debugging (macOS 13.3+)
-        #if DEBUG
         if #available(macOS 13.3, *) {
             webView.isInspectable = true
         }
-        #endif
 
         // Store webView reference in bridge for Swift→JS communication
         bridge.webView = webView

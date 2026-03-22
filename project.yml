@@ -22,6 +22,9 @@ targets:
         excludes:
           - Info.plist
           - MacAmp.entitlements
+      - path: Butterchurn
+        type: folder
+        buildPhase: resources
     resources:
       - path: MacAmpApp/Skins
       - path: MacAmpApp/Assets.xcassets
