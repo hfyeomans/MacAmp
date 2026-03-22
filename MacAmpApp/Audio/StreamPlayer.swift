@@ -15,15 +15,16 @@ import Observation
 /// - MP3 and AAC decoding via AudioToolbox
 /// - ICY metadata extraction (StreamTitle, StreamArtist)
 /// - Buffering state detection with prebuffer threshold
-/// - Error handling for network issues
+/// - Automatic reconnection with exponential backoff on network errors
 ///
 /// **Observable State:**
 /// - `isPlaying` — Playback state
-/// - `isBuffering` — Network buffering / prebuffering state
+/// - `isBuffering` — Network buffering / prebuffering / reconnecting state
+/// - `isReconnecting` — True during reconnect attempts
 /// - `currentStation` — Currently playing station
 /// - `streamTitle` — Live metadata (song title from ICY)
 /// - `streamArtist` — Live metadata (artist name from ICY)
-/// - `error` — Error message if stream fails
+/// - `error` — Error message if stream fails permanently
 ///
 /// **Usage:**
 /// Should be used via PlaybackCoordinator for proper coordination with AudioPlayer.
@@ -34,29 +35,33 @@ final class StreamPlayer {
 
     private(set) var isPlaying: Bool = false
     private(set) var isBuffering: Bool = false
+    private(set) var isReconnecting: Bool = false
     private(set) var currentStation: RadioStation?
     private(set) var streamTitle: String?
     private(set) var streamArtist: String?
     private(set) var error: String?
 
     /// Stream volume (0.0-1.0 linear amplitude).
-    /// With the unified pipeline, volume is applied via AVAudioEngine
-    /// (AudioPlayer.volume didSet propagates to playerNode/streamSourceNode).
-    /// This property is stored for PlaybackCoordinator.setVolume() propagation.
     var volume: Float = 0.75
 
     /// Stream balance (-1.0 left to 1.0 right).
-    /// With the unified pipeline, balance is applied via AVAudioEngine
-    /// (AudioPlayer.balance didSet propagates to playerNode/streamSourceNode.pan).
     var balance: Float = 0.0
 
     // MARK: - Pipeline
 
     private let pipeline = StreamDecodePipeline()
 
-    /// The ring buffer shared between the pipeline (producer) and AudioPlayer's
-    /// AVAudioSourceNode (consumer). Created per-stream, passed to pipeline on start.
     @ObservationIgnored private var ringBuffer: LockFreeRingBuffer?
+
+    // MARK: - Reconnect State
+
+    @ObservationIgnored private var reconnectTask: Task<Void, Never>?
+    @ObservationIgnored private var reconnectAttempt: Int = 0
+    @ObservationIgnored private var wasActivelyPlaying: Bool = false
+    @ObservationIgnored private var playbackStableTask: Task<Void, Never>?
+
+    private static let maxReconnectAttempts = 10
+    private static let maxBackoffSeconds: Double = 16.0
 
     // MARK: - Initialization
 
@@ -65,28 +70,27 @@ final class StreamPlayer {
     }
 
     isolated deinit {
+        reconnectTask?.cancel()
+        playbackStableTask?.cancel()
         pipeline.stop()
     }
 
     // MARK: - Playback Control
 
-    /// Play a radio station (for favorites menu).
     func play(station: RadioStation) async {
+        cancelReconnect()
+        wasActivelyPlaying = false
         currentStation = station
         error = nil
         streamTitle = nil
         streamArtist = nil
 
-        // Create a fresh ring buffer for this stream
-        // 32768 frames = ~743ms at 44100Hz — absorbs network jitter and decode latency
         let rb = LockFreeRingBuffer(capacity: 32768, channelCount: 2)
         ringBuffer = rb
 
         pipeline.start(url: station.streamURL, ringBuffer: rb)
     }
 
-    /// Play a stream from URL (for playlist tracks).
-    /// Preserves Track metadata (title/artist) until ICY metadata loads.
     func play(url: URL, title: String? = nil, artist: String? = nil) async {
         let station = RadioStation(
             name: title ?? url.host ?? "Internet Radio",
@@ -95,42 +99,52 @@ final class StreamPlayer {
 
         await play(station: station)
 
-        // Reapply initial metadata if ICY hasn't arrived yet
         if streamTitle == nil { streamTitle = title }
         if streamArtist == nil { streamArtist = artist }
     }
 
     func pause() {
+        cancelReconnect()
         pipeline.pause()
+        // Also stop the pipeline if it's mid-connect/buffer (pause is no-op in those states)
+        if case .connecting = pipeline.state { pipeline.stop() }
+        if case .buffering = pipeline.state { pipeline.stop() }
         isPlaying = false
+        isBuffering = false
     }
 
-    /// Resume a paused stream. Used by PlaybackCoordinator.togglePlayPause().
     func resume() {
-        pipeline.resume()
-        isPlaying = true
+        if case .paused = pipeline.state {
+            pipeline.resume()
+            isPlaying = true
+        } else if let station = currentStation {
+            // Pipeline was stopped (not paused) — e.g. pause during connecting/buffering.
+            // Restart the stream instead of just flipping isPlaying.
+            let rb = LockFreeRingBuffer(capacity: 32768, channelCount: 2)
+            ringBuffer = rb
+            pipeline.start(url: station.streamURL, ringBuffer: rb)
+        }
     }
 
     func stop() {
+        cancelReconnect()
         pipeline.stop()
         isPlaying = false
         isBuffering = false
+        isReconnecting = false
         currentStation = nil
         streamTitle = nil
         streamArtist = nil
         error = nil
         ringBuffer = nil
         currentSampleRate = 0
+        wasActivelyPlaying = false
     }
 
     // MARK: - Ring Buffer Access (for PlaybackCoordinator bridge lifecycle)
 
-    /// The current ring buffer, if a stream is active.
-    /// PlaybackCoordinator passes this to AudioPlayer.activateStreamBridge().
     var currentRingBuffer: LockFreeRingBuffer? { ringBuffer }
 
-    /// The detected sample rate from the current stream (for engine format configuration).
-    /// The detected sample rate from the current stream's decoder output.
     private(set) var currentSampleRate: Float64 = 0
 
     // MARK: - Pipeline Callbacks
@@ -142,22 +156,29 @@ final class StreamPlayer {
             case .idle:
                 self.isPlaying = false
                 self.isBuffering = false
-                self.onStreamTerminated?()
+                // Don't fire onStreamTerminated here — onTermination handles reconnect vs terminal
             case .connecting, .buffering:
                 self.isPlaying = false
                 self.isBuffering = true
             case .playing:
                 self.isPlaying = true
                 self.isBuffering = false
+                self.isReconnecting = false
+                self.wasActivelyPlaying = true
+                self.startPlaybackStableTimer()
             case .paused:
                 self.isPlaying = false
                 self.isBuffering = false
-            case .error(let message):
+            case .error:
                 self.isPlaying = false
                 self.isBuffering = false
-                self.error = message
-                self.onStreamTerminated?()
+                // Don't fire onStreamTerminated here — onTermination handles reconnect vs terminal
             }
+        }
+
+        pipeline.onTermination = { [weak self] reason in
+            guard let self else { return }
+            self.handleTermination(reason)
         }
 
         pipeline.onFormatReady = { [weak self] (sampleRate: Float64) in
@@ -177,13 +198,137 @@ final class StreamPlayer {
         }
     }
 
+    // MARK: - Reconnect Logic
+
+    private func handleTermination(_ reason: StreamDecodePipeline.StreamTerminationReason) {
+        if wasActivelyPlaying && isReconnectable(reason) {
+            attemptReconnect()
+        } else {
+            // Terminal failure — no reconnect
+            isReconnecting = false
+            ringBuffer = nil
+            let message = reason.userMessage
+            if error == nil && !message.isEmpty {
+                error = message
+            }
+            onStreamTerminated?()
+        }
+    }
+
+    private func isReconnectable(_ reason: StreamDecodePipeline.StreamTerminationReason) -> Bool {
+        switch reason {
+        case .networkError(_, let code):
+            // DNS resolution failure, bad URL — terminal (will never succeed on retry)
+            let terminalCodes = [
+                NSURLErrorCannotFindHost,     // -1003: hostname doesn't exist
+                NSURLErrorUnsupportedURL,     // -1002: malformed URL
+                NSURLErrorBadURL,             // -1000: invalid URL
+            ]
+            return !terminalCodes.contains(code)
+        case .serverClosed, .httpServerError, .playlistResolutionFailed:
+            return true
+        case .httpClientError, .decodeError, .invalidResponse, .userStopped:
+            return false
+        }
+    }
+
+    private func attemptReconnect() {
+        reconnectAttempt += 1
+        guard reconnectAttempt <= Self.maxReconnectAttempts else {
+            isReconnecting = false
+            isBuffering = false
+            ringBuffer = nil
+            error = "Connection lost after \(Self.maxReconnectAttempts) attempts"
+            onStreamTerminated?()
+            return
+        }
+
+        isReconnecting = true
+        isBuffering = true
+        error = nil
+
+        // Tear down bridge (critical — new ring buffer needs new bridge activation)
+        onStreamTerminated?()
+
+        let attempt = reconnectAttempt
+        reconnectTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+
+            let delay = min(Self.maxBackoffSeconds, pow(2.0, Double(attempt - 1)))
+            AppLog.info(.audio, "StreamPlayer: Reconnect attempt \(attempt)/\(Self.maxReconnectAttempts) in \(delay)s")
+
+            do {
+                try await Task.sleep(for: .seconds(delay))
+            } catch {
+                return // Cancelled
+            }
+
+            guard !Task.isCancelled, let station = self.currentStation else { return }
+
+            let rb = LockFreeRingBuffer(capacity: 32768, channelCount: 2)
+            self.ringBuffer = rb
+            self.pipeline.start(url: station.streamURL, ringBuffer: rb)
+        }
+    }
+
+    private func cancelReconnect() {
+        reconnectTask?.cancel()
+        reconnectTask = nil
+        playbackStableTask?.cancel()
+        playbackStableTask = nil
+        reconnectAttempt = 0
+        isReconnecting = false
+    }
+
+    private func startPlaybackStableTimer() {
+        playbackStableTask?.cancel()
+        playbackStableTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(for: .seconds(5))
+            } catch {
+                return // Cancelled
+            }
+            guard let self, self.isPlaying else { return }
+            // Stream has been stable for 5 seconds — reset reconnect counter
+            if self.reconnectAttempt > 0 {
+                AppLog.info(.audio, "StreamPlayer: Playback stable — reconnect counter reset")
+            }
+            self.reconnectAttempt = 0
+        }
+    }
+
     // MARK: - Callbacks (to PlaybackCoordinator)
 
-    /// Called when audio format is detected and prebuffering is complete.
-    /// PlaybackCoordinator uses this to activate the engine bridge.
     var onFormatReady: (@MainActor (Float64) -> Void)?
 
-    /// Called when stream reaches a terminal state (idle or error).
+    /// Called when stream reaches a terminal state OR needs bridge teardown for reconnect.
     /// PlaybackCoordinator uses this to deactivate the engine bridge.
     var onStreamTerminated: (@MainActor () -> Void)?
+}
+
+// MARK: - StreamTerminationReason User Message
+
+extension StreamDecodePipeline.StreamTerminationReason {
+    /// User-facing error message for the main window display.
+    /// Keep short — the Winamp title bar has limited space.
+    var userMessage: String {
+        switch self {
+        case .networkError(_, let code):
+            switch code {
+            case NSURLErrorCannotFindHost: return "Host not found"
+            case NSURLErrorTimedOut: return "Connection timed out"
+            case NSURLErrorNetworkConnectionLost: return "Connection lost"
+            case NSURLErrorNotConnectedToInternet: return "No internet connection"
+            case NSURLErrorCannotConnectToHost: return "Cannot connect to server"
+            default: return "Network error"
+            }
+        case .serverClosed: return "Stream ended"
+        case .httpClientError(let code): return "HTTP error \(code)"
+        case .httpServerError(let code): return "Server error \(code)"
+        case .decodeError: return "Unsupported audio format"
+        case .invalidResponse: return "Invalid server response"
+        case .playlistResolutionFailed: return "Playlist not found"
+        case .userStopped: return ""
+        }
+    }
 }
