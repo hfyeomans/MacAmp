@@ -10,59 +10,65 @@
 ### 1. SwiftLint Inline Suppressions
 
 **File:** `MacAmpApp/Audio/AudioPlayer.swift`
-**Status:** Cannot remove — file is 945 lines (above 600 warning), type body is ~905 lines (above 400 warning)
+**Status:** Cannot remove — file is 705 lines (above 600 warning), type body is ~690 lines (above 400 warning, above 600 error)
 
 ```swift
 // Line 1:
 // swiftlint:disable file_length
 
-// Line ~28:
+// Line 8:
 final class AudioPlayer { // swiftlint:disable:this type_body_length
 ```
 
-**Why still needed:** Phases 1-3 reduced the file from 1,095 to 945 lines, but this is still above the `file_length` warning threshold (600) and `type_body_length` warning threshold (400). The suppressions prevent these from appearing as lint violations. They can only be removed after Phase 4 (engine transport extraction) brings the file below thresholds — Phase 4 is currently deferred.
+**Why still needed:** Phase 4 reduced the file from 1,143 to 705 lines. This is below the `file_length` error threshold (1,200) but still above the warning (600). The `type_body_length` suppression is still needed (~690 body, error is 600). These can only be removed after seek extraction (Phase 5).
 
-**Condition for removal:** File under 600 lines and type body under 400 lines.
+**Condition for removal:** File under 600 lines and type body under 400 lines. Requires Phase 5 (seek extraction).
 
 ---
 
 ## Completed Removals
 
-### 1. FourCC String Extension — REMOVED (Phase 3, commit `37c3598`)
+### Phase 4 Removals (PR #60, 2026-03-22)
 
-**File:** `MacAmpApp/Audio/AudioPlayer.swift` (formerly lines 8-19)
+#### 1. Direct audioEngine/playerNode/audioFile Ownership — MOVED to AudioEngineController
 
-```swift
-// REMOVED — zero callers in codebase
-extension String {
-    init(fourCC: FourCharCode) {
-        let bytes = [
-            UInt8((fourCC >> 24) & 0xFF),
-            UInt8((fourCC >> 16) & 0xFF),
-            UInt8((fourCC >> 8) & 0xFF),
-            UInt8(fourCC & 0xFF)
-        ]
-        self = String(bytes: bytes, encoding: .ascii) ?? "????"
-    }
-}
-```
+**From:** `MacAmpApp/Audio/AudioPlayer.swift`
+**To:** `MacAmpApp/Audio/AudioEngineController.swift`
 
-**Reason:** Codebase search confirmed zero callers — the extension was defined but never used. Deleted entirely. Saved 18 lines.
+The following were moved from AudioPlayer to AudioEngineController:
 
-### 2. Stale Extraction Comments — REMOVED (Phase 3, commit `37c3598`)
+- `let audioEngine = AVAudioEngine()` — engine ownership
+- `let playerNode = AVAudioPlayerNode()` — player node ownership
+- `var audioFile: AVAudioFile?` — loaded file state
+- `var progressTimer: Timer?` — progress tracking timer
+- `var playheadOffset: Double` — scheduling offset
+- `var streamSourceNode: AVAudioSourceNode?` — stream bridge node
+- `var streamRingBuffer: LockFreeRingBuffer?` — stream bridge buffer
+- `setupEngine()` — engine initialization
+- `rewireForCurrentFile()` → `rewireForFile(_:)` — graph wiring
+- `scheduleFrom(time:seekID:)` — audio scheduling
+- `startEngineIfNeeded()` — engine lifecycle
+- `startProgressTimer()` — progress timer lifecycle
+- `installVisualizerTapIfNeeded()` — visualizer tap
+- `removeVisualizerTapIfNeeded()` — visualizer tap
+- `makeStreamRenderBlock(ringBuffer:)` — stream render block (nonisolated static)
+- `activateStreamBridge(ringBuffer:sampleRate:)` — stream bridge activation
+- `deactivateStreamBridge()` — stream bridge deactivation
 
-**File:** `MacAmpApp/Audio/AudioPlayer.swift`
+#### 2. No-op Async Task in scheduleFrom — REMOVED (Oracle review)
 
-Comments marking code for future extraction were removed as they were addressed or no longer applicable after Phases 1-2.
+Empty `Task { @MainActor in }` block was left over from extraction. Removed per Oracle review finding.
 
-### 3. Redundant eqNode Manual Assignments — REMOVED (Oracle #1, commit `8679123`)
+### Phase 1-3 Removals (PR #52, 2026-02-22)
 
-**File:** `MacAmpApp/Audio/EqualizerController.swift`
+#### 3. FourCC String Extension — REMOVED (Phase 3)
+Zero callers in codebase. Saved 18 lines.
 
-After adding `didSet` handlers on `preamp`, `eqBands`, and `isEqOn` to automatically sync the eqNode, the manual `eqNode.globalGain = preamp` and `eqNode.bands[i].gain = gain` assignments inside `setPreamp`, `setEqBand`, and `toggleEq` methods became redundant.
+#### 4. Stale Extraction Comments — REMOVED (Phase 3)
+Comments marking code for future extraction addressed by Phases 1-2.
 
-### 4. Unused Imports — REMOVED (CodeRabbit, commit `dd8866e`)
+#### 5. Redundant eqNode Manual Assignments — REMOVED (Oracle #1)
+Made redundant by `didSet` handlers.
 
-**File:** `MacAmpApp/Audio/AudioPlayer.swift`
-
-`import Combine` and `import Accelerate` were no longer used after EQ extraction moved the Accelerate-dependent code and no Combine publishers remained.
+#### 6. Unused Imports — REMOVED (CodeRabbit)
+`import Combine` and `import Accelerate` no longer needed after EQ extraction.
