@@ -59,6 +59,7 @@
 | `stream-pause-tail` | Fix ~0.7s audio tail after pausing stream (ring buffer flush) | 2026-03-14 | 2026-03-14 | 0 | 📋 PLANNED — Sprint S3 (LOW). UX polish. |
 | `hls-streaming-support` | Add HLS protocol to stream decode pipeline | 2026-03-14 | 2026-03-14 | 0 | 📋 PLANNED — Sprint S3 (LOW). Edge case coverage. |
 | `ogg-vorbis-support` | Add OGG Vorbis codec to stream decode pipeline | 2026-03-14 | 2026-03-14 | 0 | 📋 PLANNED — Sprint S3 (LOW). Codec coverage. |
+| `branded-dmg-installer` | Create professional branded DMG installer with MacAmp logo and drag-to-install layout | 2026-03-22 | 2026-03-22 | 0 | 📋 PLANNED — Release tooling. Not sprinted. |
 
 ---
 
