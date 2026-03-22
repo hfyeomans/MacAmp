@@ -299,15 +299,25 @@ final class StreamPlayer {
 // MARK: - StreamTerminationReason User Message
 
 extension StreamDecodePipeline.StreamTerminationReason {
+    /// User-facing error message for the main window display.
+    /// Keep short — the Winamp title bar has limited space.
     var userMessage: String {
         switch self {
-        case .networkError(let msg, _): return msg
-        case .serverClosed: return "Stream ended (server closed connection)"
+        case .networkError(_, let code):
+            switch code {
+            case NSURLErrorCannotFindHost: return "Host not found"
+            case NSURLErrorTimedOut: return "Connection timed out"
+            case NSURLErrorNetworkConnectionLost: return "Connection lost"
+            case NSURLErrorNotConnectedToInternet: return "No internet connection"
+            case NSURLErrorCannotConnectToHost: return "Cannot connect to server"
+            default: return "Network error"
+            }
+        case .serverClosed: return "Stream ended"
         case .httpClientError(let code): return "HTTP error \(code)"
         case .httpServerError(let code): return "Server error \(code)"
-        case .decodeError(let msg): return msg
+        case .decodeError: return "Unsupported audio format"
         case .invalidResponse: return "Invalid server response"
-        case .playlistResolutionFailed(let msg): return msg
+        case .playlistResolutionFailed: return "Playlist not found"
         case .userStopped: return ""
         }
     }

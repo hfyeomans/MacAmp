@@ -357,9 +357,9 @@ final class PlaybackCoordinator {
             if streamPlayer.isBuffering {
                 return "Connecting..."
             }
-            // Error state
-            if streamPlayer.error != nil {
-                return "buffer 0%"
+            // Error state — show user-friendly message
+            if let streamError = streamPlayer.error {
+                return streamError
             }
             // Live ICY metadata (overrides Track title)
             if let icy = streamPlayer.streamTitle {
