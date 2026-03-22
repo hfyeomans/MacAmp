@@ -79,6 +79,7 @@ final class StreamPlayer {
 
     func play(station: RadioStation) async {
         cancelReconnect()
+        wasActivelyPlaying = false
         currentStation = station
         error = nil
         streamTitle = nil
@@ -105,7 +106,11 @@ final class StreamPlayer {
     func pause() {
         cancelReconnect()
         pipeline.pause()
+        // Also stop the pipeline if it's mid-connect/buffer (pause is no-op in those states)
+        if case .connecting = pipeline.state { pipeline.stop() }
+        if case .buffering = pipeline.state { pipeline.stop() }
         isPlaying = false
+        isBuffering = false
     }
 
     func resume() {
@@ -193,6 +198,7 @@ final class StreamPlayer {
         } else {
             // Terminal failure — no reconnect
             isReconnecting = false
+            ringBuffer = nil
             if error == nil {
                 error = reason.userMessage
             }
