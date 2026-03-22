@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import MacAmp
 
@@ -16,5 +17,118 @@ struct AudioPlayerStateTests {
         let player = AudioPlayer()
         player.eject()
         #expect(player.playbackState == PlaybackState.stopped(.ejected))
+    }
+
+    // MARK: - Phase 4 Characterization Tests (seek state machine behavior)
+
+    @Test("stop() resets currentTime and playbackProgress to zero")
+    func stopResetsTimeAndProgress() {
+        let player = AudioPlayer()
+        player.stop()
+        #expect(player.currentTime == 0)
+        #expect(player.playbackProgress == 0)
+    }
+
+    @Test("stop() clears currentTrack and resets title")
+    func stopClearsTrackState() {
+        let player = AudioPlayer()
+        player.stop()
+        #expect(player.currentTrack == nil)
+        #expect(player.currentTitle == "No Track Loaded")
+        #expect(player.currentTrackURL == nil)
+        #expect(player.currentDuration == 0.0)
+    }
+
+    @Test("stop() resets audio properties to defaults")
+    func stopResetsAudioProperties() {
+        let player = AudioPlayer()
+        player.stop()
+        #expect(player.bitrate == 0)
+        #expect(player.sampleRate == 0)
+        #expect(player.channelCount == 2)
+    }
+
+    @Test("stop() sets isPlaying false and isPaused false")
+    func stopSetsDerivedStateFalse() {
+        let player = AudioPlayer()
+        player.stop()
+        #expect(player.isPlaying == false)
+        #expect(player.isPaused == false)
+    }
+
+    @Test("eject() clears playlist")
+    func ejectClearsPlaylist() {
+        let player = AudioPlayer()
+        player.eject()
+        #expect(player.playlist.isEmpty)
+        #expect(player.currentTrack == nil)
+    }
+
+    @Test("eject() resets all playback state")
+    func ejectResetsAllState() {
+        let player = AudioPlayer()
+        player.eject()
+        #expect(player.currentTime == 0.0)
+        #expect(player.playbackProgress == 0.0)
+        #expect(player.currentDuration == 0.0)
+        #expect(player.currentTitle == "No Track Loaded")
+        #expect(player.currentTrackURL == nil)
+        #expect(player.bitrate == 0)
+        #expect(player.sampleRate == 0)
+        #expect(player.channelCount == 2)
+    }
+
+    @Test("initial state is .idle with no track")
+    func initialStateIsIdle() {
+        let player = AudioPlayer()
+        #expect(player.playbackState == .idle)
+        #expect(player.isPlaying == false)
+        #expect(player.isPaused == false)
+        #expect(player.currentTrack == nil)
+        #expect(player.currentTime == 0)
+        #expect(player.playbackProgress == 0)
+    }
+
+    @Test("play() without loaded track stays idle")
+    func playWithoutTrackStaysIdle() {
+        let player = AudioPlayer()
+        player.play()
+        // No file loaded, so play should not transition to playing
+        #expect(player.isPlaying == false)
+    }
+
+    @Test("pause() without playing has no effect")
+    func pauseWithoutPlayingNoEffect() {
+        let player = AudioPlayer()
+        player.pause()
+        // playerNode not playing, should be a no-op
+        #expect(player.isPaused == false)
+        #expect(player.playbackState == .idle)
+    }
+
+    @Test("volume persists via UserDefaults")
+    func volumePersistence() {
+        let player = AudioPlayer()
+        player.volume = 0.42
+        #expect(UserDefaults.standard.float(forKey: "volume") == 0.42)
+    }
+
+    @Test("balance persists via UserDefaults")
+    func balancePersistence() {
+        let player = AudioPlayer()
+        player.balance = -0.5
+        #expect(UserDefaults.standard.float(forKey: "balance") == -0.5)
+    }
+
+    @Test("isBridgeActive is initially false")
+    func bridgeInitiallyInactive() {
+        let player = AudioPlayer()
+        #expect(player.isBridgeActive == false)
+    }
+
+    @Test("isEngineRendering is false when idle")
+    func engineNotRenderingWhenIdle() {
+        let player = AudioPlayer()
+        #expect(player.isEngineRendering == false)
     }
 }
