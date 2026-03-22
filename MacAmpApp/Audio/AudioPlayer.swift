@@ -362,6 +362,12 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
             engine.setVolume(volume)
             engine.setBalance(balance)
 
+            // Sync currentDuration from file (fallback when metadata duration is 0/missing)
+            let fileDuration = engine.currentFileDuration
+            if fileDuration.isFinite && fileDuration > 0 {
+                currentDuration = fileDuration
+            }
+
             Task { @MainActor [weak self] in
                 if let props = await MetadataLoader.loadAudioProperties(from: url) {
                     self?.channelCount = props.channelCount

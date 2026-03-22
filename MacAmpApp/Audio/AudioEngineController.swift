@@ -159,12 +159,6 @@ final class AudioEngineController {
                 }
             )
 
-            if fileDuration.isFinite && fileDuration > 0 {
-                Task { @MainActor in
-                    // Caller can read currentDuration from audioFile directly
-                }
-            }
-
             return true
         } else {
             onPlaybackEnded?(nil)
