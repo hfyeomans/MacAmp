@@ -42,7 +42,7 @@
 | `airplay-integration` | Add AirPlay audio output routing + Now Playing integration | 2026-02-07 | 2026-03-14 | 0 | 📋 PLANNED — Sprint S2. Research complete, Oracle reviewed (8.5/10), awaiting user approval |
 | `spm-multiple-producers-fix` | Fix SwiftPM "multiple producers" error blocking `swift test` from CLI | 2026-03-14 | 2026-03-22 | 0 | ✅ COMPLETE — Issue resolved by Wave 3 work (swift-tools-version 6.2 upgrade). `swift test` passes (40 tests). |
 | `network-auto-reconnect` | Auto-reconnect dropped internet radio streams with exponential backoff | 2026-03-14 | 2026-03-22 | 0 | ✅ COMPLETE — PR #61 merged. Exponential backoff (1s→16s, max 10), typed error classification, user-friendly display. 5 PR findings addressed. |
-| `xcode-butterchurn-webcontent-diagnosis` | Fix Butterchurn/MilkDrop not working in Xcode (signing/entitlements) | 2026-03-14 | 2026-03-14 | 0 | 📋 PLANNED — Sprint S1 (HIGH). Diagnosis complete; signing/entitlements implementation is next. |
+| `xcode-butterchurn-webcontent-diagnosis` | Fix Butterchurn/MilkDrop not rendering (XcodeGen migration dropped resources) | 2026-03-14 | 2026-03-22 | 0 | ✅ COMPLETE — PR #63 merged. Root cause: Butterchurn folder missing from project.yml after XcodeGen migration. Also fixed EQ on/off persistence. |
 | `swift-project-structure-research` | Evaluate MacAmp Swift file/project organization and define an approved ownership model plus backlog strategy | 2026-03-14 | 2026-03-14 | 0 | 📄 REFERENCE — Research complete. Approved structure policy for active/future tasks; not a standalone implementation sprint. |
 | `windowing-structure-consolidation` | Consolidate generic window infrastructure under the target `Windowing/` ownership model | 2026-03-14 | 2026-03-15 | 0 | 🟡 DEFERRED — Moved from post-S1 to post-S3 Structure Sprint per D-STRUCTURE decision (2026-03-15). Task folder exists; implementation deferred. |
 | `milkdrop-feature-consolidation` | Consolidate Milkdrop / Butterchurn files and resources under the target `Features/Milkdrop/` ownership model | 2026-03-14 | 2026-03-15 | 0 | 🟡 DEFERRED — Moved from post-S1 to post-S3 Structure Sprint per D-STRUCTURE decision (2026-03-15). Task folder exists; implementation deferred. |
@@ -189,6 +189,8 @@ Sprint S1 status (updated 2026-03-22):
 1. ~~**`spm-multiple-producers-fix`**~~ — ✅ COMPLETE. Resolved by Wave 3 (swift-tools-version 6.2).
 2. ~~**`audioplayer-decomposition` Phase 4**~~ — ✅ COMPLETE. PR #60 merged. AudioPlayer 1,143→705 lines.
 3. ~~**`network-auto-reconnect`**~~ — ✅ COMPLETE. PR #61 merged. Exponential backoff, error classification, user-friendly display.
-4. **`xcode-butterchurn-webcontent-diagnosis`** — NEXT. Diagnosis complete, needs signing/entitlements implementation.
+4. ~~**`xcode-butterchurn-webcontent-diagnosis`**~~ — ✅ COMPLETE. PR #63 merged. XcodeGen migration gap — Butterchurn resources missing from project.yml.
+
+**Sprint S1 is COMPLETE.** All 4 tasks done (+ 1 hotfix PR #62).
 
 **Architecture policy note:** `swift-project-structure-research` is the approved placement-policy reference for Sprints S1-S3. All file-move consolidation (Windowing/, Features/, Audio/, Core/, Shared/, App/) is deferred to a dedicated post-S3 Structure Sprint per D-STRUCTURE decision (2026-03-15). Decomposition tasks remain in their current sprint slots. See `swift-project-structure-research/state.md` for full decision rationale.
