@@ -9,9 +9,10 @@
 
 ## Current Status
 
-**Phase:** Not started
-**Status:** PLANNED
-**Last Updated:** 2026-03-14
+**Phase:** Research + plan complete. Implementation starting.
+**Status:** IN PROGRESS
+**Last Updated:** 2026-03-22
+**Branch:** `feature/network-auto-reconnect`
 
 ---
 
