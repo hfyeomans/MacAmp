@@ -1,9 +1,11 @@
 # Tasks Index
 
-> **Purpose:** Index of all currently open (non-done) tasks in `tasks/`. Each entry notes the task name, purpose, creation date, last activity, and current status.
+> **Purpose:** Index of all currently open (non-done) tasks in `tasks/`. Each entry notes the task name, purpose, and current status.
 >
-> **Today:** 2026-03-15
-> **Excludes:** `tasks/done/` and `tasks/depreciated/`
+> **Updated:** 2026-03-22
+> **Excludes:** `tasks/done/`, `tasks/stale/`, `tasks/depreciated/`
+>
+> **Housekeeping (2026-03-22):** 69 stale tasks moved to `tasks/stale/` for later review. 1 completed task (`docs-implementation-patterns-update`) moved to `tasks/done/`. 2 duplicates (`oscilloscope-toggle`, `oi-button-bugfix-review`) removed (already in `done/`).
 
 ---
 
@@ -11,161 +13,65 @@
 
 | Status | Meaning |
 |--------|---------|
-| ✅ COMPLETE | Work done, may need commit/merge/close |
 | 🔄 IN PROGRESS | Active implementation underway |
-| ⏸ BLOCKED | Waiting on prerequisite task or decision |
-| 🟡 DEFERRED | Postponed to future milestone |
 | 📋 PLANNED | Research/planning done, awaiting implementation |
-| 🔍 RESEARCH | Early-stage research/analysis task |
+| 🟡 DEFERRED | Postponed to future milestone |
 | 📄 REFERENCE | Documentation/analysis artifact, not an implementation task |
 
 ---
 
-## Active / Recent Tasks (Last 30 days)
+## Sprint S2: MEDIUM Priority — Features + Polish
 
-| Task | Purpose | Created | Last Activity | Days Idle | Status |
-|------|---------|---------|---------------|-----------|--------|
-| `unified-audio-pipeline` | Replace AVPlayer internet radio with custom URLSession + AudioFileStream + AudioConverter → AVAudioEngine pipeline. ICY metadata, M3U/PLS resolution, stream bridge. | 2026-03-13 | 2026-03-14 | 0 | ✅ COMPLETE — PR #57 merged + hotfix. All V1-V14 verified. Replaces AVPlayer for streams. |
-| `swift-concurrency-62-cleanup` | Adopt Swift 6.2 concurrency features: `isolated deinit`, `@concurrent`, default MainActor isolation, `@preconcurrency` audit, DispatchQueue migration | 2026-03-13 | 2026-03-14 | 0 | ✅ COMPLETE — PR 1 (PR #56) + PR 2 (PR #58) both merged. Zero nonisolated(unsafe), zero Task.detached. |
-| `internet-radio-n1-n6-fixes` | Fix 6 issues (1 HIGH, 2 MEDIUM, 3 LOW) in internet radio streaming infrastructure discovered during Oracle validation | 2026-02-21 | 2026-02-21 | 0 | ✅ COMPLETE — All 6 fixes implemented, Oracle-verified, merged in PR #49 |
-| `mainwindow-layer-decomposition` | Decompose WinampMainWindow from cross-file extension pattern to proper layer subview decomposition with @Observable interaction state object | 2026-02-21 | 2026-02-22 | 0 | ✅ COMPLETE — PR #54 merged. Wave 2b. 4 phases, 3 Oracle reviews, 10 PR comments resolved. 10 files in MainWindow/, old extension deleted. |
-| `playlistwindow-layer-decomposition` | Decompose WinampPlaylistWindow from cross-file extension pattern to proper layer subview decomposition; same architectural pattern as mainwindow task | 2026-02-21 | 2026-02-22 | 0 | ✅ COMPLETE — Wave 1. 4 phases done, Oracle reviewed, PR merged. Extension deleted, 7 child views created. |
-| `swift-testing-modernization` | Migrate all 9 test files (40 tests) from XCTest to Swift Testing framework; bump Package.swift to 6.2; add parameterized tests, tags, time limits | 2026-02-21 | 2026-02-22 | 0 | ✅ COMPLETE — Wave 1. 6 phases done, Oracle reviewed, PR merged. Task.sleep removal deferred. |
-| `audioplayer-decomposition` | Extract EqualizerController (Ph1-3) + AudioEngineController (Ph4) from AudioPlayer.swift | 2026-02-07 | 2026-03-22 | 0 | ✅ Ph1-4 COMPLETE — PR #52 (Ph1-3) + PR #60 (Ph4) merged. AudioPlayer 1,143→705 lines. New AudioEngineController 413 lines. 53 tests. Seek extraction deferred to Phase 5. |
-| `internet-streaming-volume-control` | Add volume control + EQ capability for internet radio streams; includes Loopback Bridge architecture for Phase 2 | 2026-02-09 | 2026-03-14 | 0 | ✅ COMPLETE — Ph1 merged PR #53. Ph2 (Loopback Bridge) SUPERSEDED by T7 unified pipeline (streams now route through AVAudioEngine natively). |
-| `internet-radio-review` | Oracle code review of internet radio streaming infrastructure; produces N1-N6 issue list | 2026-11-01 | 2026-02-21 | 1 | 📄 REFERENCE — Validation complete post-memory-optimization; findings drive `internet-streaming-volume-control` |
-| `memory-cpu-optimization` | Reduce memory usage and CPU overhead; SPSC audio thread, lazy skin loading, peak-memory reduction | 2026-02-14 | 2026-02-14 | 8 | ✅ COMPLETE — All phases verified, committed in PR #48 |
-| `window-coordinator-cleanup` | Clean up `WindowCoordinator.swift` — remove dead code, fix threading, improve structure | 2026-02-09 | 2026-02-09 | 13 | ✅ COMPLETE — Pending manual testing + commit |
-| `window-coordinator-refactor` | Extract `WindowRegistry`, `WindowFramePersistence`, `WindowVisibilityController` from `WindowCoordinator` | 2026-02-09 | 2026-02-09 | 13 | ✅ COMPLETE — All 4 phases committed, production-ready |
-| `window-coordinator-di-migration` | Migrate `WindowCoordinator` to dependency-injection pattern | 2026-02-09 | 2026-02-09 | 13 | 🟡 DEFERRED — Research + plan done; blocked on prerequisite task completion |
-| `lock-free-ring-buffer` | Implement a lock-free SPSC ring buffer for audio thread safety; prerequisite for `internet-streaming-volume-control` Phase 2 | 2026-02-09 | 2026-02-22 | 0 | ✅ COMPLETE — Wave 1. 17 tests (14 unit + 3 concurrency), Oracle reviewed x2, PR merged. Benchmarks deferred. |
-| `airplay-integration` | Add AirPlay audio output routing + Now Playing integration | 2026-02-07 | 2026-03-14 | 0 | 📋 PLANNED — Sprint S2. Research complete, Oracle reviewed (8.5/10), awaiting user approval |
-| `spm-multiple-producers-fix` | Fix SwiftPM "multiple producers" error blocking `swift test` from CLI | 2026-03-14 | 2026-03-22 | 0 | ✅ COMPLETE — Issue resolved by Wave 3 work (swift-tools-version 6.2 upgrade). `swift test` passes (40 tests). |
-| `network-auto-reconnect` | Auto-reconnect dropped internet radio streams with exponential backoff | 2026-03-14 | 2026-03-22 | 0 | ✅ COMPLETE — PR #61 merged. Exponential backoff (1s→16s, max 10), typed error classification, user-friendly display. 5 PR findings addressed. |
-| `xcode-butterchurn-webcontent-diagnosis` | Fix Butterchurn/MilkDrop not rendering (XcodeGen migration dropped resources) | 2026-03-14 | 2026-03-22 | 0 | ✅ COMPLETE — PR #63 merged. Root cause: Butterchurn folder missing from project.yml after XcodeGen migration. Also fixed EQ on/off persistence. |
-| `swift-project-structure-research` | Evaluate MacAmp Swift file/project organization and define an approved ownership model plus backlog strategy | 2026-03-14 | 2026-03-14 | 0 | 📄 REFERENCE — Research complete. Approved structure policy for active/future tasks; not a standalone implementation sprint. |
-| `windowing-structure-consolidation` | Consolidate generic window infrastructure under the target `Windowing/` ownership model | 2026-03-14 | 2026-03-15 | 0 | 🟡 DEFERRED — Moved from post-S1 to post-S3 Structure Sprint per D-STRUCTURE decision (2026-03-15). Task folder exists; implementation deferred. |
-| `milkdrop-feature-consolidation` | Consolidate Milkdrop / Butterchurn files and resources under the target `Features/Milkdrop/` ownership model | 2026-03-14 | 2026-03-15 | 0 | 🟡 DEFERRED — Moved from post-S1 to post-S3 Structure Sprint per D-STRUCTURE decision (2026-03-15). Task folder exists; implementation deferred. |
-| `skinmanager-decomposition` | Decompose `SkinManager.swift` and align skin ownership with the approved structure | 2026-03-15 | 2026-03-15 | 0 | 📋 PLANNED — Post-S2 / pre-S3 architecture follow-on. Existing `audioplayer-decomposition` remains the AudioPlayer owner. |
-| `visualizerpipeline-decomposition` | Decompose `VisualizerPipeline.swift` inside the `Audio/Visualization` boundary | 2026-03-15 | 2026-03-15 | 0 | 📋 PLANNED — Post-S2 / pre-S3 architecture follow-on. Preserve current visualizer and Butterchurn behavior. |
-| `streamdecodepipeline-decomposition` | Decompose `StreamDecodePipeline.swift` inside the `Audio/Streaming` boundary | 2026-03-15 | 2026-03-15 | 0 | 📋 PLANNED — Post-S2 / pre-S3 architecture follow-on. Keep unified pipeline semantics stable. |
-| `winamp-equalizer-window-decomposition` | Decompose `WinampEqualizerWindow.swift` into clearer equalizer feature-owned UI pieces | 2026-03-15 | 2026-03-15 | 0 | 📋 PLANNED — Post-S2 / pre-S3 architecture follow-on. UI structure cleanup only, no EQ behavior change. |
-| `audioplayer-seek-extraction` | Extract seek state machine from AudioPlayer.swift (removes last 2 swiftlint suppressions) | 2026-03-22 | 2026-03-22 | 0 | 📋 PLANNED — Post-S2 / pre-S3 architecture follow-on. Deferred from S1 Phase 4 per Oracle recommendation. AudioPlayer 719→~533 lines. |
-| `os-workgroup-integration` | Apple Silicon os_workgroup for audio render thread | 2026-03-14 | 2026-03-14 | 0 | 📋 PLANNED — Sprint S2 (MEDIUM). Performance optimization. |
-| `video-audio-engine-routing` | Route video audio through AVAudioEngine (MTAudioProcessingTap) | 2026-03-14 | 2026-03-14 | 0 | 📋 PLANNED — Sprint S2 (MEDIUM). Unify all audio through engine. |
-| `stream-track-counter` | Track position counter in main window + playlist window for streams | 2026-03-14 | 2026-03-14 | 0 | 📋 PLANNED — Sprint S2 (MEDIUM). Winamp fidelity. |
-| `playlist-list-operations` | NEW LIST, LOAD LIST, SAVE LIST buttons in playlist window | 2026-03-14 | 2026-03-14 | 0 | 📋 PLANNED — Sprint S2 (MEDIUM). Winamp fidelity. |
-| `mainwindow-visualizer-isolation` | SwiftUI recomposition boundary for visualizer during slider drag | 2026-03-14 | 2026-03-14 | 0 | 📋 PLANNED — Sprint S3 (LOW). Performance optimization. |
-| `stream-pause-tail` | Fix ~0.7s audio tail after pausing stream (ring buffer flush) | 2026-03-14 | 2026-03-14 | 0 | 📋 PLANNED — Sprint S3 (LOW). UX polish. |
-| `hls-streaming-support` | Add HLS protocol to stream decode pipeline | 2026-03-14 | 2026-03-14 | 0 | 📋 PLANNED — Sprint S3 (LOW). Edge case coverage. |
-| `ogg-vorbis-support` | Add OGG Vorbis codec to stream decode pipeline | 2026-03-14 | 2026-03-14 | 0 | 📋 PLANNED — Sprint S3 (LOW). Codec coverage. |
-| `branded-dmg-installer` | Create professional branded DMG installer with MacAmp logo and drag-to-install layout | 2026-03-22 | 2026-03-22 | 0 | 📋 PLANNED — Release tooling. Not sprinted. |
+| Task | Purpose | Size | Status |
+|------|---------|------|--------|
+| `os-workgroup-integration` | Apple Silicon os_workgroup for audio render thread | Small | 📋 PLANNED |
+| `video-audio-engine-routing` | Route video audio through AVAudioEngine (MTAudioProcessingTap) | Medium | 📋 PLANNED |
+| `stream-track-counter` | Track position counter in main window + playlist window for streams | Small-Medium | 📋 PLANNED |
+| `playlist-list-operations` | NEW LIST, LOAD LIST, SAVE LIST buttons in playlist window | Medium | 📋 PLANNED |
+| `airplay-integration` | AirPlay output routing + Now Playing integration | Medium | 📋 PLANNED — Research complete, needs plan + todos + Oracle |
 
 ---
 
-## January 2026 Tasks
+## Sprint S3: LOW Priority — Edge Cases + Optimization
 
-| Task | Purpose | Created | Last Activity | Days Idle | Status |
-|------|---------|---------|---------------|-----------|--------|
-| `phase-8-6-audioenginecontroller-analysis` | Deep analysis of `AudioEngineController` architecture; Phase 8.6 of audio refactor | 2026-02-07 | 2026-01-11 | 39 | 📄 REFERENCE — Analysis complete, findings documented |
-| `phase-8-5-visualizerpipeline-review` | Review of `VisualizerPipeline` extraction; Phase 8.5 of audio refactor | 2026-02-07 | 2026-01-11 | 39 | 📄 REFERENCE — Review complete, no code changes required |
-| `oracle-validation-audioplayer-refactor` | Oracle validation of AudioPlayer refactor results; verify metrics and API naming | 2026-02-07 | 2026-01-11 | 39 | ⏸ BLOCKED — Mismatch between docs (`savePreset(:for:)`) and code (`savePreset(_:forTrackURL:)`) requires resolution |
-| `butterchurn-data-flow-verification` | Verify Butterchurn/MilkDrop data flow from `VisualizerPipeline` through `AudioPlayer` to `ButterchurnBridge` | 2026-02-07 | 2026-01-11 | 39 | 📄 REFERENCE — Flow mapped, guard conditions identified, verification guidance delivered |
-| `code-optimization` | Code simplification sweep on `code-simplification` branch | 2026-01-11 | 2026-01-11 | 39 | 🔍 RESEARCH — State incomplete; current phase unclear |
-| `concurrency-review` | Swift concurrency audit; findings documented | 2026-11-01 | 2026-01-11 | 39 | 📄 REFERENCE — Findings only (`findings.md`), no state file |
-| `swift6-concurrency-review` | Swift 6 strict concurrency review of Butterchurn/MilkDrop code | 2026-01-05 | 2026-01-05 | 45 | 📄 REFERENCE — Review findings to be delivered; no code changes required |
-| `milk-drop-video-support` | Full MilkDrop + Video window feature: chrome, titlebar, resize, Butterchurn rendering | 2025-11-08 | 2026-01-05 | 45 | 🔄 IN PROGRESS — Days 1-2 complete; multiple sub-tasks partially done |
-| `xcode-testing-context` | Set up Xcode testing context document for MacAmp test suite | 2026-01-04 | 2026-01-04 | 46 | ✅ COMPLETE — Doc created at `docs/context/xcode-testing-context.md` |
-| `macamp-test-actions-plan` | Add MacAmpTests target, test plan, and shared scheme to Xcode project | 2026-01-04 | 2026-01-04 | 46 | ✅ COMPLETE — Test target, scheme, and `.xctestplan` wired |
-| `docs-test-actions` | Update architecture docs (README, IMPLEMENTATION_PATTERNS, MACAMP_ARCHITECTURE_GUIDE) with test plan references | 2026-01-04 | 2026-01-04 | 46 | ✅ COMPLETE — All doc updates applied |
+| Task | Purpose | Size | Status |
+|------|---------|------|--------|
+| `mainwindow-visualizer-isolation` | SwiftUI recomposition boundary for visualizer during slider drag | Small | 📋 PLANNED |
+| `stream-pause-tail` | Fix ~0.7s audio tail after pausing stream (ring buffer flush) | Small | 📋 PLANNED |
+| `hls-streaming-support` | Add HLS protocol to stream decode pipeline | Large | 📋 PLANNED |
+| `ogg-vorbis-support` | Add OGG Vorbis codec to stream decode pipeline | Medium | 📋 PLANNED |
 
 ---
 
-## December 2025 Tasks
+## Post-S2 / Pre-S3: Architecture Decomposition
 
-| Task | Purpose | Created | Last Activity | Days Idle | Status |
-|------|---------|---------|---------------|-----------|--------|
-| `memory-management-analysis` | Audit and fix audio tap lifecycle, visualizer buffer allocations, timer leaks, skin extraction memory | 2026-11-01 | 2026-01-03 | 47 | ✅ COMPLETE — Fixes implemented; may be superseded by `memory-cpu-optimization` |
-| `review-amp-code-review-report` | Review and respond to external amp code-review report | 2026-01-04 | 2025-12-28 | 53 | 📄 REFERENCE — Review completed |
-| `playlist-window-resize` | Implement playlist window resize behavior with proper sprite stretching | 2026-11-01 | 2025-12-16 | 65 | ✅ COMPLETE — Phases 3-5 done + playlist visualizer implemented |
-| `playlist-resize` | Research/analysis artifact for playlist resize implementation | 2025-12-16 | 2025-12-16 | 65 | 📄 REFERENCE — Status unclear; overlaps with `playlist-window-resize` |
-| `code-review-sweep` | Broad code review sweep across codebase | 2025-12-14 | 2025-12-14 | 67 | 🔄 IN PROGRESS — Phases 1-3 complete |
-
----
-
-## November 2025 Tasks
-
-| Task | Purpose | Created | Last Activity | Days Idle | Status |
-|------|---------|---------|---------------|-----------|--------|
-| `window-architecture-assessment` | Assess overall window architecture; produce recommendations | 2025-11-16 | 2025-11-16 | 95 | 📄 REFERENCE — Assessment complete |
-| `swiftui-window-migration` | Research whether to migrate NSWindow to SwiftUI WindowGroup | 2025-11-16 | 2025-11-16 | 95 | ✅ CLOSED — Decision: do NOT migrate |
-| `preferences-windowgroup-architecture` | Plan preferences window using SwiftUI WindowGroup architecture | 2025-11-16 | 2025-11-16 | 95 | 📄 REFERENCE — Technical debt noted |
-| `window-focus-tracking` | Implement focus tracking across Winamp windows | 2025-11-15 | 2025-11-15 | 96 | 🔍 RESEARCH — Only `TODO.md` present |
-| `video-window-sprites` | Sprite sheet analysis and coordinate fixes for video window chrome | 2025-11-15 | 2025-11-15 | 96 | 🔍 RESEARCH — No state file found |
-| `video-window-review` | Review video window implementation for correctness | 2025-11-15 | 2025-11-15 | 96 | 🔍 RESEARCH — Initial review pass started |
-| `video-window-focus` | Fix focus handling for video window | 2025-11-15 | 2025-11-15 | 96 | 🔍 RESEARCH — No state file found |
-| `swift-6-features` | Research and document Swift 6 language features for team awareness | 2025-11-15 | 2025-11-15 | 96 | ✅ COMPLETE — Research + explanation delivered |
-| `o-i-buttons-review` | Review O (Options) and I (Info) button implementation (persistence, SwiftUI wiring, NSMenu) | 2025-11-15 | 2025-11-15 | 96 | 📋 PLANNED — Research complete, awaiting detailed review findings |
-| `milkdrop-window-precision-fixes` | Pixel-precise layout fixes for MilkDrop window sprites and drag handle | 2025-11-15 | 2025-11-15 | 96 | ⏸ BLOCKED — Needs QA/user verification in running app |
-| `milkdrop-window-layout` | Fix GEN sprite layout (left-side fill tiles, redundant overlays, bottom corners) | 2025-11-15 | 2025-11-15 | 96 | 📋 PLANNED — Fixes applied, follow-up items remain |
-| `milkdrop-titlebar` | Fix MilkDrop titlebar sprite layout and section widths | 2025-11-15 | 2025-11-15 | 96 | ✅ COMPLETE — Section widths corrected, manual verification needed |
-| `milkdrop-rendering-bug` | Fix Butterchurn/MilkDrop rendering (missing `test.html`, silent load failures) | 2025-11-15 | 2025-11-15 | 96 | ⏸ BLOCKED — Code fix applied, runtime verification required |
-| `milkdrop-gen-sprites` | Analyze and correct GEN sprite coordinate system for MilkDrop window | 2025-11-15 | 2025-11-15 | 96 | 📋 PLANNED — Coordinates corrected, awaiting flip-logic implementation decision |
-| `milkdrop-chrome-alignment` | Fix MilkDrop chrome positioning (titlebar slices, bottom tri-part joint) | 2025-11-15 | 2025-11-15 | 96 | ⏸ BLOCKED — Layout fixed, needs in-app visual verification |
-| `focus-ring-eq-pl-fixes` | Fix focus ring appearance and EQ/PL button behavior | 2025-11-15 | 2025-11-15 | 96 | 🔍 RESEARCH — Committed on `feature/video-milkdrop-windows` branch (commit `1306b2e`) |
-| `five-window-docs` | Documentation guidance for five-window architecture (main, EQ, playlist, video, MilkDrop) | 2025-11-15 | 2025-11-15 | 96 | 📋 PLANNED — Guidance produced; user to implement doc updates |
-| `default-skin-fallback` | Extract and cache Winamp.wsz as default skin fallback for missing sheet resources | 2025-11-15 | 2025-11-15 | 96 | 📋 PLANNED — Research + plan done, awaiting architectural sign-off |
-| `audio-video-playback-bug` | Fix bug where old completion handler fires during seek, causing incorrect playback state | 2025-11-15 | 2025-11-15 | 96 | 📋 PLANNED — Root cause identified (`playerNode.stop()` seek ID race), awaiting implementation |
-| `window-init-position-bug` | Fix window initial position regression | 2025-11-10 | 2025-11-10 | 101 | 🔍 RESEARCH — No state file found |
-| `window-default-position-regression` | Fix default window position regression | 2025-11-10 | 2025-11-10 | 101 | 🔍 RESEARCH — No state file found |
-| `winamp-titlebar-regression` | Fix Winamp titlebar visual regression | 2025-11-10 | 2025-11-10 | 101 | 🔍 RESEARCH — No state file found |
-| `playlist-resize-analysis` | Analysis artifact for playlist resize; quick reference and README | 2025-11-10 | 2025-11-10 | 101 | 📄 REFERENCE — Research artifact |
-| `playlist-docking-debug` | Debug playlist window docking behavior | 2025-11-10 | 2025-11-10 | 101 | 🔍 RESEARCH — No state file found |
-| `phase-4-regression-analysis` | Analyze regressions introduced in Phase 4 | 2025-11-10 | 2025-11-10 | 101 | 📄 REFERENCE — Analysis complete |
-| `main-eq-stack-bug` | Fix bug in main/EQ window stacking order | 2025-11-10 | 2025-11-10 | 101 | 🔍 RESEARCH — No state file found |
-| `magnetic-window-cluster-regression` | Fix regression in magnetic window cluster behavior | 2025-11-10 | 2025-11-10 | 101 | 🔍 RESEARCH — No state file found |
-| `magnetic-docking-foundation` | Foundation implementation for magnetic window docking system | 2025-11-10 | 2025-11-10 | 101 | 🔄 IN PROGRESS — Day 1 80% complete; code ready, needs Xcode project integration |
-| `custom-drag-analysis` | Analyze custom drag gesture implementation for magnetic docking | 2025-11-10 | 2025-11-10 | 101 | 🔍 RESEARCH — No state file found |
-| `session-storage-location` | Determine correct session/state storage location | 2025-11-07 | 2025-11-07 | 104 | 🔍 RESEARCH — No state file found |
-| `oscilloscope-toggle` | Add oscilloscope visualizer toggle | 2025-11-07 | 2025-11-07 | 104 | ✅ COMPLETE — Merged to main (PR #27) |
-| `oi-button-bugfix-review` | Bug-fix review for O/I buttons (separate from `o-i-buttons-review`) | 2025-11-02 | 2025-11-07 | 104 | 🔍 RESEARCH — No state file found |
-| `magnetic-window-docking` | Research and implement magnetic window snapping/docking | 2025-10-23 | 2025-11-02 | 109 | 🟡 DEFERRED — Deferred to P3 (post-1.0) as of 2025-10-23 |
+| Task | Purpose | Size | Status |
+|------|---------|------|--------|
+| `skinmanager-decomposition` | Decompose `SkinManager.swift` into smaller pieces | Medium | 📋 PLANNED |
+| `visualizerpipeline-decomposition` | Decompose `VisualizerPipeline.swift` | Medium | 📋 PLANNED |
+| `streamdecodepipeline-decomposition` | Decompose `StreamDecodePipeline.swift` | Medium | 📋 PLANNED |
+| `winamp-equalizer-window-decomposition` | Decompose `WinampEqualizerWindow.swift` | Medium | 📋 PLANNED |
+| `audioplayer-seek-extraction` | Extract seek state machine from AudioPlayer.swift (Phase 5) | Medium | 📋 PLANNED |
 
 ---
 
-## October 2025 Tasks
+## Post-S3: Structure Sprint
 
-| Task | Purpose | Created | Last Activity | Days Idle | Status |
-|------|---------|---------|---------------|-----------|--------|
-| `track-title-display` | Implement scrolling track title display in main window | 2026-11-01 | 2025-10-31 | 111 | 🔍 RESEARCH — No clear status |
-| `track-title-display-bug` | Fix bug in track title display rendering | 2026-11-01 | 2025-10-31 | 111 | 🔍 RESEARCH — No clear status |
-| `playlist-navigation-bug` | Fix playlist navigation (next/previous track) bug | 2026-11-01 | 2025-10-31 | 111 | 🔍 RESEARCH — No clear status |
-| `oracle-playback-review` | Oracle review of audio playback implementation | 2026-11-01 | 2025-10-31 | 111 | 📄 REFERENCE — Review complete |
-| `internet-radio` | Implement internet radio streaming (HTTP/HTTPS) | 2025-10-31 | 2025-10-31 | 111 | ✅ COMPLETE — All fixes applied, user tested, ready for PR |
-| `internet-radio-file-types` | Add internet radio file type support (M3U, PLS) | 2026-11-01 | 2025-10-31 | 111 | ✅ COMPLETE — M3U phases 1-4 done; remote streams deferred to P5 |
-| `internet-radio-arch-review` | Architecture review for internet radio implementation | 2026-11-01 | 2025-10-31 | 111 | 📄 REFERENCE — Review complete |
-| `window-focus-warning` | Investigate and fix window focus compiler/runtime warning | 2026-11-01 | 2025-10-29 | 113 | 🔍 RESEARCH — No state file found |
-| `swift-modernization-recommendations` | Produce Swift modernization recommendations (pixel-perfect sprites, concurrency) | 2026-11-01 | 2025-10-29 | 113 | 🔄 IN PROGRESS — Phase 1 complete, Phase 2 ready to start |
-| `playlist-drag-and-drop` | Implement drag-and-drop reordering in playlist | 2026-11-01 | 2025-10-29 | 113 | 🔍 RESEARCH — No state file found |
-| `openpanel-mainactor-analysis` | Analyze `NSOpenPanel` `@MainActor` isolation issue | 2026-11-01 | 2025-10-29 | 113 | 📄 REFERENCE — Analysis complete |
-| `playlist-sprite-adjustments` | Adjust playlist window sprite coordinates for correct rendering | 2025-10-28 | 2025-10-28 | 114 | ✅ COMPLETE — Fix applied, ready to commit |
-| `playlist-menu-system` | Implement playlist context menu system + multi-select | 2025-10-23 | 2025-10-28 | 114 | ✅ COMPLETE — Menus + multi-select done |
-| `m3u-file-support` | Add M3U playlist file parsing and loading | 2025-10-24 | 2025-10-24 | 118 | ✅ COMPLETE — Remote streams deferred |
-| `distribution-setup` | Set up app distribution (notarization, Sparkle, DMG) | 2025-10-24 | 2025-10-24 | 118 | 📄 REFERENCE — Guide documents at `distribution-guide.md`, `testflight-beta-testing.md` |
-| `distributable-app-build` | Build distributable `.app` / `.dmg` artifact | 2025-10-24 | 2025-10-24 | 118 | 🔍 RESEARCH — Only `research.md` present |
-| `window-management-docking-analysis` | Analyze window management and docking architecture | 2025-10-23 | 2025-10-23 | 119 | 📄 REFERENCE — Analysis complete (`analysis.md`) |
-| `security-vulnerability-analysis` | Security audit of MacAmp codebase | 2025-10-23 | 2025-10-23 | 119 | 📄 REFERENCE — Analysis + compliance status documented |
+| Task | Purpose | Size | Status |
+|------|---------|------|--------|
+| `windowing-structure-consolidation` | Move window infrastructure under `Windowing/` | Medium | 🟡 DEFERRED |
+| `milkdrop-feature-consolidation` | Move Milkdrop/Butterchurn under `Features/Milkdrop/` | Medium | 🟡 DEFERRED |
 
 ---
 
-## Standalone Task Files (not in folders)
+## Active References + Backlog
 
-| File | Purpose | Notes |
-|------|---------|-------|
-| `liquid-glass-shimmer-bug.md` | Bug report for Liquid Glass shimmer effect | Standalone markdown, no task folder |
-| `spectrum-analyzer-architecture-report.md` | Architecture report for spectrum analyzer | Standalone markdown, no task folder |
-| `winamp-skin-research-2025.md` | Research notes on Winamp skin formats (2025) | Standalone markdown, no task folder |
-| `PRIORITY_MAPPING.md` | Priority mapping for tasks/features | Standalone reference |
+| Task | Purpose | Status |
+|------|---------|--------|
+| `audioplayer-decomposition` | Ph1-4 COMPLETE. Phase 5 (seek) tracked by `audioplayer-seek-extraction`. Historical context for decomposition patterns. | 📄 REFERENCE |
+| `lock-free-ring-buffer` | COMPLETE. Deferred: benchmarks, flaky high-throughput test (`withKnownIssue`). | 📄 REFERENCE |
+| `swift-project-structure-research` | Approved placement-policy reference for S1-S3. Not an implementation task. | 📄 REFERENCE |
+| `branded-dmg-installer` | Professional branded DMG installer with MacAmp logo. Not sprinted. | 📋 PLANNED |
 
 ---
 
@@ -173,26 +79,25 @@
 
 | Category | Count |
 |---------|-------|
-| Total open task folders | ~79 |
-| ✅ COMPLETE (needs close/commit/merge) | ~19 |
-| 🔄 IN PROGRESS | ~5 |
-| 📋 PLANNED (ready to implement) | ~13 |
-| ⏸ BLOCKED | ~4 |
-| 🟡 DEFERRED | ~2 |
-| 📄 REFERENCE (analysis/review artifacts) | ~15 |
-| 🔍 RESEARCH (unclear/early stage) | ~20 |
+| Total active task folders | 20 |
+| 📋 PLANNED (ready to implement) | 16 |
+| 🟡 DEFERRED | 2 |
+| 📄 REFERENCE | 3 |
+| In `tasks/stale/` (for later review) | 69 folders + 8 standalone files |
+| In `tasks/done/` | ~55 completed tasks |
 
 ---
 
-## High Priority Actionable Tasks (Sprint S1)
+## Sprint S1 (COMPLETE — 2026-03-22)
 
-Sprint S1 status (updated 2026-03-22):
+All S1 tasks done. See `_context/state.md` for full scorecard.
 
-1. ~~**`spm-multiple-producers-fix`**~~ — ✅ COMPLETE. Resolved by Wave 3 (swift-tools-version 6.2).
-2. ~~**`audioplayer-decomposition` Phase 4**~~ — ✅ COMPLETE. PR #60 merged. AudioPlayer 1,143→705 lines.
-3. ~~**`network-auto-reconnect`**~~ — ✅ COMPLETE. PR #61 merged. Exponential backoff, error classification, user-friendly display.
-4. ~~**`xcode-butterchurn-webcontent-diagnosis`**~~ — ✅ COMPLETE. PR #63 merged. XcodeGen migration gap — Butterchurn resources missing from project.yml.
-
-**Sprint S1 is COMPLETE.** All 4 tasks done (+ 1 hotfix PR #62).
-
-**Architecture policy note:** `swift-project-structure-research` is the approved placement-policy reference for Sprints S1-S3. All file-move consolidation (Windowing/, Features/, Audio/, Core/, Shared/, App/) is deferred to a dedicated post-S3 Structure Sprint per D-STRUCTURE decision (2026-03-15). Decomposition tasks remain in their current sprint slots. See `swift-project-structure-research/state.md` for full decision rationale.
+| Task | Result |
+|------|--------|
+| `spm-multiple-producers-fix` | Resolved by Wave 3 |
+| `audioplayer-decomposition` Ph4 | PR #60 — AudioPlayer 1,143→705 lines |
+| `network-auto-reconnect` | PR #61 — Exponential backoff, typed errors |
+| `xcode-butterchurn-webcontent-diagnosis` | PR #63 — XcodeGen resource gap |
+| Hotfix: VBR duration | PR #62 |
+| Test suite hygiene | PR #64 |
+| v1.2 Release + docs | PR #65, tag v1.2, DMG uploaded |
