@@ -269,7 +269,9 @@ final class StreamDecodePipeline {
             let status = httpResponse.statusCode
             stopInternal()
             setState(.error("HTTP \(status)"))
-            if (400...499).contains(status) {
+            if status == 429 {
+                onTermination?(.httpServerError(status))  // 429 Too Many Requests — reconnectable with backoff
+            } else if (400...499).contains(status) {
                 onTermination?(.httpClientError(status))
             } else {
                 onTermination?(.httpServerError(status))

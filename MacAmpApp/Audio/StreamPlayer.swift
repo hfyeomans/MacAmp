@@ -114,8 +114,16 @@ final class StreamPlayer {
     }
 
     func resume() {
-        pipeline.resume()
-        isPlaying = true
+        if case .paused = pipeline.state {
+            pipeline.resume()
+            isPlaying = true
+        } else if let station = currentStation {
+            // Pipeline was stopped (not paused) — e.g. pause during connecting/buffering.
+            // Restart the stream instead of just flipping isPlaying.
+            let rb = LockFreeRingBuffer(capacity: 32768, channelCount: 2)
+            ringBuffer = rb
+            pipeline.start(url: station.streamURL, ringBuffer: rb)
+        }
     }
 
     func stop() {
@@ -199,8 +207,9 @@ final class StreamPlayer {
             // Terminal failure — no reconnect
             isReconnecting = false
             ringBuffer = nil
-            if error == nil {
-                error = reason.userMessage
+            let message = reason.userMessage
+            if error == nil && !message.isEmpty {
+                error = message
             }
             onStreamTerminated?()
         }
@@ -228,6 +237,7 @@ final class StreamPlayer {
         guard reconnectAttempt <= Self.maxReconnectAttempts else {
             isReconnecting = false
             isBuffering = false
+            ringBuffer = nil
             error = "Connection lost after \(Self.maxReconnectAttempts) attempts"
             onStreamTerminated?()
             return

@@ -24,15 +24,14 @@ Add `StreamTerminationReason` enum to StreamDecodePipeline instead of pattern-ma
 
 ```swift
 enum StreamTerminationReason: Sendable {
-    case networkError(Error)       // URLSession error — reconnectable
-    case serverClosed              // Server closed connection — reconnectable
-    case httpClientError(Int)      // 4xx — NOT reconnectable
-    case httpServerError(Int)      // 5xx — reconnectable
-    case httpTooManyRequests       // 429 — reconnectable (with backoff)
-    case decodeError(String)       // Format/codec error — NOT reconnectable
-    case invalidResponse           // Not HTTP — NOT reconnectable
-    case playlistResolutionFailed  // M3U/PLS failure — reconnectable (may be DNS)
-    case userStopped               // Explicit stop() — NOT reconnectable
+    case networkError(String, Int)     // URLSession error (message + NSURLError code)
+    case serverClosed                  // Server closed connection — reconnectable
+    case httpClientError(Int)          // 4xx (except 429) — NOT reconnectable
+    case httpServerError(Int)          // 5xx + 429 — reconnectable
+    case decodeError(String)           // Format/codec error — NOT reconnectable
+    case invalidResponse               // Not HTTP — NOT reconnectable
+    case playlistResolutionFailed(String) // M3U/PLS failure — reconnectable (may be DNS)
+    case userStopped                   // Explicit stop() — NOT reconnectable
 }
 ```
 
