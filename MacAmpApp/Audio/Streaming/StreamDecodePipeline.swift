@@ -1,5 +1,6 @@
 import Foundation
 import AudioToolbox
+@preconcurrency import os
 
 /// Orchestrates the full stream decode chain:
 /// `URLSession → ICYFramer → AudioFileStreamParser → AudioConverterDecoder → LockFreeRingBuffer`
@@ -59,6 +60,23 @@ final class StreamDecodePipeline {
     // MARK: - Ring Buffer (shared with AudioPlayer's AVAudioSourceNode)
 
     private(set) var ringBuffer: LockFreeRingBuffer?
+
+    // MARK: - Audio Workgroup
+
+    /// Audio IO workgroup for decode thread priority. Set after bridge activation,
+    /// cleared on stop. Passed to DecodeContext for per-block join/leave.
+    private var audioWorkgroup: os_workgroup_t?
+
+    /// Set the audio IO workgroup. Called by PlaybackCoordinator after bridge activation.
+    /// The workgroup is forwarded to DecodeContext (queue-confined) for per-block join/leave.
+    func setAudioWorkgroup(_ workgroup: os_workgroup_t?) {
+        audioWorkgroup = workgroup
+        let ctx = decodeContext
+        nonisolated(unsafe) let wg = workgroup
+        decodeQueue.async {
+            ctx?.audioWorkgroup = wg
+        }
+    }
 
     // MARK: - Decode Context (queue-confined, NOT @MainActor)
 
@@ -245,6 +263,7 @@ final class StreamDecodePipeline {
         decodeContext?.shutdown()
         decodeContext = nil
         ringBuffer = nil
+        audioWorkgroup = nil
         formatReadyFired = false
     }
 
@@ -465,6 +484,10 @@ private final class DecodeContext: @unchecked Sendable {
     private var detectedSampleRate: Float64 = 0
     private var isShutdown: Bool = false
 
+    /// Audio IO workgroup — set after bridge activation, used for per-block join/leave.
+    /// Queue-confined: only accessed from decodeQueue.
+    var audioWorkgroup: os_workgroup_t?
+
     private static let prebufferThreshold: Int = 16384
 
     private let onFormatReady: @Sendable (Float64, UInt64) -> Void
@@ -526,9 +549,16 @@ private final class DecodeContext: @unchecked Sendable {
     }
 
     /// Process incoming HTTP data. Dispatched to decode queue.
+    /// Joins audio workgroup for the duration of decode work (per-block join/leave).
     func handleIncomingData(_ data: Data) {
         decodeQueue.async { [self] in
             guard !isShutdown else { return }
+
+            let token = joinWorkgroupIfAvailable()
+            defer {
+                if let t = token { leaveWorkgroup(token: t) }
+            }
+
             let chunks = framer.consume(data)
 
             for chunk in chunks {
@@ -553,6 +583,23 @@ private final class DecodeContext: @unchecked Sendable {
             parser?.close()
             parser = nil
         }
+    }
+
+    // MARK: - Workgroup Join/Leave (decode queue only)
+
+    /// Join the audio IO workgroup for the current block. Returns opaque token for leave.
+    /// Called at the start of each decode dispatch block; left at the end via defer.
+    /// Per-block join/leave is required because GCD serial queues reuse threads.
+    /// Uses ObjC shim because os_workgroup C APIs are not available in Swift.
+    private func joinWorkgroupIfAvailable() -> UnsafeMutableRawPointer? {
+        guard let wg = audioWorkgroup else { return nil }
+        return AudioWorkgroupJoin(wg)
+    }
+
+    /// Leave the audio IO workgroup. Token must be the value from joinWorkgroupIfAvailable.
+    private func leaveWorkgroup(token: UnsafeMutableRawPointer) {
+        guard let wg = audioWorkgroup else { return }
+        AudioWorkgroupLeave(wg, token)
     }
 
     // MARK: - Internal (decode queue only)

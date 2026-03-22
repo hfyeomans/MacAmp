@@ -2,6 +2,7 @@
 import Foundation
 import AVFoundation
 import Observation
+import os
 
 @Observable
 @MainActor
@@ -520,6 +521,12 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
 
     func deactivateStreamBridge() {
         engine.deactivateStreamBridge()
+    }
+
+    /// The audio IO workgroup from the engine output node.
+    /// Valid only while the engine is running (i.e., after bridge activation).
+    var audioWorkgroup: os_workgroup_t? {
+        engine.audioWorkgroup
     }
 
     // MARK: - Seeking / Scrubbing

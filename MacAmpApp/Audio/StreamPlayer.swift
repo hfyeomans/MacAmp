@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import os
 
 /// Plays internet radio streams using a custom decode pipeline.
 ///
@@ -139,6 +140,14 @@ final class StreamPlayer {
         ringBuffer = nil
         currentSampleRate = 0
         wasActivelyPlaying = false
+    }
+
+    // MARK: - Audio Workgroup
+
+    /// Forward the audio IO workgroup to the decode pipeline.
+    /// Called by PlaybackCoordinator after bridge activation.
+    func setAudioWorkgroup(_ workgroup: os_workgroup_t?) {
+        pipeline.setAudioWorkgroup(workgroup)
     }
 
     // MARK: - Ring Buffer Access (for PlaybackCoordinator bridge lifecycle)
