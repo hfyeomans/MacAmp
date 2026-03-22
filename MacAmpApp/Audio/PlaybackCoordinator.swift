@@ -361,12 +361,14 @@ final class PlaybackCoordinator {
             if let streamError = streamPlayer.error {
                 return streamError
             }
-            // Live ICY metadata (overrides Track title)
+            // Station name (from RadioStation or track title)
+            let stationName = streamPlayer.currentStation?.name ?? currentTrack?.title ?? currentTitle ?? "Internet Radio"
+
+            // Combine station name + ICY track title (scrollable in Winamp title bar)
             if let icy = streamPlayer.streamTitle {
-                return icy
+                return "\(stationName) - \(icy)"
             }
-            // Fallback to Track or station name
-            return currentTrack?.title ?? currentTitle ?? "Internet Radio"
+            return stationName
 
         case .localTrack(let url):
             if let title = currentTitle?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty {
