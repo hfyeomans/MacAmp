@@ -1,8 +1,8 @@
 # MacAmp
 
 ![Platform](https://img.shields.io/badge/platform-macOS%2015.0+-blue?logo=apple)
-![Swift](https://img.shields.io/badge/Swift-6.0-orange?logo=swift)
-![Version](https://img.shields.io/badge/version-1.0.6-brightgreen)
+![Swift](https://img.shields.io/badge/Swift-6.2-orange?logo=swift)
+![Version](https://img.shields.io/badge/version-1.2-brightgreen)
 ![Notarized](https://img.shields.io/badge/Notarized-Apple%20Approved-brightgreen?logo=apple)
 ![Maintained](https://img.shields.io/badge/maintained-yes-green)
 
@@ -23,7 +23,8 @@ MacAmp is a SwiftUI-based audio player for macOS that recreates the iconic deskt
 - ⌨️ **Keyboard Navigation** - Navigate playlist menus with arrow keys (↑↓) and Escape
 - ♿ **VoiceOver Ready** - Accessible menu navigation for screen reader users
 - 📋 **M3U/M3U8 Playlists** - Load playlists with local files and internet radio streams
-- 📻 **Internet Radio** - Stream HTTP/HTTPS radio with live metadata
+- 📻 **Internet Radio** - Stream HTTP/HTTPS radio with live metadata, EQ, and visualizer support
+- 🔄 **Auto-Reconnect** - Streams automatically reconnect after network interruptions with clear error messages
 - 📂 **Playlist Menus** - Sprite-based popup menus for ADD, REM, MISC, and LIST OPTS with hover states
 - ✨ **Multi-Select** - Shift+Click to select multiple tracks, Command+A to select all, with CROP and remove operations
 - 📝 **Native Text Rendering** - Playlist tracks use real text with PLEDIT.txt colors and Unicode support (not bitmap fonts)
@@ -50,7 +51,7 @@ MacAmp is a SwiftUI-based audio player for macOS that recreates the iconic deskt
 - ⚡ **Modern SwiftUI** - Utilizes WindowDragGesture and latest macOS APIs
 - 🔄 **Dynamic Skin Switching** - Hot-swap skins without restart
 - 📦 **Distribution Ready** - Developer ID signed builds for /Applications installation
-- 🚀 **Swift 6 Architecture** - Modern, performant, future-proof codebase
+- 🚀 **Swift 6.2 Architecture** - Modern, performant, future-proof codebase
 
 ## Requirements
 
@@ -60,16 +61,16 @@ MacAmp is a SwiftUI-based audio player for macOS that recreates the iconic deskt
 
 ## Download
 
-### Latest Release: v1.0.6 (February 2026)
+### Latest Release: v1.2 (March 2026)
 
-[![Download MacAmp](https://img.shields.io/badge/Download-MacAmp%20v1.0.6-blue?style=for-the-badge)](https://github.com/hfyeomans/MacAmp/releases/tag/v1.0.6)
+[![Download MacAmp](https://img.shields.io/badge/Download-MacAmp%20v1.2-blue?style=for-the-badge)](https://github.com/hfyeomans/MacAmp/releases/tag/v1.2)
 
-**[Download MacAmp-1.0.6.dmg](https://github.com/hfyeomans/MacAmp/releases/tag/v1.0.6)** (6.0 MB)
+**[Download MacAmp-1.2.dmg](https://github.com/hfyeomans/MacAmp/releases/tag/v1.2)**
 
 | Property | Value |
 |----------|-------|
-| Version | 1.0.6 |
-| Build | 6 |
+| Version | 1.2 |
+| Build | 12 |
 | Signed | Developer ID Application |
 | Notarized | Yes (Apple approved) |
 | Architecture | Universal (arm64 + x86_64) |
@@ -80,11 +81,16 @@ MacAmp is a SwiftUI-based audio player for macOS that recreates the iconic deskt
 3. Drag MacAmp to Applications folder
 4. Launch from Applications (no Gatekeeper warnings)
 
-**What's New in v1.0.6:**
-- **Balance Slider Fix** - Fixed balance slider color gradient to properly display left/right stereo panning
-- **Volume/Balance Persistence** - Volume and balance settings now persist across app restarts via UserDefaults
+**What's New in v1.2:**
+- **Unified Audio Pipeline** - EQ, visualizer, and balance now work for internet radio streams (not just local files)
+- **Auto-Reconnect** - Internet radio streams automatically reconnect after network interruptions with exponential backoff
+- **Stream Error Display** - Clear error messages ("Host not found", "Connection lost") instead of generic "buffer 0%"
+- **Stream Display** - Shows station name + track title together (e.g., "80s80s - Never Gonna Give You Up")
+- **EQ Persistence** - Equalizer on/off state now persists across app restarts
+- **VBR Accuracy** - Improved seek bar accuracy for variable bitrate MP3/AAC files
+- **Butterchurn Reliability** - MilkDrop visualizations load reliably across all build configurations
 
-See [Release Notes](https://github.com/hfyeomans/MacAmp/releases/tag/v1.0.6) for full changelog.
+See [Release Notes](https://github.com/hfyeomans/MacAmp/releases/tag/v1.2) for full changelog.
 
 ## Installation
 
@@ -95,11 +101,12 @@ See [Release Notes](https://github.com/hfyeomans/MacAmp/releases/tag/v1.0.6) for
 git clone https://github.com/hfyeomans/MacAmp.git
 cd MacAmp
 
-# Open in Xcode
-open MacAmpApp.xcodeproj
+# Generate Xcode project (required — .xcodeproj is not committed)
+brew install xcodegen  # if not installed
+xcodegen generate
 
-# Build and run (Cmd+R) or build from command line:
-xcodebuild -scheme MacAmp -configuration Debug -destination "platform=macOS"
+# Open in Xcode and build (Cmd+R)
+open MacAmpApp.xcodeproj
 ```
 
 ## Usage
@@ -136,7 +143,7 @@ Open with **Cmd+Shift+E** or click the EQ button.
 
 - **10 Frequency Bands** - Drag sliders to adjust (60Hz to 16kHz)
 - **Preamp** - Overall gain control
-- **ON/OFF** - Toggle EQ processing (local files only, not streams)
+- **ON/OFF** - Toggle EQ processing (works for both local files and internet radio streams)
 - **Presets** - 17 built-in presets (Classical, Rock, Dance, etc.) via Presets button
 
 ### Playlist Window
@@ -156,7 +163,7 @@ Open with **Cmd+Shift+P** or click the PL button.
 - **Scroll Slider** - Gold thumb on right border
 - **Mini Visualizer** - Appears when main window is shaded (≥350px width)
 
-**Note:** Internet streams show "Connecting..." during buffering, then live metadata. EQ/visualizer unavailable for streams (AVPlayer limitation).
+**Note:** Internet streams show "Connecting..." during buffering, then live metadata. EQ, visualizer, and balance controls work for both local files and streams. Streams automatically reconnect after network interruptions.
 
 ### Video Window
 
@@ -211,9 +218,9 @@ Open with **Ctrl+K** for 245 Milkdrop 2 presets at 60 FPS.
 MacAmp uses a strict three-layer separation, inspired by web frameworks but adapted for SwiftUI's declarative paradigm.
 
 ### Mechanism Layer ("What the app does")
-- **PlaybackCoordinator** - Orchestrates dual audio backends (local + streaming)
-- **AudioPlayer** - AVAudioEngine lifecycle for local files with 10-band EQ
-- **StreamPlayer** - AVPlayer-based HTTP/HTTPS radio streaming
+- **PlaybackCoordinator** - Orchestrates unified audio pipeline (local + streaming through AVAudioEngine)
+- **AudioPlayer** - Playback facade with AudioEngineController for engine lifecycle and 10-band EQ
+- **StreamPlayer** - Internet radio with custom decode pipeline and auto-reconnect
 - **VisualizerPipeline** - Audio tap, FFT processing, Butterchurn data
 - **PlaylistController** - Playlist state and navigation logic
 - **VideoPlaybackController** - Video AVPlayer lifecycle management
@@ -245,7 +252,7 @@ MacAmpApp/
 │   ├── MetadataLoader.swift                # Async track/video metadata extraction
 │   ├── PlaybackCoordinator.swift           # Orchestrates dual backend (local + streaming)
 │   ├── PlaylistController.swift            # Playlist state and navigation logic
-│   ├── StreamPlayer.swift                  # AVPlayer-based HTTP/HTTPS radio streaming
+│   ├── StreamPlayer.swift                  # Internet radio with auto-reconnect
 │   ├── VideoPlaybackController.swift       # AVPlayer lifecycle and observer management
 │   └── VisualizerPipeline.swift            # Audio tap, FFT processing, Butterchurn data
 │
@@ -354,7 +361,7 @@ Package.swift                           # Swift Package Manager Configuration
 
 **2025 - Foundation**
 - **5-Window System**: Main, Equalizer, Playlist, Video, Milkdrop with unified focus tracking
-- **Dual Audio Backend**: PlaybackCoordinator orchestrating AVAudioEngine (local) + AVPlayer (streams)
+- **Unified Audio Pipeline**: All audio through AVAudioEngine (local files + internet radio streams)
 - **Swift 6 Migration**: @Observable macro pattern replacing ObservableObject
 - **Segment-Based Resize**: 25×29px quantized sizing for all resizable windows
 
@@ -429,7 +436,7 @@ See [`docs/MACAMP_ARCHITECTURE_GUIDE.md`](docs/MACAMP_ARCHITECTURE_GUIDE.md) for
 - **Five-Window Architecture** - Independent WindowGroup(id:) scenes with unified focus state
 - **WindowDragGesture** - Native SwiftUI borderless window dragging (macOS 15+)
 - **@Observable Macro** - Swift 6 strict concurrency with @MainActor isolation
-- **Dual Audio Backend** - AVAudioEngine (local + EQ) / AVPlayer (streams) orchestration
+- **Unified Audio Pipeline** - All audio through AVAudioEngine with EQ, visualizer, and balance for both local and streams
 - **10-Band Parametric EQ** - Real-time equalization via AVAudioUnitEQ
 - **Hot Skin Swapping** - Runtime skin changes without app restart
 
@@ -455,6 +462,26 @@ See [`docs/SPRITE_SYSTEM_COMPLETE.md`](docs/SPRITE_SYSTEM_COMPLETE.md) for imple
 - **Progress Timer** - 100ms update interval balances CPU vs. smoothness
 
 ## Recent Updates
+
+### v1.2 (March 2026) - Unified Audio Pipeline & Stream Reliability
+
+**Major Features:**
+- **Unified Audio Pipeline** - EQ, spectrum analyzer, oscilloscope, and balance now work for internet radio streams — full feature parity with local file playback
+- **Auto-Reconnect** - Internet radio streams automatically reconnect after network interruptions with exponential backoff (up to 10 attempts)
+- **Stream Error Display** - Clear, user-friendly error messages replace the generic "buffer 0%" indicator
+- **Stream Display** - Station name and track title shown together (e.g., "80s80s - Never Gonna Give You Up")
+
+**Improvements:**
+- **EQ Persistence** - Equalizer on/off state now persists across app restarts
+- **VBR Seek Accuracy** - Improved seek bar and time label accuracy for variable bitrate MP3 and AAC files
+- **Butterchurn Reliability** - MilkDrop visualizations load reliably in all build configurations
+
+**Technical:**
+- Swift 6.2 with strict concurrency
+- 53 automated tests
+- Developer ID signed and Apple notarized
+
+---
 
 ### v1.0.6 (February 2026) - Balance Slider Fix & Persistence
 
@@ -695,7 +722,6 @@ See [`docs/SPRITE_SYSTEM_COMPLETE.md`](docs/SPRITE_SYSTEM_COMPLETE.md) for imple
 
 ### Known Limitations
 
-- **EQ for Streams** - Equalizer only works for local files (AVPlayer limitation for HTTP streams)
 - **Skin Sprite Coverage** - Some rare skin variants may have missing sprites (fallbacks generated)
 - **Enter Key in Menus** - Menu activation requires click (arrow key navigation + click works)
 - **Multi-Room Sync** - AirPlay 2 multi-room audio not yet supported
@@ -718,7 +744,7 @@ We welcome contributions! High-impact areas from our [tasks backlog](tasks/):
 
 | Document | Description | Lines |
 |----------|-------------|-------|
-| [`MACAMP_ARCHITECTURE_GUIDE.md`](docs/MACAMP_ARCHITECTURE_GUIDE.md) | ⭐ **Primary Reference** - Complete system architecture, three-layer design, dual audio backend | 4,555 |
+| [`MACAMP_ARCHITECTURE_GUIDE.md`](docs/MACAMP_ARCHITECTURE_GUIDE.md) | ⭐ **Primary Reference** - Complete system architecture, three-layer design, unified audio pipeline | 5,313 |
 | [`IMPLEMENTATION_PATTERNS.md`](docs/IMPLEMENTATION_PATTERNS.md) | Code patterns, @Observable usage, testing, anti-patterns | 2,327 |
 | [`SPRITE_SYSTEM_COMPLETE.md`](docs/SPRITE_SYSTEM_COMPLETE.md) | Semantic sprite resolution, skin file structure | 814 |
 

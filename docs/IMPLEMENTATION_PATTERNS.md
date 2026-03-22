@@ -1,7 +1,7 @@
 # MacAmp Implementation Patterns
 
-**Version:** 1.9.0
-**Date:** 2026-03-14
+**Version:** 2.0.0
+**Date:** 2026-03-22
 **Purpose:** Practical code patterns and best practices for MacAmp development
 
 ---
@@ -40,13 +40,16 @@
    - [Stream Decode Pipeline (Unified Audio)](#pattern-stream-decode-pipeline-unified-audio) **(New - Unified Pipeline)**
    - [AudioConverter Input Buffer Lifecycle](#pattern-audioconverter-input-buffer-lifecycle) **(New - Unified Pipeline)**
    - [Engine Graph Explicit Format](#pattern-engine-graph-explicit-format) **(New - Unified Pipeline)**
+   - [Engine File Duration as Authoritative Source](#pattern-engine-file-duration-as-authoritative-source-vbr-lesson-s1) **(New - S1)**
 5. [Async/Await Patterns](#asyncawait-patterns)
    - [Async Stream Events](#pattern-async-stream-events)
    - [Cancellable Tasks](#pattern-cancellable-tasks)
    - [Background I/O with @concurrent Static Functions](#pattern-background-io-with-concurrent-static-functions-swift-62) **(Updated - Swift 6.2)**
-   - [Callback Synchronization for Cross-Component Communication](#pattern-callback-synchronization-for-cross-component-communication) **(New - Swift 6)**
+   - [Callback Synchronization for Cross-Component Communication](#pattern-callback-synchronization-for-cross-component-communication) **(New - Swift 6, Updated - S1)**
    - [Stream Bridge Lifecycle Callbacks](#pattern-stream-bridge-lifecycle-callbacks) **(New - Unified Pipeline)**
+   - [Exponential Backoff Reconnect with Bridge Tear-Down](#pattern-exponential-backoff-reconnect-with-bridge-tear-down-s1) **(New - S1)**
 6. [Error Handling Patterns](#error-handling-patterns)
+   - [Typed Stream Termination Reasons](#pattern-typed-stream-termination-reasons-s1) **(New - S1)**
 7. [Testing Patterns](#testing-patterns)
 8. [Migration Guides](#migration-guides)
 9. [Anti-Patterns to Avoid](#anti-patterns-to-avoid)
@@ -201,7 +204,7 @@ final class PlaylistManager {
 
 **Implementation**:
 ```swift
-// File: MacAmpApp/Audio/AudioPlayer.swift:86-126
+// File: MacAmpApp/Audio/AudioPlayer.swift
 // Purpose: Forward state from extracted components while preserving existing bindings
 // Context: Views bind to AudioPlayer.playlist instead of playlistController.playlist
 
@@ -253,7 +256,7 @@ final class AudioPlayer {
 - Views should use the facade (AudioPlayer), not reach into sub-components
 - Don't forward every property - only those needed by external callers
 
-**Real usage**: `AudioPlayer.swift` maintains API compatibility after extracting `PlaylistController`, `EQPresetStore`, `VideoPlaybackController`, `VisualizerPipeline`, and `EqualizerController` (EQ bands, preamp, presets, auto-EQ — extracted in Wave 1)
+**Real usage**: `AudioPlayer.swift` maintains API compatibility after extracting 6 components: `PlaylistController`, `EQPresetStore`, `VideoPlaybackController`, `VisualizerPipeline`, `EqualizerController` (EQ bands, preamp, presets, auto-EQ — extracted in Wave 1), and `AudioEngineController` (AVAudioEngine graph, node operations, stream bridge, progress timer — extracted in S1)
 
 **Pitfalls**:
 - Don't duplicate state - always delegate to the source component
@@ -342,7 +345,7 @@ var repeatMode: AppSettings.RepeatMode {
 
 **Implementation**:
 ```swift
-// File: MacAmpApp/Audio/AudioPlayer.swift:29-32, 58-73
+// File: MacAmpApp/Audio/AudioPlayer.swift
 // Purpose: Persist volume and balance settings across launches
 // Context: Keys enum centralizes string literals, didSet auto-saves
 // NOTE (T5 Phase 1): didSet only updates local playerNode + persists.
@@ -520,7 +523,7 @@ final class PlaylistController {
     }
 }
 
-// File: MacAmpApp/Audio/AudioPlayer.swift:1021-1042
+// File: MacAmpApp/Audio/AudioPlayer.swift
 // Purpose: Bridge method translates actions to actual playback operations
 
 /// AudioPlayer - Bridges actions to playback
@@ -2472,6 +2475,64 @@ engine.connect(playerNode, to: eqNode, format: graphFormat)
 - Direct playback paths that bypass PlaybackCoordinator must still deactivate the bridge — guard this in `rewireForCurrentFile()`
 - Engine start must be a hard gate: if `audioEngine.start()` fails, abort immediately (don't install taps or call `playerNode.play()`)
 
+### Pattern: Engine File Duration as Authoritative Source (VBR Lesson, S1)
+
+**When to use**: Computing playback progress and seek targets for local audio files. The engine's `AVAudioFile.length / sampleRate` is the authoritative duration for runtime progress, NOT metadata duration from `AVAsset.duration`.
+
+**S1**: Discovered when VBR (Variable Bit Rate) MP3 files caused seek bar drift. `AVAsset.duration` uses the file's metadata header (which estimates duration from average bitrate), while `AVAudioFile.length` counts actual audio frames. These diverge on VBR files, causing the seek bar to jump at end-of-track when the two sources disagree.
+
+**Implementation**:
+```swift
+// File: MacAmpApp/Audio/AudioEngineController.swift
+// Purpose: Compute duration from actual audio frames, not metadata
+
+var currentFileDuration: Double {
+    guard let file = audioFile else { return 0 }
+    let sampleRate = file.processingFormat.sampleRate
+    guard sampleRate > 0 else { return 0 }
+    return Double(file.length) / sampleRate  // Frame-accurate
+}
+
+// File: MacAmpApp/Audio/AudioPlayer.swift
+// Purpose: Prefer engine duration over metadata duration for audio playback
+
+// On track load: sync duration from file (not metadata)
+let fileDuration = engine.currentFileDuration
+if fileDuration.isFinite && fileDuration > 0 {
+    currentDuration = fileDuration
+}
+
+// On track metadata arrival: only use metadata duration for non-audio or before file loads
+if self.currentMediaType != .audio || self.engine.currentFileDuration <= 0 {
+    self.currentDuration = track.duration  // Metadata fallback only
+}
+
+// On playback completion: use engine duration for final time display
+if self.currentMediaType == .audio, self.engine.currentFileDuration > 0 {
+    self.currentTime = self.engine.currentFileDuration
+} else {
+    self.currentTime = self.currentDuration  // Video: use metadata
+}
+```
+
+**Why metadata duration is unreliable for VBR**:
+- `AVAsset.duration` reads the XING/VBRI header or estimates from file size / average bitrate
+- VBR files have sections with different bitrates — the estimate can be off by seconds
+- `AVAudioFile.length` is the actual number of audio sample frames decoded — always accurate
+- The difference causes the seek bar to show 3:42 while the engine says 3:38, creating a visible jump at track end
+
+**When to use metadata duration**:
+- Video files (engine may not have an audioFile loaded)
+- Before the audio file is opened (initial display from playlist metadata)
+- Non-audio media types where `AVAudioFile` is not applicable
+
+**Real usage**: `AudioEngineController.swift` `currentFileDuration`, `AudioPlayer.swift` progress tracking and completion
+
+**Pitfalls**:
+- Do not cache metadata duration and use it for seek calculations after the engine file is loaded
+- When the engine file is swapped (track change), `currentFileDuration` changes immediately — update `currentDuration` at the same point
+- For video files, `engine.currentFileDuration` may return 0 (no audio file loaded) — always fall back to metadata duration in that case
+
 ---
 
 ## Async/Await Patterns
@@ -2679,7 +2740,7 @@ final class VideoPlaybackController {
     }
 }
 
-// File: MacAmpApp/Audio/AudioPlayer.swift:141-153
+// File: MacAmpApp/Audio/AudioPlayer.swift
 // Purpose: Wire up callbacks during initialization
 
 init() {
@@ -2745,6 +2806,58 @@ self.audioPlayer.onPlaylistAdvanceRequest = { [weak self] track in
 - Don't pass non-Sendable types through callbacks in Swift 6
 - Consider using `AsyncStream` for high-frequency events
 - **Don't conflate unrelated events in a single callback** -- the `externalPlaybackHandler` anti-pattern made it ambiguous whether the coordinator should refresh metadata or advance the playlist
+
+#### AudioEngineController Callback Wiring (S1 Decomposition)
+
+**Context**: When `AudioEngineController` was extracted from `AudioPlayer` in S1, it took ownership of the progress timer, audio scheduling completion, and bridge state -- but `AudioPlayer` still owns the observable state that drives the UI. Three callbacks bridge this gap:
+
+```swift
+// File: MacAmpApp/Audio/AudioEngineController.swift
+// Purpose: Expose engine-level events to AudioPlayer without back-reference
+
+@MainActor
+final class AudioEngineController {
+    /// Called on every progress timer tick with (currentTime, progress).
+    var onProgressUpdate: ((_ currentTime: Double, _ progress: Double) -> Void)?
+
+    /// Called when a scheduled audio segment completes. The UUID identifies the seek
+    /// operation that scheduled the segment, allowing AudioPlayer to filter stale completions.
+    var onPlaybackEnded: ((_ fromSeekID: UUID?) -> Void)?
+
+    /// Called when isBridgeActive changes so AudioPlayer can update its observable property.
+    var onBridgeStateChanged: ((_ isActive: Bool) -> Void)?
+}
+
+// File: MacAmpApp/Audio/AudioPlayer.swift
+// Purpose: Wire engine callbacks during init
+
+init() {
+    // ... volume/balance restore, engine creation ...
+
+    engine.onProgressUpdate = { [weak self] currentTime, progress in
+        guard let self else { return }
+        self.currentTime = currentTime
+        if self.currentDuration > 0 {
+            self.playbackProgress = progress
+        } else {
+            self.playbackProgress = 0
+        }
+    }
+    engine.onPlaybackEnded = { [weak self] seekID in
+        self?.onPlaybackEnded(fromSeekID: seekID)
+    }
+    engine.onBridgeStateChanged = { [weak self] isActive in
+        self?.isBridgeActive = isActive
+    }
+}
+```
+
+**Why three separate callbacks (not a delegate protocol)**:
+- Each callback has a distinct signature and firing frequency (progress fires at 10 Hz, bridge state fires rarely)
+- Closures allow `[weak self]` without requiring a formal protocol conformance
+- Consistent with the existing VideoPlaybackController callback pattern
+
+**Real usage**: `AudioEngineController.swift` declares the callbacks, `AudioPlayer.swift` wires them in `init()`
 
 ### Pattern: Stream Bridge Lifecycle Callbacks
 
@@ -2818,6 +2931,93 @@ sessionDelegate.onResponse = { [weak self] response in  // delegate queue
 - Calling `configureFramer` from both delegate queue AND MainActor causes double-configure — the second call resets `audioByteCount`, corrupting ICY metadata alignment for the entire stream
 - When adding an "early" call to fix a race, ALWAYS search for and remove the "late" call (`grep -r "configureFramer"`)
 - Diagnostic code (file I/O) on the decode queue can mask this timing bug by adding latency
+
+### Pattern: Exponential Backoff Reconnect with Bridge Tear-Down (S1)
+
+**When to use**: Automatically reconnecting internet radio streams after transient network failures while maintaining AVAudioEngine bridge integrity.
+
+**S1**: Introduced to give internet radio streams resilience against network glitches, server restarts, and connection resets without user intervention.
+
+**Implementation**:
+```swift
+// File: MacAmpApp/Audio/StreamPlayer.swift
+// Purpose: Reconnect with exponential backoff, tearing down and re-creating the bridge each attempt
+// Context: Each reconnect needs a fresh ring buffer and fresh bridge activation
+
+private static let maxReconnectAttempts = 10
+private static let maxBackoffSeconds: Double = 16.0
+
+private func attemptReconnect() {
+    reconnectAttempt += 1
+    guard reconnectAttempt <= Self.maxReconnectAttempts else {
+        // Terminal: give up after max attempts
+        isReconnecting = false
+        error = "Connection lost after \(Self.maxReconnectAttempts) attempts"
+        onStreamTerminated?()
+        return
+    }
+
+    isReconnecting = true
+
+    // CRITICAL: Tear down bridge — new ring buffer needs new bridge activation
+    onStreamTerminated?()
+
+    let attempt = reconnectAttempt
+    reconnectTask = Task { @MainActor [weak self] in
+        guard let self else { return }
+
+        let delay = min(Self.maxBackoffSeconds, pow(2.0, Double(attempt - 1)))
+        // Backoff: 1s, 2s, 4s, 8s, 16s, 16s, 16s, ...
+
+        try? await Task.sleep(for: .seconds(delay))
+        guard !Task.isCancelled, let station = self.currentStation else { return }
+
+        // Fresh ring buffer for new stream connection
+        let rb = LockFreeRingBuffer(capacity: 32768, channelCount: 2)
+        self.ringBuffer = rb
+        self.pipeline.start(url: station.streamURL, ringBuffer: rb)
+    }
+}
+```
+
+**Stable-playback counter reset**:
+```swift
+// File: MacAmpApp/Audio/StreamPlayer.swift
+// Purpose: Reset reconnect counter after sustained playback proves the connection is healthy
+
+private func startPlaybackStableTimer() {
+    playbackStableTask?.cancel()
+    playbackStableTask = Task { @MainActor [weak self] in
+        try? await Task.sleep(for: .seconds(5))
+        guard let self, self.isPlaying else { return }
+        // Stream has been stable for 5 seconds — reset reconnect counter
+        self.reconnectAttempt = 0
+    }
+}
+```
+
+**Reconnect lifecycle**:
+```
+Stream playing → network error → handleTermination()
+  → isReconnectable(reason)? → YES
+  → attemptReconnect()
+    → onStreamTerminated() → PlaybackCoordinator tears down bridge
+    → Task.sleep(backoff)
+    → pipeline.start() with fresh ring buffer
+    → onFormatReady() → PlaybackCoordinator activates new bridge
+    → isPlaying = true → startPlaybackStableTimer()
+    → 5 seconds stable → reconnectAttempt = 0
+```
+
+**Why bridge tear-down is required per attempt**: Each reconnect creates a new `LockFreeRingBuffer` because the old one may contain stale PCM data from the previous connection. The `AVAudioSourceNode` render block captures the ring buffer reference, so a new bridge must be activated to pick up the new buffer.
+
+**Real usage**: `StreamPlayer.swift` reconnect logic, wired to `PlaybackCoordinator` via `onStreamTerminated` callback
+
+**Pitfalls**:
+- Bridge tear-down (`onStreamTerminated`) must fire BEFORE starting the new pipeline — otherwise the old bridge's render block reads stale data
+- `cancelReconnect()` must be called on explicit `stop()` and on new `play()` calls to prevent orphaned reconnect tasks
+- The stable-playback timer must be cancelled when stopping or reconnecting to prevent false resets
+- `wasActivelyPlaying` guard prevents reconnect attempts for streams that never successfully played (avoids infinite retry on initial connection failure)
 
 ---
 
@@ -2934,6 +3134,62 @@ struct VisualizationView: View {
 ```
 
 **Real usage**: Spectrum analyzer fallback
+
+### Pattern: Typed Stream Termination Reasons (S1)
+
+**When to use**: Classifying stream failure modes to determine reconnect eligibility, replacing string-based error matching with exhaustive enum pattern matching.
+
+**S1**: Introduced to replace ad-hoc `error.localizedDescription.contains(...)` string matching in StreamPlayer reconnect logic. The typed enum ensures all failure modes are handled at compile time and makes reconnect policy explicit.
+
+**Implementation**:
+```swift
+// File: MacAmpApp/Audio/Streaming/StreamDecodePipeline.swift
+// Purpose: Typed enum for all stream termination modes
+// Context: Produced by StreamDecodePipeline, consumed by StreamPlayer for reconnect decisions
+
+enum StreamTerminationReason: Sendable {
+    case networkError(String, Int)          // URLSession error (message + NSURLError code)
+    case serverClosed                       // Server closed connection
+    case httpClientError(Int)               // 4xx status
+    case httpServerError(Int)               // 5xx status
+    case decodeError(String)                // Format/codec error
+    case invalidResponse                    // Not HTTP
+    case playlistResolutionFailed(String)   // M3U/PLS failure
+    case userStopped                        // Explicit stop()
+}
+
+// File: MacAmpApp/Audio/StreamPlayer.swift
+// Purpose: Classify which terminations warrant reconnect vs. terminal failure
+
+private func isReconnectable(_ reason: StreamDecodePipeline.StreamTerminationReason) -> Bool {
+    switch reason {
+    case .networkError(_, let code):
+        // DNS resolution failure, bad URL — terminal (will never succeed on retry)
+        let terminalCodes = [
+            NSURLErrorCannotFindHost,     // -1003
+            NSURLErrorUnsupportedURL,     // -1002
+            NSURLErrorBadURL,             // -1000
+        ]
+        return !terminalCodes.contains(code)
+    case .serverClosed, .httpServerError, .playlistResolutionFailed:
+        return true   // Transient — reconnect
+    case .httpClientError, .decodeError, .invalidResponse, .userStopped:
+        return false  // Permanent or user-initiated — terminal
+    }
+}
+```
+
+**Design rationale**:
+- **Sendable**: The enum crosses from the decode queue (via `@MainActor @Sendable` closure) to MainActor, so it must be `Sendable`
+- **Associated values**: `networkError` carries the NSURLError code for fine-grained reconnect logic; `httpServerError`/`httpClientError` carry the HTTP status code for logging
+- **Exhaustive switch**: Adding a new case forces handling at all call sites — no silent fallthrough
+
+**Real usage**: `StreamDecodePipeline.swift` produces the reason via `onTermination`, `StreamPlayer.swift` consumes it in `handleTermination()` / `isReconnectable()`
+
+**Pitfalls**:
+- `networkError` codes overlap between truly transient (timeout, connection reset) and permanent (bad host) — the `terminalCodes` list must be curated carefully
+- `playlistResolutionFailed` is reconnectable because M3U/PLS download failure may be a transient DNS issue, even though the error looks permanent
+- `userStopped` must never trigger reconnect — always check this case first in any reconnect logic
 
 ---
 
@@ -3581,4 +3837,4 @@ When implementing new features, prefer these established patterns. When you disc
 
 ---
 
-*Document Version: 1.9.0 | Last Updated: 2026-03-14*
+*Document Version: 2.0.0 | Last Updated: 2026-03-22*

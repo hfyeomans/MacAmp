@@ -1,9 +1,9 @@
 # MacAmp Documentation Guide
 
-**Version:** 3.7.0
-**Date:** 2026-03-14
+**Version:** 3.8.0
+**Date:** 2026-03-22
 **Purpose:** Master index and navigation guide for all MacAmp documentation
-**Total Documentation:** 19,420 active lines across 18 current docs + 26 archived docs
+**Total Documentation:** 19,820 active lines across 18 current docs + 26 archived docs
 
 ---
 
@@ -26,7 +26,7 @@
 
 ## Executive Summary
 
-The MacAmp documentation system consists of **18 active technical documents** (19,420 lines) providing comprehensive coverage of a pixel-perfect Winamp 2.x recreation for macOS. Documentation spans from high-level architecture to implementation details, window management systems, video playback, visualization windows, build processes, and skin system specifications.
+The MacAmp documentation system consists of **18 active technical documents** (19,820 lines) providing comprehensive coverage of a pixel-perfect Winamp 2.x recreation for macOS. Documentation spans from high-level architecture to implementation details, window management systems, video playback, visualization windows, build processes, and skin system specifications.
 
 ### Documentation Purpose
 
@@ -112,11 +112,11 @@ xcodebuild test -scheme MacAmpApp -destination 'platform=macOS'
 
 ## Complete Documentation Inventory
 
-### 🏗️ Architecture & Design (12 documents, 16,377 lines)
+### 🏗️ Architecture & Design (12 documents, 16,777 lines)
 
 #### **[MACAMP_ARCHITECTURE_GUIDE.md](MACAMP_ARCHITECTURE_GUIDE.md)** ⭐
-- **Size**: 168KB, 5,206 lines
-- **Last Updated**: 2026-03-14
+- **Size**: 168KB, 5,313 lines
+- **Last Updated**: 2026-03-22
 - **Status**: ✅ AUTHORITATIVE
 - **Purpose**: Complete architectural reference for MacAmp
 - **Key Sections**:
@@ -133,8 +133,8 @@ xcodebuild test -scheme MacAmpApp -destination 'platform=macOS'
 - **Quality**: ⭐⭐⭐⭐⭐ Authoritative (post-corrections)
 
 #### **[IMPLEMENTATION_PATTERNS.md](IMPLEMENTATION_PATTERNS.md)** ⭐
-- **Size**: 115KB, 3,584 lines
-- **Last Updated**: 2026-03-14
+- **Size**: 115KB, 3,840 lines
+- **Last Updated**: 2026-03-22
 - **Status**: ✅ AUTHORITATIVE
 - **Purpose**: Practical code patterns and best practices
 - **Key Sections**:
@@ -224,8 +224,8 @@ xcodebuild test -scheme MacAmpApp -destination 'platform=macOS'
 - **Quality**: ⭐⭐⭐⭐⭐ Authoritative (Oracle Grade A-)
 
 #### **[MILKDROP_WINDOW.md](MILKDROP_WINDOW.md)** ⭐
-- **Size**: 54KB, 1,623 lines
-- **Last Updated**: 2026-01-06
+- **Size**: 54KB, 1,660 lines
+- **Last Updated**: 2026-03-22
 - **Status**: ✅ PRODUCTION - Complete with Butterchurn visualization and resize
 - **Purpose**: Milkdrop visualization window with Butterchurn.js integration
 - **Key Sections**:
@@ -760,6 +760,13 @@ Includes:
 | **Recursive withObservationTracking** | MULTI_WINDOW_ARCHITECTURE.md | §10.4.1 Recursive withObservationTracking |
 | **nonisolated deinit** | MULTI_WINDOW_ARCHITECTURE.md | §10.4.2 nonisolated deinit Awareness |
 | **Xcode settings** | RELEASE_BUILD_GUIDE.md | §Xcode Configuration |
+| **AudioEngineController** | MACAMP_ARCHITECTURE_GUIDE.md | §4a AudioPlayer Decomposition |
+| **StreamTerminationReason** | MACAMP_ARCHITECTURE_GUIDE.md, IMPLEMENTATION_PATTERNS.md | §9 Internet Radio, §Error Handling |
+| **Auto-reconnect / exponential backoff** | MACAMP_ARCHITECTURE_GUIDE.md | §9 Internet Radio |
+| **Stream error display** | MACAMP_ARCHITECTURE_GUIDE.md | §4 (displayTitle) |
+| **XcodeGen resource configuration** | MILKDROP_WINDOW.md | §9.2 XcodeGen Resource Config |
+| **macOS 26 WebContent noise** | MILKDROP_WINDOW.md | §11.5 macOS 26 WebContent |
+| **VBR duration alignment** | IMPLEMENTATION_PATTERNS.md | §Audio Processing Patterns |
 
 ### Common Questions → Answer Location
 
@@ -817,6 +824,9 @@ Includes:
 | "How does MILKDROP resize work?" | MILKDROP_WINDOW.md §12.3 Window Resizing |
 | "What is MilkdropWindowSizeState?" | MILKDROP_WINDOW.md §12.3 Window Resizing |
 | "How does dynamic titlebar expansion work?" | MILKDROP_WINDOW.md §12.3 Window Resizing (goldFillerTilesPerSide) |
+| "How does stream auto-reconnect work?" | MACAMP_ARCHITECTURE_GUIDE.md §9 (exponential backoff with StreamTerminationReason) |
+| "What is AudioEngineController?" | MACAMP_ARCHITECTURE_GUIDE.md §4a (extracted AVAudioEngine lifecycle manager) |
+| "Why does Milkdrop show 'loading'?" | MILKDROP_WINDOW.md §9.2 (XcodeGen resource configuration for Butterchurn JS files) |
 
 ---
 
@@ -828,11 +838,11 @@ Includes:
 ┌─────────────────────────────────────────────────────────┐
 │ Category               │ Lines  │ Docs │ Coverage      │
 ├───────────────────────┼────────┼──────┼───────────────┤
-│ Architecture & Design  │16,377  │ 12   │ █████████░ 96%│
+│ Architecture & Design  │16,777  │ 12   │ █████████░ 96%│
 │ Build & Distribution   │ 1,319  │  4   │ █████████░ 95%│
 │ Skin System           │   652  │  1   │ █████████░ 90%│
 │ Navigation & Index     │ 1,072  │  1   │ ██████████100%│
-│ TOTAL                 │19,420  │ 18   │ █████████░ 95%│
+│ TOTAL                 │19,820  │ 18   │ █████████░ 95%│
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -841,11 +851,11 @@ Includes:
 ```
 Total Active Docs:        18
 Total Archived Docs:      26 (local only)
-Total Lines:             19,420
-Average Doc Size:        1,079 lines
-Last Full Review:        2026-03-14
-Documentation Version:   3.7.0
-Recent Update:           Staleness audit, removed phantom docs (v3.7.0)
+Total Lines:             19,820
+Average Doc Size:        1,101 lines
+Last Full Review:        2026-03-22
+Documentation Version:   3.8.0
+Recent Update:           Updated line counts, added search index entries for auto-reconnect, AudioEngineController, XcodeGen resource config (v3.8.0)
 
 Quality Ratings:
 ⭐⭐⭐⭐⭐ Authoritative:   10 docs (56%)
@@ -979,9 +989,9 @@ The following documents have been **archived to docs/archive/** (local only, not
 ```
 18 Core Technical Documents
 ─────────────────────────────
-MACAMP_ARCHITECTURE_GUIDE.md         5,206 lines  (27%) ⭐ UPDATED
-IMPLEMENTATION_PATTERNS.md           3,584 lines  (18%) ⭐ UPDATED
-MILKDROP_WINDOW.md                   1,623 lines  (9%)
+MACAMP_ARCHITECTURE_GUIDE.md         5,313 lines  (27%) ⭐ UPDATED
+IMPLEMENTATION_PATTERNS.md           3,840 lines  (19%) ⭐ UPDATED
+MILKDROP_WINDOW.md                   1,660 lines  (8%)  ⭐ UPDATED
 MULTI_WINDOW_ARCHITECTURE.md         1,382 lines  (7%)  ⭐ UPDATED +322
 VIDEO_WINDOW.md                      1,151 lines  (7%)
 README.md (this file)                1,072 lines  (6%)
@@ -998,15 +1008,15 @@ CUSTOM_DRAG_FIX.md                     254 lines  (1%)
 RELEASE_BUILD_COMPARISON.md            230 lines  (1%)
 CODE_SIGNING_FIX.md                    200 lines  (1%)
 ─────────────────────────────
-TOTAL:                              19,420 lines
+TOTAL:                              19,820 lines
 ```
 
 ### Documentation by Category
 
-- **Architecture & Design**: 84% (16,377 lines)
+- **Architecture & Design**: 85% (16,777 lines)
 - **Build & Distribution**: 7% (1,319 lines)
 - **Skin System**: 3% (652 lines)
-- **Navigation & Index**: 6% (1,072 lines)
+- **Navigation & Index**: 5% (1,072 lines)
 
 ---
 
@@ -1040,11 +1050,18 @@ For questions or corrections, the documentation was comprehensively reviewed on 
 
 ---
 
-**MacAmp Documentation v3.7.0 | Last Updated: 2026-03-14 | Status: Production Authoritative**
+**MacAmp Documentation v3.8.0 | Last Updated: 2026-03-22 | Status: Production Authoritative**
 
-*Master index for 19,420+ lines of verified technical documentation (18 active docs)*
+*Master index for 19,820+ lines of verified technical documentation (18 active docs)*
 
-**Recent Update (v3.7.0 - 2026-03-14): Staleness Audit**
+**Recent Update (v3.8.0 - 2026-03-22): Doc Line Count Sync + Search Index Expansion**
+- Updated line counts: MACAMP_ARCHITECTURE_GUIDE.md 5,206 -> 5,313 (+107), IMPLEMENTATION_PATTERNS.md 3,584 -> 3,840 (+256), MILKDROP_WINDOW.md 1,623 -> 1,660 (+37)
+- Total documentation: 19,420 -> 19,820 lines (+400)
+- Added search index entries: AudioEngineController, StreamTerminationReason, auto-reconnect/exponential backoff, stream error display, XcodeGen resource configuration, macOS 26 WebContent noise, VBR duration alignment
+- Added common questions: stream auto-reconnect, AudioEngineController, Milkdrop loading issues
+- Updated last-updated dates for MACAMP_ARCHITECTURE_GUIDE.md, IMPLEMENTATION_PATTERNS.md, MILKDROP_WINDOW.md
+
+**Previous Update (v3.7.0 - 2026-03-14): Staleness Audit**
 - Removed 2 phantom doc entries (AUDIOPLAYER_REFACTORING_2026 variants) that no longer exist on disk
 - Updated all line counts, doc counts, and quality metrics to reflect 18 active docs
 - Updated PLAYLIST_WINDOW.md and RELEASE_BUILD_GUIDE.md inventory dates

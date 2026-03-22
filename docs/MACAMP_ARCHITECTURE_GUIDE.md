@@ -1,8 +1,8 @@
 # MacAmp Complete Architecture Guide
 
-**Version:** 2.9.0
-**Date:** 2026-03-14
-**Project State:** Production-Ready (5-Window System, WindowCoordinator Refactoring, MainWindow Layer Decomposition (T3), Internet Radio N1-N6 Fixes, Unified Audio Pipeline (T5), AudioPlayer Decomposition, PlaylistWindow Decomposition, Swift Testing Migration, Swift 6.2, macOS 15+/26+)
+**Version:** 3.0.0
+**Date:** 2026-03-22
+**Project State:** Production-Ready (5-Window System, WindowCoordinator Refactoring, MainWindow Layer Decomposition (T3), Internet Radio N1-N6 Fixes, Unified Audio Pipeline (T5), AudioPlayer Decomposition Phase 4 (AudioEngineController), Auto-Reconnect, PlaylistWindow Decomposition, Swift Testing Migration, Swift 6.2, macOS 15+/26+)
 **Purpose:** Deep technical reference for developers joining or maintaining MacAmp
 
 ---
@@ -70,8 +70,9 @@ Deployment:               Developer ID signed, notarization-ready
 ┌────────────────────────────────────────────────────────┐
 │ Component               │ Files │ LoC   │ Status       │
 ├────────────────────────┼───────┼───────┼──────────────┤
-│ Audio Engine           │  14   │ 5,132 │ Production   │
-│   - AudioPlayer.swift  │   1   │ 1,143 │ Mechanism    │
+│ Audio Engine           │  15   │ 5,400 │ Production   │
+│   - AudioPlayer.swift  │   1   │   705 │ Mechanism    │
+│   - AudioEngineCtrl    │   1   │   413 │ Mechanism    │
 │   - EqualizerController│   1   │   198 │ Mechanism    │
 │   - LockFreeRingBuffer │   1   │   212 │ Mechanism    │
 │   - EQPresetStore      │   1   │   197 │ Mechanism    │
@@ -79,13 +80,13 @@ Deployment:               Developer ID signed, notarization-ready
 │   - PlaylistController │   1   │   297 │ Mechanism    │
 │   - VideoPlaybackCtrl  │   1   │   282 │ Mechanism    │
 │   - VisualizerPipeline │   1   │   699 │ Mechanism    │
-│   - StreamPlayer       │   1   │   189 │ Mechanism    │
+│   - StreamPlayer       │   1   │   334 │ Mechanism    │
 │   - PlaybackCoord.     │   1   │   426 │ Mechanism    │
 │   - Streaming/         │   4   │ 1,318 │ Mechanism    │
 │     ICYFramer          │   1   │   200 │   Sendable   │
 │     AudioFileStreamPrs │   1   │   194 │   Queue-conf │
 │     AudioConverterDec  │   1   │   293 │   Queue-conf │
-│     StreamDecodePipeln │   1   │   631 │   @MainActor │
+│     StreamDecodePipeln │   1   │   666 │   @MainActor │
 │ Window Management      │  15   │ 1,388 │ Production   │
 │   - WindowCoordinator  │   1   │   219 │ Bridge/Facade│
 │   - Coordinator+Layout │   1   │   164 │ Bridge       │
@@ -112,10 +113,10 @@ Deployment:               Developer ID signed, notarization-ready
 **Recent Metrics Improvements:**
 - MainWindow: monolithic ~650-line file → 10 files in MainWindow/ subdirectory (T3)
 - PlaylistWindow: monolithic + extension file → 7 files in PlaylistWindow/ subdirectory
-- AudioPlayer.swift: 1,805 → 1,043 lines (-42.2%)
+- AudioPlayer.swift: 1,805 → 705 lines (-61.0%) via Phase 1-4 extractions
 - Full Sendable conformance for Swift 6 readiness
 
-### Recent Architectural Changes (October 2025 - February 2026)
+### Recent Architectural Changes (October 2025 - March 2026)
 
 1. **Internet Radio Support**: Added StreamPlayer with PlaybackCoordinator orchestration
 2. **Swift 6 Migration**: Converted from ObservableObject to @Observable macro
@@ -141,16 +142,17 @@ Deployment:               Developer ID signed, notarization-ready
    - Unified focus state management across all 5 windows
    - Magnetic docking cluster detection for all window combinations
 
-9. **AudioPlayer Decomposition (v0.8.0, January 2026)**: Full Option C extraction
-   - Reduced AudioPlayer from 1,805 to 1,143 lines (-36.7%)
-   - Extracted 5 focused components following three-layer architecture:
+9. **AudioPlayer Decomposition (v0.8.0, January-March 2026)**: Full Option C extraction (Phases 1-4)
+   - Reduced AudioPlayer from 1,805 to 705 lines (-61.0%) across 4 phases
+   - Extracted 6 focused components following three-layer architecture:
      - **EQPresetStore** (197 lines): EQ preset persistence (UserDefaults + JSON file)
      - **MetadataLoader** (171 lines): Async track/video metadata extraction (nonisolated struct)
      - **PlaylistController** (297 lines): Playlist state and navigation logic
      - **VideoPlaybackController** (282 lines): AVPlayer lifecycle and observer management
      - **VisualizerPipeline** (699 lines): Audio tap, FFT processing, SPSC shared buffer, Butterchurn data
+     - **AudioEngineController** (413 lines): AVAudioEngine graph lifecycle, node wiring, bridge activation/deactivation (Phase 4)
    - Extracted **Track** model to `Models/Track.swift` with Sendable conformance (42 lines)
-   - AudioPlayer remains in Mechanism layer, now focused on AVAudioEngine lifecycle
+   - AudioPlayer remains in Mechanism layer, now a slim facade (705 lines) delegating engine concerns to AudioEngineController
    - Full Swift 6 strict concurrency compliance (Sendable, @MainActor, Task.detached)
    - Background I/O for preset persistence (fire-and-forget pattern)
    - Oracle review: 10/10 quality gate achieved
@@ -197,6 +199,22 @@ Deployment:               Developer ID signed, notarization-ready
    - Deleted files: `WinampMainWindow.swift` (old root), `WinampMainWindow+Helpers.swift` (cross-file extension)
    - Follows same decomposition pattern as PlaylistWindow/ (PR #49 N6)
 
+12. **AudioEngineController Extraction (Phase 4, March 2026)**: Extracted AVAudioEngine graph lifecycle from AudioPlayer
+   - AudioPlayer reduced from 1,143 to 705 lines in this phase (-38.3%; overall reduction from original 1,805 to 705 across all phases)
+   - New `AudioEngineController.swift` (413 lines) owns engine setup, node wiring, bridge activation/deactivation
+   - AudioPlayer is now a slim facade delegating engine graph concerns to AudioEngineController
+   - Component count for AudioPlayer decomposition increases from 5 to 6
+   - Full backward compatibility maintained via computed forwarding properties
+
+13. **Network Auto-Reconnect (March 2026)**: Automatic reconnection for internet radio streams
+   - `StreamTerminationReason` enum with 8 typed cases classifying connection failures
+   - Reconnect state machine with exponential backoff (1s to 16s, max 10 attempts)
+   - Error classification: reconnectable (networkError, serverClosed, httpServerError) vs terminal (userStopped, decodeError, httpClientError)
+   - Bridge tear-down and re-create cycle during reconnect (PlaybackCoordinator deactivates bridge, StreamPlayer restarts pipeline)
+   - User-friendly error messages via `userMessage` extension on StreamTerminationReason
+   - StreamPlayer grew from 189 to 334 lines; StreamDecodePipeline grew from 631 to 666 lines
+   - 13 new tests added for reconnect logic and error classification
+
 ---
 
 ## Three-Layer Architecture Deep Dive
@@ -229,7 +247,8 @@ MacAmp's architecture follows a strict three-layer separation, inspired by web f
 │                  "What the app does"                         │
 │                                                               │
 │  • PlaybackCoordinator (playback orchestration)             │
-│  • AudioPlayer (AVAudioEngine for local files)              │
+│  • AudioPlayer (facade for local files + engine)            │
+│  • AudioEngineController (AVAudioEngine graph lifecycle)    │
 │  • EQPresetStore (preset persistence)                       │
 │  • MetadataLoader (async metadata extraction)               │
 │  • PlaylistController (playlist state/navigation)           │
@@ -590,11 +609,18 @@ final class PlaybackCoordinator {
     // Computed properties for UI
     var displayTitle: String {
         switch currentSource {
-        case .radioStation:
+        case .radioStation(let station):
             if streamPlayer.isBuffering {
-                return "Buffering..."
+                return "Connecting..."
             }
-            return streamPlayer.streamTitle ?? currentTitle ?? "Internet Radio"
+            if let error = streamPlayer.error {
+                return error  // User-friendly message from StreamTerminationReason.userMessage
+            }
+            // Station name + track title combination
+            if let trackTitle = streamPlayer.streamTitle {
+                return "\(station.name) - \(trackTitle)"
+            }
+            return currentTitle ?? station.name
 
         case .localTrack:
             return currentTitle ?? "Unknown Track"
@@ -760,7 +786,7 @@ The AudioPlayer class was refactored in January 2026 following the Option C incr
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-### After: Decomposed Architecture (1,043 + 5 components)
+### After: Decomposed Architecture (705 + 6 components)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -814,25 +840,36 @@ The AudioPlayer class was refactored in January 2026 following the Option C incr
 │  └───────────────────────────────────────────────────────────────────┘  │
 │                                                                          │
 │  ┌───────────────────────────────────────────────────────────────────┐  │
-│  │                    AudioPlayer (Core Engine)                       │  │
-│  │                    ────────────────────────                        │  │
+│  │                  AudioEngineController (Engine Graph)              │  │
+│  │                  ──────────────────────────────────                │  │
+│  │                  @MainActor @Observable                            │  │
+│  │                  413 lines (Phase 4 extraction)                    │  │
+│  ├───────────────────────────────────────────────────────────────────┤  │
+│  │  • audioEngine, playerNode, eqNode, streamSourceNode              │  │
+│  │  • setupEngine(), configureEQ(), rewireForCurrentFile()           │  │
+│  │  • activateBridge() / deactivateBridge() (stream path)            │  │
+│  │  • startEngineIfNeeded(), scheduleFrom()                          │  │
+│  │  • isBridgeActive flag for capability checks                      │  │
+│  └───────────────────────────────────────────────────────────────────┘  │
+│                                                                          │
+│  ┌───────────────────────────────────────────────────────────────────┐  │
+│  │                    AudioPlayer (Facade)                            │  │
+│  │                    ───────────────────                             │  │
 │  │                    @MainActor @Observable                          │  │
-│  │                    1,143 lines after extraction                    │  │
+│  │                    705 lines after Phase 4 extraction              │  │
 │  ├───────────────────────────────────────────────────────────────────┤  │
 │  │                                                                    │  │
-│  │  Engine Core:                                                      │  │
+│  │  Playback Control:                                                 │  │
 │  │  ─────────────────────────────────────────────                     │  │
-│  │  • audioEngine, playerNode, eqNode                                 │  │
-│  │  • audioFile, progressTimer                                        │  │
-│  │  • playbackState, isPlaying, isPaused                              │  │
-│  │  • currentSeekID, seekGuardActive, isHandlingCompletion            │  │
-│  │  • setupEngine(), configureEQ(), rewireForCurrentFile()            │  │
-│  │  • scheduleFrom(), startEngineIfNeeded()                           │  │
 │  │  • play(), pause(), stop(), eject()                                │  │
 │  │  • seekToPercent(), seek()                                         │  │
+│  │  • playbackState, isPlaying, isPaused                              │  │
+│  │  • currentSeekID, seekGuardActive, isHandlingCompletion            │  │
+│  │  • audioFile, progressTimer                                        │  │
 │  │                                                                    │  │
 │  │  Component References:                                             │  │
 │  │  ─────────────────────                                             │  │
+│  │  • engineController: AudioEngineController                         │  │
 │  │  • eqPresetStore: EQPresetStore                                    │  │
 │  │  • playlistController: PlaylistController                          │  │
 │  │  • videoPlaybackController: VideoPlaybackController                │  │
@@ -843,6 +880,7 @@ The AudioPlayer class was refactored in January 2026 following the Option C incr
 │  │  var userPresets: [EQPreset] { eqPresetStore.userPresets }         │  │
 │  │  var playlist: [Track] { playlistController.playlist }             │  │
 │  │  var videoPlayer: AVPlayer? { videoPlaybackController.player }     │  │
+│  │  var isBridgeActive: Bool { engineController.isBridgeActive }      │  │
 │  │  var shuffleEnabled: Bool {                                        │  │
 │  │      get { playlistController.shuffleEnabled }                     │  │
 │  │      set { playlistController.shuffleEnabled = newValue }          │  │
@@ -1096,7 +1134,7 @@ private final class VisualizerScratchBuffers: @unchecked Sendable { ... }
                         │                        │                      │
                         ▼                        ▼                      ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                    AudioPlayer (Mechanism Layer)                         │
+│              AudioPlayer + AudioEngineController (Mechanism Layer)       │
 │  ┌──────────────────────────────────────────────────────────────────┐   │
 │  │                        Public API                                 │   │
 │  │  • play() / pause() / stop()                                      │   │
@@ -1107,25 +1145,30 @@ private final class VisualizerScratchBuffers: @unchecked Sendable { ... }
 │  └──────────────────────────────────────────────────────────────────┘   │
 │                                                                          │
 │  ┌──────────────────────────────────────────────────────────────────┐   │
-│  │                     Engine Core (retained)                        │   │
-│  │  • AVAudioEngine lifecycle                                        │   │
-│  │  • AVAudioPlayerNode scheduling                                   │   │
+│  │               AudioEngineController (Engine Graph)                │   │
+│  │  • AVAudioEngine lifecycle, node wiring                           │   │
+│  │  • Bridge activation/deactivation (stream path)                   │   │
+│  │  • EQ node configuration, format rewiring                         │   │
+│  └──────────────────────────────────────────────────────────────────┘   │
+│  ┌──────────────────────────────────────────────────────────────────┐   │
+│  │                    AudioPlayer Facade (retained)                   │   │
+│  │  • Playback control (play/pause/stop/seek)                        │   │
 │  │  • Seek guards (currentSeekID, seekGuardActive)                   │   │
 │  │  • Progress timer                                                 │   │
 │  └──────────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────────┘
           │              │              │              │
           ▼              ▼              ▼              ▼
-┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐
-│ EQPreset    │  │ Playlist    │  │ Visualizer  │  │ Video       │
-│ Store       │  │ Controller  │  │ Pipeline    │  │ Controller  │
-│             │  │             │  │             │  │             │
-│ @Observable │  │ @Observable │  │ @Observable │  │ @Observable │
-│ @MainActor  │  │ @MainActor  │  │ @MainActor  │  │ @MainActor  │
-├─────────────┤  ├─────────────┤  ├─────────────┤  ├─────────────┤
-│ File I/O    │  │ Navigation  │  │ Core Audio  │  │ AVPlayer    │
-│ UserDefaults│  │ Logic       │  │ Realtime    │  │ Observers   │
-└─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘
+┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐
+│ EQPreset    │  │ Playlist    │  │ Visualizer  │  │ Video       │  │ AudioEngine │
+│ Store       │  │ Controller  │  │ Pipeline    │  │ Controller  │  │ Controller  │
+│             │  │             │  │             │  │             │  │             │
+│ @Observable │  │ @Observable │  │ @Observable │  │ @Observable │  │ @Observable │
+│ @MainActor  │  │ @MainActor  │  │ @MainActor  │  │ @MainActor  │  │ @MainActor  │
+├─────────────┤  ├─────────────┤  ├─────────────┤  ├─────────────┤  ├─────────────┤
+│ File I/O    │  │ Navigation  │  │ Core Audio  │  │ AVPlayer    │  │ AVAudioEng  │
+│ UserDefaults│  │ Logic       │  │ Realtime    │  │ Observers   │  │ Graph/Nodes │
+└─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘
           │                               │              │
           ▼                               │              ▼
 ┌─────────────────────────────┐           │ ┌─────────────────────────────┐
@@ -1146,7 +1189,8 @@ private final class VisualizerScratchBuffers: @unchecked Sendable { ... }
 ```
 MacAmpApp/
 ├── Audio/
-│   ├── AudioPlayer.swift              (1,143 lines) - Engine Core + Facade
+│   ├── AudioPlayer.swift              (705 lines) - Playback Facade
+│   ├── AudioEngineController.swift    (413 lines) - Engine graph lifecycle (Phase 4)
 │   ├── EqualizerController.swift      (~198 lines) - EQ facade (extracted from AudioPlayer)
 │   ├── LockFreeRingBuffer.swift       (~212 lines) - SPSC ring buffer for stream audio
 │   ├── EQPresetStore.swift            (197 lines) - Preset persistence
@@ -1154,7 +1198,7 @@ MacAmpApp/
 │   ├── PlaylistController.swift       (297 lines) - Playlist logic
 │   ├── VideoPlaybackController.swift  (282 lines) - AVPlayer wrapper
 │   ├── VisualizerPipeline.swift       (699 lines) - Audio tap + SPSC + FFT
-│   ├── StreamPlayer.swift             (189 lines) - Internet radio
+│   ├── StreamPlayer.swift             (334 lines) - Internet radio + auto-reconnect
 │   └── PlaybackCoordinator.swift      (426 lines) - Backend orchestration
 │
 ├── ViewModels/
@@ -2898,6 +2942,64 @@ final class StreamPlayer {
     func stop() { pipeline.stop(); /* reset all state */ }
 
     isolated deinit { pipeline.stop() }
+}
+```
+
+### Auto-Reconnect State Machine (March 2026)
+
+When an internet radio stream terminates unexpectedly, StreamPlayer automatically attempts reconnection using an exponential backoff strategy.
+
+**StreamTerminationReason** -- 8 typed cases classify why a stream ended:
+
+| Case | Reconnectable | Description |
+|------|:------------:|-------------|
+| `networkError(String, Int)` | Depends | URLSession error — reconnectable for transient (connection lost, timeout), terminal for DNS failure |
+| `serverClosed` | Yes | Server closed connection gracefully |
+| `httpClientError(Int)` | No | HTTP 4xx (except 429) — bad URL, auth required |
+| `httpServerError(Int)` | Yes | HTTP 5xx + 429 Too Many Requests |
+| `decodeError(String)` | No | AudioConverter/AudioFileStream failure |
+| `invalidResponse` | No | Non-HTTP response |
+| `playlistResolutionFailed(String)` | Yes | M3U/PLS fetch failure (may be DNS) |
+| `userStopped` | No | User explicitly stopped playback |
+
+**Reconnect Backoff:**
+```
+Attempt 1:  1s delay
+Attempt 2:  2s delay
+Attempt 3:  4s delay
+Attempt 4:  8s delay
+Attempt 5+: 16s delay (capped)
+Max attempts: 10 (then terminal failure)
+```
+
+**Bridge Tear-Down/Re-Create Cycle:**
+
+During reconnect, PlaybackCoordinator deactivates the AVAudioSourceNode bridge (stops reading from the old ring buffer), StreamPlayer creates a fresh `LockFreeRingBuffer` and restarts the decode pipeline, then PlaybackCoordinator re-activates the bridge with the new buffer once the stream's format is re-detected and prebuffering completes.
+
+**User-Friendly Error Messages:**
+
+`StreamTerminationReason` has a `userMessage` computed property that provides display-ready strings for the UI:
+```swift
+extension StreamTerminationReason {
+    var userMessage: String {
+        switch self {
+        case .networkError(_, let code):
+            switch code {
+            case NSURLErrorCannotFindHost: return "Host not found"
+            case NSURLErrorTimedOut: return "Connection timed out"
+            case NSURLErrorNetworkConnectionLost: return "Connection lost"
+            case NSURLErrorNotConnectedToInternet: return "No internet connection"
+            default: return "Network error"
+            }
+        case .serverClosed: return "Stream ended"
+        case .httpClientError(let code): return "HTTP error \(code)"
+        case .httpServerError(let code): return "Server error \(code)"
+        case .decodeError: return "Unsupported audio format"
+        case .invalidResponse: return "Invalid server response"
+        case .playlistResolutionFailed: return "Playlist not found"
+        case .userStopped: return ""
+        }
+    }
 }
 ```
 
@@ -4929,7 +5031,8 @@ struct MainWindowSlidersLayer: View {
 ```
 MacAmpApp/
 ├── Audio/
-│   ├── AudioPlayer.swift           # AVAudioEngine facade, local playback, volume/balance (1,143 lines)
+│   ├── AudioPlayer.swift           # Playback facade, volume/balance, seek control (705 lines)
+│   ├── AudioEngineController.swift # AVAudioEngine graph lifecycle, node wiring, bridge (413 lines)
 │   ├── EqualizerController.swift   # EQ facade (extracted from AudioPlayer, ~198 lines)
 │   ├── LockFreeRingBuffer.swift    # SPSC ring buffer for stream audio (~212 lines)
 │   ├── EQPresetStore.swift         # EQ preset persistence (197 lines)
@@ -4937,7 +5040,7 @@ MacAmpApp/
 │   ├── PlaylistController.swift    # Playlist state and navigation (297 lines)
 │   ├── VideoPlaybackController.swift # AVPlayer lifecycle (282 lines)
 │   ├── VisualizerPipeline.swift    # Audio tap, FFT, SPSC buffer, Butterchurn (699 lines)
-│   ├── StreamPlayer.swift          # Stream playback, owns StreamDecodePipeline (189 lines)
+│   ├── StreamPlayer.swift          # Stream playback, auto-reconnect, owns StreamDecodePipeline (334 lines)
 │   ├── PlaybackCoordinator.swift   # Orchestrates both backends, bridge lifecycle, capability flags (426 lines)
 │   └── Streaming/
 │       ├── ICYFramer.swift             # ICY metadata protocol parser, Sendable struct
@@ -5172,9 +5275,20 @@ Welcome to MacAmp. May your audio be crisp and your skins be pixel-perfect.
 
 ---
 
-*Document Version: 2.9.0 | Last Updated: 2026-03-14 | Lines: ~5,200*
+*Document Version: 3.0.0 | Last Updated: 2026-03-22 | Lines: ~5,400*
 
-**Recent Updates (v2.9.0 - 2026-03-14):**
+**Recent Updates (v3.0.0 - 2026-03-22):**
+- Added AudioEngineController (413 lines) to Component Breakdown table, Three-Layer diagram, Section 4a decomposition architecture, Data Flow diagram, File Structure, and Quick Reference
+- Updated AudioPlayer line count from 1,143 to 705 throughout (Phase 4 extraction)
+- Updated StreamPlayer line count from 189 to 334 (auto-reconnect growth)
+- Updated StreamDecodePipeline line count from 631 to 666
+- Added Recent Architectural Changes #12 (AudioEngineController Phase 4 extraction)
+- Added Recent Architectural Changes #13 (Network Auto-Reconnect)
+- Added Auto-Reconnect State Machine subsection in Section 9 (StreamTerminationReason, exponential backoff, error classification, bridge tear-down/re-create, user-friendly error messages)
+- Updated PlaybackCoordinator.displayTitle code example: "Buffering..." to "Connecting...", added error branch, station name + track title combination
+- Updated "After" decomposition diagram from 5 to 6 components (AudioPlayer split into Facade + AudioEngineController)
+
+**Previous Updates (v2.9.0 - 2026-03-14):**
 - Renamed section 4 from "Dual Audio Backend Architecture" to "Unified Audio Pipeline Architecture"
 - Replaced dual backend diagrams with unified pipeline architecture showing both input paths converging at AVAudioEngine
 - Added Stream Decode Pipeline Components subsection (ICYFramer, AudioFileStreamParser, AudioConverterDecoder, StreamDecodePipeline)
