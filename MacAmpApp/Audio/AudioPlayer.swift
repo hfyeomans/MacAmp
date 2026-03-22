@@ -261,7 +261,14 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
                     AppLog.debug(.audio, "Updating current track metadata")
                     self.currentTrack = track
                     self.currentTitle = "\(track.title) - \(track.artist)"
-                    self.currentDuration = track.duration
+                    // Don't overwrite currentDuration from metadata (AVAsset.duration)
+                    // when the engine has the current audio file loaded. Engine file
+                    // duration is the authoritative runtime source — metadata duration
+                    // can diverge on VBR/compressed files, causing seek bar drift.
+                    // Use metadata duration only for non-audio or before file loads.
+                    if self.currentMediaType != .audio || self.engine.currentFileDuration <= 0 {
+                        self.currentDuration = track.duration
+                    }
                     self.currentTrackURL = track.url
                     self.onTrackMetadataUpdate?(track)
                 }
@@ -627,7 +634,14 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
             self.transition(to: .stopped(.completed))
             self.engine.invalidateProgressTimer()
             self.playbackProgress = 1
-            self.currentTime = self.currentDuration
+            // Use engine file duration (authoritative for audio) to avoid jump if
+            // currentDuration was set from metadata (AVAsset.duration).
+            // For video, engine.audioFile may be stale — use currentDuration.
+            if self.currentMediaType == .audio, self.engine.currentFileDuration > 0 {
+                self.currentTime = self.engine.currentFileDuration
+            } else {
+                self.currentTime = self.currentDuration
+            }
             let action = self.nextTrack()
             switch action {
             case .requestCoordinatorPlayback(let track), .playLocally(let track):
