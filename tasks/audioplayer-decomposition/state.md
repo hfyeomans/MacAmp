@@ -7,7 +7,7 @@
 
 ## Current Phase: Phase 4 — Engine + Stream Bridge + Transport Extraction
 
-## Status: Research complete, plan written, Oracle-reviewed. Implementation starting.
+## Status: Phase 4 extraction COMPLETE. Oracle reviewed. PR pending user review.
 
 ## Branch: `refactor/audioplayer-phase4-transport`
 
