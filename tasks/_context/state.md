@@ -248,6 +248,22 @@ All doc updates verified complete by sub-agent scan:
 | `network-auto-reconnect` | Auto-reconnect dropped internet radio streams with exponential backoff | Medium | ✅ COMPLETE — PR #61 merged (2026-03-22) | Exponential backoff 1s→16s, max 10 attempts. Typed error classification. User-friendly error display. |
 | `xcode-butterchurn-webcontent-diagnosis` | Fix Butterchurn/MilkDrop not rendering (XcodeGen migration dropped Butterchurn resources) | Medium | ✅ COMPLETE — PR #63 merged (2026-03-22) | Root cause: missing resource in project.yml. Also fixed EQ on/off persistence. |
 
+| Hotfix: VBR duration alignment | Fix seek bar drift on VBR/compressed files (P2 from PR #60) | Small | ✅ COMPLETE — PR #62 merged (2026-03-22) | Engine file duration as single source of truth for audio progress. |
+
+**Sprint S1 COMPLETE (2026-03-22).** 4 tasks + 1 hotfix, 4 PRs merged (#60, #61, #62, #63). 53 tests.
+
+**Key outcomes:**
+- AudioPlayer decomposed: 1,143→705 lines, new AudioEngineController (413 lines)
+- Internet radio auto-reconnect with exponential backoff and typed error classification
+- Butterchurn/MilkDrop rendering restored (XcodeGen resource gap)
+- EQ on/off state persistence, VBR duration alignment, user-friendly stream error display
+
+**Lessons learned:**
+- XcodeGen migration must audit all "Copy Bundle Resources" — non-code resources outside `sources:` path are silently dropped
+- `swift build`/`swift test` hide resource issues — always verify with XcodeBuildMCP + manual app launch
+- Don't chase console errors before verifying basics (resources in bundle)
+- macOS 26 Tahoe WebContent sandbox errors are noisy but non-fatal (WebKit bug 302212)
+
 **Structure policy overlay:** Use `tasks/swift-project-structure-research/` as the placement-policy reference during Sprints S1-S3. Do not run a broad repo restructure during S1-S3. Apply the new ownership model only where sprint tasks already touch files. All file-move consolidation is deferred to the post-S3 Structure Sprint (D-STRUCTURE decision 2026-03-15). Decomposition tasks (post-S2/pre-S3) should split files in place, not move them to target folders.
 
 ### Sprint S0: DOCS FIRST — Documentation Hygiene (COMPLETE)

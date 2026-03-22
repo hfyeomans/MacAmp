@@ -5,9 +5,9 @@
 
 ---
 
-## Current Phase: Phase 4 COMPLETE — PR #60 merged (2026-03-22)
+## Current Phase: Phase 4 COMPLETE — PR #60 merged (2026-03-22) + Hotfix PR #62
 
-## Status: Phases 1-4 complete. Seek extraction (Phase 5) deferred.
+## Status: Phases 1-4 complete. Hotfix for VBR duration alignment (PR #62) merged. Seek extraction (Phase 5) deferred.
 
 ## Branch: `refactor/audioplayer-phase4-transport` (merged)
 
@@ -240,6 +240,16 @@ Post-extraction findings (all addressed):
 Phase 4 does **not** conflict with `swift-project-structure-research`:
 - New files in `MacAmpApp/Audio/` (current location)
 - Folder moves to `Audio/Playback/` deferred to post-S3 Structure Sprint
+
+## Hotfix: VBR Duration Alignment (PR #62, 2026-03-22)
+
+P2 bug found by Oracle post-merge review of PR #60. Engine progress timer uses `AVAudioFile.length/sampleRate` for `playbackProgress`, but `addTrack` metadata completion could overwrite `currentDuration` with `AVAsset.duration` (MetadataLoader). On VBR/compressed files these diverge, causing seek bar and time labels to drift apart.
+
+**Fix:**
+1. Don't overwrite `currentDuration` from metadata when engine has current audio file loaded (media-type-aware guard)
+2. `onPlaybackEnded` uses `engine.currentFileDuration` for audio completion terminal time (falls back to `currentDuration` for video)
+
+**Lesson:** Engine file duration (frame count / sample rate) is the authoritative runtime source for audio playback progress. Metadata duration (AVAsset) is only for playlist display and pre-load fallback.
 
 ## Blockers
 
