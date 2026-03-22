@@ -169,7 +169,7 @@ Do **not** try to solve this as one giant “restructure the repo” PR.
 Use a 3-track approach:
 - `Track A: structure policy` — define and approve the target layout and movement rules
 - `Track B: opportunistic adoption` — apply the structure in files already being touched by active sprint tasks
-- `Track C: targeted cleanup` — after S1 stabilizes, run focused refactors for areas still scattered
+- `Track C: targeted cleanup` — ~~after S1 stabilizes~~ deferred to post-S3 Structure Sprint (D-STRUCTURE decision 2026-03-15)
 
 ### Phase 1: Folder and group cleanup within the existing target
 
@@ -225,17 +225,18 @@ Use current tasks as adoption points instead of creating a separate churn-heavy 
 - `network-auto-reconnect`
   - keep all new reconnect code under `Audio/Streaming`
 
-### Step 2: After S1, run two focused structure tasks
+### Step 2: ~~After S1~~ Post-S3 Structure Sprint — run focused structure tasks
+
+**Updated (D-STRUCTURE decision 2026-03-15):** All file-move consolidation deferred to a dedicated post-S3 Structure Sprint. Task folders exist but implementation is deferred.
 
 Recommended follow-on implementation tasks:
 - `windowing-structure-consolidation`
   - move generic window infrastructure into `Windowing/`
 - `milkdrop-feature-consolidation`
   - move Butterchurn and Milkdrop files plus resources into `Features/Milkdrop/`
+- Additional consolidation tasks (Features/, Audio/, App/Core/Shared/) to be created during post-S3 planning
 
-These are bounded and much safer than a repo-wide move.
-
-**Status:** Task folders created; not yet sprinted for implementation.
+**Status:** Task folders created; DEFERRED to post-S3.
 
 ### Step 3: After S2 / before S3, make the remaining oversized files explicit architecture owners
 
@@ -263,5 +264,5 @@ Only after the folder ownership is stable should local packages be considered.
 - Do **not** bundle these planning updates into unrelated feature branches.
 - For implementation:
   - keep active Sprint S1 fixes in their own task branches
-  - keep post-S1 consolidation tasks in their own focused branches
+  - keep post-S3 consolidation tasks in their own focused branches
   - avoid a single umbrella “restructure” branch

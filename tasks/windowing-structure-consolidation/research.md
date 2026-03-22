@@ -1,7 +1,7 @@
 # Research: Windowing Structure Consolidation
 
 > **Description:** Research task for consolidating MacAmp’s generic window-management infrastructure under a dedicated `Windowing/` ownership boundary.
-> **Purpose:** Map the current scattered windowing files to a focused subsystem and define a safe post-S1 consolidation scope.
+> **Purpose:** Map the current scattered windowing files to a focused subsystem and define a safe consolidation scope. Deferred to post-S3 Structure Sprint (D-STRUCTURE decision 2026-03-15).
 
 ---
 
@@ -43,4 +43,4 @@ Out of scope:
 
 ## Status
 
-Planned. Post-S1 follow-on.
+DEFERRED to post-S3 Structure Sprint (D-STRUCTURE decision 2026-03-15). Was originally post-S1.

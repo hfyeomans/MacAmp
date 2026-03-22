@@ -1,290 +1,225 @@
 # Plan: AudioPlayer.swift Decomposition
 
-> **Description:** Implementation plan for decomposing AudioPlayer.swift from 1,070 lines to ~680 lines using the facade pattern established by the WindowCoordinator refactor (PR #45).
-> **Purpose:** Step-by-step extraction plan with code changes, file listings, verification steps, and risk assessment for each phase.
+> **Description:** Implementation plan for decomposing AudioPlayer.swift using the facade pattern.
+> **Purpose:** Step-by-step extraction plan with code changes, verification steps, and risk assessment.
+> **Phase 1-3:** COMPLETE (PR #52 merged). Extracted EqualizerController, consolidated visualizer forwarding, removed FourCC.
+> **Phase 4:** Re-baselined 2026-03-22 against 1,143-line file (post-T7/T8). Oracle-reviewed extraction strategy.
 
 ---
 
-## Overview
+## Phase 4: Engine + Stream Bridge + Transport Extraction
 
-| Metric | Before | After (Target) |
-|--------|--------|----------------|
-| AudioPlayer.swift | 1,070 lines | ~680 lines |
-| swiftlint suppressions | 2 (`file_length` + `type_body_length`) | 0–1 |
-| New files | 0 | 1 (`EqualizerController.swift`) |
-| Modified files | 1 | 2 (`AudioPlayer.swift`, `VisualizerPipeline.swift`) |
-| Deleted code | FourCC extension (if unused) | ~12 lines |
+### Oracle Review Summary (2026-03-22, gpt-5.3-codex xhigh)
 
----
+1. Engine wiring + stream bridge must stay in ONE controller (shared format invariants, -10868 lessons)
+2. Keep seek state machine in AudioPlayer — partial move splits one state machine across two owners
+3. If node ownership moves, transport must follow (play/pause/stop touch playerNode/audioEngine)
+4. Facade pattern preserved — callers continue using AudioPlayer API
+5. Add seek characterization tests BEFORE extraction to prevent blind-spot regressions
 
-## Phase 1: Extract EqualizerController (~120 lines)
+### Extraction Target
 
-**Risk: Low** — EQ methods are self-contained with no seek/transport entanglement.
+| What Moves | Lines | Destination |
+|------------|-------|-------------|
+| Engine Wiring (setupEngine, rewireForCurrentFile, scheduleFrom, startEngineIfNeeded, startProgressTimer) | 158 | AudioEngineController.swift |
+| Stream Bridge (makeStreamRenderBlock, activateStreamBridge, deactivateStreamBridge) | 161 | AudioEngineController.swift |
+| Audio Transport (engine-level play/pause/stop on playerNode) | ~50 | AudioEngineController.swift |
+| Visualizer Tap (install/remove) | 11 | AudioEngineController.swift |
+| Engine properties (audioEngine, playerNode, audioFile, streamSourceNode, streamRingBuffer, progressTimer, playheadOffset) | ~15 | AudioEngineController.swift |
 
-### 1.1 Create EqualizerController.swift
+**Total extracted:** ~395 lines
+**AudioPlayer after:** ~748 lines (down from 1,143)
+**New file:** AudioEngineController.swift (~420 lines including class boilerplate)
 
-**New file:** `MacAmpApp/Audio/EqualizerController.swift`
+### What Stays in AudioPlayer
 
-```swift
-import AVFoundation
-import Observation
+| What Stays | Reason |
+|------------|--------|
+| Seek state machine (currentSeekID, seekGuardActive, isHandlingCompletion, shouldIgnoreCompletion) | Oracle: partial move splits state machine across two owners |
+| seekToPercent / seek | Tightly coupled to seek state machine + onPlaybackEnded |
+| onPlaybackEnded | Uses seek guards, playlist navigation, state transitions |
+| playTrack (orchestration) | Routes between audio/video, calls engine controller for audio |
+| play/pause/stop/eject (orchestration) | Orchestrate video + audio; delegate engine operations to controller |
+| Track Management | Playlist operations, metadata loading |
+| Playlist Navigation | next/previous track handling |
+| All forwarding (EQ, visualizer, etc.) | Unchanged facade surface |
+| isBridgeActive, isEngineRendering | Observable state — stays in AudioPlayer, updated by callbacks from controller |
 
-@Observable
-@MainActor
-final class EqualizerController {
-    // EQ node (owned by this controller, attached to engine by AudioPlayer)
-    let eqNode = AVAudioUnitEQ(numberOfBands: 10)
+### What Stays vs What Was Planned Originally
 
-    // Observable state
-    var preamp: Float = 0.0
-    var eqBands: [Float] = Array(repeating: 0.0, count: 10)
-    var isEqOn: Bool = false
-    var eqAutoEnabled: Bool = false
-    var useLogScaleBands: Bool = true
-    var appliedAutoPresetTrack: String?
+The original Phase 4 plan proposed extracting an `AudioEngineTransport` focused on the seek/transport pipeline. The Oracle review changed the strategy: **engine graph management + stream bridge is the safer extraction** because those methods are more self-contained, while seek has tentacles everywhere.
 
-    // Extracted controllers
-    let eqPresetStore = EQPresetStore()
-
-    // Computed forwarding
-    var userPresets: [EQPreset] { eqPresetStore.userPresets }
-
-    @ObservationIgnored private var autoEQTask: Task<Void, Never>?
-
-    // All EQ methods moved here:
-    // setPreamp, setEqBand, toggleEq, applyPreset, applyEQPreset,
-    // getCurrentEQPreset, saveUserPreset, deleteUserPreset,
-    // importEqfPreset, savePresetForCurrentTrack,
-    // applyAutoPreset, setAutoEQEnabled, generateAutoPreset,
-    // configureEQ
-}
-```
-
-### 1.2 Move Methods
-
-Move these methods from AudioPlayer to EqualizerController (cut-paste, no logic changes):
-
-| Method | AudioPlayer Lines | Notes |
-|--------|-------------------|-------|
-| `setPreamp(value:)` | 523-531 | Direct move |
-| `setEqBand(index:value:)` | 533-538 | Direct move |
-| `toggleEq(isOn:)` | 540-544 | Direct move |
-| `applyPreset(_:)` | 547-551 | Direct move |
-| `applyEQPreset(_:)` | 553-558 | Direct move |
-| `getCurrentEQPreset(name:)` | 560-562 | Direct move |
-| `saveUserPreset(named:)` | 564-570 | Direct move |
-| `deleteUserPreset(id:)` | 572-574 | Direct move |
-| `importEqfPreset(from:)` | 576-583 | Direct move |
-| `savePresetForCurrentTrack()` | 585-590 | Needs `currentTrack` passed as parameter |
-| `applyAutoPreset(for:)` | 592-608 | Direct move |
-| `setAutoEQEnabled(_:)` | 610-620 | Needs `currentTrack` passed as parameter |
-| `generateAutoPreset(for:)` | 622-626 | Direct move |
-| `configureEQ()` | 636-655 | Direct move |
-
-### 1.3 Add Forwarding in AudioPlayer
-
-```swift
-// AudioPlayer.swift — replace direct EQ methods with forwarding
-let equalizer = EqualizerController()
-
-// Forwarding (backwards compatibility)
-var preamp: Float {
-    get { equalizer.preamp }
-    set { equalizer.preamp = newValue }
-}
-var eqBands: [Float] {
-    get { equalizer.eqBands }
-    set { equalizer.eqBands = newValue }
-}
-var isEqOn: Bool {
-    get { equalizer.isEqOn }
-    set { equalizer.isEqOn = newValue }
-}
-// ... etc for all observable EQ properties
-
-func setPreamp(value: Float) { equalizer.setPreamp(value: value) }
-func setEqBand(index: Int, value: Float) { equalizer.setEqBand(index: index, value: value) }
-func toggleEq(isOn: Bool) { equalizer.toggleEq(isOn: isOn) }
-func applyPreset(_ preset: EqfPreset) { equalizer.applyPreset(preset) }
-func applyEQPreset(_ preset: EQPreset) { equalizer.applyEQPreset(preset) }
-// ... etc
-```
-
-### 1.4 Wire eqNode into Engine
-
-In `setupEngine()`, attach the equalizer's node:
-
-```swift
-private func setupEngine() {
-    audioEngine.attach(playerNode)
-    audioEngine.attach(equalizer.eqNode)  // Changed from self.eqNode
-}
-```
-
-In `rewireForCurrentFile()`, connect through the equalizer's node:
-
-```swift
-audioEngine.connect(playerNode, to: equalizer.eqNode, format: nil)
-audioEngine.connect(equalizer.eqNode, to: audioEngine.mainMixerNode, format: nil)
-```
-
-### 1.5 Handle `savePresetForCurrentTrack()` Dependency
-
-This method accesses `currentTrack`. Change signature to accept the track:
-
-```swift
-// EqualizerController:
-func savePresetForCurrentTrack(_ track: Track) { ... }
-
-// AudioPlayer forwarding:
-func savePresetForCurrentTrack() {
-    guard let t = currentTrack else { return }
-    equalizer.savePresetForCurrentTrack(t)
-}
-```
-
-Same pattern for `setAutoEQEnabled(_:)` and `applyAutoPreset(for:)`.
-
-### 1.6 Verification
-
-- Build with Thread Sanitizer
-- Verify all 10 EQ bands respond in EQ window
-- Verify preamp slider works
-- Verify EQ on/off toggle
-- Verify preset save/load/delete
-- Verify auto-EQ applies on track change
-- Run tests
+Seeking extraction is deferred to a future Phase 5 (after seek tests stabilize the behavior).
 
 ---
 
-## Phase 2: Consolidate Visualizer Forwarding (~70 lines)
+## Implementation Steps
 
-**Risk: Low** — Moving one standalone method and removing thin wrappers.
+### Step 0: Seek State Machine Characterization Tests (PREREQUISITE)
 
-### 2.1 Move `getFrequencyData(bands:)` to VisualizerPipeline
+Add tests to `AudioPlayerStateTests.swift` that capture current seek-related behavior:
 
-This 40-line method (lines 904-943) has its own log-scaling logic and doesn't forward to `VisualizerPipeline`. It belongs there.
+- `playTrack()` sets `seekGuardActive = true` then clears after delay
+- `stop()` resets `currentSeekID` and calls `scheduleFrom(time: 0)`
+- `shouldIgnoreCompletion` returns true for mismatched seekID
+- `shouldIgnoreCompletion` returns true when `seekGuardActive && seekID == nil`
+- `shouldIgnoreCompletion` returns true when stopped(.manual) or stopped(.ejected)
 
-```swift
-// Move to VisualizerPipeline.swift:
-func getFrequencyData(bands: Int, isPlaying: Bool) -> [Float] {
-    // ... existing implementation
-    // Uses self.levels instead of visualizerLevels
-}
-```
+These tests lock in current behavior before refactoring.
 
-### 2.2 Remove Pure Forwarding Methods
+### Step 1: Create AudioEngineController.swift
 
-These methods on AudioPlayer are pure one-line forwards that can be replaced by callers accessing `visualizerPipeline` directly, OR kept as thin forwards:
-
-```swift
-// Keep as forwards for API stability:
-func getRMSData(bands: Int) -> [Float] { visualizerPipeline.getRMSData(bands: bands) }
-func getWaveformSamples(count: Int) -> [Float] { visualizerPipeline.getWaveformSamples(count: count) }
-func snapshotButterchurnFrame() -> ButterchurnFrame? {
-    guard currentMediaType == .audio && isPlaying else { return nil }
-    return visualizerPipeline.snapshotButterchurnFrame()
-}
-func getFrequencyData(bands: Int) -> [Float] {
-    visualizerPipeline.getFrequencyData(bands: bands, isPlaying: isPlaying)
-}
-```
-
-### 2.3 Remove Unnecessary Forwarding Properties
-
-Evaluate whether callers can access `visualizerPipeline` directly instead of through forwarding computed properties on AudioPlayer. If callers use `@Environment(AudioPlayer.self)`, they can also access `audioPlayer.visualizerPipeline.levels`.
-
-### 2.4 Verification
-
-- Build with Thread Sanitizer
-- Verify spectrum analyzer renders correctly
-- Verify oscilloscope waveform renders correctly
-- Verify Butterchurn/MilkDrop visualizer receives data
-
----
-
-## Phase 3: Clean Up FourCC Extension (~12 lines)
-
-**Risk: Zero.**
-
-### 3.1 Check Usage
-
-```bash
-rg "fourCC" --type swift MacAmpApp/
-```
-
-If unused, delete lines 8-19 entirely. If used, move to a `Utilities/` extension file.
-
-### 3.2 Verification
-
-- Build succeeds
-
----
-
-## Phase 4: Optional — Engine Transport Extraction (~200 lines)
-
-**Risk: Medium-High.** Only proceed if Phases 1-3 bring the file to an acceptable size and there's appetite for more.
-
-### 4.1 Create AudioEngineTransport
-
-Extract AVAudioEngine lifecycle and file scheduling:
+New file: `MacAmpApp/Audio/AudioEngineController.swift`
 
 ```swift
 @MainActor
-final class AudioEngineTransport {
+final class AudioEngineController {
+    // Engine internals (moved from AudioPlayer)
     let audioEngine = AVAudioEngine()
     let playerNode = AVAudioPlayerNode()
-    private var audioFile: AVAudioFile?
+    private(set) var audioFile: AVAudioFile?
     private var progressTimer: Timer?
     private var playheadOffset: Double = 0
 
-    func setup() { ... }
-    func rewireForFile(_ file: AVAudioFile, eqNode: AVAudioUnitEQ) { ... }
-    func scheduleFrom(time: Double, seekID: UUID, completion: @escaping (UUID) -> Void) -> Bool { ... }
-    func startIfNeeded() { ... }
-    func startProgressTimer(callback: @escaping (Double, Double) -> Void) { ... }
+    // Stream bridge state
+    private var streamSourceNode: AVAudioSourceNode?
+    private var streamRingBuffer: LockFreeRingBuffer?
+
+    // External dependencies (injected)
+    private let eqNode: AVAudioUnitEQ
+    private let visualizerPipeline: VisualizerPipeline
+
+    // Callbacks to AudioPlayer for state updates
+    var onProgressUpdate: ((Double, Double) -> Void)?  // (currentTime, progress)
+    var onPlaybackEnded: ((UUID?) -> Void)?  // seekID for completion filtering
+
+    init(eqNode: AVAudioUnitEQ, visualizerPipeline: VisualizerPipeline) {
+        self.eqNode = eqNode
+        self.visualizerPipeline = visualizerPipeline
+        setupEngine()
+    }
 }
 ```
 
-### 4.2 Coupling Issues
+### Step 2: Move Engine Wiring Methods
 
-`seek()` and `play()`/`pause()`/`stop()` would need to call through the transport controller. This changes the internal call graph significantly and requires careful handling of:
+Move from AudioPlayer to AudioEngineController:
+- `setupEngine()` → `private func setupEngine()`
+- `rewireForCurrentFile()` → `func rewireForFile(_ file: AVAudioFile)`
+- `scheduleFrom(time:seekID:)` → `func scheduleFrom(time:seekID:) -> Bool`
+- `startEngineIfNeeded()` → `@discardableResult func startEngineIfNeeded() -> Bool`
+- `startProgressTimer()` → `func startProgressTimer()`
 
-- `currentSeekID` and `seekGuardActive` (seek state machine)
-- `isHandlingCompletion` (re-entrancy guard)
-- Completion handler wiring (`onPlaybackEnded`)
+**Signature changes:**
+- `rewireForCurrentFile` becomes `rewireForFile(_ file:)` — receives audioFile as parameter
+- `scheduleFrom` completion handler calls `self.onPlaybackEnded?(completionID)` instead of `self?.onPlaybackEnded(fromSeekID:)`
+- `startProgressTimer` calls `self.onProgressUpdate?(current, progress)` instead of updating properties directly
 
-**Recommendation:** Defer this phase unless Phases 1-3 are insufficient. The seek/transport pipeline was heavily debugged (multiple seek guard mechanisms) and is high-risk to refactor.
+### Step 3: Move Stream Bridge
+
+Move from AudioPlayer to AudioEngineController:
+- `makeStreamRenderBlock(ringBuffer:)` → stays `nonisolated static`
+- `activateStreamBridge(ringBuffer:sampleRate:)` → public method
+- `deactivateStreamBridge()` → public method
+
+**Returns `isBridgeActive` state** via a property or callback so AudioPlayer can update its observable `isBridgeActive`.
+
+### Step 4: Move Visualizer Tap Helpers
+
+Move from AudioPlayer to AudioEngineController:
+- `installVisualizerTapIfNeeded()` → uses `audioEngine.mainMixerNode` + `visualizerPipeline`
+- `removeVisualizerTapIfNeeded()` → same
+
+### Step 5: Add Audio Transport Methods
+
+New methods on AudioEngineController for engine-level transport:
+- `func playAudio()` — `playerNode.play()` + `startProgressTimer()`
+- `func pauseAudio()` — `playerNode.pause()`
+- `func stopAudio()` — `playerNode.stop()` + `progressTimer?.invalidate()`
+- `var isPlayerNodePlaying: Bool` — forwards `playerNode.isPlaying`
+
+### Step 6: Wire Volume/Balance
+
+AudioEngineController provides:
+- `func setVolume(_ volume: Float)` — sets `playerNode.volume` + `streamSourceNode?.volume`
+- `func setBalance(_ balance: Float)` — sets `playerNode.pan` + `streamSourceNode?.pan`
+
+AudioPlayer's `volume`/`balance` didSet calls `engine.setVolume(volume)` / `engine.setBalance(balance)`.
+
+### Step 7: Update AudioPlayer
+
+- Replace direct `audioEngine`/`playerNode` access with `engine.*` calls
+- `let engine = AudioEngineController(eqNode: equalizer.eqNode, visualizerPipeline: visualizerPipeline)`
+- `play()` calls `engine.playAudio()` for audio path (video path unchanged)
+- `pause()` calls `engine.pauseAudio()` for audio path
+- `stop()` calls `engine.stopAudio()` + `engine.scheduleFrom(time: 0, seekID: currentSeekID)`
+- `loadAudioFile()` calls `engine.loadFile(url:)` or sets `engine.audioFile` then `engine.rewireForFile()`
+- `seek()` calls `engine.scheduleFrom()`, `engine.startEngineIfNeeded()`, `engine.playAudio()`, etc.
+- `activateStreamBridge`/`deactivateStreamBridge` forward to `engine.*`
+- `isEngineRendering` reads from `engine.audioEngine.isRunning`
+- `isBridgeActive` updated via engine callback
+
+### Step 8: Update init/deinit
+
+- `init`: Create engine controller, wire callbacks
+- `isolated deinit`: Call `engine.shutdown()` (invalidate timer, deactivate bridge, remove tap)
 
 ---
 
-## Expected File Sizes After Each Phase
+## Verification Plan
 
-| Phase | AudioPlayer.swift | New Files | Suppressions |
-|-------|-------------------|-----------|--------------|
-| Current | 1,070 | — | 2 |
-| After Phase 1 | ~940 | EqualizerController.swift (~150) | 1 (file_length only) |
-| After Phase 2 | ~870 | — | 1 |
-| After Phase 3 | ~858 | — | 1 |
-| After Phase 4 | ~680 | AudioEngineTransport.swift (~200) | 0 |
+### Build Verification (each step)
+- Build with Thread Sanitizer enabled
+- `swift test` passes (40 tests + new seek tests)
+
+### Functional Verification (after all steps)
+- Local file playback: play, pause, stop, seek, next/previous
+- Internet radio: stream starts, volume works, EQ works, visualizer works
+- Switch between local and stream without audio glitches
+- Seek to end of track triggers next track
+- Repeat modes work (off, all, one)
+- EQ stays applied across local/stream switches
+- Volume/balance persists and applies to both paths
+
+### Regression Checks
+- No -10868 errors (format stickiness after stream bridge)
+- No visualizer pause during volume slider drag (pre-existing, shouldn't worsen)
+- No seek state corruption (stale completions, guard leaks)
+- `isEngineRendering` correctly gates visualizer animation
 
 ---
 
 ## Risk Assessment
 
-| Phase | Risk | Mitigation |
-|-------|------|-----------|
-| 1: EQ Controller | **Low** | Self-contained methods, no transport coupling |
-| 2: Visualizer consolidation | **Low** | Moving one method, removing thin wrappers |
-| 3: FourCC cleanup | **Zero** | Delete or move unused code |
-| 4: Engine transport | **Medium-High** | Complex seek state machine, defer if not needed |
+| Risk | Likelihood | Impact | Mitigation |
+|------|-----------|--------|-----------|
+| Seek completion regression | Medium | HIGH | Characterization tests first; seek stays in AudioPlayer |
+| -10868 format errors after bridge | Low | HIGH | Engine+bridge in ONE controller; format lessons preserved |
+| Timer/tap lifecycle leak | Medium | Medium | deinit calls engine.shutdown(); tests verify cleanup |
+| Volume/balance not propagating | Low | Medium | didSet → engine.setVolume; test with stream + local |
+| Public API drift | Low | Low | Facade pattern; all AudioPlayer signatures unchanged |
 
 ---
 
-## Out of Scope
+## Expected Results
 
-1. **Volume/balance persistence debouncing** — noted in review, can be addressed separately
-2. **Default volume 1.0 → 0.75 change** — already shipped in PR #43, not reverting
-3. **PlaybackCoordinator changes** — AudioPlayer's public API stays unchanged (facade pattern)
-4. **Unit tests** — separate task (AudioPlayer currently has no unit tests)
-5. **`@Environment` migration for EQ** — views still access `@Environment(AudioPlayer.self)`
+| Metric | Before | After Phase 4 |
+|--------|--------|---------------|
+| AudioPlayer.swift | 1,143 lines | ~748 lines |
+| AudioEngineController.swift | — | ~420 lines |
+| swiftlint file_length | Suppressed (1,143 > 600 warning) | Suppressed (748 > 600, but well under 1,200 error) |
+| swiftlint type_body_length | Suppressed (1,130 > 600 error) | ~735 — still over 600 error, suppression remains |
+| Seek state machine | In AudioPlayer | In AudioPlayer (unchanged) |
+| Future Phase 5 | — | Extract seek when tests are stable |
+
+**Note:** type_body_length suppression cannot be removed until seek extraction (Phase 5) or further forwarding cleanup. Phase 4 gets the file safely away from the 1,200-line error cliff and establishes clean engine ownership boundaries.
+
+---
+
+## Out of Scope (Phase 4)
+
+1. Seek extraction — deferred to Phase 5 (Oracle recommendation)
+2. Folder moves — decompose in place per D-STRUCTURE decision
+3. PlaybackCoordinator changes — facade preserved
+4. Video transport changes — video path stays in AudioPlayer
+5. Unit tests for stream bridge lifecycle — future task

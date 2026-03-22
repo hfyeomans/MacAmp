@@ -22,7 +22,7 @@ Diagnosis complete. Ready for implementation in a separate worktree.
 - Do not manually edit `.pbxproj`; if build-setting changes are needed, make them in `project.yml` and regenerate.
 - Use a separate worktree for implementation.
 - Branch that worktree from `main` because the Swift 6.2 cleanup work is complete and merged.
-- Keep this task focused on the runtime fix; defer broad Milkdrop file moves to the dedicated post-S1 consolidation task.
+- Keep this task focused on the runtime fix; defer broad Milkdrop file moves to the post-S3 Structure Sprint (D-STRUCTURE decision 2026-03-15).
 
 ## Next
 

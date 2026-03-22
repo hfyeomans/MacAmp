@@ -46,7 +46,7 @@ New task T8 (swift-concurrency-62-cleanup) added as prerequisite for T7.
 
 | ID | Task | Internal Status | Cross-Task Status | Blocker |
 |----|------|----------------|-------------------|---------|
-| T1 | `audioplayer-decomposition` | **Ph1-3 COMPLETE**, Ph4 deferred | Wave 1 — done, awaiting PR | swiftlint suppressions remain (945 lines, needs Ph4) |
+| T1 | `audioplayer-decomposition` | **Ph1-3 COMPLETE**, Ph4 UNLOCKED for S1 | Wave 1 — done, awaiting PR | swiftlint suppressions remain (1,143 lines post-T7/T8, needs Ph4) |
 | T2 | `playlistwindow-layer-decomposition` | **COMPLETE** | Wave 1 — done, awaiting PR | Manual testing items deferred |
 | T3 | `mainwindow-layer-decomposition` | **COMPLETE** (PR #54 merged) | Wave 2b — MERGED | None |
 | T4 | `lock-free-ring-buffer` | **COMPLETE** (benchmarks deferred) | Wave 1 — done, awaiting PR | None |
@@ -110,13 +110,13 @@ T8 is split across 3a and 3c because AudioPlayer.swift is modified by both T8 an
 
 **Rationale:** Both modify Package.swift (T4 adds swift-atomics dependency, T6 bumps tools-version). Combining avoids merge conflicts. Trade-off: couples two unrelated risk domains. Mitigated by internal sequencing (T6 Ph1 -> T4 -> T6 Ph2-6).
 
-### D3: T1 Phase 4 deferred — swiftlint suppressions remain
+### D3: T1 Phase 4 — swiftlint suppressions remain (UNLOCKED for S1)
 
-**Decision:** AudioPlayer engine transport extraction (Phase 4, medium-high risk) is deferred until after T5 Phase 2 or combined with it.
+**Decision:** AudioPlayer engine transport extraction (Phase 4, medium-high risk) was deferred until T7 unified-audio-pipeline landed. T7 merged (PR #57, 2026-03-14) — Phase 4 is now UNLOCKED and assigned to Sprint S1.
 
 **Rationale:** The seek state machine has three interlocking guards (`currentSeekID`, `seekGuardActive`, `isHandlingCompletion`) that were extensively debugged across multiple PRs. The transport methods (`play`/`pause`/`stop`/`seek`/`scheduleFrom`) share tight mutable state coupling, and completion handlers use seekID matching to ignore stale completions. Multiple timing-sensitive `Task.sleep` delays coordinate guard clearing.
 
-**Impact:** AudioPlayer.swift remains at 945 lines (above 600-line warning, below 1,200-line error). Two swiftlint inline suppressions (`file_length` + `type_body_length`) cannot be removed until Phase 4. Phase 4 should only be pursued after unit tests for the seek state machine are added first.
+**Impact:** AudioPlayer.swift is now at **1,143 lines** (grew from 945 after T7 added stream source node handling and T8 added isolated deinit + @concurrent). Now approaching the 1,200-line error threshold. Two swiftlint inline suppressions (`file_length` + `type_body_length`) cannot be removed until Phase 4. Phase 4 should only be pursued after unit tests for the seek state machine are added first.
 
 **Does NOT block Waves 2-3:**
 - Wave 2 (T5 Ph1): Modifies `volume` didSet and coordinator routing — does not touch engine transport
@@ -176,15 +176,15 @@ Target (MainWindowFullLayer.body):
 
 | Item | Source | Size | Priority | Blocks Future? |
 |------|--------|------|----------|----------------|
-| T1 Phase 4: Engine transport extraction | audioplayer-decomposition todo.md | Large | Medium | No — schedule after T7 (unified-audio-pipeline). Engine boundaries change with streamSourceNode. |
-| T1 swiftlint suppressions (file_length + type_body_length) | audioplayer-decomposition todo.md | N/A | N/A | Blocked by T1 Phase 4. AudioPlayer at 945 lines. |
+| T1 Phase 4: Engine transport extraction | audioplayer-decomposition todo.md | Large | HIGH | **UNLOCKED** — T7 merged. Assigned to Sprint S1. AudioPlayer now 1,143 lines (post-T7/T8). Plan needs re-baselining against current file. |
+| T1 swiftlint suppressions (file_length + type_body_length) | audioplayer-decomposition todo.md | N/A | N/A | Blocked by T1 Phase 4. AudioPlayer at 1,143 lines (approaching 1,200-line error threshold). |
 | T1 manual verification (EQ bands, presets, auto-EQ, visualizers) | audioplayer-decomposition todo.md (6 items) | Small | Low | No — functional, just not formally verified post-decomposition |
 | Hide Main Window not working | T3 manual testing (pre-existing) | Small | Low | No |
 | T3 Instruments body evaluation profiling | mainwindow-layer-decomposition todo.md | Small | Low | No — performance optimization |
 | PlaylistWindowActions singleton rearchitecture | playlist-decomp depreciated.md | Large | Low | No |
 | Manual selection state sync fix | playlist-decomp depreciated.md | Small | Low | No — blocked by singleton fix |
 | T2 doc updates (IMPLEMENTATION_PATTERNS.md anti-pattern, tasks_index) | playlistwindow-layer-decomposition todo.md (2 items) | Small | Low | No |
-| `spm-multiple-producers-fix` | infra-ring-testing todo.md + lock-free-ring-buffer + swift-testing | Small-Medium | **Medium** | **Yes — blocks `swift test` via CLI for ALL tasks** |
+| ~~`spm-multiple-producers-fix`~~ | infra-ring-testing todo.md + lock-free-ring-buffer + swift-testing | Small-Medium | **RESOLVED** | ~~**Yes — blocks `swift test` via CLI for ALL tasks**~~ Resolved by Wave 3 (swift-tools-version 6.2). CLI tests pass. |
 | `async-test-determinism` (Task.sleep removal from 2 test files) | swift-testing todo.md (8 items) | Medium | Low | No — tests pass but use non-deterministic waits |
 | Swift Testing parameterization improvements | swift-testing todo.md (4 items) | Small | Low | No — code quality |
 | Ring buffer performance benchmarks | lock-free-ring-buffer todo.md (3 items) | Small | Low | No |
@@ -195,7 +195,7 @@ Target (MainWindowFullLayer.body):
 
 **Context (Hide Main Window):** The "Hide Main" menu item (`AppCommands.swift:13`) calls `DockingController.toggleMain()` which only toggles an internal `panes[idx].visible` boolean. This boolean is not wired to actually hide/show the NSWindow. `WindowVisibilityController.hideMain()` exists and calls `registry.mainWindow?.orderOut(nil)` but is never invoked by the toggle path. Pre-existing — not caused by T3 decomposition.
 
-**Context (spm-multiple-producers-fix):** This blocks `swift test` from CLI for ALL tasks. SwiftPM reports "multiple producers" error when building tests. Tests work fine through Xcode. Root cause is SwiftPM target configuration. This should be fixed before any task that needs CLI test runs.
+**Context (spm-multiple-producers-fix):** ✅ RESOLVED (2026-03-22). The error no longer reproduces — resolved by Wave 3 swift-tools-version 6.2 upgrade. `swift test` passes (40 tests, 11 suites). CLI test runs are unblocked.
 
 ### From Wave 3 — Pivot + Deferred Items
 
@@ -241,12 +241,12 @@ All doc updates verified complete by sub-agent scan:
 
 | Task Folder | Description | Size | Status | Dependency |
 |-------------|-------------|------|--------|------------|
-| `spm-multiple-producers-fix` | Fix SwiftPM "multiple producers" blocking `swift test` CLI | Small-Medium | PLANNED | None (independent) |
+| `spm-multiple-producers-fix` | Fix SwiftPM "multiple producers" blocking `swift test` CLI | Small-Medium | ✅ COMPLETE — resolved by Wave 3 (2026-03-22) | None |
 | `audioplayer-decomposition` Phase 4 | Engine transport extraction (play/pause/stop/seek) from AudioPlayer.swift | Large | UNLOCKED | T7 merged — engine boundaries stable |
 | `network-auto-reconnect` | Auto-reconnect dropped internet radio streams with exponential backoff | Medium | PLANNED | None (independent) |
 | `xcode-butterchurn-webcontent-diagnosis` | Fix Butterchurn/MilkDrop not working in Xcode (signing/entitlements) | Medium | DIAGNOSED | None — diagnosis complete, needs implementation |
 
-**Structure policy overlay:** Use `tasks/swift-project-structure-research/` as the placement-policy reference during S1. Do not run a broad repo restructure during S1. Apply the new ownership model only where S1 tasks already touch files.
+**Structure policy overlay:** Use `tasks/swift-project-structure-research/` as the placement-policy reference during Sprints S1-S3. Do not run a broad repo restructure during S1-S3. Apply the new ownership model only where sprint tasks already touch files. All file-move consolidation is deferred to the post-S3 Structure Sprint (D-STRUCTURE decision 2026-03-15). Decomposition tasks (post-S2/pre-S3) should split files in place, not move them to target folders.
 
 ### Sprint S0: DOCS FIRST — Documentation Hygiene (COMPLETE)
 
@@ -273,25 +273,34 @@ All doc updates verified complete by sub-agent scan:
 | `hls-streaming-support` | Add HLS protocol to stream decode pipeline | Large | PLANNED | None |
 | `ogg-vorbis-support` | Add OGG Vorbis codec (needs libvorbis or pure Swift decoder) | Medium | PLANNED | None |
 
-### Post-S1 Architecture Follow-Ons (Created, Not Yet Sprinted)
+### Post-S2 / Pre-S3 Architecture Follow-Ons: Decomposition Only (Created, Not Yet Sprinted)
 
 | Task Folder | Description | Size | Status | Dependency |
 |-------------|-------------|------|--------|------------|
-| `windowing-structure-consolidation` | Consolidate generic window infrastructure under the target `Windowing/` ownership model | Medium | PLANNED | Start after Sprint S1 stabilizes |
-| `milkdrop-feature-consolidation` | Consolidate Milkdrop / Butterchurn files and resources under the target `Features/Milkdrop/` ownership model | Medium | PLANNED | Start after Sprint S1 stabilizes |
-
-### Post-S2 / Pre-S3 Architecture Follow-Ons (Created, Not Yet Sprinted)
-
-| Task Folder | Description | Size | Status | Dependency |
-|-------------|-------------|------|--------|------------|
-| `skinmanager-decomposition` | Decompose `SkinManager.swift` and align skin ownership with the approved structure | Medium | PLANNED | Start after Sprint S2 stabilizes |
-| `visualizerpipeline-decomposition` | Decompose `VisualizerPipeline.swift` inside the `Audio/Visualization` boundary | Medium | PLANNED | Start after Sprint S2 stabilizes |
-| `streamdecodepipeline-decomposition` | Decompose `StreamDecodePipeline.swift` inside the `Audio/Streaming` boundary | Medium | PLANNED | Start after Sprint S2 stabilizes |
-| `winamp-equalizer-window-decomposition` | Decompose `WinampEqualizerWindow.swift` into clearer equalizer feature-owned UI pieces | Medium | PLANNED | Start after Sprint S2 stabilizes |
+| `skinmanager-decomposition` | Decompose `SkinManager.swift` (split large file into smaller pieces) | Medium | PLANNED | Start after Sprint S2 stabilizes |
+| `visualizerpipeline-decomposition` | Decompose `VisualizerPipeline.swift` (split large file) | Medium | PLANNED | Start after Sprint S2 stabilizes |
+| `streamdecodepipeline-decomposition` | Decompose `StreamDecodePipeline.swift` (split large file) | Medium | PLANNED | Start after Sprint S2 stabilizes |
+| `winamp-equalizer-window-decomposition` | Decompose `WinampEqualizerWindow.swift` (split large file) | Medium | PLANNED | Start after Sprint S2 stabilizes |
 
 **AudioPlayer note:** `AudioPlayer.swift` remains owned by the existing `audioplayer-decomposition` Phase 4 task and is not a separate post-S2 task folder.
 
-**Architecture rollout status:** post-S1 and post-S2 follow-on tasks now both exist as concrete task folders.
+**Decomposition readiness note:** The 4 post-S2 decomposition tasks are backlog-ready (scope, constraints, verification defined) but not implementation-ready. Each task's first step is "produce a responsibility map" — the detailed symbol/method-level extraction tables will be created when S2 stabilizes and the target files have their final shape. This is intentional: S2 tasks (`os-workgroup-integration`, `video-audio-engine-routing`) may modify these files, so premature extraction planning would be wasted.
+
+### Post-S3 Structure Sprint: All Consolidation (D-STRUCTURE decision 2026-03-15)
+
+All file-move consolidation work is deferred to a single dedicated "Structure Sprint" after S3 completes. This replaces the previous plan of weaving consolidation incrementally through post-S1 and post-S2 phases.
+
+| Task Folder | Description | Size | Status | Dependency |
+|-------------|-------------|------|--------|------------|
+| `windowing-structure-consolidation` | Move generic window files into `Windowing/` | Medium | DEFERRED to post-S3 | Was post-S1; deferred per D-STRUCTURE |
+| `milkdrop-feature-consolidation` | Move Milkdrop/Butterchurn files into `Features/Milkdrop/` | Medium | DEFERRED to post-S3 | Was post-S1; deferred per D-STRUCTURE |
+| *(not yet created)* | `Features/` consolidation (Video, EQ, Playlist) | Medium | NOT CREATED | Post-S3 |
+| *(not yet created)* | `Audio/` consolidation (existing files → ownership boundaries) | Medium | NOT CREATED | Post-S3 |
+| *(not yet created)* | `App/`, `Core/`, `Shared/` consolidation | Medium | NOT CREATED | Post-S3 |
+
+**Rationale:** File moves touch `project.yml`, imports, bundle resource paths, and test references — inherently a "stop the world" operation that conflicts with active feature branches. Decomposition first (S1-S3) makes files smaller and easier to move. One focused post-S3 pass is lower risk and higher coherence than scattered moves interleaved with feature work. The placement policy from `swift-project-structure-research` remains active during S1-S3 (new files go to the right place).
+
+**Planning gap (address when post-S3 starts):** The target layout is defined in `swift-project-structure-research/plan.md` but the Structure Sprint still needs: (1) a complete source-to-target mapping for all files, (2) an execution order with dependencies between consolidation areas, (3) task folders for the 3 uncreated areas, (4) XcodeGen/project.yml migration analysis, (5) decisions on ambiguous files that could belong to multiple boundaries. Do not create these until S3 is done — decomposition will create new files and S1-S3 features will modify existing ones.
 
 ---
 

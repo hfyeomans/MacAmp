@@ -85,7 +85,7 @@ struct WinampEqualizerWindow: View {
                 // Titlebar buttons (always active, never dimmed)
                 buildTitlebarButtons()
 
-                // EQ controls (dimmed when streaming — EQ not available for AVPlayer)
+                // EQ controls (dimmed briefly during stream prebuffering before bridge activates)
                 Group {
                     // ON/AUTO buttons
                     buildControlButtons()

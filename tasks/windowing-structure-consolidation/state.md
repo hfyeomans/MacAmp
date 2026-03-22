@@ -7,11 +7,13 @@
 
 ## Status
 
-Planned. Not started.
+DEFERRED to post-S3 Structure Sprint (D-STRUCTURE decision 2026-03-15).
 
 ## Scheduling
 
-- Start after Sprint S1 stabilizes.
+- ~~Start after Sprint S1 stabilizes.~~ Deferred to post-S3 Structure Sprint.
+- All file-move consolidation is now batched into one dedicated pass after S3 completes.
+- Decomposition tasks (S1-S3) will make files smaller before this task runs, reducing move risk.
 - Do not run in parallel with broad window-behavior feature work unless the overlap is explicitly reviewed.
 
 ## Key Decision

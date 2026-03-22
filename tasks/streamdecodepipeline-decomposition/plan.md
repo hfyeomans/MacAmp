@@ -20,6 +20,7 @@ Decompose `MacAmpApp/Audio/Streaming/StreamDecodePipeline.swift` so the top-leve
 
 - Preserve current generation-token, shutdown, and callback semantics.
 - Do not destabilize the decode queue / audio-thread handoff.
+- **Decompose in place:** Create new files in `Audio/Streaming/` (current location, already at target). No folder-level moves needed for this task.
 - Do not mix new stream features into this cleanup task.
 
 ## Verification

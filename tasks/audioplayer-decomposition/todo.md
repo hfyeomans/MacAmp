@@ -5,89 +5,53 @@
 
 ---
 
-## Phase 1: Extract EqualizerController
+## Phase 1: Extract EqualizerController — COMPLETE (PR #52)
 
-- [x] Create `MacAmpApp/Audio/EqualizerController.swift` with `@Observable @MainActor` class
-- [x] Move `eqNode` (AVAudioUnitEQ) ownership to EqualizerController
-- [x] Move EQ state properties: `preamp`, `eqBands`, `isEqOn`, `eqAutoEnabled`, `useLogScaleBands`, `appliedAutoPresetTrack`, `autoEQTask`
-- [x] Move `eqPresetStore` and `userPresets` computed property to EqualizerController
-- [x] Move methods: `setPreamp`, `setEqBand`, `toggleEq`
-- [x] Move methods: `applyPreset`, `applyEQPreset`, `getCurrentEQPreset`
-- [x] Move methods: `saveUserPreset`, `deleteUserPreset`, `importEqfPreset`
-- [x] Move methods: `savePresetForCurrentTrack` (change signature to accept `Track` parameter)
-- [x] Move methods: `applyAutoPreset`, `setAutoEQEnabled` (change signature to accept `Track?`), `generateAutoPreset`
-- [x] Move `configureEQ()` to EqualizerController
-- [x] Add `let equalizer = EqualizerController()` to AudioPlayer
-- [x] Add forwarding computed properties on AudioPlayer for all moved observable state
-- [x] Add forwarding methods on AudioPlayer for all moved methods
-- [x] Update `setupEngine()` to use `equalizer.eqNode`
-- [x] Update `rewireForCurrentFile()` to use `equalizer.eqNode`
-- [x] Update `playTrack()` to call `equalizer.applyAutoPreset(for:)` instead of `self.applyAutoPreset(for:)`
-- [x] Build with Thread Sanitizer — **PASSED** (commit `1b7e76f`)
-- [ ] Verify EQ window: all 10 bands, preamp, on/off toggle (requires manual testing)
-- [ ] Verify preset save/load/delete (requires manual testing)
-- [ ] Verify auto-EQ applies on track change (requires manual testing)
+- [x] Create EqualizerController.swift, move EQ methods/state, add forwarding
+- [x] Build with Thread Sanitizer — PASSED
 
-## Phase 2: Consolidate Visualizer Forwarding
+## Phase 2: Consolidate Visualizer Forwarding — COMPLETE (PR #52)
 
-- [x] Move `getFrequencyData(bands:)` implementation to `VisualizerPipeline.swift` (added `isPlaying` parameter)
-- [x] Replace AudioPlayer's `getFrequencyData` with forwarding call
-- [x] Merged `// MARK: - Visualizer Support` and `// MARK: - Butterchurn Audio Data` into single `// MARK: - Visualizer Forwarding` block
-- [x] Build with Thread Sanitizer — **PASSED** (commit `2fbed90`)
-- [ ] Verify spectrum analyzer renders correctly (requires manual testing)
-- [ ] Verify oscilloscope waveform renders correctly (requires manual testing)
-- [ ] Verify Butterchurn/MilkDrop visualizer receives data (requires manual testing)
+- [x] Move getFrequencyData to VisualizerPipeline, consolidate MARK sections
+- [x] Build with Thread Sanitizer — PASSED
 
-## Phase 3: Clean Up FourCC Extension
+## Phase 3: Clean Up FourCC Extension — COMPLETE (PR #52)
 
-- [x] Search codebase for `fourCC` usage — **No callers found**
-- [x] Deleted lines 8-19 from AudioPlayer.swift (unused extension)
-- [x] Removed stale extraction comments
-- [x] Build succeeds — **PASSED** (commit `37c3598`)
+- [x] Delete unused FourCC extension
+- [x] Build succeeds — PASSED
 
-## Oracle Review #1 Fixes
+## Phase 4: Engine + Stream Bridge + Transport Extraction (Sprint S1)
 
-- [x] Made `equalizer` `private` to enforce facade boundary
-- [x] Added `didSet` handlers on `preamp`, `eqBands`, `isEqOn` for eqNode sync
-- [x] Removed redundant manual node assignments from behavioral methods
-- [x] Build with Thread Sanitizer — **PASSED** (commit `8679123`)
+### Step 0: Seek State Machine Characterization Tests (PREREQUISITE) — COMPLETE
+- [x] Add 13 characterization tests covering stop/eject state reset, initial state, play/pause no-ops, volume/balance persistence, bridge/engine initial values
+- [x] Note: seekGuardActive/currentSeekID/shouldIgnoreCompletion are private — tested through observable behavior (state transitions, property values)
+- [x] `swift test` passes — 53 tests (up from 40)
+- [x] Commit: `ccd0213` "test: add seek state machine characterization tests"
 
-## Oracle Review #2 Fixes
+### Steps 1-5: Create AudioEngineController + Rewrite AudioPlayer — COMPLETE
+- [x] Create `MacAmpApp/Audio/AudioEngineController.swift` (419 lines → 413 after Oracle fixes)
+- [x] Move engine properties, stream bridge, graph wiring, transport, visualizer tap, progress timer
+- [x] Inject eqNode + visualizerPipeline, wire callbacks (onProgressUpdate, onPlaybackEnded, onBridgeStateChanged)
+- [x] Rewrite AudioPlayer to delegate all engine operations through controller
+- [x] Fix volume/balance didSet crash (optional chaining during init)
+- [x] Build succeeds, `swift test` passes (53 tests)
+- [x] Commit: `5582f0d` "refactor: extract AudioEngineController from AudioPlayer (Phase 4)"
 
-- [x] Fix deinit crash: `removeTap()` main-queue precondition — dispatch to main when deinit runs off-thread
-- [x] Harden `eqBands` didSet: zero remaining eqNode bands when array has fewer than 10 elements
-- [x] Make `visualizerPipeline` `private` to match `equalizer` facade enforcement
-- [x] Build with Thread Sanitizer — **PASSED** (commit `c87aa07`)
+### Step 6: Oracle Review — COMPLETE
+- [x] Oracle review (gpt-5.3-codex xhigh) — 3 findings
+- [x] [MEDIUM] Fix currentDuration regression — sync from engine file duration after loadAudioFile
+- [x] [LOW] Remove no-op async task from scheduleFrom hot path
+- [x] [LOW] Noted: completion-ID defensiveness acceptable (all callers pass non-nil)
+- [x] Commit: `924bc1e` "fix: address Oracle review findings for Phase 4 extraction"
 
-## CodeRabbit Review Fixes
+### Step 7: Verification — COMPLETE
+- [x] Line counts: AudioPlayer 705, AudioEngineController 413 (total 1,118)
+- [x] `swift test` passes — 53 tests, 0 failures
+- [x] Facade preserved — all AudioPlayer public API signatures unchanged
+- [ ] Create PR for user review
 
-- [x] Make `configureEQ()` `private` in EqualizerController — only called from `init()`
-- [x] Remove unused `import Combine` and `import Accelerate` from AudioPlayer.swift
-- [x] Verify swiftlint suppressions — **cannot remove** (945 lines, still above 600 warning threshold)
-- [x] Build with Thread Sanitizer — **PASSED** (commit `dd8866e`)
+## Post-Phase 4
 
-## Gemini Review Fix
-
-- [x] Use URL-based identity for auto-preset clear task instead of track title
-- [x] Cancel stale clear tasks when new preset is applied
-- [x] Build with Thread Sanitizer — **PASSED** (commit `b1d8700`)
-
-## Phase 4: Engine Transport Extraction (DEFERRED)
-
-- [x] Evaluate if Phases 1-3 bring file below thresholds — **No:** 945 lines, still above 600 warning. Phase 4 deferred.
-- [ ] Keep Phase 4 aligned with the approved `Audio/Playback` ownership model from `swift-project-structure-research`
-- [ ] Avoid broad repo/folder moves as part of Phase 4; keep this a scoped decomposition PR
-- [ ] If needed: create `AudioEngineTransport.swift`
-- [ ] If needed: extract `setupEngine`, `rewireForCurrentFile`, `scheduleFrom`, `startEngineIfNeeded`, `startProgressTimer`
-- [ ] If needed: refactor `play/pause/stop/seek` to use transport controller
-- [ ] Oracle review on seek state machine changes
-
-## Post-Implementation
-
-- [ ] Remove `// swiftlint:disable file_length` if file is under 600 lines (currently 945 — NOT YET, requires Phase 4)
-- [ ] Remove `// swiftlint:disable:this type_body_length` if type body is under 400 lines (currently ~905 — NOT YET, requires Phase 4)
-- [x] Run full swiftlint check: no new warnings — **0 violations**
-- [x] Update state.md with final line counts
-- [x] Update deprecated.md with removed patterns
-- [x] Commits with descriptive messages (7 commits across 3 phases + 4 review rounds)
-- [x] PR #52 created and **merged**
+- [ ] Remove `// swiftlint:disable file_length` if AudioPlayer under 600 (unlikely without Phase 5)
+- [ ] Remove `// swiftlint:disable:this type_body_length` if type body under 600 (unlikely without Phase 5)
+- [ ] Update shared `_context/state.md` and `_context/tasks_index.md`

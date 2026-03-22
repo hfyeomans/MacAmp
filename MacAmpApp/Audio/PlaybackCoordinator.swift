@@ -7,8 +7,8 @@ import Observation
 /// It provides a unified API for the UI to play content regardless of source type.
 ///
 /// **Architecture:**
-/// - Local files (.mp3, .flac, etc.) → AudioPlayer with 10-band EQ
-/// - Internet radio (http://, https://) → StreamPlayer (AVPlayer, no EQ)
+/// - Local files (.mp3, .flac, etc.) → AudioPlayer (AVAudioPlayerNode) with 10-band EQ
+/// - Internet radio (http://, https://) → StreamPlayer (custom decode pipeline) → AudioPlayer stream bridge (AVAudioSourceNode) with EQ + visualization
 ///
 /// **Usage:**
 /// ```swift
@@ -143,7 +143,7 @@ final class PlaybackCoordinator {
     }
 
     /// Propagate balance to ALL backends unconditionally.
-    /// StreamPlayer stores balance but cannot apply it (no AVPlayer .pan property).
+    /// With the unified pipeline, balance is applied via AVAudioEngine (streamSourceNode.pan).
     func setBalance(_ bal: Float) {
         audioPlayer.balance = bal
         streamPlayer.balance = bal

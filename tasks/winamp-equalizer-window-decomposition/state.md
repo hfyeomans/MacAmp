@@ -17,4 +17,5 @@ Planned. Not started.
 ## Key Decision
 
 - This task owns the structural cleanup of `WinampEqualizerWindow.swift`.
-- It should move equalizer UI toward feature-owned structure without changing equalizer behavior.
+- **Decompose in place:** Split the file into smaller pieces within `Views/` (its current location). Do not move files to `Features/Equalizer/` as part of this task — all folder-level consolidation is deferred to the post-S3 Structure Sprint (D-STRUCTURE decision 2026-03-15).
+- It should reduce the root file without changing equalizer behavior.
