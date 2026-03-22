@@ -9,39 +9,42 @@
 - [x] Oracle review of reconnect strategy (gpt-5.3-codex xhigh)
 - [x] Write implementation plan incorporating Oracle findings
 
-## Step 1: Add StreamTerminationReason to StreamDecodePipeline
-- [ ] Add `StreamTerminationReason` enum (8 cases)
-- [ ] Add `userRequestedStop` flag, set in `stop()`
-- [ ] Add `onTermination` callback
-- [ ] Modify error paths to fire `onTermination` with typed reason
-- [ ] Distinguish server-close from user-stop in URLSession completion
-- [ ] Build with XcodeBuildMCP — PASSES
-- [ ] Commit
+## Step 1: Add StreamTerminationReason to StreamDecodePipeline — COMPLETE
+- [x] Add `StreamTerminationReason` enum (8 cases)
+- [x] Add `userRequestedStop` flag, set in `stop()`, reset in `start()`
+- [x] Add `onTermination` callback
+- [x] Modify all 5 error paths + stop() + server-close to fire `onTermination` with typed reason
+- [x] Distinguish server-close from user-stop in URLSession completion
+- [x] XcodeBuildMCP build — PASSES
+- [x] Commit: `72c3cb6`
 
-## Step 2: Add Reconnect State Machine to StreamPlayer
-- [ ] Add reconnect state: reconnectTask, reconnectAttempt, wasActivelyPlaying, isReconnecting
-- [ ] Add `isReconnectable(_:)` classification method
-- [ ] Add `attemptReconnect()` with exponential backoff (1s→2s→4s→8s→16s cap, max 10)
-- [ ] Add `cancelReconnect()` — cancel task, clear state
-- [ ] Add `resetReconnectState()` — reset counter on successful playback (5s threshold)
-- [ ] Wire `pipeline.onTermination` to reconnect decision logic
-- [ ] Modify `.error`/`.idle` handling: delegate to onTermination, don't fire onStreamTerminated directly
-- [ ] Cancel reconnect in `stop()` and `pause()`
-- [ ] Set `wasActivelyPlaying = true` when stream enters `.playing` state
-- [ ] Build with XcodeBuildMCP — PASSES
-- [ ] Test with XcodeBuildMCP — 53+ tests pass
-- [ ] Commit
+## Step 2: Add Reconnect State Machine to StreamPlayer — COMPLETE
+- [x] Add reconnect state: reconnectTask, reconnectAttempt, wasActivelyPlaying, isReconnecting, playbackStableTask
+- [x] Add `isReconnectable(_:)` classification (4 reconnectable, 4 terminal)
+- [x] Add `attemptReconnect()` with exponential backoff (1s→16s cap, max 10)
+- [x] Add `cancelReconnect()` — cancel tasks, clear state
+- [x] Add `startPlaybackStableTimer()` — reset counter after 5s stable playback
+- [x] Wire `pipeline.onTermination` to `handleTermination()` decision logic
+- [x] Removed direct `onStreamTerminated` calls from `.error`/`.idle` in onStateChange
+- [x] Cancel reconnect in `stop()` and `pause()`
+- [x] Reset `wasActivelyPlaying` in `play(station:)` and `stop()`
+- [x] Added `StreamTerminationReason.userMessage` extension
+- [x] XcodeBuildMCP build + test — 53 tests PASS
+- [x] Commit: `ef081c1`
 
-## Step 3: Oracle Review
-- [ ] Run `/codex-oracle-workflow` review on changes
-- [ ] Address all ACTIONABLE findings
-- [ ] Commit fixes
+## Step 3: Oracle Review — COMPLETE
+- [x] Oracle review (gpt-5.3-codex xhigh) — 3 findings
+- [x] [HIGH] Fix pause during reconnect — stop pipeline if mid-connect/buffer, clear isBuffering
+- [x] [MEDIUM] Reset wasActivelyPlaying in play(station:) — prevent stale reconnect eligibility
+- [x] [LOW] Clear ringBuffer on terminal failure — free memory immediately
+- [x] XcodeBuildMCP build + test — 53 tests PASS
+- [x] Commit: `b3991e5`
 
-## Step 4: Verification
-- [ ] XcodeBuildMCP build with Thread Sanitizer
-- [ ] XcodeBuildMCP test with Thread Sanitizer
-- [ ] Update state.md with final metrics
-- [ ] Update task todo (check off items)
+## Step 4: Verification + PR — COMPLETE
+- [x] XcodeBuildMCP build with Thread Sanitizer — PASSES
+- [x] XcodeBuildMCP test with Thread Sanitizer — 53/53 PASS
+- [x] Update state.md
+- [x] Update todo.md
 - [ ] Push branch → create PR for user review
 
 ## Architecture Constraints
