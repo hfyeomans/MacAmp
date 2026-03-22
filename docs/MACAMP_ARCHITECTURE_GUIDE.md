@@ -209,7 +209,7 @@ Deployment:               Developer ID signed, notarization-ready
 13. **Network Auto-Reconnect (March 2026)**: Automatic reconnection for internet radio streams
    - `StreamTerminationReason` enum with 8 typed cases classifying connection failures
    - Reconnect state machine with exponential backoff (1s to 16s, max 10 attempts)
-   - Error classification: reconnectable (timeout, networkLost, serverError) vs terminal (userStopped, formatError, decodeFailed)
+   - Error classification: reconnectable (networkError, serverClosed, httpServerError) vs terminal (userStopped, decodeError, httpClientError)
    - Bridge tear-down and re-create cycle during reconnect (PlaybackCoordinator deactivates bridge, StreamPlayer restarts pipeline)
    - User-friendly error messages via `userMessage` extension on StreamTerminationReason
    - StreamPlayer grew from 189 to 334 lines; StreamDecodePipeline grew from 631 to 666 lines
@@ -2953,14 +2953,14 @@ When an internet radio stream terminates unexpectedly, StreamPlayer automaticall
 
 | Case | Reconnectable | Description |
 |------|:------------:|-------------|
+| `networkError(String, Int)` | Depends | URLSession error — reconnectable for transient (connection lost, timeout), terminal for DNS failure |
+| `serverClosed` | Yes | Server closed connection gracefully |
+| `httpClientError(Int)` | No | HTTP 4xx (except 429) — bad URL, auth required |
+| `httpServerError(Int)` | Yes | HTTP 5xx + 429 Too Many Requests |
+| `decodeError(String)` | No | AudioConverter/AudioFileStream failure |
+| `invalidResponse` | No | Non-HTTP response |
+| `playlistResolutionFailed(String)` | Yes | M3U/PLS fetch failure (may be DNS) |
 | `userStopped` | No | User explicitly stopped playback |
-| `timeout` | Yes | Connection or data timeout |
-| `networkLost` | Yes | Network interface went down |
-| `serverError(Int)` | Yes | HTTP 5xx server error |
-| `connectionRefused` | Yes | Server refused connection (overloaded) |
-| `formatError` | No | Unsupported or corrupt audio format |
-| `decodeFailed` | No | AudioConverter decode failure |
-| `unknown(String)` | Yes | Unclassified error (retry as best-effort) |
 
 **Reconnect Backoff:**
 ```
@@ -2983,13 +2983,20 @@ During reconnect, PlaybackCoordinator deactivates the AVAudioSourceNode bridge (
 extension StreamTerminationReason {
     var userMessage: String {
         switch self {
-        case .timeout: return "Connection timed out"
-        case .networkLost: return "Network connection lost"
-        case .serverError(let code): return "Server error (\(code))"
-        case .connectionRefused: return "Server is busy"
-        case .formatError: return "Unsupported audio format"
-        case .decodeFailed: return "Audio decode error"
-        case .unknown(let msg): return msg
+        case .networkError(_, let code):
+            switch code {
+            case NSURLErrorCannotFindHost: return "Host not found"
+            case NSURLErrorTimedOut: return "Connection timed out"
+            case NSURLErrorNetworkConnectionLost: return "Connection lost"
+            case NSURLErrorNotConnectedToInternet: return "No internet connection"
+            default: return "Network error"
+            }
+        case .serverClosed: return "Stream ended"
+        case .httpClientError(let code): return "HTTP error \(code)"
+        case .httpServerError(let code): return "Server error \(code)"
+        case .decodeError: return "Unsupported audio format"
+        case .invalidResponse: return "Invalid server response"
+        case .playlistResolutionFailed: return "Playlist not found"
         case .userStopped: return ""
         }
     }
