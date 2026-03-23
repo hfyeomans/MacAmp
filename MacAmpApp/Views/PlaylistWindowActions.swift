@@ -245,16 +245,19 @@ final class PlaylistWindowActions: NSObject {
 
         savePanel.begin { response in
             if response == .OK, let url = savePanel.url {
-                Task { @MainActor in
+                let tracks = audioPlayer.playlist
+                Task.detached(priority: .userInitiated) {
                     do {
-                        try M3UWriter.write(tracks: audioPlayer.playlist, to: url)
+                        try M3UWriter.write(tracks: tracks, to: url)
                     } catch {
-                        let alert = NSAlert()
-                        alert.messageText = "Failed to Save Playlist"
-                        alert.informativeText = error.localizedDescription
-                        alert.alertStyle = .warning
-                        alert.addButton(withTitle: "OK")
-                        alert.runModal()
+                        await MainActor.run {
+                            let alert = NSAlert()
+                            alert.messageText = "Failed to Save Playlist"
+                            alert.informativeText = error.localizedDescription
+                            alert.alertStyle = .warning
+                            alert.addButton(withTitle: "OK")
+                            alert.runModal()
+                        }
                     }
                 }
             }
@@ -276,32 +279,41 @@ final class PlaylistWindowActions: NSObject {
 
         openPanel.begin { response in
             if response == .OK, let url = openPanel.url {
-                Task { @MainActor in
-                    // Parse first — only clear playlist after successful parse (avoid data loss)
+                Task.detached(priority: .userInitiated) {
+                    // Parse off main actor to avoid blocking UI
+                    let result: Result<[M3UEntry], Error>
                     do {
-                        let entries = try M3UParser.parse(fileURL: url)
-                        // LOAD LIST replaces the playlist (Winamp behavior)
-                        audioPlayer.clearPlaylist()
-                        for entry in entries {
-                            if entry.isRemoteStream {
-                                let streamTrack = Track(
-                                    url: entry.url,
-                                    title: entry.title ?? "Unknown Station",
-                                    artist: "Internet Radio",
-                                    duration: 0.0
-                                )
-                                audioPlayer.addStreamTrack(streamTrack)
-                            } else {
-                                audioPlayer.addTrack(url: entry.url)
-                            }
-                        }
+                        result = .success(try M3UParser.parse(fileURL: url))
                     } catch {
-                        let alert = NSAlert()
-                        alert.messageText = "Failed to Load Playlist"
-                        alert.informativeText = error.localizedDescription
-                        alert.alertStyle = .warning
-                        alert.addButton(withTitle: "OK")
-                        alert.runModal()
+                        result = .failure(error)
+                    }
+
+                    await MainActor.run {
+                        switch result {
+                        case .success(let entries):
+                            // LOAD LIST replaces the playlist (Winamp behavior)
+                            audioPlayer.clearPlaylist()
+                            for entry in entries {
+                                if entry.isRemoteStream {
+                                    let streamTrack = Track(
+                                        url: entry.url,
+                                        title: entry.title ?? "Unknown Station",
+                                        artist: "Internet Radio",
+                                        duration: 0.0
+                                    )
+                                    audioPlayer.addStreamTrack(streamTrack)
+                                } else {
+                                    audioPlayer.addTrack(url: entry.url)
+                                }
+                            }
+                        case .failure(let error):
+                            let alert = NSAlert()
+                            alert.messageText = "Failed to Load Playlist"
+                            alert.informativeText = error.localizedDescription
+                            alert.alertStyle = .warning
+                            alert.addButton(withTitle: "OK")
+                            alert.runModal()
+                        }
                     }
                 }
             }

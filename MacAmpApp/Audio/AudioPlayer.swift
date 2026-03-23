@@ -48,6 +48,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     @ObservationIgnored private var currentSeekID: UUID = UUID()
     @ObservationIgnored private var isHandlingCompletion = false
     @ObservationIgnored private var seekGuardActive = false
+    @ObservationIgnored private var playlistGeneration: UInt64 = 0
     var currentTrackURL: URL?
     var currentTitle: String = "No Track Loaded"
     var currentDuration: Double = 0.0
@@ -248,12 +249,20 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
             playTrack(track: placeholder)
         }
 
+        let generation = playlistGeneration
         Task { @MainActor [weak self] in
             guard let self else { return }
             defer { self.playlistController.removePendingURL(normalizedURL) }
 
             AppLog.debug(.audio, "Loading metadata for \(normalizedURL.lastPathComponent)")
             let metadata = await MetadataLoader.loadTrackMetadata(from: normalizedURL)
+
+            // Reject stale metadata if playlist was cleared/replaced while loading
+            guard self.playlistGeneration == generation else {
+                AppLog.debug(.audio, "Discarding stale metadata for \(normalizedURL.lastPathComponent) — playlist changed")
+                return
+            }
+
             let track = Track(url: normalizedURL, title: metadata.title, artist: metadata.artist, duration: metadata.duration)
             AppLog.debug(.audio, "Metadata loaded - title: '\(track.title)', artist: '\(track.artist)', duration: \(track.duration)s")
 
@@ -288,12 +297,14 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     }
 
     func replacePlaylist(with tracks: [Track]) {
+        playlistGeneration &+= 1
         playlistController.clear()
         for track in tracks { playlistController.addTrack(track) }
         AppLog.debug(.audio, "Replaced playlist with \(tracks.count) tracks")
     }
 
     func clearPlaylist() {
+        playlistGeneration &+= 1
         playlistController.clear()
     }
 
