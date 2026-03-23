@@ -12,8 +12,8 @@ import Observation
 ///
 /// **Usage:**
 /// ```swift
-/// // Play a file URL
-/// await coordinator.play(url: fileURL)
+/// // Play a track from the playlist
+/// await coordinator.play(track: myTrack)
 ///
 /// // Play a radio station
 /// await coordinator.play(station: myStation)
@@ -188,6 +188,9 @@ final class PlaybackCoordinator {
 
     // MARK: - Unified Playback Control
 
+    /// Play a raw URL (not from playlist). Currently unused in production —
+    /// all playback goes through play(track:) or play(station:).
+    /// Note: does not set currentTrack, so trackPositionString will be nil.
     func play(url: URL) async {
         if url.isFileURL {
             // Stop stream + deactivate bridge if playing
