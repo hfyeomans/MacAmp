@@ -107,7 +107,7 @@ struct AppCommands: Commands {
                 for url in panel.urls {
                     audioPlayer.addTrack(url: url)
                 }
-                if wasEmpty, let firstTrack = audioPlayer.currentTrack {
+                if wasEmpty, let firstTrack = audioPlayer.playlist.first {
                     await playbackCoordinator.play(track: firstTrack)
                 }
             }

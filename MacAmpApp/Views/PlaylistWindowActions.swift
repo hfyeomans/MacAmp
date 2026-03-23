@@ -39,12 +39,11 @@ final class PlaylistWindowActions: NSObject {
 
                     self.handleSelectedURLs(urls, audioPlayer: audioPlayer)
 
-                    if wasEmpty, let firstTrack = audioPlayer.currentTrack, let coordinator = playbackCoordinator {
+                    // Auto-play first track via coordinator when playlist was empty
+                    let coordinator = playbackCoordinator ?? self.playbackCoordinator
+                    if wasEmpty, let firstTrack = audioPlayer.playlist.first, let coordinator {
                         await coordinator.play(track: firstTrack)
                     }
-
-                    // Note: onPlaylistAdvanceRequest/onTrackMetadataUpdate are set in PlaybackCoordinator init
-                    // Not here - setting them here would clobber coordinator's handlers
                 }
             }
         }
@@ -177,7 +176,7 @@ final class PlaylistWindowActions: NSObject {
         guard let audioPlayer = sender.representedObject as? AudioPlayer else {
             return
         }
-        presentAddFilesPanel(audioPlayer: audioPlayer)
+        presentAddFilesPanel(audioPlayer: audioPlayer, playbackCoordinator: playbackCoordinator)
     }
 
     @objc func removeSelected(_ sender: NSMenuItem) {
@@ -317,12 +316,11 @@ final class PlaylistWindowActions: NSObject {
                                 }
                             }
                         }
-                        // Auto-play first track via coordinator
-                        let firstTrack: Track? = await MainActor.run {
-                            audioPlayer.currentTrack ?? audioPlayer.playlist.first
+                        // Auto-play first track via coordinator (capture in same MainActor hop)
+                        let (firstTrack, coordinator): (Track?, PlaybackCoordinator?) = await MainActor.run {
+                            (audioPlayer.playlist.first, self.playbackCoordinator)
                         }
-                        if let coordinator = await self.playbackCoordinator,
-                           let track = firstTrack {
+                        if let track = firstTrack, let coordinator {
                             await coordinator.play(track: track)
                         }
                     case .failure(let error):
