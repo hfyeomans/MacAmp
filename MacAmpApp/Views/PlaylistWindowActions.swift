@@ -37,7 +37,7 @@ final class PlaylistWindowActions: NSObject {
 
                     let wasEmpty = audioPlayer.playlist.isEmpty
 
-                    self.handleSelectedURLs(urls, audioPlayer: audioPlayer)
+                    self.handleSelectedURLs(urls, audioPlayer: audioPlayer, autoplay: wasEmpty)
 
                     // Auto-play first track via coordinator when playlist was empty
                     let coordinator = playbackCoordinator ?? self.playbackCoordinator
@@ -49,18 +49,19 @@ final class PlaylistWindowActions: NSObject {
         }
     }
 
-    private func handleSelectedURLs(_ urls: [URL], audioPlayer: AudioPlayer) {
+    private func handleSelectedURLs(_ urls: [URL], audioPlayer: AudioPlayer, autoplay: Bool = false) {
         for url in urls {
             let fileExtension = url.pathExtension.lowercased()
             if fileExtension == "m3u" || fileExtension == "m3u8" {
-                loadM3UPlaylist(url, audioPlayer: audioPlayer)
+                loadM3UPlaylist(url, audioPlayer: audioPlayer, autoplay: autoplay)
             } else {
                 audioPlayer.addTrack(url: url)
             }
         }
     }
 
-    private func loadM3UPlaylist(_ url: URL, audioPlayer: AudioPlayer) {
+    private func loadM3UPlaylist(_ url: URL, audioPlayer: AudioPlayer, autoplay: Bool = false) {
+        let coordinator = playbackCoordinator
         Task.detached(priority: .userInitiated) {
             let result: Result<[M3UEntry], Error>
             do {
@@ -69,11 +70,11 @@ final class PlaylistWindowActions: NSObject {
                 result = .failure(error)
             }
 
-            await MainActor.run {
-                switch result {
-                case .success(let entries):
-                    var addedStreams = 0
-                    var addedFiles = 0
+            switch result {
+            case .success(let entries):
+                let (addedFiles, addedStreams, firstTrack, coordinator): (Int, Int, Track?, PlaybackCoordinator?) = await MainActor.run {
+                    var streams = 0
+                    var files = 0
 
                     for entry in entries {
                         if entry.isRemoteStream {
@@ -84,13 +85,23 @@ final class PlaylistWindowActions: NSObject {
                                 duration: 0.0
                             )
                             audioPlayer.addStreamTrack(streamTrack)
-                            addedStreams += 1
+                            streams += 1
                         } else {
                             audioPlayer.addTrack(url: entry.url)
-                            addedFiles += 1
+                            files += 1
                         }
                     }
 
+                    let track = autoplay ? audioPlayer.playlist.first : nil
+                    return (files, streams, track, coordinator)
+                }
+
+                // Auto-play first track if playlist was empty
+                if let track = firstTrack, let coordinator {
+                    await coordinator.play(track: track)
+                }
+
+                await MainActor.run {
                     let alert = NSAlert()
                     alert.messageText = "M3U Playlist Loaded"
 
@@ -108,8 +119,10 @@ final class PlaylistWindowActions: NSObject {
                     alert.alertStyle = .informational
                     alert.addButton(withTitle: "OK")
                     alert.runModal()
+                }
 
-                case .failure(let error):
+            case .failure(let error):
+                await MainActor.run {
                     let alert = NSAlert()
                     alert.messageText = "Failed to Load M3U Playlist"
                     alert.informativeText = error.localizedDescription
