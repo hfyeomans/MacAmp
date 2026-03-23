@@ -278,7 +278,7 @@ All doc updates verified complete by sub-agent scan:
 | Task Folder | Description | Size | Status | Dependency |
 |-------------|-------------|------|--------|------------|
 | `os-workgroup-integration` | Apple Silicon os_workgroup for audio render thread | Small | ✅ COMPLETE — PR #66 merged (2026-03-22). Oracle 8.5/10. ObjC shim + per-block join/leave on decode queue. | None |
-| `stream-track-counter` | Track position counter in main window + playlist window for streams | Small-Medium | PLANNED | None |
+| `stream-track-counter` | Stream elapsed timer + playlist position + auto-play consolidation + crash guard | Medium | ✅ COMPLETE — (2026-03-23). Oracle 8/10. Anchor-based timer, "3/15" position, auto-play routed through coordinator, loadAudioFile crash guard. | None |
 | `playlist-list-operations` | NEW LIST, LOAD LIST, SAVE LIST buttons in playlist window | Medium | ✅ COMPLETE — PR #67 merged (2026-03-22). Oracle 9/10. M3UWriter, generation token, background I/O. | None |
 | `airplay-integration` | AirPlay output routing + Now Playing integration (all 3 phases) | Medium | PLANNED — Research done, plan exists, user approved all phases | None |
 

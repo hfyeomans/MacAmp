@@ -12,8 +12,8 @@ import Observation
 ///
 /// **Usage:**
 /// ```swift
-/// // Play a file URL
-/// await coordinator.play(url: fileURL)
+/// // Play a track from the playlist
+/// await coordinator.play(track: myTrack)
 ///
 /// // Play a radio station
 /// await coordinator.play(station: myStation)
@@ -67,6 +67,37 @@ final class PlaybackCoordinator {
     enum PlaybackSource {
         case localTrack(URL)
         case radioStation(RadioStation)
+    }
+
+    // MARK: - Unified Display Time
+
+    /// Elapsed time for display — delegates to the active backend.
+    /// Local files: engine progress timer. Streams: anchor-based elapsed counter.
+    var displayTime: Double {
+        switch currentSource {
+        case .radioStation: return streamPlayer.elapsedTime
+        case .localTrack: return audioPlayer.currentTime
+        case nil: return 0
+        }
+    }
+
+    /// Duration for display — 0 for streams (unknown/infinite).
+    var displayDuration: Double {
+        switch currentSource {
+        case .radioStation: return 0
+        case .localTrack: return audioPlayer.currentDuration
+        case nil: return 0
+        }
+    }
+
+    // MARK: - Playlist Position
+
+    /// Track position string ("3/15") — nil when no playlist track is active.
+    /// Guards against stale values during non-playlist playback (Oracle finding).
+    var trackPositionString: String? {
+        guard currentTrack != nil,
+              let position = audioPlayer.playlistPosition else { return nil }
+        return "\(position)/\(audioPlayer.playlistCount)"
     }
 
     // MARK: - Capability Flags
@@ -154,34 +185,6 @@ final class PlaybackCoordinator {
     }
 
     // MARK: - Unified Playback Control
-
-    func play(url: URL) async {
-        if url.isFileURL {
-            // Stop stream + deactivate bridge if playing
-            audioPlayer.deactivateStreamBridge()
-            streamPlayer.stop()
-
-            // Play local file with EQ
-            audioPlayer.addTrack(url: url)
-            audioPlayer.play()
-            currentSource = .localTrack(url)
-            currentTitle = formattedLocalDisplayTitle(
-                trackTitle: url.deletingPathExtension().lastPathComponent,
-                trackArtist: "",
-                url: url
-            )
-        } else {
-            // Stop local file + deactivate any existing bridge (handles stream-to-stream too)
-            audioPlayer.deactivateStreamBridge()
-            audioPlayer.stop()
-
-            // Play stream (bridge activates via onFormatReady callback)
-            let station = RadioStation(name: url.lastPathComponent, streamURL: url)
-            await streamPlayer.play(station: station)
-            currentSource = .radioStation(station)
-            currentTitle = streamPlayer.streamTitle ?? station.name
-        }
-    }
 
     /// Play a track from the playlist (supports both local files and streams)
     func play(track: Track) async {
@@ -375,8 +378,10 @@ final class PlaybackCoordinator {
             return stationName
 
         case .localTrack(let url):
+            let posPrefix = trackPositionString.map { "\($0). " } ?? ""
+
             if let title = currentTitle?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty {
-                return title
+                return "\(posPrefix)\(title)"
             }
 
             let fallbackTitle = formattedLocalDisplayTitle(
@@ -385,7 +390,7 @@ final class PlaybackCoordinator {
                 url: url
             )
 
-            return fallbackTitle.isEmpty ? "Unknown" : fallbackTitle
+            return "\(posPrefix)\(fallbackTitle.isEmpty ? "Unknown" : fallbackTitle)"
 
         case .none:
             return "MacAmp"

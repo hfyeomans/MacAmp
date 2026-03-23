@@ -80,6 +80,8 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
 
     let playlistController = PlaylistController()
     var playlist: [Track] { playlistController.playlist }
+    var playlistPosition: Int? { playlistController.currentPosition }
+    var playlistCount: Int { playlistController.count }
     var currentTrack: Track?
     var onTrackMetadataUpdate: ((Track) -> Void)?
     var onPlaylistAdvanceRequest: ((Track) -> Void)?
@@ -242,12 +244,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
             duration: 0.0
         )
 
-        let shouldAutoplay = currentTrack == nil
         playlistController.addPlaceholder(placeholder)
-
-        if shouldAutoplay {
-            playTrack(track: placeholder)
-        }
 
         let generation = playlistGeneration
         Task { @MainActor [weak self] in
@@ -396,6 +393,8 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
             }
         } catch {
             AppLog.error(.audio, "Failed to open file: \(error)")
+            engine.clearFile()
+            transition(to: .stopped(.manual))
         }
     }
 

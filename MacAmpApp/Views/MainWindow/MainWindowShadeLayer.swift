@@ -73,7 +73,7 @@ struct MainWindowShadeLayer: View {
                 .frame(width: 21, height: 13)
                 .offset(x: 34, y: 0)
 
-            if settings.timeDisplayMode == .remaining {
+            if settings.timeDisplayMode == .remaining && playbackCoordinator.displayDuration > 0 {
                 ZStack(alignment: .topLeading) {
                     SimpleSpriteImage(.minusSign, width: 5, height: 1)
                         .offset(x: 0, y: 6)
@@ -82,9 +82,10 @@ struct MainWindowShadeLayer: View {
                 .offset(x: 1, y: 0)
             }
 
-            let timeToShow = settings.timeDisplayMode == .remaining ?
-                max(0.0, audioPlayer.currentDuration - audioPlayer.currentTime) :
-                audioPlayer.currentTime
+            let duration = playbackCoordinator.displayDuration
+            let timeToShow = settings.timeDisplayMode == .remaining && duration > 0
+                ? max(0.0, duration - playbackCoordinator.displayTime)
+                : playbackCoordinator.displayTime
             let digits = interactionState.timeDigits(from: timeToShow)
             let shouldShowDigits = !playbackCoordinator.isPaused || interactionState.pauseBlinkVisible
 

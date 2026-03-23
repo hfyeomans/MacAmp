@@ -6,6 +6,7 @@ struct AppCommands: Commands {
     @Bindable var dockingController: DockingController
     @Bindable var audioPlayer: AudioPlayer
     @Bindable var settings: AppSettings
+    var playbackCoordinator: PlaybackCoordinator
     @Environment(\.openWindow) private var openWindow
 
     var body: some Commands {
@@ -101,8 +102,14 @@ struct AppCommands: Commands {
 
         panel.begin { response in
             guard response == .OK else { return }
-            for url in panel.urls {
-                audioPlayer.addTrack(url: url)
+            Task { @MainActor in
+                let wasEmpty = audioPlayer.playlist.isEmpty
+                for url in panel.urls {
+                    audioPlayer.addTrack(url: url)
+                }
+                if wasEmpty, let firstTrack = audioPlayer.playlist.first {
+                    await playbackCoordinator.play(track: firstTrack)
+                }
             }
         }
     }

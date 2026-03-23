@@ -391,7 +391,7 @@ Four new files in `MacAmpApp/Audio/Streaming/` implement the custom decode chain
 
 **AudioFileStreamParser** (`AudioFileStreamParser.swift`) -- Wraps Apple's C-based `AudioFileStream` API. Accepts compressed audio chunks from ICYFramer, discovers the stream format (ASBD), extracts magic cookies (for AAC), and emits compressed packet batches. Decode-queue-confined with `dispatchPrecondition` assertions.
 
-**AudioConverterDecoder** (`AudioConverterDecoder.swift`) -- Wraps Apple's `AudioConverter` API. Converts compressed packets (MP3/AAC) to Float32 interleaved stereo PCM at 44100 Hz. Manages its own packet queue with strict buffer lifetime contracts (input buffers remain valid until the next callback invocation). Decode-queue-confined.
+**AudioConverterDecoder** (`AudioConverterDecoder.swift`) -- Wraps Apple's `AudioConverter` API. Converts compressed packets (MP3/AAC) to Float32 interleaved stereo PCM at the detected source sample rate. `44.1 kHz` is common for MP3 streams, but it is not a hard-coded stream rate; the implementation only falls back to `44100` if the parser reports `0`. Manages its own packet queue with strict buffer lifetime contracts (input buffers remain valid until the next callback invocation). Decode-queue-confined.
 
 **StreamDecodePipeline** (`StreamDecodePipeline.swift`) -- `@MainActor` orchestrator. Manages the URLSession data task, routes bytes through the decode chain, and publishes state changes to StreamPlayer via `@MainActor @Sendable` callbacks. Internally uses a `DecodeContext` (`@unchecked Sendable`, queue-confined) that owns all decode-queue state. A generation token prevents stale callbacks from previous streams.
 
@@ -2930,7 +2930,7 @@ final class StreamPlayer {
         currentStation = station
         error = nil
 
-        // Create fresh ring buffer per stream (32768 frames = ~743ms at 44100Hz)
+        // Create fresh ring buffer per stream (32768 frames; real-time headroom depends on sample rate)
         let rb = LockFreeRingBuffer(capacity: 32768, channelCount: 2)
         ringBuffer = rb
 
@@ -2944,6 +2944,14 @@ final class StreamPlayer {
     isolated deinit { pipeline.stop() }
 }
 ```
+
+The stream ring buffer is sized in frames, not seconds, so its effective buffering time changes with the decoded sample rate:
+
+- `32768` frames at `44.1 kHz` is about `0.743 s`
+- `32768` frames at `48 kHz` is about `0.683 s`
+- `32768` frames at `96 kHz` is about `0.341 s`
+
+Bitrate and sample rate are separate concepts in this pipeline. A `192 kbps` MP3 is a compressed data-rate figure; once decoded, the ring buffer carries PCM frames at the stream's detected sample rate.
 
 ### Auto-Reconnect State Machine (March 2026)
 

@@ -2343,9 +2343,11 @@ DecodeContext (serial decode queue, @unchecked Sendable)
 
 AVAudioSourceNode (real-time audio thread)
     → render block reads from LockFreeRingBuffer
-    → interleaved Float32 at stream sample rate (44100Hz)
-    → engine handles SRC to device rate (48000Hz)
+    → interleaved Float32 at detected stream sample rate (44.1kHz is common, not fixed)
+    → engine handles SRC to device rate (for example 48kHz)
 ```
+
+**Buffer sizing note**: The stream ring buffer is sized in frames, not seconds. For the current `32768`-frame capacity, that works out to about `0.743 s` at `44.1 kHz`, `0.683 s` at `48 kHz`, and `0.341 s` at `96 kHz`. Bitrate values such as `192 kbps` are compressed data-rate measurements and do not determine the ring buffer's sample rate.
 
 **Key component — DecodeContext**:
 ```swift

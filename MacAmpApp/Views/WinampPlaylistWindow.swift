@@ -6,6 +6,7 @@ struct WinampPlaylistWindow: View {
     @Environment(AudioPlayer.self) private var audioPlayer
     @Environment(AppSettings.self) private var settings
     @Environment(RadioStationLibrary.self) private var radioLibrary
+    @Environment(PlaybackCoordinator.self) private var playbackCoordinator
     @Environment(WindowFocusState.self) private var windowFocusState
 
     @State private var ui = PlaylistWindowInteractionState()
@@ -67,6 +68,7 @@ struct WinampPlaylistWindow: View {
         .onAppear {
             ui.installKeyboardMonitor { [audioPlayer] in audioPlayer.playlist.count }
             PlaylistWindowActions.shared.radioLibrary = radioLibrary
+            PlaylistWindowActions.shared.playbackCoordinator = playbackCoordinator
             WindowCoordinator.shared?.updatePlaylistWindowSize(to: sizeState.pixelSize)
         }
         .onChange(of: sizeState.size) { _, newSize in
