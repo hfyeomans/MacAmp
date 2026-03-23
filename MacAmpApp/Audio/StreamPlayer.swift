@@ -112,6 +112,14 @@ final class StreamPlayer {
 
         if streamTitle == nil { streamTitle = title }
         if streamArtist == nil { streamArtist = artist }
+
+        // Seed now-playing identity so first identical ICY packet doesn't false-reset elapsed
+        if let t = title {
+            lastNowPlayingIdentity = (
+                t.trimmingCharacters(in: .whitespaces).lowercased(),
+                (artist ?? "").trimmingCharacters(in: .whitespaces).lowercased()
+            )
+        }
     }
 
     func pause() {
@@ -266,6 +274,7 @@ final class StreamPlayer {
         if let startedAt = elapsedStartedAt {
             elapsedAccumulated += Self.durationSeconds(startedAt.duration(to: .now))
             elapsedStartedAt = nil
+            elapsedTime = elapsedAccumulated
         }
         elapsedTimer?.invalidate()
         elapsedTimer = nil
