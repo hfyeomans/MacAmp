@@ -123,3 +123,23 @@ struct M3UParser {
         return URL(fileURLWithPath: trimmed)
     }
 }
+
+// MARK: - M3U Writer
+
+struct M3UWriter {
+    static func write(tracks: [Track], to url: URL) throws {
+        var lines = ["#EXTM3U"]
+
+        for track in tracks {
+            let duration = track.isStream ? -1 : Int(track.duration)
+            let displayTitle = track.artist.isEmpty || track.artist == "Unknown Artist"
+                ? track.title
+                : "\(track.artist) - \(track.title)"
+            lines.append("#EXTINF:\(duration),\(displayTitle)")
+            lines.append(track.isStream ? track.url.absoluteString : track.url.path)
+        }
+
+        let content = lines.joined(separator: "\n") + "\n"
+        try content.write(to: url, atomically: true, encoding: .utf8)
+    }
+}

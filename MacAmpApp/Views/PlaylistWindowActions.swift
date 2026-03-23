@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 
 @MainActor
 final class PlaylistWindowActions: NSObject {
@@ -19,7 +20,9 @@ final class PlaylistWindowActions: NSObject {
 
     func presentAddFilesPanel(audioPlayer: AudioPlayer, playbackCoordinator: PlaybackCoordinator? = nil) {
         let openPanel = NSOpenPanel()
-        openPanel.allowedContentTypes = [.audio, .playlist, .movie]
+        let m3uType = UTType(filenameExtension: "m3u") ?? .plainText
+        let m3u8Type = UTType(filenameExtension: "m3u8") ?? .plainText
+        openPanel.allowedContentTypes = [.audio, m3uType, m3u8Type, .movie]
         openPanel.allowsMultipleSelection = true
         openPanel.canChooseDirectories = false
         openPanel.title = "Add Files to Playlist"
@@ -50,63 +53,71 @@ final class PlaylistWindowActions: NSObject {
         for url in urls {
             let fileExtension = url.pathExtension.lowercased()
             if fileExtension == "m3u" || fileExtension == "m3u8" {
-                if let radioLibrary {
-                    loadM3UPlaylist(url, audioPlayer: audioPlayer, radioLibrary: radioLibrary)
-                } else {
-                    showAlert("Error", "Radio library not initialized. Please restart the app.")
-                }
+                loadM3UPlaylist(url, audioPlayer: audioPlayer)
             } else {
                 audioPlayer.addTrack(url: url)
             }
         }
     }
 
-    private func loadM3UPlaylist(_ url: URL, audioPlayer: AudioPlayer, radioLibrary: RadioStationLibrary) {
-        do {
-            let entries = try M3UParser.parse(fileURL: url)
-            var addedStreams = 0
-            var addedFiles = 0
+    private func loadM3UPlaylist(_ url: URL, audioPlayer: AudioPlayer) {
+        Task.detached(priority: .userInitiated) {
+            let result: Result<[M3UEntry], Error>
+            do {
+                result = .success(try M3UParser.parse(fileURL: url))
+            } catch {
+                result = .failure(error)
+            }
 
-            for entry in entries {
-                if entry.isRemoteStream {
-                    let streamTrack = Track(
-                        url: entry.url,
-                        title: entry.title ?? "Unknown Station",
-                        artist: "Internet Radio",
-                        duration: 0.0
-                    )
-                    audioPlayer.addStreamTrack(streamTrack)
-                    addedStreams += 1
-                } else {
-                    audioPlayer.addTrack(url: entry.url)
-                    addedFiles += 1
+            await MainActor.run {
+                switch result {
+                case .success(let entries):
+                    var addedStreams = 0
+                    var addedFiles = 0
+
+                    for entry in entries {
+                        if entry.isRemoteStream {
+                            let streamTrack = Track(
+                                url: entry.url,
+                                title: entry.title ?? "Unknown Station",
+                                artist: "Internet Radio",
+                                duration: 0.0
+                            )
+                            audioPlayer.addStreamTrack(streamTrack)
+                            addedStreams += 1
+                        } else {
+                            audioPlayer.addTrack(url: entry.url)
+                            addedFiles += 1
+                        }
+                    }
+
+                    let alert = NSAlert()
+                    alert.messageText = "M3U Playlist Loaded"
+
+                    var message = ""
+                    if addedFiles > 0 {
+                        message += "Added \(addedFiles) local file(s)"
+                    }
+                    if addedStreams > 0 {
+                        if !message.isEmpty { message += "\n" }
+                        message += "Added \(addedStreams) internet radio stream(s)"
+                    }
+                    message += "\n\nAll items visible in playlist."
+
+                    alert.informativeText = message
+                    alert.alertStyle = .informational
+                    alert.addButton(withTitle: "OK")
+                    alert.runModal()
+
+                case .failure(let error):
+                    let alert = NSAlert()
+                    alert.messageText = "Failed to Load M3U Playlist"
+                    alert.informativeText = error.localizedDescription
+                    alert.alertStyle = .warning
+                    alert.addButton(withTitle: "OK")
+                    alert.runModal()
                 }
             }
-
-            let alert = NSAlert()
-            alert.messageText = "M3U Playlist Loaded"
-
-            var message = ""
-            if addedFiles > 0 {
-                message += "Added \(addedFiles) local file(s)"
-            }
-            if addedStreams > 0 {
-                if !message.isEmpty { message += "\n" }
-                message += "Added \(addedStreams) internet radio stream(s)"
-            }
-            message += "\n\nAll items visible in playlist."
-
-            alert.informativeText = message
-            alert.alertStyle = .informational
-            alert.addButton(withTitle: "OK")
-            alert.runModal()
-        } catch {
-            let alert = NSAlert()
-            alert.messageText = "Failed to Load M3U Playlist"
-            alert.informativeText = error.localizedDescription
-            alert.alertStyle = .warning
-            alert.addButton(withTitle: "OK")
-            alert.runModal()
         }
     }
 
@@ -224,14 +235,97 @@ final class PlaylistWindowActions: NSObject {
     }
 
     @objc func newList(_ sender: NSMenuItem) {
-        showAlert("New List", "Not supported yet")
+        guard let audioPlayer = sender.representedObject as? AudioPlayer else { return }
+        audioPlayer.clearPlaylist()
     }
 
     @objc func saveList(_ sender: NSMenuItem) {
-        showAlert("Save List", "Not supported yet")
+        guard let audioPlayer = sender.representedObject as? AudioPlayer else { return }
+        guard !audioPlayer.playlist.isEmpty else {
+            showAlert("Save List", "Playlist is empty")
+            return
+        }
+
+        let savePanel = NSSavePanel()
+        let m3uSaveType = UTType(filenameExtension: "m3u") ?? .plainText
+        savePanel.allowedContentTypes = [m3uSaveType]
+        savePanel.nameFieldStringValue = "playlist.m3u"
+        savePanel.title = "Save Playlist"
+
+        savePanel.begin { response in
+            if response == .OK, let url = savePanel.url {
+                let tracks = audioPlayer.playlist
+                Task.detached(priority: .userInitiated) {
+                    do {
+                        try M3UWriter.write(tracks: tracks, to: url)
+                    } catch {
+                        await MainActor.run {
+                            let alert = NSAlert()
+                            alert.messageText = "Failed to Save Playlist"
+                            alert.informativeText = error.localizedDescription
+                            alert.alertStyle = .warning
+                            alert.addButton(withTitle: "OK")
+                            alert.runModal()
+                        }
+                    }
+                }
+            }
+        }
     }
 
     @objc func loadList(_ sender: NSMenuItem) {
-        showAlert("Load List", "Not supported yet")
+        guard let audioPlayer = sender.representedObject as? AudioPlayer else { return }
+
+        let m3uType = UTType(filenameExtension: "m3u") ?? .plainText
+        let m3u8Type = UTType(filenameExtension: "m3u8") ?? .plainText
+
+        let openPanel = NSOpenPanel()
+        openPanel.allowedContentTypes = [m3uType, m3u8Type]
+        openPanel.allowsMultipleSelection = false
+        openPanel.canChooseDirectories = false
+        openPanel.title = "Load Playlist"
+        openPanel.message = "Select an M3U playlist file"
+
+        openPanel.begin { response in
+            if response == .OK, let url = openPanel.url {
+                Task.detached(priority: .userInitiated) {
+                    // Parse off main actor to avoid blocking UI
+                    let result: Result<[M3UEntry], Error>
+                    do {
+                        result = .success(try M3UParser.parse(fileURL: url))
+                    } catch {
+                        result = .failure(error)
+                    }
+
+                    await MainActor.run {
+                        switch result {
+                        case .success(let entries):
+                            // LOAD LIST replaces the playlist (Winamp behavior)
+                            audioPlayer.clearPlaylist()
+                            for entry in entries {
+                                if entry.isRemoteStream {
+                                    let streamTrack = Track(
+                                        url: entry.url,
+                                        title: entry.title ?? "Unknown Station",
+                                        artist: "Internet Radio",
+                                        duration: 0.0
+                                    )
+                                    audioPlayer.addStreamTrack(streamTrack)
+                                } else {
+                                    audioPlayer.addTrack(url: entry.url)
+                                }
+                            }
+                        case .failure(let error):
+                            let alert = NSAlert()
+                            alert.messageText = "Failed to Load Playlist"
+                            alert.informativeText = error.localizedDescription
+                            alert.alertStyle = .warning
+                            alert.addButton(withTitle: "OK")
+                            alert.runModal()
+                        }
+                    }
+                }
+            }
+        }
     }
 }

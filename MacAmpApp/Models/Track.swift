@@ -15,7 +15,8 @@ struct Track: Identifiable, Equatable, Sendable {
     /// Streams cannot be played via AudioPlayer (which uses AVAudioFile for local files only)
     /// and must be routed through PlaybackCoordinator → StreamPlayer instead.
     var isStream: Bool {
-        !url.isFileURL && (url.scheme == "http" || url.scheme == "https")
+        let scheme = url.scheme?.lowercased()
+        return !url.isFileURL && (scheme == "http" || scheme == "https")
     }
 
     static func == (lhs: Track, rhs: Track) -> Bool {
