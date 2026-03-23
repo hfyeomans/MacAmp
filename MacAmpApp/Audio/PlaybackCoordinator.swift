@@ -188,37 +188,6 @@ final class PlaybackCoordinator {
 
     // MARK: - Unified Playback Control
 
-    /// Play a raw URL (not from playlist). Currently unused in production —
-    /// all playback goes through play(track:) or play(station:).
-    /// Note: does not set currentTrack, so trackPositionString will be nil.
-    func play(url: URL) async {
-        if url.isFileURL {
-            // Stop stream + deactivate bridge if playing
-            audioPlayer.deactivateStreamBridge()
-            streamPlayer.stop()
-
-            // Play local file with EQ
-            audioPlayer.addTrack(url: url)
-            audioPlayer.play()
-            currentSource = .localTrack(url)
-            currentTitle = formattedLocalDisplayTitle(
-                trackTitle: url.deletingPathExtension().lastPathComponent,
-                trackArtist: "",
-                url: url
-            )
-        } else {
-            // Stop local file + deactivate any existing bridge (handles stream-to-stream too)
-            audioPlayer.deactivateStreamBridge()
-            audioPlayer.stop()
-
-            // Play stream (bridge activates via onFormatReady callback)
-            let station = RadioStation(name: url.lastPathComponent, streamURL: url)
-            await streamPlayer.play(station: station)
-            currentSource = .radioStation(station)
-            currentTitle = streamPlayer.streamTitle ?? station.name
-        }
-    }
-
     /// Play a track from the playlist (supports both local files and streams)
     func play(track: Track) async {
         audioPlayer.updatePlaylistPosition(with: track)
