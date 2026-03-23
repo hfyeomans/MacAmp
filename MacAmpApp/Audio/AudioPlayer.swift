@@ -80,6 +80,8 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
 
     let playlistController = PlaylistController()
     var playlist: [Track] { playlistController.playlist }
+    var playlistPosition: Int? { playlistController.currentPosition }
+    var playlistCount: Int { playlistController.count }
     var currentTrack: Track?
     var onTrackMetadataUpdate: ((Track) -> Void)?
     var onPlaylistAdvanceRequest: ((Track) -> Void)?

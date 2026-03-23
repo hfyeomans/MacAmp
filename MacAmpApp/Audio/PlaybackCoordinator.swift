@@ -69,6 +69,39 @@ final class PlaybackCoordinator {
         case radioStation(RadioStation)
     }
 
+    // MARK: - Unified Display Time
+
+    /// Elapsed time for display — delegates to the active backend.
+    /// Local files: engine progress timer. Streams: anchor-based elapsed counter.
+    var displayTime: Double {
+        switch currentSource {
+        case .radioStation: return streamPlayer.elapsedTime
+        case .localTrack: return audioPlayer.currentTime
+        case nil: return 0
+        }
+    }
+
+    /// Duration for display — 0 for streams (unknown/infinite).
+    var displayDuration: Double {
+        switch currentSource {
+        case .radioStation: return 0
+        case .localTrack: return audioPlayer.currentDuration
+        case nil: return 0
+        }
+    }
+
+    // MARK: - Playlist Position
+
+    /// Track position string ("3/15") — nil when no playlist track is active.
+    /// Guards against stale values during non-playlist playback (Oracle finding).
+    var trackPositionString: String? {
+        guard currentTrack != nil,
+              let position = audioPlayer.playlistPosition else { return nil }
+        let count = audioPlayer.playlistCount
+        guard count > 0 else { return nil }
+        return "\(position)/\(count)"
+    }
+
     // MARK: - Capability Flags
 
     /// Whether the stream backend is currently active (playing, paused, or buffering).
@@ -375,8 +408,10 @@ final class PlaybackCoordinator {
             return stationName
 
         case .localTrack(let url):
+            let posPrefix = trackPositionString.map { "\($0). " } ?? ""
+
             if let title = currentTitle?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty {
-                return title
+                return "\(posPrefix)\(title)"
             }
 
             let fallbackTitle = formattedLocalDisplayTitle(
@@ -385,7 +420,7 @@ final class PlaybackCoordinator {
                 url: url
             )
 
-            return fallbackTitle.isEmpty ? "Unknown" : fallbackTitle
+            return "\(posPrefix)\(fallbackTitle.isEmpty ? "Unknown" : fallbackTitle)"
 
         case .none:
             return "MacAmp"

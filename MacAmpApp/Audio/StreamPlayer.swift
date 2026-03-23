@@ -54,6 +54,14 @@ final class StreamPlayer {
 
     @ObservationIgnored private var ringBuffer: LockFreeRingBuffer?
 
+    // MARK: - Elapsed Time (anchor-based, not accumulator — avoids timer drift)
+
+    private(set) var elapsedTime: Double = 0
+    @ObservationIgnored private var elapsedTimer: Timer?
+    @ObservationIgnored private var elapsedAccumulated: Double = 0
+    @ObservationIgnored private var elapsedStartedAt: ContinuousClock.Instant?
+    @ObservationIgnored private var lastNowPlayingIdentity: (String, String)?
+
     // MARK: - Reconnect State
 
     @ObservationIgnored private var reconnectTask: Task<Void, Never>?
@@ -71,6 +79,7 @@ final class StreamPlayer {
     }
 
     isolated deinit {
+        elapsedTimer?.invalidate()
         reconnectTask?.cancel()
         playbackStableTask?.cancel()
         pipeline.stop()
@@ -80,6 +89,7 @@ final class StreamPlayer {
 
     func play(station: RadioStation) async {
         cancelReconnect()
+        resetElapsedTime()
         wasActivelyPlaying = false
         currentStation = station
         error = nil
@@ -106,6 +116,7 @@ final class StreamPlayer {
 
     func pause() {
         cancelReconnect()
+        stopElapsedTimer()
         pipeline.pause()
         // Also stop the pipeline if it's mid-connect/buffer (pause is no-op in those states)
         if case .connecting = pipeline.state { pipeline.stop() }
@@ -129,6 +140,7 @@ final class StreamPlayer {
 
     func stop() {
         cancelReconnect()
+        resetElapsedTime()
         pipeline.stop()
         isPlaying = false
         isBuffering = false
@@ -165,23 +177,26 @@ final class StreamPlayer {
             case .idle:
                 self.isPlaying = false
                 self.isBuffering = false
-                // Don't fire onStreamTerminated here — onTermination handles reconnect vs terminal
+                self.stopElapsedTimer()
             case .connecting, .buffering:
                 self.isPlaying = false
                 self.isBuffering = true
+                self.stopElapsedTimer()
             case .playing:
                 self.isPlaying = true
                 self.isBuffering = false
                 self.isReconnecting = false
                 self.wasActivelyPlaying = true
                 self.startPlaybackStableTimer()
+                self.startElapsedTimer()
             case .paused:
                 self.isPlaying = false
                 self.isBuffering = false
+                self.stopElapsedTimer()
             case .error:
                 self.isPlaying = false
                 self.isBuffering = false
-                // Don't fire onStreamTerminated here — onTermination handles reconnect vs terminal
+                self.stopElapsedTimer()
             }
         }
 
@@ -204,7 +219,65 @@ final class StreamPlayer {
             if let artist = metadata.artist {
                 self.streamArtist = artist
             }
+
+            // Detect new track via normalized (title, artist) identity change
+            let identity = (
+                (metadata.title ?? "").trimmingCharacters(in: .whitespaces).lowercased(),
+                (metadata.artist ?? "").trimmingCharacters(in: .whitespaces).lowercased()
+            )
+            let isNewTrack: Bool
+            if let last = self.lastNowPlayingIdentity {
+                isNewTrack = identity.0 != last.0 || identity.1 != last.1
+            } else {
+                isNewTrack = true
+            }
+            if !identity.0.isEmpty && isNewTrack {
+                self.lastNowPlayingIdentity = identity
+                // Reset elapsed time for new track on same station
+                self.elapsedAccumulated = 0
+                self.elapsedStartedAt = self.isPlaying ? .now : nil
+                self.elapsedTime = 0
+            }
         }
+    }
+
+    // MARK: - Elapsed Time Control
+
+    private static func durationSeconds(_ d: Duration) -> Double {
+        let (seconds, attoseconds) = d.components
+        return Double(seconds) + Double(attoseconds) / 1_000_000_000_000_000_000
+    }
+
+    private func startElapsedTimer() {
+        elapsedStartedAt = .now
+        elapsedTimer?.invalidate()
+        let timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, let startedAt = self.elapsedStartedAt else { return }
+                let elapsed = Self.durationSeconds(startedAt.duration(to: .now))
+                self.elapsedTime = self.elapsedAccumulated + elapsed
+            }
+        }
+        elapsedTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
+    }
+
+    private func stopElapsedTimer() {
+        if let startedAt = elapsedStartedAt {
+            elapsedAccumulated += Self.durationSeconds(startedAt.duration(to: .now))
+            elapsedStartedAt = nil
+        }
+        elapsedTimer?.invalidate()
+        elapsedTimer = nil
+    }
+
+    private func resetElapsedTime() {
+        elapsedTimer?.invalidate()
+        elapsedTimer = nil
+        elapsedTime = 0
+        elapsedAccumulated = 0
+        elapsedStartedAt = nil
+        lastNowPlayingIdentity = nil
     }
 
     // MARK: - Reconnect Logic

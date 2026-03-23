@@ -76,6 +76,12 @@ final class PlaylistController {
     /// Number of tracks in playlist
     var count: Int { playlist.count }
 
+    /// 1-based position of current track, or nil if no track is active.
+    var currentPosition: Int? {
+        guard let idx = currentIndex else { return nil }
+        return idx + 1
+    }
+
     /// Whether playlist is empty
     var isEmpty: Bool { playlist.isEmpty }
 
