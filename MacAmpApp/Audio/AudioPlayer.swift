@@ -393,6 +393,8 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
             }
         } catch {
             AppLog.error(.audio, "Failed to open file: \(error)")
+            engine.clearFile()
+            transition(to: .stopped(.manual))
         }
     }
 
