@@ -277,18 +277,20 @@ All doc updates verified complete by sub-agent scan:
 
 | Task Folder | Description | Size | Status | Dependency |
 |-------------|-------------|------|--------|------------|
-| `os-workgroup-integration` | Apple Silicon os_workgroup for audio render thread | Small | PLANNED | None |
-| `video-audio-engine-routing` | Route video audio through AVAudioEngine (MTAudioProcessingTap) | Medium | PLANNED | None |
+| `os-workgroup-integration` | Apple Silicon os_workgroup for audio render thread | Small | 🔄 IN PROGRESS — Oracle 8.5/10, awaiting manual test + PR | None |
 | `stream-track-counter` | Track position counter in main window + playlist window for streams | Small-Medium | PLANNED | None |
 | `playlist-list-operations` | NEW LIST, LOAD LIST, SAVE LIST buttons in playlist window | Medium | PLANNED | None |
-| `airplay-integration` | AirPlay output routing + Now Playing integration | Medium | RESEARCH DONE | Awaiting user approval |
+| `airplay-integration` | AirPlay output routing + Now Playing integration (all 3 phases) | Medium | PLANNED — Research done, plan exists, user approved all phases | None |
 
-### Sprint S3: LOW Priority — Edge Cases + Optimization
+**S2 deferral (2026-03-22):** `video-audio-engine-routing` moved to S3. A/V sync risk needs Gemini deep research before implementation. AirPlay (S2) provides shared engine config change handler foundation.
+
+### Sprint S3: LOW-MEDIUM Priority — Edge Cases + Optimization + Video Routing
 
 | Task Folder | Description | Size | Status | Dependency |
 |-------------|-------------|------|--------|------------|
-| `mainwindow-visualizer-isolation` | SwiftUI recomposition boundary for visualizer during slider drag | Small | PLANNED | None — demoted from Medium: small scope, pre-existing behavior, no functional impact |
+| `mainwindow-visualizer-isolation` | SwiftUI recomposition boundary for visualizer during slider drag | Small | PLANNED | None |
 | `stream-pause-tail` | Fix ~0.7s audio tail after pausing stream (ring buffer flush) | Small | PLANNED | None |
+| `video-audio-engine-routing` | Route video audio through AVAudioEngine (MTAudioProcessingTap) | Medium-High | PLANNED — Deferred from S2. Gemini deep research pending. | AirPlay engine config handler (S2) |
 | `hls-streaming-support` | Add HLS protocol to stream decode pipeline | Large | PLANNED | None |
 | `ogg-vorbis-support` | Add OGG Vorbis codec (needs libvorbis or pure Swift decoder) | Medium | PLANNED | None |
 
