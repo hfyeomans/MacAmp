@@ -65,51 +65,63 @@ final class PlaylistWindowActions: NSObject {
     }
 
     private func loadM3UPlaylist(_ url: URL, audioPlayer: AudioPlayer, radioLibrary: RadioStationLibrary) {
-        do {
-            let entries = try M3UParser.parse(fileURL: url)
-            var addedStreams = 0
-            var addedFiles = 0
+        Task.detached(priority: .userInitiated) {
+            let result: Result<[M3UEntry], Error>
+            do {
+                result = .success(try M3UParser.parse(fileURL: url))
+            } catch {
+                result = .failure(error)
+            }
 
-            for entry in entries {
-                if entry.isRemoteStream {
-                    let streamTrack = Track(
-                        url: entry.url,
-                        title: entry.title ?? "Unknown Station",
-                        artist: "Internet Radio",
-                        duration: 0.0
-                    )
-                    audioPlayer.addStreamTrack(streamTrack)
-                    addedStreams += 1
-                } else {
-                    audioPlayer.addTrack(url: entry.url)
-                    addedFiles += 1
+            await MainActor.run {
+                switch result {
+                case .success(let entries):
+                    var addedStreams = 0
+                    var addedFiles = 0
+
+                    for entry in entries {
+                        if entry.isRemoteStream {
+                            let streamTrack = Track(
+                                url: entry.url,
+                                title: entry.title ?? "Unknown Station",
+                                artist: "Internet Radio",
+                                duration: 0.0
+                            )
+                            audioPlayer.addStreamTrack(streamTrack)
+                            addedStreams += 1
+                        } else {
+                            audioPlayer.addTrack(url: entry.url)
+                            addedFiles += 1
+                        }
+                    }
+
+                    let alert = NSAlert()
+                    alert.messageText = "M3U Playlist Loaded"
+
+                    var message = ""
+                    if addedFiles > 0 {
+                        message += "Added \(addedFiles) local file(s)"
+                    }
+                    if addedStreams > 0 {
+                        if !message.isEmpty { message += "\n" }
+                        message += "Added \(addedStreams) internet radio stream(s)"
+                    }
+                    message += "\n\nAll items visible in playlist."
+
+                    alert.informativeText = message
+                    alert.alertStyle = .informational
+                    alert.addButton(withTitle: "OK")
+                    alert.runModal()
+
+                case .failure(let error):
+                    let alert = NSAlert()
+                    alert.messageText = "Failed to Load M3U Playlist"
+                    alert.informativeText = error.localizedDescription
+                    alert.alertStyle = .warning
+                    alert.addButton(withTitle: "OK")
+                    alert.runModal()
                 }
             }
-
-            let alert = NSAlert()
-            alert.messageText = "M3U Playlist Loaded"
-
-            var message = ""
-            if addedFiles > 0 {
-                message += "Added \(addedFiles) local file(s)"
-            }
-            if addedStreams > 0 {
-                if !message.isEmpty { message += "\n" }
-                message += "Added \(addedStreams) internet radio stream(s)"
-            }
-            message += "\n\nAll items visible in playlist."
-
-            alert.informativeText = message
-            alert.alertStyle = .informational
-            alert.addButton(withTitle: "OK")
-            alert.runModal()
-        } catch {
-            let alert = NSAlert()
-            alert.messageText = "Failed to Load M3U Playlist"
-            alert.informativeText = error.localizedDescription
-            alert.alertStyle = .warning
-            alert.addButton(withTitle: "OK")
-            alert.runModal()
         }
     }
 

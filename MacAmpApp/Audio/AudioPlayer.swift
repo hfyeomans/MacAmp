@@ -486,6 +486,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     func eject() {
         stop()
         transition(to: .stopped(.ejected))
+        playlistGeneration &+= 1
         playlistController.clear()
         currentTrack = nil
         currentTrackURL = nil
