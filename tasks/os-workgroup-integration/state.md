@@ -3,15 +3,15 @@
 > **Purpose:** Integrate Apple os_workgroup API for audio render thread on Apple Silicon
 > **Created:** 2026-03-14
 > **Sprint:** S2 (MEDIUM)
-> **Status:** IN PROGRESS
+> **Status:** COMPLETE
 
 ---
 
 ## Current Status
 
-**Phase:** Implementation complete — awaiting manual testing + PR
-**Status:** IN PROGRESS
-**Branch:** `feature/os-workgroup-integration`
+**Phase:** COMPLETE
+**Status:** ✅ COMPLETE — PR #66 merged (2026-03-22)
+**Branch:** `feature/os-workgroup-integration` (merged to main)
 **Oracle Score:** 8.5/10 (revised from 4/10 initial plan)
 **Last Updated:** 2026-03-22
 
@@ -22,8 +22,9 @@
 **Verification completed:**
 - `build_macos` for scheme `MacAmpApp` — passed
 - `test_macos` for scheme `MacAmpApp` — passed (`53/53`)
+- Manual testing: stream play/stop, local file, reconnect — all pass
 
-**Review result:** One remaining lifecycle risk
+**Review result:** One accepted limitation
 
 1. **Device-change refresh gap (ACCEPTED):** Workgroup is reacquired on bridge activation, but there is no active-path refresh when the output device / engine configuration changes while a stream is already playing. The decode queue keeps using the previously captured workgroup until the next reconnect or manual bridge teardown/reactivation. **Impact:** Low — stale workgroup means slightly suboptimal scheduling on the new device, not a crash or correctness issue. A `kAudioDevicePropertyIOThreadOSWorkgroup` observer could refresh it, but that's over-engineering for the current use case. Documented for future consideration.
 

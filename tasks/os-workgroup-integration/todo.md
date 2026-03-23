@@ -25,13 +25,13 @@
 
 ## Manual Testing
 
-- [ ] Play internet radio stream — no audio glitches, no workgroup errors in console
-- [ ] Stop stream — clean teardown, no warnings
-- [ ] Play local file — no workgroup activity (correct)
-- [ ] Reconnect scenario — workgroup re-acquired on new stream
-- [ ] Switch audio output device during stream — no crash
+- [x] Play internet radio stream — no audio glitches, no workgroup errors in console
+- [x] Stop stream — clean teardown, no warnings
+- [x] Play local file — no workgroup activity (correct)
+- [x] Reconnect scenario — workgroup re-acquired on new stream
+- [x] Switch audio output device during stream — not tested (accepted limitation, documented)
 
 ## Review & PR
 
-- [ ] Oracle review — address all findings
-- [ ] Create PR for user review
+- [x] Oracle review — 8.5/10, device-change gap accepted
+- [x] Create PR #66 — merged (2026-03-22)

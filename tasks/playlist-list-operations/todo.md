@@ -14,6 +14,12 @@
 - [x] Fix loadList: parse before clear to avoid data loss (Oracle finding)
 - [x] Fix loadList: remove dead `radioLibrary` fallback (Oracle finding)
 - [x] Fix presentAddFilesPanel: same UTType fix for consistency (Oracle low finding)
+- [x] Fix stale metadata: playlistGeneration token in AudioPlayer (Oracle finding)
+- [x] Fix file I/O: move M3U parse/write off main actor (Oracle finding)
+- [x] Fix eject(): bump playlistGeneration before clear (Oracle finding)
+- [x] Fix Track.isStream: case-insensitive scheme check (Oracle finding)
+- [x] Remove radioLibrary gate from Add Files M3U path (Oracle finding)
+- [x] Safe UTType unwrap in saveList (Oracle finding)
 - [x] Use `ast-grep` to check for duplicate M3U write patterns — clean
 
 ## Build & Test
@@ -23,12 +29,12 @@
 
 ## Manual Testing
 
-- [ ] NEW LIST — clears playlist, stops playback
-- [ ] LOAD LIST — opens file dialog, replaces playlist with M3U contents
-- [ ] SAVE LIST — opens save dialog, exports valid M3U file
-- [ ] Round-trip: SAVE LIST → NEW LIST → LOAD LIST (saved file) — same tracks
+- [x] NEW LIST — clears playlist, stops playback
+- [x] LOAD LIST — opens file dialog, replaces playlist with M3U contents
+- [x] SAVE LIST — opens save dialog, exports valid M3U file
+- [x] Round-trip: SAVE LIST → NEW LIST → LOAD LIST (saved file) — same tracks
 
 ## Review & PR
 
-- [x] Oracle review — 8.5/10 after fixes (3 findings fixed, 1 pre-existing accepted)
-- [ ] Create PR for user review
+- [x] Oracle review — 9/10 final (4 rounds: 5→8.5→8→7→9)
+- [x] Create PR #67 — merged (2026-03-22)
