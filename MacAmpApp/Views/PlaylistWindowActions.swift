@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 
 @MainActor
 final class PlaylistWindowActions: NSObject {
@@ -19,7 +20,9 @@ final class PlaylistWindowActions: NSObject {
 
     func presentAddFilesPanel(audioPlayer: AudioPlayer, playbackCoordinator: PlaybackCoordinator? = nil) {
         let openPanel = NSOpenPanel()
-        openPanel.allowedContentTypes = [.audio, .playlist, .movie]
+        let m3uType = UTType(filenameExtension: "m3u") ?? .plainText
+        let m3u8Type = UTType(filenameExtension: "m3u8") ?? .plainText
+        openPanel.allowedContentTypes = [.audio, m3uType, m3u8Type, .movie]
         openPanel.allowsMultipleSelection = true
         openPanel.canChooseDirectories = false
         openPanel.title = "Add Files to Playlist"
@@ -224,14 +227,84 @@ final class PlaylistWindowActions: NSObject {
     }
 
     @objc func newList(_ sender: NSMenuItem) {
-        showAlert("New List", "Not supported yet")
+        guard let audioPlayer = sender.representedObject as? AudioPlayer else { return }
+        audioPlayer.clearPlaylist()
     }
 
     @objc func saveList(_ sender: NSMenuItem) {
-        showAlert("Save List", "Not supported yet")
+        guard let audioPlayer = sender.representedObject as? AudioPlayer else { return }
+        guard !audioPlayer.playlist.isEmpty else {
+            showAlert("Save List", "Playlist is empty")
+            return
+        }
+
+        let savePanel = NSSavePanel()
+        savePanel.allowedContentTypes = [.init(filenameExtension: "m3u")!]
+        savePanel.nameFieldStringValue = "playlist.m3u"
+        savePanel.title = "Save Playlist"
+
+        savePanel.begin { response in
+            if response == .OK, let url = savePanel.url {
+                Task { @MainActor in
+                    do {
+                        try M3UWriter.write(tracks: audioPlayer.playlist, to: url)
+                    } catch {
+                        let alert = NSAlert()
+                        alert.messageText = "Failed to Save Playlist"
+                        alert.informativeText = error.localizedDescription
+                        alert.alertStyle = .warning
+                        alert.addButton(withTitle: "OK")
+                        alert.runModal()
+                    }
+                }
+            }
+        }
     }
 
     @objc func loadList(_ sender: NSMenuItem) {
-        showAlert("Load List", "Not supported yet")
+        guard let audioPlayer = sender.representedObject as? AudioPlayer else { return }
+
+        let m3uType = UTType(filenameExtension: "m3u") ?? .plainText
+        let m3u8Type = UTType(filenameExtension: "m3u8") ?? .plainText
+
+        let openPanel = NSOpenPanel()
+        openPanel.allowedContentTypes = [m3uType, m3u8Type]
+        openPanel.allowsMultipleSelection = false
+        openPanel.canChooseDirectories = false
+        openPanel.title = "Load Playlist"
+        openPanel.message = "Select an M3U playlist file"
+
+        openPanel.begin { response in
+            if response == .OK, let url = openPanel.url {
+                Task { @MainActor in
+                    // Parse first — only clear playlist after successful parse (avoid data loss)
+                    do {
+                        let entries = try M3UParser.parse(fileURL: url)
+                        // LOAD LIST replaces the playlist (Winamp behavior)
+                        audioPlayer.clearPlaylist()
+                        for entry in entries {
+                            if entry.isRemoteStream {
+                                let streamTrack = Track(
+                                    url: entry.url,
+                                    title: entry.title ?? "Unknown Station",
+                                    artist: "Internet Radio",
+                                    duration: 0.0
+                                )
+                                audioPlayer.addStreamTrack(streamTrack)
+                            } else {
+                                audioPlayer.addTrack(url: entry.url)
+                            }
+                        }
+                    } catch {
+                        let alert = NSAlert()
+                        alert.messageText = "Failed to Load Playlist"
+                        alert.informativeText = error.localizedDescription
+                        alert.alertStyle = .warning
+                        alert.addButton(withTitle: "OK")
+                        alert.runModal()
+                    }
+                }
+            }
+        }
     }
 }
