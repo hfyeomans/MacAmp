@@ -24,9 +24,9 @@
 
 | Task | Purpose | Size | Status |
 |------|---------|------|--------|
-| `os-workgroup-integration` | Apple Silicon os_workgroup for audio render thread | Small | 🔄 IN PROGRESS — Oracle 8.5/10, awaiting manual test + PR |
+| `os-workgroup-integration` | Apple Silicon os_workgroup for audio render thread | Small | ✅ COMPLETE — PR #66 merged. Oracle 8.5/10. |
 | `stream-track-counter` | Track position counter in main window + playlist window for streams | Small-Medium | 📋 PLANNED |
-| `playlist-list-operations` | NEW LIST, LOAD LIST, SAVE LIST buttons in playlist window | Medium | 📋 PLANNED |
+| `playlist-list-operations` | NEW LIST, LOAD LIST, SAVE LIST buttons in playlist window | Medium | ✅ COMPLETE — PR #67 merged. Oracle 9/10. |
 | `airplay-integration` | AirPlay output routing + Now Playing integration (all 3 phases) | Medium | 📋 PLANNED — Research done, plan exists, user approved |
 
 ---

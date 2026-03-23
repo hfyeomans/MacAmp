@@ -277,9 +277,9 @@ All doc updates verified complete by sub-agent scan:
 
 | Task Folder | Description | Size | Status | Dependency |
 |-------------|-------------|------|--------|------------|
-| `os-workgroup-integration` | Apple Silicon os_workgroup for audio render thread | Small | 🔄 IN PROGRESS — Oracle 8.5/10, awaiting manual test + PR | None |
+| `os-workgroup-integration` | Apple Silicon os_workgroup for audio render thread | Small | ✅ COMPLETE — PR #66 merged (2026-03-22). Oracle 8.5/10. ObjC shim + per-block join/leave on decode queue. | None |
 | `stream-track-counter` | Track position counter in main window + playlist window for streams | Small-Medium | PLANNED | None |
-| `playlist-list-operations` | NEW LIST, LOAD LIST, SAVE LIST buttons in playlist window | Medium | PLANNED | None |
+| `playlist-list-operations` | NEW LIST, LOAD LIST, SAVE LIST buttons in playlist window | Medium | ✅ COMPLETE — PR #67 merged (2026-03-22). Oracle 9/10. M3UWriter, generation token, background I/O. | None |
 | `airplay-integration` | AirPlay output routing + Now Playing integration (all 3 phases) | Medium | PLANNED — Research done, plan exists, user approved all phases | None |
 
 **S2 deferral (2026-03-22):** `video-audio-engine-routing` moved to S3. A/V sync risk needs Gemini deep research before implementation. AirPlay (S2) provides shared engine config change handler foundation.
