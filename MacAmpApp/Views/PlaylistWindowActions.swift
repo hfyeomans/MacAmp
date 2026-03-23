@@ -53,18 +53,14 @@ final class PlaylistWindowActions: NSObject {
         for url in urls {
             let fileExtension = url.pathExtension.lowercased()
             if fileExtension == "m3u" || fileExtension == "m3u8" {
-                if let radioLibrary {
-                    loadM3UPlaylist(url, audioPlayer: audioPlayer, radioLibrary: radioLibrary)
-                } else {
-                    showAlert("Error", "Radio library not initialized. Please restart the app.")
-                }
+                loadM3UPlaylist(url, audioPlayer: audioPlayer)
             } else {
                 audioPlayer.addTrack(url: url)
             }
         }
     }
 
-    private func loadM3UPlaylist(_ url: URL, audioPlayer: AudioPlayer, radioLibrary: RadioStationLibrary) {
+    private func loadM3UPlaylist(_ url: URL, audioPlayer: AudioPlayer) {
         Task.detached(priority: .userInitiated) {
             let result: Result<[M3UEntry], Error>
             do {
@@ -251,7 +247,8 @@ final class PlaylistWindowActions: NSObject {
         }
 
         let savePanel = NSSavePanel()
-        savePanel.allowedContentTypes = [.init(filenameExtension: "m3u")!]
+        let m3uSaveType = UTType(filenameExtension: "m3u") ?? .plainText
+        savePanel.allowedContentTypes = [m3uSaveType]
         savePanel.nameFieldStringValue = "playlist.m3u"
         savePanel.title = "Save Playlist"
 
