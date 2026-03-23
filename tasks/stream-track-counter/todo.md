@@ -71,4 +71,5 @@
 
 - [x] Oracle plan review — 9/10
 - [x] Oracle code reviews — 9/10 (stream timer), 9/10 (auto-play refactor), 8/10 (final)
-- [ ] Create PR for user review
+- [x] Create PR #68 — merged (2026-03-23)
+- [x] PR review comments — 4 resolved (1 actionable fixed, 1 nitpick fixed, 1 nitpick accepted, 1 false positive)
