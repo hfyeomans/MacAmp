@@ -60,7 +60,6 @@ final class StreamPlayer {
     @ObservationIgnored private var elapsedTimer: Timer?
     @ObservationIgnored private var elapsedAccumulated: Double = 0
     @ObservationIgnored private var elapsedStartedAt: ContinuousClock.Instant?
-    @ObservationIgnored private var lastNowPlayingIdentity: (String, String)?
 
     // MARK: - Reconnect State
 
@@ -112,14 +111,6 @@ final class StreamPlayer {
 
         if streamTitle == nil { streamTitle = title }
         if streamArtist == nil { streamArtist = artist }
-
-        // Seed now-playing identity so first identical ICY packet doesn't false-reset elapsed
-        if let t = title {
-            lastNowPlayingIdentity = (
-                t.trimmingCharacters(in: .whitespaces).lowercased(),
-                (artist ?? "").trimmingCharacters(in: .whitespaces).lowercased()
-            )
-        }
     }
 
     func pause() {
@@ -228,24 +219,9 @@ final class StreamPlayer {
                 self.streamArtist = artist
             }
 
-            // Detect new track via normalized (title, artist) identity change
-            let identity = (
-                (metadata.title ?? "").trimmingCharacters(in: .whitespaces).lowercased(),
-                (metadata.artist ?? "").trimmingCharacters(in: .whitespaces).lowercased()
-            )
-            let isNewTrack: Bool
-            if let last = self.lastNowPlayingIdentity {
-                isNewTrack = identity.0 != last.0 || identity.1 != last.1
-            } else {
-                isNewTrack = true
-            }
-            if !identity.0.isEmpty && isNewTrack {
-                self.lastNowPlayingIdentity = identity
-                // Reset elapsed time for new track on same station
-                self.elapsedAccumulated = 0
-                self.elapsedStartedAt = self.isPlaying ? .now : nil
-                self.elapsedTime = 0
-            }
+            // Note: Winamp classic does NOT reset elapsed time on ICY metadata change.
+            // decode_pos_ms counts continuously from Play until Stop. ICY metadata
+            // only updates the title display. (Verified from Winamp source: in_mp3/giofile.cpp)
         }
     }
 
@@ -286,7 +262,6 @@ final class StreamPlayer {
         elapsedTime = 0
         elapsedAccumulated = 0
         elapsedStartedAt = nil
-        lastNowPlayingIdentity = nil
     }
 
     // MARK: - Reconnect Logic
