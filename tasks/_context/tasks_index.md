@@ -24,20 +24,20 @@
 
 | Task | Purpose | Size | Status |
 |------|---------|------|--------|
-| `os-workgroup-integration` | Apple Silicon os_workgroup for audio render thread | Small | 📋 PLANNED |
-| `video-audio-engine-routing` | Route video audio through AVAudioEngine (MTAudioProcessingTap) | Medium | 📋 PLANNED |
+| `os-workgroup-integration` | Apple Silicon os_workgroup for audio render thread | Small | 🔄 IN PROGRESS — Oracle 8.5/10, awaiting manual test + PR |
 | `stream-track-counter` | Track position counter in main window + playlist window for streams | Small-Medium | 📋 PLANNED |
 | `playlist-list-operations` | NEW LIST, LOAD LIST, SAVE LIST buttons in playlist window | Medium | 📋 PLANNED |
-| `airplay-integration` | AirPlay output routing + Now Playing integration | Medium | 📋 PLANNED — Research complete, needs plan + todos + Oracle |
+| `airplay-integration` | AirPlay output routing + Now Playing integration (all 3 phases) | Medium | 📋 PLANNED — Research done, plan exists, user approved |
 
 ---
 
-## Sprint S3: LOW Priority — Edge Cases + Optimization
+## Sprint S3: LOW-MEDIUM Priority — Edge Cases + Optimization + Video Routing
 
 | Task | Purpose | Size | Status |
 |------|---------|------|--------|
 | `mainwindow-visualizer-isolation` | SwiftUI recomposition boundary for visualizer during slider drag | Small | 📋 PLANNED |
 | `stream-pause-tail` | Fix ~0.7s audio tail after pausing stream (ring buffer flush) | Small | 📋 PLANNED |
+| `video-audio-engine-routing` | Route video audio through AVAudioEngine (MTAudioProcessingTap) | Medium-High | 📋 PLANNED — Deferred from S2. Gemini deep research pending. |
 | `hls-streaming-support` | Add HLS protocol to stream decode pipeline | Large | 📋 PLANNED |
 | `ogg-vorbis-support` | Add OGG Vorbis codec to stream decode pipeline | Medium | 📋 PLANNED |
 

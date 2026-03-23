@@ -1,4 +1,5 @@
 import AVFoundation
+import os
 
 /// Owns the AVAudioEngine graph and all node-level operations.
 ///
@@ -172,6 +173,16 @@ final class AudioEngineController {
         let sampleRate = file.processingFormat.sampleRate
         guard sampleRate > 0 else { return 0 }
         return Double(file.length) / sampleRate
+    }
+
+    // MARK: - Audio Workgroup
+
+    /// The audio IO workgroup from the output node. Only valid while engine is running.
+    /// Used by StreamDecodePipeline to join its decode thread to the real-time workgroup.
+    /// Requires ObjC shim because AUAudioUnit.osWorkgroup is Swift-unavailable.
+    var audioWorkgroup: os_workgroup_t? {
+        guard audioEngine.isRunning else { return nil }
+        return AUAudioUnitGetWorkgroup(audioEngine.outputNode.auAudioUnit)
     }
 
     // MARK: - Engine Lifecycle

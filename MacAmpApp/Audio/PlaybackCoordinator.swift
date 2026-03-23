@@ -121,6 +121,10 @@ final class PlaybackCoordinator {
             guard let self,
                   let ringBuffer = self.streamPlayer.currentRingBuffer else { return }
             self.audioPlayer.activateStreamBridge(ringBuffer: ringBuffer, sampleRate: sampleRate)
+
+            // Pass the audio IO workgroup to the decode pipeline so its thread
+            // shares the real-time scheduling group with the Core Audio IO thread
+            self.streamPlayer.setAudioWorkgroup(self.audioPlayer.audioWorkgroup)
         }
 
         // Wire stream terminal state callback for bridge teardown
