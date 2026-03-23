@@ -9,6 +9,7 @@ final class PlaylistWindowActions: NSObject {
     var selectedIndices: Set<Int> = []
     weak var radioLibrary: RadioStationLibrary?
     weak var playbackCoordinator: PlaybackCoordinator?
+    private var loadListGeneration: UInt64 = 0
 
     private func showAlert(_ title: String, _ message: String) {
         let alert = NSAlert()
@@ -297,6 +298,8 @@ final class PlaylistWindowActions: NSObject {
         let coordinator = playbackCoordinator
         openPanel.begin { response in
             if response == .OK, let url = openPanel.url {
+                self.loadListGeneration &+= 1
+                let expectedGeneration = self.loadListGeneration
                 Task.detached(priority: .userInitiated) {
                     let result: Result<[M3UEntry], Error>
                     do {
@@ -307,17 +310,22 @@ final class PlaylistWindowActions: NSObject {
 
                     switch result {
                     case .success(let entries):
-                        await MainActor.run {
+                        let applied: Bool = await MainActor.run {
+                            // Reject stale results if another load started while parsing
+                            guard self.loadListGeneration == expectedGeneration else { return false }
                             // LOAD LIST replaces the playlist (Winamp behavior)
                             audioPlayer.clearPlaylist()
                             self.addEntries(entries, to: audioPlayer)
+                            return true
                         }
-                        // Auto-play first track
-                        await self.autoPlayFirstTrack(
-                            audioPlayer: audioPlayer,
-                            coordinator: coordinator,
-                            wasEmpty: true  // Always true — we just cleared
-                        )
+                        // Auto-play first track (only if we actually applied the results)
+                        if applied {
+                            await self.autoPlayFirstTrack(
+                                audioPlayer: audioPlayer,
+                                coordinator: coordinator,
+                                wasEmpty: true  // Always true — we just cleared
+                            )
+                        }
                     case .failure(let error):
                         await MainActor.run {
                             let alert = NSAlert()

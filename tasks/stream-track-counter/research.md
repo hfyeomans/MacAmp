@@ -54,9 +54,10 @@ StreamPlayer.isPlaying = true
 
 **Timer approach:** Same `Timer.scheduledTimer` pattern as `AudioEngineController.startProgressTimer()` — 0.1s interval, fires on main actor.
 
-**Reset behavior:**
+**Reset behavior (updated — verified from Winamp source code):**
 - Reset to 0 on `play(station:)` (new stream)
-- Reset to 0 on ICY metadata title change (new track on same station) — Winamp behavior
+- Reset to 0 on `stop()`
+- **NO reset on ICY metadata change** — Winamp classic `decode_pos_ms` counts continuously from Play until Stop. ICY metadata only updates title display. (Verified from `in_mp3/DecodeThread.cpp`, `giofile.cpp`)
 - Preserve during reconnect (Winamp continues counting during brief reconnects)
 - Pause during buffering/reconnect (don't count time when no audio is playing)
 

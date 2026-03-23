@@ -97,9 +97,7 @@ final class PlaybackCoordinator {
     var trackPositionString: String? {
         guard currentTrack != nil,
               let position = audioPlayer.playlistPosition else { return nil }
-        let count = audioPlayer.playlistCount
-        guard count > 0 else { return nil }
-        return "\(position)/\(count)"
+        return "\(position)/\(audioPlayer.playlistCount)"
     }
 
     // MARK: - Capability Flags
