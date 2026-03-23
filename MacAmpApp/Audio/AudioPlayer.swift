@@ -244,12 +244,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
             duration: 0.0
         )
 
-        let shouldAutoplay = currentTrack == nil
         playlistController.addPlaceholder(placeholder)
-
-        if shouldAutoplay {
-            playTrack(track: placeholder)
-        }
 
         let generation = playlistGeneration
         Task { @MainActor [weak self] in

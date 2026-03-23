@@ -8,6 +8,7 @@ final class PlaylistWindowActions: NSObject {
 
     var selectedIndices: Set<Int> = []
     weak var radioLibrary: RadioStationLibrary?
+    weak var playbackCoordinator: PlaybackCoordinator?
 
     private func showAlert(_ title: String, _ message: String) {
         let alert = NSAlert()
@@ -297,9 +298,9 @@ final class PlaylistWindowActions: NSObject {
                         result = .failure(error)
                     }
 
-                    await MainActor.run {
-                        switch result {
-                        case .success(let entries):
+                    switch result {
+                    case .success(let entries):
+                        await MainActor.run {
                             // LOAD LIST replaces the playlist (Winamp behavior)
                             audioPlayer.clearPlaylist()
                             for entry in entries {
@@ -315,7 +316,17 @@ final class PlaylistWindowActions: NSObject {
                                     audioPlayer.addTrack(url: entry.url)
                                 }
                             }
-                        case .failure(let error):
+                        }
+                        // Auto-play first track via coordinator
+                        let firstTrack: Track? = await MainActor.run {
+                            audioPlayer.currentTrack ?? audioPlayer.playlist.first
+                        }
+                        if let coordinator = await self.playbackCoordinator,
+                           let track = firstTrack {
+                            await coordinator.play(track: track)
+                        }
+                    case .failure(let error):
+                        await MainActor.run {
                             let alert = NSAlert()
                             alert.messageText = "Failed to Load Playlist"
                             alert.informativeText = error.localizedDescription
