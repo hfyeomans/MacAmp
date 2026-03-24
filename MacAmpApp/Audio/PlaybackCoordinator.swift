@@ -521,11 +521,15 @@ final class PlaybackCoordinator {
     }
 
     /// Clear Now Playing info and set playback state to stopped.
+    /// Disables all context-dependent remote commands (seek, next, previous).
     private func clearNowPlayingInfo() {
         let center = MPNowPlayingInfoCenter.default()
         center.nowPlayingInfo = nil
         center.playbackState = .stopped
-        MPRemoteCommandCenter.shared().changePlaybackPositionCommand.isEnabled = false
+        let commandCenter = MPRemoteCommandCenter.shared()
+        commandCenter.changePlaybackPositionCommand.isEnabled = false
+        commandCenter.nextTrackCommand.isEnabled = false
+        commandCenter.previousTrackCommand.isEnabled = false
     }
 
     /// Register handlers for keyboard media keys, Control Center transport buttons,
