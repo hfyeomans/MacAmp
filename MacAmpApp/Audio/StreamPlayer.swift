@@ -222,6 +222,8 @@ final class StreamPlayer {
             // Note: Winamp classic does NOT reset elapsed time on ICY metadata change.
             // decode_pos_ms counts continuously from Play until Stop. ICY metadata
             // only updates the title display. (Verified from Winamp source: in_mp3/giofile.cpp)
+
+            self.onMetadataChanged?()
         }
     }
 
@@ -370,6 +372,10 @@ final class StreamPlayer {
     /// Called when stream reaches a terminal state OR needs bridge teardown for reconnect.
     /// PlaybackCoordinator uses this to deactivate the engine bridge.
     var onStreamTerminated: (@MainActor () -> Void)?
+
+    /// Called when ICY metadata updates streamTitle/streamArtist.
+    /// PlaybackCoordinator uses this to update Now Playing info.
+    var onMetadataChanged: (@MainActor () -> Void)?
 }
 
 // MARK: - StreamTerminationReason User Message

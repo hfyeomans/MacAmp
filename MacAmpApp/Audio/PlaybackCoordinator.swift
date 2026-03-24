@@ -1,4 +1,5 @@
 import Foundation
+import MediaPlayer
 import Observation
 
 /// Coordinates playback between local files (AudioPlayer) and internet radio streams (StreamPlayer).
@@ -165,6 +166,14 @@ final class PlaybackCoordinator {
                 self.audioPlayer.deactivateStreamBridge()
             }
         }
+
+        // Wire stream metadata change callback for Now Playing updates
+        self.streamPlayer.onMetadataChanged = { [weak self] in
+            guard let self else { return }
+            self.updateNowPlayingInfo()
+        }
+
+        setupRemoteCommands()
     }
 
     // MARK: - Volume & Balance Routing
@@ -209,6 +218,7 @@ final class PlaybackCoordinator {
             audioPlayer.playTrack(track: track)
             updateLocalPlaybackState(for: track)
         }
+        updateNowPlayingInfo()
     }
 
     /// Play a radio station from favorites menu
@@ -222,6 +232,7 @@ final class PlaybackCoordinator {
         currentSource = .radioStation(station)
         currentTitle = streamPlayer.streamTitle ?? station.name
         currentTrack = nil  // Not from playlist
+        updateNowPlayingInfo()
     }
 
     func pause() {
@@ -233,6 +244,7 @@ final class PlaybackCoordinator {
         case .none:
             break
         }
+        updateNowPlayingInfo()
     }
 
     func stop() {
@@ -242,6 +254,7 @@ final class PlaybackCoordinator {
         currentSource = nil
         currentTitle = nil
         currentTrack = nil  // Clear so playlist highlighting resets
+        clearNowPlayingInfo()
     }
 
     func togglePlayPause() {
@@ -276,6 +289,7 @@ final class PlaybackCoordinator {
         case .none:
             break
         }
+        updateNowPlayingInfo()
     }
 
     // MARK: - Helpers
@@ -327,6 +341,7 @@ final class PlaybackCoordinator {
         case .requestCoordinatorPlayback(let track):
             await play(track: track)
         }
+        updateNowPlayingInfo()
     }
 
     /// Update coordinator state when metadata loads (don't replay)
@@ -344,6 +359,7 @@ final class PlaybackCoordinator {
 
         // Note: Don't call play(track:) - that would replay the file
         // Just update metadata for display
+        updateNowPlayingInfo()
     }
 
     private func handleExternalPlaylistAdvance(track: Track) async {
@@ -433,5 +449,88 @@ final class PlaybackCoordinator {
 
     var error: String? {
         streamPlayer.error
+    }
+
+    // MARK: - Now Playing & Remote Commands
+
+    /// Update the system Now Playing info center with current track/stream metadata.
+    /// Called at every playback state transition. Apple auto-extrapolates elapsed time
+    /// from the last provided value + playback rate — no periodic timer needed.
+    func updateNowPlayingInfo() {
+        let center = MPNowPlayingInfoCenter.default()
+
+        guard currentSource != nil else {
+            clearNowPlayingInfo()
+            return
+        }
+
+        var info = [String: Any]()
+        info[MPMediaItemPropertyTitle] = displayTitle
+        info[MPMediaItemPropertyArtist] = displayArtist
+        info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = displayTime
+        info[MPMediaItemPropertyPlaybackDuration] = displayDuration
+        info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
+        center.nowPlayingInfo = info
+
+        // REQUIRED on macOS — explicit playback state.
+        // Use coordinator state (isPlaying/isPaused), not audioPlayer.playbackState,
+        // because stream pause/buffering is owned by StreamPlayer/PlaybackCoordinator.
+        if isPlaying {
+            center.playbackState = .playing
+        } else if isPaused {
+            center.playbackState = .paused
+        } else if streamPlayer.isBuffering {
+            // Stream buffering: not playing but not stopped — keep as paused
+            // to avoid losing the Now Playing item during reconnect
+            center.playbackState = .paused
+        } else {
+            center.playbackState = .stopped
+        }
+
+        // Disable seek for streams (no duration), enable for local files
+        let seekEnabled = currentSource.map { if case .localTrack = $0 { return true } else { return false } } ?? false
+        MPRemoteCommandCenter.shared().changePlaybackPositionCommand.isEnabled = seekEnabled
+    }
+
+    /// Clear Now Playing info and set playback state to stopped.
+    private func clearNowPlayingInfo() {
+        let center = MPNowPlayingInfoCenter.default()
+        center.nowPlayingInfo = nil
+        center.playbackState = .stopped
+    }
+
+    /// Register handlers for keyboard media keys, Control Center transport buttons,
+    /// Bluetooth headphone buttons, and AirPlay receiver remotes.
+    /// All handlers dispatch to @MainActor via Task (handlers fire on arbitrary thread).
+    private func setupRemoteCommands() {
+        let center = MPRemoteCommandCenter.shared()
+
+        center.playCommand.addTarget { [weak self] _ in
+            Task { @MainActor [weak self] in self?.resume() }
+            return .success
+        }
+        center.pauseCommand.addTarget { [weak self] _ in
+            Task { @MainActor [weak self] in self?.pause() }
+            return .success
+        }
+        center.togglePlayPauseCommand.addTarget { [weak self] _ in
+            Task { @MainActor [weak self] in self?.togglePlayPause() }
+            return .success
+        }
+        center.nextTrackCommand.addTarget { [weak self] _ in
+            Task { @MainActor [weak self] in await self?.next() }
+            return .success
+        }
+        center.previousTrackCommand.addTarget { [weak self] _ in
+            Task { @MainActor [weak self] in await self?.previous() }
+            return .success
+        }
+        center.changePlaybackPositionCommand.addTarget { [weak self] event in
+            guard let event = event as? MPChangePlaybackPositionCommandEvent else { return .commandFailed }
+            Task { @MainActor [weak self] in
+                self?.audioPlayer.seek(to: event.positionTime)
+            }
+            return .success
+        }
     }
 }

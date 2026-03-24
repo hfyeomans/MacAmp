@@ -50,50 +50,50 @@
 ## Phase 2: Now Playing Integration
 
 ### MPNowPlayingInfoCenter
-- [ ] Add `import MediaPlayer` to PlaybackCoordinator.swift
-- [ ] Implement `updateNowPlayingInfo()` method
-  - [ ] Set title (`displayTitle`)
-  - [ ] Set artist (`displayArtist`)
-  - [ ] Set elapsed time (`displayTime`)
-  - [ ] Set duration (`displayDuration`, 0 for streams)
-  - [ ] Set playback rate (1.0 / 0.0)
-  - [ ] Set explicit `playbackState` (.playing / .paused / .stopped) — REQUIRED on macOS
-- [ ] Implement `clearNowPlayingInfo()` method
-  - [ ] Set `nowPlayingInfo = nil`
-  - [ ] Set `playbackState = .stopped`
-- [ ] Call `updateNowPlayingInfo()` at all 9 transition points:
-  - [ ] `play(track:)`
-  - [ ] `play(station:)`
-  - [ ] `pause()`
-  - [ ] `stop()` (via `clearNowPlayingInfo()`)
-  - [ ] `resume()`
-  - [ ] `handlePlaylistAdvance(action:)`
-  - [ ] `updateTrackMetadata(_:)`
-  - [ ] StreamPlayer `onStateChange` callback
-  - [ ] StreamPlayer `onMetadataChanged` callback (NEW)
+- [x] Add `import MediaPlayer` to PlaybackCoordinator.swift
+- [x] Implement `updateNowPlayingInfo()` method
+  - [x] Set title (`displayTitle`)
+  - [x] Set artist (`displayArtist`)
+  - [x] Set elapsed time (`displayTime`)
+  - [x] Set duration (`displayDuration`, 0 for streams)
+  - [x] Set playback rate (1.0 / 0.0)
+  - [x] Set explicit `playbackState` (.playing / .paused / .stopped) — REQUIRED on macOS
+  - [x] Handle stream buffering as `.paused` (not `.stopped`)
+- [x] Implement `clearNowPlayingInfo()` method
+  - [x] Set `nowPlayingInfo = nil`
+  - [x] Set `playbackState = .stopped`
+- [x] Call `updateNowPlayingInfo()` at all transition points:
+  - [x] `play(track:)`
+  - [x] `play(station:)`
+  - [x] `pause()`
+  - [x] `stop()` (via `clearNowPlayingInfo()`)
+  - [x] `resume()`
+  - [x] `handlePlaylistAdvance(action:)`
+  - [x] `updateTrackMetadata(_:)`
+  - [x] StreamPlayer `onMetadataChanged` callback (NEW)
 
 ### MPRemoteCommandCenter
-- [ ] Implement `setupRemoteCommands()` in PlaybackCoordinator
-- [ ] All handlers dispatch via `Task { @MainActor }`:
-  - [ ] play → `resume()`
-  - [ ] pause → `pause()`
-  - [ ] togglePlayPause → `togglePlayPause()`
-  - [ ] nextTrack → `next()`
-  - [ ] previousTrack → `previous()`
-  - [ ] changePlaybackPosition → `audioPlayer.seek(to:)`
-- [ ] Disable seek command when `currentSource == .radioStation`
-- [ ] Re-enable seek command when switching to local playback
+- [x] Implement `setupRemoteCommands()` in PlaybackCoordinator
+- [x] All handlers dispatch via `Task { @MainActor }`:
+  - [x] play → `resume()`
+  - [x] pause → `pause()`
+  - [x] togglePlayPause → `togglePlayPause()`
+  - [x] nextTrack → `next()`
+  - [x] previousTrack → `previous()`
+  - [x] changePlaybackPosition → `audioPlayer.seek(to:)`
+- [x] Disable seek command when `currentSource == .radioStation`
+- [x] Re-enable seek command when switching to local playback
 - [ ] Evaluate command enablement during testing: skip forward/backward, seek, repeat, shuffle — MacAmp has UI for these already, decide which to wire vs disable based on Control Center space
-- [ ] Call `setupRemoteCommands()` from init
+- [x] Call `setupRemoteCommands()` from init
 
 ### Stream Metadata Callback
-- [ ] Add `onMetadataChanged` callback to StreamPlayer
-- [ ] Fire from ICY metadata handler (alongside streamTitle/streamArtist updates)
-- [ ] Wire in PlaybackCoordinator init → calls `updateNowPlayingInfo()`
+- [x] Add `onMetadataChanged` callback to StreamPlayer
+- [x] Fire from ICY metadata handler (alongside streamTitle/streamArtist updates)
+- [x] Wire in PlaybackCoordinator init → calls `updateNowPlayingInfo()`
 
 ### Build & Test Phase 2
-- [ ] XcodeBuildMCP build with Thread Sanitizer — no warnings
-- [ ] XcodeBuildMCP test — all tests pass
+- [x] XcodeBuildMCP build with Thread Sanitizer — no warnings
+- [x] XcodeBuildMCP test — all 53 tests pass
 - [ ] Play local file — Control Center shows title/artist/progress
 - [ ] Play internet radio — Control Center shows stream title
 - [ ] Keyboard play/pause — works
