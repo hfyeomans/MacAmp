@@ -148,6 +148,12 @@ final class PlaybackCoordinator {
             }
         }
 
+        // Wire local playback finished (no next track) for Now Playing cleanup
+        self.audioPlayer.onPlaybackFinished = { [weak self] in
+            guard let self else { return }
+            self.clearNowPlayingInfo()
+        }
+
         // Wire stream pipeline format-ready callback to activate engine bridge
         self.streamPlayer.onFormatReady = { [weak self] sampleRate in
             guard let self,
@@ -169,6 +175,13 @@ final class PlaybackCoordinator {
 
         // Wire stream metadata change callback for Now Playing updates
         self.streamPlayer.onMetadataChanged = { [weak self] in
+            guard let self else { return }
+            self.updateNowPlayingInfo()
+        }
+
+        // Wire stream state change callback for Now Playing playback state updates
+        // (buffering → playing → reconnect → error transitions)
+        self.streamPlayer.onStreamStateChanged = { [weak self] in
             guard let self else { return }
             self.updateNowPlayingInfo()
         }
@@ -368,6 +381,7 @@ final class PlaybackCoordinator {
         } else {
             updateLocalPlaybackState(for: track)
         }
+        updateNowPlayingInfo()
     }
 
     // MARK: - Unified State for UI
@@ -497,6 +511,7 @@ final class PlaybackCoordinator {
         let center = MPNowPlayingInfoCenter.default()
         center.nowPlayingInfo = nil
         center.playbackState = .stopped
+        MPRemoteCommandCenter.shared().changePlaybackPositionCommand.isEnabled = false
     }
 
     /// Register handlers for keyboard media keys, Control Center transport buttons,

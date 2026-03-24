@@ -85,6 +85,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     var currentTrack: Track?
     var onTrackMetadataUpdate: ((Track) -> Void)?
     var onPlaylistAdvanceRequest: ((Track) -> Void)?
+    var onPlaybackFinished: (() -> Void)?
     var shuffleEnabled: Bool {
         get { playlistController.shuffleEnabled }
         set { playlistController.shuffleEnabled = newValue }
@@ -664,6 +665,8 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
             switch action {
             case .requestCoordinatorPlayback(let track), .playLocally(let track):
                 self.onPlaylistAdvanceRequest?(track)
+            case .none:
+                self.onPlaybackFinished?()
             default:
                 break
             }
