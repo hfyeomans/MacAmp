@@ -148,9 +148,13 @@ final class PlaybackCoordinator {
             }
         }
 
-        // Wire local playback finished (no next track) for Now Playing cleanup
+        // Wire local playback finished (no next track) for Now Playing cleanup.
+        // Clear source state to prevent late metadata callbacks from repopulating Now Playing.
         self.audioPlayer.onPlaybackFinished = { [weak self] in
             guard let self else { return }
+            self.currentSource = nil
+            self.currentTitle = nil
+            self.currentTrack = nil
             self.clearNowPlayingInfo()
         }
 
@@ -507,10 +511,13 @@ final class PlaybackCoordinator {
         let commandCenter = MPRemoteCommandCenter.shared()
         commandCenter.changePlaybackPositionCommand.isEnabled = seekEnabled
 
-        // Disable next/previous when no playlist context (e.g., playing a favorite station directly)
-        let hasPlaylist = audioPlayer.playlistCount > 0
-        commandCenter.nextTrackCommand.isEnabled = hasPlaylist
-        commandCenter.previousTrackCommand.isEnabled = hasPlaylist
+        // Disable next/previous when no playlist position context.
+        // currentTrack is nil when playing a direct station (not from playlist),
+        // even if the playlist has tracks loaded. Without a position, next/previous
+        // would jump to track 0 unexpectedly.
+        let hasPlaylistContext = currentTrack != nil && audioPlayer.playlistCount > 0
+        commandCenter.nextTrackCommand.isEnabled = hasPlaylistContext
+        commandCenter.previousTrackCommand.isEnabled = hasPlaylistContext
     }
 
     /// Clear Now Playing info and set playback state to stopped.
