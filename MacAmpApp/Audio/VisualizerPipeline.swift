@@ -47,32 +47,30 @@ private final class VisualizerSharedBuffer: @unchecked Sendable {
     private var generation: UInt64 = 0
     private var lastConsumed: UInt64 = 0
 
+    /// Copy Float elements via memcpy. Audio-thread safe (no allocation).
+    private func copyFloatBuffer(from source: [Float], to destination: inout [Float], count: Int? = nil) {
+        let n = count ?? min(source.count, destination.count)
+        guard n > 0 else { return }
+        source.withUnsafeBufferPointer { src in
+            destination.withUnsafeMutableBufferPointer { dst in
+                guard let s = src.baseAddress, let d = dst.baseAddress else { return }
+                memcpy(d, s, n * MemoryLayout<Float>.stride)
+            }
+        }
+    }
+
     /// Audio thread: try to publish data (non-blocking).
     /// Returns false if lock is contended (frame is dropped).
     func tryPublish(from scratch: VisualizerScratchBuffers, oscilloscopeSamples: Int, validFrameCount: Int) -> Bool {
         guard os_unfair_lock_trylock(&lock) else { return false }
         defer { os_unfair_lock_unlock(&lock) }
 
-        let scratchRms = scratch.rms
-        let rCount = min(scratchRms.count, rms.count)
-        scratchRms.withUnsafeBufferPointer { src in
-            rms.withUnsafeMutableBufferPointer { dst in
-                if rCount > 0, let s = src.baseAddress, let d = dst.baseAddress {
-                    memcpy(d, s, rCount * MemoryLayout<Float>.stride)
-                }
-            }
-        }
+        let rCount = min(scratch.rms.count, rms.count)
+        copyFloatBuffer(from: scratch.rms, to: &rms, count: rCount)
         rmsCount = rCount
 
-        let scratchSpec = scratch.spectrum
-        let sCount = min(scratchSpec.count, spectrum.count)
-        scratchSpec.withUnsafeBufferPointer { src in
-            spectrum.withUnsafeMutableBufferPointer { dst in
-                if sCount > 0, let s = src.baseAddress, let d = dst.baseAddress {
-                    memcpy(d, s, sCount * MemoryLayout<Float>.stride)
-                }
-            }
-        }
+        let sCount = min(scratch.spectrum.count, spectrum.count)
+        copyFloatBuffer(from: scratch.spectrum, to: &spectrum, count: sCount)
         spectrumCount = sCount
 
         // Downsample waveform using validFrameCount (not mono.count)
@@ -91,25 +89,8 @@ private final class VisualizerSharedBuffer: @unchecked Sendable {
         }
         waveformCount = actualSamples
 
-        let scratchBcSpec = scratch.butterchurnSpectrum
-        scratchBcSpec.withUnsafeBufferPointer { src in
-            bcSpectrum.withUnsafeMutableBufferPointer { dst in
-                let count = min(src.count, dst.count)
-                if count > 0, let s = src.baseAddress, let d = dst.baseAddress {
-                    memcpy(d, s, count * MemoryLayout<Float>.stride)
-                }
-            }
-        }
-
-        let scratchBcWave = scratch.butterchurnWaveform
-        scratchBcWave.withUnsafeBufferPointer { src in
-            bcWaveform.withUnsafeMutableBufferPointer { dst in
-                let count = min(src.count, dst.count)
-                if count > 0, let s = src.baseAddress, let d = dst.baseAddress {
-                    memcpy(d, s, count * MemoryLayout<Float>.stride)
-                }
-            }
-        }
+        copyFloatBuffer(from: scratch.butterchurnSpectrum, to: &bcSpectrum)
+        copyFloatBuffer(from: scratch.butterchurnWaveform, to: &bcWaveform)
 
         generation &+= 1
         return true
@@ -249,15 +230,6 @@ private final class VisualizerScratchBuffers: @unchecked Sendable {
         mono.withUnsafeMutableBufferPointer { pointer in
             guard let baseAddress = pointer.baseAddress else { return }
             vDSP_vclr(baseAddress, 1, vDSP_Length(cappedFrameCount))
-        }
-
-        // Bars are constant (20) and pre-allocated - no clamping needed
-        if rms.count < bars {
-            rms = Array(repeating: 0, count: bars)
-        }
-
-        if spectrum.count < bars {
-            spectrum = Array(repeating: 0, count: bars)
         }
 
         // Recompute Goertzel coefficients only when sample rate changes (once per track)
@@ -480,46 +452,27 @@ final class VisualizerPipeline {
         )
     }
 
+    /// Nearest-neighbor resample: map `source` into an array of `targetCount` elements.
+    private func resample(_ source: [Float], to targetCount: Int) -> [Float] {
+        guard targetCount > 0 else { return [] }
+        if source.count == targetCount { return source }
+        guard !source.isEmpty else { return [Float](repeating: 0, count: targetCount) }
+        var result = [Float](repeating: 0, count: targetCount)
+        for i in 0..<targetCount {
+            let sourceIndex = (i * source.count) / targetCount
+            result[i] = source[min(sourceIndex, source.count - 1)]
+        }
+        return result
+    }
+
     /// Get RMS data mapped to requested number of bands
     func getRMSData(bands: Int) -> [Float] {
-        guard bands > 0 else { return [] }
-
-        // Return raw RMS data (already has correct band count)
-        if latestRMS.count == bands {
-            return latestRMS
-        }
-
-        // Or map if different band count requested
-        var result = [Float](repeating: 0, count: bands)
-        if !latestRMS.isEmpty {
-            for i in 0..<bands {
-                let sourceIndex = (i * latestRMS.count) / bands
-                result[i] = latestRMS[min(sourceIndex, latestRMS.count - 1)]
-            }
-        }
-
-        return result
+        resample(latestRMS, to: bands)
     }
 
     /// Get waveform samples resampled to requested count
     func getWaveformSamples(count: Int) -> [Float] {
-        guard count > 0 else { return [] }
-
-        // Return waveform samples captured from mono buffer
-        if latestWaveform.count == count {
-            return latestWaveform
-        }
-
-        // Resample if different count requested
-        var result = [Float](repeating: 0, count: count)
-        if !latestWaveform.isEmpty {
-            for i in 0..<count {
-                let sourceIndex = (i * latestWaveform.count) / count
-                result[i] = latestWaveform[min(sourceIndex, latestWaveform.count - 1)]
-            }
-        }
-
-        return result
+        resample(latestWaveform, to: count)
     }
 
     /// Get frequency data mapped to requested number of bands with logarithmic scaling
