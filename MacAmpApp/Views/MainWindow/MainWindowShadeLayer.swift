@@ -65,14 +65,6 @@ struct MainWindowShadeLayer: View {
     @ViewBuilder
     private func buildShadeTimeDisplay() -> some View {
         ZStack(alignment: .leading) {
-            Color.black
-                .frame(width: 21, height: 13)
-                .offset(x: 6, y: 0)
-
-            Color.black
-                .frame(width: 21, height: 13)
-                .offset(x: 34, y: 0)
-
             if settings.timeDisplayMode == .remaining && playbackCoordinator.displayDuration > 0 {
                 ZStack(alignment: .topLeading) {
                     SimpleSpriteImage(.minusSign, width: 5, height: 1)
@@ -98,13 +90,14 @@ struct MainWindowShadeLayer: View {
                 SimpleSpriteImage(.digit(digits[3]), width: 9, height: 13).offset(x: 46, y: 0)
             }
         }
-        .at(Layout.timeDisplay)
-        .scaleEffect(0.7)
-        .at(CGPoint(x: 150, y: 7))
+        .frame(width: 56, height: 13, alignment: .leading)
         .contentShape(Rectangle())
         .onTapGesture {
             settings.toggleTimeDisplayMode()
         }
+        .at(Layout.timeDisplay)
+        .scaleEffect(0.7)
+        .at(CGPoint(x: 150, y: 7))
     }
 
     // MARK: - Shade Titlebar Buttons

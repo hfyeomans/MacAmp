@@ -7069,6 +7069,43 @@ This matters for seek accuracy -- seeking to 95% of a wrong duration overshoots 
 
 ---
 
+### Lesson #31: AVRoutePickerView + AVAudioEngine = Dead End on macOS (AirPlay Integration)
+
+**Severity:** CRITICAL (wasted 5+ months of planning on a fundamentally broken assumption)
+
+**The Problem:**
+`AVRoutePickerView` on macOS is designed to route a specific `AVPlayer` instance's audio over AirPlay 2. It does NOT change the system default output device. Without a bound `AVPlayer`, it's a dummy button. With one, it routes only that player, leaving `AVAudioEngine` untouched.
+
+**Why macOS ≠ iOS:**
+- **iOS:** `AVAudioSession` is global per app. Route changes affect everything including `AVAudioEngine`.
+- **macOS:** No global `AVAudioSession`. `AVPlayer` and `AVAudioEngine` are in completely separate routing worlds. `AVPlayer` routing is per-instance via AirPlay 2. `AVAudioEngine` routing is tied to the Core Audio HAL (hardware devices).
+
+**What We Tested:**
+| Test | Result |
+|---|---|
+| AVRoutePickerView alone (no player) | UI only, no routing |
+| AVRoutePickerView + empty AVPlayer | AirPlay connects for that player only, engine untouched |
+| AVRoutePickerView + silent AVPlayer | FigFilePlayer errors |
+| AirPlay devices in Core Audio HAL | Hidden until system-wide route established |
+| Engine configurationChangeNotification | Never fires (system default never changed) |
+
+**Industry Evidence:**
+Even Spotify's macOS desktop app lacks per-app AirPlay 2. Only Apple Music has it (via private `MediaExperience.framework`). WebKit uses SPI (`AVOutputContext` + `showRoutePickingControlsForOutputContext`) which is not App Store safe.
+
+**Viable Paths:**
+1. **System-wide AirPlay (recommended for AVAudioEngine apps):** Users switch via macOS Control Center. Engine fires `configurationChangeNotification`. App restarts engine with new output format. EQ/visualizer preserved. Not per-app.
+2. **AVSampleBufferAudioRenderer (future architecture for per-app AirPlay 2):** Apple's official "custom player" path. Feed decoded PCM as CMSampleBuffers. `audioOutputDeviceUniqueID` enables per-app routing. EQ via vDSP.Biquad cascades. Massive rewrite.
+
+**Key Takeaways:**
+1. **Prototype critical framework assumptions immediately** -- don't plan for months on untested API behavior
+2. **AI code review misses framework-level incompatibilities** -- Oracle gave 8/10 feasibility, Gemini validated. Neither caught the fundamental issue. Only hands-on testing revealed it.
+3. **If your macOS app uses AVAudioEngine and needs AirPlay, accept system-wide routing** -- there is no public API for per-app AirPlay with AVAudioEngine
+4. **The only public path to per-app AirPlay 2 with custom audio processing is AVSampleBufferAudioRenderer** -- requires complete audio architecture rewrite but is the only approach that satisfies all constraints
+
+**References:** `tasks/airplay-integration/research.md` sections 8-9
+
+---
+
 **Built with ❤️ for retro computing on modern macOS**
 
-*This skill document captures 10+ months of lessons learned building MacAmp, distilled into actionable patterns for building similar retro-styled macOS applications with modern Swift 6.2 patterns. Updated with Sprint S1 lessons (Mar 2026) — XcodeGen resource migration audit, auto-reconnect with exponential backoff for streams, and AudioEngineController extraction extending the facade pattern. Also includes Unified Audio Pipeline (Mar 2026), T3 MainWindow Layer Decomposition (PR #54, Feb 2026), coordinator volume routing and capability flags, SwiftUI view decomposition architecture, memory & CPU optimization with SPSC shared buffer, WindowCoordinator Facade + Composition refactoring, Oracle-driven quality gates, and Swift 6.2 concurrency compliance.*
+*This skill document captures 10+ months of lessons learned building MacAmp, distilled into actionable patterns for building similar retro-styled macOS applications with modern Swift 6.2 patterns. Updated with Sprint S2 lessons (Mar 2026) — AirPlay integration failure analysis (AVRoutePickerView + AVAudioEngine incompatibility on macOS), AVSampleBufferAudioRenderer as future per-app AirPlay architecture, and Phase 0 time display hit area bugfix (.contentShape after .offset ordering). Also includes Sprint S1 lessons — XcodeGen resource migration audit, auto-reconnect with exponential backoff for streams, and AudioEngineController extraction extending the facade pattern. Also includes Unified Audio Pipeline (Mar 2026), T3 MainWindow Layer Decomposition (PR #54, Feb 2026), coordinator volume routing and capability flags, SwiftUI view decomposition architecture, memory & CPU optimization with SPSC shared buffer, WindowCoordinator Facade + Composition refactoring, Oracle-driven quality gates, and Swift 6.2 concurrency compliance.*

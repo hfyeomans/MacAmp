@@ -197,6 +197,7 @@ final class StreamPlayer {
                 self.isBuffering = false
                 self.stopElapsedTimer()
             }
+            self.onStreamStateChanged?()
         }
 
         pipeline.onTermination = { [weak self] reason in
@@ -222,6 +223,8 @@ final class StreamPlayer {
             // Note: Winamp classic does NOT reset elapsed time on ICY metadata change.
             // decode_pos_ms counts continuously from Play until Stop. ICY metadata
             // only updates the title display. (Verified from Winamp source: in_mp3/giofile.cpp)
+
+            self.onMetadataChanged?()
         }
     }
 
@@ -278,6 +281,7 @@ final class StreamPlayer {
                 error = message
             }
             onStreamTerminated?()
+            onStreamStateChanged?()
         }
     }
 
@@ -306,6 +310,7 @@ final class StreamPlayer {
             ringBuffer = nil
             error = "Connection lost after \(Self.maxReconnectAttempts) attempts"
             onStreamTerminated?()
+            onStreamStateChanged?()
             return
         }
 
@@ -315,6 +320,7 @@ final class StreamPlayer {
 
         // Tear down bridge (critical — new ring buffer needs new bridge activation)
         onStreamTerminated?()
+        onStreamStateChanged?()
 
         let attempt = reconnectAttempt
         reconnectTask = Task { @MainActor [weak self] in
@@ -370,6 +376,14 @@ final class StreamPlayer {
     /// Called when stream reaches a terminal state OR needs bridge teardown for reconnect.
     /// PlaybackCoordinator uses this to deactivate the engine bridge.
     var onStreamTerminated: (@MainActor () -> Void)?
+
+    /// Called when ICY metadata updates streamTitle/streamArtist.
+    /// PlaybackCoordinator uses this to update Now Playing info.
+    var onMetadataChanged: (@MainActor () -> Void)?
+
+    /// Called when stream transport state changes (connecting/buffering/playing/paused/error).
+    /// PlaybackCoordinator uses this to update Now Playing playback state.
+    var onStreamStateChanged: (@MainActor () -> Void)?
 }
 
 // MARK: - StreamTerminationReason User Message

@@ -1,40 +1,86 @@
 # State: AirPlay Integration
 
-> **Purpose:** Tracks the current state of the AirPlay integration task, including what's been completed, what's in progress, and what's blocked.
+> **Purpose:** Tracks the current state of the AirPlay integration task.
 
 **Date:** 2026-02-07
 **Sprint:** S2 (MEDIUM)
-**Status:** Research Complete - Oracle Reviewed (8.5/10) - Awaiting User Approval
-**Note:** Assigned to Sprint S2. Research complete, Oracle reviewed (8.5/10). Ready for implementation pending user approval.
+**Status:** Phase 0 COMPLETE, Phase 1 DEFUNCT, Phase 2 COMPLETE (Oracle 9/10), Phase 3 DEFUNCT — Ready for PR
+**Last Updated:** 2026-03-24
 
 ---
 
-## Current Phase: Research & Planning
+## Current Phase: Reassessing scope after Phase 1 failure
 
 ### Completed
 - [x] Gemini research on AirPlay APIs (2025-10-30)
-- [x] Oracle review #1 - 5 critical corrections (2025-10-30)
-- [x] Oracle review #2 - Logo overlay validation (2025-10-30)
-- [x] Webamp codebase analysis - about link overlay pattern
-- [x] MacAmp codebase analysis - title bar architecture, sprite system, coordinates
-- [x] Entitlements verification (network.client already exists)
-- [x] Info.plist verification (no changes needed)
-- [x] Consolidated research from tasks/airplay/ and tasks/winamp-airplay-overlay/
-- [x] Combined plan created
-- [x] Oracle review #3 (gpt-5.3-codex, xhigh) - Feasibility 8.5/10, 5 corrections applied
-
-### In Progress
-- None
-
-### Pending
-- [ ] User approval of plan
-- [ ] Phase 1 implementation (AirPlayRoutePicker + engine observer)
-- [ ] Phase 1 testing with real AirPlay device
-- [ ] Phase 2 implementation (Now Playing integration)
-- [ ] Phase 3 implementation (UX polish)
+- [x] Oracle reviews #1-6 (2025-10-30 through 2026-03-23)
+- [x] Webamp + MacAmp codebase analysis
+- [x] Entitlements verification (network.client + audio-output already exist)
+- [x] Consolidated research from prior tasks
+- [x] Plan created with dual-trigger approach (Oracle 8/10)
+- [x] Phase 0: Fix time display hit area bug (full + shade modes)
+- [x] Phase 0: Digit positioning refinement
+- [x] Phase 0: Black mask removal (documented in depreciated.md)
+- [x] Phase 1 ATTEMPTED: AVRoutePickerView dual triggers + engine observer
+- [x] Phase 1 FAILED: AVRoutePickerView doesn't route AVAudioEngine audio on macOS
+- [x] Gemini deep research: AVRoutePickerView failure analysis, HAL routing, AVPlayer rewrite, per-app routing
 
 ### Blocked
-- None
+- [x] Phase 1 AirPlay triggers — AVRoutePickerView is designed for AVPlayer per-app routing, NOT system-wide output switching for AVAudioEngine
+
+### Still Viable (Future Work)
+- [ ] Engine config observer (needed when users switch output via macOS Control Center — deferred)
+
+### Complete
+- [x] Phase 2: Now Playing + remote commands — Oracle 9/10, manual testing passed
+  - MPNowPlayingInfoCenter with explicit playbackState
+  - MPRemoteCommandCenter with @MainActor dispatch
+  - 10 trigger points, smart command enablement, lifecycle cleanup
+  - Keyboard media keys, Bluetooth headphones, Control Center transport all verified
+
+### Defunct
+- Phase 1: AirPlay triggers (AVRoutePickerView + dual overlays) — ABANDONED
+- Phase 3: Discoverability UX (no in-app AirPlay button to discover) — ABANDONED
+
+---
+
+## Critical Finding: AVRoutePickerView + AVAudioEngine Incompatibility
+
+**Date:** 2026-03-24
+**Source:** Phase 1 implementation testing + Gemini deep research
+
+### The Problem
+
+`AVRoutePickerView` on macOS is designed to route a specific `AVPlayer` instance's audio over AirPlay 2. It is NOT a generic "change system output" button.
+
+| Test | Result | Why |
+|---|---|---|
+| AVRoutePickerView alone (no player) | UI only, no routing | Picker requires `.player` property to know what to route |
+| AVRoutePickerView + empty AVPlayer | TV connects, system default unchanged | Establishes per-app route for that AVPlayer only |
+| AVRoutePickerView + silent AVPlayer | FigFilePlayer errors | AVPlayer optimizes out silent/empty tracks |
+| AirPlay devices in HAL | Not visible | AirPlay devices hidden from Core Audio HAL until system-wide route established |
+| Engine config notification | Never fires | System default never changed, so AVAudioEngine sees no hardware change |
+
+### Root Cause
+
+- **iOS:** `AVAudioSession` is global per app. Route changes affect everything including `AVAudioEngine`.
+- **macOS:** No global `AVAudioSession`. `AVPlayer` routing is isolated per-instance. `AVAudioEngine` routing is tied to Core Audio HAL (hardware devices). They are completely separate worlds.
+
+### Paths Evaluated
+
+| Path | Viable? | Trade-off |
+|---|---|---|
+| System-wide AirPlay (Control Center) | YES | Users switch via macOS UI, not in-app. Engine config observer handles restart. EQ/visualizer preserved. |
+| AVPlayer rewrite | NO (too costly) | Lose 10-band EQ, lose custom StreamDecodePipeline, lose ICY metadata, rewrite visualizer |
+| AVSampleBufferAudioRenderer | NO (too costly) | Massive rewrite, poor EQ compatibility |
+| Core Audio HAL device selection | PARTIAL | AirPlay 1 only, no AirPlay 2 multi-room, fragile, custom UI needed |
+| Custom virtual audio driver | NO (out of scope) | Airfoil-level complexity |
+
+### Decision
+
+**Accept system-wide AirPlay routing.** Users switch output via macOS Control Center. MacAmp handles the engine config change notification to restart seamlessly. EQ, visualizer, and custom streaming pipeline are all preserved.
+
+No in-app AirPlay trigger button. The bolt icon and WA logo overlays are not needed.
 
 ---
 
@@ -42,41 +88,38 @@
 
 | Decision | Rationale | Date |
 |---|---|---|
-| Use AVRoutePickerView only | Custom device APIs don't exist on macOS | 2025-10-30 |
-| Import AVKit not AVFoundation | Oracle correction - wrong framework | 2025-10-30 |
-| No Info.plist changes | NSLocalNetworkUsageDescription valid on macOS but not needed for AVRoutePickerView | 2026-02-07 |
-| Transparent overlay on logo | Matches webamp pattern, maintains aesthetic | 2025-10-30 |
-| Engine config observer required | Audio goes silent without it on route change | 2025-10-30 |
-| Logo position at (253, 91) | Webamp reference, body area not title bar | 2026-02-07 |
+| AVRoutePickerView approach | ABANDONED — doesn't work with AVAudioEngine on macOS | 2026-03-24 |
+| System-wide AirPlay via Control Center | Only viable path that preserves EQ + visualizer + streaming | 2026-03-24 |
+| Engine config observer still needed | Handles route changes from macOS Control Center | 2026-03-24 |
+| Now Playing in PlaybackCoordinator | Bridge layer, independent of AirPlay trigger method | 2026-03-23 |
+| Phase 0 time display bugfix | Shipped — `.contentShape()` before `.at()`, explicit frame | 2026-03-24 |
 
 ---
 
-## Architecture Verified
+## Architecture (Revised)
 
-### Audio Pipeline (No Changes Needed)
+### Audio Pipeline (No Changes to Graph)
 ```
-AVAudioPlayerNode -> AVAudioUnitEQ -> mainMixerNode -> outputNode -> [AirPlay/Built-in]
+AVAudioPlayerNode → AVAudioUnitEQ → mainMixerNode → outputNode → [System Default Output]
 ```
-- EQ preserved before routing
-- AVAudioEngine supports AirPlay natively
-- Only addition: engine config change observer
+- When user switches to AirPlay via macOS Control Center, system default changes
+- AVAudioEngine fires configurationChangeNotification
+- Engine restarts with new output format
+- EQ, visualizer, stream bridge all preserved through restart
 
-### Entitlements (Already Sufficient)
-- `com.apple.security.network.client` - Line 32
-- `com.apple.security.device.audio-output` - Line 22
-
-### UI Architecture
-- Main window: 275x116 pixels
-- Title bar: 275x14 at (0, 0) - wrapped in drag handle
-- Logo area: approximately (253, 91) - in body, not title bar
-- Existing buttons at y:3 (minimize, shade, close) and y:25+ (clutter bar)
+### What's Still Needed
+1. **Engine config observer** — handle route changes from system Control Center
+2. **Now Playing** — MPNowPlayingInfoCenter + MPRemoteCommandCenter in PlaybackCoordinator
+3. **No in-app AirPlay UI** — users use macOS Control Center
 
 ---
 
 ## Prior Task Context
 
-This task consolidates:
-- `tasks/airplay/` - Full AirPlay research, Oracle review, implementation plan
-- `tasks/winamp-airplay-overlay/` - AVRoutePickerView overlay research, webamp pattern analysis
-
-Both prior tasks remain as historical reference.
+Consolidates:
+- `tasks/airplay/` — Original AirPlay research
+- `tasks/winamp-airplay-overlay/` — AVRoutePickerView overlay research (approach abandoned)
+- `research-gemini-avroutepicker-failure.md` — Why AVRoutePickerView fails with AVAudioEngine
+- `research-gemini-airplay-hal.md` — AirPlay devices hidden from Core Audio HAL
+- `research-avplayer-rewrite.md` — AVPlayer rewrite evaluation (rejected)
+- `research-per-app-routing.md` — Per-app routing options evaluation

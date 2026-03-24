@@ -398,5 +398,127 @@ MacAmp has a dual audio backend:
 
 ### Apple Frameworks
 - AVKit: AVRoutePickerView
-- AVFoundation: AVAudioEngine, AVRouteDetector
+- AVFoundation: AVAudioEngine, AVRouteDetector, AVSampleBufferAudioRenderer
 - MediaPlayer: MPNowPlayingInfoCenter, MPRemoteCommandCenter
+
+---
+
+## 8. Phase 1 Implementation Failure (2026-03-24)
+
+### What We Attempted
+
+Implemented transparent `AVRoutePickerView` overlays at two positions (top-left bolt icon, bottom-right WA logo) in the main window. The picker was correctly rendered and clickable. Added engine configuration change observer to `AudioEngineController` with will/did callbacks for `AudioPlayer` seek guard coordination.
+
+### What Failed
+
+**AVRoutePickerView does not route AVAudioEngine audio on macOS.** Testing revealed:
+
+| Test | Result | Why |
+|---|---|---|
+| AVRoutePickerView alone (no player) | UI appears, no routing | Picker requires `.player` property — without it, it's a dummy button |
+| AVRoutePickerView + empty AVPlayer | AirPlay device connects, system default unchanged | Establishes per-app route for that AVPlayer only — AVAudioEngine untouched |
+| AVRoutePickerView + silent AVPlayer | FigFilePlayer errors | AVPlayer optimizes out silent/empty tracks |
+| AirPlay devices in Core Audio HAL | Not visible | AirPlay devices hidden from HAL until system-wide route is established |
+| Engine config notification | Never fires | System default never changed, so AVAudioEngine sees no hardware change |
+
+### Root Cause: iOS vs macOS Audio Architecture
+
+- **iOS:** `AVAudioSession` is global per app. Route changes affect everything including `AVAudioEngine`.
+- **macOS:** No global `AVAudioSession`. `AVPlayer` routing is isolated per-instance. `AVAudioEngine` routing is tied to Core Audio HAL (hardware devices). They are completely separate worlds.
+
+Apple explicitly designed `AVRoutePickerView` on macOS to bind to an `AVPlayer` instance and route only that player's audio over AirPlay 2. It is NOT a generic "change system output" button.
+
+### Industry Validation
+
+| Player | AirPlay Support | How |
+|---|---|---|
+| **Apple Music** | Full per-app AirPlay 2 + multi-room | Private frameworks (MediaExperience.framework) — not available to third parties |
+| **Spotify macOS** | No native per-app AirPlay 2 | Uses Spotify Connect for device targeting; AirPlay only via system Control Center |
+| **VLC / IINA** | No per-app AirPlay 2 | Core Audio HAL output only — falls back to AirPlay 1 if device visible, no multi-room |
+| **Safari / WebKit** | Per-app AirPlay via SPI | Uses `AVOutputContext` + `showRoutePickingControlsForOutputContext` (private API, not App Store safe) |
+| **Rogue Amoeba Airfoil** | Full AirPlay 2 capture | Installs custom HAL audio driver — out of scope for standard app |
+
+### Paths Evaluated
+
+#### Path A: System-Wide AirPlay (Current Recommendation)
+- Users switch output via macOS Control Center
+- AVAudioEngine fires `configurationChangeNotification` when system default changes
+- Engine restarts with new output format
+- **Preserves:** 10-band EQ, visualizer, custom stream pipeline, ICY metadata
+- **Trade-off:** Not per-app — all system audio goes to AirPlay
+
+#### Path B: AVPlayer Rewrite (Rejected — Too Costly)
+- Replace AVAudioEngine with AVPlayer for all playback
+- Bind AVRoutePickerView to the player for native per-app routing
+- **Loses:** 10-band AVAudioUnitEQ, custom StreamDecodePipeline, ICY metadata parsing, robust reconnection
+- **Adds:** Need local HLS proxy for infinite radio (4-10s latency), rewrite visualizer with MTAudioProcessingTap
+- **Risk:** MTAudioProcessingTap stops producing data under AirPlay 2 on macOS 15+ (silent failures, AirPlayXPCHelper crashes)
+
+#### Path C: AVSampleBufferAudioRenderer (Future Architecture — Large Effort)
+- Apple's official "custom player" path for apps that own sourcing/parsing
+- `AVSampleBufferAudioRenderer` + `AVSampleBufferRenderSynchronizer`
+- Feed decoded PCM as CMSampleBuffers with strictly incrementing PTS
+- `audioOutputDeviceUniqueID` property enables per-app routing
+- EQ: reimplement with vDSP.Biquad cascades (Accelerate framework) — sub-0.5ms on Apple Silicon
+- Visualizer: PCM available pre-enqueue, no MTAudioProcessingTap needed
+- **AirPlay picker:** Use "dummy AVPlayer" KVO harvesting technique — bind AVRoutePickerView to empty AVPlayer, observe `audioOutputDeviceUniqueID` via KVO, propagate to renderer
+- **Trade-off:** Massive architectural rewrite. Entire AVAudioEngine graph replaced. New CMSampleBuffer packaging pipeline. New vDSP-based EQ.
+- **Advantage:** Only architecture that satisfies ALL constraints (per-app AirPlay 2, EQ, visualizer, infinite streams)
+
+#### Path D: Core Audio HAL Device Selection (Partial — AirPlay 1 Only)
+- `kAudioOutputUnitProperty_CurrentDevice` on `audioEngine.outputNode.audioUnit`
+- Routes only engine audio, not system-wide
+- **Limitation:** AirPlay 1 only (no enhanced buffering, no multi-room). Fragile on disconnect. Custom UI needed (devices hidden from HAL until connected). No AirPlay 2 features.
+
+#### Path E: Custom Virtual Audio Driver (Out of Scope)
+- Install `.driver` plugin to capture app audio and transmit over AirPlay protocol
+- How Rogue Amoeba Airfoil works
+- Requires system-level installation, breaks sandbox
+
+### WebKit Source Code Evidence
+
+Apple's own WebKit uses SPI (private API) for AirPlay routing:
+```objc
+// From WebKit: MediaPlayerPrivateAVFoundationObjC.mm
+m_avPlayer.get().audioOutputDeviceUniqueID = audioOutputDeviceId.createNSString().get();
+```
+
+WebKit's `AVKitSPI.h` declares a category on `AVRoutePickerView`:
+- `showRoutePickingControlsForOutputContext:relativeToRect:ofView:` — targets a specific `AVOutputContext`
+- `AVOutputContext` exists in runtime headers but is NOT a public API
+
+This confirms: per-app AirPlay routing on macOS is mediated by output contexts, not Core Audio HAL. The mechanism exists but is private/SPI.
+
+### macOS 26 (Tahoe) Assessment
+
+No new public APIs in macOS 26 that bridge `AVRoutePickerView` to non-AVPlayer audio. The gap between Apple's internal SPI and the public API surface remains.
+
+### Decision
+
+**Accept system-wide AirPlay routing (Path A)** for the current architecture. EQ, visualizer, and custom streaming pipeline are non-negotiable for a Winamp clone.
+
+**Document Path C (AVSampleBufferAudioRenderer)** as future architecture for per-app AirPlay 2 if the requirement becomes critical. This would be a separate sprint-level effort.
+
+### Lessons Learned
+
+1. **Test framework assumptions early.** The AVRoutePickerView approach was planned for 5+ months before testing. First real-device test revealed the fundamental incompatibility in minutes.
+2. **macOS ≠ iOS for audio routing.** iOS `AVAudioSession` provides global per-app routing. macOS has no equivalent — `AVPlayer` and `AVAudioEngine` are in completely separate routing worlds.
+3. **Industry leaders can't solve this either.** Spotify, VLC, and IINA all lack per-app AirPlay 2 on macOS. Only Apple Music has it (via private frameworks). This isn't a gap in our research — it's a platform limitation.
+4. **The only public path to per-app AirPlay 2 is AVSampleBufferAudioRenderer.** This preserves PCM access for visualization and allows custom EQ, but requires a complete audio architecture rewrite.
+5. **Oracle and Gemini both missed the fundamental issue.** Multiple rounds of AI review (Oracle 7/10 → 8/10, Gemini validation) did not catch the AVRoutePickerView + AVAudioEngine incompatibility. Only hands-on testing revealed it. Always prototype critical assumptions.
+
+---
+
+## 9. References: Phase 1 Research Sources
+
+### Gemini Research Files (saved in task folder)
+- `research-gemini-avroutepicker-failure.md` — Why AVRoutePickerView fails with AVAudioEngine
+- `research-gemini-airplay-hal.md` — AirPlay devices hidden from Core Audio HAL
+- `research-avplayer-rewrite.md` — AVPlayer rewrite evaluation (rejected)
+- `research-per-app-routing.md` — Per-app routing options (7 approaches evaluated)
+
+### Oracle Deep Research
+- `deep-research-report.md` (external) — Comprehensive analysis of per-app AirPlay on macOS, MTAudioProcessingTap regressions, AVSampleBufferAudioRenderer architecture, WebKit SPI analysis, Spotify/VLC/IINA comparison
+
+### Gemini Deep Research
+- `Per-App AirPlay for Mac Media Player.md` (external) — AVSampleBufferAudioRenderer definitive architecture, vDSP biquad EQ implementation, CMSampleBuffer packaging, dummy AVPlayer KVO harvesting technique, industry analysis (55 citations)

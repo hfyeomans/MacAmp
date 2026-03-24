@@ -24,6 +24,40 @@ The following task folders contain research and plans that are now superseded by
    - Research valid but incomplete (no engine restart logic)
    - **Status:** Superseded by this task's research.md
 
+### Removed: Time Display Color.black Masks (Phase 0)
+
+Two `Color.black` mask rectangles were removed from both `MainWindowFullLayer.buildTimeDisplay()` and `MainWindowShadeLayer.buildShadeTimeDisplay()`. These provided dark backgrounds behind each digit pair but were unnecessary — the skin background already provides the correct appearance.
+
+**Full mode (MainWindowFullLayer.swift, formerly lines 92-100):**
+```swift
+// Minutes mask
+Color.black
+    .frame(width: 21, height: 13)
+    .offset(x: 6, y: 0)
+
+// Seconds mask
+Color.black
+    .frame(width: 21, height: 13)
+    .offset(x: 34, y: 0)
+```
+
+**Shade mode (MainWindowShadeLayer.swift, formerly lines 68-74):**
+```swift
+// Minutes mask
+Color.black
+    .frame(width: 21, height: 13)
+    .offset(x: 6, y: 0)
+
+// Seconds mask
+Color.black
+    .frame(width: 21, height: 13)
+    .offset(x: 34, y: 0)
+```
+
+**Status:** Removed in commit `7643fad`. May need to be restored if some skins require the dark background behind digits. Kept here for reference.
+
+---
+
 ### Code Patterns to Avoid
 
 | Pattern | Why Deprecated | Use Instead |
