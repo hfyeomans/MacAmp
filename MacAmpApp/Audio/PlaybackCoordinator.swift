@@ -348,7 +348,9 @@ final class PlaybackCoordinator {
                 updateLocalPlaybackState(for: track)
             }
         case .playLocally(let track):
-            stopAllBackends()
+            // Only stop stream side — AudioPlayer already started this track
+            audioPlayer.deactivateStreamBridge()
+            streamPlayer.stop()
             updateLocalPlaybackState(for: track)
         case .requestCoordinatorPlayback(let track):
             await play(track: track)
@@ -502,7 +504,13 @@ final class PlaybackCoordinator {
 
         // Disable seek for streams (no duration), enable for local files
         let seekEnabled = currentSource.map { if case .localTrack = $0 { return true } else { return false } } ?? false
-        MPRemoteCommandCenter.shared().changePlaybackPositionCommand.isEnabled = seekEnabled
+        let commandCenter = MPRemoteCommandCenter.shared()
+        commandCenter.changePlaybackPositionCommand.isEnabled = seekEnabled
+
+        // Disable next/previous when no playlist context (e.g., playing a favorite station directly)
+        let hasPlaylist = audioPlayer.playlistCount > 0
+        commandCenter.nextTrackCommand.isEnabled = hasPlaylist
+        commandCenter.previousTrackCommand.isEnabled = hasPlaylist
     }
 
     /// Clear Now Playing info and set playback state to stopped.
