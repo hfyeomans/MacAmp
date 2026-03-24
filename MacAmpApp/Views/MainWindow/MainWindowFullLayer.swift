@@ -112,11 +112,12 @@ struct MainWindowFullLayer: View {
             // Time digits (MM:SS)
             buildTimeDigits()
         }
-        .at(Layout.timeDisplay)
+        .frame(width: 56, height: 13)
         .contentShape(Rectangle())
         .onTapGesture {
             settings.toggleTimeDisplayMode()
         }
+        .at(Layout.timeDisplay)
     }
 
     @ViewBuilder

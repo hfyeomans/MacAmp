@@ -22,20 +22,20 @@
 ## Phase 0: Fix Time Display Hit Area Bug
 
 ### MainWindowFullLayer (full mode)
-- [ ] Add `.frame(width: 56, height: 13)` after ZStack to set full MM:SS bounds
-- [ ] Move `.contentShape(Rectangle())` and `.onTapGesture` BEFORE `.at(Layout.timeDisplay)`
+- [x] Add `.frame(width: 56, height: 13)` after ZStack to set full MM:SS bounds
+- [x] Move `.contentShape(Rectangle())` and `.onTapGesture` BEFORE `.at(Layout.timeDisplay)`
 - [ ] Verify: clicking time digits toggles elapsed/remaining (all 4 digits)
 - [ ] Verify: clicking bolt icon area does NOT toggle time display
 
 ### MainWindowShadeLayer (shade mode)
-- [ ] Add `.frame(width: 56, height: 13)` after ZStack to set full MM:SS bounds
-- [ ] Move `.contentShape(Rectangle())` and `.onTapGesture` BEFORE `.at(Layout.timeDisplay).scaleEffect(0.7).at(...)`
+- [x] Add `.frame(width: 56, height: 13)` after ZStack to set full MM:SS bounds
+- [x] Move `.contentShape(Rectangle())` and `.onTapGesture` BEFORE `.at(Layout.timeDisplay).scaleEffect(0.7).at(...)`
 - [ ] Verify: clicking shade time digits toggles elapsed/remaining
 - [ ] Verify: clicking shade bolt area does NOT toggle time display
 
 ### Build & Test
-- [ ] XcodeBuildMCP build — no compiler errors
-- [ ] XcodeBuildMCP test — all tests pass
+- [x] XcodeBuildMCP build — no compiler errors
+- [x] XcodeBuildMCP test — all 53 tests pass (Thread Sanitizer enabled)
 
 ---
 
