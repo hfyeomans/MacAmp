@@ -1,22 +1,28 @@
 # State: StreamDecodePipeline Decomposition
 
 > **Description:** Tracks readiness, sequencing, and key boundaries for the `StreamDecodePipeline.swift` decomposition task.
-> **Purpose:** Keep this task clearly positioned as post-S2 / pre-S3 streaming cleanup rather than active sprint churn.
+> **Updated:** 2026-03-24 (S2 complete, responsibility map done, plan implementation-ready)
 
 ---
 
 ## Status
 
-Planned. Not started.
+READY TO START. Responsibility map and implementation plan complete.
 
 ## Scheduling
 
-- Start after Sprint S2 stabilizes.
-- Treat this as pre-S3 architecture cleanup, not as part of the lower-priority S3 edge-case queue.
-- **S2 dependency:** `os-workgroup-integration` (S2) may add workgroup code to the audio render path that interacts with this pipeline. Decompose after that S2 task lands so the extraction map reflects the final shape.
+- S2 dependency resolved: `os-workgroup-integration` merged (PR #66). File is at final shape (713 lines).
+- `video-audio-engine-routing` deferred to S3 — no further changes expected.
+- Execution order: **Task 1 of 5** (safest, all extractions rated Safe)
+
+## Current Line Count
+
+713 lines (grew from 631 at planning time due to S2 os-workgroup integration)
 
 ## Key Decision
 
-- This task owns the structural cleanup of `StreamDecodePipeline.swift`.
-- **Decompose in place:** Split the file into smaller pieces within `Audio/Streaming/` (its current location). This file is already in its target directory, so no post-S3 move is needed.
-- It should preserve the unified audio pipeline semantics and focus on ownership clarity inside `Audio/Streaming/`.
+- Decompose in place within `Audio/Streaming/` (already at target location)
+- Extract 4 new files: DecodeContext, SessionDelegateProxy, PlaylistResolver, StreamFormatHint
+- Residual pipeline: ~345 lines
+- StreamState/StreamTerminationReason enums stay in pipeline file (too small for own file)
+- Flag-but-don't-fix dead code and dedup targets in placeholder.md

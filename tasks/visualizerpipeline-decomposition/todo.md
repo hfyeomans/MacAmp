@@ -1,14 +1,30 @@
 # Todo: VisualizerPipeline Decomposition
 
-> **Description:** Checklist for preparing and executing the `VisualizerPipeline.swift` decomposition task.
-> **Purpose:** Keep the work incremental, verifiable, and safe for visualization/audio behavior.
+> **Description:** Checklist for executing the `VisualizerPipeline.swift` decomposition.
+> **Updated:** 2026-03-24 (Oracle review v2 — Phase 2a dedup + dead code removal added)
 
 ---
 
-- [ ] Produce a responsibility map for `VisualizerPipeline.swift`
-- [ ] Separate orchestration concerns from support/data types
-- [ ] Extract the lowest-risk support boundary first
-- [ ] Continue extraction until `VisualizerPipeline.swift` is reduced to a clearer coordinator role
-- [ ] Update paths and regenerate Xcode project if files move
-- [ ] Build and verify visualizer and Butterchurn behavior
-- [ ] Record any intentionally deferred seams in `placeholder.md`
+## Phase 2a: Intra-File Dedup (before extraction)
+
+- [x] Produce a responsibility map for `VisualizerPipeline.swift`
+- [ ] Create branch `refactor/visualizerpipeline-decomposition`
+- [ ] Update state.md to IN PROGRESS
+- [ ] Extract shared `resample(_:to:)` helper (consolidate getRMSData + getWaveformSamples)
+- [ ] Extract `copyBuffer(from:to:count:)` helper in VisualizerSharedBuffer (consolidate 4 memcpy blocks)
+- [ ] Remove dead guards in ScratchBuffers.prepare() (lines 255-261)
+- [ ] Build + test after dedup (verify no behavior change)
+
+## Phase 2b: Structural Extraction
+
+- [ ] Extract `ButterchurnFrame` + `VisualizerData` to `Audio/VisualizerTypes.swift`
+- [ ] Extract `GoertzelCoefficients` + `VisualizerScratchBuffers` to `Audio/VisualizerScratchBuffers.swift` (private -> internal)
+- [ ] Extract `VisualizerSharedBuffer` to `Audio/VisualizerSharedBuffer.swift` (private -> internal)
+- [ ] Extract `makeTapHandler` to `Audio/VisualizerTapHandler.swift` (static -> free function or enum)
+- [ ] Run `xcodegen generate`
+- [ ] XcodeBuildMCP build (Thread Sanitizer enabled)
+- [ ] XcodeBuildMCP test
+- [ ] Oracle review on extraction
+- [ ] Manual test: play local file + stream, verify visualizer + Butterchurn
+- [ ] Push branch -> create PR for user review
+- [ ] Update state.md and shared _context/ on completion

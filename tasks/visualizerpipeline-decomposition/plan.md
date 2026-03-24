@@ -1,31 +1,82 @@
 # Plan: VisualizerPipeline Decomposition
 
-> **Description:** Implementation plan for reducing `VisualizerPipeline.swift` and aligning it with the approved `Audio/Visualization` structure.
-> **Purpose:** Keep the decomposition bounded, behavior-preserving, and safe for the audio/render path.
+> **Description:** Implementation plan for decomposing `VisualizerPipeline.swift` (699 lines) into focused files.
+> **Updated:** 2026-03-24 (Oracle review v2 — added Phase 2a dedup, dead code removal)
 
 ---
 
 ## Objective
 
-Decompose `MacAmpApp/Audio/VisualizerPipeline.swift` so the top-level pipeline focuses on orchestration while support/data responsibilities move into clearer neighbors.
+Reduce `VisualizerPipeline.swift` from 699 to ~258 lines by first deduplicating intra-file logic, then extracting support types and the tap handler into neighboring files within `Audio/`.
 
-## Candidate Extraction Boundaries
+## Phase 2a: Intra-File Dedup BEFORE Extraction
 
-- shared-buffer and scratch-buffer support types
-- Butterchurn frame and FFT-specific support
-- UI-facing waveform / RMS / spectrum mapping helpers
-- tap-lifecycle coordination versus pure data-processing responsibilities
+Per Oracle + Gemini hybrid guidance: deduplicate while code is visible side-by-side.
+
+### Dedup 1: Nearest-Neighbor Resampling Helper
+
+`getRMSData(bands:)` (lines 493-500) and `getWaveformSamples(count:)` (lines 514-521) share identical resampling: `(i * sourceCount) / targetCount`.
+
+**Action:** Extract `private func resample(_ source: [Float], to targetCount: Int) -> [Float]` helper. Both methods call it.
+
+### Dedup 2: tryPublish memcpy Helper
+
+`tryPublish` has 4 nearly identical `withUnsafeBufferPointer`/`memcpy` blocks (lines 58-64, 69-75, 95-102, 105-112).
+
+**Action:** Extract `private func copyBuffer(from source: [Float], to destination: inout [Float], count: Int)` helper inside VisualizerSharedBuffer. All 4 blocks call it.
+
+### Dead Code Removal (during decomposition, per Oracle)
+
+- Remove dead guards in `ScratchBuffers.prepare()` (lines 255-261) — `if rms.count < bars` and `if spectrum.count < bars` can never trigger (pre-allocated at maxBars=20).
+
+## Phase 2b: Structural Extraction
+
+### Step 1: Extract `VisualizerTypes.swift` (Safe, ~22 lines)
+
+Move `ButterchurnFrame` and `VisualizerData` structs (lines 6-27). Sendable value types consumed across file boundaries.
+
+### Step 2: Extract `VisualizerScratchBuffers.swift` (Safe, ~185 lines)
+
+Move `GoertzelCoefficients` + `VisualizerScratchBuffers` together. Change `private` to `internal`.
+
+### Step 3: Extract `VisualizerSharedBuffer.swift` (Moderate, ~115 lines)
+
+Move `VisualizerSharedBuffer` class. Change `private` to `internal`. Includes the new `copyBuffer` helper from dedup.
+
+### Step 4: Extract `VisualizerTapHandler.swift` (Safe, ~102 lines)
+
+Move `makeTapHandler(sharedBuffer:scratch:)`. Convert from `private static` to free function or enum namespace.
+
+### Step 5: Slim residual pipeline
+
+VisualizerPipeline retains: tap lifecycle, data storage/config, data access methods (with shared `resample` helper), level smoothing, poll timer. ~258 lines.
+
+## New Files Created
+
+| File | Lines | Source |
+|------|-------|--------|
+| `Audio/VisualizerTypes.swift` | ~22 | Public Sendable structs |
+| `Audio/VisualizerScratchBuffers.swift` | ~185 | Goertzel + scratch buffers (dead guards removed) |
+| `Audio/VisualizerSharedBuffer.swift` | ~115 | Thread-safe data bridge (with copyBuffer helper) |
+| `Audio/VisualizerTapHandler.swift` | ~102 | Tap callback (nonisolated static) |
+
+**Total new files: 4**
+**Residual VisualizerPipeline.swift: ~258 lines**
 
 ## Constraints
 
-- Preserve current visualizer and Butterchurn behavior.
-- Preserve audio-thread safety and existing confinement assumptions.
-- **Decompose in place:** Create new files in `Audio/` (current location). Do not move files to `Audio/Visualization/` — all folder-level consolidation is deferred to the post-S3 Structure Sprint (D-STRUCTURE decision 2026-03-15).
-- Avoid introducing churn into unrelated audio files during the split.
+- Preserve audio-thread safety and confinement assumptions
+- Preserve visualizer and Butterchurn rendering behavior
+- Decompose in place within `Audio/` — no moves to `Audio/Visualization/` (deferred to post-S3)
+- Phase 2a dedup: consolidate intra-file duplicates before splitting
+- Remove trivially dead code during decomposition (dead guards)
+- Minimum visibility: `internal` only for types that must be visible across files
 
 ## Verification
 
-- Visualizer bars still update correctly during playback
-- Butterchurn still receives frame data correctly
+- Visualizer bars update correctly during local + stream playback
+- Butterchurn receives frame data correctly (spectrum + waveform)
 - Tap install/remove behavior remains correct
-- Project builds after any file moves and XcodeGen regeneration if needed
+- No frame drops or audio glitches during visualization
+- `xcodegen generate` + XcodeBuildMCP build + test pass
+- Thread Sanitizer clean

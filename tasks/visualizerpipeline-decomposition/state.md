@@ -1,22 +1,27 @@
 # State: VisualizerPipeline Decomposition
 
-> **Description:** Tracks readiness, sequencing, and key boundaries for the `VisualizerPipeline.swift` decomposition task.
-> **Purpose:** Keep this task clearly positioned as post-S2 / pre-S3 visualization cleanup rather than active sprint churn.
+> **Description:** Tracks readiness and progress for the `VisualizerPipeline.swift` decomposition task.
+> **Updated:** 2026-03-24 (S2 complete, responsibility map done, plan implementation-ready)
 
 ---
 
 ## Status
 
-Planned. Not started.
+READY TO START. Responsibility map and implementation plan complete.
 
 ## Scheduling
 
-- Start after Sprint S2 stabilizes.
-- Treat this as pre-S3 architecture cleanup, not as part of the lower-priority S3 edge-case queue.
-- **S2 dependency:** `video-audio-engine-routing` (S2) may add video visualization support that touches this file. Decompose after that S2 task lands so the extraction map reflects the final shape.
+- S2 dependency resolved: `video-audio-engine-routing` deferred to S3 — file is at final shape (699 lines).
+- Execution order: **Task 2 of 5** (clean section boundaries, well-understood threading)
+
+## Current Line Count
+
+699 lines (unchanged from planning time)
 
 ## Key Decision
 
-- This task owns the structural cleanup of `VisualizerPipeline.swift`.
-- **Decompose in place:** Split the file into smaller pieces within `Audio/` (its current location). Do not move files to `Audio/Visualization/` as part of this task — all folder-level consolidation is deferred to the post-S3 Structure Sprint (D-STRUCTURE decision 2026-03-15).
-- It should preserve the existing runtime behavior and focus on internal ownership boundaries.
+- Decompose in place within `Audio/` — no moves to `Audio/Visualization/` (post-S3)
+- Extract 4 new files: VisualizerTypes, VisualizerScratchBuffers, VisualizerSharedBuffer, VisualizerTapHandler
+- Residual pipeline: ~268 lines
+- Private types become internal (minimum required visibility)
+- Flag near-duplicate code for future dedup pass in placeholder.md

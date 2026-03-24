@@ -1,14 +1,23 @@
 # Todo: StreamDecodePipeline Decomposition
 
-> **Description:** Checklist for preparing and executing the `StreamDecodePipeline.swift` decomposition task.
-> **Purpose:** Keep the work incremental, verifiable, and safe for the streaming pipeline.
+> **Description:** Checklist for executing the `StreamDecodePipeline.swift` decomposition.
+> **Updated:** 2026-03-24 (implementation-ready)
 
 ---
 
-- [ ] Produce a responsibility map for `StreamDecodePipeline.swift`
-- [ ] Decide which nested/support types should move into dedicated neighbors
-- [ ] Extract the lowest-risk support boundary first
-- [ ] Continue extraction until the top-level pipeline file has a narrower owner role
-- [ ] Update paths and regenerate Xcode project if files move
-- [ ] Build and verify startup, buffering, metadata, and error handling
-- [ ] Record any intentionally deferred seams in `placeholder.md`
+- [x] Produce a responsibility map for `StreamDecodePipeline.swift`
+- [ ] Create branch `refactor/streamdecodepipeline-decomposition`
+- [ ] Update state.md to IN PROGRESS
+- [ ] Extract `DecodeContext` class to `Audio/Streaming/DecodeContext.swift` (private -> internal)
+- [ ] Extract `SessionDelegateProxy` class to `Audio/Streaming/SessionDelegateProxy.swift` (private -> internal)
+- [ ] Extract static playlist resolution to `Audio/Streaming/PlaylistResolver.swift` (include PlaylistResolveError)
+- [ ] Extract static format hints to `Audio/Streaming/StreamFormatHint.swift`
+- [ ] Flag dead code `formatHint(forContentType:)` in placeholder.md
+- [ ] Flag intentional dual `extractICYMetaInt` calls in placeholder.md (not a bug)
+- [ ] Run `xcodegen generate`
+- [ ] XcodeBuildMCP build (Thread Sanitizer enabled)
+- [ ] XcodeBuildMCP test
+- [ ] Oracle review on extraction
+- [ ] Manual test: play internet radio stream, verify metadata/reconnect
+- [ ] Push branch -> create PR for user review
+- [ ] Update state.md and shared _context/ on completion
