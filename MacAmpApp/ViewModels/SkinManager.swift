@@ -745,12 +745,12 @@ final class SkinManager {
         return .winampDefault
     }
 
-    /// Parse visualizer colors from viscolor.txt data, falling back to provided default.
-    private static func parseVisualizerColors(from viscolorData: Data?, fallback: [Color] = defaultVisualizerColors) -> [Color] {
+    /// Parse visualizer colors from viscolor.txt data, falling back to Winamp defaults.
+    private static func parseVisualizerColors(from viscolorData: Data?) -> [Color] {
         if let data = viscolorData, let colors = VisColorParser.parse(from: data) {
             return colors
         }
-        return fallback
+        return defaultVisualizerColors
     }
 
     private static func describeLoadError(_ error: Error, url: URL) -> String {

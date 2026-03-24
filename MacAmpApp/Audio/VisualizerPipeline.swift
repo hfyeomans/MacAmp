@@ -49,7 +49,7 @@ private final class VisualizerSharedBuffer: @unchecked Sendable {
 
     /// Copy Float elements via memcpy. Audio-thread safe (no allocation).
     private func copyFloatBuffer(from source: [Float], to destination: inout [Float], count: Int? = nil) {
-        let n = count ?? min(source.count, destination.count)
+        let n = min(count ?? min(source.count, destination.count), min(source.count, destination.count))
         guard n > 0 else { return }
         source.withUnsafeBufferPointer { src in
             destination.withUnsafeMutableBufferPointer { dst in
