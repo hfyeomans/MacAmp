@@ -3,8 +3,8 @@
 > **Purpose:** Implementation plan for adding AirPlay output routing, Now Playing system integration, and UX discoverability to MacAmp. All three phases plus prerequisite bugfix. Derived from Oracle-corrected research, updated for current codebase.
 
 **Date:** 2026-02-07 (original), **Updated:** 2026-03-23
-**Status:** Oracle Reviewed (8/10) — Ready for user approval
-**Oracle Reviews:** gpt-5.4 xhigh — Round 1: 7/10 (7 corrections), Round 2: 8/10 (4 gaps), Round 3: 8/10 (3 refinements applied)
+**Status:** HISTORICAL — Phase 1 (AirPlay triggers) DEFUNCT, Phase 2 (Now Playing) COMPLETE. See state.md for current status.
+**Oracle Reviews:** Plan: 7→8→8/10. Implementation: 6→7→6→7→9/10.
 **Estimated Effort:** 5-7 hours total (all phases incl. bugfix)
 
 ---
@@ -29,7 +29,7 @@
 
 ## Three-Layer Architecture Alignment
 
-```
+```text
 Mechanism Layer:
 ├─ AudioEngineController — engine config change observer, engine restart
 ├─ StreamPlayer — stream metadata (streamTitle, streamArtist), elapsed time

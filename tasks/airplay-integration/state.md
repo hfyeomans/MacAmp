@@ -107,10 +107,12 @@ AVAudioPlayerNode → AVAudioUnitEQ → mainMixerNode → outputNode → [System
 - Engine restarts with new output format
 - EQ, visualizer, stream bridge all preserved through restart
 
-### What's Still Needed
-1. **Engine config observer** — handle route changes from system Control Center
-2. **Now Playing** — MPNowPlayingInfoCenter + MPRemoteCommandCenter in PlaybackCoordinator
-3. **No in-app AirPlay UI** — users use macOS Control Center
+### What's Still Needed (Future Work)
+1. **Engine config observer** — handle route changes when users switch output via macOS Control Center (deferred)
+
+### Completed
+2. ~~**Now Playing**~~ — DONE. MPNowPlayingInfoCenter + MPRemoteCommandCenter in PlaybackCoordinator (Oracle 9/10)
+3. **No in-app AirPlay UI** — users use macOS Control Center (accepted limitation)
 
 ---
 
