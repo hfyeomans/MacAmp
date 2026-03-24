@@ -641,15 +641,10 @@ final class SkinManager {
                 // Try to use default skin sprites first (all BMPs from Winamp.wsz)
                 if let defaultSprites = fallbackSpritesFromDefaultSkin(sheet: sheetName, sprites: sprites) {
                     AppLog.debug(.skin, "Using default Winamp skin sprites for \(sheetName)")
-                    for (name, image) in defaultSprites {
-                        extractedImages[name] = image
-                    }
+                    extractedImages.merge(defaultSprites) { _, new in new }
                 } else {
                     // Last resort: transparent fallback
-                    let fallbackSprites = createFallbackSprites(forSheet: sheetName, sprites: sprites)
-                    for (name, image) in fallbackSprites {
-                        extractedImages[name] = image
-                    }
+                    extractedImages.merge(createFallbackSprites(forSheet: sheetName, sprites: sprites)) { _, new in new }
                 }
                 // Don't add to loadedSheets - using fallback
                 continue
@@ -657,10 +652,7 @@ final class SkinManager {
 
             guard let sheetImage = NSImage(data: data) else {
                 AppLog.error(.skin, "Failed to decode image data for sheet: \(sheetName)")
-                let fallbackSprites = createFallbackSprites(forSheet: sheetName, sprites: sprites)
-                for (name, image) in fallbackSprites {
-                    extractedImages[name] = image
-                }
+                extractedImages.merge(createFallbackSprites(forSheet: sheetName, sprites: sprites)) { _, new in new }
                 // Don't add to loadedSheets - using fallback
                 continue
             }
@@ -739,8 +731,6 @@ final class SkinManager {
         currentSkin = newSkin
         AppLog.info(.skin, "Skin loaded successfully from \(sourceURL.lastPathComponent)")
     }
-
-    // MARK: - Shared Parsing Helpers
 
     // MARK: - Shared Parsing Helpers
 
