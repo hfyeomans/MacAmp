@@ -20,6 +20,15 @@ final class PlaylistWindowActions: NSObject {
         alert.runModal()
     }
 
+    private func showErrorAlert(_ title: String, error: Error) {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = error.localizedDescription
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+    }
+
     // MARK: - Unified Auto-Play
 
     /// Auto-play the first playlist track via coordinator if the playlist was previously empty.
@@ -102,23 +111,14 @@ final class PlaylistWindowActions: NSObject {
     /// Parse M3U off main actor, add entries on main actor. Async — caller can await.
     private func parseAndAddM3U(_ url: URL, audioPlayer: AudioPlayer) async {
         let result: Result<[M3UEntry], Error> = await Task.detached(priority: .userInitiated) {
-            do {
-                return .success(try M3UParser.parse(fileURL: url))
-            } catch {
-                return .failure(error)
-            }
+            Result { try M3UParser.parse(fileURL: url) }
         }.value
 
         switch result {
         case .success(let entries):
             addEntries(entries, to: audioPlayer)
         case .failure(let error):
-            let alert = NSAlert()
-            alert.messageText = "Failed to Load M3U Playlist"
-            alert.informativeText = error.localizedDescription
-            alert.alertStyle = .warning
-            alert.addButton(withTitle: "OK")
-            alert.runModal()
+            showErrorAlert("Failed to Load M3U Playlist", error: error)
         }
     }
 
@@ -269,12 +269,7 @@ final class PlaylistWindowActions: NSObject {
                         try M3UWriter.write(tracks: tracks, to: url)
                     } catch {
                         await MainActor.run {
-                            let alert = NSAlert()
-                            alert.messageText = "Failed to Save Playlist"
-                            alert.informativeText = error.localizedDescription
-                            alert.alertStyle = .warning
-                            alert.addButton(withTitle: "OK")
-                            alert.runModal()
+                            self.showErrorAlert("Failed to Save Playlist", error: error)
                         }
                     }
                 }
@@ -301,12 +296,7 @@ final class PlaylistWindowActions: NSObject {
                 self.loadListGeneration &+= 1
                 let expectedGeneration = self.loadListGeneration
                 Task.detached(priority: .userInitiated) {
-                    let result: Result<[M3UEntry], Error>
-                    do {
-                        result = .success(try M3UParser.parse(fileURL: url))
-                    } catch {
-                        result = .failure(error)
-                    }
+                    let result = Result { try M3UParser.parse(fileURL: url) }
 
                     switch result {
                     case .success(let entries):
@@ -328,12 +318,7 @@ final class PlaylistWindowActions: NSObject {
                         }
                     case .failure(let error):
                         await MainActor.run {
-                            let alert = NSAlert()
-                            alert.messageText = "Failed to Load Playlist"
-                            alert.informativeText = error.localizedDescription
-                            alert.alertStyle = .warning
-                            alert.addButton(withTitle: "OK")
-                            alert.runModal()
+                            self.showErrorAlert("Failed to Load Playlist", error: error)
                         }
                     }
                 }
