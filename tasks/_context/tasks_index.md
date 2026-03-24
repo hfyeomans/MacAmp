@@ -27,7 +27,7 @@
 | `os-workgroup-integration` | Apple Silicon os_workgroup for audio render thread | Small | ✅ COMPLETE — PR #66 merged. Oracle 8.5/10. |
 | `stream-track-counter` | Stream elapsed timer + playlist position + auto-play fix + crash guard | Medium | ✅ COMPLETE — PR #68 merged. Oracle 8/10. |
 | `playlist-list-operations` | NEW LIST, LOAD LIST, SAVE LIST buttons in playlist window | Medium | ✅ COMPLETE — PR #67 merged. Oracle 9/10. |
-| `airplay-integration` | ~~AirPlay routing~~ + Now Playing + remote commands | Medium | 🔄 IN PROGRESS — Phase 0 complete, Phase 1 DEFUNCT, Phase 2 complete (Oracle 9/10). Ready for PR. |
+| `airplay-integration` | ~~AirPlay routing~~ + Now Playing + remote commands | Medium | ✅ COMPLETE — PR #69 merged. Phase 1 (AirPlay triggers) DEFUNCT. Phase 2 (Now Playing + remote commands) Oracle 9/10. |
 
 ---
 
