@@ -208,24 +208,28 @@ final class PlaybackCoordinator {
 
     // MARK: - Unified Playback Control
 
+    /// Stop both backends and deactivate the stream bridge.
+    /// Shared teardown used before switching sources or stopping entirely.
+    private func stopAllBackends() {
+        audioPlayer.deactivateStreamBridge()
+        audioPlayer.stop()
+        streamPlayer.stop()
+    }
+
     /// Play a track from the playlist (supports both local files and streams)
     func play(track: Track) async {
         audioPlayer.updatePlaylistPosition(with: track)
         currentTrack = track
 
         if track.isStream {
-            // Stop local file if playing
-            audioPlayer.deactivateStreamBridge()
-            audioPlayer.stop()
+            stopAllBackends()
 
             // Play stream via StreamPlayer (bridge activates via onFormatReady callback)
             await streamPlayer.play(url: track.url, title: track.title, artist: track.artist)
             currentSource = .radioStation(RadioStation(name: track.title, streamURL: track.url))
             currentTitle = track.title
         } else {
-            // Stop stream + deactivate bridge if playing
-            audioPlayer.deactivateStreamBridge()
-            streamPlayer.stop()
+            stopAllBackends()
 
             // Play local file via AudioPlayer
             audioPlayer.playTrack(track: track)
@@ -236,9 +240,7 @@ final class PlaybackCoordinator {
 
     /// Play a radio station from favorites menu
     func play(station: RadioStation) async {
-        // Stop local file + deactivate any existing bridge
-        audioPlayer.deactivateStreamBridge()
-        audioPlayer.stop()
+        stopAllBackends()
 
         // Play stream
         await streamPlayer.play(station: station)
@@ -261,9 +263,7 @@ final class PlaybackCoordinator {
     }
 
     func stop() {
-        audioPlayer.deactivateStreamBridge()
-        audioPlayer.stop()
-        streamPlayer.stop()
+        stopAllBackends()
         currentSource = nil
         currentTitle = nil
         currentTrack = nil  // Clear so playlist highlighting resets
@@ -348,8 +348,7 @@ final class PlaybackCoordinator {
                 updateLocalPlaybackState(for: track)
             }
         case .playLocally(let track):
-            audioPlayer.deactivateStreamBridge()
-            streamPlayer.stop()
+            stopAllBackends()
             updateLocalPlaybackState(for: track)
         case .requestCoordinatorPlayback(let track):
             await play(track: track)
