@@ -173,7 +173,7 @@ final class SkinManager {
         defaultSkinSpriteCache = extractedImages
         defaultSkinExtractedSheets = loadedSheets
 
-        let playlistStyle = Self.parsePlaylistStyle(from: payload.pledit)
+        let playlistStyle = Self.parsePlaylistStyle(from: payload.pledit, fallback: .winampDefault)
         let visualizerColors = Self.parseVisualizerColors(from: payload.viscolor, fallback: Self.defaultVisualizerColors)
 
         return Skin(
@@ -715,7 +715,7 @@ final class SkinManager {
             AppLog.info(.skin, "All sprites loaded successfully!")
         }
 
-        let playlistStyle = Self.parsePlaylistStyle(from: payload.pledit)
+        let playlistStyle = Self.parsePlaylistStyle(from: payload.pledit, fallback: .pleditParserDefault)
         let visualizerColors = Self.parseVisualizerColors(from: payload.viscolor, fallback: [])
 
         // VIDEO.bmp sprites now handled by standard extraction loop (like PLEDIT)
@@ -737,12 +737,13 @@ final class SkinManager {
     /// Winamp 2.x default visualizer colors (24 green entries, used when viscolor.txt is missing).
     private static let defaultVisualizerColors: [Color] = (0..<24).map { _ in Color.green }
 
-    /// Parse playlist style from pledit.txt data, falling back to Winamp defaults.
-    private static func parsePlaylistStyle(from pleditData: Data?) -> PlaylistStyle {
+    /// Parse playlist style from pledit.txt data, falling back to provided default.
+    /// Default skin uses .winampDefault (green text); custom skins use PLEditParser's own fallbacks (white text).
+    private static func parsePlaylistStyle(from pleditData: Data?, fallback: PlaylistStyle) -> PlaylistStyle {
         if let data = pleditData, let parsed = PLEditParser.parse(from: data) {
             return parsed
         }
-        return .winampDefault
+        return fallback
     }
 
     /// Parse visualizer colors from viscolor.txt data, falling back to provided default.
