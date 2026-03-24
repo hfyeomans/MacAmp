@@ -89,16 +89,6 @@ struct MainWindowFullLayer: View {
     @ViewBuilder
     private func buildTimeDisplay() -> some View {
         ZStack(alignment: .leading) {
-            // Minutes mask
-            Color.black
-                .frame(width: 21, height: 13)
-                .offset(x: 6, y: 0)
-
-            // Seconds mask
-            Color.black
-                .frame(width: 21, height: 13)
-                .offset(x: 34, y: 0)
-
             // Minus sign for remaining time (hidden for streams — no known duration)
             if settings.timeDisplayMode == .remaining && playbackCoordinator.displayDuration > 0 {
                 ZStack(alignment: .topLeading) {
@@ -112,7 +102,7 @@ struct MainWindowFullLayer: View {
             // Time digits (MM:SS)
             buildTimeDigits()
         }
-        .frame(width: 56, height: 13)
+        .frame(width: 56, height: 13, alignment: .leading)
         .contentShape(Rectangle())
         .onTapGesture {
             settings.toggleTimeDisplayMode()
@@ -130,12 +120,12 @@ struct MainWindowFullLayer: View {
         let shouldShowDigits = !playbackCoordinator.isPaused || interactionState.pauseBlinkVisible
 
         if shouldShowDigits {
-            SimpleSpriteImage(.digit(digits[0]), width: 9, height: 13).offset(x: 6, y: 0)
-            SimpleSpriteImage(.digit(digits[1]), width: 9, height: 13).offset(x: 17, y: 0)
+            SimpleSpriteImage(.digit(digits[0]), width: 9, height: 13).offset(x: 8, y: 0)
+            SimpleSpriteImage(.digit(digits[1]), width: 9, height: 13).offset(x: 19, y: 0)
         }
         if shouldShowDigits {
-            SimpleSpriteImage(.digit(digits[2]), width: 9, height: 13).offset(x: 35, y: 0)
-            SimpleSpriteImage(.digit(digits[3]), width: 9, height: 13).offset(x: 46, y: 0)
+            SimpleSpriteImage(.digit(digits[2]), width: 9, height: 13).offset(x: 39, y: 0)
+            SimpleSpriteImage(.digit(digits[3]), width: 9, height: 13).offset(x: 50, y: 0)
         }
     }
 

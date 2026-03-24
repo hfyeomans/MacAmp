@@ -2,8 +2,8 @@
 
 > **Purpose:** Documents deprecated or legacy code findings related to the AirPlay integration. Per project conventions, we report deprecated code here instead of adding `// Deprecated` or `// Legacy` comments in code. Code identified here should be removed, not preserved.
 
-**Date:** 2026-02-07
-**Status:** No deprecated code identified (implementation not started)
+**Date:** 2026-02-07, **Updated:** 2026-03-23
+**Status:** Phase 0 — black masks removed, digit positions adjusted
 
 ---
 
@@ -34,6 +34,50 @@ The following task folders contain research and plans that are now superseded by
 | Custom device enumeration via AVAudioDevice | Only shows local devices, not AirPlay | System picker handles discovery |
 | `picker.isRouteDetectionEnabled` | Property doesn't exist on macOS | Use minimal AVRoutePickerView |
 | `picker.routePickerButtonStyle` | Property doesn't exist on macOS | Use minimal AVRoutePickerView |
+
+---
+
+## Removed Code (Phase 0) — May Need Restoration
+
+### Color.black Masks (Time Display)
+
+Removed from both `MainWindowFullLayer.buildTimeDisplay()` and `MainWindowShadeLayer.buildShadeTimeDisplay()`. These were black rectangles behind each digit pair to mask the skin background.
+
+**Full mode (MainWindowFullLayer.swift, was lines 92-100):**
+```swift
+// Minutes mask
+Color.black
+    .frame(width: 21, height: 13)
+    .offset(x: 6, y: 0)
+
+// Seconds mask
+Color.black
+    .frame(width: 21, height: 13)
+    .offset(x: 34, y: 0)
+```
+
+**Shade mode (MainWindowShadeLayer.swift, was lines 68-74):**
+```swift
+Color.black
+    .frame(width: 21, height: 13)
+    .offset(x: 6, y: 0)
+
+Color.black
+    .frame(width: 21, height: 13)
+    .offset(x: 34, y: 0)
+```
+
+**Why removed:** The masks covered the skin's native colon and digit area. Without them, the skin background shows through correctly. **May need restoration** if some skins have artifacts in the digit area without masking — test with multiple skins.
+
+### Digit Position Changes (Full Mode)
+
+Original → Current positions:
+| Digit | Original x | Current x | Change |
+|-------|-----------|-----------|--------|
+| digits[0] (min tens) | 6 | 8 | +2px |
+| digits[1] (min ones) | 17 | 19 | +2px |
+| digits[2] (sec tens) | 35 | 39 | +4px |
+| digits[3] (sec ones) | 46 | 50 | +4px |
 
 ---
 
