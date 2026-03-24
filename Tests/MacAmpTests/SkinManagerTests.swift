@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import SwiftUI
 @testable import MacAmp
 
 @MainActor
@@ -31,6 +32,34 @@ struct SkinManagerTests {
         manager.loadSkin(from: invalidURL)
         try await waitUntilNotLoading(manager)
         #expect(manager.loadingError != nil)
+    }
+
+    @Test("loadSkin parses playlist style colors from pledit.txt",
+          .tags(.skin), .timeLimit(.minutes(1)))
+    func loadDefaultSkinHasCorrectPlaylistStyle() async throws {
+        let manager = SkinManager()
+        let skinURL = try bundledSkinURL(named: "Winamp")
+        manager.loadSkin(from: skinURL)
+        try await waitUntilNotLoading(manager)
+
+        let skin = try #require(manager.currentSkin)
+        let style = skin.playlistStyle
+        // The bundled Winamp skin has a pledit.txt, so all colors should be parsed
+        #expect(style.normalTextColor != Color.clear)
+        #expect(style.currentTextColor != Color.clear)
+        #expect(style.backgroundColor != Color.clear)
+    }
+
+    @Test("loadSkin parses visualizer colors from viscolor.txt",
+          .tags(.skin), .timeLimit(.minutes(1)))
+    func loadDefaultSkinHasVisualizerColors() async throws {
+        let manager = SkinManager()
+        let skinURL = try bundledSkinURL(named: "Winamp")
+        manager.loadSkin(from: skinURL)
+        try await waitUntilNotLoading(manager)
+
+        let skin = try #require(manager.currentSkin)
+        #expect(skin.visualizerColors.count == 24)
     }
 
     private func bundledSkinURL(named name: String) throws -> URL {

@@ -44,6 +44,15 @@ struct PlaylistStyle: Sendable {
     let backgroundColor: Color
     let selectedBackgroundColor: Color
     let fontName: String?
+
+    /// Winamp 2.x hardcoded defaults: green text, white current, black bg, #0000C6 selected.
+    static let winampDefault = PlaylistStyle(
+        normalTextColor: Color(red: 0, green: 1.0, blue: 0),
+        currentTextColor: .white,
+        backgroundColor: .black,
+        selectedBackgroundColor: Color(red: 0, green: 0, blue: 0.776),
+        fontName: nil
+    )
 }
 
 // MARK: - Skin Metadata (for skin picker/switcher)

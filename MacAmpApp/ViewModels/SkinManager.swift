@@ -1,5 +1,4 @@
 import Foundation
-import Combine
 @preconcurrency import ZIPFoundation
 import AppKit
 import CoreGraphics // For CGRect
@@ -174,25 +173,8 @@ final class SkinManager {
         defaultSkinSpriteCache = extractedImages
         defaultSkinExtractedSheets = loadedSheets
 
-        let playlistStyle: PlaylistStyle
-        if let pleditData = payload.pledit, let parsed = PLEditParser.parse(from: pleditData) {
-            playlistStyle = parsed
-        } else {
-            playlistStyle = PlaylistStyle(
-                normalTextColor: Color.green,
-                currentTextColor: Color.white,
-                backgroundColor: Color.black,
-                selectedBackgroundColor: Color.blue,
-                fontName: nil
-            )
-        }
-
-        let visualizerColors: [Color]
-        if let visData = payload.viscolor, let colors = VisColorParser.parse(from: visData) {
-            visualizerColors = colors
-        } else {
-            visualizerColors = (0..<24).map { _ in Color.green }
-        }
+        let playlistStyle = Self.parsePlaylistStyle(from: payload.pledit)
+        let visualizerColors = Self.parseVisualizerColors(from: payload.viscolor)
 
         return Skin(
             visualizerColors: visualizerColors,
@@ -741,21 +723,8 @@ final class SkinManager {
             AppLog.info(.skin, "All sprites loaded successfully!")
         }
 
-        var playlistStyle = PlaylistStyle(
-            normalTextColor: .white,
-            currentTextColor: .white,
-            backgroundColor: .black,
-            selectedBackgroundColor: Color(red: 0, green: 0, blue: 0.776),
-            fontName: nil
-        )
-        if let pleditData = payload.pledit, let parsed = PLEditParser.parse(from: pleditData) {
-            playlistStyle = parsed
-        }
-
-        var visualizerColors: [Color] = []
-        if let visData = payload.viscolor, let colors = VisColorParser.parse(from: visData) {
-            visualizerColors = colors
-        }
+        let playlistStyle = Self.parsePlaylistStyle(from: payload.pledit)
+        let visualizerColors = Self.parseVisualizerColors(from: payload.viscolor)
 
         // VIDEO.bmp sprites now handled by standard extraction loop (like PLEDIT)
         // No special parsing needed - defined in SkinSprites.swift
@@ -769,6 +738,29 @@ final class SkinManager {
 
         currentSkin = newSkin
         AppLog.info(.skin, "Skin loaded successfully from \(sourceURL.lastPathComponent)")
+    }
+
+    // MARK: - Shared Parsing Helpers
+
+    // MARK: - Shared Parsing Helpers
+
+    /// Winamp 2.x default visualizer colors (24 green entries, used when viscolor.txt is missing).
+    private static let defaultVisualizerColors: [Color] = (0..<24).map { _ in Color.green }
+
+    /// Parse playlist style from pledit.txt data, falling back to Winamp defaults.
+    private static func parsePlaylistStyle(from pleditData: Data?) -> PlaylistStyle {
+        if let data = pleditData, let parsed = PLEditParser.parse(from: data) {
+            return parsed
+        }
+        return .winampDefault
+    }
+
+    /// Parse visualizer colors from viscolor.txt data, falling back to provided default.
+    private static func parseVisualizerColors(from viscolorData: Data?, fallback: [Color] = defaultVisualizerColors) -> [Color] {
+        if let data = viscolorData, let colors = VisColorParser.parse(from: data) {
+            return colors
+        }
+        return fallback
     }
 
     private static func describeLoadError(_ error: Error, url: URL) -> String {
