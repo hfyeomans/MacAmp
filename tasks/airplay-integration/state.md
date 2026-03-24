@@ -29,9 +29,12 @@
 - [x] Phase 1 AirPlay triggers — AVRoutePickerView is designed for AVPlayer per-app routing, NOT system-wide output switching for AVAudioEngine
 
 ### Still Viable
-- [ ] Engine config observer (for system Control Center route changes)
-- [ ] Phase 2: Now Playing + remote commands (independent of AirPlay trigger)
-- [ ] Phase 3: Discoverability (scope reduced — no in-app AirPlay button)
+- [ ] Engine config observer (deferred to future work — needed when users switch output via macOS Control Center)
+- [ ] Phase 2: Now Playing + remote commands (independent of AirPlay trigger) — IN PROGRESS
+
+### Defunct
+- Phase 1: AirPlay triggers (AVRoutePickerView + dual overlays) — ABANDONED
+- Phase 3: Discoverability UX (no in-app AirPlay button to discover) — ABANDONED
 
 ---
 

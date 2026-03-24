@@ -39,86 +39,11 @@
 
 ---
 
-## Phase 1: Core AirPlay + Engine Restart
+## ~~Phase 1: Core AirPlay + Engine Restart~~ — DEFUNCT
 
-### Create AirPlayRoutePicker Component
-- [ ] Create `MacAmpApp/Views/Components/AirPlayRoutePicker.swift`
-- [ ] Import SwiftUI and AVKit (NOT AVFoundation)
-- [ ] Implement NSViewRepresentable wrapping AVRoutePickerView
-- [ ] Set `isRoutePickerButtonBordered = false`
-- [ ] Set `alphaValue = 0.01` (invisible but hit-testable)
-- [ ] Set `setRoutePickerButtonColor(.clear, for: .normal)`
-- [ ] Set `toolTip = "AirPlay"`
-- [ ] Verify compiles
-
-### Add Layout Constants
-- [ ] Add `airPlayBolt` coordinate to `WinampMainWindowLayout.swift` (~3, 1)
-- [ ] Add `airPlayBoltSize` to `WinampMainWindowLayout.swift` (12x12)
-- [ ] Add `airPlayLogo` coordinate to `WinampMainWindowLayout.swift` (~249, 87)
-- [ ] Add `airPlayLogoSize` to `WinampMainWindowLayout.swift` (26x20)
-
-### Position Primary Trigger (bolt icon — both modes)
-- [ ] Add AirPlayRoutePicker overlay as LAST child of ZStack in `WinampMainWindow.swift`
-- [ ] Must be LAST = highest z-order (above drag handle AND shade/full layers)
-- [ ] Frame: `Layout.airPlayBoltSize`, position: `Layout.airPlayBolt`
-- [ ] Verify doesn't interfere with titlebar drag (small 12x12 area)
-- [ ] Verify works in full mode
-- [ ] Verify works in shade mode
-
-### Position Secondary Trigger (WA logo — full mode only)
-- [ ] Add AirPlayRoutePicker overlay to Group in `MainWindowFullLayer.swift`
-- [ ] Frame: `Layout.airPlayLogoSize`, position: `Layout.airPlayLogo`
-- [ ] Verify auto-hides in shade mode (MainWindowFullLayer not rendered)
-- [ ] Verify doesn't overlap repeat button (211, 89) or other controls
-
-### Add Engine Configuration Observer (CRITICAL)
-- [ ] Add `AVAudioEngine.configurationChangeNotification` observer in `AudioEngineController.swift`
-- [ ] Dispatch to `@MainActor` via `Task` (fires on arbitrary queue)
-- [ ] Add `onWillReconfigure` callback property
-- [ ] Add `onDidReconfigure` callback property
-- [ ] Implement `handleEngineConfigurationChange()`:
-  - [ ] Fire `onWillReconfigure()`
-  - [ ] Save engine running state
-  - [ ] Stop engine
-  - [ ] If stream bridge active: disconnect/reconnect source node path
-  - [ ] If local file playing: reconnect player node path
-  - [ ] Restart engine (`try engine.start()`)
-  - [ ] Fire `onDidReconfigure()`
-
-### Wire Engine Reconfiguration in AudioPlayer
-- [ ] Wire `engine.onWillReconfigure` in AudioPlayer init
-  - [ ] Set `seekGuardActive = true`
-  - [ ] Set `isHandlingCompletion = true`
-  - [ ] Save `currentTime` for resume
-- [ ] Wire `engine.onDidReconfigure` in AudioPlayer init
-  - [ ] Re-apply volume and balance
-  - [ ] If was playing local: seek to saved position, resume
-  - [ ] Fire `onEngineReconfigured` callback
-  - [ ] Clear `seekGuardActive` after 100ms delay
-  - [ ] Clear `isHandlingCompletion` after 200ms delay
-- [ ] Add `onEngineReconfigured` callback property on AudioPlayer
-
-### Wire Stream Workgroup Refresh in PlaybackCoordinator
-- [ ] Wire `audioPlayer.onEngineReconfigured` in PlaybackCoordinator init
-- [ ] If stream bridge active: call `streamPlayer.setAudioWorkgroup(audioPlayer.audioWorkgroup)`
-
-### Build & Test Phase 1
-- [ ] XcodeBuildMCP build with Thread Sanitizer — no warnings
-- [ ] XcodeBuildMCP test — all tests pass
-- [ ] Launch app — no visible change to bolt or logo areas
-- [ ] Click top-left bolt — AirPlay picker appears
-- [ ] Click bottom-right WA logo — AirPlay picker appears
-- [ ] Test with real AirPlay device (local file playback)
-- [ ] Verify EQ processing maintained on AirPlay
-- [ ] Switch back to built-in speakers
-- [ ] Test engine restart: switch output while playing
-- [ ] Test stream playback over AirPlay
-- [ ] Test AirPlay in shade mode (bolt trigger)
-- [ ] Edge case: AirPlay device disconnection
-- [ ] Edge case: switch output while paused, then resume
-
-### Oracle Review Phase 1
-- [ ] Submit Phase 1 implementation to Oracle for code review
+> **Status:** ABANDONED (2026-03-24). AVRoutePickerView on macOS routes per-AVPlayer only, not system-wide. Cannot redirect AVAudioEngine audio to AirPlay. See `research.md` section 8 for full analysis. Engine config observer deferred to future work (needed when users switch output via macOS Control Center).
+>
+> All Phase 1 items below are cancelled. In-app AirPlay trigger is not viable with current architecture.
 
 ---
 
@@ -185,21 +110,9 @@
 
 ---
 
-## Phase 3: Discoverability & UX Polish
+## ~~Phase 3: Discoverability & UX Polish~~ — DEFUNCT
 
-### Options Menu Hint
-- [ ] Add disabled `NSMenuItem` to `MainWindowOptionsMenuPresenter`
-- [ ] Text: "AirPlay: click bolt icon" (or similar)
-- [ ] `isEnabled = false` — informational only
-
-### Verification
-- [ ] Tooltip shows "AirPlay" on bolt hover (full mode)
-- [ ] Tooltip shows "AirPlay" on bolt hover (shade mode)
-- [ ] Tooltip shows "AirPlay" on WA logo hover (full mode)
-- [ ] Options menu includes AirPlay hint
-- [ ] Double-size mode — both triggers work
-- [ ] Test with 3+ different skins — bolt position consistent
-- [ ] Test with 3+ different skins — WA logo overlay reasonable
+> **Status:** ABANDONED (2026-03-24). No in-app AirPlay trigger exists, so discoverability UI is moot. All items below are cancelled.
 
 ---
 
