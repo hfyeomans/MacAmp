@@ -2,7 +2,7 @@
 
 > **Purpose:** Single source of truth for cross-task execution status, wave progress, and coordination decisions.
 > **Date:** 2026-02-21
-> **Updated:** 2026-03-15 (Wave 3 complete; architecture rollout tasks extended through post-S2 / pre-S3)
+> **Updated:** 2026-03-24 (Sprint S2 complete — 4/4 tasks merged. AirPlay triggers DEFUNCT, Now Playing shipped.)
 
 ### Quick Reference
 
@@ -280,9 +280,12 @@ All doc updates verified complete by sub-agent scan:
 | `os-workgroup-integration` | Apple Silicon os_workgroup for audio render thread | Small | ✅ COMPLETE — PR #66 merged (2026-03-22). Oracle 8.5/10. ObjC shim + per-block join/leave on decode queue. | None |
 | `stream-track-counter` | Stream elapsed timer + playlist position + auto-play consolidation + crash guard | Medium | ✅ COMPLETE — PR #68 merged (2026-03-23). Oracle 8/10. Anchor-based timer, "3/15" position, auto-play through coordinator, loadAudioFile crash guard. | None |
 | `playlist-list-operations` | NEW LIST, LOAD LIST, SAVE LIST buttons in playlist window | Medium | ✅ COMPLETE — PR #67 merged (2026-03-22). Oracle 9/10. M3UWriter, generation token, background I/O. | None |
-| `airplay-integration` | AirPlay output routing + Now Playing integration (all 3 phases) | Medium | PLANNED — Research done, plan exists, user approved all phases | None |
+| `airplay-integration` | ~~AirPlay routing~~ + Now Playing + remote commands | Medium | ✅ COMPLETE — PR #69 merged (2026-03-24). Phase 1 (AirPlay triggers) DEFUNCT — AVRoutePickerView incompatible with AVAudioEngine on macOS. Phase 2 (Now Playing + remote commands) Oracle 9/10. | None |
 
-**S2 deferral (2026-03-22):** `video-audio-engine-routing` moved to S3. A/V sync risk needs Gemini deep research before implementation. AirPlay (S2) provides shared engine config change handler foundation.
+**S2 deferral (2026-03-22):** `video-audio-engine-routing` moved to S3. A/V sync risk needs Gemini deep research before implementation.
+**S2 AirPlay finding (2026-03-24):** AVRoutePickerView on macOS routes per-AVPlayer only, cannot redirect AVAudioEngine. In-app AirPlay triggers abandoned. Engine config observer deferred (still needed for system Control Center route changes). Now Playing + remote commands shipped independently.
+
+**Sprint S2: COMPLETE (4/4 tasks merged)**
 
 ### Sprint S3: LOW-MEDIUM Priority — Edge Cases + Optimization + Video Routing
 
@@ -290,7 +293,7 @@ All doc updates verified complete by sub-agent scan:
 |-------------|-------------|------|--------|------------|
 | `mainwindow-visualizer-isolation` | SwiftUI recomposition boundary for visualizer during slider drag | Small | PLANNED | None |
 | `stream-pause-tail` | Fix ~0.7s audio tail after pausing stream (ring buffer flush) | Small | PLANNED | None |
-| `video-audio-engine-routing` | Route video audio through AVAudioEngine (MTAudioProcessingTap) | Medium-High | PLANNED — Deferred from S2. Gemini deep research pending. | AirPlay engine config handler (S2) |
+| `video-audio-engine-routing` | Route video audio through AVAudioEngine (MTAudioProcessingTap) | Medium-High | PLANNED — Deferred from S2. Gemini deep research pending. | Engine config observer (deferred from AirPlay task) |
 | `hls-streaming-support` | Add HLS protocol to stream decode pipeline | Large | PLANNED | None |
 | `ogg-vorbis-support` | Add OGG Vorbis codec (needs libvorbis or pure Swift decoder) | Medium | PLANNED | None |
 

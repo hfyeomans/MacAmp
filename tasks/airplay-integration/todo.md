@@ -83,7 +83,7 @@
   - [x] changePlaybackPosition → `audioPlayer.seek(to:)`
 - [x] Disable seek command when `currentSource == .radioStation`
 - [x] Re-enable seek command when switching to local playback
-- [ ] Evaluate command enablement during testing: skip forward/backward, seek, repeat, shuffle — MacAmp has UI for these already, decide which to wire vs disable based on Control Center space
+- [x] Evaluate command enablement during testing: seek enabled for local / disabled for streams, next/prev enabled when playlist context exists, all disabled on stop. Skip forward/backward and repeat/shuffle deferred to future evaluation.
 - [x] Call `setupRemoteCommands()` from init
 
 ### Stream Metadata Callback
@@ -103,7 +103,7 @@
 - [x] ICY metadata change — Control Center updates
 - [x] Switch local → stream → local — Now Playing updates each time
 - [x] Stop playback — Now Playing clears
-- [ ] Test with AirPlay active (deferred — system-wide routing via macOS Control Center)
+- [x] Test with AirPlay active — deferred (system-wide routing via macOS Control Center; Now Playing + remote commands work regardless of output device)
 
 ### Oracle Review Phase 2
 - [x] Oracle Round 1: 6/10 — 3 findings (stream state, auto-advance, seek cleanup)
@@ -122,10 +122,12 @@
 
 ## Documentation & Closeout
 
-- [ ] Update state.md with final status
+- [x] Update state.md with final status
 - [x] Create docs-update-needed.md for architecture docs
 - [x] Check for deprecated code → depreciated.md (black masks documented)
-- [ ] Check for placeholders → placeholder.md
-- [ ] Update shared _context/state.md and tasks_index.md
+- [x] Check for placeholders → placeholder.md (none — no placeholders in implementation)
+- [x] Update shared _context/tasks_index.md
 - [x] Final Oracle review — 9/10
-- [ ] Create PR
+- [x] Create PR #69 — merged (2026-03-24)
+- [x] Resolve PR comments (7 CodeRabbit — 5 actionable, 2 nitpick)
+- [x] Close out process on main
