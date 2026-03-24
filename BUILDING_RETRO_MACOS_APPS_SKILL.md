@@ -7081,6 +7081,7 @@ This matters for seek accuracy -- seeking to 95% of a wrong duration overshoots 
 - **macOS:** No global `AVAudioSession`. `AVPlayer` and `AVAudioEngine` are in completely separate routing worlds. `AVPlayer` routing is per-instance via AirPlay 2. `AVAudioEngine` routing is tied to the Core Audio HAL (hardware devices).
 
 **What We Tested:**
+
 | Test | Result |
 |---|---|
 | AVRoutePickerView alone (no player) | UI only, no routing |

@@ -33,5 +33,5 @@ Notice there is absolutely no `airp` (AirPlay) transport type in that list, even
 ### What This Means for Development
 
 *   **You Cannot Build a Custom Picker via Core Audio:** You cannot use `kAudioHardwarePropertyDevices` to populate a custom menu of available AirPlay devices. The system simply hides them from that API.
-*   **AVRoutePickerView is Mandatory:** This behavior reinforces why Apple heavily pushes developers to use `AVRoutePickerView` from `AVKit`. That UI component bypasses the Core Audio HAL and directly talks to the network discovery daemon to populate its list of available receivers.
-*   **The Plan is Correct:** This firmly solidifies that Phase 1.3 of your plan (using `AVRoutePickerView` and listening for engine reconfiguration when the system applies the route) is the only viable path forward for a macOS desktop app using `AVAudioEngine`.
+*   **AVRoutePickerView is Mandatory for per-app routing:** This behavior reinforces why Apple pushes developers to use `AVRoutePickerView` from `AVKit`. That UI component bypasses the Core Audio HAL and directly talks to the network discovery daemon to populate its list of available receivers.
+*   **(SUPERSEDED) ~~The Plan is Correct~~:** Phase 1.3 was attempted and failed — AVRoutePickerView on macOS routes per-AVPlayer only and cannot redirect AVAudioEngine audio. The HAL finding remains valid (AirPlay devices hidden), but the conclusion that AVRoutePickerView + AVAudioEngine is viable was disproven by testing. See `research.md` section 8.
