@@ -4,7 +4,7 @@
 
 **Date:** 2026-02-07
 **Sprint:** S2 (MEDIUM)
-**Status:** Phase 1 AirPlay triggers BLOCKED — AVRoutePickerView doesn't work with AVAudioEngine on macOS. Phase 0 complete. Phase 2 (Now Playing) still viable.
+**Status:** Phase 0 COMPLETE, Phase 1 DEFUNCT, Phase 2 COMPLETE (Oracle 9/10), Phase 3 DEFUNCT — Ready for PR
 **Last Updated:** 2026-03-24
 
 ---
@@ -28,9 +28,15 @@
 ### Blocked
 - [x] Phase 1 AirPlay triggers — AVRoutePickerView is designed for AVPlayer per-app routing, NOT system-wide output switching for AVAudioEngine
 
-### Still Viable
-- [ ] Engine config observer (deferred to future work — needed when users switch output via macOS Control Center)
-- [ ] Phase 2: Now Playing + remote commands (independent of AirPlay trigger) — IN PROGRESS
+### Still Viable (Future Work)
+- [ ] Engine config observer (needed when users switch output via macOS Control Center — deferred)
+
+### Complete
+- [x] Phase 2: Now Playing + remote commands — Oracle 9/10, manual testing passed
+  - MPNowPlayingInfoCenter with explicit playbackState
+  - MPRemoteCommandCenter with @MainActor dispatch
+  - 10 trigger points, smart command enablement, lifecycle cleanup
+  - Keyboard media keys, Bluetooth headphones, Control Center transport all verified
 
 ### Defunct
 - Phase 1: AirPlay triggers (AVRoutePickerView + dual overlays) — ABANDONED

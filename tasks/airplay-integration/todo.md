@@ -24,14 +24,14 @@
 ### MainWindowFullLayer (full mode)
 - [x] Add `.frame(width: 56, height: 13)` after ZStack to set full MM:SS bounds
 - [x] Move `.contentShape(Rectangle())` and `.onTapGesture` BEFORE `.at(Layout.timeDisplay)`
-- [ ] Verify: clicking time digits toggles elapsed/remaining (all 4 digits)
-- [ ] Verify: clicking bolt icon area does NOT toggle time display
+- [x] Verify: clicking time digits toggles elapsed/remaining (all 4 digits)
+- [x] Verify: clicking bolt icon area does NOT toggle time display
 
 ### MainWindowShadeLayer (shade mode)
 - [x] Add `.frame(width: 56, height: 13)` after ZStack to set full MM:SS bounds
 - [x] Move `.contentShape(Rectangle())` and `.onTapGesture` BEFORE `.at(Layout.timeDisplay).scaleEffect(0.7).at(...)`
-- [ ] Verify: clicking shade time digits toggles elapsed/remaining
-- [ ] Verify: clicking shade bolt area does NOT toggle time display
+- [x] Verify: clicking shade time digits toggles elapsed/remaining
+- [x] Verify: clicking shade bolt area does NOT toggle time display
 
 ### Build & Test
 - [x] XcodeBuildMCP build — no compiler errors
@@ -94,19 +94,23 @@
 ### Build & Test Phase 2
 - [x] XcodeBuildMCP build with Thread Sanitizer — no warnings
 - [x] XcodeBuildMCP test — all 53 tests pass
-- [ ] Play local file — Control Center shows title/artist/progress
-- [ ] Play internet radio — Control Center shows stream title
-- [ ] Keyboard play/pause — works
-- [ ] Keyboard next/previous — advances playlist
-- [ ] Seek via Control Center — works for local files
-- [ ] Seek disabled for streams
-- [ ] ICY metadata change — Control Center updates
-- [ ] Switch local → stream → local — Now Playing updates each time
-- [ ] Stop playback — Now Playing clears
-- [ ] Test with AirPlay active
+- [x] Play local file — Control Center shows title/artist/progress
+- [x] Play internet radio — Control Center shows stream title
+- [x] Keyboard play/pause — works (Apple keyboard + Bluetooth headphones)
+- [x] Keyboard next/previous — advances playlist
+- [x] Seek via Control Center — works for local files
+- [x] Seek disabled for streams
+- [x] ICY metadata change — Control Center updates
+- [x] Switch local → stream → local — Now Playing updates each time
+- [x] Stop playback — Now Playing clears
+- [ ] Test with AirPlay active (deferred — system-wide routing via macOS Control Center)
 
 ### Oracle Review Phase 2
-- [ ] Submit Phase 2 implementation to Oracle for code review
+- [x] Oracle Round 1: 6/10 — 3 findings (stream state, auto-advance, seek cleanup)
+- [x] Oracle Round 2: 7/10 — 2 findings (local finished, terminal timing)
+- [x] Oracle Round 3: 6/10 — 2 findings (.playLocally regression, station next jump)
+- [x] Oracle Round 4: 7/10 — 1 finding (playlist context guard)
+- [x] Oracle Round 5: 9/10 — 1 finding (disable next/prev in clearNowPlayingInfo)
 
 ---
 
@@ -119,9 +123,9 @@
 ## Documentation & Closeout
 
 - [ ] Update state.md with final status
-- [ ] Create docs-update-needed.md for architecture docs
-- [ ] Check for deprecated code → depreciated.md
+- [x] Create docs-update-needed.md for architecture docs
+- [x] Check for deprecated code → depreciated.md (black masks documented)
 - [ ] Check for placeholders → placeholder.md
 - [ ] Update shared _context/state.md and tasks_index.md
-- [ ] Final Oracle review of complete implementation
+- [x] Final Oracle review — 9/10
 - [ ] Create PR
