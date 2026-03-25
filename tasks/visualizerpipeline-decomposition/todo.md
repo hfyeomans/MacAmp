@@ -5,17 +5,18 @@
 
 ---
 
-## Phase 2a: Intra-File Dedup (before extraction)
+## Phase 2a: Intra-File Dedup — COMPLETE (PR #71 + PR #72)
 
 - [x] Produce a responsibility map for `VisualizerPipeline.swift`
-- [ ] Create branch `refactor/visualizerpipeline-decomposition`
-- [ ] Update state.md to IN PROGRESS
-- [ ] Extract shared `resample(_:to:)` helper (consolidate getRMSData + getWaveformSamples)
-- [ ] Extract `copyBuffer(from:to:count:)` helper in VisualizerSharedBuffer (consolidate 4 memcpy blocks)
-- [ ] Remove dead guards in ScratchBuffers.prepare() (lines 255-261)
-- [ ] Build + test after dedup (verify no behavior change)
+- [x] Extract shared `resample(_:to:)` helper — done in Phase 2a (line 452)
+- [x] Extract `copyFloatBuffer(from:to:count:)` helper in VisualizerSharedBuffer — done in Phase 2a (line 51)
+- [x] Remove dead guards in ScratchBuffers.prepare() — done in Phase 2a
+- [x] Remove dead `onDataUpdate` callback — done in Phase 2.5
 
 ## Phase 2b: Structural Extraction
+
+- [ ] Create branch `refactor/visualizerpipeline-decomposition`
+- [ ] Update state.md to IN PROGRESS
 
 - [ ] Extract `ButterchurnFrame` + `VisualizerData` to `Audio/VisualizerTypes.swift`
 - [ ] Extract `GoertzelCoefficients` + `VisualizerScratchBuffers` to `Audio/VisualizerScratchBuffers.swift` (private -> internal)

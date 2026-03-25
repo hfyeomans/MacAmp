@@ -1,7 +1,7 @@
 # State: AudioPlayer Seek Extraction
 
 > **Description:** Extract the seek state machine from AudioPlayer.swift into SeekController.
-> **Updated:** 2026-03-24 (S2 complete, responsibility map done, plan implementation-ready)
+> **Updated:** 2026-03-25 (line numbers refreshed post-Phase 2.5 cleanup)
 
 ## Status
 
@@ -9,7 +9,7 @@ READY TO START. Responsibility map and implementation plan complete.
 
 **Sprint:** Post-S2 / pre-S3
 **Created:** 2026-03-22
-**Last Updated:** 2026-03-24
+**Last Updated:** 2026-03-25
 
 ## Scheduling
 
@@ -20,12 +20,12 @@ READY TO START. Responsibility map and implementation plan complete.
 
 ## Current Line Count
 
-740 lines (grew from 719 due to S2: stream-track-counter + Now Playing hooks)
+734 lines (down from 740 — Phase 2.5 removed `getRMSData(bands:)` forwarding)
 
 ## Expected Result
 
-- AudioPlayer.swift: 740 -> ~554 lines (below 600 warning and error thresholds)
-- New SeekController.swift: ~186 lines
+- AudioPlayer.swift: 734 -> ~554 lines (below 600 warning and error thresholds)
+- New SeekController.swift: ~180 lines
 - Both swiftlint suppressions removed
 - Zero behavioral changes
 

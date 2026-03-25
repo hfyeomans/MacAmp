@@ -1,15 +1,15 @@
 # Research: StreamDecodePipeline Decomposition
 
 > **Description:** Responsibility map for decomposing `StreamDecodePipeline.swift` into smaller, focused files.
-> **Updated:** 2026-03-24 (responsibility map complete — reflects 713 lines post-S2)
+> **Updated:** 2026-03-25 (line numbers refreshed post-Phase 2.5 cleanup)
 
 ---
 
 ## File Overview
 
 **File:** `MacAmpApp/Audio/Streaming/StreamDecodePipeline.swift`
-**Lines:** 713 (grew from 631 at planning time — S2 added os-workgroup integration)
-**Contains:** 3 types — `StreamDecodePipeline` (lines 25-463), `DecodeContext` (lines 473-671), `SessionDelegateProxy` (lines 680-713)
+**Lines:** 697 (down from 713 — Phase 2.5 removed dead `formatHint(forContentType:)` + unused `metaInt` block)
+**Contains:** 3 types — `StreamDecodePipeline` (lines 25-447), `DecodeContext` (lines 457-655), `SessionDelegateProxy` (lines 664-697)
 
 ## Imports
 
@@ -55,27 +55,27 @@
 - **Key symbols:** `handleStreamComplete(error:generation:)`
 - **Extractability:** **Safe** — self-contained handler
 
-### Section 7: Playlist Resolution (lines 365-440) — 76 lines
+### Section 7: Playlist Resolution (lines 358-430) — 73 lines
 - **Responsibility:** Detect and resolve M3U/M3U8/PLS playlist URLs to direct stream URLs
 - **Key symbols:** `isPlaylistURL(_:)` (static), `resolvePlaylistURL(_:)` (static async throws), `parsePLS(content:)` (static), `PlaylistResolveError` enum
 - **Internal coupling:** Called only from `start()` (lines 121, 126)
 - **External coupling:** `M3UParser`
 - **Extractability:** **Safe** — ALL four symbols are `static` with zero instance state coupling
 
-### Section 8: Format Hint Utilities (lines 442-462) — 21 lines
+### Section 8: Format Hint Utility (lines 434-445) — 14 lines
 - **Responsibility:** Map URL paths to AudioToolbox format hint IDs
-- **Key symbols:** `formatHint(for:)` (static)
-- **Dead code removed:** `formatHint(forContentType:)` was removed in Phase 2a (had zero callers)
-- **Extractability:** **Safe** — pure static function
+- **Key symbols:** `formatHint(for:)` (static, 14 lines)
+- **Phase 2.5:** `formatHint(forContentType:)` removed (zero callers)
+- **Extractability:** **Safe** — pure static function. Small enough to fold into PlaylistResolver.
 
-### Section 9: DecodeContext (lines 465-671) — 207 lines
+### Section 9: DecodeContext (lines 457-655) — 199 lines
 - **Responsibility:** Queue-confined decode chain state. Owns ICYFramer, AudioFileStreamParser, AudioConverterDecoder.
 - **Key symbols:** `DecodeContext` (private final class, @unchecked Sendable), `handleIncomingData(_:)`, `shutdown()`, `joinWorkgroupIfAvailable()`, `leaveWorkgroup(token:)`, `handleFormatAvailable(_:)`, `handlePackets(data:descriptions:)`
 - **Threading:** All mutable state confined to `decodeQueue`. `@unchecked Sendable` with `dispatchPrecondition` assertions. Per-block workgroup join/leave.
 - **External coupling:** ICYFramer, AudioFileStreamParser, AudioConverterDecoder, LockFreeRingBuffer, AudioWorkgroupJoin/Leave (ObjC shim)
 - **Extractability:** **Safe** — already a separate class with clear boundaries
 
-### Section 10: SessionDelegateProxy (lines 673-713) — 41 lines
+### Section 10: SessionDelegateProxy (lines 664-697) — 34 lines
 - **Responsibility:** NSObject delegate proxy forwarding URLSessionDataDelegate callbacks to closures
 - **Key symbols:** `SessionDelegateProxy` (private final class, NSObject, URLSessionDataDelegate, @unchecked Sendable)
 - **Internal coupling:** Created in startDirectStream; closures capture [weak self, weak context]
@@ -104,19 +104,17 @@
 
 | # | Target File | Sections | Est. Lines | Risk |
 |---|-------------|----------|------------|------|
-| 1 | `StreamDecodePipelineTypes.swift` | Section 1 (StreamState, StreamTerminationReason) | ~23 | Safe |
-| 2 | `PlaylistResolver.swift` | Section 7 (static playlist detection/resolution) | ~76 | Safe |
-| 3 | `StreamFormatHint.swift` | Section 8 (static format hint mapping) | ~21 | Safe |
-| 4 | `DecodeContext.swift` | Section 9 (entire DecodeContext class) | ~207 | Safe |
-| 5 | `SessionDelegateProxy.swift` | Section 10 (entire delegate proxy) | ~41 | Safe |
-| 6 | `StreamDecodePipeline.swift` (remaining) | Sections 2-6 (core lifecycle) | ~310 | Core — stays |
+| 1 | `PlaylistResolver.swift` (incl. format hint) | Section 7 + 8 | ~87 | Safe |
+| 2 | `DecodeContext.swift` | Section 9 (entire DecodeContext class) | ~199 | Safe |
+| 3 | `SessionDelegateProxy.swift` | Section 10 (entire delegate proxy) | ~34 | Safe |
+| 4 | `StreamDecodePipeline.swift` (remaining) | Sections 2-6 (core lifecycle) | ~380 | Core — stays |
 
-**Post-extraction estimate:** ~310 lines (down from 713)
+**Post-extraction estimate:** ~380 lines (down from 697)
 
 ## Dead Code
 
-- ~~`formatHint(forContentType:)` at line 457~~ — **Removed in Phase 2a** (was `static` with zero callers)
+- ~~`formatHint(forContentType:)` at line 457~~ — **Removed in Phase 2.5** (was `static` with zero callers)
 
 ## Intentional Non-Duplication
 
-- Lines 189 and 302-309 both call `extractICYMetaInt` on HTTP response headers. This is **intentional** — proxy call runs on delegate queue for ordering, handleHTTPResponse call runs on MainActor for logging. Comment on lines 311-314 documents this.
+- `extractICYMetaInt` is called from the `onResponse` proxy callback (line 189, delegate queue). The `handleHTTPResponse` method (lines 301-305) has a comment explaining why it does NOT call `extractICYMetaInt` again — the proxy already handles it.

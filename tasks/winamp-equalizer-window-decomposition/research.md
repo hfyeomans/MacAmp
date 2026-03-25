@@ -1,21 +1,21 @@
 # Research: Winamp Equalizer Window Decomposition
 
 > **Description:** Responsibility map for decomposing `WinampEqualizerWindow.swift` into child view structs.
-> **Updated:** 2026-03-24 (responsibility map complete)
+> **Updated:** 2026-03-25 (line numbers refreshed post-Phase 2.5 cleanup)
 
 ---
 
 ## File Overview
 
 **File:** `MacAmpApp/Views/WinampEqualizerWindow.swift`
-**Lines:** 626
+**Lines:** 616 (down from 626 — Phase 2.5 removed dead `thumbWidth` constant)
 **Contains:** 3 View structs + 1 nested coordinate struct + 1 Preview
 
 | Struct | Lines | Role |
 |---|---|---|
-| `WinampEqualizerWindow` | 6-349 | Root EQ window view (full + shade mode) |
-| `WinampVerticalSlider` | 352-499 | Reusable vertical slider component |
-| `PresetPickerView` | 502-620 | Popover preset selection UI |
+| `WinampEqualizerWindow` | 6-348 | Root EQ window view (full + shade mode) |
+| `WinampVerticalSlider` | 350-489 | Reusable vertical slider component |
+| `PresetPickerView` | 491-610 | Popover preset selection UI |
 
 ## Imports
 
@@ -30,7 +30,7 @@
 | `SkinManager` | `@Environment` | Sprites throughout |
 | `AudioPlayer` | `@Environment` | EQ bands, preamp, presets, toggles |
 | `AppSettings` | `@Environment` | `isDoubleSizeMode` |
-| `PlaybackCoordinator` | `@Environment` | `supportsEQ` (dimming) |
+| `PlaybackCoordinator` | `@Environment` | `supportsAudioProcessing` (dimming) |
 | `WindowFocusState` | `@Environment` | `isEqualizerKey` (titlebar active state) |
 
 ---
@@ -47,9 +47,9 @@
 - **Key symbols:** `importPresetFromFile()`
 - **Extractability:** Should travel with presets section
 
-### Slider Dimensions (lines 62-66) — 5 lines
-- **Key symbols:** `sliderWidth`, `sliderHeight`, `thumbWidth`, `thumbHeight`
-- **Dead code:** `thumbWidth` (line 65) is declared but never referenced
+### Slider Dimensions (lines 62-65) — 4 lines
+- **Key symbols:** `sliderWidth`, `sliderHeight`, `thumbHeight`
+- **Phase 2.5:** `thumbWidth` removed (was dead code, zero callers)
 
 ### Root Body (lines 68-130) — 63 lines
 - **Responsibility:** Top-level composition — branches full/shade mode, applies scale/frame
@@ -101,13 +101,13 @@
 - **Key symbols:** `buildEQCurve()`
 - **Extractability:** **Safe** — pure visualization, reads audioPlayer.eqBands
 
-### WinampVerticalSlider (lines 351-499) — 149 lines
+### WinampVerticalSlider (lines 350-489) — 140 lines
 - **Responsibility:** Reusable sprite-based vertical slider with grid background, drag, center snapping
 - **Key symbols:** Standalone `struct WinampVerticalSlider: View` — fully independent component
 - **External coupling:** `SkinManager` via @Environment
 - **Extractability:** **Safe — should be extracted to its own file** (no EQ-specific references)
 
-### PresetPickerView (lines 501-620) — 120 lines
+### PresetPickerView (lines 491-610) — 120 lines
 - **Responsibility:** Popover UI for browsing, selecting, saving, deleting, importing presets
 - **Key symbols:** Standalone `struct PresetPickerView: View` — callback-driven, no @Environment
 - **External coupling:** `EQPreset` model only
@@ -117,7 +117,7 @@
 
 ## Dead Code
 
-- `thumbWidth` (line 65) — declared but never referenced. WinampVerticalSlider takes `thumbHeight` only.
+- ~~`thumbWidth` (line 65)~~ — **Removed in Phase 2.5** (was declared but never referenced)
 
 ## Duplicated Patterns
 
@@ -138,7 +138,7 @@ Following MainWindow decomposition pattern (root + full layer + shade layer + ch
 
 | # | Target File | Source | Est. Lines | Risk |
 |---|-------------|--------|------------|------|
-| 1 | `WinampVerticalSlider.swift` (Views/Components/) | Standalone component | ~149 | Safe |
+| 1 | `WinampVerticalSlider.swift` (Views/Components/) | Standalone component | ~140 | Safe |
 | 2 | `EQPresetPickerView.swift` | Standalone component | ~120 | Safe |
 | 3 | `EQTitlebarButtons.swift` | Titlebar builder | ~34 | Moderate |
 | 4 | `EQControlButtons.swift` | Control buttons | ~26 | Safe |

@@ -5,19 +5,19 @@
 
 ---
 
-## Phase 2a: Intra-File Dedup (before extraction)
+## Phase 2a: Intra-File Dedup — COMPLETE (PR #71 + PR #72)
 
 - [x] Produce a responsibility map for `SkinManager.swift`
-- [ ] Create branch `refactor/skinmanager-decomposition`
-- [ ] Update state.md to IN PROGRESS
-- [ ] Add characterization test for playlist style defaults (default skin vs missing pledit.txt)
-- [ ] Investigate color inconsistency (green vs blue) — determine correct defaults
-- [ ] Extract shared `parsePlaylistStyle(from:...)` helper (consolidate 2 duplicate blocks)
-- [ ] Extract shared `parseVisualizerColors(from:...)` helper (consolidate 2 duplicate blocks)
-- [ ] Remove dead `import Combine`
-- [ ] Build + test after dedup (verify no behavior change)
+- [x] Add characterization tests (fontName=="Arial", count==24)
+- [x] Investigate color inconsistency — resolved: `.winampDefault` vs `.pleditParserDefault`
+- [x] Extract shared `parsePlaylistStyle(from:fallback:)` helper (line 741)
+- [x] Extract shared `parseVisualizerColors(from:fallback:)` helper (line 750)
+- [x] Remove dead `import Combine` + `import CoreGraphics`
 
 ## Phase 2b: Structural Extraction
+
+- [ ] Create branch `refactor/skinmanager-decomposition`
+- [ ] Update state.md to IN PROGRESS
 
 - [ ] Change `defaultSkinPayload`, `defaultSkinSpriteCache`, `defaultSkinExtractedSheets` from `private` to `internal`
 - [ ] Extract `SkinArchivePayload` + `SkinArchiveLoader` to `ViewModels/SkinArchiveLoader.swift`

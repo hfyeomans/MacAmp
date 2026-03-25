@@ -5,7 +5,7 @@
 
 ---
 
-- [x] Wait for S2 tasks to stabilize (COMPLETE — S2 merged, AudioPlayer at 740 lines)
+- [x] Wait for S2 tasks to stabilize (COMPLETE — S2 merged, AudioPlayer at 734 lines post-Phase 2.5)
 - [x] Produce a responsibility map of seek state machine coupling points
 - [ ] Create branch `refactor/audioplayer-seek-extraction`
 - [ ] Update state.md to IN PROGRESS

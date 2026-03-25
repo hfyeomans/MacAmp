@@ -7,9 +7,10 @@
 
 ## Dead Code (Removed during decomposition)
 
-| Symbol | File:Line | Issue | Action |
+| Symbol | File:Line | Issue | Status |
 |--------|-----------|-------|--------|
-| `import Combine` | SkinManager.swift:2 | Imported but never used anywhere in file | **Remove during decomposition** |
+| ~~`import Combine`~~ | ~~SkinManager.swift:2~~ | ~~never used~~ | **REMOVED in Phase 2.5** |
+| ~~`import CoreGraphics`~~ | ~~SkinManager.swift~~ | ~~re-exported by AppKit~~ | **REMOVED in Phase 2.5** |
 
 ## Deduplication Targets (For future Phase 2.5 simplification pass)
 
@@ -17,8 +18,8 @@
 |---|---|---|---|---|
 | `parseDefaultSkinFully` playlist parsing (lines 177-188) | `applySkinPayload` playlist parsing (lines 744-753) | Duplicate playlist style parsing with **different defaults** (green vs blue) — possible bug | Extract shared `parsePlaylistStyle(from:)` helper; investigate color inconsistency | **RESOLVED in Phase 2a** |
 | `parseDefaultSkinFully` viscolor parsing (lines 190-195) | `applySkinPayload` viscolor parsing (lines 755-758) | Duplicate visualizer color parsing with **different fallbacks** (24 green colors vs empty array) | Extract shared `parseVisualizerColors(from:)` helper | **RESOLVED in Phase 2a** |
-| `parseDefaultSkinFully` sprite extraction loop (lines 156-171) | `applySkinPayload` sprite extraction loop (lines 654-708) | Similar sheet iteration + cropping + autoreleasepool pattern | Extract shared `extractSpritesFromSheets(_:)` helper | Deferred to Phase 2c (cross-file dedup) |
-| NUMS_EX sprite definitions (lines 634-647) | `SkinSprites.swift` sprite definitions | Inline `Sprite` array that belongs with other sprite definitions | Move to `SkinSprites.swift` as a static property | Deferred to Phase 2c (cross-file dedup) |
+| `parseDefaultSkinFully` sprite extraction loop (lines 154-169) | `applySkinPayload` sprite extraction loop (lines 664-680) | Similar sheet iteration + cropping + autoreleasepool pattern | Extract shared `extractSpritesFromSheets(_:)` helper | Deferred to Phase 2c (cross-file dedup) |
+| NUMS_EX sprite definitions (lines 615-628) | `SkinSprites.swift` sprite definitions | Inline `Sprite` array that belongs with other sprite definitions | Move to `SkinSprites.swift` as a static property | Deferred to Phase 2c (cross-file dedup) |
 
 ## Possible Bug (Investigate during dedup pass)
 

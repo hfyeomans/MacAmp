@@ -7,9 +7,10 @@
 
 ## Dead / Defensive Code (Flag for cleanup in dedup pass)
 
-| Symbol | File:Line | Issue |
-|--------|-----------|-------|
-| `prepare()` guards | VisualizerScratchBuffers.swift (was lines 255-261) | `if rms.count < bars` and `if spectrum.count < bars` can never trigger — both arrays initialized at `maxBars` (20) and `bars` is always 20. Harmless but dead. |
+| Symbol | File:Line | Issue | Status |
+|--------|-----------|-------|--------|
+| ~~`prepare()` guards~~ | ~~VisualizerScratchBuffers.swift (lines 255-261)~~ | ~~can never trigger~~ | **REMOVED in Phase 2a** |
+| ~~`onDataUpdate` callback~~ | ~~VisualizerPipeline.swift~~ | ~~never set~~ | **REMOVED in Phase 2.5** |
 
 ## Deduplication Targets (For future Phase 2.5 simplification pass)
 
