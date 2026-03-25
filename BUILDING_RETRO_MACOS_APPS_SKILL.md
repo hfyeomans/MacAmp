@@ -7107,6 +7107,225 @@ Even Spotify's macOS desktop app lacks per-app AirPlay 2. Only Apple Music has i
 
 ---
 
+### 32. Now Playing + Remote Commands: MPNowPlayingInfoCenter on macOS (Mar 2026)
+
+**Context:** Integrating macOS Now Playing info center and media remote commands with a custom audio engine (AVAudioEngine, not AVPlayer).
+
+**The Pattern:**
+- `MPNowPlayingInfoCenter.default()` publishes track metadata to Control Center / AirPlay displays
+- `MPRemoteCommandCenter.shared()` receives play/pause/next/prev/seek from Bluetooth headphones, keyboard media keys, and Control Center
+- On macOS, you MUST set `playbackState` explicitly (iOS infers it from AVAudioSession)
+
+**Key Implementation Details:**
+1. **10 trigger points** — every state transition must update Now Playing: play, pause, stop, track change, seek, stream metadata update, stream connect/disconnect, reconnect backoff, playback finished
+2. **Command enablement is context-aware** — seek disabled for streams (no duration), next/prev disabled when no playlist loaded
+3. **clearNowPlayingInfo** must disable ALL context-dependent commands and set `.stopped`
+4. **Remote command handlers** dispatch via `Task { @MainActor in }` — `MPRemoteCommandCenter` fires on arbitrary threads
+
+**Pitfalls:**
+- Forgetting to clear on playback finished → stale album art in Control Center
+- Not disabling seek for streams → user sends seek command → no-op but confusing
+- Stream metadata changes (ICY title) must fire `updateNowPlayingInfo()` — easy to miss
+
+**Reference:** `tasks/airplay-integration/plan.md` Phase 2, `PlaybackCoordinator.swift:472-520`
+
+---
+
+### 33. Per-Block os_workgroup Join/Leave for Audio Threads (Mar 2026)
+
+**Context:** Apple Silicon's scheduler gives real-time priority to threads that join the audio render workgroup. Getting this right for a custom stream decode pipeline is subtle.
+
+**The Problem:**
+`os_workgroup_join` is THREAD-scoped, not QUEUE-scoped. A GCD serial queue reuses threads from a pool. If you join once at session start, the token becomes invalid when the thread is recycled.
+
+**The Pattern:**
+```swift
+// In each dispatch block on the decode queue:
+var token = os_workgroup_join_token_s()
+let joinResult = os_workgroup_join(workgroup, &token)
+defer {
+    if joinResult == 0 { os_workgroup_leave(workgroup, &token) }
+}
+// ... do audio decode work ...
+```
+
+**ObjC Bridge Required:**
+`AUAudioUnit.osWorkgroup` is marked `__attribute__((swift_private))` — Swift can't access it. Create an ObjC shim:
+```objc
+// AUAudioUnitWorkgroupShim.m
+@implementation AUAudioUnitWorkgroupShim
++ (os_workgroup_t)workgroupForUnit:(AUAudioUnit *)unit {
+    return unit.osWorkgroup;
+}
+@end
+```
+
+**Key Takeaways:**
+1. Join/leave per dispatch block, NOT per session
+2. ObjC shim needed for Swift-private Apple APIs
+3. If join fails, log and continue — degraded scheduling, not a crash
+4. Workgroup is valid only while engine is running
+
+**Reference:** `tasks/os-workgroup-integration/plan.md`, `AudioEngineController.swift`, `StreamDecodePipeline.swift`
+
+---
+
+### 34. Anchor-Based Timer for Stream Elapsed Time (Mar 2026)
+
+**Context:** Internet radio streams have no `currentTime` from the player node (no file duration, no seek position). How do you show elapsed time?
+
+**The Wrong Way (accumulator):**
+```swift
+// Timer fires every 0.1s
+elapsed += 0.1  // Drifts! Timer delivery is not precise.
+```
+
+**The Right Way (anchor-based):**
+```swift
+private var elapsedAccumulated: TimeInterval = 0
+private var elapsedStartedAt: ContinuousClock.Instant?
+
+var elapsedTime: TimeInterval {
+    let live = elapsedStartedAt.map { elapsedAccumulated + $0.duration(to: .now).seconds } ?? elapsedAccumulated
+    return live
+}
+```
+
+On pause: `elapsedAccumulated = elapsedTime; elapsedStartedAt = nil`
+On resume: `elapsedStartedAt = .now`
+On stop/reconnect: `elapsedAccumulated = 0; elapsedStartedAt = nil`
+
+**Key Insight:** Winamp classic does NOT reset elapsed time on ICY metadata changes (verified from Winamp source: `in_mp3/DecodeThread.cpp`). The timer is continuous across stream title updates.
+
+**Reference:** `tasks/stream-track-counter/research.md`, `StreamPlayer.swift`
+
+---
+
+### 35. SwiftUI .offset() Does NOT Move Hit Areas (Mar 2026)
+
+**Context:** Fixed a bug where the time display in the main window wasn't responding to taps. The click-to-toggle-time-display-mode feature was broken.
+
+**The Problem:**
+```swift
+// WRONG: gesture modifier AFTER .offset() — hit area stays at original position
+Text("2:34")
+    .at(x: 48, y: 26)  // uses .offset() internally
+    .onTapGesture { toggleTimeDisplay() }  // hit test at (0,0), not (48,26)!
+```
+
+**The Fix:**
+```swift
+// RIGHT: .contentShape() + gesture BEFORE .offset()
+Text("2:34")
+    .frame(width: 56, height: 13)
+    .contentShape(Rectangle())  // explicit hit area
+    .onTapGesture { toggleTimeDisplay() }  // hit test matches frame
+    .at(x: 48, y: 26)  // visual offset only
+```
+
+**Rule:** In SwiftUI, `.offset()` is a visual-only transform. Hit testing uses the original frame position. Always attach gestures and `.contentShape()` BEFORE any positional modifiers.
+
+**Reference:** `tasks/airplay-integration/plan.md` Phase 0
+
+---
+
+### 36. DRY Dedup with Fallback Preservation (Mar 2026)
+
+**Context:** During Phase 2a intra-file dedup, we consolidated duplicated parsing code that had intentionally different fallback defaults. Oracle review (gpt-5.3-codex, xhigh) caught the resulting behavior regressions.
+
+**The Problem:**
+Two code paths parsed `pledit.txt` with different fallbacks:
+- Default skin: green text (`#00FF00`) — Winamp 2.x canonical
+- Custom skins: white text — matches PLEditParser's per-key defaults
+
+Naive dedup used a single fallback → changed custom skin rendering.
+
+**The Pattern:**
+```swift
+// WRONG: single fallback collapses intentional differences
+private static func parsePlaylistStyle(from data: Data?) -> PlaylistStyle {
+    if let d = data, let p = PLEditParser.parse(from: d) { return p }
+    return .winampDefault  // green text for ALL skins!
+}
+
+// RIGHT: preserve per-path fallbacks via parameter
+private static func parsePlaylistStyle(from data: Data?, fallback: PlaylistStyle) -> PlaylistStyle {
+    if let d = data, let p = PLEditParser.parse(from: d) { return p }
+    return fallback
+}
+// Default skin: fallback: .winampDefault (green text)
+// Custom skin: fallback: .pleditParserDefault (white text)
+```
+
+**Key Takeaways:**
+1. When two code paths look identical but have different constants, the difference is intentional
+2. Add `fallback:` parameters instead of picking one default
+3. Add characterization tests BEFORE dedup to catch behavior changes
+4. "Behavior-preserving" means even fallback edge cases must not change
+5. Oracle review is essential for catching these — humans miss them too
+
+**Reference:** `tasks/intra-file-dedup-simplification/depreciated.md` (Oracle P2/P3 sections)
+
+---
+
+### 37. Agent Team Codebase Sweep for Dead Code and DRY Violations (Mar 2026)
+
+**Context:** Phase 2.5 used a 5-agent team to systematically sweep all 112 .swift files for simplification opportunities. Found ~80 findings, removed 732 lines.
+
+**The Methodology:**
+1. **Partition by directory** — 5 parallel Explore agents, each assigned a directory (Audio/, Views/, Models/, ViewModels/, Windows+Utilities)
+2. **Each agent reads ALL files end-to-end** using ast-grep (`sg --lang swift`) for structural matching and `rg` for cross-reference counting
+3. **For every private/internal symbol**, verify caller count across the entire project with `rg`
+4. **Classify findings**: DEAD_CODE (zero callers), DRY_VIOLATION (3+ identical patterns), DEAD_IMPORT (unused module), SIMPLIFICATION
+5. **Synthesize**: Plan agent reads all 5 reports, deduplicates, groups by fix type, prioritizes by risk
+
+**Implementation Batches (zero-risk → moderate-risk):**
+1. Dead file deletion (6 files, 393 lines)
+2. Dead function/property removal (19 files, 270 lines)
+3. Dead import removal (8 files)
+4. Simple DRY consolidation (6 fixes, 3 new utility files)
+5. Moderate DRY consolidation (window config, visibility methods, alerts)
+
+**Key Takeaways:**
+1. ast-grep (`sg --lang swift -p 'pattern'`) finds structural patterns that text search misses
+2. `rg 'symbolName' MacAmpApp/ --type swift` is the definitive zero-caller check
+3. Build + test after EACH batch — don't stack risky changes
+4. Oracle review (gpt-5.4, xhigh) after all batches — caught zero issues on this pass
+5. The deferred items list is as important as the done list — know what NOT to touch
+
+**Results:** 112 files swept, -732 lines, 6 dead files deleted, 4 new utility files, 110 files remain.
+
+**Reference:** `tasks/codebase-wide-simplification/research.md`
+
+---
+
+### 38. UTType.playlist Does NOT Match .m3u on macOS (Mar 2026)
+
+**Context:** Implementing LOAD LIST / SAVE LIST for M3U playlist files.
+
+**The Problem:**
+```swift
+// WRONG: UTType.playlist doesn't match .m3u/.m3u8 on macOS
+panel.allowedContentTypes = [.playlist]  // opens nothing useful
+```
+
+`UTType.playlist` is a generic abstract type. On macOS, it does NOT conform to the dynamic `UTType(filenameExtension: "m3u")`. The NSOpenPanel will not show `.m3u` files.
+
+**The Fix:**
+```swift
+// RIGHT: explicit file extension types
+panel.allowedContentTypes = [
+    UTType(filenameExtension: "m3u")!,
+    UTType(filenameExtension: "m3u8")!
+]
+```
+
+**Key Takeaway:** Never trust abstract UTType constants for file panels on macOS. Always test with actual files. Use `UTType(filenameExtension:)` for specific formats.
+
+**Reference:** `tasks/playlist-list-operations/research.md`
+
+---
+
 **Built with ❤️ for retro computing on modern macOS**
 
-*This skill document captures 10+ months of lessons learned building MacAmp, distilled into actionable patterns for building similar retro-styled macOS applications with modern Swift 6.2 patterns. Updated with Sprint S2 lessons (Mar 2026) — AirPlay integration failure analysis (AVRoutePickerView + AVAudioEngine incompatibility on macOS), AVSampleBufferAudioRenderer as future per-app AirPlay architecture, and Phase 0 time display hit area bugfix (.contentShape after .offset ordering). Also includes Sprint S1 lessons — XcodeGen resource migration audit, auto-reconnect with exponential backoff for streams, and AudioEngineController extraction extending the facade pattern. Also includes Unified Audio Pipeline (Mar 2026), T3 MainWindow Layer Decomposition (PR #54, Feb 2026), coordinator volume routing and capability flags, SwiftUI view decomposition architecture, memory & CPU optimization with SPSC shared buffer, WindowCoordinator Facade + Composition refactoring, Oracle-driven quality gates, and Swift 6.2 concurrency compliance.*
+*This skill document captures 10+ months of lessons learned building MacAmp (38 lessons), distilled into actionable patterns for building similar retro-styled macOS applications with modern Swift 6.2 patterns. Updated with Sprint S2 + Phase 2.5 cleanup lessons (Mar 2026) — Now Playing/remote commands, per-block os_workgroup join/leave, anchor-based stream timer, SwiftUI .offset() hit area bug, DRY dedup with fallback preservation, agent team codebase sweep methodology, UTType.playlist vs .m3u, AirPlay integration failure analysis, AudioEngineController extraction, auto-reconnect with exponential backoff, and XcodeGen resource migration audit.*
