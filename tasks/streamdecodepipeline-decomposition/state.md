@@ -1,29 +1,19 @@
 # State: StreamDecodePipeline Decomposition
 
 > **Description:** Tracks readiness, sequencing, and key boundaries for the `StreamDecodePipeline.swift` decomposition task.
-> **Updated:** 2026-03-25 (line numbers refreshed post-Phase 2.5 cleanup)
+> **Updated:** 2026-03-25 (DEFERRED per responsibility sweep + Principle 5)
 
 ---
 
 ## Status
 
-READY TO START. Plans refreshed with current line numbers.
+DEFERRED. DecodeContext extraction requires `private → internal` (Principle 5: API Surface Minimization). File is 697 lines with one cohesive responsibility (HTTP stream decode lifecycle). Responsibility sweep confirmed architecturally sound (Justified classification).
 
-## Scheduling
+Same principle applied to cancel SkinManager Step 4 and VisualizerPipeline decomposition.
 
-- S2 dependency resolved: `os-workgroup-integration` merged (PR #66).
-- Phase 2.5 cleanup landed (PR #72): `formatHint(forContentType:)` removed, `metaInt` block removed.
-- `video-audio-engine-routing` deferred to S3 — no further changes expected.
-- Execution order: **Task 1 of 5** (safest, all extractions rated Safe)
+## Re-evaluation Criteria
 
-## Current Line Count
-
-697 lines (down from 713 — Phase 2.5 removed dead code)
-
-## Key Decision
-
-- Decompose in place within `Audio/Streaming/` (already at target location)
-- Extract 3 new files: DecodeContext, SessionDelegateProxy, PlaylistResolver (includes format hint — too small for own file)
-- Residual pipeline: ~380 lines
-- StreamState/StreamTerminationReason enums stay in pipeline file (too small for own file)
-- DecodeContext should adopt `QueueConfined` protocol for consistency with AudioFileStreamParser + AudioConverterDecoder
+Revisit only if:
+- File grows past 800 lines from new features
+- A genuinely new responsibility is added (not just lifecycle complexity)
+- DecodeContext gains external consumers beyond StreamDecodePipeline

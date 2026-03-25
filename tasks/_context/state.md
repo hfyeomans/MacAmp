@@ -2,7 +2,7 @@
 
 > **Purpose:** Single source of truth for cross-task execution status, wave progress, and coordination decisions.
 > **Date:** 2026-02-21
-> **Updated:** 2026-03-24 (Post-S2 decomposition planning complete. 6-task phased execution: dedup first pass + 5 extractions.)
+> **Updated:** 2026-03-25 (Post-S2 decomposition COMPLETE. Responsibility sweep applied. 3 tasks done, 3 deferred/cancelled per architecture principles.)
 
 ### Quick Reference
 
@@ -14,7 +14,7 @@
 | Waves | 3 |
 | Branches | 6 |
 | PRs | 8 (Wave 1: 3 merged, Wave 2a: PR #53 merged, Wave 2b: PR #54 merged, Wave 3: PR #56, PR #57, PR #58 merged) |
-| Current wave | Wave 3 COMPLETE; Sprint S1 planning and follow-on tasks queued |
+| Current wave | Post-S2 decomposition COMPLETE; S3 planning queued |
 
 ---
 
@@ -324,7 +324,7 @@ All doc updates verified complete by sub-agent scan:
 
 **Revised Phase 2b scope:** ~5 new files (was ~18). Dead code cleanup: PresetsButton.swift, WinampButtonStyle.swift, WinampAlertHelper.promptText, SkinBackgroundPreprocessor (caused skin artifacts, removed). New opportunity: WindowSizeState protocol (3x persistence duplication).
 
-**Phase 2c deferred items** (tracked in `intra-file-dedup-simplification/placeholder.md`): SkinManager sprite extraction loop dedup, NUMS_EX move to SkinSprites.swift.
+**Phase 2c deferred items:** ~~SkinManager sprite extraction loop dedup, NUMS_EX move to SkinSprites.swift~~ — **RESOLVED in PR #76** (`extractSprites` helper + `SkinSprites.numsExSprites`).
 
 ### D8: AudioPlayer — Defer seek extraction (Option C, 2026-03-25)
 
