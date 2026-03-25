@@ -53,7 +53,11 @@ final class SkinManager {
     private func parseDefaultSkinFully(payload: SkinArchivePayload) -> Skin {
         var extractedImages: [String: NSImage] = [:]
         var loadedSheets: Set<String> = []
-        let sheetsToProcess = SkinSprites.defaultSprites.sheets
+        var sheetsToProcess = SkinSprites.defaultSprites.sheets
+
+        if payload.sheets.keys.contains("nums_ex") {
+            sheetsToProcess["NUMS_EX"] = SkinSprites.numsExSprites
+        }
 
         for (sheetName, sprites) in sheetsToProcess {
             guard let data = payload.sheets[sheetName.lowercased()],
