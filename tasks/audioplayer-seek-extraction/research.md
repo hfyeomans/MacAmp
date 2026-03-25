@@ -127,7 +127,7 @@ These callbacks are wired by PlaybackCoordinator.
 - `isHandlingCompletion: Bool` (line 49)
 - `seekGuardActive: Bool` (line 50)
 
-### Methods (~147 lines):
+### Methods (~117 lines):
 - `shouldIgnoreCompletion(from:)` (lines 220-226) — 7 lines
 - `seekToPercent(_:resume:)` (lines 546-560) — 15 lines
 - `seek(to:resume:)` (lines 562-606) — 45 lines

@@ -16,4 +16,4 @@
 - [ ] Rank new actionable findings by severity
 - [ ] Oracle review on synthesis findings
 - [ ] Update decomposition plans based on findings (if Revise)
-- [ ] Update `_context/state.md` with sweep results
+- [ ] Update `tasks/_context/state.md` with sweep results

@@ -7,7 +7,7 @@
 
 ## Objective
 
-Extract the seek state machine (~180 lines) from `AudioPlayer.swift` into a `SeekController`, reducing AudioPlayer from 734 to ~554 lines (below both 600-line swiftlint thresholds) and removing the last 2 inline suppressions.
+Extract the seek state machine (~117 lines of methods + 3 properties) from `AudioPlayer.swift` into a `SeekController`, reducing AudioPlayer from 734 to ~554 lines (below both 600-line swiftlint thresholds) and removing the last 2 inline suppressions.
 
 ## Key Design Decision
 
@@ -113,7 +113,7 @@ After extraction, AudioPlayer should be ~554 lines (734 - ~180):
 
 | File | Lines | Source |
 |------|-------|--------|
-| `Audio/SeekController.swift` | ~180 | Seek state machine atomic extraction |
+| `Audio/SeekController.swift` | ~170 | Seek state machine atomic extraction (117 lines methods + boilerplate/callbacks) |
 
 **Total new files: 1**
 **Residual AudioPlayer.swift: ~554 lines**

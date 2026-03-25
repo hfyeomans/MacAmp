@@ -11,7 +11,7 @@ Reduce `StreamDecodePipeline.swift` from 697 to ~380 lines by extracting self-co
 
 ## Extraction Plan
 
-### Step 1: Extract `DecodeContext.swift` (Safe, ~207 lines)
+### Step 1: Extract `DecodeContext.swift` (Safe, ~199 lines)
 
 Move the entire `DecodeContext` class (lines 457-655) to its own file. This is already a separate class with clear boundaries — queue-confined decode chain owning ICYFramer, AudioFileStreamParser, AudioConverterDecoder. Consider adopting `QueueConfined` protocol (already used by AudioFileStreamParser + AudioConverterDecoder) for consistency.
 
@@ -19,7 +19,7 @@ Move the entire `DecodeContext` class (lines 457-655) to its own file. This is a
 - No API changes needed — constructed via init, communicated via closures
 - Include all methods: `handleIncomingData`, `shutdown`, `joinWorkgroupIfAvailable`, `leaveWorkgroup`, `handleFormatAvailable`, `handlePackets`, `configureFramer`
 
-### Step 2: Extract `SessionDelegateProxy.swift` (Safe, ~41 lines)
+### Step 2: Extract `SessionDelegateProxy.swift` (Safe, ~34 lines)
 
 Move the entire `SessionDelegateProxy` class (lines 664-697) to its own file. Completely self-contained NSObject delegate proxy.
 
