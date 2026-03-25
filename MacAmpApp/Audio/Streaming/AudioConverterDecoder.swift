@@ -20,7 +20,7 @@ import Foundation
 /// pulls packets from the queue itself and keeps the previous buffer alive until replaced.
 ///
 /// **Layer:** Mechanism (C API wrapper, no async, no actor isolation)
-final class AudioConverterDecoder {
+final class AudioConverterDecoder: QueueConfined {
 
     /// Custom status code signaling no more input data available.
     /// AudioConverter stops decoding when the input callback returns this.
@@ -55,14 +55,6 @@ final class AudioConverterDecoder {
 
     /// The decode queue this decoder is confined to (set by owner, checked in debug builds).
     var confinementQueue: DispatchQueue?
-
-    private func assertConfinement() {
-        #if DEBUG
-        if let queue = confinementQueue {
-            dispatchPrecondition(condition: .onQueue(queue))
-        }
-        #endif
-    }
 
     /// Pre-allocated output buffer — 4096 frames (enough for multiple MP3/AAC frames)
     private static let maxOutputFrames = 4096

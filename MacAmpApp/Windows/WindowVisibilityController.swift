@@ -22,14 +22,14 @@ final class WindowVisibilityController {
         NSApp.keyWindow?.miniaturize(nil)
     }
 
-    func closeKeyWindow() {
-        NSApp.keyWindow?.close()
-    }
-
     // MARK: - EQ Window
 
-    func showEQWindow() {
-        registry.eqWindow?.orderFront(nil)
+    func showEQWindow(makeKey: Bool = false) {
+        if makeKey {
+            registry.eqWindow?.makeKeyAndOrderFront(nil)
+        } else {
+            registry.eqWindow?.orderFront(nil)
+        }
         isEQWindowVisible = true
     }
 
@@ -57,8 +57,12 @@ final class WindowVisibilityController {
 
     // MARK: - Playlist Window
 
-    func showPlaylistWindow() {
-        registry.playlistWindow?.orderFront(nil)
+    func showPlaylistWindow(makeKey: Bool = false) {
+        if makeKey {
+            registry.playlistWindow?.makeKeyAndOrderFront(nil)
+        } else {
+            registry.playlistWindow?.orderFront(nil)
+        }
         isPlaylistWindowVisible = true
     }
 
@@ -88,26 +92,6 @@ final class WindowVisibilityController {
 
     func showMain() { registry.mainWindow?.makeKeyAndOrderFront(nil) }
     func hideMain() { registry.mainWindow?.orderOut(nil) }
-
-    func showEqualizer() {
-        registry.eqWindow?.makeKeyAndOrderFront(nil)
-        isEQWindowVisible = true
-    }
-
-    func hideEqualizer() {
-        registry.eqWindow?.orderOut(nil)
-        isEQWindowVisible = false
-    }
-
-    func showPlaylist() {
-        registry.playlistWindow?.makeKeyAndOrderFront(nil)
-        isPlaylistWindowVisible = true
-    }
-
-    func hidePlaylist() {
-        registry.playlistWindow?.orderOut(nil)
-        isPlaylistWindowVisible = false
-    }
 
     func showVideo() {
         AppLog.debug(.window, "showVideo() called")

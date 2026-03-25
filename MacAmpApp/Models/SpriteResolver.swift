@@ -387,18 +387,6 @@ struct SpriteResolver: Sendable {
         return skin.images[spriteName]
     }
 
-    /// Get dimensions for a semantic sprite without loading the image.
-    /// Useful for layout calculations.
-    ///
-    /// - Parameter semantic: The semantic sprite identifier
-    /// - Returns: The sprite dimensions if found, nil otherwise
-    func dimensions(for semantic: SemanticSprite) -> CGSize? {
-        guard let spriteName = resolve(semantic),
-              let image = skin.images[spriteName] else {
-            return nil
-        }
-        return image.size
-    }
 }
 
 // MARK: - SpriteResolver Extension for Environment

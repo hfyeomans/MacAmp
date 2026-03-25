@@ -1,5 +1,4 @@
 import SwiftUI
-import AppKit
 
 struct WinampPlaylistWindow: View {
     @Environment(SkinManager.self) private var skinManager
@@ -66,7 +65,7 @@ struct WinampPlaylistWindow: View {
             WindowCoordinator.shared?.updatePlaylistWindowSize(to: sizeState.pixelSize)
         }
         .onChange(of: sizeState.size) { _, newSize in
-            let pixelSize = newSize.toPlaylistPixels()
+            let pixelSize = newSize.toPixels()
             WindowCoordinator.shared?.updatePlaylistWindowSize(to: pixelSize)
         }
         .onDisappear {

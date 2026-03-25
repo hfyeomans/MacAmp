@@ -21,10 +21,7 @@ class WinampMainWindowController: NSWindowController {
         // Extracted from UnifiedDockView.configureWindow()
         WinampWindowConfigurator.apply(to: window)
 
-        // Borderless visual configuration
-        window.isOpaque = false
         window.hasShadow = true
-        window.backgroundColor = .clear
 
         // Create view with environment injection
         let rootView = WinampMainWindow()

@@ -75,28 +75,6 @@ enum SnapUtils {
         return Diff(x: x, y: y)
     }
 
-    static func snapDiff(_ a: Box, _ b: Box) -> Point {
-        let newPos = snap(a, b)
-        return Point(
-            x: newPos.x.map { $0 - a.x } ?? 0,
-            y: newPos.y.map { $0 - a.y } ?? 0
-        )
-    }
-
-    static func snapDiffManyToMany(_ boxesA: [Box], _ boxesB: [Box]) -> Point {
-        var x: CGFloat? = 0
-        var y: CGFloat? = 0
-        for a in boxesA {
-            for b in boxesB {
-                let diff = snapDiff(a, b)
-                x = x ?? diff.x
-                y = y ?? diff.y
-                if let xx = x, let yy = y, xx > 0 && yy > 0 { break }
-            }
-        }
-        return Point(x: x ?? 0, y: y ?? 0)
-    }
-
     static func snapToMany(_ a: Box, _ others: [Box]) -> Diff {
         var x: CGFloat?
         var y: CGFloat?
@@ -163,14 +141,6 @@ enum SnapUtils {
         return diff
     }
 
-    static func snapWithinDiff(_ a: Box, _ bound: BoundingBox) -> Point {
-        let newPos = snapWithin(a, bound)
-        return Point(
-            x: newPos.x.map { $0 - a.x } ?? 0,
-            y: newPos.y.map { $0 - a.y } ?? 0
-        )
-    }
-
     static func applySnap(_ original: Point, _ snaps: Diff...) -> Point {
         return snaps.reduce(original) { prev, s in
             Point(
@@ -196,35 +166,6 @@ enum SnapUtils {
         }
 
         return Box(x: leftVal, y: topVal, width: rightVal - leftVal, height: bottomVal - topVal)
-    }
-
-    static func applyDiff(_ a: Point, _ b: Point) -> Point {
-        Point(x: a.x + b.x, y: a.y + b.y)
-    }
-
-    static func applyMultipleDiffs(_ initial: Point, _ diffs: Point...) -> Point {
-        let meta = diffs.reduce(Point(x: 0, y: 0)) { m, d in
-            Point(
-                x: (m.x == 0 || d.x == 0) ? m.x + d.x : min(m.x, d.x),
-                y: (m.y == 0 || d.y == 0) ? m.y + d.y : min(m.y, d.y)
-            )
-        }
-        return applyDiff(initial, meta)
-    }
-
-    // Find all nodes connected to `node` via the given predicate
-    static func traceConnection(areConnected: @escaping (Box, Box) -> Bool) -> (_ candidates: [Box], _ node: Box) -> Set<Box> {
-        return { candidates, node in
-            var connected = Set<Box>()
-            func check(_ n: Box) {
-                for c in candidates where !connected.contains(c) && areConnected(c, n) {
-                    connected.insert(c)
-                    check(c)
-                }
-            }
-            check(node)
-            return connected
-        }
     }
 
     private static func separationDistanceSquared(_ a: Box, _ b: Box) -> CGFloat {

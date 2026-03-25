@@ -61,8 +61,8 @@ struct MainWindowSlidersLayer: View {
         )
         WinampBalanceSlider(balance: balanceBinding)
             .at(Layout.balanceSlider)
-            .opacity(playbackCoordinator.supportsBalance ? 1.0 : 0.5)
-            .allowsHitTesting(playbackCoordinator.supportsBalance)
-            .help(playbackCoordinator.supportsBalance ? "Balance" : "Balance unavailable during streaming")
+            .opacity(playbackCoordinator.supportsAudioProcessing ? 1.0 : 0.5)
+            .allowsHitTesting(playbackCoordinator.supportsAudioProcessing)
+            .help(playbackCoordinator.supportsAudioProcessing ? "Balance" : "Balance unavailable during streaming")
     }
 }

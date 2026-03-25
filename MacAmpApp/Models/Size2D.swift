@@ -41,28 +41,9 @@ struct Size2D: Equatable, Codable, Hashable {
 
     // MARK: - Conversion Methods
 
-    /// Convert segments to pixel dimensions for VIDEO window
-    /// Formula: baseWidth + (segments × segmentSize)
-    func toVideoPixels() -> CGSize {
-        CGSize(
-            width: 275 + width * 25,
-            height: 116 + height * 29
-        )
-    }
-
-    /// Convert segments to pixel dimensions for PLAYLIST window
-    /// Formula: baseWidth + (segments × segmentSize)
-    func toPlaylistPixels() -> CGSize {
-        CGSize(
-            width: 275 + width * 25,
-            height: 116 + height * 29
-        )
-    }
-
-    /// Convert segments to pixel dimensions for MILKDROP window
-    /// Formula: baseWidth + (segments × segmentSize)
-    /// Same as VIDEO/Playlist - base 275×116, segments 25×29
-    func toMilkdropPixels() -> CGSize {
+    /// Convert segments to pixel dimensions.
+    /// All resizable windows share the same base (275x116) and segment size (25x29).
+    func toPixels() -> CGSize {
         CGSize(
             width: 275 + width * 25,
             height: 116 + height * 29
@@ -70,13 +51,6 @@ struct Size2D: Equatable, Codable, Hashable {
     }
 
     // MARK: - Validation
-
-    /// Create Size2D from pixel dimensions, quantizing to nearest segment
-    static func fromVideoPixels(_ size: CGSize) -> Size2D {
-        let widthSegments = max(0, Int(round((size.width - 275) / 25)))
-        let heightSegments = max(0, Int(round((size.height - 116) / 29)))
-        return Size2D(width: widthSegments, height: heightSegments)
-    }
 
     /// Clamp size to minimum (no negative segments)
     func clamped(min: Size2D = .zero, max: Size2D? = nil) -> Size2D {

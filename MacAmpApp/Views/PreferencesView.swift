@@ -4,10 +4,6 @@ struct PreferencesView: View {
     @Environment(AppSettings.self) private var appSettings
     @Environment(\.dismiss) var dismiss
 
-    // MARK: - Whimsy & Animation States
-    @State private var settingChangeGlow: String? = nil
-    @State private var materialPreview: Bool = false
-
     var body: some View {
         // Body-scoped @Bindable for Toggle/Picker bindings
         @Bindable var settings = appSettings
@@ -87,31 +83,6 @@ struct PreferencesView: View {
         .padding(20)
         .frame(width: 500, height: 400)
         .conditionalPreferencesBackground(enabled: true)
-    }
-    
-    // MARK: - Whimsy Helper Functions
-    private func triggerSettingGlow(_ settingKey: String) {
-        withAnimation(.easeInOut(duration: 0.2)) {
-            settingChangeGlow = settingKey
-        }
-        Task { @MainActor in
-            try? await Task.sleep(for: .seconds(0.6))
-            withAnimation(.easeOut(duration: 0.4)) {
-                settingChangeGlow = nil
-            }
-        }
-    }
-
-    private func triggerMaterialPreview() {
-        withAnimation(.easeInOut(duration: 0.3)) {
-            materialPreview = true
-        }
-        Task { @MainActor in
-            try? await Task.sleep(for: .seconds(1.8))
-            withAnimation(.easeOut(duration: 0.3)) {
-                materialPreview = false
-            }
-        }
     }
 }
 

@@ -22,10 +22,6 @@ final class EQPresetStore {
     @ObservationIgnored private let presetsFileName = "perTrackPresets.json"
     @ObservationIgnored private let userPresetDefaultsKey = "MacAmp.UserEQPresets.v1"
 
-    /// Flag to track when initial per-track preset load is complete
-    /// Prevents race condition where async load could overwrite early saves
-    @ObservationIgnored private var perTrackPresetsLoaded = false
-
     // MARK: - Initialization
     init() {
         loadUserPresets()
@@ -98,7 +94,6 @@ final class EQPresetStore {
 
     private func loadPerTrackPresets() async {
         guard let url = presetsFileURL() else {
-            perTrackPresetsLoaded = true
             return
         }
 
@@ -114,7 +109,6 @@ final class EQPresetStore {
             perTrackPresets = merged
             AppLog.debug(.audio, "Loaded \(loaded.count) per-track presets (merged with \(perTrackPresets.count - loaded.count) in-flight changes)")
         }
-        perTrackPresetsLoaded = true
     }
 
     @ObservationIgnored private var saveTask: Task<Void, Never>?

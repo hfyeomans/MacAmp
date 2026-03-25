@@ -114,17 +114,10 @@ final class PlaybackCoordinator {
         return streamPlayer.error == nil
     }
 
-    /// EQ is available when not streaming, OR when stream bridge is active
-    /// (stream decoded through AVAudioEngine). Dimmed only during stream error
-    /// or before bridge activates (prebuffering).
-    var supportsEQ: Bool { !isStreamBackendActive || audioPlayer.isBridgeActive }
-
-    /// Balance is available when not streaming, OR when stream bridge is active.
-    var supportsBalance: Bool { !isStreamBackendActive || audioPlayer.isBridgeActive }
-
-    /// Visualizer is available when not streaming, OR when stream bridge is active
-    /// (audio tap on mixer receives stream PCM through the bridge).
-    var supportsVisualizer: Bool { !isStreamBackendActive || audioPlayer.isBridgeActive }
+    /// EQ, balance, and other audio-processing features are available when not streaming,
+    /// OR when the stream bridge is active (stream decoded through AVAudioEngine).
+    /// Dimmed only during stream error or before bridge activates (prebuffering).
+    var supportsAudioProcessing: Bool { !isStreamBackendActive || audioPlayer.isBridgeActive }
 
     // MARK: - Initialization
 

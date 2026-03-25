@@ -19,21 +19,14 @@ struct PlaylistBottomControlsView: View {
         return max(0, audioPlayer.currentDuration - audioPlayer.currentTime)
     }
 
-    private func formatTime(_ seconds: Double) -> String {
-        let totalSeconds = max(0, Int(seconds))
-        let minutes = totalSeconds / 60
-        let secs = totalSeconds % 60
-        return String(format: "%d:%02d", minutes, secs)
-    }
-
     private var trackTimeText: String {
         guard audioPlayer.currentTrack != nil,
               audioPlayer.currentDuration > 0 else {
             return ":"
         }
 
-        let current = formatTime(audioPlayer.currentTime)
-        let total = formatTime(totalPlaylistDuration)
+        let current = TimeFormatting.formatDuration(audioPlayer.currentTime)
+        let total = TimeFormatting.formatDuration(totalPlaylistDuration)
         return "\(current) / \(total)"
     }
 
@@ -44,7 +37,7 @@ struct PlaylistBottomControlsView: View {
             return ""
         }
 
-        let remaining = formatTime(remainingTime)
+        let remaining = TimeFormatting.formatDuration(remainingTime)
         return "-\(remaining)"
     }
 

@@ -29,8 +29,6 @@ struct MetadataLoader {
         let channelCount: Int   // 1 = mono, 2 = stereo
         let bitrate: Int        // kbps
         let sampleRate: Int     // Hz
-
-        static let `default` = AudioProperties(channelCount: 2, bitrate: 0, sampleRate: 0)
     }
 
     /// Video file metadata for display

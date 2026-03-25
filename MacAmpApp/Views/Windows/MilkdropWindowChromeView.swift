@@ -181,7 +181,7 @@ struct MilkdropWindowChromeView<Content: View>: View {
                         // Show AppKit preview overlay
                         if let coordinator = WindowCoordinator.shared,
                            let window = coordinator.milkdropWindow {
-                            resizePreview.show(in: window, previewSize: candidate.toMilkdropPixels())
+                            resizePreview.show(in: window, previewSize: candidate.toPixels())
                         }
                     }
                     .onEnded { value in

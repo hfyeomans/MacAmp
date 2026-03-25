@@ -1,5 +1,4 @@
 import SwiftUI
-import Accelerate
 
 /// Winamp visualizer constants
 enum VisualizerLayout {

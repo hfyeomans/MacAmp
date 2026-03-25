@@ -40,10 +40,7 @@ class WinampMilkdropWindowController: NSWindowController {
         // Apply standard Winamp window configuration
         WinampWindowConfigurator.apply(to: window)
 
-        // Borderless visual configuration
-        window.isOpaque = false
         window.hasShadow = true
-        window.backgroundColor = .clear
 
         // Create view with environment injection (including Butterchurn bridge and preset manager)
         let rootView = WinampMilkdropWindow()

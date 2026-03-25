@@ -55,7 +55,7 @@ final class PlaylistWindowSizeState {
 
     /// Pixel dimensions calculated from segments
     var pixelSize: CGSize {
-        size.toPlaylistPixels()
+        size.toPixels()
     }
 
     /// Window width in pixels

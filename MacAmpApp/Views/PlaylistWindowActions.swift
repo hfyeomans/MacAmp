@@ -12,21 +12,11 @@ final class PlaylistWindowActions: NSObject {
     private var loadListGeneration: UInt64 = 0
 
     private func showAlert(_ title: String, _ message: String) {
-        let alert = NSAlert()
-        alert.messageText = title
-        alert.informativeText = message
-        alert.alertStyle = .informational
-        alert.addButton(withTitle: "OK")
-        alert.runModal()
+        WinampAlertHelper.showInfo(title: title, message: message)
     }
 
     private func showErrorAlert(_ title: String, error: Error) {
-        let alert = NSAlert()
-        alert.messageText = title
-        alert.informativeText = error.localizedDescription
-        alert.alertStyle = .warning
-        alert.addButton(withTitle: "OK")
-        alert.runModal()
+        WinampAlertHelper.showError(title: title, message: error.localizedDescription)
     }
 
     // MARK: - Unified Auto-Play

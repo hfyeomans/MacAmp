@@ -198,15 +198,6 @@ final class ButterchurnPresetManager {
         bridge?.loadPreset(at: index, transition: transitionTime)
     }
 
-    /// Select preset by name
-    /// - Parameters:
-    ///   - name: Preset name to find
-    ///   - transition: Transition duration (nil uses default)
-    func selectPreset(byName name: String, transition: Double? = nil) {
-        guard let index = presets.firstIndex(of: name) else { return }
-        selectPreset(at: index, transition: transition)
-    }
-
     // MARK: - Cycling
 
     /// Start automatic preset cycling

@@ -33,7 +33,7 @@ final class MainWindowOptionsMenuPresenter {
     // MARK: - Menu Construction
 
     private func buildOptionsMenuItems(menu: NSMenu, settings: AppSettings, audioPlayer: AudioPlayer) {
-        menu.addItem(createMenuItem(
+        menu.addItem(MenuItemFactory.createMenuItem(
             title: "Time: Elapsed",
             isChecked: settings.timeDisplayMode == .elapsed,
             action: { [weak settings] in
@@ -43,7 +43,7 @@ final class MainWindowOptionsMenuPresenter {
             }
         ))
 
-        menu.addItem(createMenuItem(
+        menu.addItem(MenuItemFactory.createMenuItem(
             title: "Time: Remaining",
             isChecked: settings.timeDisplayMode == .remaining,
             action: { [weak settings] in
@@ -55,7 +55,7 @@ final class MainWindowOptionsMenuPresenter {
 
         menu.addItem(.separator())
 
-        menu.addItem(createMenuItem(
+        menu.addItem(MenuItemFactory.createMenuItem(
             title: "Double Size",
             isChecked: settings.isDoubleSizeMode,
             keyEquivalent: "d",
@@ -69,7 +69,7 @@ final class MainWindowOptionsMenuPresenter {
     }
 
     private func buildRepeatShuffleMenuItems(menu: NSMenu, audioPlayer: AudioPlayer) {
-        menu.addItem(createMenuItem(
+        menu.addItem(MenuItemFactory.createMenuItem(
             title: "Repeat: Off",
             isChecked: audioPlayer.repeatMode == .off,
             action: { [weak audioPlayer] in
@@ -77,7 +77,7 @@ final class MainWindowOptionsMenuPresenter {
             }
         ))
 
-        menu.addItem(createMenuItem(
+        menu.addItem(MenuItemFactory.createMenuItem(
             title: "Repeat: All",
             isChecked: audioPlayer.repeatMode == .all,
             action: { [weak audioPlayer] in
@@ -85,7 +85,7 @@ final class MainWindowOptionsMenuPresenter {
             }
         ))
 
-        menu.addItem(createMenuItem(
+        menu.addItem(MenuItemFactory.createMenuItem(
             title: "Repeat: One",
             isChecked: audioPlayer.repeatMode == .one,
             keyEquivalent: "r",
@@ -95,7 +95,7 @@ final class MainWindowOptionsMenuPresenter {
             }
         ))
 
-        menu.addItem(createMenuItem(
+        menu.addItem(MenuItemFactory.createMenuItem(
             title: "Shuffle",
             isChecked: audioPlayer.shuffleEnabled,
             keyEquivalent: "s",
@@ -106,38 +106,4 @@ final class MainWindowOptionsMenuPresenter {
         ))
     }
 
-    // MARK: - Menu Item Factory
-
-    private func createMenuItem(
-        title: String,
-        isChecked: Bool,
-        keyEquivalent: String = "",
-        modifiers: NSEvent.ModifierFlags = [],
-        action: @escaping () -> Void
-    ) -> NSMenuItem {
-        let item = NSMenuItem(title: title, action: nil, keyEquivalent: keyEquivalent)
-        item.state = isChecked ? .on : .off
-        item.keyEquivalentModifierMask = modifiers
-
-        let actionTarget = MenuItemActionTarget(action: action)
-        item.target = actionTarget
-        item.action = #selector(MenuItemActionTarget.execute)
-        item.representedObject = actionTarget
-
-        return item
-    }
-}
-
-/// Bridges closures to NSMenuItem @objc action selectors.
-@MainActor
-private class MenuItemActionTarget: NSObject {
-    let action: () -> Void
-
-    init(action: @escaping () -> Void) {
-        self.action = action
-    }
-
-    @objc func execute() {
-        action()
-    }
 }

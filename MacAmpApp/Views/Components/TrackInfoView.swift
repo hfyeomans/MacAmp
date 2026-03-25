@@ -51,7 +51,7 @@ struct TrackInfoView: View {
         }
 
         if audioPlayer.currentDuration > 0 {
-            InfoRow(label: "Duration:", value: formatDuration(audioPlayer.currentDuration))
+            InfoRow(label: "Duration:", value: TimeFormatting.formatDuration(audioPlayer.currentDuration))
         }
 
         Divider()
@@ -99,12 +99,6 @@ struct TrackInfoView: View {
         }
     }
 
-    private func formatDuration(_ seconds: Double) -> String {
-        let totalSeconds = Int(seconds)
-        let minutes = totalSeconds / 60
-        let secs = totalSeconds % 60
-        return String(format: "%d:%02d", minutes, secs)
-    }
 }
 
 /// Helper view for displaying label-value pairs

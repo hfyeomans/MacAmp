@@ -111,12 +111,10 @@ struct PlaylistMenuPresenter {
     }
 
     func showSelNotSupportedAlert() {
-        let alert = NSAlert()
-        alert.messageText = "Selection Menu"
-        alert.informativeText = "Not supported yet. Use Shift+click for multi-select (planned feature)."
-        alert.alertStyle = .informational
-        alert.addButton(withTitle: "OK")
-        alert.runModal()
+        WinampAlertHelper.showInfo(
+            title: "Selection Menu",
+            message: "Not supported yet. Use Shift+click for multi-select (planned feature)."
+        )
     }
 
     func showMiscMenu() {

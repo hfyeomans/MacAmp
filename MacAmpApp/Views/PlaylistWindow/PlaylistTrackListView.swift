@@ -52,7 +52,7 @@ struct PlaylistTrackListView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .layoutPriority(1)
 
-            Text(formatDuration(track.duration))
+            Text(TimeFormatting.formatDuration(track.duration))
                 .font(.system(size: 9, design: .monospaced))
                 .foregroundColor(textColor)
                 .frame(width: 38, alignment: .trailing)
@@ -75,10 +75,4 @@ struct PlaylistTrackListView: View {
         return Color.clear
     }
 
-    private func formatDuration(_ duration: Double) -> String {
-        let totalSeconds = Int(duration)
-        let minutes = totalSeconds / 60
-        let seconds = totalSeconds % 60
-        return String(format: "%d:%02d", minutes, seconds)
-    }
 }

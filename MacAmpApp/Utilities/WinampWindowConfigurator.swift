@@ -24,6 +24,7 @@ struct WinampWindowConfigurator {
         // Remove title bar appearance completely
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
+        window.tabbingMode = .disallowed
 
         // Ensure no separator line between title bar and content
         if #available(macOS 11.0, *) {
