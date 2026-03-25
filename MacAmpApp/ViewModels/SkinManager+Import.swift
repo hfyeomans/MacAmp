@@ -88,7 +88,7 @@ extension SkinManager {
         do {
             let attributes = try FileManager.default.attributesOfItem(atPath: standardized.path)
             if let fileSize = attributes[.size] as? NSNumber,
-               fileSize.intValue > Self.maxImportSizeBytes {
+               fileSize.int64Value > Self.maxImportSizeBytes {
                 throw SkinImportError.oversizedFile
             }
         } catch {

@@ -320,7 +320,7 @@ All doc updates verified complete by sub-agent scan:
 
 **Responsibility sweep (2026-03-25, PR #74):** 5-agent SRP + AHA audit of all 109 files. Result: 76 Clean, 26 Justified, 7 Actionable. Applied Swift Architecture & Decomposition principles (Cohesion > LOC, AHA Rule of Three, no visibility leaks, no pass-through middlemen). 4 of 5 original decomposition plans revised or cancelled. See `tasks/responsibility-sweep/research.md`.
 
-**Revised Phase 2b scope:** ~7 new files (was ~18). Dead code cleanup: PresetsButton.swift, WinampButtonStyle.swift, WinampAlertHelper.promptText. New opportunity: WindowSizeState protocol (3x persistence duplication).
+**Revised Phase 2b scope:** ~5 new files (was ~18). Dead code cleanup: PresetsButton.swift, WinampButtonStyle.swift, WinampAlertHelper.promptText, SkinBackgroundPreprocessor (caused skin artifacts, removed). New opportunity: WindowSizeState protocol (3x persistence duplication).
 
 **Phase 2c deferred items** (tracked in `intra-file-dedup-simplification/placeholder.md`): SkinManager sprite extraction loop dedup, NUMS_EX move to SkinSprites.swift.
 
