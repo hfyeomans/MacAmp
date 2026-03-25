@@ -353,11 +353,7 @@ final class SkinManager {
                 autoreleasepool {
                     let rect = sprite.rect
                     if let croppedImage = sheetImage.cropped(to: rect) {
-                        var finalImage = croppedImage
-                        if sprite.name == "MAIN_WINDOW_BACKGROUND" {
-                            finalImage = SkinBackgroundPreprocessor.preprocessMainBackground(croppedImage)
-                        }
-                        extractedImages[sprite.name] = finalImage
+                        extractedImages[sprite.name] = croppedImage
                     } else {
                         AppLog.warn(.skin, "Failed to crop \(sprite.name) from \(sheetName) at \(rect)")
                         let fallbackImage = createFallbackSprite(named: sprite.name)
