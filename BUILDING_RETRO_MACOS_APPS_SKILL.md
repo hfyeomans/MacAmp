@@ -1221,7 +1221,7 @@ struct Size2D: Codable, Equatable {
     static let video2x = Size2D(w: 11, h: 12)      // 550×464 (2x default)
 
     // Conversion to pixels
-    func toVideoPixels() -> CGSize {
+    func toPixels() -> CGSize {  // (formerly toVideoPixels(), now unified as toPixels())
         CGSize(
             width: 275 + CGFloat(w) * 25,   // 25px width increments
             height: 116 + CGFloat(h) * 29    // 29px height increments
@@ -1237,7 +1237,7 @@ final class VideoWindowSizeState {
         didSet { persist() }
     }
 
-    var pixelSize: CGSize { size.toVideoPixels() }
+    var pixelSize: CGSize { size.toPixels() }  // (formerly toVideoPixels(), now unified as toPixels())
     var centerTileCount: Int { max(0, Int((pixelSize.width - 250) / 25)) }
 
     private func persist() {
@@ -1603,7 +1603,7 @@ extension Size2D {
 
     /// Convert segments to pixel dimensions (different from VIDEO)
     /// Base: 275x116, Segment: 25x29
-    func toMilkdropPixels() -> CGSize {
+    func toPixels() -> CGSize {  // (formerly toMilkdropPixels(), now unified as toPixels())
         CGSize(
             width: 275 + CGFloat(width) * 25,   // Base 275, 25px segments
             height: 116 + CGFloat(height) * 29  // Base 116, 29px segments
@@ -1629,7 +1629,7 @@ final class MilkdropWindowSizeState {
     }
 
     // MARK: - Computed Properties
-    var pixelSize: CGSize { size.toMilkdropPixels() }
+    var pixelSize: CGSize { size.toPixels() }  // (formerly toMilkdropPixels(), now unified as toPixels())
     var contentWidth: CGFloat { pixelSize.width - 19 }   // 11 left + 8 right borders
     var contentHeight: CGFloat { pixelSize.height - 34 } // 20 titlebar + 14 bottom
     var contentSize: CGSize { CGSize(width: contentWidth, height: contentHeight) }
@@ -1774,7 +1774,7 @@ private func buildResizeHandle() -> some View {
                     // Show AppKit preview overlay (Pattern 6)
                     if let coordinator = WindowCoordinator.shared,
                        let window = coordinator.milkdropWindow {
-                        resizePreview.show(in: window, previewSize: candidate.toMilkdropPixels())
+                        resizePreview.show(in: window, previewSize: candidate.toPixels())  // (formerly toMilkdropPixels())
                     }
                 }
                 .onEnded { value in
@@ -2817,7 +2817,7 @@ extension Size2D {
     static let playlist2xWidth = Size2D(width: 11, height: 4)
 
     /// Convert segments to playlist pixels
-    func toPlaylistPixels() -> CGSize {
+    func toPixels() -> CGSize {  // (formerly toPlaylistPixels(), now unified as toPixels())
         CGSize(
             width: 275 + CGFloat(width) * 25,   // 275px base (not 250 like video)
             height: 116 + CGFloat(height) * 29  // 116px base (not 116 like video)
@@ -2833,7 +2833,7 @@ final class PlaylistWindowSizeState {
         didSet { saveSize() }  // UserDefaults persistence
     }
 
-    var pixelSize: CGSize { size.toPlaylistPixels() }
+    var pixelSize: CGSize { size.toPixels() }  // (formerly toPlaylistPixels(), now unified as toPixels())
     var windowWidth: CGFloat { pixelSize.width }
     var windowHeight: CGFloat { pixelSize.height }
 
@@ -3175,7 +3175,7 @@ let clampedWidth = max(PlaylistWindowSizeState.baseWidth, storedPlaylist.size.wi
 }
 .onChange(of: sizeState.size) { _, newSize in
     // Sync NSWindow on programmatic size changes
-    let pixelSize = newSize.toPlaylistPixels()
+    let pixelSize = newSize.toPixels()  // (formerly toPlaylistPixels(), now unified as toPixels())
     WindowCoordinator.shared?.updatePlaylistWindowSize(to: pixelSize)
 }
 ```
@@ -4300,7 +4300,7 @@ struct ButterchurnFrame: Sendable {
 
 **Pattern 2: nonisolated(unsafe) for deinit Cleanup**
 
-> **SUPERSEDED (Swift 6.2):** This pattern has been replaced by `isolated deinit` (Swift 6.2). The `isolated deinit` runs on the class's actor executor, allowing safe access to all `@MainActor` properties without `nonisolated(unsafe)`. See Lesson #27 (line 6691). Zero `nonisolated(unsafe)` usages remain in the codebase.
+> **SUPERSEDED (Swift 6.2):** This pattern has been replaced by `isolated deinit` (Swift 6.2). The `isolated deinit` runs on the class's actor executor, allowing safe access to all `@MainActor` properties without `nonisolated(unsafe)`. See Lesson #27 (line 6691). One `nonisolated(unsafe)` usage remains in the codebase (`StreamDecodePipeline.swift:75`, for workgroup capture across isolation boundaries).
 
 ```swift
 @MainActor
@@ -4666,8 +4666,8 @@ Rate 1-10 with specific issues to fix."
 MacAmp/
 ├── MacAmpApp/
 │   ├── Audio/
-│   │   ├── AudioPlayer.swift           # Orchestrator (~705 lines)
-│   │   ├── AudioEngineController.swift # Engine graph + stream bridge (413 lines)
+│   │   ├── AudioPlayer.swift           # Orchestrator (~734 lines)
+│   │   ├── AudioEngineController.swift # Engine graph + stream bridge (424 lines)
 │   │   ├── EQPresetStore.swift         # EQ preset persistence (~197 lines)
 │   │   ├── MetadataLoader.swift        # Async track metadata (171 lines)
 │   │   ├── PlaylistController.swift    # Navigation & shuffle (297 lines)
@@ -4839,14 +4839,14 @@ When building your next retro macOS app:
 **Document Status:** Production Ready
 **Maintenance:** Update when new patterns/pitfalls discovered
 **Owner:** MacAmp Development Team
-**Last Updated:** 2026-03-22
+**Last Updated:** 2026-03-25
 
 **Recent Additions:**
 - **Sprint S1 Lessons Learned** (Mar 22, 2026) - Three new lessons from Sprint S1:
   - Lesson #28: XcodeGen Resource Migration Audit -- Butterchurn folder silently dropped during XcodeGen migration; non-code resources not auto-discovered; `type: folder` + `buildPhase: resources` fix; migration audit checklist
   - Lesson #29: Auto-Reconnect with Exponential Backoff -- typed StreamTerminationReason enum, 1s/2s/4s/8s/16s cap with max 10 attempts, bridge teardown between attempts, mechanism vs policy separation, userRequestedStop flag, stability reset after 5s
-  - Lesson #30: AudioEngineController Extraction -- engine graph + stream bridge as single unit (413 lines), AudioPlayer reduced from ~1,143 to 705 lines, seek state machine kept co-located (Oracle-validated), transport follows node ownership, 13 characterization tests as prerequisite, VBR duration lesson
-  - File structure updated: AudioPlayer.swift (~705 lines), AudioEngineController.swift (413 lines), StreamPlayer.swift (334 lines)
+  - Lesson #30: AudioEngineController Extraction -- engine graph + stream bridge as single unit (424 lines), AudioPlayer reduced from ~1,143 to 734 lines, seek state machine kept co-located (Oracle-validated), transport follows node ownership, 13 characterization tests as prerequisite, VBR duration lesson
+  - File structure updated: AudioPlayer.swift (~734 lines), AudioEngineController.swift (424 lines), StreamPlayer.swift (334 lines)
 - **Stale Content Audit** (Mar 14, 2026) - Updated March 2026: Swift 6.2 patterns (isolated deinit, @concurrent), stale dual-backend/DispatchQueue patterns marked as superseded, file structure updated with Streaming/ subdirectory and current line counts.
 - **Coordinator Volume Routing + Capability Flags** (Feb 22, 2026) - Multi-backend volume fan-out and UI capability dimming (Lesson #26)
   - PlaybackCoordinator.setVolume() propagates unconditionally to all backends (audioPlayer, streamPlayer, videoPlaybackController)
@@ -6944,7 +6944,7 @@ After the unified audio pipeline (Lesson #27), AudioPlayer contained two distinc
 
 These responsibilities had different change frequencies (graph wiring changes rarely; playback logic changes often) and different testing profiles (graph wiring needs format-specific tests; playback needs interaction tests).
 
-#### The Extraction: AudioEngineController (413 lines)
+#### The Extraction: AudioEngineController (424 lines)
 
 AudioEngineController owns the AVAudioEngine graph topology and the stream bridge lifecycle:
 
@@ -6975,7 +6975,7 @@ final class AudioEngineController {
 }
 ```
 
-**AudioPlayer (705 lines)** retains:
+**AudioPlayer (734 lines)** retains:
 - Seek state machine (`currentSeekID`, `scheduleSegment`, `handleCompletion`)
 - Progress timer management
 - Track lifecycle (load, play, pause, stop, next, previous)
@@ -7152,12 +7152,26 @@ defer {
 **ObjC Bridge Required:**
 `AUAudioUnit.osWorkgroup` is marked `__attribute__((swift_private))` — Swift can't access it. Create an ObjC shim:
 ```objc
+// AUAudioUnitWorkgroupShim.h
+os_workgroup_t _Nullable AUAudioUnitGetWorkgroup(AUAudioUnit * _Nonnull unit);
+void * _Nullable AudioWorkgroupJoin(os_workgroup_t _Nonnull workgroup);
+void AudioWorkgroupLeave(os_workgroup_t _Nonnull workgroup, void * _Nonnull token);
+
 // AUAudioUnitWorkgroupShim.m
-@implementation AUAudioUnitWorkgroupShim
-+ (os_workgroup_t)workgroupForUnit:(AUAudioUnit *)unit {
+os_workgroup_t _Nullable AUAudioUnitGetWorkgroup(AUAudioUnit * _Nonnull unit) {
     return unit.osWorkgroup;
 }
-@end
+void * _Nullable AudioWorkgroupJoin(os_workgroup_t _Nonnull workgroup) {
+    os_workgroup_join_token_s *token = calloc(1, sizeof(os_workgroup_join_token_s));
+    if (!token) return NULL;
+    int result = os_workgroup_join(workgroup, token);
+    if (result != 0) { free(token); return NULL; }
+    return token;
+}
+void AudioWorkgroupLeave(os_workgroup_t _Nonnull workgroup, void * _Nonnull token) {
+    os_workgroup_leave(workgroup, (os_workgroup_join_token_s *)token);
+    free(token);
+}
 ```
 
 **Key Takeaways:**

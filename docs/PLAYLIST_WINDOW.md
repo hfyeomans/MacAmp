@@ -108,7 +108,7 @@ Window Layout (Default 275×232):
 
 ```swift
 // Pixel dimensions from segment counts
-func toPlaylistPixels() -> CGSize {
+func toPixels() -> CGSize {
     CGSize(
         width: 275 + CGFloat(width) * 25,   // Base + segments
         height: 116 + CGFloat(height) * 29  // Base + segments
@@ -246,7 +246,7 @@ WindowCoordinator
 The titlebar consists of dynamic sprite sections based on window width:
 
 ```swift
-// WinampPlaylistWindow.swift:390-417
+// WinampPlaylistWindow.swift
 let suffix = isWindowActive ? "_SELECTED" : ""
 
 // Left corner (25×20)
@@ -301,7 +301,7 @@ ForEach(0..<borderTileCount, id: \.self) { i in
 **Visualizer Visibility:** Appears when `sizeState.size.width >= 3` (350px+ width)
 
 ```swift
-// WinampPlaylistWindow.swift:437-478
+// WinampPlaylistWindow.swift
 let showVisualizer = sizeState.size.width >= 3  // 275 + 75 = 350px minimum
 
 // LEFT section (fixed 125px)
@@ -348,7 +348,7 @@ The bottom bar's LEFT section contains buttons for playlist list operations, imp
 
 - **LOAD LIST**: Opens `NSOpenPanel` filtered to `.m3u`/`.m3u8` files. Parses the selected file off the main actor. On success, clears the current playlist then adds parsed entries (replaces, not appends). Uses a `playlistGeneration` token to guard against stale metadata tasks from a previous playlist.
 
-- **SAVE LIST**: Opens `NSSavePanel` with `.m3u8` default extension. Writes `#EXTM3U` format via `M3UWriter.write()` off the main actor. All file I/O is performed in the background.
+- **SAVE LIST**: Opens `NSSavePanel` with `.m3u` default extension. Writes `#EXTM3U` format via `M3UWriter.write()` off the main actor. All file I/O is performed in the background.
 
 ### Track Position Display
 
@@ -400,7 +400,7 @@ final class PlaylistWindowSizeState {
     }
 
     // MARK: - Computed Properties
-    var pixelSize: CGSize { size.toPlaylistPixels() }
+    var pixelSize: CGSize { size.toPixels() }
     var windowWidth: CGFloat { pixelSize.width }
     var windowHeight: CGFloat { pixelSize.height }
 
@@ -423,7 +423,7 @@ final class PlaylistWindowSizeState {
 ### Resize Handle Implementation
 
 ```swift
-// WinampPlaylistWindow.swift:756-822
+// WinampPlaylistWindow.swift
 @ViewBuilder
 private func buildResizeHandle() -> some View {
     Rectangle()
@@ -453,7 +453,7 @@ private func buildResizeHandle() -> some View {
 
                     // Show AppKit preview overlay
                     if let coordinator = WindowCoordinator.shared {
-                        let previewPixels = candidate.toPlaylistPixels()
+                        let previewPixels = candidate.toPixels()
                         coordinator.showPlaylistResizePreview(resizePreview, previewSize: previewPixels)
                     }
                 }
@@ -476,7 +476,7 @@ private func buildResizeHandle() -> some View {
 ### WindowCoordinator Bridge Methods
 
 ```swift
-// WindowCoordinator.swift:820-838
+// WindowCoordinator.swift
 func updatePlaylistWindowSize(to pixelSize: CGSize) {
     guard let window = playlistWindow else { return }
     var frame = window.frame
@@ -503,14 +503,14 @@ func hidePlaylistResizePreview(_ overlay: WindowResizePreviewOverlay) {
 Critical for ensuring SwiftUI state and AppKit window stay in sync:
 
 ```swift
-// WinampPlaylistWindow.swift:358-375
+// WinampPlaylistWindow.swift
 .onAppear {
     // Sync NSWindow size from persisted PlaylistWindowSizeState on launch
     WindowCoordinator.shared?.updatePlaylistWindowSize(to: sizeState.pixelSize)
 }
 .onChange(of: sizeState.size) { _, newSize in
     // Sync NSWindow when sizeState.size changes programmatically
-    let pixelSize = newSize.toPlaylistPixels()
+    let pixelSize = newSize.toPixels()
     WindowCoordinator.shared?.updatePlaylistWindowSize(to: pixelSize)
 }
 ```
@@ -600,7 +600,7 @@ struct PlaylistScrollSlider: View {
 ### ScrollView Integration
 
 ```swift
-// WinampPlaylistWindow.swift:536-573
+// WinampPlaylistWindow.swift
 ScrollViewReader { proxy in
     ScrollView(.vertical, showsIndicators: false) {
         VStack(spacing: 0) {
@@ -641,7 +641,7 @@ This matches Winamp 5.x behavior where the visualizer appears in the playlist wh
 ### Implementation
 
 ```swift
-// WinampPlaylistWindow.swift:459-478
+// WinampPlaylistWindow.swift
 if showVisualizer {
     SimpleSpriteImage("PLAYLIST_VISUALIZER_BACKGROUND", width: 75, height: 38)
         .position(x: windowWidth - 187.5, y: windowHeight - 19)
@@ -678,7 +678,7 @@ Visualizer Container: 75×38px
 ### WindowFocusState Integration
 
 ```swift
-// WinampPlaylistWindow.swift:285-288
+// WinampPlaylistWindow.swift
 @Environment(WindowFocusState.self) var windowFocusState
 
 private var isWindowActive: Bool {
@@ -706,7 +706,7 @@ SimpleSpriteImage("PLAYLIST_TOP_RIGHT_CORNER\(suffix)", ...)
 ### Size Persistence
 
 ```swift
-// PlaylistWindowSizeState.swift:155-172
+// PlaylistWindowSizeState.swift
 private static let sizeKey = "playlistWindowSize"
 
 private func saveSize() {
@@ -728,7 +728,7 @@ private func loadSize() {
 ### Window Position Restoration
 
 ```swift
-// WindowCoordinator.swift:1072-1088
+// WindowCoordinator.swift
 if let playlist = playlistWindow,
    var storedPlaylist = windowFrameStore.frame(for: .playlist) {
     // Preserve stored width (segment-based sizing allows expansion)
@@ -767,7 +767,7 @@ final class PlaylistWindowSizeState {
     }
 
     // Computed properties derive from size
-    var pixelSize: CGSize { size.toPlaylistPixels() }
+    var pixelSize: CGSize { size.toPixels() }
     var visibleTrackCount: Int { ... }
 }
 ```

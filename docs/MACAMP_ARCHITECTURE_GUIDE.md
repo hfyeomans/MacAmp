@@ -143,16 +143,16 @@ Deployment:               Developer ID signed, notarization-ready
    - Magnetic docking cluster detection for all window combinations
 
 9. **AudioPlayer Decomposition (v0.8.0, January-March 2026)**: Full Option C extraction (Phases 1-4)
-   - Reduced AudioPlayer from 1,805 to 705 lines (-61.0%) across 4 phases
+   - Reduced AudioPlayer from 1,805 to 734 lines (-59.3%) across 4 phases
    - Extracted 6 focused components following three-layer architecture:
      - **EQPresetStore** (197 lines): EQ preset persistence (UserDefaults + JSON file)
      - **MetadataLoader** (171 lines): Async track/video metadata extraction (nonisolated struct)
      - **PlaylistController** (297 lines): Playlist state and navigation logic
      - **VideoPlaybackController** (282 lines): AVPlayer lifecycle and observer management
      - **VisualizerPipeline** (699 lines): Audio tap, FFT processing, SPSC shared buffer, Butterchurn data
-     - **AudioEngineController** (413 lines): AVAudioEngine graph lifecycle, node wiring, bridge activation/deactivation (Phase 4)
+     - **AudioEngineController** (424 lines): AVAudioEngine graph lifecycle, node wiring, bridge activation/deactivation (Phase 4)
    - Extracted **Track** model to `Models/Track.swift` with Sendable conformance (42 lines)
-   - AudioPlayer remains in Mechanism layer, now a slim facade (705 lines) delegating engine concerns to AudioEngineController
+   - AudioPlayer remains in Mechanism layer, now a slim facade (734 lines) delegating engine concerns to AudioEngineController
    - Full Swift 6 strict concurrency compliance (Sendable, @MainActor, Task.detached)
    - Background I/O for preset persistence (fire-and-forget pattern)
    - Oracle review: 10/10 quality gate achieved
@@ -200,8 +200,8 @@ Deployment:               Developer ID signed, notarization-ready
    - Follows same decomposition pattern as PlaylistWindow/ (PR #49 N6)
 
 12. **AudioEngineController Extraction (Phase 4, March 2026)**: Extracted AVAudioEngine graph lifecycle from AudioPlayer
-   - AudioPlayer reduced from 1,143 to 705 lines in this phase (-38.3%; overall reduction from original 1,805 to 705 across all phases)
-   - New `AudioEngineController.swift` (413 lines) owns engine setup, node wiring, bridge activation/deactivation
+   - AudioPlayer reduced from 1,143 to 734 lines in this phase (-35.8%; overall reduction from original 1,805 to 734 across all phases)
+   - New `AudioEngineController.swift` (424 lines) owns engine setup, node wiring, bridge activation/deactivation
    - AudioPlayer is now a slim facade delegating engine graph concerns to AudioEngineController
    - Component count for AudioPlayer decomposition increases from 5 to 6
    - Full backward compatibility maintained via computed forwarding properties
@@ -838,7 +838,7 @@ The AudioPlayer class was refactored in January 2026 following the Option C incr
 │  │                  AudioEngineController (Engine Graph)              │  │
 │  │                  ──────────────────────────────────                │  │
 │  │                  @MainActor @Observable                            │  │
-│  │                  413 lines (Phase 4 extraction)                    │  │
+│  │                  424 lines (Phase 4 extraction)                    │  │
 │  ├───────────────────────────────────────────────────────────────────┤  │
 │  │  • audioEngine, playerNode, eqNode, streamSourceNode              │  │
 │  │  • setupEngine(), configureEQ(), rewireForCurrentFile()           │  │
@@ -851,7 +851,7 @@ The AudioPlayer class was refactored in January 2026 following the Option C incr
 │  │                    AudioPlayer (Facade)                            │  │
 │  │                    ───────────────────                             │  │
 │  │                    @MainActor @Observable                          │  │
-│  │                    705 lines after Phase 4 extraction              │  │
+│  │                    734 lines after Phase 4 extraction              │  │
 │  ├───────────────────────────────────────────────────────────────────┤  │
 │  │                                                                    │  │
 │  │  Playback Control:                                                 │  │
@@ -5204,11 +5204,11 @@ Welcome to MacAmp. May your audio be crisp and your skins be pixel-perfect.
 
 ---
 
-*Document Version: 3.1.0 | Last Updated: 2026-03-25 | Lines: ~5,500*
+*Document Version: 3.1.0 | Last Updated: 2026-03-25 | Lines: ~5,249*
 
 **Recent Updates (v3.0.0 - 2026-03-22):**
-- Added AudioEngineController (413 lines) to Component Breakdown table, Three-Layer diagram, Section 4a decomposition architecture, Data Flow diagram, File Structure, and Quick Reference
-- Updated AudioPlayer line count from 1,143 to 705 throughout (Phase 4 extraction)
+- Added AudioEngineController (413->424 lines) to Component Breakdown table, Three-Layer diagram, Section 4a decomposition architecture, Data Flow diagram, File Structure, and Quick Reference
+- Updated AudioPlayer line count from 1,143 to 734 throughout (Phase 4 extraction + subsequent growth)
 - Updated StreamPlayer line count from 189 to 334 (auto-reconnect growth)
 - Updated StreamDecodePipeline line count from 631 to 666
 - Added Recent Architectural Changes #12 (AudioEngineController Phase 4 extraction)

@@ -750,7 +750,7 @@ Includes:
 | **Segment-based resize** | PLAYLIST_WINDOW.md | §Segment-Based Resize System |
 | **Segment-based resize (MILKDROP)** | MILKDROP_WINDOW.md | §12.3 Window Resizing |
 | **25×29px segments** | PLAYLIST_WINDOW.md | §Window Specifications |
-| **WindowAccessor** | MACAMP_ARCHITECTURE_GUIDE.md | §NSWindow Bridge |
+| **WindowCoordinator** | MULTI_WINDOW_ARCHITECTURE.md | §10 WindowCoordinator Refactoring |
 | **WindowDragGesture** | CUSTOM_DRAG_FIX.md | §Problem Analysis |
 | **WindowFocusDelegate** | WINDOW_FOCUS_ARCHITECTURE.md | §WindowFocusDelegate |
 | **WindowFocusState** | WINDOW_FOCUS_ARCHITECTURE.md | §WindowFocusState Model |
@@ -769,16 +769,16 @@ Includes:
 | **XcodeGen resource configuration** | MILKDROP_WINDOW.md | §9.2 XcodeGen Resource Config |
 | **macOS 26 WebContent noise** | MILKDROP_WINDOW.md | §11.5 macOS 26 WebContent |
 | **VBR duration alignment** | IMPLEMENTATION_PATTERNS.md | §Audio Processing Patterns |
-| **`os_workgroup` / audio workgroup** | MACAMP_ARCHITECTURE_GUIDE.md | §4 Unified Audio Pipeline |
-| **`Now Playing` / MPNowPlayingInfoCenter** | MACAMP_ARCHITECTURE_GUIDE.md | §4 Unified Audio Pipeline |
-| **`Remote commands` / MPRemoteCommandCenter** | MACAMP_ARCHITECTURE_GUIDE.md | §4 Unified Audio Pipeline |
-| **Stream elapsed time** | IMPLEMENTATION_PATTERNS.md | §4 Audio Processing Patterns |
+| **`os_workgroup` / audio workgroup** | BUILDING_RETRO_MACOS_APPS_SKILL.md | Lesson #33 (os_workgroup) |
+| **`Now Playing` / MPNowPlayingInfoCenter** | BUILDING_RETRO_MACOS_APPS_SKILL.md | Lesson #32 (Now Playing) |
+| **`Remote commands` / MPRemoteCommandCenter** | BUILDING_RETRO_MACOS_APPS_SKILL.md | Lesson #32 (Now Playing) |
+| **Stream elapsed time** | BUILDING_RETRO_MACOS_APPS_SKILL.md | Lesson #34 (Anchor-Based Timer) |
 | **Playlist list operations (NEW/LOAD/SAVE)** | PLAYLIST_WINDOW.md | §List Operations |
 | **M3UWriter** | PLAYLIST_WINDOW.md | §List Operations |
-| **QueueConfined protocol** | IMPLEMENTATION_PATTERNS.md | §4 Audio Processing Patterns |
-| **TimeFormatting** | IMPLEMENTATION_PATTERNS.md | §Utilities |
+| **QueueConfined protocol** | `MacAmpApp/Audio/QueueConfined.swift` | (code file; no dedicated doc section yet) |
+| **TimeFormatting** | `MacAmpApp/Utilities/TimeFormatting.swift` | (code file; no dedicated doc section yet) |
 | **MenuActionTarget / MenuItemFactory** | IMPLEMENTATION_PATTERNS.md | §3 UI Component Patterns |
-| **WinampAlertHelper** | IMPLEMENTATION_PATTERNS.md | §Utilities |
+| **WinampAlertHelper** | `MacAmpApp/Utilities/WinampAlertHelper.swift` | (code file; no dedicated doc section yet) |
 | **PlaylistStyle.winampDefault** | IMPLEMENTATION_PATTERNS.md | §2 State Patterns |
 | **supportsAudioProcessing** | IMPLEMENTATION_PATTERNS.md | §2 Capability Flag Pattern |
 

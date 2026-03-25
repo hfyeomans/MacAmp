@@ -3636,7 +3636,7 @@ extension WinampPlaylistWindow {
 
 // 1. Extract interaction state into a dedicated @Observable class
 @MainActor @Observable
-final class PlaylistInteractionState {
+final class PlaylistWindowInteractionState {
     var isEditing = false
     var selectionAnchor: Int?
     // ... focused, testable state
@@ -3645,7 +3645,7 @@ final class PlaylistInteractionState {
 // 2. Child views declare only the dependencies they need
 struct PlaylistHeaderView: View {
     let skinManager: SkinManager
-    let interactionState: PlaylistInteractionState
+    let interactionState: PlaylistWindowInteractionState
 
     var body: some View {
         // Self-contained: only re-evaluates when its inputs change
@@ -3660,7 +3660,8 @@ struct PlaylistHeaderView: View {
 - `@Observable` interaction state classes are unit-testable without views
 
 **Current status** (all RESOLVED):
-- `WinampPlaylistWindow+Menus.swift` / `PlaylistWindowActions.swift` -- **REMOVED** (replaced by child view structs in Wave 1; see `tasks/playlistwindow-layer-decomposition/research.md`)
+- `WinampPlaylistWindow+Menus.swift` -- **REMOVED** (replaced by child view structs in Wave 1; see `tasks/playlistwindow-layer-decomposition/research.md`)
+- `PlaylistWindowActions.swift` -- **RETAINED** (318 lines; handles NEW/LOAD/SAVE list operations as standalone action methods)
 - `WinampMainWindow+Helpers.swift` -- **REMOVED** (replaced by child layer structs in PR #54 T3 MainWindow Layer Decomposition; see `tasks/mainwindow-layer-decomposition/`)
 - `WinampMainWindow.swift` moved from `MacAmpApp/Views/WinampMainWindow.swift` to `MacAmpApp/Views/MainWindow/WinampMainWindow.swift` with 10 files in the `MainWindow/` directory
 
