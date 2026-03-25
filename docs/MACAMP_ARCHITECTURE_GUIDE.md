@@ -1,8 +1,8 @@
 # MacAmp Complete Architecture Guide
 
-**Version:** 3.0.0
-**Date:** 2026-03-22
-**Project State:** Production-Ready (5-Window System, WindowCoordinator Refactoring, MainWindow Layer Decomposition (T3), Internet Radio N1-N6 Fixes, Unified Audio Pipeline (T5), AudioPlayer Decomposition Phase 4 (AudioEngineController), Auto-Reconnect, PlaylistWindow Decomposition, Swift Testing Migration, Swift 6.2, macOS 15+/26+)
+**Version:** 3.1.0
+**Date:** 2026-03-25
+**Project State:** Production-Ready (5-Window System, WindowCoordinator Refactoring, MainWindow Layer Decomposition (T3), Internet Radio N1-N6 Fixes, Unified Audio Pipeline (T5), AudioPlayer Decomposition Phase 4 (AudioEngineController), Auto-Reconnect, PlaylistWindow Decomposition, Swift Testing Migration, Swift 6.2, macOS 15+/26+, S2 Decomposition + Dead Code Cleanup)
 **Purpose:** Deep technical reference for developers joining or maintaining MacAmp
 
 ---
@@ -106,14 +106,14 @@ Deployment:               Developer ID signed, notarization-ready
 │ State Management       │   4   │   987 │ Production   │
 │ Models                 │  22   │ 3,142 │ Production   │
 │   - Track.swift        │   1   │    42 │ Extracted    │
-│ Utilities              │   7   │ 2,077 │ Production   │
+│ Utilities              │   9   │   823 │ Production   │
 └────────────────────────────────────────────────────────┘
 ```
 
 **Recent Metrics Improvements:**
 - MainWindow: monolithic ~650-line file → 10 files in MainWindow/ subdirectory (T3)
 - PlaylistWindow: monolithic + extension file → 7 files in PlaylistWindow/ subdirectory
-- AudioPlayer.swift: 1,805 → 705 lines (-61.0%) via Phase 1-4 extractions
+- AudioPlayer.swift: 1,805 → 734 lines (-59.3%) via Phase 1-4 extractions
 - Full Sendable conformance for Swift 6 readiness
 
 ### Recent Architectural Changes (October 2025 - March 2026)
@@ -484,14 +484,9 @@ final class PlaybackCoordinator {
         return streamPlayer.error == nil
     }
 
-    /// EQ is available for local files always, and for streams when bridge is active.
-    var supportsEQ: Bool { !isStreamBackendActive || audioPlayer.isBridgeActive }
-
-    /// Balance is available for local files always, and for streams when bridge is active.
-    var supportsBalance: Bool { !isStreamBackendActive || audioPlayer.isBridgeActive }
-
-    /// Visualizer is available when engine tap receives audio (local or bridged stream).
-    var supportsVisualizer: Bool { !isStreamBackendActive || audioPlayer.isBridgeActive }
+    /// Audio processing (EQ, balance, visualizer) is available for local files always,
+    /// and for streams when bridge is active.
+    var supportsAudioProcessing: Bool { !isStreamBackendActive || audioPlayer.isBridgeActive }
 
     // MARK: - Callback Wiring (PR #49 - N3 fix)
     //
@@ -646,7 +641,7 @@ final class PlaybackCoordinator {
 
 4. **Centralized volume/balance routing**: `setVolume()` and `setBalance()` on PlaybackCoordinator propagate to all backends (AudioPlayer, StreamPlayer, VideoPlaybackController) unconditionally. AudioPlayer applies volume/balance to both `playerNode` and `streamSourceNode` via `didSet`.
 
-5. **Capability flags**: `supportsEQ`, `supportsBalance`, and `supportsVisualizer` are computed properties on PlaybackCoordinator that return `true` when either (a) the stream backend is not active, or (b) the AudioPlayer bridge is active (`audioPlayer.isBridgeActive`). With the unified pipeline, all three flags return `true` during stream playback once the bridge activates. The UI dims controls only during the brief prebuffering window and on error state.
+5. **Capability flag**: `supportsAudioProcessing` is a unified computed property on PlaybackCoordinator that returns `true` when either (a) the stream backend is not active, or (b) the AudioPlayer bridge is active (`audioPlayer.isBridgeActive`). With the unified pipeline, this flag returns `true` during stream playback once the bridge activates. The UI dims controls only during the brief prebuffering window and on error state.
 
 6. **StreamPlayer rewrite**: StreamPlayer no longer uses AVPlayer or NSObject. It owns a `StreamDecodePipeline` that decodes streams to PCM. Volume and balance are applied via AVAudioEngine (through AudioPlayer's `streamSourceNode`). StreamPlayer stores these values for state tracking only. Uses `isolated deinit` (Swift 6.2).
 
@@ -654,7 +649,7 @@ final class PlaybackCoordinator {
 
 ### Integration with UI
 
-The UI uses PlaybackCoordinator's capability flags to enable/disable controls based on the active backend:
+The UI uses PlaybackCoordinator's unified `supportsAudioProcessing` flag to enable/disable controls based on the active backend:
 
 ```swift
 // File: MacAmpApp/Views/MainWindow/MainWindowSlidersLayer.swift (simplified excerpt)
@@ -693,20 +688,20 @@ struct MainWindowSlidersLayer: View {
         )
         WinampBalanceSlider(balance: balanceBinding)
             .at(Layout.balanceSlider)
-            .opacity(playbackCoordinator.supportsBalance ? 1.0 : 0.5)
-            .allowsHitTesting(playbackCoordinator.supportsBalance)
-            .help(playbackCoordinator.supportsBalance
+            .opacity(playbackCoordinator.supportsAudioProcessing ? 1.0 : 0.5)
+            .allowsHitTesting(playbackCoordinator.supportsAudioProcessing)
+            .help(playbackCoordinator.supportsAudioProcessing
                   ? "Balance"
                   : "Balance unavailable during streaming")
     }
 }
 
 // File: MacAmpApp/Views/WinampEqualizerWindow.swift (simplified excerpt)
-// EQ sliders dim during stream playback via capability flag
+// EQ sliders dim during stream playback via unified capability flag
 
 eqSliders
-    .opacity(playbackCoordinator.supportsEQ ? 1.0 : 0.5)
-    .allowsHitTesting(playbackCoordinator.supportsEQ)
+    .opacity(playbackCoordinator.supportsAudioProcessing ? 1.0 : 0.5)
+    .allowsHitTesting(playbackCoordinator.supportsAudioProcessing)
 ```
 
 ### Critical Implementation Details
@@ -1189,25 +1184,34 @@ private final class VisualizerScratchBuffers: @unchecked Sendable { ... }
 ```
 MacAmpApp/
 ├── Audio/
-│   ├── AudioPlayer.swift              (705 lines) - Playback Facade
-│   ├── AudioEngineController.swift    (413 lines) - Engine graph lifecycle (Phase 4)
-│   ├── EqualizerController.swift      (~198 lines) - EQ facade (extracted from AudioPlayer)
-│   ├── LockFreeRingBuffer.swift       (~212 lines) - SPSC ring buffer for stream audio
-│   ├── EQPresetStore.swift            (197 lines) - Preset persistence
-│   ├── MetadataLoader.swift           (171 lines) - Track metadata
-│   ├── PlaylistController.swift       (297 lines) - Playlist logic
+│   ├── AudioPlayer.swift              (734 lines) - Playback Facade
+│   ├── AudioEngineController.swift    (424 lines) - Engine graph lifecycle (Phase 4)
+│   ├── EqualizerController.swift      (205 lines) - EQ facade (extracted from AudioPlayer)
+│   ├── LockFreeRingBuffer.swift       (180 lines) - SPSC ring buffer for stream audio
+│   ├── EQPresetStore.swift            (191 lines) - Preset persistence
+│   ├── MetadataLoader.swift           (169 lines) - Track metadata
+│   ├── PlaylistController.swift       (286 lines) - Playlist logic
 │   ├── VideoPlaybackController.swift  (282 lines) - AVPlayer wrapper
-│   ├── VisualizerPipeline.swift       (699 lines) - Audio tap + SPSC + FFT
-│   ├── StreamPlayer.swift             (334 lines) - Internet radio + auto-reconnect
-│   └── PlaybackCoordinator.swift      (426 lines) - Backend orchestration
+│   ├── VisualizerPipeline.swift       (645 lines) - Audio tap + SPSC + FFT
+│   ├── StreamPlayer.swift             (414 lines) - Internet radio + auto-reconnect
+│   ├── PlaybackCoordinator.swift      (562 lines) - Backend orchestration
+│   ├── ObjCBridge/
+│   │   ├── AUAudioUnitWorkgroupShim.h  (17 lines) - ObjC bridge for os_workgroup
+│   │   └── AUAudioUnitWorkgroupShim.m  (23 lines) - ObjC bridge implementation
+│   └── Streaming/
+│       ├── QueueConfined.swift            (19 lines) - Queue confinement protocol
+│       ├── ICYFramer.swift                (200 lines) - ICY metadata protocol parser
+│       ├── AudioFileStreamParser.swift    (186 lines) - AudioFileStream C API wrapper
+│       ├── AudioConverterDecoder.swift    (285 lines) - AudioConverter C API wrapper
+│       └── StreamDecodePipeline.swift     (697 lines) - Pipeline orchestrator
 │
 ├── ViewModels/
-│   ├── WindowCoordinator.swift        (219 lines) - Window management facade
-│   ├── WindowCoordinator+Layout.swift (164 lines) - Layout/presentation extension
-│   ├── SkinManager.swift              (783 lines) - Skin loading
-│   ├── DockingController.swift        (144 lines) - Window docking
+│   ├── WindowCoordinator.swift        (218 lines) - Window management facade
+│   ├── WindowCoordinator+Layout.swift (129 lines) - Layout/presentation extension
+│   ├── SkinManager.swift              (766 lines) - Skin loading
+│   ├── DockingController.swift        (124 lines) - Window docking
 │   ├── ButterchurnBridge.swift        (247 lines) - Swift-to-JS Butterchurn bridge
-│   └── ButterchurnPresetManager.swift (282 lines) - Preset management
+│   └── ButterchurnPresetManager.swift (273 lines) - Preset management
 │
 ├── Views/
 │   ├── MainWindow/                    (T3 Decomposition, PR #54)
@@ -1256,13 +1260,10 @@ MacAmpApp/
 │   ├── WinampPlaylistWindow.swift     - Playlist root composition
 │   ├── WinampVideoWindow.swift        - Video window
 │   ├── WinampMilkdropWindow.swift     - Milkdrop window
-│   ├── EqGraphView.swift              - EQ graph visualization
-│   ├── PlaylistWindowActions.swift    - Playlist window actions
+│   ├── PlaylistWindowActions.swift    - Playlist window actions (NEW/LOAD/SAVE)
 │   ├── PreferencesView.swift          - Preferences window
 │   ├── PresetsButton.swift            - EQ presets button
-│   ├── SkinnedBanner.swift            - Skinned banner view
 │   ├── SkinnedText.swift              - Bitmap font text rendering
-│   ├── VisualizerOptions.swift        - Visualizer options menu
 │   └── VisualizerView.swift           - Spectrum/waveform visualizer
 │
 ├── Windows/
@@ -1287,6 +1288,17 @@ MacAmpApp/
 │   ├── EQPreset.swift                 (existing, + Sendable)
 │   ├── EqfPreset.swift                (existing, + Sendable)
 │   └── ...
+│
+├── Utilities/
+│   ├── TimeFormatting.swift           (12 lines) - Duration formatting
+│   ├── MenuActionTarget.swift         (39 lines) - NSMenu closure bridge
+│   ├── WinampAlertHelper.swift        (50 lines) - Alert presentation helpers
+│   ├── AppLogger.swift                (43 lines) - Unified logging
+│   ├── WinampWindowConfigurator.swift (62 lines) - Window configuration
+│   ├── WindowDelegateMultiplexer.swift (86 lines) - Delegate multiplexer
+│   ├── WindowFocusDelegate.swift      (41 lines) - Focus delegation
+│   ├── WindowResizePreviewOverlay.swift (111 lines) - Resize preview
+│   └── WindowSnapManager.swift        (379 lines) - Magnetic snap logic
 ```
 
 ### Migration Notes
@@ -3109,7 +3121,7 @@ T5 Phase 1 addressed a fundamental gap: volume and balance changes from the UI o
 
 **Solution:** PlaybackCoordinator gained two routing methods (`setVolume()`, `setBalance()`) that propagate to all backends unconditionally. UI sliders use asymmetric `Binding<Float>` that reads from AudioPlayer (source of truth for persistence) but writes through the coordinator.
 
-**Capability Flags:** Three computed properties (`supportsEQ`, `supportsBalance`, `supportsVisualizer`) gate UI controls. With the unified pipeline, they return `true` once the stream bridge is active (`audioPlayer.isBridgeActive`). Controls dim briefly during the prebuffering window (before bridge activates) and on error state:
+**Capability Flag:** A unified computed property (`supportsAudioProcessing`) gates all audio-dependent UI controls (EQ, balance, visualizer). With the unified pipeline, it returns `true` once the stream bridge is active (`audioPlayer.isBridgeActive`). Controls dim briefly during the prebuffering window (before bridge activates) and on error state:
 - EQ sliders dim (50% opacity, hit testing disabled) in WinampEqualizerWindow
 - Balance slider dims in MainWindow/MainWindowSlidersLayer
 - Controls re-enable when bridge activates or stream enters error state
@@ -4124,43 +4136,7 @@ func generateFallbackGenChrome() -> GenChromeSet {
 
 ### Butterchurn Audio Data Flow
 
-Complete path from audio file to WebGL visualization:
-
-```
-┌──────────────────────────────────────────────────────────────────────────┐
-│                     BUTTERCHURN AUDIO DATA FLOW                          │
-├──────────────────────────────────────────────────────────────────────────┤
-│                                                                           │
-│   Audio File (.mp3/flac)                                                  │
-│        │                                                                  │
-│        ▼                                                                  │
-│   AVAudioEngine (48kHz stereo)                                            │
-│        │                                                                  │
-│        ▼                                                                  │
-│   installTap(2048 samples) ─────▶ Mono downsample + vDSP FFT              │
-│        │                                                                  │
-│        ▼                                                                  │
-│   VisualizerPipeline.swift                                                │
-│   ├── @ObservationIgnored butterchurnSpectrum[1024]                      │
-│   ├── @ObservationIgnored butterchurnWaveform[1024]                      │
-│   └── snapshotButterchurnFrame() → ButterchurnFrame                      │
-│        │                                                                  │
-│        ▼ (30 FPS Timer)                                                   │
-│   ButterchurnBridge.swift                                                 │
-│   └── callAsyncJavaScript("receiveAudioData([...])")                      │
-│        │                                                                  │
-│        ▼ (WKWebView)                                                      │
-│   bridge.js                                                               │
-│   └── ScriptProcessorNode → Butterchurn analyser                          │
-│        │                                                                  │
-│        ▼ (60 FPS requestAnimationFrame)                                   │
-│   butterchurn.min.js                                                      │
-│   └── visualizer.render() → WebGL Canvas                                  │
-│                                                                           │
-└──────────────────────────────────────────────────────────────────────────┘
-```
-
-**Note:** With the unified audio pipeline (March 2026), Butterchurn visualization is available for both local file playback and internet radio streams. The stream decode pipeline feeds PCM into AVAudioEngine, where the visualizer tap captures data identically to local files.
+See **§8 Audio Processing Pipeline → Butterchurn Data Flow** for the complete diagram (Audio File → AVAudioEngine → VisualizerPipeline → ButterchurnBridge → WebGL). The same pipeline serves both local file and internet radio streams via the unified audio engine.
 
 ### Key Implementation Details
 
@@ -4390,77 +4366,6 @@ http://stream.example.com/radio
 
 ---
 
-## WindowAccessor Pattern
-
-MacAmp uses WindowAccessor to bridge SwiftUI views with NSWindow functionality for window management.
-
-### Implementation
-
-```swift
-// File: MacAmpApp/Utilities/WindowAccessor.swift:1-24
-// Purpose: Access NSWindow from SwiftUI views
-// Context: Required for window-level operations not exposed by SwiftUI
-
-struct WindowAccessor: NSViewRepresentable {
-    let onWindow: (NSWindow) -> Void
-
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView()
-        DispatchQueue.main.async { [weak view] in
-            if let window = view?.window {
-                onWindow(window)
-            }
-        }
-        return view
-    }
-
-    func updateNSView(_ nsView: NSView, context: Context) {
-        if let window = nsView.window {
-            onWindow(window)
-        }
-    }
-}
-```
-
-### Usage Pattern
-
-```swift
-// Example: Configure window properties from SwiftUI
-// Note: WindowAccessor is used from window controller hosting views,
-// not directly in the MainWindow/ child view structs.
-struct ExampleWindowView: View {
-    var body: some View {
-        ZStack {
-            // Window configuration layer
-            WindowAccessor { window in
-                // Configure NSWindow properties
-                window.isMovableByWindowBackground = true
-                window.titleVisibility = .hidden
-                window.titlebarAppearsTransparent = true
-                window.standardWindowButton(.closeButton)?.isHidden = false
-                window.standardWindowButton(.miniaturizeButton)?.isHidden = false
-                window.standardWindowButton(.zoomButton)?.isHidden = true
-
-                // Register with snap manager
-                WindowSnapManager.shared.register(window: window, kind: .main)
-            }
-            .frame(width: 0, height: 0)  // Invisible
-
-            // Actual window content
-            WinampMainWindow()  // Root composition from MainWindow/
-        }
-    }
-}
-```
-
-### Common Use Cases
-
-1. **Window Registration**: Register windows with WindowSnapManager
-2. **Titlebar Configuration**: Hide or customize the titlebar
-3. **Window Buttons**: Show/hide traffic light buttons
-4. **Draggable Background**: Make window draggable by background
-5. **Window Level**: Set floating or normal window level
-
 ---
 
 ## Component Integration Maps
@@ -4490,8 +4395,9 @@ Video Window              Milkdrop Window
      └─────────────────────────────┘
                     │
                     ▼
-            WindowAccessor
-    (NSWindow manipulation via NSViewRepresentable)
+       WinampWindowConfigurator
+    (NSWindow config: borderless, hit surface,
+     shadow, tabbingMode, titlebar properties)
 ```
 
 ### Playlist System
@@ -4767,13 +4673,13 @@ let balanceBinding = Binding<Float>(
 )
 WinampBalanceSlider(balance: balanceBinding)
     .at(Layout.balanceSlider)
-    .opacity(playbackCoordinator.supportsBalance ? 1.0 : 0.5)
-    .allowsHitTesting(playbackCoordinator.supportsBalance)
+    .opacity(playbackCoordinator.supportsAudioProcessing ? 1.0 : 0.5)
+    .allowsHitTesting(playbackCoordinator.supportsAudioProcessing)
 ```
 
 **Capability-Based Dimming** (T5 Phase 1, updated for unified pipeline):
 - Balance slider dims (50% opacity, hit testing disabled) only during stream prebuffering (before bridge activates) or error state
-- EQ sliders dim via `playbackCoordinator.supportsEQ` in WinampEqualizerWindow
+- EQ sliders dim via `playbackCoordinator.supportsAudioProcessing` in WinampEqualizerWindow
 - Once the stream bridge is active, all controls are fully enabled (EQ, balance, visualizer all work via unified pipeline)
 - Controls re-enable when stream enters error state (user not stuck with dimmed UI)
 - Tooltip changes to "Balance unavailable during streaming" when dimmed (prebuffering only)
@@ -5039,22 +4945,26 @@ struct MainWindowSlidersLayer: View {
 ```
 MacAmpApp/
 ├── Audio/
-│   ├── AudioPlayer.swift           # Playback facade, volume/balance, seek control (705 lines)
-│   ├── AudioEngineController.swift # AVAudioEngine graph lifecycle, node wiring, bridge (413 lines)
-│   ├── EqualizerController.swift   # EQ facade (extracted from AudioPlayer, ~198 lines)
-│   ├── LockFreeRingBuffer.swift    # SPSC ring buffer for stream audio (~212 lines)
-│   ├── EQPresetStore.swift         # EQ preset persistence (197 lines)
-│   ├── MetadataLoader.swift        # Async track/video metadata (171 lines)
-│   ├── PlaylistController.swift    # Playlist state and navigation (297 lines)
+│   ├── AudioPlayer.swift           # Playback facade, volume/balance, seek control (734 lines)
+│   ├── AudioEngineController.swift # AVAudioEngine graph lifecycle, node wiring, bridge (424 lines)
+│   ├── EqualizerController.swift   # EQ facade (extracted from AudioPlayer, 205 lines)
+│   ├── LockFreeRingBuffer.swift    # SPSC ring buffer for stream audio (180 lines)
+│   ├── EQPresetStore.swift         # EQ preset persistence (191 lines)
+│   ├── MetadataLoader.swift        # Async track/video metadata (169 lines)
+│   ├── PlaylistController.swift    # Playlist state and navigation (286 lines)
 │   ├── VideoPlaybackController.swift # AVPlayer lifecycle (282 lines)
-│   ├── VisualizerPipeline.swift    # Audio tap, FFT, SPSC buffer, Butterchurn (699 lines)
-│   ├── StreamPlayer.swift          # Stream playback, auto-reconnect, owns StreamDecodePipeline (334 lines)
-│   ├── PlaybackCoordinator.swift   # Orchestrates both backends, bridge lifecycle, capability flags (426 lines)
+│   ├── VisualizerPipeline.swift    # Audio tap, FFT, SPSC buffer, Butterchurn (645 lines)
+│   ├── StreamPlayer.swift          # Stream playback, auto-reconnect, owns StreamDecodePipeline (414 lines)
+│   ├── PlaybackCoordinator.swift   # Orchestrates both backends, bridge lifecycle, capability flag (562 lines)
+│   ├── ObjCBridge/
+│   │   ├── AUAudioUnitWorkgroupShim.h  # ObjC bridge for os_workgroup (17 lines)
+│   │   └── AUAudioUnitWorkgroupShim.m  # ObjC bridge implementation (23 lines)
 │   └── Streaming/
-│       ├── ICYFramer.swift             # ICY metadata protocol parser, Sendable struct
-│       ├── AudioFileStreamParser.swift # AudioFileStream C API wrapper, decode-queue-confined
-│       ├── AudioConverterDecoder.swift # AudioConverter C API wrapper, decode-queue-confined
-│       └── StreamDecodePipeline.swift  # Pipeline orchestrator (@MainActor + DecodeContext)
+│       ├── QueueConfined.swift         # Queue confinement protocol (19 lines)
+│       ├── ICYFramer.swift             # ICY metadata protocol parser, Sendable struct (200 lines)
+│       ├── AudioFileStreamParser.swift # AudioFileStream C API wrapper, decode-queue-confined (186 lines)
+│       ├── AudioConverterDecoder.swift # AudioConverter C API wrapper, decode-queue-confined (285 lines)
+│       └── StreamDecodePipeline.swift  # Pipeline orchestrator (@MainActor + DecodeContext, 697 lines)
 │
 ├── Models/
 │   ├── Track.swift                 # Track data model (42 lines, Sendable)
@@ -5063,12 +4973,12 @@ MacAmpApp/
 │   └── RadioStation.swift          # Internet radio station model
 │
 ├── ViewModels/
-│   ├── SkinManager.swift           # Skin loading and hot-swap
-│   ├── DockingController.swift     # Window magnetic docking
+│   ├── SkinManager.swift           # Skin loading and hot-swap (766 lines)
+│   ├── DockingController.swift     # Window magnetic docking (124 lines)
 │   ├── ButterchurnBridge.swift      # Swift-to-JS Butterchurn bridge (247 lines)
-│   ├── ButterchurnPresetManager.swift # Preset management (282 lines)
-│   ├── WindowCoordinator.swift      # Window management facade (219 lines)
-│   └── WindowCoordinator+Layout.swift # Layout/presentation (164 lines)
+│   ├── ButterchurnPresetManager.swift # Preset management (273 lines)
+│   ├── WindowCoordinator.swift      # Window management facade (218 lines)
+│   └── WindowCoordinator+Layout.swift # Layout/presentation (129 lines)
 │
 ├── Views/
 │   ├── MainWindow/                 # Main player window (T3 decomposition, 10 files)
@@ -5134,6 +5044,17 @@ MacAmpApp/
 │   ├── WinampVideoWindowController.swift     # NSWindowController for video (44 lines)
 │   └── WinampMilkdropWindowController.swift  # NSWindowController for milkdrop (85 lines)
 │
+├── Utilities/
+│   ├── TimeFormatting.swift                  # Duration formatting (12 lines)
+│   ├── MenuActionTarget.swift                # NSMenu closure bridge (39 lines)
+│   ├── WinampAlertHelper.swift               # Alert presentation helpers (50 lines)
+│   ├── AppLogger.swift                       # Unified logging (43 lines)
+│   ├── WinampWindowConfigurator.swift        # Window configuration (62 lines)
+│   ├── WindowDelegateMultiplexer.swift       # Delegate multiplexer (86 lines)
+│   ├── WindowFocusDelegate.swift             # Focus delegation (41 lines)
+│   ├── WindowResizePreviewOverlay.swift      # Resize preview (111 lines)
+│   └── WindowSnapManager.swift              # Magnetic snap logic (379 lines)
+│
 ├── MacAmpApp.swift                 # App entry point, DI setup
 ├── AppCommands.swift                # App menu commands
 └── SkinsCommands.swift               # Skins menu commands
@@ -5187,14 +5108,14 @@ dockingController.dockWindow(.equalizer, to: .main, edge: .bottom)
 
 ```bash
 # Debug build
-xcodebuild -scheme MacAmp -configuration Debug build
+xcodebuild -scheme MacAmpApp -configuration Debug build
 
 # Release build with optimizations
-xcodebuild -scheme MacAmp -configuration Release \
-    -archivePath MacAmp.xcarchive archive
+xcodebuild -scheme MacAmpApp -configuration Release \
+    -archivePath MacAmpApp.xcarchive archive
 
 # Run tests
-swift test
+xcodebuild test -scheme MacAmpApp -destination 'platform=macOS' -enableThreadSanitizer YES
 
 # Clean build
 xcodebuild clean
@@ -5283,7 +5204,7 @@ Welcome to MacAmp. May your audio be crisp and your skins be pixel-perfect.
 
 ---
 
-*Document Version: 3.0.0 | Last Updated: 2026-03-22 | Lines: ~5,400*
+*Document Version: 3.1.0 | Last Updated: 2026-03-25 | Lines: ~5,500*
 
 **Recent Updates (v3.0.0 - 2026-03-22):**
 - Added AudioEngineController (413 lines) to Component Breakdown table, Three-Layer diagram, Section 4a decomposition architecture, Data Flow diagram, File Structure, and Quick Reference
