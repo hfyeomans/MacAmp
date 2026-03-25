@@ -133,18 +133,26 @@ Create `ExportOptions.plist`:
 
 ### Step 2: Store Credentials
 
+Credentials are stored in Keychain under profile name `notarytool-password`. This is already configured:
+
 ```bash
-# Store your credentials in Keychain (one-time setup)
-xcrun notarytool store-credentials "MacAmp-Notary" \
-  --apple-id "your-apple-id@example.com" \
-  --team-id "YOUR_TEAM_ID" \
-  --password "xxxx-xxxx-xxxx-xxxx"
+# Already done — reference with --keychain-profile "notarytool-password"
+# Apple ID: hank.yeomans@me.com
+# Team ID: AC3LGVEJJ8
 ```
 
-Replace:
-- `your-apple-id@example.com` with your Apple ID
-- `YOUR_TEAM_ID` with your 10-character Team ID
-- `xxxx-xxxx-xxxx-xxxx` with the app-specific password
+If you ever need to re-create the profile (new machine, Keychain reset, rotated app-specific password):
+
+```bash
+# 1. Generate a new app-specific password at https://appleid.apple.com
+#    (Security → App-Specific Passwords → Generate)
+# 2. Store credentials:
+xcrun notarytool store-credentials "notarytool-password" \
+  --apple-id "hank.yeomans@me.com" \
+  --team-id "AC3LGVEJJ8" \
+  --password "xxxx-xxxx-xxxx-xxxx"
+# 3. It will prompt for the app-specific password if --password is omitted
+```
 
 ### Step 3: Submit for Notarization
 
@@ -155,7 +163,7 @@ ditto -c -k --keepParent MacAmpApp.app MacAmpApp.zip
 
 # Submit to Apple
 xcrun notarytool submit MacAmpApp.zip \
-  --keychain-profile "MacAmp-Notary" \
+  --keychain-profile "notarytool-password" \
   --wait
 
 # This will return a submission ID like:
@@ -171,11 +179,11 @@ The `--wait` flag makes it wait for results (usually 2-5 minutes).
 ```bash
 # Check notarization status
 xcrun notarytool info SUBMISSION_ID \
-  --keychain-profile "MacAmp-Notary"
+  --keychain-profile "notarytool-password"
 
 # View logs if rejected
 xcrun notarytool log SUBMISSION_ID \
-  --keychain-profile "MacAmp-Notary"
+  --keychain-profile "notarytool-password"
 ```
 
 ### Step 5: Staple the Ticket
@@ -205,7 +213,7 @@ hdiutil create -volname "MacAmp" \
 
 # Notarize the DMG too
 xcrun notarytool submit MacAmp-0.1.0.dmg \
-  --keychain-profile "MacAmp-Notary" \
+  --keychain-profile "notarytool-password" \
   --wait
 
 # Staple to DMG
@@ -335,7 +343,7 @@ xattr -cr MacAmpApp.app
 ```bash
 # Get detailed logs
 xcrun notarytool log SUBMISSION_ID \
-  --keychain-profile "MacAmp-Notary" \
+  --keychain-profile "notarytool-password" \
   notarization-log.json
 
 # Review the JSON for specific issues
