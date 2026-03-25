@@ -314,7 +314,7 @@ All doc updates verified complete by sub-agent scan:
 |---|-------------|-------------|------|--------|------------|
 | 0 | `intra-file-dedup-simplification` | First-pass dedup: consolidate intra-file duplications + remove dead code in 4 implementation targets (excludes AudioPlayer) | Small-Medium | COMPLETE (PR #71 merged 2026-03-24) | None — runs first |
 | 0.5 | `codebase-wide-simplification` | Codebase-wide dead code + DRY consolidation (-732 lines, 6 files deleted, 4 utilities created) | Medium | COMPLETE (PR #72 merged 2026-03-24) | After Task 0 |
-| 1 | `streamdecodepipeline-decomposition` | ~~3 new files~~ → Optional: extract DecodeContext only (narrow API) | Small | **OPTIONAL GO** | Independent |
+| 1 | `streamdecodepipeline-decomposition` | **DEFERRED.** DecodeContext extraction requires `private → internal` (Principle 5). File is 697 lines, one responsibility, architecturally sound per sweep. Same principle applied to cancel SkinManager Step 4 and VisualizerPipeline. | N/A | **DEFERRED** | Re-evaluate if file grows or gains new responsibility |
 | 2 | `winamp-equalizer-window-decomposition` | Selective: extracted WinampVerticalSlider + EQPresetPickerView. Full layer split cancelled (verbose SwiftUI). 616→354 lines. | Small | **COMPLETE** (PR #76) | Done |
 | 3 | `visualizerpipeline-decomposition` | ~~4 new files~~ → Cancelled (private @unchecked Sendable surface risk) | N/A | **NO-GO** | N/A |
 | 4 | `skinmanager-decomposition` | Steps 1-3 done (ArchiveLoader, Import). Preprocessor removed (skin artifact bug). Step 4 cancelled (visibility leak). 766→454 lines. | Medium | **COMPLETE** (PR #75 merged 2026-03-25) | Done |
