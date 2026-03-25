@@ -30,3 +30,36 @@
 | File | Bug | Fix |
 |------|-----|-----|
 | `SkinManager.swift` | Two code paths had inconsistent playlist color defaults — `parseDefaultSkinFully` used `Color.green`/`Color.blue`, `applySkinPayload` used `.white`/`Color(r:0,g:0,b:0.776)`. Neither fully matched Winamp 2.x. | Created `PlaylistStyle.winampDefault` with correct Winamp 2.x colors: green `#00FF00`, white, black, deep blue `#0000C6`. Both paths + `WinampPlaylistWindow` fallback now use it. |
+
+## Oracle-Caught Behavior Regressions (Fixed)
+
+These were behavior changes introduced by the dedup that the Oracle caught during review. Both follow the same pattern: two code paths had intentionally different fallbacks, and naive dedup collapsed them into one. The fix in both cases was to add a `fallback:` parameter preserving the original per-path behavior.
+
+### P2: Viscolor fallback for custom skins (commit d113fde)
+
+**What happened:** `parseVisualizerColors` was initially extracted without a `fallback:` parameter, returning `defaultVisualizerColors` (24 green entries) for ALL skins when `viscolor.txt` is missing.
+
+**Why it's wrong:** The original `applySkinPayload` (custom skins) fell back to an empty array `[]`, which causes `VisualizerView` to skip rendering (it guards on `!colors.isEmpty`). Returning 24 greens instead would render an all-green monochrome visualizer for skins that intentionally omit viscolor.txt.
+
+**Fix:** Restored `fallback:` parameter. Call sites:
+- `parseDefaultSkinFully` → `fallback: Self.defaultVisualizerColors` (24 greens — default Winamp skin always has a valid palette)
+- `applySkinPayload` → `fallback: []` (custom skins — VisualizerView handles empty gracefully)
+
+**Future note:** The empty-array fallback for custom skins may itself be a latent bug — Winamp 2.x uses its default green palette when a skin lacks viscolor.txt, not "no visualizer." If we ever want to fix that, change the `applySkinPayload` call to pass `Self.defaultVisualizerColors` instead of `[]`. That would be a separate intentional behavior change, not a dedup side-effect.
+
+### P3: Playlist style fallback for custom skins (commit 8e2469b)
+
+**What happened:** `parsePlaylistStyle` was initially extracted returning `.winampDefault` (green `#00FF00` text) for ALL skins when `pledit.txt` is missing.
+
+**Why it's wrong:** The original `applySkinPayload` (custom skins) used white text as the fallback — matching `PLEditParser`'s own per-key defaults (white/white/black/#0000C6). A skin with no `pledit.txt` at all would get green text instead of white, which is a user-visible change.
+
+**Fix:** Added `PlaylistStyle.pleditParserDefault` (white/white/black/#0000C6) matching the old custom-skin behavior. Call sites:
+- `parseDefaultSkinFully` → `fallback: .winampDefault` (green text — for the bundled Winamp.wsz)
+- `applySkinPayload` → `fallback: .pleditParserDefault` (white text — preserves old behavior)
+
+**Future note:** There are now THREE playlist style fallback levels:
+1. `PlaylistStyle.winampDefault` — green text, used when the default Winamp skin's pledit.txt is missing (shouldn't happen — Winamp.wsz includes it)
+2. `PlaylistStyle.pleditParserDefault` — white text, used when a custom skin lacks pledit.txt entirely
+3. `PLEditParser` per-key fallbacks — white text per missing key, used when pledit.txt exists but is incomplete (e.g., has `[Text]` section but missing `Normal=` line)
+
+Levels 2 and 3 intentionally match (both white). Level 1 uses green because that's the canonical Winamp 2.x default. If we ever see playlist color issues with specific skins, check which fallback level is being triggered by adding logging to `parsePlaylistStyle(from:fallback:)`.
