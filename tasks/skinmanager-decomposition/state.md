@@ -1,27 +1,25 @@
 # State: SkinManager Decomposition
 
 > **Description:** Tracks readiness and progress for the `SkinManager.swift` decomposition task.
-> **Updated:** 2026-03-25 (line numbers refreshed post-Phase 2.5 cleanup; Phase 2a COMPLETE)
+> **Updated:** 2026-03-25 (COMPLETE — PR #75 merged)
 
 ---
 
 ## Status
 
-READY TO START. Phase 2a dedup complete. Plans refreshed with current line numbers.
+COMPLETE. PR #75 merged 2026-03-25. Steps 1-3 executed, Step 4 cancelled per responsibility sweep.
 
-## Scheduling
+## Result
 
-- Phase 2a complete (PR #71 + PR #72): parsing helpers, dead imports, color bug all handled.
-- Execution order: **Task 4 of 5** (largest file, some duplication deferred to Phase 2c)
-
-## Current Line Count
-
-766 lines (down from 783 — Phase 2a/2.5 removed dead imports + extracted parsing helpers)
+- SkinManager.swift: 766→454 lines (-312)
+- 2 new files: SkinArchiveLoader.swift (74 lines), SkinManager+Import.swift (191 lines)
+- SkinBackgroundPreprocessor extracted then DELETED (caused skin artifacts — unnecessary workaround)
+- Dead code removed: PresetsButton.swift (146 lines), WinampButtonStyle.swift (37 lines), WinampAlertHelper.promptText
+- Bonus fixes: SkinImportError.validationFailed (semantic precision), int64Value (overflow safety)
+- Oracle: 8.5/10, all Gemini/CodeRabbit comments resolved
 
 ## Key Decision
 
-- Decompose in place within `ViewModels/` — no moves to `Features/Skins/` (post-S3)
-- Extract 4 new files: SkinArchiveLoader, SkinImporter (extension), SkinBackgroundPreprocessor, SkinFallbackResolver (extension)
-- Residual SkinManager: ~392 lines (revised from ~250 — core loading + orchestration larger than estimated)
-- Use extension-file pattern for methods that need `self` (SkinImporter, SkinFallbackResolver)
-- New shared parsing helpers section (lines 734-755) moves with residual or into a separate parsing file
+- Step 4 (SkinManager+Fallback.swift) cancelled: would require `private → internal` for 3 mutable caches with append-only invariants (Principle 5 violation per responsibility sweep)
+- SkinBackgroundPreprocessor removed entirely: digit sprites render on top, preprocessing was harmful on non-black skins
+- Residual 454 lines is a single cohesive responsibility: skin state management, loading, fallback resolution, orchestration

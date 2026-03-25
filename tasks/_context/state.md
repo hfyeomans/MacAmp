@@ -315,7 +315,7 @@ All doc updates verified complete by sub-agent scan:
 | 1 | `streamdecodepipeline-decomposition` | ~~3 new files~~ → Optional: extract DecodeContext only (narrow API) | Small | **OPTIONAL GO** | Independent |
 | 2 | `winamp-equalizer-window-decomposition` | ~~5 new files~~ → Selective: extract WinampVerticalSlider + PresetPickerView only | Small | **SELECTIVE GO** | Independent |
 | 3 | `visualizerpipeline-decomposition` | ~~4 new files~~ → Cancelled (private @unchecked Sendable surface risk) | N/A | **NO-GO** | N/A |
-| 4 | `skinmanager-decomposition` | ~~4 new files~~ → Steps 1-3 only (ArchiveLoader, Import, Preprocessor). Step 4 cancelled (visibility leak). 766→~460 lines. | Medium | **PARTIAL GO** | Independent |
+| 4 | `skinmanager-decomposition` | Steps 1-3 done (ArchiveLoader, Import). Preprocessor removed (skin artifact bug). Step 4 cancelled (visibility leak). 766→454 lines. | Medium | **COMPLETE** (PR #75 merged 2026-03-25) | Done |
 | 5 | `audioplayer-seek-extraction` | **DEFERRED (Option C).** 734 lines, one responsibility (facade). Accept swiftlint suppressions. Revisit as Option B (lean SeekController with direct engine refs, 2 callbacks max) only if AudioPlayer grows past 800 lines during S3 or a new responsibility emerges. | N/A | **DEFERRED** | Re-evaluate during S3 |
 
 **Responsibility sweep (2026-03-25, PR #74):** 5-agent SRP + AHA audit of all 109 files. Result: 76 Clean, 26 Justified, 7 Actionable. Applied Swift Architecture & Decomposition principles (Cohesion > LOC, AHA Rule of Three, no visibility leaks, no pass-through middlemen). 4 of 5 original decomposition plans revised or cancelled. See `tasks/responsibility-sweep/research.md`.
