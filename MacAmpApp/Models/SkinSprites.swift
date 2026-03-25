@@ -37,10 +37,16 @@ struct SkinSprites {
         allSpritesByName[name]
     }
 
-    /// Get the dimensions for a sprite by name
+    /// Get the dimensions for a sprite by name (includes NUMS_EX optional sprites)
     func dimensions(forSprite name: String) -> CGSize? {
-        guard let sprite = sprite(named: name) else { return nil }
-        return CGSize(width: sprite.width, height: sprite.height)
+        if let sprite = sprite(named: name) {
+            return CGSize(width: sprite.width, height: sprite.height)
+        }
+        // Fall back to NUMS_EX sprites (not in defaultSprites.sheets since they're optional)
+        if let exSprite = Self.numsExSprites.first(where: { $0.name == name }) {
+            return CGSize(width: exSprite.width, height: exSprite.height)
+        }
+        return nil
     }
 
     /// NUMS_EX.bmp sprites (extended digits) — optional sheet, not all skins have this.
