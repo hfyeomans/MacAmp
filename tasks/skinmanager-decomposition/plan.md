@@ -54,7 +54,7 @@ File: `ViewModels/SkinManager+Fallback.swift` (extension on SkinManager)
 
 ### Step 5: Slim residual SkinManager
 
-SkinManager retains: observable state, `loadDefaultSkinIfNeeded`, `parseDefaultSkinFully` (simplified after dedup), `scanAvailableSkins`, `switchToSkin`, `loadInitialSkin`, `loadSkin`, `applySkinPayload` (simplified after dedup), `describeLoadError`, shared parsing helpers (from dedup). ~250 lines.
+SkinManager retains: observable state, `loadDefaultSkinIfNeeded`, `parseDefaultSkinFully` (simplified after dedup), `scanAvailableSkins`, `switchToSkin`, `loadInitialSkin`, `loadSkin`, `applySkinPayload` (simplified after dedup), `describeLoadError`, shared parsing helpers (from dedup). ~392 lines (revised — core loading section ~190 lines + state/init/discovery/switching ~200 lines).
 
 ## New Files Created
 

@@ -1,13 +1,13 @@
 # Plan: StreamDecodePipeline Decomposition
 
-> **Description:** Implementation plan for decomposing `StreamDecodePipeline.swift` (698 lines) into focused files.
+> **Description:** Implementation plan for decomposing `StreamDecodePipeline.swift` (697 lines) into focused files.
 > **Updated:** 2026-03-25 (line numbers refreshed post-Phase 2.5 cleanup)
 
 ---
 
 ## Objective
 
-Reduce `StreamDecodePipeline.swift` from 698 to ~380 lines by extracting self-contained types and static utilities into neighboring files within `Audio/Streaming/`.
+Reduce `StreamDecodePipeline.swift` from 697 to ~380 lines by extracting self-contained types and static utilities into neighboring files within `Audio/Streaming/`.
 
 ## Extraction Plan
 

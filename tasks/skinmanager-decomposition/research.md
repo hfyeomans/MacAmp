@@ -91,12 +91,12 @@ Foundation, @preconcurrency ZIPFoundation, AppKit, SwiftUI, UserNotifications, O
 - **Internal coupling:** Reads/writes `defaultSkinPayload`, `defaultSkinSpriteCache`, `defaultSkinExtractedSheets`
 - **Extractability:** **Moderate** — `fallbackSpritesFromDefaultSkin` mutates cached state
 
-### Section 9: Core Skin Loading & Application (lines 596-783) — 188 lines
+### Section 9: Core Skin Loading & Application (lines 577-766) — 190 lines
 - **Responsibility:** Async skin loading orchestration, sprite extraction, aliasing, parsing, Skin construction
-- **Key symbols:** `loadSkin(from:)`, `applySkinPayload(_:sourceURL:)`, `describeLoadError(_:url:)`
+- **Key symbols:** `loadSkin(from:)`, `applySkinPayload(_:sourceURL:)`, `describeLoadError(_:url:)`, shared parsing helpers
 - **Internal coupling:** Calls sections 7 and 8; reads/writes loadGeneration, currentSkin, isLoading
 - **Extractability:** **Moderate** — `applySkinPayload` has swiftlint suppressions for complexity/length
-- **Sub-extractable:** NUMS_EX sprites (lines 634-647), sprite aliasing (lines 713-731), playlist/viscolor parsing (lines 744-758)
+- **Sub-extractable:** NUMS_EX sprites (lines 615-628), sprite aliasing (lines 695-713), parsing helpers (lines 734-755)
 
 ---
 
@@ -126,7 +126,7 @@ Foundation, @preconcurrency ZIPFoundation, AppKit, SwiftUI, UserNotifications, O
 | 6 | `MainBackgroundPreprocessor.swift` | 7 | ~49 | Safe |
 | 7 | Move NUMS_EX to `SkinSprites.swift` | Part of 9 | ~14 | Safe |
 
-**Post-extraction SkinManager.swift estimate:** ~200-250 lines (state, orchestration, applySkinPayload skeleton)
+**Post-extraction SkinManager.swift estimate:** ~392 lines (revised — state, orchestration, core loading, applySkinPayload, shared parsing helpers)
 
 ## External Consumers
 

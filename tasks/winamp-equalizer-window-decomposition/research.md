@@ -8,7 +8,7 @@
 ## File Overview
 
 **File:** `MacAmpApp/Views/WinampEqualizerWindow.swift`
-**Lines:** 617 (down from 626 — Phase 2.5 removed dead `thumbWidth` constant)
+**Lines:** 616 (down from 626 — Phase 2.5 removed dead `thumbWidth` constant)
 **Contains:** 3 View structs + 1 nested coordinate struct + 1 Preview
 
 | Struct | Lines | Role |

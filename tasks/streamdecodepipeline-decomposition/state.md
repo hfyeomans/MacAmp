@@ -18,7 +18,7 @@ READY TO START. Plans refreshed with current line numbers.
 
 ## Current Line Count
 
-698 lines (down from 713 — Phase 2.5 removed dead code)
+697 lines (down from 713 — Phase 2.5 removed dead code)
 
 ## Key Decision
 

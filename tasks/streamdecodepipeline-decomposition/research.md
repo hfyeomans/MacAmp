@@ -8,7 +8,7 @@
 ## File Overview
 
 **File:** `MacAmpApp/Audio/Streaming/StreamDecodePipeline.swift`
-**Lines:** 698 (down from 713 — Phase 2.5 removed dead `formatHint(forContentType:)` + unused `metaInt` block)
+**Lines:** 697 (down from 713 — Phase 2.5 removed dead `formatHint(forContentType:)` + unused `metaInt` block)
 **Contains:** 3 types — `StreamDecodePipeline` (lines 25-447), `DecodeContext` (lines 457-655), `SessionDelegateProxy` (lines 664-697)
 
 ## Imports
@@ -104,14 +104,12 @@
 
 | # | Target File | Sections | Est. Lines | Risk |
 |---|-------------|----------|------------|------|
-| 1 | `StreamDecodePipelineTypes.swift` | Section 1 (StreamState, StreamTerminationReason) | ~23 | Safe |
-| 2 | `PlaylistResolver.swift` | Section 7 (static playlist detection/resolution) | ~76 | Safe |
-| 3 | `PlaylistResolver.swift` (incl. format hint) | Section 7 + 8 | ~87 | Safe |
-| 4 | `DecodeContext.swift` | Section 9 (entire DecodeContext class) | ~199 | Safe |
-| 5 | `SessionDelegateProxy.swift` | Section 10 (entire delegate proxy) | ~34 | Safe |
-| 6 | `StreamDecodePipeline.swift` (remaining) | Sections 2-6 (core lifecycle) | ~380 | Core — stays |
+| 1 | `PlaylistResolver.swift` (incl. format hint) | Section 7 + 8 | ~87 | Safe |
+| 2 | `DecodeContext.swift` | Section 9 (entire DecodeContext class) | ~199 | Safe |
+| 3 | `SessionDelegateProxy.swift` | Section 10 (entire delegate proxy) | ~34 | Safe |
+| 4 | `StreamDecodePipeline.swift` (remaining) | Sections 2-6 (core lifecycle) | ~380 | Core — stays |
 
-**Post-extraction estimate:** ~380 lines (down from 698)
+**Post-extraction estimate:** ~380 lines (down from 697)
 
 ## Dead Code
 

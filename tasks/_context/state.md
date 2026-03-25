@@ -310,8 +310,8 @@ All doc updates verified complete by sub-agent scan:
 |---|-------------|-------------|------|--------|------------|
 | 0 | `intra-file-dedup-simplification` | First-pass dedup: consolidate intra-file duplications + remove dead code in 4 implementation targets (excludes AudioPlayer) | Small-Medium | COMPLETE (PR #71 merged 2026-03-24) | None — runs first |
 | 0.5 | `codebase-wide-simplification` | Codebase-wide dead code + DRY consolidation (-732 lines, 6 files deleted, 4 utilities created) | Medium | COMPLETE (PR #72 merged 2026-03-24) | After Task 0 |
-| 1 | `streamdecodepipeline-decomposition` | Decompose `StreamDecodePipeline.swift` (698 lines) → 3 new files (~380 residual) | Medium | PLANS REFRESHED | After Task 0.5 (done) |
-| 2 | `winamp-equalizer-window-decomposition` | Decompose `WinampEqualizerWindow.swift` (617 lines) → 5 new files (~100 residual) | Medium | PLANS REFRESHED | After Task 1 merges |
+| 1 | `streamdecodepipeline-decomposition` | Decompose `StreamDecodePipeline.swift` (697 lines) → 3 new files (~380 residual) | Medium | PLANS REFRESHED | After Task 0.5 (done) |
+| 2 | `winamp-equalizer-window-decomposition` | Decompose `WinampEqualizerWindow.swift` (616 lines) → 5 new files (~100 residual) | Medium | PLANS REFRESHED | After Task 1 merges |
 | 3 | `visualizerpipeline-decomposition` | Decompose `VisualizerPipeline.swift` (645 lines) → 4 new files (~231 residual) | Medium | PLANS REFRESHED | After Task 2 merges |
 | 4 | `skinmanager-decomposition` | Decompose `SkinManager.swift` (766 lines) → 4 new files (~392 residual) | Medium | PLANS REFRESHED | After Task 3 merges |
 | 5 | `audioplayer-seek-extraction` | Extract seek state machine from AudioPlayer.swift (734 lines) → SeekController (~554 residual). Removes last 2 swiftlint suppressions. | Medium-High | PLANS REFRESHED | After Task 4 merges |

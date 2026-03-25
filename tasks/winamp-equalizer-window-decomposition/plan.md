@@ -1,13 +1,13 @@
 # Plan: Winamp Equalizer Window Decomposition
 
-> **Description:** Implementation plan for decomposing `WinampEqualizerWindow.swift` (617 lines) into child view structs.
+> **Description:** Implementation plan for decomposing `WinampEqualizerWindow.swift` (616 lines) into child view structs.
 > **Updated:** 2026-03-25 (line numbers refreshed post-Phase 2.5 cleanup)
 
 ---
 
 ## Objective
 
-Reduce `WinampEqualizerWindow.swift` from 617 to ~100 lines by extracting child views and standalone components, following the proven MainWindow decomposition pattern.
+Reduce `WinampEqualizerWindow.swift` from 616 to ~100 lines by extracting child views and standalone components, following the proven MainWindow decomposition pattern.
 
 ## Extraction Plan
 

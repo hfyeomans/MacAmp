@@ -16,7 +16,7 @@ READY TO START. Plans refreshed with current line numbers.
 
 ## Current Line Count
 
-617 lines (down from 626 — Phase 2.5 removed dead `thumbWidth`)
+616 lines (down from 626 — Phase 2.5 removed dead `thumbWidth`)
 
 ## Key Decision
 
