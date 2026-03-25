@@ -62,6 +62,7 @@ struct WinampEqualizerWindow: View {
     // EQ slider specs - CORRECTED to match webamp exactly
     private let sliderWidth: CGFloat = 14  // CORRECTED: Each slider is 14px wide
     private let sliderHeight: CGFloat = 62  // CORRECTED: 62px active area (not 63)
+    private let thumbWidth: CGFloat = 11
     private let thumbHeight: CGFloat = 11
     
     var body: some View {
@@ -199,7 +200,8 @@ struct WinampEqualizerWindow: View {
             ),
             range: -12.0...12.0,
             width: sliderWidth,   // 14px exactly
-            height: sliderHeight, // 62px exactly  
+            height: sliderHeight, // 62px exactly
+            thumbWidth: thumbWidth,
             thumbHeight: thumbHeight,
             backgroundSprite: "EQ_SLIDER_BACKGROUND",
             thumbSprite: "EQ_SLIDER_THUMB",
@@ -220,6 +222,7 @@ struct WinampEqualizerWindow: View {
                 range: -12.0...12.0,
                 width: sliderWidth,
                 height: sliderHeight,
+                thumbWidth: thumbWidth,
                 thumbHeight: thumbHeight,
                 backgroundSprite: "EQ_SLIDER_BACKGROUND",
                 thumbSprite: "EQ_SLIDER_THUMB",

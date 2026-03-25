@@ -7,6 +7,7 @@ struct WinampVerticalSlider: View {
     let range: ClosedRange<Float>
     let width: CGFloat
     let height: CGFloat
+    let thumbWidth: CGFloat
     let thumbHeight: CGFloat
     let backgroundSprite: String
     let thumbSprite: String
@@ -40,10 +41,10 @@ struct WinampVerticalSlider: View {
                     .frame(width: width, height: height)
             }
 
-            // Slider thumb sprite (11x11 pixels)
+            // Slider thumb sprite
             SimpleSpriteImage(isDragging ? thumbActiveSprite : thumbSprite,
-                            width: 11, height: 11)
-                .offset(x: 1.5, y: thumbPosition) // Position based on webamp formula
+                            width: thumbWidth, height: thumbHeight)
+                .offset(x: (width - thumbWidth) / 2, y: thumbPosition)
 
             // Invisible interaction area - EXACTLY constrained
             GeometryReader { geo in
@@ -96,8 +97,7 @@ struct WinampVerticalSlider: View {
 
 
     private var thumbPosition: CGFloat {
-        let thumbSize: CGFloat = 11
-        let trackHeight = height - thumbSize
+        let trackHeight = height - thumbHeight
         // Inverted: our coordinate system has 0 at top
         return floor(trackHeight * (1.0 - CGFloat(normalizedValue)))
     }
