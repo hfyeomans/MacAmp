@@ -308,7 +308,7 @@ All doc updates verified complete by sub-agent scan:
 
 | # | Task Folder | Description | Size | Status | Dependency |
 |---|-------------|-------------|------|--------|------------|
-| 0 | `intra-file-dedup-simplification` | First-pass dedup: consolidate intra-file duplications + remove dead code in all 5 targets | Small-Medium | READY | None — runs first |
+| 0 | `intra-file-dedup-simplification` | First-pass dedup: consolidate intra-file duplications + remove dead code in 4 implementation targets (excludes AudioPlayer) | Small-Medium | READY | None — runs first |
 | 1 | `streamdecodepipeline-decomposition` | Decompose `StreamDecodePipeline.swift` → 4 new files (~345 residual) | Medium | PLANNED | After Task 0 merges (refresh plan) |
 | 2 | `winamp-equalizer-window-decomposition` | Decompose `WinampEqualizerWindow.swift` → 5 new files (~100 residual) | Medium | PLANNED | After Task 1 merges |
 | 3 | `visualizerpipeline-decomposition` | Decompose `VisualizerPipeline.swift` → 4 new files (~258 residual) | Medium | PLANNED | After Task 2 merges |

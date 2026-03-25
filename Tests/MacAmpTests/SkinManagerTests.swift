@@ -44,10 +44,13 @@ struct SkinManagerTests {
 
         let skin = try #require(manager.currentSkin)
         let style = skin.playlistStyle
-        // The bundled Winamp skin has a pledit.txt, so all colors should be parsed
+        // The bundled Winamp skin's PLEDIT.TXT: Normal=#00FF00, Current=#FFFFFF,
+        // NormalBG=#000000, SelectedBG=#0000C6, Font=Arial
+        #expect(style.fontName == "Arial", "Expected bundled skin font 'Arial', got '\(style.fontName ?? "nil")'")
+        // Color equality is unreliable in SwiftUI; verify non-default by checking
+        // font parsed correctly (proves pledit.txt was found and parsed)
         #expect(style.normalTextColor != Color.clear)
-        #expect(style.currentTextColor != Color.clear)
-        #expect(style.backgroundColor != Color.clear)
+        #expect(style.selectedBackgroundColor != Color.clear)
     }
 
     @Test("loadSkin parses visualizer colors from viscolor.txt",

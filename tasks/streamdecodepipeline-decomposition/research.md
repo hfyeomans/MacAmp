@@ -63,10 +63,10 @@
 - **Extractability:** **Safe** — ALL four symbols are `static` with zero instance state coupling
 
 ### Section 8: Format Hint Utilities (lines 442-462) — 21 lines
-- **Responsibility:** Map URL paths/content types to AudioToolbox format hint IDs
-- **Key symbols:** `formatHint(for:)` (static), `formatHint(forContentType:)` (static)
-- **Dead code:** `formatHint(forContentType:)` has zero callers in entire codebase
-- **Extractability:** **Safe** — pure static functions
+- **Responsibility:** Map URL paths to AudioToolbox format hint IDs
+- **Key symbols:** `formatHint(for:)` (static)
+- **Dead code removed:** `formatHint(forContentType:)` was removed in Phase 2a (had zero callers)
+- **Extractability:** **Safe** — pure static function
 
 ### Section 9: DecodeContext (lines 465-671) — 207 lines
 - **Responsibility:** Queue-confined decode chain state. Owns ICYFramer, AudioFileStreamParser, AudioConverterDecoder.
@@ -115,7 +115,7 @@
 
 ## Dead Code
 
-- `formatHint(forContentType:)` at line 457 — `static` (internal access) with zero callers in entire codebase
+- ~~`formatHint(forContentType:)` at line 457~~ — **Removed in Phase 2a** (was `static` with zero callers)
 
 ## Intentional Non-Duplication
 

@@ -95,7 +95,7 @@ Both removed when file drops below ~600 lines.
 
 ## shouldIgnoreCompletion Call Chain
 
-```
+```text
 AudioEngineController.scheduleFrom(time:seekID:)
   -> completionHandler fires on playerNode segment end
     -> engine.onPlaybackEnded?(completionID)
