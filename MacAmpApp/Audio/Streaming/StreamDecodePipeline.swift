@@ -454,12 +454,6 @@ final class StreamDecodePipeline {
         return 0
     }
 
-    static func formatHint(forContentType contentType: String?) -> AudioFileTypeID {
-        guard let ct = contentType?.lowercased() else { return 0 }
-        if ct.contains("mpeg") || ct.contains("mp3") { return kAudioFileMP3Type }
-        if ct.contains("aac") || ct.contains("aacp") { return kAudioFileAAC_ADTSType }
-        return 0
-    }
 }
 
 // MARK: - DecodeContext (queue-confined, NOT @MainActor)

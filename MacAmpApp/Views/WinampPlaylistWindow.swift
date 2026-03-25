@@ -25,13 +25,7 @@ struct WinampPlaylistWindow: View {
     }
 
     private var playlistStyle: PlaylistStyle {
-        skinManager.currentSkin?.playlistStyle ?? PlaylistStyle(
-            normalTextColor: Color(red: 0, green: 1.0, blue: 0),
-            currentTextColor: .white,
-            backgroundColor: Color.black,
-            selectedBackgroundColor: Color(red: 0, green: 0, blue: 0.776),
-            fontName: nil
-        )
+        skinManager.currentSkin?.playlistStyle ?? .winampDefault
     }
 
     private var menuPresenter: PlaylistMenuPresenter {

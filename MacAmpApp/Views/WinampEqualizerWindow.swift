@@ -62,7 +62,6 @@ struct WinampEqualizerWindow: View {
     // EQ slider specs - CORRECTED to match webamp exactly
     private let sliderWidth: CGFloat = 14  // CORRECTED: Each slider is 14px wide
     private let sliderHeight: CGFloat = 62  // CORRECTED: 62px active area (not 63)
-    private let thumbWidth: CGFloat = 11
     private let thumbHeight: CGFloat = 11
     
     var body: some View {
@@ -414,10 +413,14 @@ struct WinampVerticalSlider: View {
         .clipped() // CRITICAL: Clip any overflow
     }
     
+    /// Value normalized to 0.0–1.0 within the slider range.
+    private var normalizedValue: Float {
+        (value - range.lowerBound) / (range.upperBound - range.lowerBound)
+    }
+
     // Solid color that changes based on slider position
     private var sliderColor: Color {
         // Map value to color: green (-12) -> yellow (0) -> red (+12)
-        let normalizedValue = (value - range.lowerBound) / (range.upperBound - range.lowerBound)
         
         if normalizedValue <= 0.5 {
             // Green to Yellow (bottom to center)
@@ -440,18 +443,9 @@ struct WinampVerticalSlider: View {
     
     
     private var thumbPosition: CGFloat {
-        // Position the thumb sprite based on value using webamp's formula
-        let thumbSize: CGFloat = 11 // Actual thumb sprite height
+        let thumbSize: CGFloat = 11
         let trackHeight = height - thumbSize
-        
-        // Normalize value from range to 0-1
-        // At -12dB: normalizedValue = 0 (bottom)
-        // At 0dB: normalizedValue = 0.5 (center)  
-        // At +12dB: normalizedValue = 1 (top)
-        let normalizedValue = (value - range.lowerBound) / (range.upperBound - range.lowerBound)
-        
-        // Use webamp's formula: offset = floor((height - handleHeight) * value)
-        // But inverted since our coordinate system has 0 at top
+        // Inverted: our coordinate system has 0 at top
         return floor(trackHeight * (1.0 - CGFloat(normalizedValue)))
     }
     
@@ -474,11 +468,7 @@ struct WinampVerticalSlider: View {
 
     // Calculate which frame (0-27) to display based on EQ value
     private func calculateFrameIndex() -> Int {
-        // Normalize value from range (-12 to +12) to 0.0-1.0
-        let normalizedValue = (value - range.lowerBound) / (range.upperBound - range.lowerBound)
         let percent = min(max(CGFloat(normalizedValue), 0), 1)
-
-        // Map to frame 0-27
         let frameIndex = Int(round(percent * CGFloat(totalFrames - 1)))
         return min(max(frameIndex, 0), totalFrames - 1)
     }

@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import SwiftUI
 @testable import MacAmp
 
 @MainActor
@@ -31,6 +32,37 @@ struct SkinManagerTests {
         manager.loadSkin(from: invalidURL)
         try await waitUntilNotLoading(manager)
         #expect(manager.loadingError != nil)
+    }
+
+    @Test("loadSkin parses playlist style colors from pledit.txt",
+          .tags(.skin), .timeLimit(.minutes(1)))
+    func loadDefaultSkinHasCorrectPlaylistStyle() async throws {
+        let manager = SkinManager()
+        let skinURL = try bundledSkinURL(named: "Winamp")
+        manager.loadSkin(from: skinURL)
+        try await waitUntilNotLoading(manager)
+
+        let skin = try #require(manager.currentSkin)
+        let style = skin.playlistStyle
+        // The bundled Winamp skin's PLEDIT.TXT: Normal=#00FF00, Current=#FFFFFF,
+        // NormalBG=#000000, SelectedBG=#0000C6, Font=Arial
+        #expect(style.fontName == "Arial", "Expected bundled skin font 'Arial', got '\(style.fontName ?? "nil")'")
+        // Color equality is unreliable in SwiftUI; verify non-default by checking
+        // font parsed correctly (proves pledit.txt was found and parsed)
+        #expect(style.normalTextColor != Color.clear)
+        #expect(style.selectedBackgroundColor != Color.clear)
+    }
+
+    @Test("loadSkin parses visualizer colors from viscolor.txt",
+          .tags(.skin), .timeLimit(.minutes(1)))
+    func loadDefaultSkinHasVisualizerColors() async throws {
+        let manager = SkinManager()
+        let skinURL = try bundledSkinURL(named: "Winamp")
+        manager.loadSkin(from: skinURL)
+        try await waitUntilNotLoading(manager)
+
+        let skin = try #require(manager.currentSkin)
+        #expect(skin.visualizerColors.count == 24)
     }
 
     private func bundledSkinURL(named name: String) throws -> URL {

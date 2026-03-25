@@ -1,21 +1,28 @@
 # State: Winamp Equalizer Window Decomposition
 
-> **Description:** Tracks readiness, sequencing, and key boundaries for the `WinampEqualizerWindow.swift` decomposition task.
-> **Purpose:** Keep this task clearly positioned as post-S2 / pre-S3 equalizer UI cleanup rather than active sprint churn.
+> **Description:** Tracks readiness and progress for the `WinampEqualizerWindow.swift` decomposition task.
+> **Updated:** 2026-03-24 (S2 complete, responsibility map done, plan implementation-ready)
 
 ---
 
 ## Status
 
-Planned. Not started.
+READY TO START. Responsibility map and implementation plan complete.
 
 ## Scheduling
 
-- Start after Sprint S2 stabilizes.
-- Treat this as pre-S3 architecture cleanup, not as part of the lower-priority S3 edge-case queue.
+- No S2 dependencies on this file — unchanged at 626 lines.
+- Execution order: **Task 3 of 5** (follows proven MainWindow decomposition pattern)
+
+## Current Line Count
+
+626 lines (unchanged from planning time)
 
 ## Key Decision
 
-- This task owns the structural cleanup of `WinampEqualizerWindow.swift`.
-- **Decompose in place:** Split the file into smaller pieces within `Views/` (its current location). Do not move files to `Features/Equalizer/` as part of this task — all folder-level consolidation is deferred to the post-S3 Structure Sprint (D-STRUCTURE decision 2026-03-15).
-- It should reduce the root file without changing equalizer behavior.
+- Decompose into new `Views/EqualizerWindow/` subfolder (7 files) + 1 to existing `Views/Components/`
+- Root file stays in `Views/WinampEqualizerWindow.swift` at ~80-100 lines
+- WinampVerticalSlider is reusable, goes to Components/ (not EQ-specific)
+- PresetPickerView renamed to EQPresetPickerView for clarity
+- thumbWidth dead code removed during extraction (safe)
+- Shade mode static slider placeholders documented as pre-existing in placeholder.md

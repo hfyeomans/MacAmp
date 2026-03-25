@@ -1,21 +1,29 @@
 # State: SkinManager Decomposition
 
-> **Description:** Tracks readiness, sequencing, and key boundaries for the `SkinManager.swift` decomposition task.
-> **Purpose:** Keep this task clearly positioned as post-S2 / pre-S3 architecture work rather than immediate sprint churn.
+> **Description:** Tracks readiness and progress for the `SkinManager.swift` decomposition task.
+> **Updated:** 2026-03-24 (S2 complete, responsibility map done, plan implementation-ready)
 
 ---
 
 ## Status
 
-Planned. Not started.
+READY TO START. Responsibility map and implementation plan complete.
 
 ## Scheduling
 
-- Start after Sprint S2 stabilizes.
-- Treat this as pre-S3 architecture cleanup, not as part of the lower-priority S3 edge-case queue.
+- No S2 dependencies on this file — unchanged at 783 lines.
+- Execution order: **Task 4 of 5** (largest reduction, some duplication to flag)
+
+## Current Line Count
+
+783 lines (unchanged from planning time)
 
 ## Key Decision
 
-- This task owns the decomposition of `SkinManager.swift`.
-- **Decompose in place:** Split the file into smaller pieces within `ViewModels/` (its current location). Do not move files to `Features/Skins/` as part of this task — all folder-level consolidation is deferred to the post-S3 Structure Sprint (D-STRUCTURE decision 2026-03-15).
-- The target `Features/Skins/` ownership model remains the long-term goal, but the actual file moves happen in a separate, dedicated pass after all sprints complete.
+- Decompose in place within `ViewModels/` — no moves to `Features/Skins/` (post-S3)
+- Extract 4 new files: SkinArchiveLoader, SkinImporter, SkinBackgroundPreprocessor, SkinFallbackResolver
+- Residual SkinManager: ~250 lines
+- Use extension-file pattern for methods that need `self` (SkinImporter, SkinFallbackResolver)
+- Consolidate small types into related files (SkinImportError into SkinImporter, SkinArchivePayload into SkinArchiveLoader)
+- Flag-but-don't-fix duplication (playlist parsing, viscolor parsing, sprite extraction loops)
+- Flag possible color inconsistency bug for investigation in dedup pass

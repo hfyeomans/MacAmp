@@ -1,42 +1,150 @@
 # Research: Winamp Equalizer Window Decomposition
 
-> **Description:** Research task for decomposing `WinampEqualizerWindow.swift` into clearer feature-owned UI boundaries.
-> **Purpose:** Define a safe post-S2 / pre-S3 plan for reducing the equalizer window file without mixing UI cleanup into active feature work.
+> **Description:** Responsibility map for decomposing `WinampEqualizerWindow.swift` into child view structs.
+> **Updated:** 2026-03-24 (responsibility map complete)
 
 ---
 
-## Goal
+## File Overview
 
-Create a decomposition plan for `MacAmpApp/Views/WinampEqualizerWindow.swift` that aligns the file with the target feature-first structure.
+**File:** `MacAmpApp/Views/WinampEqualizerWindow.swift`
+**Lines:** 626
+**Contains:** 3 View structs + 1 nested coordinate struct + 1 Preview
 
-## Current Context
+| Struct | Lines | Role |
+|---|---|---|
+| `WinampEqualizerWindow` | 6-349 | Root EQ window view (full + shade mode) |
+| `WinampVerticalSlider` | 352-499 | Reusable vertical slider component |
+| `PresetPickerView` | 502-620 | Popover preset selection UI |
 
-- `WinampEqualizerWindow.swift` is currently `626` lines.
-- The file combines:
-  - the root equalizer window view
-  - titlebar/control-button construction
-  - slider and curve UI
-  - shade-mode rendering
-  - vertical slider support view
-  - preset picker UI
+## Imports
 
-## Initial Scope
+- `SwiftUI` — all views
+- `AppKit` — `NSOpenPanel`, `NSAlert` for file import/save dialogs
+- `UniformTypeIdentifiers` — `UTType` in file import
 
-In scope:
-- separating reusable equalizer UI pieces from the root window shell
-- clarifying which pieces belong under a future `Features/Equalizer/` area
-- reducing the root file without changing the window's visible behavior
+## Environment Dependencies
 
-Out of scope:
-- redesigning equalizer UX
-- changing EQ behavior or preset semantics
-- changing audio engine behavior as part of the UI split
+| Dependency | Type | Used By |
+|---|---|---|
+| `SkinManager` | `@Environment` | Sprites throughout |
+| `AudioPlayer` | `@Environment` | EQ bands, preamp, presets, toggles |
+| `AppSettings` | `@Environment` | `isDoubleSizeMode` |
+| `PlaybackCoordinator` | `@Environment` | `supportsEQ` (dimming) |
+| `WindowFocusState` | `@Environment` | `isEqualizerKey` (titlebar active state) |
 
-## Target Alignment
+---
 
-- This task should move equalizer UI ownership toward a feature-first structure
-- Reusable equalizer-specific subviews should live near the equalizer feature, not in generic global UI buckets
+## Section-by-Section Responsibility Map
 
-## Status
+### EQCoords Constants (lines 22-44) — 23 lines
+- **Responsibility:** Pixel-coordinate constants for absolute positioning
+- **Key symbols:** `EQCoords` struct — `preampSlider`, `eqSliderPositions`, `onButton`, `autoButton`, `presetsButton`, `minimizeButton`, `shadeButton`, `closeButton`, `graphArea`
+- **Extractability:** Extract first — shared by all child views
 
-Planned. Post-S2 / pre-S3 architecture follow-on.
+### File Import Helper (lines 46-60) — 15 lines
+- **Responsibility:** NSOpenPanel for .eqf preset file import
+- **Key symbols:** `importPresetFromFile()`
+- **Extractability:** Should travel with presets section
+
+### Slider Dimensions (lines 62-66) — 5 lines
+- **Key symbols:** `sliderWidth`, `sliderHeight`, `thumbWidth`, `thumbHeight`
+- **Dead code:** `thumbWidth` (line 65) is declared but never referenced
+
+### Root Body (lines 68-130) — 63 lines
+- **Responsibility:** Top-level composition — branches full/shade mode, applies scale/frame
+- **Internal coupling:** Calls all builder methods
+- **Extractability:** Stays as root — simplified after extraction
+
+### Titlebar Buttons Builder (lines 132-165) — 34 lines
+- **Responsibility:** Minimize, shade toggle, close buttons
+- **Key symbols:** `buildTitlebarButtons()`
+- **Internal coupling:** Mutates `isShadeMode` (needs @Binding if extracted). Called from BOTH full and shade modes.
+- **External coupling:** `WindowCoordinator.shared`
+- **Extractability:** **Moderate** — shared across modes, needs binding for isShadeMode
+
+### Control Buttons Builder (lines 167-192) — 26 lines
+- **Responsibility:** EQ on/off toggle and Auto-EQ toggle
+- **Key symbols:** `buildControlButtons()`
+- **External coupling:** `audioPlayer.isEqOn`, `audioPlayer.eqAutoEnabled`
+- **Extractability:** **Safe** — only reads @Environment audioPlayer
+
+### Preamp Slider Builder (lines 194-210) — 17 lines
+- **Responsibility:** Single preamp vertical slider
+- **Key symbols:** `buildPreampSlider()`
+- **Extractability:** **Safe** — thin wrapper around WinampVerticalSlider
+
+### EQ Band Sliders Builder (lines 212-234) — 23 lines
+- **Responsibility:** 10-band equalizer sliders via ForEach
+- **Key symbols:** `buildEQSliders()`
+- **Extractability:** **Safe** — combine with preamp into EQSlidersLayer
+
+### Presets Button Builder (lines 236-266) — 31 lines
+- **Responsibility:** Presets button with popover
+- **Key symbols:** `buildPresetsButton()`
+- **Internal coupling:** Mutates `showPresetPicker`, calls `showSavePresetDialog()`, `importPresetFromFile()`
+- **Extractability:** **Moderate** — needs @State and dialog helpers to travel with it
+
+### Save Preset Dialog (lines 268-284) — 17 lines
+- **Responsibility:** NSAlert with text field for saving named preset
+- **Key symbols:** `showSavePresetDialog()`
+- **Extractability:** Should travel with presets button
+
+### Shade Mode Builder (lines 286-314) — 29 lines
+- **Responsibility:** Compact 275x14px shade rendering
+- **Key symbols:** `buildShadeMode()`
+- **Note:** Shade slider sprites are static placeholders (no interactivity)
+- **Extractability:** **Safe** — mirrors MainWindowShadeLayer pattern
+
+### EQ Curve Visualization (lines 316-348) — 33 lines
+- **Responsibility:** Draw EQ frequency response curve over graph background
+- **Key symbols:** `buildEQCurve()`
+- **Extractability:** **Safe** — pure visualization, reads audioPlayer.eqBands
+
+### WinampVerticalSlider (lines 351-499) — 149 lines
+- **Responsibility:** Reusable sprite-based vertical slider with grid background, drag, center snapping
+- **Key symbols:** Standalone `struct WinampVerticalSlider: View` — fully independent component
+- **External coupling:** `SkinManager` via @Environment
+- **Extractability:** **Safe — should be extracted to its own file** (no EQ-specific references)
+
+### PresetPickerView (lines 501-620) — 120 lines
+- **Responsibility:** Popover UI for browsing, selecting, saving, deleting, importing presets
+- **Key symbols:** Standalone `struct PresetPickerView: View` — callback-driven, no @Environment
+- **External coupling:** `EQPreset` model only
+- **Extractability:** **Safe — should be extracted to its own file** (fully self-contained)
+
+---
+
+## Dead Code
+
+- `thumbWidth` (line 65) — declared but never referenced. WinampVerticalSlider takes `thumbHeight` only.
+
+## Duplicated Patterns
+
+- Preamp slider and EQ band sliders share identical WinampVerticalSlider configuration.
+
+## Communication Patterns
+
+- **Environment injection:** Child views inherit @Environment automatically
+- **Local state:** `isShadeMode` and `showPresetPicker` are @State on root. Extracted children needing these require @Binding.
+- **Callbacks:** PresetPickerView already uses clean callback pattern — exemplary extraction-ready design.
+- **Singletons:** `WindowCoordinator.shared` accessed directly (consistent with codebase).
+
+---
+
+## Recommended Extraction Units
+
+Following MainWindow decomposition pattern (root + full layer + shade layer + child views):
+
+| # | Target File | Source | Est. Lines | Risk |
+|---|-------------|--------|------------|------|
+| 1 | `WinampVerticalSlider.swift` (Views/Components/) | Standalone component | ~149 | Safe |
+| 2 | `EQPresetPickerView.swift` | Standalone component | ~120 | Safe |
+| 3 | `EQTitlebarButtons.swift` | Titlebar builder | ~34 | Moderate |
+| 4 | `EQControlButtons.swift` | Control buttons | ~26 | Safe |
+| 5 | `EQSlidersLayer.swift` | Preamp + 10-band | ~40 | Safe |
+| 6 | `EQPresetsButton.swift` | Presets + dialogs + import | ~63 | Moderate |
+| 7 | `EQCurveView.swift` | Graph visualization | ~33 | Safe |
+| 8 | `EQShadeLayer.swift` | Shade mode | ~29 | Safe |
+
+**Post-extraction WinampEqualizerWindow.swift estimate:** ~80-100 lines

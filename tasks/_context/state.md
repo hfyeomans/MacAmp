@@ -2,7 +2,7 @@
 
 > **Purpose:** Single source of truth for cross-task execution status, wave progress, and coordination decisions.
 > **Date:** 2026-02-21
-> **Updated:** 2026-03-24 (Sprint S2 complete — 4/4 tasks merged. AirPlay triggers DEFUNCT, Now Playing shipped.)
+> **Updated:** 2026-03-24 (Post-S2 decomposition planning complete. 6-task phased execution: dedup first pass + 5 extractions.)
 
 ### Quick Reference
 
@@ -297,19 +297,31 @@ All doc updates verified complete by sub-agent scan:
 | `hls-streaming-support` | Add HLS protocol to stream decode pipeline | Large | PLANNED | None |
 | `ogg-vorbis-support` | Add OGG Vorbis codec (needs libvorbis or pure Swift decoder) | Medium | PLANNED | None |
 
-### Post-S2 / Pre-S3 Architecture Follow-Ons: Decomposition Only (Created, Not Yet Sprinted)
+### Post-S2 / Pre-S3 Architecture Follow-Ons: Hybrid Dedup + Decomposition (6 tasks)
 
-| Task Folder | Description | Size | Status | Dependency |
-|-------------|-------------|------|--------|------------|
-| `skinmanager-decomposition` | Decompose `SkinManager.swift` (split large file into smaller pieces) | Medium | PLANNED | Start after Sprint S2 stabilizes |
-| `visualizerpipeline-decomposition` | Decompose `VisualizerPipeline.swift` (split large file) | Medium | PLANNED | Start after Sprint S2 stabilizes |
-| `streamdecodepipeline-decomposition` | Decompose `StreamDecodePipeline.swift` (split large file) | Medium | PLANNED | Start after Sprint S2 stabilizes |
-| `winamp-equalizer-window-decomposition` | Decompose `WinampEqualizerWindow.swift` (split large file) | Medium | PLANNED | Start after Sprint S2 stabilizes |
-| `audioplayer-seek-extraction` | Extract seek state machine from AudioPlayer.swift (Phase 5 — deferred from S1 per Oracle) | Medium | PLANNED | Start after Sprint S2 stabilizes. Removes last 2 swiftlint suppressions. |
+> **Phasing (Gemini + Oracle, 2026-03-24):**
+> - **Phase 2a:** Intra-file dedup & simplification (Task 0 — prerequisite for all extractions)
+> - **Phase 2b:** Structural extraction (Tasks 1-5 — sequential, one branch/PR each)
+> - **Phase 2c:** Cross-file dedup (deferred to after extraction or Structure Sprint)
+>
+> After Phase 2a merges, all 5 decomposition plans are refreshed (line numbers change).
 
-**AudioPlayer note:** Phase 4 (PR #60, S1) extracted AudioEngineController. The seek state machine remains in AudioPlayer (719 lines, 2 suppressions). `audioplayer-seek-extraction` is now a dedicated post-S2 task to complete the decomposition. The Oracle deferred this from Phase 4 because partial move of the seek state machine across two owners was too risky.
+| # | Task Folder | Description | Size | Status | Dependency |
+|---|-------------|-------------|------|--------|------------|
+| 0 | `intra-file-dedup-simplification` | First-pass dedup: consolidate intra-file duplications + remove dead code in 4 implementation targets (excludes AudioPlayer) | Small-Medium | READY | None — runs first |
+| 1 | `streamdecodepipeline-decomposition` | Decompose `StreamDecodePipeline.swift` → 4 new files (~345 residual) | Medium | PLANNED | After Task 0 merges (refresh plan) |
+| 2 | `winamp-equalizer-window-decomposition` | Decompose `WinampEqualizerWindow.swift` → 5 new files (~100 residual) | Medium | PLANNED | After Task 1 merges |
+| 3 | `visualizerpipeline-decomposition` | Decompose `VisualizerPipeline.swift` → 4 new files (~258 residual) | Medium | PLANNED | After Task 2 merges |
+| 4 | `skinmanager-decomposition` | Decompose `SkinManager.swift` → 4 new files (~250 residual) | Medium | PLANNED | After Task 3 merges |
+| 5 | `audioplayer-seek-extraction` | Extract seek state machine from AudioPlayer.swift → SeekController (~554 residual). Removes last 2 swiftlint suppressions. | Medium-High | PLANNED | After Task 4 merges |
 
-**Decomposition readiness note:** The 5 post-S2 decomposition tasks are backlog-ready (scope, constraints, verification defined) but not implementation-ready. Each task's first step is "produce a responsibility map" — the detailed symbol/method-level extraction tables will be created when S2 stabilizes and the target files have their final shape. This is intentional: S2 tasks (`os-workgroup-integration`, `video-audio-engine-routing`) may modify these files, so premature extraction planning would be wasted.
+**Execution order rationale (Oracle, 2026-03-24):** Safest first → riskiest last. UI before audio-thread. StreamDecode (9/10) → EQ Window (7/10) → Visualizer (8/10) → SkinManager (6/10) → AudioPlayer seek (5/10).
+
+**Phase 2a scope:** SkinManager (2 dedup + dead import), VisualizerPipeline (2 dedup + dead guards), StreamDecodePipeline (dead function), WinampEqualizerWindow (dead constant). No AudioPlayer changes.
+
+**Phase 2b creates ~21 new files** across the 5 tasks. Project goes from 112 → ~133 .swift files (well within Gemini's "conservative for this complexity" assessment).
+
+**Phase 2c deferred items** (tracked in `intra-file-dedup-simplification/placeholder.md`): SkinManager sprite extraction loop dedup, NUMS_EX move to SkinSprites.swift.
 
 ### Post-S3 Structure Sprint: All Consolidation (D-STRUCTURE decision 2026-03-15)
 
@@ -346,4 +358,4 @@ All file-move consolidation work is deferred to a single dedicated "Structure Sp
 |------|--------|
 | `_context/research.md` | Complete (verified, corrections applied) |
 | `_context/plan.md` | Complete (verified, corrections applied) |
-| `_context/state.md` | Active (this file — updated 2026-03-15) |
+| `_context/state.md` | Active (this file — updated 2026-03-24) |

@@ -44,6 +44,26 @@ struct PlaylistStyle: Sendable {
     let backgroundColor: Color
     let selectedBackgroundColor: Color
     let fontName: String?
+
+    /// Winamp 2.x hardcoded defaults: green text, white current, black bg, #0000C6 selected.
+    /// Used for the default Winamp skin and by WinampPlaylistWindow when no skin is loaded.
+    static let winampDefault = PlaylistStyle(
+        normalTextColor: Color(red: 0, green: 1.0, blue: 0),
+        currentTextColor: .white,
+        backgroundColor: .black,
+        selectedBackgroundColor: Color(red: 0, green: 0, blue: 0.776),
+        fontName: nil
+    )
+
+    /// Matches PLEditParser's per-key fallbacks: white text, white current, black bg, #0000C6 selected.
+    /// Used for custom skins where pledit.txt is completely missing (preserves pre-dedup behavior).
+    static let pleditParserDefault = PlaylistStyle(
+        normalTextColor: .white,
+        currentTextColor: .white,
+        backgroundColor: .black,
+        selectedBackgroundColor: Color(red: 0, green: 0, blue: 0.776),
+        fontName: nil
+    )
 }
 
 // MARK: - Skin Metadata (for skin picker/switcher)
