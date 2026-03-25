@@ -41,28 +41,9 @@ struct Size2D: Equatable, Codable, Hashable {
 
     // MARK: - Conversion Methods
 
-    /// Convert segments to pixel dimensions for VIDEO window
-    /// Formula: baseWidth + (segments × segmentSize)
-    func toVideoPixels() -> CGSize {
-        CGSize(
-            width: 275 + width * 25,
-            height: 116 + height * 29
-        )
-    }
-
-    /// Convert segments to pixel dimensions for PLAYLIST window
-    /// Formula: baseWidth + (segments × segmentSize)
-    func toPlaylistPixels() -> CGSize {
-        CGSize(
-            width: 275 + width * 25,
-            height: 116 + height * 29
-        )
-    }
-
-    /// Convert segments to pixel dimensions for MILKDROP window
-    /// Formula: baseWidth + (segments × segmentSize)
-    /// Same as VIDEO/Playlist - base 275×116, segments 25×29
-    func toMilkdropPixels() -> CGSize {
+    /// Convert segments to pixel dimensions.
+    /// All resizable windows share the same base (275x116) and segment size (25x29).
+    func toPixels() -> CGSize {
         CGSize(
             width: 275 + width * 25,
             height: 116 + height * 29

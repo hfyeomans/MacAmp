@@ -19,7 +19,7 @@ import Foundation
 /// - `AudioFileStreamClose()` disposes — MUST be called after AudioConverterDispose()
 ///
 /// **Layer:** Mechanism (C API wrapper, no async, no actor isolation)
-final class AudioFileStreamParser {
+final class AudioFileStreamParser: QueueConfined {
 
     // MARK: - Callback Types
 
@@ -45,14 +45,6 @@ final class AudioFileStreamParser {
 
     /// The decode queue this parser is confined to (set by owner, checked in debug builds).
     var confinementQueue: DispatchQueue?
-
-    private func assertConfinement() {
-        #if DEBUG
-        if let queue = confinementQueue {
-            dispatchPrecondition(condition: .onQueue(queue))
-        }
-        #endif
-    }
 
     // MARK: - Initialization
 

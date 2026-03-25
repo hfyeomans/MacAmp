@@ -311,7 +311,7 @@ struct VideoWindowChromeView<Content: View>: View {
 
                         // APPKIT PREVIEW: Update overlay window via coordinator bridge
                         if let coordinator = WindowCoordinator.shared {
-                            let previewPixels = candidate.toVideoPixels()
+                            let previewPixels = candidate.toPixels()
                             coordinator.showVideoResizePreview(resizePreview, previewSize: previewPixels)
                         }
                     }
@@ -333,8 +333,8 @@ struct VideoWindowChromeView<Content: View>: View {
                         // Sync NSWindow frame via coordinator bridge
                         if let coordinator = WindowCoordinator.shared {
                             let clampedSize = CGSize(
-                                width: round(finalSize.toVideoPixels().width),
-                                height: round(finalSize.toVideoPixels().height)
+                                width: round(finalSize.toPixels().width),
+                                height: round(finalSize.toPixels().height)
                             )
                             coordinator.updateVideoWindowSize(to: clampedSize)
                             coordinator.hideVideoResizePreview(resizePreview)

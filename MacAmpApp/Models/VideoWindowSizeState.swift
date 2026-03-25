@@ -20,7 +20,7 @@ final class VideoWindowSizeState {
 
     /// Pixel dimensions calculated from segments
     var pixelSize: CGSize {
-        size.toVideoPixels()
+        size.toPixels()
     }
 
     /// Width of center section in bottom bar (can be 0)

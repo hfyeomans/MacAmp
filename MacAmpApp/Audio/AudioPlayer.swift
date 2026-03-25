@@ -545,15 +545,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
 
     func seekToPercent(_ percent: Double, resume: Bool? = nil) {
         if currentMediaType == .video {
-            videoPlaybackController.seekToPercent(percent, resume: resume) { [weak self] (actualTime: Double) in
-                Task { @MainActor in
-                    guard let self else { return }
-                    self.currentTime = actualTime
-                    self.playbackProgress = self.videoPlaybackController.progress
-                    self.currentDuration = self.videoPlaybackController.duration
-                    self.transition(to: self.videoPlaybackController.isPlaying ? .playing : .paused)
-                }
-            }
+            videoPlaybackController.seekToPercent(percent, resume: resume, completion: videoSeekCompletion)
             return
         }
 
@@ -569,15 +561,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
 
     func seek(to time: Double, resume: Bool? = nil) {
         if currentMediaType == .video {
-            videoPlaybackController.seek(to: time, resume: resume) { [weak self] (actualTime: Double) in
-                Task { @MainActor in
-                    guard let self else { return }
-                    self.currentTime = actualTime
-                    self.playbackProgress = self.videoPlaybackController.progress
-                    self.currentDuration = self.videoPlaybackController.duration
-                    self.transition(to: self.videoPlaybackController.isPlaying ? .playing : .paused)
-                }
-            }
+            videoPlaybackController.seek(to: time, resume: resume, completion: videoSeekCompletion)
             return
         }
 
@@ -618,6 +602,20 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
         Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: 100_000_000)
             self?.seekGuardActive = false
+        }
+    }
+
+    /// Shared completion handler for video seek operations.
+    /// Syncs video playback state back to AudioPlayer after AVPlayer seek completes.
+    private var videoSeekCompletion: @Sendable (Double) -> Void {
+        { [weak self] (actualTime: Double) in
+            Task { @MainActor in
+                guard let self else { return }
+                self.currentTime = actualTime
+                self.playbackProgress = self.videoPlaybackController.progress
+                self.currentDuration = self.videoPlaybackController.duration
+                self.transition(to: self.videoPlaybackController.isPlaying ? .playing : .paused)
+            }
         }
     }
 

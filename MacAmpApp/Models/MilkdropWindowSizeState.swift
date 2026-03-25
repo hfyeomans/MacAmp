@@ -28,7 +28,7 @@ final class MilkdropWindowSizeState {
 
     /// Pixel dimensions calculated from segments
     var pixelSize: CGSize {
-        size.toMilkdropPixels()
+        size.toPixels()
     }
 
     /// Width of center section in bottom bar: window - LEFT(125) - RIGHT(125)

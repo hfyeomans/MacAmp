@@ -104,7 +104,7 @@ struct WinampMilkdropWindow: View {
         }
 
         // MARK: Navigation
-        menu.addItem(createMenuItem(
+        menu.addItem(MenuItemFactory.createMenuItem(
             title: "Next Preset",
             keyEquivalent: " ",
             modifiers: [],
@@ -113,7 +113,7 @@ struct WinampMilkdropWindow: View {
             }
         ))
 
-        menu.addItem(createMenuItem(
+        menu.addItem(MenuItemFactory.createMenuItem(
             title: "Previous Preset",
             keyEquivalent: "\u{08}", // Backspace
             modifiers: [],
@@ -125,7 +125,7 @@ struct WinampMilkdropWindow: View {
         menu.addItem(.separator())
 
         // MARK: Settings
-        menu.addItem(createMenuItem(
+        menu.addItem(MenuItemFactory.createMenuItem(
             title: "Randomize",
             isChecked: presetManager.isRandomize,
             keyEquivalent: "r",
@@ -135,7 +135,7 @@ struct WinampMilkdropWindow: View {
             }
         ))
 
-        menu.addItem(createMenuItem(
+        menu.addItem(MenuItemFactory.createMenuItem(
             title: "Auto-Cycle Presets",
             isChecked: presetManager.isCycling,
             keyEquivalent: "c",
@@ -156,7 +156,7 @@ struct WinampMilkdropWindow: View {
         ]
 
         for (title, interval) in intervals {
-            let item = createMenuItem(
+            let item = MenuItemFactory.createMenuItem(
                 title: title,
                 isChecked: abs(presetManager.cycleInterval - interval) < 0.1,
                 action: { [weak presetManager] in
@@ -174,7 +174,7 @@ struct WinampMilkdropWindow: View {
 
         // MARK: Show Track Title
         let currentDisplayTitle = playbackCoordinator.displayTitle
-        menu.addItem(createMenuItem(
+        menu.addItem(MenuItemFactory.createMenuItem(
             title: "Show Track Title",
             keyEquivalent: "t",
             modifiers: [],
@@ -195,7 +195,7 @@ struct WinampMilkdropWindow: View {
         ]
 
         for (title, interval) in titleIntervals {
-            let item = createMenuItem(
+            let item = MenuItemFactory.createMenuItem(
                 title: title,
                 isChecked: abs(presetManager.trackTitleInterval - interval) < 0.1,
                 action: { [weak presetManager] in
@@ -216,7 +216,7 @@ struct WinampMilkdropWindow: View {
             let presetSubmenu = NSMenu()
 
             for (index, name) in presetManager.presets.enumerated() {
-                let item = createMenuItem(
+                let item = MenuItemFactory.createMenuItem(
                     title: name,
                     isChecked: index == presetManager.currentPresetIndex,
                     action: { [weak presetManager] in
@@ -243,43 +243,9 @@ struct WinampMilkdropWindow: View {
         menu.popUp(positioning: nil, at: location, in: nil)
     }
 
-    /// Helper to create menu items with actions
-    @MainActor
-    private func createMenuItem(
-        title: String,
-        isChecked: Bool = false,
-        keyEquivalent: String = "",
-        modifiers: NSEvent.ModifierFlags = [],
-        action: @escaping () -> Void
-    ) -> NSMenuItem {
-        let item = NSMenuItem(title: title, action: nil, keyEquivalent: keyEquivalent)
-        item.state = isChecked ? .on : .off
-        item.keyEquivalentModifierMask = modifiers
-
-        let actionTarget = MilkdropMenuTarget(action: action)
-        item.target = actionTarget
-        item.action = #selector(MilkdropMenuTarget.execute)
-        item.representedObject = actionTarget // Keep it alive
-
-        return item
-    }
 }
 
 // MARK: - Helper Classes
-
-/// Helper class to bridge closures to NSMenuItem actions
-@MainActor
-private class MilkdropMenuTarget: NSObject {
-    let action: () -> Void
-
-    init(action: @escaping () -> Void) {
-        self.action = action
-    }
-
-    @objc func execute() {
-        action()
-    }
-}
 
 /// NSViewRepresentable that captures right-click events
 struct RightClickCaptureView: NSViewRepresentable {

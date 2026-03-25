@@ -33,7 +33,7 @@ struct PlaylistResizeHandle: View {
                         )
 
                         if let coordinator = WindowCoordinator.shared {
-                            let previewPixels = candidate.toPlaylistPixels()
+                            let previewPixels = candidate.toPixels()
                             coordinator.showPlaylistResizePreview(resizePreview, previewSize: previewPixels)
                         }
                     }
