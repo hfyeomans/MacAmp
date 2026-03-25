@@ -130,7 +130,7 @@ Deployment:               Developer ID signed, notarization-ready
    - D Button: Double Size UI scaling 100%/200% (Ctrl+D)
    - V Button: Visualizer control (scaffolded, pending implementation)
 7. **Three-State Repeat Mode (v0.7.9)**: Migrated from boolean to enum-based repeat system
-8. **Stream Volume Control (T5 Phase 1, v1.0.6)**: Centralized volume/balance routing through PlaybackCoordinator. Volume and balance sliders now propagate to all backends (AudioPlayer, StreamPlayer, VideoPlaybackController) via `setVolume()`/`setBalance()`. Added capability flags (`supportsEQ`, `supportsBalance`, `supportsVisualizer`) that dim controls only during stream prebuffering (before the bridge activates); once active, streams have full EQ/balance/visualizer support via the unified pipeline. Removed AudioPlayer's direct knowledge of VideoPlaybackController for volume propagation.
+8. **Stream Volume Control (T5 Phase 1, v1.0.6)**: Centralized volume/balance routing through PlaybackCoordinator. Volume and balance sliders now propagate to all backends (AudioPlayer, StreamPlayer, VideoPlaybackController) via `setVolume()`/`setBalance()`. Added capability flags (`supportsEQ`, `supportsBalance`, `supportsVisualizer`) (later consolidated into `supportsAudioProcessing`) that dim controls only during stream prebuffering (before the bridge activates); once active, streams have full EQ/balance/visualizer support via the unified pipeline. Removed AudioPlayer's direct knowledge of VideoPlaybackController for volume propagation.
    - RepeatMode enum: off/all/one matching Winamp 5 Modern skins
    - "1" badge overlay for repeat-one mode (ZStack pattern)
    - Manual skip vs auto-advance distinction with isManualSkip parameter

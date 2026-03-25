@@ -36,7 +36,7 @@ This documentation package provides comprehensive guidance for implementing mode
 - Detailed code examples for every pattern
   - Per-window state models (VideoVisualizerState, MilkdropVisualizerState)
   - WindowStateStore for frame persistence
-  - Window Management with WindowAccessor
+  - Window Management with NSWindowController subclasses
   - Opening windows with Commands
   - Lifecycle management
   - Concurrency patterns
@@ -118,7 +118,7 @@ MacAmpApp (App struct)
 - [ ] Update MacAmpApp.swift with new WindowGroup declarations
 
 ### Phase 2: Views
-- [ ] Create VideoVisualizerView.swift with WindowAccessor integration
+- [ ] Create VideoVisualizerView.swift with NSWindowController integration
 - [ ] Create MilkdropVisualizerView.swift
 - [ ] Add basic rendering (Canvas or Metal)
 - [ ] Add overlay controls (color mode, fullscreen)
@@ -188,12 +188,7 @@ Use this to verify correct implementation:
 ```
 
 ### Pattern 2: Window Registration
-```swift
-.background(WindowAccessor { window in
-    windowStore.register(window: window, kind: .videoVisualizer)
-    docking.windowSnapManager.register(window: window, kind: .visualizerVideo)
-})
-```
+Window configuration is handled by `NSWindowController` subclasses (e.g., `WinampMainWindowController`) that configure NSWindow directly in their initializer, with shared logic centralized in `WinampWindowConfigurator`.
 
 ### Pattern 3: Opening Windows
 ```swift
@@ -212,8 +207,8 @@ Task { @MainActor in
 
 ## Integration Points with Existing Code
 
-### WindowAccessor.swift
-Already exists! Reuse it exactly as shown in examples.
+### WinampWindowConfigurator.swift
+Centralizes NSWindow configuration. Each window type has an NSWindowController subclass (e.g., `WinampMainWindowController`) that configures its window directly in the initializer.
 
 ### AppSettings.swift
 Pattern to follow: Use @Observable @MainActor with UserDefaults didSet
@@ -271,14 +266,14 @@ Already enum-based, will handle new window kinds automatically
 
 ## FAQ
 
-**Q: Do I need NSWindowController?**
-A: No! WindowAccessor provides all the NSWindow access you need.
+**Q: How is window configuration handled?**
+A: Each window type uses an NSWindowController subclass that configures its NSWindow directly in the initializer. Shared configuration logic lives in `WinampWindowConfigurator`.
 
 **Q: Can multiple windows have the same visualizer?**
 A: Not with current WindowGroup(id:) approach. One window per ID. To support multiple, use value-based WindowGroup (documented in ARCHITECTURE.md).
 
 **Q: How do I make visualizers work with window snapping?**
-A: Register with WindowSnapManager in WindowAccessor callback. Already shown in examples.
+A: Register with WindowSnapManager in the NSWindowController subclass initializer. See existing controllers for examples.
 
 **Q: What about Milkdrop shaders?**
 A: Use Metal rendering with SPIR-V or Metal shaders. Per-window state can store shader parameters.
@@ -305,7 +300,7 @@ These existing files provide patterns to follow:
 
 - `MacAmpApp/MacAmpApp.swift` - App struct with WindowGroup pattern
 - `MacAmpApp/Models/AppSettings.swift` - @Observable @MainActor singleton pattern
-- `MacAmpApp/Utilities/WindowAccessor.swift` - NSWindow capture pattern
+- `MacAmpApp/Windows/WinampWindowConfigurator.swift` - Centralized NSWindow configuration
 - `MacAmpApp/Utilities/WindowSnapManager.swift` - Window registration pattern
 - `MacAmpApp/ViewModels/DockingController.swift` - Window kind enum pattern
 - `MacAmpApp/Views/UnifiedDockView.swift` - Environment injection pattern

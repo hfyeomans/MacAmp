@@ -815,22 +815,9 @@ private func showContextMenu(at location: NSPoint) {
     menu.popUp(positioning: nil, at: location, in: nil)
 }
 
-// Helper: Bridge Swift closure to NSMenuItem action
-@MainActor
-private class MilkdropMenuTarget: NSObject {
-    let action: () -> Void
-    init(action: @escaping () -> Void) { self.action = action }
-    @objc func execute() { action() }
-}
-
-private func createMenuItem(title: String, action: @escaping () -> Void) -> NSMenuItem {
-    let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
-    let target = MilkdropMenuTarget(action: action)
-    item.target = target
-    item.action = #selector(MilkdropMenuTarget.execute)
-    item.representedObject = target  // Keep alive!
-    return item
-}
+// Uses MenuActionTarget from MacAmpApp/Utilities/MenuActionTarget.swift
+// and MenuItemFactory.createMenuItem() for streamlined menu item creation
+let item = MenuItemFactory.createMenuItem(title: title, action: { ... })
 ```
 
 ### 9.7 Critical Bug Fixes (Oracle A-Grade)
@@ -1184,7 +1171,7 @@ struct Size2D: Equatable, Codable, Hashable {
     static let milkdropDefault = Size2D(width: 0, height: 4)  // 275×232
 
     /// Convert segments to pixel dimensions for MILKDROP window
-    func toMilkdropPixels() -> CGSize {
+    func toPixels() -> CGSize {
         CGSize(
             width: 275 + width * 25,
             height: 116 + height * 29
@@ -1205,7 +1192,7 @@ final class MilkdropWindowSizeState {
     }
 
     /// Pixel dimensions calculated from segments
-    var pixelSize: CGSize { size.toMilkdropPixels() }
+    var pixelSize: CGSize { size.toPixels() }
 
     /// Content dimensions (for Butterchurn canvas)
     var contentWidth: CGFloat { pixelSize.width - 19 }   // Minus borders
@@ -1369,7 +1356,7 @@ private func buildResizeHandle() -> some View {
                     // Show AppKit preview overlay
                     if let coordinator = WindowCoordinator.shared,
                        let window = coordinator.milkdropWindow {
-                        resizePreview.show(in: window, previewSize: candidate.toMilkdropPixels())
+                        resizePreview.show(in: window, previewSize: candidate.toPixels())
                     }
                 }
                 .onEnded { value in
@@ -1413,7 +1400,7 @@ private func buildResizeHandle() -> some View {
 During drag, a translucent overlay shows the target size:
 ```swift
 // WindowResizePreviewOverlay (shared with VIDEO window)
-resizePreview.show(in: window, previewSize: candidate.toMilkdropPixels())
+resizePreview.show(in: window, previewSize: candidate.toPixels())
 resizePreview.hide()
 ```
 

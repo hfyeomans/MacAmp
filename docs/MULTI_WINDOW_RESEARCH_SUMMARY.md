@@ -14,7 +14,7 @@ This document summarizes the comprehensive research on modern SwiftUI multi-wind
 
 2. **MacAmp Codebase Analysis**
    - Current architecture: Pure SwiftUI with @Observable models
-   - Existing patterns: WindowAccessor, WindowSnapManager, DockingController
+   - Existing patterns: WindowAccessor (since replaced by NSWindowController subclasses, 2026-02), WindowSnapManager, DockingController
    - State management: Singleton pattern with environment injection
 
 3. **Community Best Practices**
@@ -76,9 +76,11 @@ This ensures:
 - Swift 6 strict concurrency compliance
 - No race conditions despite multi-window access
 
-### 4. WindowAccessor is Perfect for Frame Capture
+### 4. WindowAccessor for Frame Capture (Historical)
 
-MacAmp already has this pattern! Reuse it:
+> **Note:** WindowAccessor was the recommended pattern at research time; it was later replaced by NSWindowController subclasses (e.g., `WinampMainWindowController`) with centralized configuration in `WinampWindowConfigurator` (2026-02).
+
+The original research recommended reusing the existing WindowAccessor pattern:
 ```swift
 .background(WindowAccessor { window in
     windowStore.register(window: window, kind: .videoVisualizer)
@@ -86,7 +88,7 @@ MacAmp already has this pattern! Reuse it:
 })
 ```
 
-No additional NSWindowController needed.
+The current architecture handles window registration in the NSWindowController initializer instead.
 
 ### 5. Window Snapping Integration
 
@@ -222,11 +224,13 @@ All recommended patterns follow Swift 6 strict concurrency:
 ## Comparison: Rejected Alternatives
 
 ### Alternative 1: NSWindowController Wrapper
-**Why rejected**:
+**Why rejected at research time** (later adopted as the primary pattern, 2026-02):
 - Duplicates SwiftUI scene lifecycle
 - Complicates environment injection
 - Not needed - WindowAccessor provides escape hatch
 - Adds 200+ lines of unnecessary code
+
+> **Update:** NSWindowController subclasses were later adopted as the standard pattern, with `WinampWindowConfigurator` centralizing shared configuration. The concerns above were addressed through the controller-per-window architecture.
 
 ### Alternative 2: Value-Based WindowGroup
 **Why rejected**:

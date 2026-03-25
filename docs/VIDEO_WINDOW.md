@@ -527,7 +527,7 @@ struct Size2D: Codable, Equatable {
     static let video2x = Size2D(w: 11, h: 12)      // 550×464 (2x default)
 
     // Conversion to pixels
-    func toVideoPixels() -> CGSize {
+    func toPixels() -> CGSize {
         CGSize(
             width: 275 + CGFloat(w) * 25,   // 25px width increments
             height: 116 + CGFloat(h) * 29    // 29px height increments
@@ -547,7 +547,7 @@ final class VideoWindowSizeState {
         didSet { persist() }
     }
 
-    var pixelSize: CGSize { size.toVideoPixels() }
+    var pixelSize: CGSize { size.toPixels() }
     var contentSize: CGSize {
         CGSize(width: pixelSize.width - 19, height: pixelSize.height - 58)
     }
@@ -604,7 +604,7 @@ private func buildVideoResizeHandle() -> some View {
 
                     // Show preview overlay (AppKit window)
                     if let coordinator = WindowCoordinator.shared {
-                        coordinator.showVideoResizePreview(resizePreview, previewSize: candidate.toVideoPixels())
+                        coordinator.showVideoResizePreview(resizePreview, previewSize: candidate.toPixels())
                     }
 
                     // Update state (quantized)

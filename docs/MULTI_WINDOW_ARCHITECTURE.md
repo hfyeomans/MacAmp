@@ -33,7 +33,7 @@ MacAmp is a pure SwiftUI application for macOS 15+/26+ with the following charac
 - **Scene-Level State**: Long-lived singletons (`SkinManager`, `AudioPlayer`, `DockingController`, `AppSettings`, `PlaybackCoordinator`, `StreamPlayer`) stored as `@State` in the App struct
 - **Environment Injection**: All state models injected via `.environment()` modifier for access across all windows
 - **Window Management**: 
-  - `WindowAccessor.swift` - NSViewRepresentable to capture underlying NSWindow references
+  - `WinampWindowConfigurator.swift` - Centralized NSWindow configuration for all Winamp windows
   - `WindowSnapManager.swift` - Handles magnetic snapping between docked windows
   - `DockingController.swift` - Manages visibility and layout of panes (Main, Playlist, Equalizer)
 
@@ -179,7 +179,7 @@ struct MacAmpApp: App {
 
 **Disadvantages**:
 - Maximum one window per ID (but could be extended with value-based WindowGroup)
-- Less direct NSAppKit control (but WindowAccessor provides escape hatch)
+- Less direct NSAppKit control (but `NSWindowController` subclasses provide direct configuration)
 
 ### Pattern 2: Window vs WindowGroup Comparison
 
@@ -399,7 +399,7 @@ final class WindowStateStore {
             return
         }
         
-        // Set frame on main thread (WindowAccessor callback is already @MainActor)
+        // Set frame on main thread (@MainActor)
         let rect = saved.toNSRect()
         window.setFrame(rect, display: true)
     }
@@ -512,35 +512,10 @@ struct VideoVisualizerView: View {
             }
             .padding(16)
         }
-        .background(WindowAccessor { window in
-            // Register this window with state store
-            guard window.identifier?.rawValue != windowID.uuidString else { return }
-            window.identifier = NSUserInterfaceItemIdentifier(windowID.uuidString)
-            
-            // Restore saved position
-            windowStore.register(window: window, kind: .videoVisualizer)
-            
-            // Register with snapping system
-            docking.windowSnapManager.register(window: window, kind: .visualizerVideo)
-            
-            // Set up persistence listener
-            Task { @MainActor in
-                // Listen for window move/resize via notification
-                NotificationCenter.default.publisher(
-                    for: NSWindow.didMoveNotification,
-                    object: window
-                )
-                .merge(with: NotificationCenter.default.publisher(
-                    for: NSWindow.didResizeNotification,
-                    object: window
-                ))
-                .debounce(for: 0.5, scheduler: DispatchQueue.main)
-                .sink { _ in
-                    windowStore.persistFrame(window.frame, for: .videoVisualizer)
-                }
-                .store(in: &subscriptions)
-            }
-        })
+        // > **Note (2026-03):** `WindowAccessor` was replaced by `NSWindowController` subclasses
+        // > (e.g., `WinampMainWindowController`) that configure `NSWindow` properties directly
+        // > in their initializer. Window configuration is centralized in `WinampWindowConfigurator`.
+        // > Registration, snapping, and frame persistence are handled in the controller's init.
         .onAppear {
             // Ensure docking controller knows about this window type
             if !docking.hasVisualizers {
@@ -895,45 +870,15 @@ struct MacAmpApp: App {
 
 ### Pitfall 2: Window Reference Cycles
 
-**Problem**: NSWindow references captured in closures cause memory leaks:
+> **Note (2026-03):** `WindowAccessor` was replaced by `NSWindowController` subclasses
+> (e.g., `WinampMainWindowController`) that configure `NSWindow` properties directly
+> in their initializer. Window configuration is centralized in `WinampWindowConfigurator`.
 
-```swift
-// WRONG - Strong reference cycle
-struct VideoVisualizerView: View {
-    var body: some View {
-        Color.clear
-            .background(WindowAccessor { window in
-                NotificationCenter.default.addObserver(
-                    forName: NSWindow.didResizeNotification,
-                    object: window,
-                    queue: .main
-                ) { [window] _ in // ❌ Strong reference to window
-                    // Process resize
-                }
-            })
-    }
-}
-```
+**Problem**: NSWindow references captured in closures cause memory leaks.
 
-**Solution**: Use weak references:
-
-```swift
-// CORRECT - Weak reference
-struct VideoVisualizerView: View {
-    var body: some View {
-        Color.clear
-            .background(WindowAccessor { [weak window = window] window in
-                NotificationCenter.default.addObserver(
-                    forName: NSWindow.didResizeNotification,
-                    object: window,
-                    queue: .main
-                ) { [weak window] _ in
-                    window?.frame = // ...
-                }
-            })
-    }
-}
-```
+**Solution**: The `NSWindowController` pattern avoids this by managing the window lifecycle
+directly. Controllers hold a strong reference to their window, and notification observers
+are removed in `deinit`. Use `[weak self]` in closures within controllers to avoid retain cycles.
 
 ### Pitfall 3: Excessive Body Re-evaluations
 
@@ -1303,7 +1248,7 @@ The Swift patterns review (conducted by swift-concurrency-expert skill) graded t
 ### Phase 2: Views (Week 2)
 - [ ] Build `VideoVisualizerView` with basic rendering
 - [ ] Build `MilkdropVisualizerView` with basic rendering
-- [ ] Integrate `WindowAccessor` for frame capture
+- [ ] Configure `NSWindowController` subclasses for frame capture
 - [ ] Add window controls (color mode, fullscreen)
 
 ### Phase 3: Integration (Week 3)
@@ -1349,7 +1294,7 @@ The Swift patterns review (conducted by swift-concurrency-expert skill) graded t
    - [FatBobman: The @State Specter - Multi-Window SwiftUI Bug Analysis](https://fatbobman.com/en/posts/the-state-specter-analyzing-a-bug-in-multi-window-swiftui-applications/)
 
 3. **MacAmp-Specific**
-   - See `MacAmpApp/Utilities/WindowAccessor.swift` for NSWindow capture pattern
+   - See `MacAmpApp/Windows/WinampWindowConfigurator.swift` for centralized NSWindow configuration
    - See `MacAmpApp/Utilities/WindowSnapManager.swift` for magnetic snapping
    - See `MacAmpApp/ViewModels/DockingController.swift` for pane management
    - See `MacAmpApp/Models/AppSettings.swift` for @Observable singleton pattern

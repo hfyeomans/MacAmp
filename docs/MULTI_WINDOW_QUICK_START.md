@@ -6,7 +6,7 @@ Use **multiple `WindowGroup(id:)` instances** in `MacAmpApp.swift` with:
 - Shared global state (AudioPlayer, AppSettings) via `@Environment`
 - Per-window state models (`VideoVisualizerState`, etc.) via `@Observable @MainActor`
 - Frame persistence via `WindowStateStore`
-- Reuse existing `WindowAccessor` pattern
+- Use `NSWindowController` subclasses with `WinampWindowConfigurator`
 - Extend `WindowSnapManager` with new window kinds
 
 **Result**: Pure SwiftUI, no NSWindowController, automatic lifecycle, Swift 6 safe.
@@ -120,24 +120,9 @@ final class VideoVisualizerState {
 }
 ```
 
-### 5. Capturing the NSWindow
+### 5. Window Configuration
 
-```swift
-struct VideoVisualizerView: View {
-    @Environment(WindowStateStore.self) var windowStore
-    @State private var windowID = UUID()
-    
-    var body: some View {
-        YourContent()
-            .background(WindowAccessor { window in
-                // Register for frame persistence
-                windowStore.register(window: window, kind: .videoVisualizer)
-                // Register for snapping
-                docking.windowSnapManager.register(window: window, kind: .visualizerVideo)
-            })
-    }
-}
-```
+NSWindow setup is handled by `NSWindowController` subclasses (e.g., `WinampMainWindowController`) that configure the window directly in their initializer. Shared configuration logic is centralized in `WinampWindowConfigurator`. Window registration for frame persistence and snapping happens in the controller, not in the SwiftUI view layer.
 
 ---
 
@@ -182,7 +167,7 @@ struct VideoVisualizerView: View {
             // Overlay controls
             VStack { /* controls */ }
         }
-        .background(WindowAccessor { /* register */ })
+        // Window configuration handled by NSWindowController subclass
     }
 }
 ```
@@ -217,7 +202,7 @@ Handle new WindowKind cases automatically (no changes needed if enum-based)
 
 1. **One @State per WindowGroup**: Each window gets its own state instance
 2. **@Observable @MainActor Everything**: Automatic concurrency safety
-3. **Reuse WindowAccessor**: Already exists, just use it
+3. **Use NSWindowController subclasses**: Configure windows in controller initializers via `WinampWindowConfigurator`
 4. **Debounce UserDefaults**: 500ms delay to avoid disk thrashing
 5. **Weak References**: Prevent NSWindow retention cycles
 
@@ -237,8 +222,8 @@ Handle new WindowKind cases automatically (no changes needed if enum-based)
 ❌ Mutating @Observable from background thread
 ✅ Use `Task { @MainActor in }` 
 
-❌ Creating NSWindowController wrapper
-✅ Use WindowAccessor in your SwiftUI view
+❌ Configuring NSWindow from SwiftUI view layer
+✅ Use NSWindowController subclasses with `WinampWindowConfigurator`
 
 ---
 
@@ -292,7 +277,7 @@ See MULTI_WINDOW_ARCHITECTURE.md §10 for complete refactoring details.
 - Research summary: `MULTI_WINDOW_RESEARCH_SUMMARY.md`
 - Complete code patterns: Both docs above
 - Existing code to learn from:
-  - `WindowAccessor.swift` - NSWindow capture pattern
+  - `WinampWindowConfigurator.swift` - Centralized NSWindow configuration
   - `AppSettings.swift` - @Observable model pattern
   - `DockingController.swift` - Window registration pattern
   - `UnifiedDockView.swift` - Environment injection pattern
