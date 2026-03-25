@@ -1,7 +1,7 @@
 # MacAmp Implementation Patterns
 
-**Version:** 2.0.0
-**Date:** 2026-03-22
+**Version:** 2.1.0
+**Date:** 2026-03-25
 **Purpose:** Practical code patterns and best practices for MacAmp development
 
 ---
@@ -654,20 +654,8 @@ private func buildVolumeSlider() -> some View {
         .at(Layout.volumeSlider)
 }
 
-@ViewBuilder
-private func buildBalanceSlider() -> some View {
-    let balanceBinding = Binding<Float>(
-        get: { audioPlayer.balance },                // Read: source of truth
-        set: { playbackCoordinator.setBalance($0) }  // Write: fan-out to all backends
-    )
-    WinampBalanceSlider(balance: balanceBinding)
-        .at(Layout.balanceSlider)
-        .opacity(playbackCoordinator.supportsBalance ? 1.0 : 0.5)
-        .allowsHitTesting(playbackCoordinator.supportsBalance)
-        .help(playbackCoordinator.supportsBalance
-              ? "Balance"
-              : "Balance unavailable during streaming")
-}
+// Balance slider follows the same asymmetric pattern.
+// It also applies capability-flag dimming -- see "Capability Flag Pattern" below.
 ```
 
 **Why asymmetric**: The `get` path reads from `audioPlayer.volume` because AudioPlayer is the single source of truth for volume state (it persists to UserDefaults, drives playerNode). The `set` path goes through `playbackCoordinator.setVolume()` which fans out to AudioPlayer + StreamPlayer + VideoPlaybackController. A symmetric `@Bindable` binding would only update AudioPlayer, leaving other backends unsynchronized.
@@ -689,14 +677,14 @@ WinampVolumeSlider(volume: $player.volume)  // Only updates AudioPlayer!
 
 ### Pattern: Capability Flag Pattern
 
-**When to use**: Exposing computed boolean flags from the coordinator to indicate which audio features are available for the current playback mode, and using them to dim/disable UI controls
+**When to use**: Exposing a computed boolean flag from the coordinator to indicate whether audio-processing features (EQ, balance, visualizer) are available for the current playback mode, and using it to dim/disable UI controls
 
-**T5 Phase 1**: Originally introduced because AVPlayer (used for internet radio streams) did not support EQ, balance, or visualizer. **Updated (Unified Pipeline)**: With the custom stream decode pipeline, streams now route through AVAudioEngine via the stream bridge, enabling all features when the bridge is active.
+**History**: T5 Phase 1 introduced three separate flags (`supportsEQ`, `supportsBalance`, `supportsVisualizer`). With the unified stream decode pipeline, all three followed identical logic, so they were consolidated into a single `supportsAudioProcessing` flag.
 
 **Implementation**:
 ```swift
-// File: MacAmpApp/Audio/PlaybackCoordinator.swift:76-97
-// Purpose: Expose per-feature availability based on active backend + bridge state
+// File: MacAmpApp/Audio/PlaybackCoordinator.swift:110-120
+// Purpose: Single flag for all audio-processing feature availability
 // Context: UI dims controls only during stream prebuffering or error states
 
 @Observable
@@ -709,46 +697,38 @@ final class PlaybackCoordinator {
         return streamPlayer.error == nil  // Error → inactive → re-enable controls
     }
 
-    /// EQ is available when not streaming, OR when stream bridge is active
-    /// (stream decoded through AVAudioEngine). Dimmed only during stream error
-    /// or before bridge activates (prebuffering).
-    var supportsEQ: Bool { !isStreamBackendActive || audioPlayer.isBridgeActive }
-
-    /// Balance is available when not streaming, OR when stream bridge is active.
-    var supportsBalance: Bool { !isStreamBackendActive || audioPlayer.isBridgeActive }
-
-    /// Visualizer is available when not streaming, OR when stream bridge is active
-    /// (audio tap on mixer receives stream PCM through the bridge).
-    var supportsVisualizer: Bool { !isStreamBackendActive || audioPlayer.isBridgeActive }
+    /// EQ, balance, and other audio-processing features are available when not streaming,
+    /// OR when the stream bridge is active (stream decoded through AVAudioEngine).
+    /// Dimmed only during stream error or before bridge activates (prebuffering).
+    var supportsAudioProcessing: Bool { !isStreamBackendActive || audioPlayer.isBridgeActive }
 }
 ```
 
 **UI consumption pattern** (dim + disable):
 ```swift
 // File: MacAmpApp/Views/MainWindow/MainWindowSlidersLayer.swift
-// File: MacAmpApp/Views/WinampEqualizerWindow.swift:105-106
+// File: MacAmpApp/Views/WinampEqualizerWindow.swift:104-105
 // Pattern: opacity(0.5) + allowsHitTesting(false) for unsupported features
 
 // Balance slider
 WinampBalanceSlider(balance: balanceBinding)
-    .opacity(playbackCoordinator.supportsBalance ? 1.0 : 0.5)
-    .allowsHitTesting(playbackCoordinator.supportsBalance)
-    .help(playbackCoordinator.supportsBalance
+    .opacity(playbackCoordinator.supportsAudioProcessing ? 1.0 : 0.5)
+    .allowsHitTesting(playbackCoordinator.supportsAudioProcessing)
+    .help(playbackCoordinator.supportsAudioProcessing
           ? "Balance"
           : "Balance unavailable during streaming")
 
 // EQ window content
 buildEQSliders()
-    .opacity(playbackCoordinator.supportsEQ ? 1.0 : 0.5)
-    .allowsHitTesting(playbackCoordinator.supportsEQ)
+    .opacity(playbackCoordinator.supportsAudioProcessing ? 1.0 : 0.5)
+    .allowsHitTesting(playbackCoordinator.supportsAudioProcessing)
 ```
 
-**Error state recovery**: When a stream enters an error state (`streamPlayer.error != nil`), `isStreamBackendActive` returns `false`, which flips all `supports*` flags back to `true`. This ensures the user is never stuck with permanently dimmed controls after a stream failure. When the user switches to a local file or starts a new stream, the flags update naturally.
+**Error state recovery**: When a stream enters an error state (`streamPlayer.error != nil`), `isStreamBackendActive` returns `false`, which flips `supportsAudioProcessing` back to `true`. This ensures the user is never stuck with permanently dimmed controls after a stream failure.
 
-**Real usage**: `PlaybackCoordinator.swift` capability flags, `MainWindowSlidersLayer.swift` balance dimming, `WinampEqualizerWindow.swift` EQ dimming
+**Real usage**: `PlaybackCoordinator.swift:120` capability flag, `MainWindowSlidersLayer.swift` balance dimming, `WinampEqualizerWindow.swift` EQ dimming
 
 **Pitfalls**:
-- All three flags now check `!isStreamBackendActive || audioPlayer.isBridgeActive` -- they are separate computed properties (not a single enum) for clarity, though all currently follow the same logic
 - Controls dim briefly during stream prebuffering (before bridge activates) and re-enable once `onFormatReady` fires and the bridge is active
 - Use `opacity(0.5)` (not `0.0`) to indicate "unavailable" rather than "hidden" -- users should see the control exists but cannot be used
 - Always pair `.opacity()` with `.allowsHitTesting(false)` to prevent interaction with dimmed controls
@@ -883,7 +863,7 @@ func handlePositionDrag(...) {
 ```swift
 // File: MacAmpApp/Views/MainWindow/MainWindowOptionsMenuPresenter.swift
 // Purpose: Bridges AppKit NSMenu to SwiftUI for the Options (O) button menu
-// Context: Absorbs MenuItemTarget and menu lifecycle from the old extension
+// Context: Uses shared MenuActionTarget + MenuItemFactory from Utilities/
 
 @MainActor
 final class MainWindowOptionsMenuPresenter {
@@ -894,7 +874,13 @@ final class MainWindowOptionsMenuPresenter {
         let menu = NSMenu()
         activeMenu = menu  // CRITICAL: retain menu
 
-        buildOptionsMenuItems(menu: menu, settings: settings, audioPlayer: audioPlayer)
+        // Uses shared MenuItemFactory (see MacAmpApp/Utilities/MenuActionTarget.swift)
+        menu.addItem(MenuItemFactory.createMenuItem(
+            title: "Always on Top",
+            isChecked: settings.alwaysOnTop
+        ) { [weak settings] in settings?.alwaysOnTop.toggle() })
+
+        // ... additional menu items via MenuItemFactory.createMenuItem(...)
 
         // Position calculation accounting for double-size mode
         if let window = findMainWindow() {
@@ -906,29 +892,12 @@ final class MainWindowOptionsMenuPresenter {
             menu.popUp(positioning: nil, at: screenPoint, in: nil)
         }
     }
-
-    private func createMenuItem(title: String, isChecked: Bool,
-                                action: @escaping () -> Void) -> NSMenuItem {
-        let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
-        item.state = isChecked ? .on : .off
-
-        // MenuItemActionTarget bridges closure → @objc selector
-        let actionTarget = MenuItemActionTarget(action: action)
-        item.target = actionTarget
-        item.action = #selector(MenuItemActionTarget.execute)
-        item.representedObject = actionTarget  // Retains target during menu lifecycle
-
-        return item
-    }
 }
 
-/// Bridges closures to NSMenuItem @objc action selectors.
-@MainActor
-private class MenuItemActionTarget: NSObject {
-    let action: () -> Void
-    init(action: @escaping () -> Void) { self.action = action }
-    @objc func execute() { action() }
-}
+// Shared utility: MacAmpApp/Utilities/MenuActionTarget.swift
+// MenuActionTarget bridges closures to NSMenuItem @objc action selectors.
+// MenuItemFactory creates NSMenuItems with closure-based actions.
+// Both are used by MainWindowOptionsMenuPresenter, WinampMilkdropWindow, and other menus.
 
 // In WinampMainWindow.swift -- owned as @State, not part of interaction state
 @State private var optionsPresenter = MainWindowOptionsMenuPresenter()
@@ -937,14 +906,14 @@ private class MenuItemActionTarget: NSObject {
 **Why a separate class (not in interaction state)**:
 - `WinampMainWindowInteractionState` manages drag state, scroll offsets, timers -- **user interaction state**
 - Menu presentation is a **presentation concern** that bridges AppKit APIs
-- The menu must retain `NSMenu` and `MenuItemActionTarget` objects during display -- this lifecycle is orthogonal to interaction state
+- The menu must retain `NSMenu` and `MenuActionTarget` objects during display -- this lifecycle is orthogonal to interaction state
 - Separating them keeps both classes focused and testable
 
 **Real usage**: `MainWindowOptionsMenuPresenter.swift`, instantiated in `WinampMainWindow.swift` as `@State`
 
 **Pitfalls**:
 - `activeMenu` must be retained as an instance property -- if the NSMenu is only a local variable, it is deallocated before `popUp` returns (menu items stop working)
-- `MenuItemActionTarget` must be stored in `representedObject` -- the `target` property is a weak reference, so without `representedObject` the target is released before the user clicks
+- `MenuActionTarget` must be stored in `representedObject` -- the `target` property is a weak reference, so without `representedObject` the target is released before the user clicks (`MenuItemFactory` handles this automatically)
 - Menu items use `[weak settings]` / `[weak audioPlayer]` in action closures to avoid retaining environment objects beyond the menu's lifetime
 
 ---
@@ -1819,7 +1788,7 @@ Task { @MainActor in
 
 ### Pattern: nonisolated(unsafe) Deinit Safety (Swift 6)
 
-> **SUPERSEDED (Swift 6.2):** Use `isolated deinit` instead. Zero `nonisolated(unsafe)` usages remain in the codebase.
+> **SUPERSEDED (Swift 6.2):** Use `isolated deinit` instead. One `nonisolated(unsafe)` usage remains in the codebase (`StreamDecodePipeline.swift:75`, for AudioWorkgroup interop).
 
 **When to use**: Accessing @MainActor properties in deinit for cleanup
 
@@ -3722,29 +3691,7 @@ var volume: Float = 0.75 {
 }
 ```
 
-**Correct**:
-```swift
-// Asymmetric binding: reads from AudioPlayer, writes through coordinator
-let volumeBinding = Binding<Float>(
-    get: { audioPlayer.volume },
-    set: { playbackCoordinator.setVolume($0) }
-)
-WinampVolumeSlider(volume: volumeBinding)
-
-// Coordinator fans out to ALL backends unconditionally
-func setVolume(_ vol: Float) {
-    audioPlayer.volume = vol
-    streamPlayer.volume = vol
-    audioPlayer.videoPlaybackController.volume = vol
-}
-```
-
-**Why the direct binding was wrong**:
-- Volume changes during internet radio playback had no effect (StreamPlayer was never updated)
-- Switching from radio to local file could have mismatched volume between backends
-- AudioPlayer knowing about VideoPlaybackController violated single-responsibility (cross-backend routing belongs in the coordinator)
-
-See "Coordinator Volume Routing", "Asymmetric Binding for Coordinator Routing", and "Capability Flag Pattern" in the State Management Patterns section.
+**Correct**: Use asymmetric bindings through `PlaybackCoordinator`. See [Coordinator Volume Routing](#pattern-coordinator-volume-routing) and [Asymmetric Binding for Coordinator Routing](#pattern-asymmetric-binding-for-coordinator-routing) in State Management Patterns.
 
 ---
 
@@ -3839,4 +3786,4 @@ When implementing new features, prefer these established patterns. When you disc
 
 ---
 
-*Document Version: 2.0.0 | Last Updated: 2026-03-22*
+*Document Version: 2.1.0 | Last Updated: 2026-03-25*
