@@ -196,6 +196,8 @@ Target (MainWindowFullLayer.body):
 | Real-time VBR bitrate display | S1 manual testing (2026-03-22) | Medium | Low | No — Feature request: Winamp classic updates bitrate display in real-time during VBR playback. MacAmp currently reads bitrate once at track load (MetadataLoader). Would require periodic re-reading from the engine during playback. Evaluate as a Winamp fidelity feature. |
 | LockFreeRingBuffer "High throughput" flaky overrun threshold | PR #64 (2026-03-22) | Small | Low | No — Wrapped with `withKnownIssue(isIntermittent: true)`. Root cause: overrun count is non-deterministic under task scheduling contention. Threshold (chunksToWrite/2) too tight for loaded CI. Needs either a relaxed threshold or a redesigned stress test that measures throughput without a hard overrun cap. |
 
+| Early-project preprocessing/workarounds audit | PR #75 (2026-03-25) | Small | Medium | No — `SkinBackgroundPreprocessor` (digit blackout) was unnecessary and caused visual artifacts on non-black skins. Removed in PR #75. Scan codebase for similar early-project workarounds that may no longer be needed (defensive preprocessing, hardcoded pixel fixups, manual coordinate hacks that sprites now handle). |
+
 **Context (Hide Main Window):** The "Hide Main" menu item (`AppCommands.swift:13`) calls `DockingController.toggleMain()` which only toggles an internal `panes[idx].visible` boolean. This boolean is not wired to actually hide/show the NSWindow. `WindowVisibilityController.hideMain()` exists and calls `registry.mainWindow?.orderOut(nil)` but is never invoked by the toggle path. Pre-existing — not caused by T3 decomposition.
 
 **Context (spm-multiple-producers-fix):** ✅ RESOLVED (2026-03-22). The error no longer reproduces — resolved by Wave 3 swift-tools-version 6.2 upgrade. `swift test` passes (40 tests, 11 suites). CLI test runs are unblocked.
@@ -318,7 +320,7 @@ All doc updates verified complete by sub-agent scan:
 
 **Responsibility sweep (2026-03-25, PR #74):** 5-agent SRP + AHA audit of all 109 files. Result: 76 Clean, 26 Justified, 7 Actionable. Applied Swift Architecture & Decomposition principles (Cohesion > LOC, AHA Rule of Three, no visibility leaks, no pass-through middlemen). 4 of 5 original decomposition plans revised or cancelled. See `tasks/responsibility-sweep/research.md`.
 
-**Revised Phase 2b scope:** ~7 new files (was ~18). Dead code cleanup: PresetsButton.swift, WinampButtonStyle.swift, WinampAlertHelper.promptText. New opportunity: WindowSizeState protocol (3x persistence duplication).
+**Revised Phase 2b scope:** ~5 new files (was ~18). Dead code cleanup: PresetsButton.swift, WinampButtonStyle.swift, WinampAlertHelper.promptText, SkinBackgroundPreprocessor (caused skin artifacts, removed). New opportunity: WindowSizeState protocol (3x persistence duplication).
 
 **Phase 2c deferred items** (tracked in `intra-file-dedup-simplification/placeholder.md`): SkinManager sprite extraction loop dedup, NUMS_EX move to SkinSprites.swift.
 
