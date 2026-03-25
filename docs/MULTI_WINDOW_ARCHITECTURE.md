@@ -20,6 +20,7 @@ This document provides comprehensive research and implementation guidance for cr
 8. [Swift 6 Concurrency Patterns](#swift-6-concurrency-patterns)
 9. [Common Pitfalls & Solutions](#common-pitfalls--solutions)
 10. [WindowCoordinator Refactoring (2026-02)](#windowcoordinator-refactoring-2026-02)
+11. [Quick Reference](#quick-reference)
 
 ---
 
@@ -1314,6 +1315,53 @@ The Swift patterns review (conducted by swift-concurrency-expert skill) graded t
    - See `tasks/window-coordinator-refactor/plan.md` for refactoring plan
    - See `tasks/window-coordinator-refactor/state.md` for final state
    - See `tasks/window-coordinator-refactor/swift-patterns-review.md` for Swift 6.2 review
+
+---
+
+## Quick Reference
+
+### Key Principles
+
+1. **One @State per WindowGroup**: Each window gets its own state instance
+2. **@Observable @MainActor Everything**: Automatic concurrency safety
+3. **Use NSWindowController subclasses**: Configure windows in controller initializers via `WinampWindowConfigurator`
+4. **Debounce UserDefaults**: 500ms delay to avoid disk thrashing
+5. **Weak References**: Prevent NSWindow retention cycles
+
+### Common Mistakes
+
+| Mistake | Fix |
+|---------|-----|
+| Single `VideoVisualizerState()` shared across windows | Create separate `@State` for each `WindowGroup` |
+| Strong reference to `NSWindow` in closures | Use weak references or `WeakBox` |
+| `AudioPlayer.currentFrequencies` triggers body re-evaluation | Use `onChange` callbacks, not body dependence |
+| Mutating `@Observable` from background thread | Use `Task { @MainActor in }` |
+| Configuring `NSWindow` from SwiftUI view layer | Use `NSWindowController` subclasses with `WinampWindowConfigurator` |
+
+### Performance Tips
+
+1. Use **Metal rendering** not SwiftUI Canvas for audio visualization
+2. **Don't trigger body** on every audio update (use `onChange`)
+3. **Cache waveforms** in per-window state
+4. **Clean up DisplayLink** in `onDisappear`
+5. Use **CVDisplayLink** for 60+ FPS smooth rendering
+
+### Verification Test
+
+Independent state is working correctly when this holds:
+
+```swift
+// In VideoVisualizerView
+@Environment(VideoVisualizerState.self) var visState
+Button("Switch to Fire") { visState.colorMode = .fire }
+
+// In MilkdropVisualizerView
+@Environment(MilkdropVisualizerState.self) var visState
+Button("Switch to Fire") { visState.colorMode = .fire }
+
+// Clicking in one visualizer must NOT affect the other.
+// If it does, state is shared incorrectly.
+```
 
 ---
 

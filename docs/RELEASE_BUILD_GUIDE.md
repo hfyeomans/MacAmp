@@ -1,5 +1,7 @@
 # MacAmp Release Build & Distribution Guide
 
+> **Consolidated:** Merged content from `CODE_SIGNING_FIX.md`, `CODE_SIGNING_FIX_DIAGRAM.md`, and `RELEASE_BUILD_COMPARISON.md` (2026-03-25).
+
 This guide covers building MacAmp for direct download distribution using Developer ID signing.
 
 ## Prerequisites
@@ -444,6 +446,196 @@ Before each release, update:
 2. **Update mechanisms** - Implement Sparkle framework for auto-updates
 3. **Crash reporting** - Add Sentry or similar for production monitoring
 4. **Analytics** - Track usage patterns (respecting privacy)
+
+---
+
+## Code Signing Troubleshooting
+
+### P0 Bug: Unsigned App in dist/ (Commit 6a80a97)
+
+The Release build script was copying `MacAmp.app` to `dist/` BEFORE Xcode's code signing phase completed, resulting in an unsigned app in the distribution directory.
+
+**Root Cause:** Xcode build phase execution order places `CodeSign` AFTER custom Run Script phases. The "Copy to dist" script was running before signing.
+
+**Fix:** Moved distribution copy from a Build Phase Script to a **Scheme Post-Action**, which runs AFTER all build phases including CodeSign.
+
+```
+Before (BROKEN):  Build → Copy → Sign   (dist/ gets unsigned app)
+After  (WORKING): Build → Sign → Copy → Verify  (dist/ gets signed app)
+```
+
+The post-action script automatically verifies the signature and fails the build if invalid.
+
+### Alternatives Considered
+
+| Option | Why Not Used |
+|--------|-------------|
+| Move script to end of Build Phases | Xcode controls order; scripts may still run before CodeSign |
+| Manual re-sign in script | Redundant signing; script signature may differ from Xcode's |
+| Use xcodebuild archive | Good for production but overkill for quick development builds |
+
+### Debug vs Release Signing Configuration
+
+```
+CODE_SIGN_IDENTITY = "Apple Development"
+CODE_SIGN_IDENTITY[sdk=macosx*] = "Developer ID Application"
+CODE_SIGN_STYLE = Manual
+DEVELOPMENT_TEAM[sdk=macosx*] = AC3LGVEJJ8
+```
+
+- **Debug builds**: "Apple Development" with automatic signing
+- **Release builds**: "Developer ID Application" for distribution outside Mac App Store
+
+### Additional Troubleshooting
+
+#### "CODE_SIGN_IDENTITY not found"
+Ensure Developer ID certificate is installed in Keychain Access:
+```bash
+security find-identity -v -p codesigning
+```
+
+#### Post-action not running
+1. Product -> Scheme -> Edit Scheme...
+2. Build -> Post-actions -> Verify script is present
+3. Ensure "Provide build settings from: MacAmp" is selected
+
+#### Signature verification fails
+1. Check certificate validity: `security find-identity -v -p codesigning`
+2. Ensure certificate is not expired
+3. Verify Team ID matches in project settings
+
+#### Verification script
+```bash
+./scripts/verify-dist-signature.sh
+```
+
+---
+
+## Code Signing Flow Diagram
+
+### Build Phase Execution Order (After Fix)
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Xcode Build Process (Release)                 │
+└─────────────────────────────────────────────────────────────────┘
+
+Step 1: Compile Sources
+┌─────────────────┐
+│  Swift Files    │  →  Compile  →  Object Files
+└─────────────────┘
+
+Step 2: Copy Resources
+┌─────────────────┐
+│  Assets, WSZ    │  →  Copy  →  Build Directory
+└─────────────────┘
+
+Step 3: Link & Embed Frameworks
+┌─────────────────┐
+│  ZIPFoundation  │  →  Link  →  MacAmp.app (unsigned)
+└─────────────────┘
+
+Step 4: CodeSign
+┌─────────────────────────────────────────────────────────────┐
+│  codesign -s "Developer ID Application" MacAmp.app          │
+└─────────────────────────────────────────────────────────────┘
+         │
+         v
+Step 5: POST-ACTION "Copy signed app to dist"
+┌─────────────────────────────────────────────────────────────┐
+│  Copy signed app → Verify signature → Fail if invalid       │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Signature Verification Flow
+
+```
+codesign --verify --deep --strict dist/MacAmp.app
+    │
+    ├─ Exit code 0 → Signature valid → Display authority chain → Build succeeds
+    │
+    └─ Exit code 1+ → Signature INVALID → Display error → Fail build (exit 1)
+        Possible causes: expired cert, revoked cert, entitlements mismatch,
+        unsigned embedded framework, resource modified after signing
+```
+
+### Certificate Chain
+
+```
+dist/MacAmp.app
+    └── Code Signature
+            ├── Identifier: com.hankyeomans.MacAmp
+            ├── Format: Mach-O thin (arm64)
+            ├── Authority Chain:
+            │       ├── Developer ID Application: Hank Yeomans (AC3LGVEJJ8)
+            │       ├── Developer ID Certification Authority
+            │       └── Apple Root CA
+            ├── Team Identifier: AC3LGVEJJ8
+            └── Entitlements: MacAmp.entitlements
+```
+
+### Summary Comparison
+
+| Aspect | Before Fix | After Fix |
+|--------|-----------|-----------|
+| **Copy Timing** | Before CodeSign | After CodeSign |
+| **Signature Status** | Unsigned | Signed |
+| **Verification** | None | Automatic |
+| **Error Detection** | Silent failure | Build fails |
+| **Notarization** | Impossible | Ready |
+| **Build Time** | ~15s | ~16s (+1s) |
+
+---
+
+## Debug vs Release Configuration
+
+> **Note (2026-03-25):** This section consolidated from `RELEASE_BUILD_COMPARISON.md`. The Swift 6 migration is complete (Swift 6.2 with strict concurrency). Verify build settings match current `project.yml` if discrepancies arise.
+
+### Build Phase Order Comparison
+
+**Release Build (current):**
+```
+1. Sources          ← Compile Swift files
+2. Resources        ← Copy resources
+3. Frameworks       ← Embed frameworks
+4. CodeSign         ← Sign app in DerivedData
+5. Post-Action      ← Copy SIGNED app to dist/ + verify
+```
+
+### Testing a Release Build
+
+```bash
+# Build Release
+xcodebuild -project MacAmpApp.xcodeproj -scheme MacAmpApp -configuration Release build
+
+# Verify signature
+codesign --verify --deep --strict --verbose=2 dist/MacAmp.app
+
+# Display signature details
+codesign -dvvv dist/MacAmp.app
+
+# Run standalone verification
+./scripts/verify-dist-signature.sh
+```
+
+### Performance Impact
+
+| Metric | Debug | Release | Notes |
+|--------|-------|---------|-------|
+| Build Time | ~10s | ~16s | +signing +verification |
+| Code Signing | Apple Development | Developer ID Application | Manual for Release |
+| Signature Verification | None | Automatic (post-action) | +1s overhead |
+| Notarization Ready | No | Yes | Required for distribution |
+| Hardened Runtime | Optional | Required | Enabled in Release config |
+
+### Distribution Checklist (Post-Fix)
+
+- [x] Build Release (automatic signing + verification)
+- [x] App in dist/ is SIGNED and VERIFIED
+- [ ] Notarize (standard workflow, see Notarization section above)
+- [ ] Staple notarization ticket
+- [ ] Create DMG (see DMG section above)
+- [ ] Distribute
 
 ---
 

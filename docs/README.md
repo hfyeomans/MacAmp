@@ -1,9 +1,9 @@
 # MacAmp Documentation Guide
 
-**Version:** 3.9.0
+**Version:** 3.11.0
 **Date:** 2026-03-25
 **Purpose:** Master index and navigation guide for all MacAmp documentation
-**Total Documentation:** 19,755 active lines across 18 current docs + 26 archived docs
+**Total Documentation:** 18,080 active lines across 12 current docs + 26 archived docs
 
 ---
 
@@ -26,7 +26,7 @@
 
 ## Executive Summary
 
-The MacAmp documentation system consists of **18 active technical documents** (19,755 lines) providing comprehensive coverage of a pixel-perfect Winamp 2.x recreation for macOS. Documentation spans from high-level architecture to implementation details, window management systems, video playback, visualization windows, build processes, and skin system specifications.
+The MacAmp documentation system consists of **12 active technical documents** (18,080 lines) providing comprehensive coverage of a pixel-perfect Winamp 2.x recreation for macOS. Documentation spans from high-level architecture to implementation details, window management systems, video playback, visualization windows, build processes, and skin system specifications.
 
 ### Documentation Purpose
 
@@ -47,7 +47,7 @@ The MacAmp documentation serves multiple critical functions:
 | **New Developer** | [MACAMP_ARCHITECTURE_GUIDE.md](MACAMP_ARCHITECTURE_GUIDE.md) §1-2 | [IMPLEMENTATION_PATTERNS.md](IMPLEMENTATION_PATTERNS.md) | 3-4 hours |
 | **Bug Fixer** | [MACAMP_ARCHITECTURE_GUIDE.md](MACAMP_ARCHITECTURE_GUIDE.md) §14 Quick Ref | Relevant component section | 1 hour |
 | **Feature Developer** | [IMPLEMENTATION_PATTERNS.md](IMPLEMENTATION_PATTERNS.md) | [SPRITE_SYSTEM_COMPLETE.md](SPRITE_SYSTEM_COMPLETE.md) | 2 hours |
-| **Release Manager** | [RELEASE_BUILD_GUIDE.md](RELEASE_BUILD_GUIDE.md) | [CODE_SIGNING_FIX.md](CODE_SIGNING_FIX.md) | 1-2 hours |
+| **Release Manager** | [RELEASE_BUILD_GUIDE.md](RELEASE_BUILD_GUIDE.md) | (all-in-one guide) | 1-2 hours |
 | **Architectural Reviewer** | [MACAMP_ARCHITECTURE_GUIDE.md](MACAMP_ARCHITECTURE_GUIDE.md) | All docs | 4-6 hours |
 
 ---
@@ -112,7 +112,7 @@ xcodebuild test -scheme MacAmpApp -destination 'platform=macOS'
 
 ## Complete Documentation Inventory
 
-### 🏗️ Architecture & Design (12 documents, 16,675 lines)
+### 🏗️ Architecture & Design (9 documents, 15,789 lines)
 
 #### **[MACAMP_ARCHITECTURE_GUIDE.md](MACAMP_ARCHITECTURE_GUIDE.md)** ⭐
 - **Size**: 168KB, 5,249 lines
@@ -266,48 +266,6 @@ xcodebuild test -scheme MacAmpApp -destination 'platform=macOS'
 - **Related Docs**: MULTI_WINDOW_ARCHITECTURE.md, VIDEO_WINDOW.md, MILKDROP_WINDOW.md
 - **Quality**: ⭐⭐⭐⭐⭐ Authoritative
 
-#### **[MULTI_WINDOW_QUICK_START.md](MULTI_WINDOW_QUICK_START.md)**
-- **Size**: 10KB, 326 lines
-- **Last Updated**: 2025-11-14
-- **Status**: ✅ CURRENT
-- **Purpose**: Quick reference guide for multi-window implementation
-- **Key Sections**:
-  - Essential patterns and code snippets
-  - Common window configurations
-  - Quick debugging tips
-  - Checklist for new windows
-- **When to Read**: Quick reference during development, onboarding
-- **Related Docs**: MULTI_WINDOW_ARCHITECTURE.md, README_MULTI_WINDOW.md
-- **Quality**: ⭐⭐⭐⭐ Reference
-
-#### **[README_MULTI_WINDOW.md](README_MULTI_WINDOW.md)**
-- **Size**: 12KB, 364 lines
-- **Last Updated**: 2025-11-14
-- **Status**: ✅ CURRENT
-- **Purpose**: Overview and navigation for multi-window documentation suite
-- **Key Sections**:
-  - Document organization
-  - Implementation roadmap
-  - Quick start guide
-  - Related documentation links
-- **When to Read**: Starting multi-window work, understanding doc structure
-- **Related Docs**: All multi-window documentation
-- **Quality**: ⭐⭐⭐⭐ Reference
-
-#### **[MULTI_WINDOW_RESEARCH_SUMMARY.md](MULTI_WINDOW_RESEARCH_SUMMARY.md)**
-- **Size**: 9KB, 278 lines
-- **Last Updated**: 2025-11-14
-- **Status**: ✅ CURRENT
-- **Purpose**: Research findings and design decisions for multi-window system
-- **Key Sections**:
-  - Research methodology
-  - Key findings and insights
-  - Design decisions rationale
-  - Alternative approaches considered
-- **When to Read**: Understanding design decisions, architectural reviews
-- **Related Docs**: MULTI_WINDOW_ARCHITECTURE.md
-- **Quality**: ⭐⭐⭐⭐ Reference
-
 #### **[CUSTOM_DRAG_FIX.md](CUSTOM_DRAG_FIX.md)**
 - **Size**: 8KB, 254 lines
 - **Last Updated**: 2025-11-14
@@ -322,32 +280,15 @@ xcodebuild test -scheme MacAmpApp -destination 'platform=macOS'
 - **Related Docs**: MULTI_WINDOW_ARCHITECTURE.md
 - **Quality**: ⭐⭐⭐⭐ Reference
 
-### 🔨 Build & Distribution (4 documents, 1,319 lines)
+### 🔨 Build & Distribution (1 document, 648 lines)
 
 #### **[RELEASE_BUILD_GUIDE.md](RELEASE_BUILD_GUIDE.md)**
-- **Size**: 11KB, 456 lines
-- **Last Updated**: February 2026
-- **Status**: ✅ CURRENT
-- **Purpose**: Complete guide for building, signing, and notarizing
+- **Size**: ~20KB, 648 lines
+- **Last Updated**: 2026-03-25
+- **Status**: ✅ AUTHORITATIVE
+- **Purpose**: Complete guide for building, signing, notarizing, and troubleshooting
+- **Consolidated**: Merged CODE_SIGNING_FIX.md, CODE_SIGNING_FIX_DIAGRAM.md, RELEASE_BUILD_COMPARISON.md (2026-03-25)
 - **Quality**: ⭐⭐⭐⭐⭐ Authoritative
-
-#### **[CODE_SIGNING_FIX.md](CODE_SIGNING_FIX.md)**
-- **Size**: 6KB, 200 lines
-- **Status**: ✅ CURRENT
-- **Purpose**: Solutions for code signing issues
-- **Quality**: ⭐⭐⭐⭐⭐ Authoritative
-
-#### **[CODE_SIGNING_FIX_DIAGRAM.md](CODE_SIGNING_FIX_DIAGRAM.md)**
-- **Size**: 22KB, 433 lines
-- **Status**: ✅ CURRENT
-- **Purpose**: Visual diagram of signing process
-- **Quality**: ⭐⭐⭐⭐ Reference
-
-#### **[RELEASE_BUILD_COMPARISON.md](RELEASE_BUILD_COMPARISON.md)**
-- **Size**: 6KB, 230 lines
-- **Status**: 🔄 NEEDS UPDATE (Swift 6 changes)
-- **Purpose**: Debug vs Release build configurations
-- **Quality**: ⭐⭐⭐ Reference
 
 ### 🎨 Skin System (1 document, 652 lines)
 
@@ -378,13 +319,9 @@ xcodebuild test -scheme MacAmpApp -destination 'platform=macOS'
 **Implementation & Coding:**
 - IMPLEMENTATION_PATTERNS.md - Code patterns and practices
 - WINAMP_SKIN_VARIATIONS.md - Skin format specifications
-- MULTI_WINDOW_QUICK_START.md - Quick reference guide
 
 **Build & Release:**
-- RELEASE_BUILD_GUIDE.md - Build and distribution process
-- CODE_SIGNING_FIX.md - Signing troubleshooting
-- CODE_SIGNING_FIX_DIAGRAM.md - Visual signing guide
-- RELEASE_BUILD_COMPARISON.md - Build configurations
+- RELEASE_BUILD_GUIDE.md - Build, distribution, signing troubleshooting, and configuration
 
 ### By Technical Domain
 
@@ -407,9 +344,7 @@ xcodebuild test -scheme MacAmpApp -destination 'platform=macOS'
 - IMPLEMENTATION_PATTERNS.md §8 - Migration guides
 
 **Build System:**
-- RELEASE_BUILD_GUIDE.md - Complete build process
-- CODE_SIGNING_FIX.md - Signing issues
-- RELEASE_BUILD_COMPARISON.md - Configurations
+- RELEASE_BUILD_GUIDE.md - Complete build process, signing, troubleshooting, configuration
 
 ---
 
@@ -503,11 +438,11 @@ xcodebuild test -scheme MacAmpApp -destination 'platform=macOS'
 
 2. **Build Process** (30 min):
    - RELEASE_BUILD_GUIDE.md §Building - Complete workflow
-   - RELEASE_BUILD_COMPARISON.md - Configuration verification
+   - RELEASE_BUILD_GUIDE.md §Debug vs Release Configuration - Configuration verification
 
 3. **Troubleshooting** (as needed):
-   - CODE_SIGNING_FIX.md - Common issues and solutions
-   - CODE_SIGNING_FIX_DIAGRAM.md - Visual diagnostic guide
+   - RELEASE_BUILD_GUIDE.md §Code Signing Troubleshooting - Common issues and solutions
+   - RELEASE_BUILD_GUIDE.md §Code Signing Flow Diagram - Visual diagnostic guide
 
 ---
 
@@ -527,9 +462,6 @@ docs/
 │   ├── 🪟 Multi-Window System
 │   │   ├── MULTI_WINDOW_ARCHITECTURE.md (Core design)
 │   │   ├── WINDOW_FOCUS_ARCHITECTURE.md (Focus tracking)
-│   │   ├── MULTI_WINDOW_QUICK_START.md (Quick reference)
-│   │   ├── README_MULTI_WINDOW.md (Navigation guide)
-│   │   ├── MULTI_WINDOW_RESEARCH_SUMMARY.md (Research)
 │   │   └── CUSTOM_DRAG_FIX.md (Window dragging fix)
 │   │
 │   ├── 📺 Window Implementations
@@ -541,15 +473,12 @@ docs/
 │       └── WINAMP_SKIN_VARIATIONS.md (Skin format specs)
 │
 ├── 🔨 Build & Distribution
-│   ├── RELEASE_BUILD_GUIDE.md (Build process)
-│   ├── CODE_SIGNING_FIX.md (Troubleshooting)
-│   ├── CODE_SIGNING_FIX_DIAGRAM.md (Visual guide)
-│   └── RELEASE_BUILD_COMPARISON.md (Configurations)
+│   └── RELEASE_BUILD_GUIDE.md (Build, signing, troubleshooting, configuration)
 │
 ├── 📁 context/
 │   └── xcode-testing-context.md (Xcode testing reference)
 │
-└── 📦 archive/ (23 historical docs - local only, gitignored)
+└── 📦 archive/ (27 historical docs - local only, gitignored)
     ├── Architecture evolution documents
     ├── Superseded implementation attempts
     └── Completed task documentation
@@ -560,7 +489,7 @@ docs/
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                     README.md                           │
-│           (Master Documentation Index v3.9.0)           │
+│           (Master Documentation Index v3.11.0)          │
 └─────────────────────┬───────────────────────────────────┘
                       │
         ┌─────────────┴─────────────┬──────────────┐
@@ -570,9 +499,9 @@ docs/
 │  Core Docs   │           │    Docs      │  │    System    │
 └──────┬───────┘           └──────┬───────┘  └──────┬───────┘
        │                          │                  │
-       ├── MACAMP_ARCH...         ├── RELEASE       ├── MULTI_WINDOW_ARCH
-       ├── IMPLEMENTATION         ├── CODE_SIGN     ├── PLAYLIST_WINDOW
-       └── SPRITE_SYSTEM          └── COMPARISON    ├── VIDEO_WINDOW
+       ├── MACAMP_ARCH...         └── RELEASE_BUILD  ├── MULTI_WINDOW_ARCH
+       ├── IMPLEMENTATION              _GUIDE.md     ├── PLAYLIST_WINDOW
+       └── SPRITE_SYSTEM                             ├── VIDEO_WINDOW
                                                     └── MILKDROP_WINDOW
                                                          │
                                                     ┌────┴────┐
@@ -585,7 +514,7 @@ docs/
 
 ## Archive Documentation Inventory
 
-The `docs/archive/` directory contains **23 historical documents** (local only, gitignored) representing superseded approaches and implementation attempts.
+The `docs/archive/` directory contains **27 historical documents** (local only, gitignored) representing superseded approaches and implementation attempts.
 
 ### Superseded by Current Documentation
 
@@ -596,6 +525,10 @@ The `docs/archive/` directory contains **23 historical documents** (local only, 
 | SpriteResolver-Architecture.md | SPRITE_SYSTEM_COMPLETE.md | Consolidated |
 | SpriteResolver-Implementation-Summary.md | SPRITE_SYSTEM_COMPLETE.md | Consolidated |
 | SpriteResolver-Visual-Guide.md | SPRITE_SYSTEM_COMPLETE.md | Consolidated |
+| CODE_SIGNING_FIX.md | RELEASE_BUILD_GUIDE.md | Consolidated (2026-03-25) |
+| CODE_SIGNING_FIX_DIAGRAM.md | RELEASE_BUILD_GUIDE.md | Consolidated (2026-03-25) |
+| RELEASE_BUILD_COMPARISON.md | RELEASE_BUILD_GUIDE.md | Consolidated (2026-03-25) |
+| MULTI_WINDOW_RESEARCH_SUMMARY.md | MULTI_WINDOW_ARCHITECTURE.md | Archived (2026-03-25) |
 
 ### Historical Implementation Documentation (18 files)
 
@@ -635,13 +568,13 @@ Includes:
 | **AVAudioSourceNode** | MACAMP_ARCHITECTURE_GUIDE.md | §4 Unified Audio Pipeline |
 | **Stream decode pipeline** | MACAMP_ARCHITECTURE_GUIDE.md | §9 Internet Radio |
 | **Background I/O fire-and-forget** | IMPLEMENTATION_PATTERNS.md | §5 Async/Await Patterns |
-| **Build configurations** | RELEASE_BUILD_COMPARISON.md | Full document |
+| **Build configurations** | RELEASE_BUILD_GUIDE.md | §Debug vs Release Configuration |
 | **Clutter bar buttons** | MACAMP_ARCHITECTURE_GUIDE.md | §UI Controls & Features |
 | **Computed forwarding pattern** | IMPLEMENTATION_PATTERNS.md | §2 State Management Patterns |
 | **Computed play state (isPlaying/isPaused)** | MACAMP_ARCHITECTURE_GUIDE.md, IMPLEMENTATION_PATTERNS.md | §4.3, §2 Computed Properties (PR #49) |
 | **Context-aware playlist navigation** | MACAMP_ARCHITECTURE_GUIDE.md | §4.3, §9 Internet Radio (PR #49) |
 | **Cross-file SwiftUI extensions (anti-pattern)** | IMPLEMENTATION_PATTERNS.md | §9 Anti-Patterns |
-| **Code signing errors** | CODE_SIGNING_FIX.md | §Common Issues |
+| **Code signing errors** | RELEASE_BUILD_GUIDE.md | §Code Signing Troubleshooting |
 | **Component integration** | MACAMP_ARCHITECTURE_GUIDE.md | §11 Integration Maps |
 | **Custom menus** | MACAMP_ARCHITECTURE_GUIDE.md | §SpriteMenuItem |
 | **Double Size (D button)** | MACAMP_ARCHITECTURE_GUIDE.md | §UI Controls & Features |
@@ -652,7 +585,7 @@ Includes:
 | **Error handling** | IMPLEMENTATION_PATTERNS.md | §6 Error Handling |
 | **Fallback sprites** | SPRITE_SYSTEM_COMPLETE.md | §6 Fallback Generation |
 | **Goertzel algorithm** | MACAMP_ARCHITECTURE_GUIDE.md | §8.4 Spectrum |
-| **Hardened runtime** | CODE_SIGNING_FIX.md | §Hardened Runtime |
+| **Hardened runtime** | RELEASE_BUILD_GUIDE.md | §Code Signing Troubleshooting |
 | **ICY metadata protocol** | MACAMP_ARCHITECTURE_GUIDE.md | §9 Internet Radio |
 | **ICYFramer** | MACAMP_ARCHITECTURE_GUIDE.md | §9 Internet Radio |
 | **Internet radio** | MACAMP_ARCHITECTURE_GUIDE.md | §9 Complete section |
@@ -676,7 +609,7 @@ Includes:
 | **PlaylistController** | MACAMP_ARCHITECTURE_GUIDE.md, IMPLEMENTATION_PATTERNS.md | §4a, §4 Audio Processing Patterns |
 | **Semantic sprites** | SPRITE_SYSTEM_COMPLETE.md | §3 Semantic Enum |
 | **Sine wave diagnostic** | BUILDING_RETRO_MACOS_APPS_SKILL.md (skill file, not in docs/) | Lesson #27 |
-| **Signing workflow** | CODE_SIGNING_FIX_DIAGRAM.md | Full diagram |
+| **Signing workflow** | RELEASE_BUILD_GUIDE.md | §Code Signing Flow Diagram |
 | **Skin compatibility** | WINAMP_SKIN_VARIATIONS.md | Full document |
 | **Skin file structure** | SPRITE_SYSTEM_COMPLETE.md | §7 Skin Structure |
 | **SpriteResolver** | SPRITE_SYSTEM_COMPLETE.md | §4 Implementation |
@@ -714,7 +647,7 @@ Includes:
 | **Track title display** | MILKDROP_WINDOW.md | §9.9 Track Title Display |
 | **Preset cycling** | MILKDROP_WINDOW.md | §9.5 ButterchurnPresetManager |
 | **Multi-window architecture** | MULTI_WINDOW_ARCHITECTURE.md | Full document |
-| **Multi-window quick start** | MULTI_WINDOW_QUICK_START.md | Full document |
+| **Multi-window quick start** | MULTI_WINDOW_ARCHITECTURE.md | §11 Quick Reference |
 | **performDrag API** | CUSTOM_DRAG_FIX.md | §Solution |
 | **Two-piece sprites** | MILKDROP_WINDOW.md | §Two-Piece Sprite System |
 | **VideoPlaybackController** | MACAMP_ARCHITECTURE_GUIDE.md, IMPLEMENTATION_PATTERNS.md | §4a, §4 Audio Processing Patterns |
@@ -791,8 +724,8 @@ Includes:
 | "How does internet radio streaming work now?" | MACAMP_ARCHITECTURE_GUIDE.md §9 (custom decode pipeline: ICYFramer → AudioFileStreamParser → AudioConverterDecoder → AVAudioSourceNode) |
 | "How to debug audio corruption?" | BUILDING_RETRO_MACOS_APPS_SKILL.md Lesson #27 (sine wave diagnostic test) |
 | "How does skin loading work?" | SPRITE_SYSTEM_COMPLETE.md + WINAMP_SKIN_VARIATIONS.md |
-| "What's Debug vs Release difference?" | RELEASE_BUILD_COMPARISON.md |
-| "How do I fix code signing errors?" | CODE_SIGNING_FIX.md + diagram |
+| "What's Debug vs Release difference?" | RELEASE_BUILD_GUIDE.md §Debug vs Release Configuration |
+| "How do I fix code signing errors?" | RELEASE_BUILD_GUIDE.md §Code Signing Troubleshooting + §Code Signing Flow Diagram |
 | "What patterns should I follow?" | IMPLEMENTATION_PATTERNS.md |
 | "How does PlaybackCoordinator track play state?" | MACAMP_ARCHITECTURE_GUIDE.md §4.3 (computed from active backend, PR #49) |
 | "What replaced externalPlaybackHandler?" | IMPLEMENTATION_PATTERNS.md §5 Callback Synchronization (split into onTrackMetadataUpdate + onPlaylistAdvanceRequest) |
@@ -822,7 +755,7 @@ Includes:
 | "What is GEN.bmp?" | MILKDROP_WINDOW.md §GEN.bmp Sprite Atlas |
 | "How do two-piece sprites work?" | MILKDROP_WINDOW.md §Two-Piece Sprite System |
 | "How does multi-window management work?" | MULTI_WINDOW_ARCHITECTURE.md |
-| "How do I add a new window?" | MULTI_WINDOW_QUICK_START.md §Checklist |
+| "How do I add a new window?" | MULTI_WINDOW_ARCHITECTURE.md §11 Quick Reference |
 | "Why doesn't WindowDragGesture work?" | CUSTOM_DRAG_FIX.md §Problem Analysis |
 | "How to fix custom window dragging?" | CUSTOM_DRAG_FIX.md §Solution |
 | "How does playlist resize work?" | PLAYLIST_WINDOW.md §Segment-Based Resize System |
@@ -852,28 +785,28 @@ Includes:
 ┌─────────────────────────────────────────────────────────┐
 │ Category               │ Lines  │ Docs │ Coverage      │
 ├───────────────────────┼────────┼──────┼───────────────┤
-│ Architecture & Design  │16,675  │ 12   │ █████████░ 96%│
-│ Build & Distribution   │ 1,319  │  4   │ █████████░ 95%│
+│ Architecture & Design  │15,789  │  9   │ █████████░ 96%│
+│ Build & Distribution   │   648  │  1   │ █████████░ 95%│
 │ Skin System           │   652  │  1   │ █████████░ 90%│
-│ Navigation & Index     │ 1,109  │  1   │ ██████████100%│
-│ TOTAL                 │19,755  │ 18   │ █████████░ 95%│
+│ Navigation & Index     │ 1,092  │  1   │ ██████████100%│
+│ TOTAL                 │18,080  │ 12   │ █████████░ 95%│
 └─────────────────────────────────────────────────────────┘
 ```
 
 ### Documentation Health
 
 ```
-Total Active Docs:        18
-Total Archived Docs:      26 (local only)
-Total Lines:             19,755
-Average Doc Size:        1,098 lines
+Total Active Docs:        12
+Total Archived Docs:      27 (local only)
+Total Lines:             18,080
+Average Doc Size:        1,507 lines
 Last Full Review:        2026-03-25
-Documentation Version:   3.9.0
-Recent Update:           Sprint S2 + Phase 2.5 cleanup sync: updated line counts, 12 search index entries, playlist list operations (v3.9.0)
+Documentation Version:   3.11.0
+Recent Update:           Multi-window docs consolidation: merged QUICK_START + README into MULTI_WINDOW_ARCHITECTURE.md, archived RESEARCH_SUMMARY (v3.11.0)
 
 Quality Ratings:
-⭐⭐⭐⭐⭐ Authoritative:   10 docs (56%)
-⭐⭐⭐⭐  Reference:        8 docs (44%)
+⭐⭐⭐⭐⭐ Authoritative:   10 docs (83%)
+⭐⭐⭐⭐  Reference:        2 docs (17%)
 ```
 
 ### Accuracy Assessment
@@ -898,8 +831,8 @@ Quality Ratings:
 | PLAYLIST_WINDOW | 98% ✅ | Production (Oracle A-) |
 | WINDOW_FOCUS_ARCHITECTURE | 98% ✅ | Production |
 | WINAMP_SKIN_VARIATIONS | 100% ✅ | Verified |
-| Build docs (4) | 95% ✅ | Current |
-| Multi-window suite (4) | 95% ✅ | Current |
+| RELEASE_BUILD_GUIDE | 95% ✅ | Authoritative (consolidated) |
+| CUSTOM_DRAG_FIX | 95% ✅ | Current |
 
 ---
 
@@ -983,6 +916,16 @@ The following documents have been **archived to docs/archive/** (local only, not
 - ✅ SpriteResolver-Visual-Guide.md (visual examples)
 - ✅ semantic-sprites/ directory (Phase 4 investigation - 8 files)
 
+### Replaced by RELEASE_BUILD_GUIDE.md (consolidated 2026-03-25):
+- ✅ CODE_SIGNING_FIX.md (signing troubleshooting)
+- ✅ CODE_SIGNING_FIX_DIAGRAM.md (visual signing flow)
+- ✅ RELEASE_BUILD_COMPARISON.md (build configuration comparison)
+
+### Replaced by MULTI_WINDOW_ARCHITECTURE.md (consolidated 2026-03-25):
+- ✅ MULTI_WINDOW_QUICK_START.md (merged into §11 Quick Reference)
+- ✅ README_MULTI_WINDOW.md (index for single-doc suite unnecessary)
+- ✅ MULTI_WINDOW_RESEARCH_SUMMARY.md (archived to docs/archive/)
+
 ### Historical Implementation Docs:
 - ✅ ISSUE_FIXES_2025-10-12.md (October bug fixes)
 - ✅ title-bar-*.md (3 files - title bar customization)
@@ -992,7 +935,7 @@ The following documents have been **archived to docs/archive/** (local only, not
 - ✅ P0_CODE_SIGNING_FIX_SUMMARY.md (early signing work)
 - ✅ line-removal-report.md (code cleanup)
 
-**Total**: 26 archived documents (~9,065 lines) preserved for historical context
+**Total**: 27 archived documents (~9,065 lines) + 3 consolidated into RELEASE_BUILD_GUIDE.md + 3 consolidated into MULTI_WINDOW_ARCHITECTURE.md
 
 ---
 
@@ -1001,36 +944,30 @@ The following documents have been **archived to docs/archive/** (local only, not
 ### Current Active Documentation
 
 ```
-18 Core Technical Documents
+12 Core Technical Documents
 ─────────────────────────────
-MACAMP_ARCHITECTURE_GUIDE.md         5,249 lines  (27%) ⭐ UPDATED
-IMPLEMENTATION_PATTERNS.md           3,789 lines  (19%) ⭐ UPDATED
-MILKDROP_WINDOW.md                   1,660 lines  (8%)  ⭐ UPDATED
-MULTI_WINDOW_ARCHITECTURE.md         1,382 lines  (7%)  ⭐ UPDATED +322
-VIDEO_WINDOW.md                      1,151 lines  (7%)
-README.md (this file)                1,109 lines  (6%)
+MACAMP_ARCHITECTURE_GUIDE.md         5,249 lines  (29%) ⭐ UPDATED
+IMPLEMENTATION_PATTERNS.md           3,790 lines  (21%) ⭐ UPDATED
+MILKDROP_WINDOW.md                   1,647 lines  (9%)  ⭐ UPDATED
+MULTI_WINDOW_ARCHITECTURE.md         1,375 lines  (8%)  ⭐ UPDATED
+VIDEO_WINDOW.md                      1,151 lines  (6%)
+README.md (this file)                1,092 lines  (6%)
 PLAYLIST_WINDOW.md                     895 lines  (5%)
 SPRITE_SYSTEM_COMPLETE.md              728 lines  (4%)
-WINAMP_SKIN_VARIATIONS.md              652 lines  (3%)
+WINAMP_SKIN_VARIATIONS.md              652 lines  (4%)
+RELEASE_BUILD_GUIDE.md                 648 lines  (4%)  ⭐ CONSOLIDATED
 WINDOW_FOCUS_ARCHITECTURE.md           599 lines  (3%)
-RELEASE_BUILD_GUIDE.md                 456 lines  (3%)
-CODE_SIGNING_FIX_DIAGRAM.md            433 lines  (2%)
-README_MULTI_WINDOW.md                 364 lines  (2%)
-MULTI_WINDOW_QUICK_START.md            326 lines  (2%)
-MULTI_WINDOW_RESEARCH_SUMMARY.md       278 lines  (2%)
 CUSTOM_DRAG_FIX.md                     254 lines  (1%)
-RELEASE_BUILD_COMPARISON.md            230 lines  (1%)
-CODE_SIGNING_FIX.md                    200 lines  (1%)
 ─────────────────────────────
-TOTAL:                              19,755 lines
+TOTAL:                              18,080 lines
 ```
 
 ### Documentation by Category
 
-- **Architecture & Design**: 85% (16,675 lines)
-- **Build & Distribution**: 7% (1,319 lines)
-- **Skin System**: 3% (652 lines)
-- **Navigation & Index**: 6% (1,109 lines)
+- **Architecture & Design**: 87% (15,789 lines)
+- **Build & Distribution**: 4% (648 lines)
+- **Skin System**: 4% (652 lines)
+- **Navigation & Index**: 6% (1,092 lines)
 
 ---
 
@@ -1051,7 +988,7 @@ The MacAmp documentation system provides **comprehensive, accurate, and authorit
 
 **Navigation Tips**:
 - **First time?** Start with MACAMP_ARCHITECTURE_GUIDE.md §1-2
-- **Multi-window work?** Start with MULTI_WINDOW_QUICK_START.md
+- **Multi-window work?** Start with MULTI_WINDOW_ARCHITECTURE.md
 - **Looking for something specific?** Use the Search Index above
 - **Building a release?** Go to RELEASE_BUILD_GUIDE.md
 - **Fixing a bug?** Check MACAMP_ARCHITECTURE_GUIDE.md §14 Quick Reference
@@ -1064,11 +1001,24 @@ For questions or corrections, the documentation was comprehensively reviewed on 
 
 ---
 
-**MacAmp Documentation v3.9.0 | Last Updated: 2026-03-25 | Status: Production Authoritative**
+**MacAmp Documentation v3.11.0 | Last Updated: 2026-03-25 | Status: Production Authoritative**
 
-*Master index for 19,755+ lines of verified technical documentation (18 active docs)*
+*Master index for 18,080+ lines of verified technical documentation (12 active docs)*
 
-**Recent Update (v3.9.0 - 2026-03-25): Sprint S2 + Phase 2.5 Cleanup Sync**
+**Recent Update (v3.11.0 - 2026-03-25): Multi-Window Docs Consolidation**
+- Merged MULTI_WINDOW_QUICK_START.md into MULTI_WINDOW_ARCHITECTURE.md §11 Quick Reference
+- Deleted README_MULTI_WINDOW.md (index for single-doc suite unnecessary)
+- Archived MULTI_WINDOW_RESEARCH_SUMMARY.md to docs/archive/
+- Reduced active doc count: 15 -> 12 (3 docs removed)
+- Updated all cross-references, search index entries, and quality metrics
+
+**Previous Update (v3.10.0 - 2026-03-25): Build Docs Consolidation**
+- Merged CODE_SIGNING_FIX.md, CODE_SIGNING_FIX_DIAGRAM.md, RELEASE_BUILD_COMPARISON.md into RELEASE_BUILD_GUIDE.md
+- RELEASE_BUILD_GUIDE.md: 456 -> 648 lines (added signing troubleshooting, flow diagrams, configuration comparison)
+- Reduced active doc count: 18 -> 15 (3 docs consolidated)
+- Updated all cross-references, search index entries, and quality metrics
+
+**Previous Update (v3.9.0 - 2026-03-25): Sprint S2 + Phase 2.5 Cleanup Sync**
 - Updated line counts for MACAMP_ARCHITECTURE_GUIDE.md (5,313->5,249) and IMPLEMENTATION_PATTERNS.md (3,840->3,789)
 - Added 12 search index entries: os_workgroup, Now Playing, remote commands, stream elapsed time, playlist list operations, M3UWriter, QueueConfined, TimeFormatting, MenuActionTarget, WinampAlertHelper, PlaylistStyle, supportsAudioProcessing
 - Removed stale "NEW" labels from PLAYLIST_WINDOW.md entries

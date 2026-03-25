@@ -1,0 +1,11 @@
+# State
+- Status: completed
+- Task: review 5 docs for S2 + Phase 2.5 accuracy/completeness/staleness
+- Completed:
+  - Verified current source symbols and deleted files
+  - Verified line counts and doc metadata
+  - Checked all target docs for stale `.swift:line` anchors
+  - Assessed lessons #32-#38 for accuracy and structure
+- Outcome:
+  - Multiple high-signal doc issues remain; no code changes made in this task
+  - Primary trouble spots are `docs/README.md`, `docs/PLAYLIST_WINDOW.md`, and stale sections inside `docs/MACAMP_ARCHITECTURE_GUIDE.md` / `BUILDING_RETRO_MACOS_APPS_SKILL.md`
