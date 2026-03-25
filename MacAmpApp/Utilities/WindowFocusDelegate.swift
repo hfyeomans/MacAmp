@@ -1,5 +1,4 @@
 import AppKit
-import Foundation
 
 /// Window Focus Delegate - Updates WindowFocusState when windows gain/lose focus
 /// Follows WindowPersistenceDelegate pattern from WindowCoordinator

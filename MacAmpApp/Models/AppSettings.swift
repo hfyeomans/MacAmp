@@ -189,14 +189,6 @@ final class AppSettings {
         return skinsDir
     }
 
-    static func fallbackSkinsDirectory() -> URL {
-        // URL.cachesDirectory is available in macOS 13+ and is non-optional.
-        // .appending(component:directoryHint:) is the modern path API.
-        URL.cachesDirectory
-            .appending(component: "MacAmp", directoryHint: .isDirectory)
-            .appending(component: "FallbackSkins", directoryHint: .isDirectory)
-    }
-
     // MARK: - Double Size Mode
 
     /// Persists across app restarts - defaults to false (100% size)

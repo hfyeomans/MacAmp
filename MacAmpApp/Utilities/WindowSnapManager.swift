@@ -1,5 +1,4 @@
 import AppKit
-import Foundation
 
 enum WindowKind: Hashable {
     case main

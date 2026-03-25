@@ -61,41 +61,6 @@ extension WindowCoordinator {
         if let milkdrop = milkdropWindow { AppLog.debug(.window, "  Milkdrop: \(milkdrop.frame)") }
     }
 
-    /// Reset windows to default vertical stack (for testing double-size docking)
-    func resetToDefaultStack() {
-        WindowSnapManager.shared.beginProgrammaticAdjustment()
-        framePersistence.beginSuppressingPersistence()
-
-        guard let main = mainWindow, let eq = eqWindow, let playlist = playlistWindow else {
-            WindowSnapManager.shared.endProgrammaticAdjustment()
-            framePersistence.endSuppressingPersistence()
-            return
-        }
-
-        let x = LayoutDefaults.stackX
-
-        var mainFrame = main.frame
-        mainFrame.origin = NSPoint(x: x, y: LayoutDefaults.mainY)
-        main.setFrame(mainFrame, display: true)
-
-        var eqFrame = eq.frame
-        eqFrame.origin = NSPoint(x: x, y: mainFrame.origin.y - eqFrame.size.height)
-        eq.setFrame(eqFrame, display: true)
-
-        var playlistFrame = playlist.frame
-        playlistFrame.origin = NSPoint(x: x, y: eqFrame.origin.y - playlistFrame.size.height)
-        playlist.setFrame(playlistFrame, display: true)
-
-        WindowSnapManager.shared.endProgrammaticAdjustment()
-        framePersistence.endSuppressingPersistence()
-        framePersistence.schedulePersistenceFlush()
-
-        AppLog.debug(.window, "Windows reset to default vertical stack")
-        AppLog.debug(.window, "  Main: \(mainFrame)")
-        AppLog.debug(.window, "  EQ: \(eqFrame)")
-        AppLog.debug(.window, "  Playlist: \(playlistFrame)")
-    }
-
     // MARK: - Presentation
 
     var canPresentImmediately: Bool {

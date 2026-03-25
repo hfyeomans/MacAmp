@@ -1,6 +1,4 @@
 import Foundation
-import SwiftUI
-import Combine
 import Observation
 
 /// A pane in the unified docking container
@@ -109,28 +107,10 @@ final class DockingController {
 
     func pane(for type: DockPaneType) -> DockPaneState? { panes.first(where: { $0.type == type }) }
 
-    // MARK: - Get sorted visible panes for vertical stack
-    var sortedVisiblePanes: [DockPaneState] {
-        panes
-            .filter { $0.visible }
-            .sorted { $0.position < $1.position }
-    }
-
     // MARK: - Shade
     func toggleShade(_ type: DockPaneType) {
         guard let idx = panes.firstIndex(where: { $0.type == type }) else { return }
         panes[idx].isShaded.toggle()
-    }
-
-    // MARK: - Window arrangement helpers
-    func getVisibleWindowsInOrder() -> [DockPaneType] {
-        sortedVisiblePanes.map { $0.type }
-    }
-    
-    func isEqualizerBetweenMainAndPlaylist() -> Bool {
-        let visible = getVisibleWindowsInOrder()
-        guard visible.count == 3 else { return false }
-        return visible[0] == .main && visible[1] == .equalizer && visible[2] == .playlist
     }
 
     private func persist(panes: [DockPaneState]) {

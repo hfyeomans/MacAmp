@@ -122,10 +122,6 @@ final class PlaybackCoordinator {
     /// Balance is available when not streaming, OR when stream bridge is active.
     var supportsBalance: Bool { !isStreamBackendActive || audioPlayer.isBridgeActive }
 
-    /// Visualizer is available when not streaming, OR when stream bridge is active
-    /// (audio tap on mixer receives stream PCM through the bridge).
-    var supportsVisualizer: Bool { !isStreamBackendActive || audioPlayer.isBridgeActive }
-
     // MARK: - Initialization
 
     init(audioPlayer: AudioPlayer, streamPlayer: StreamPlayer) {

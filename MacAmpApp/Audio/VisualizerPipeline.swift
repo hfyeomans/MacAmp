@@ -361,11 +361,6 @@ final class VisualizerPipeline {
     /// Current smoothed visualizer levels (20 bars)
     private(set) var levels: [Float] = []
 
-    // MARK: - Callbacks
-
-    /// Called when visualizer data is updated (from audio tap)
-    var onDataUpdate: ((VisualizerData) -> Void)?
-
     // MARK: - Initialization
 
     init() {}
@@ -544,9 +539,6 @@ final class VisualizerPipeline {
         }
 
         levels = smoothed
-
-        // Notify callback
-        onDataUpdate?(data)
     }
 
     // MARK: - Tap Handler (nonisolated)

@@ -627,10 +627,6 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
         visualizerPipeline.getFrequencyData(bands: bands, isPlaying: isEngineRendering)
     }
 
-    func getRMSData(bands: Int) -> [Float] {
-        visualizerPipeline.getRMSData(bands: bands)
-    }
-
     func getWaveformSamples(count: Int) -> [Float] {
         visualizerPipeline.getWaveformSamples(count: count)
     }

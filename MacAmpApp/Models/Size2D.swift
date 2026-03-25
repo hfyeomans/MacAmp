@@ -71,13 +71,6 @@ struct Size2D: Equatable, Codable, Hashable {
 
     // MARK: - Validation
 
-    /// Create Size2D from pixel dimensions, quantizing to nearest segment
-    static func fromVideoPixels(_ size: CGSize) -> Size2D {
-        let widthSegments = max(0, Int(round((size.width - 275) / 25)))
-        let heightSegments = max(0, Int(round((size.height - 116) / 29)))
-        return Size2D(width: widthSegments, height: heightSegments)
-    }
-
     /// Clamp size to minimum (no negative segments)
     func clamped(min: Size2D = .zero, max: Size2D? = nil) -> Size2D {
         var result = self

@@ -82,9 +82,6 @@ final class PlaylistController {
         return idx + 1
     }
 
-    /// Whether playlist is empty
-    var isEmpty: Bool { playlist.isEmpty }
-
     // MARK: - Playlist Operations
 
     /// Add a track to the playlist
@@ -156,12 +153,6 @@ final class PlaylistController {
         } else {
             currentIndex = nil
         }
-    }
-
-    /// Mark playlist as ended (for external state sync)
-    func markEnded() {
-        hasEnded = true
-        currentIndex = nil
     }
 
     /// Reset the ended flag
@@ -273,14 +264,6 @@ final class PlaylistController {
 
         // At beginning: restart current track
         return .restartCurrent
-    }
-
-    /// Select a specific track by index
-    func selectTrack(at index: Int) -> Track? {
-        guard playlist.indices.contains(index) else { return nil }
-        currentIndex = index
-        hasEnded = false
-        return playlist[index]
     }
 
     // MARK: - Private Helpers

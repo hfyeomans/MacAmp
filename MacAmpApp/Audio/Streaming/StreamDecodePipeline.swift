@@ -298,16 +298,6 @@ final class StreamDecodePipeline {
             return
         }
 
-        // Extract ICY metaint — case-insensitive header lookup
-        let headers = httpResponse.allHeaderFields
-        let metaInt: Int
-        if let metaIntValue = Self.extractICYMetaInt(from: headers) {
-            metaInt = metaIntValue
-            AppLog.debug(.audio, "StreamDecodePipeline: ICY metaint = \(metaInt)")
-        } else {
-            metaInt = 0
-        }
-
         // NOTE: configureFramer is called from the onResponse callback (delegate queue)
         // BEFORE data delivery begins. Do NOT call it again here — the MainActor hop
         // means this runs AFTER data has already been processed, which would reset the

@@ -2,15 +2,12 @@ import Foundation
 
 /// Errors that can occur during M3U parsing
 enum M3UParseError: Error, LocalizedError {
-    case invalidFormat
     case fileNotFound
     case encodingError
     case emptyPlaylist
 
     var errorDescription: String? {
         switch self {
-        case .invalidFormat:
-            return "Invalid M3U format"
         case .fileNotFound:
             return "M3U file not found"
         case .encodingError:

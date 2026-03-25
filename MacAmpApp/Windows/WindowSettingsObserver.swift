@@ -1,4 +1,3 @@
-import Foundation
 import Observation
 
 /// Observes AppSettings changes and fires callbacks. Uses recursive

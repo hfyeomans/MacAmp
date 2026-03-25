@@ -96,23 +96,6 @@ final class LockFreeRingBuffer: @unchecked Sendable {
         return framesToWrite
     }
 
-    /// Write from an AudioBufferList (interleaved format).
-    func write(_ bufferList: UnsafePointer<AudioBufferList>, frameCount: UInt32) -> UInt32 {
-        let ablPointer = UnsafeMutableAudioBufferListPointer(
-            UnsafeMutablePointer(mutating: bufferList)
-        )
-        precondition(ablPointer.count == 1, "Expected single interleaved AudioBufferList")
-        guard let firstBuffer = ablPointer.first,
-              let data = firstBuffer.mData else {
-            return 0
-        }
-        precondition(firstBuffer.mNumberChannels == UInt32(channelCount), "Channel count mismatch")
-        let requiredBytes = UInt64(frameCount) * UInt64(channelCount) * UInt64(MemoryLayout<Float>.size)
-        precondition(UInt64(firstBuffer.mDataByteSize) >= requiredBytes, "AudioBufferList buffer too small")
-        let floatPtr = data.assumingMemoryBound(to: Float.self)
-        return UInt32(write(from: floatPtr, frameCount: Int(frameCount)))
-    }
-
     // MARK: - Read (Consumer Thread)
 
     /// Read interleaved frames from the ring buffer into a destination.
@@ -146,21 +129,6 @@ final class LockFreeRingBuffer: @unchecked Sendable {
 
         _ = readHead.wrappingIncrementThenLoad(by: UInt64(framesToRead), ordering: .releasing)
         return framesToRead
-    }
-
-    /// Read into an AudioBufferList (interleaved format).
-    func read(into bufferList: UnsafeMutablePointer<AudioBufferList>, frameCount: UInt32) -> UInt32 {
-        let ablPointer = UnsafeMutableAudioBufferListPointer(bufferList)
-        precondition(ablPointer.count == 1, "Expected single interleaved AudioBufferList")
-        guard let firstBuffer = ablPointer.first,
-              let data = firstBuffer.mData else {
-            return 0
-        }
-        precondition(firstBuffer.mNumberChannels == UInt32(channelCount), "Channel count mismatch")
-        let requiredBytes = UInt64(frameCount) * UInt64(channelCount) * UInt64(MemoryLayout<Float>.size)
-        precondition(UInt64(firstBuffer.mDataByteSize) >= requiredBytes, "AudioBufferList buffer too small")
-        let floatPtr = data.assumingMemoryBound(to: Float.self)
-        return UInt32(read(into: floatPtr, frameCount: Int(frameCount)))
     }
 
     // MARK: - Generation (Format Changes)

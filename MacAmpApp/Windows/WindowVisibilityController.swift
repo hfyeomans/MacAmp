@@ -22,10 +22,6 @@ final class WindowVisibilityController {
         NSApp.keyWindow?.miniaturize(nil)
     }
 
-    func closeKeyWindow() {
-        NSApp.keyWindow?.close()
-    }
-
     // MARK: - EQ Window
 
     func showEQWindow() {

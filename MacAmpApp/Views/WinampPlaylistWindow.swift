@@ -1,5 +1,4 @@
 import SwiftUI
-import AppKit
 
 struct WinampPlaylistWindow: View {
     @Environment(SkinManager.self) private var skinManager

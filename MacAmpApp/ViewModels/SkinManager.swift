@@ -1,7 +1,6 @@
 import Foundation
 @preconcurrency import ZIPFoundation
 import AppKit
-import CoreGraphics // For CGRect
 import SwiftUI
 import UserNotifications
 import Observation
