@@ -6,6 +6,7 @@ private enum SkinImportError: LocalizedError {
     case remoteURL
     case oversizedFile
     case directoryCreationFailed(String)
+    case validationFailed(String)
     case copyFailed(String)
 
     var errorDescription: String? {
@@ -18,6 +19,8 @@ private enum SkinImportError: LocalizedError {
             return "Skin file is larger than the 50 MB limit."
         case .directoryCreationFailed(let message):
             return "Unable to access the skins directory: \(message)"
+        case .validationFailed(let message):
+            return "Unable to validate skin file: \(message)"
         case .copyFailed(let message):
             return "Failed to copy skin: \(message)"
         }
@@ -89,7 +92,7 @@ extension SkinManager {
                 throw SkinImportError.oversizedFile
             }
         } catch {
-            throw SkinImportError.copyFailed(error.localizedDescription)
+            throw SkinImportError.validationFailed(error.localizedDescription)
         }
 
         return standardized
