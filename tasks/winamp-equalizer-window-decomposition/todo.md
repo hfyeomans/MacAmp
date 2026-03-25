@@ -9,7 +9,7 @@
 - [ ] Create branch `refactor/winamp-equalizer-window-decomposition`
 - [ ] Update state.md to IN PROGRESS
 - [ ] Make `EQCoords` internal (was private)
-- [ ] Remove dead `thumbWidth` constant
+- [x] ~~Remove dead `thumbWidth` constant~~ — removed in Phase 2.5
 - [ ] Create `Views/EqualizerWindow/` subfolder
 - [ ] Extract `WinampVerticalSlider` to `Views/Components/WinampVerticalSlider.swift`
 - [ ] Extract `PresetPickerView` to `Views/EqualizerWindow/EQPresetPickerView.swift` (rename)

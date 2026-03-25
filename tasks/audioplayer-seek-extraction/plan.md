@@ -1,13 +1,13 @@
 # Plan: AudioPlayer Seek Extraction
 
-> **Description:** Implementation plan for extracting the seek state machine from AudioPlayer.swift (740 lines).
-> **Updated:** 2026-03-24 (Oracle review v2 — expanded controller contract, clarified onPlaybackEnded scope)
+> **Description:** Implementation plan for extracting the seek state machine from AudioPlayer.swift (734 lines).
+> **Updated:** 2026-03-25 (line numbers refreshed post-Phase 2.5 cleanup)
 
 ---
 
 ## Objective
 
-Extract the seek state machine (~186 lines) from `AudioPlayer.swift` into a `SeekController`, reducing AudioPlayer from 740 to ~554 lines (below both 600-line swiftlint thresholds) and removing the last 2 inline suppressions.
+Extract the seek state machine (~180 lines) from `AudioPlayer.swift` into a `SeekController`, reducing AudioPlayer from 734 to ~554 lines (below both 600-line swiftlint thresholds) and removing the last 2 inline suppressions.
 
 ## Key Design Decision
 
@@ -105,7 +105,7 @@ seekController.onRemoveVisualizerTap = { [weak self] in self?.engine.removeVisua
 
 ### Step 5: Remove swiftlint suppressions
 
-After extraction, AudioPlayer should be ~554 lines:
+After extraction, AudioPlayer should be ~554 lines (734 - ~180):
 - Remove `// swiftlint:disable file_length` (line 1)
 - Remove `// swiftlint:disable:this type_body_length` (line 9)
 
@@ -113,7 +113,7 @@ After extraction, AudioPlayer should be ~554 lines:
 
 | File | Lines | Source |
 |------|-------|--------|
-| `Audio/SeekController.swift` | ~186 | Seek state machine atomic extraction |
+| `Audio/SeekController.swift` | ~180 | Seek state machine atomic extraction |
 
 **Total new files: 1**
 **Residual AudioPlayer.swift: ~554 lines**

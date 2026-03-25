@@ -1,13 +1,13 @@
 # Plan: Winamp Equalizer Window Decomposition
 
-> **Description:** Implementation plan for decomposing `WinampEqualizerWindow.swift` (626 lines) into child view structs.
-> **Updated:** 2026-03-24 (Oracle review v2 — consolidated tiny files, fixed EQCoords visibility)
+> **Description:** Implementation plan for decomposing `WinampEqualizerWindow.swift` (617 lines) into child view structs.
+> **Updated:** 2026-03-25 (line numbers refreshed post-Phase 2.5 cleanup)
 
 ---
 
 ## Objective
 
-Reduce `WinampEqualizerWindow.swift` from 626 to ~100 lines by extracting child views and standalone components, following the proven MainWindow decomposition pattern.
+Reduce `WinampEqualizerWindow.swift` from 617 to ~100 lines by extracting child views and standalone components, following the proven MainWindow decomposition pattern.
 
 ## Extraction Plan
 
@@ -17,9 +17,9 @@ Change `EQCoords` from `private struct` to `internal struct` (or move to its own
 
 **Decision:** Keep `EQCoords` in the root file as `internal struct`. It's small (23 lines) and logically belongs to the window. Child views access it via the type name.
 
-Remove dead `thumbWidth` constant (zero callers).
+~~Remove dead `thumbWidth` constant (zero callers).~~ **Done in Phase 2.5.**
 
-### Step 2: Extract `WinampVerticalSlider.swift` to `Views/Components/` (Safe, ~149 lines)
+### Step 2: Extract `WinampVerticalSlider.swift` to `Views/Components/` (Safe, ~140 lines)
 
 Move the entire `WinampVerticalSlider` struct. Fully independent reusable component.
 
@@ -56,7 +56,7 @@ Move shade mode builder. References titlebar button logic from `EQFullLayer` —
 
 | File | Location | Lines | Source |
 |------|----------|-------|--------|
-| `WinampVerticalSlider.swift` | `Views/Components/` | ~149 | Reusable component |
+| `WinampVerticalSlider.swift` | `Views/Components/` | ~140 | Reusable component |
 | `EQPresetPickerView.swift` | `Views/EqualizerWindow/` | ~120 | Standalone preset picker |
 | `EQFullLayer.swift` | `Views/EqualizerWindow/` | ~200 | All full-mode content (consolidated) |
 | `EQShadeLayer.swift` | `Views/EqualizerWindow/` | ~29 | Shade mode |
@@ -78,7 +78,7 @@ Move shade mode builder. References titlebar button logic from `EQFullLayer` —
 - Decompose in place: `Views/EqualizerWindow/` subfolder (root stays in `Views/`)
 - @Environment propagation — child views inherit automatically
 - @Binding only for `isShadeMode` (titlebar buttons)
-- Remove trivially dead code (`thumbWidth`)
+- ~~Remove trivially dead code (`thumbWidth`)~~ — already removed in Phase 2.5
 
 ## Verification
 

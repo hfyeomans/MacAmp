@@ -7,9 +7,9 @@
 
 ## Dead Code (Remove during decomposition)
 
-| Symbol | File:Line | Issue |
-|--------|-----------|-------|
-| `thumbWidth` | WinampEqualizerWindow.swift:65 | `private let thumbWidth: CGFloat = 11` — declared but never referenced. WinampVerticalSlider takes `thumbHeight` only. **Remove during extraction** (safe, zero callers). |
+| Symbol | File:Line | Issue | Status |
+|--------|-----------|-------|--------|
+| ~~`thumbWidth`~~ | ~~WinampEqualizerWindow.swift:65~~ | ~~declared but never referenced~~ | **REMOVED in Phase 2.5** |
 
 ## Deduplication Targets (For future Phase 2.5 simplification pass)
 

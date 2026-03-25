@@ -1,14 +1,14 @@
 # Research: AudioPlayer Seek Extraction
 
 > **Description:** Responsibility map focused on seek state machine extraction from AudioPlayer.swift.
-> **Updated:** 2026-03-24 (responsibility map complete — reflects current 740 lines post-S2)
+> **Updated:** 2026-03-25 (line numbers refreshed post-Phase 2.5 cleanup)
 
 ---
 
 ## File Overview
 
 **File:** `MacAmpApp/Audio/AudioPlayer.swift`
-**Lines:** 740 (grew from 719 at planning time — S2 added stream-track-counter and Now Playing hooks)
+**Lines:** 734 (down from 740 — Phase 2.5 removed `getRMSData(bands:)` forwarding + minor cleanup)
 **Class:** `AudioPlayer` — `@Observable @MainActor final class`
 
 ## SwiftLint Suppressions
@@ -39,14 +39,14 @@ Both removed when file drops below ~600 lines.
 | K: Transport | 102 | play/pause/stop/eject | **Writes seek state** |
 | L: EQ forwarding | 20 | Method forwarding | No |
 | M: Stream bridge | 17 | Method forwarding | No |
-| N: Seeking | 79 | seek + seekToPercent | **CORE SEEK** |
-| O: Viz forwarding | 18 | Method forwarding | No |
-| P: Completion | 41 | onPlaybackEnded | **CORE SEEK** |
+| N: Seeking | 75 | seek + seekToPercent + videoSeekCompletion | **CORE SEEK** |
+| O: Viz forwarding | 14 | Method forwarding | No |
+| P: Completion | 39 | onPlaybackEnded | **CORE SEEK** |
 | Q: Playlist nav | 56 | next/prev/handle | **Calls seek** |
 
-**Seek-dedicated lines (N+P+shouldIgnore):** ~127
+**Seek-dedicated lines (N+P+shouldIgnore):** ~121
 **Seek-touching lines in other sections:** ~59
-**Total seek-coupled code:** ~186 lines
+**Total seek-coupled code:** ~180 lines
 
 ---
 
@@ -112,7 +112,7 @@ Also triggered (nil seekID):
 
 ## onPlaybackEnded Coupling to Playlist Navigation
 
-`onPlaybackEnded` (line 645) calls `nextTrack()` (line 664) returning `PlaylistAdvanceAction`:
+`onPlaybackEnded` (line 639) calls `nextTrack()` returning `PlaylistAdvanceAction`:
 - `.requestCoordinatorPlayback(track)` / `.playLocally(track)` -> fires `onPlaylistAdvanceRequest?(track)` callback
 - `.none` -> fires `onPlaybackFinished?()` callback
 
@@ -129,9 +129,10 @@ These callbacks are wired by PlaybackCoordinator.
 
 ### Methods (~147 lines):
 - `shouldIgnoreCompletion(from:)` (lines 220-226) — 7 lines
-- `seekToPercent(_:resume:)` (lines 546-568) — 23 lines
-- `seek(to:resume:)` (lines 570-622) — 53 lines
-- `onPlaybackEnded(fromSeekID:)` (lines 645-683) — 39 lines
+- `seekToPercent(_:resume:)` (lines 546-560) — 15 lines
+- `seek(to:resume:)` (lines 562-606) — 45 lines
+- `videoSeekCompletion` computed property (lines 610-620) — 11 lines
+- `onPlaybackEnded(fromSeekID:)` (lines 639-677) — 39 lines
 
 ### What CANNOT move (stays in AudioPlayer):
 - `transition(to:)` — called from 15+ locations
@@ -185,5 +186,5 @@ This task implements the atomic-unit extraction the Oracle recommended deferring
 
 ## Expected Result
 
-AudioPlayer.swift: 740 -> ~554 lines (below 600 warning and error thresholds)
+AudioPlayer.swift: 734 -> ~554 lines (below 600 warning and error thresholds)
 Both swiftlint suppressions removed.

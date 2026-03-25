@@ -1,19 +1,19 @@
 # Plan: StreamDecodePipeline Decomposition
 
-> **Description:** Implementation plan for decomposing `StreamDecodePipeline.swift` (713 lines) into focused files.
-> **Updated:** 2026-03-24 (implementation-ready, based on responsibility map)
+> **Description:** Implementation plan for decomposing `StreamDecodePipeline.swift` (698 lines) into focused files.
+> **Updated:** 2026-03-25 (line numbers refreshed post-Phase 2.5 cleanup)
 
 ---
 
 ## Objective
 
-Reduce `StreamDecodePipeline.swift` from 713 to ~345 lines by extracting self-contained types and static utilities into neighboring files within `Audio/Streaming/`.
+Reduce `StreamDecodePipeline.swift` from 698 to ~380 lines by extracting self-contained types and static utilities into neighboring files within `Audio/Streaming/`.
 
 ## Extraction Plan
 
 ### Step 1: Extract `DecodeContext.swift` (Safe, ~207 lines)
 
-Move the entire `DecodeContext` class (lines 465-671) to its own file. This is already a separate class with clear boundaries — queue-confined decode chain owning ICYFramer, AudioFileStreamParser, AudioConverterDecoder.
+Move the entire `DecodeContext` class (lines 457-655) to its own file. This is already a separate class with clear boundaries — queue-confined decode chain owning ICYFramer, AudioFileStreamParser, AudioConverterDecoder. Consider adopting `QueueConfined` protocol (already used by AudioFileStreamParser + AudioConverterDecoder) for consistency.
 
 - Change access from `private` to `internal`
 - No API changes needed — constructed via init, communicated via closures
@@ -21,14 +21,14 @@ Move the entire `DecodeContext` class (lines 465-671) to its own file. This is a
 
 ### Step 2: Extract `SessionDelegateProxy.swift` (Safe, ~41 lines)
 
-Move the entire `SessionDelegateProxy` class (lines 673-713) to its own file. Completely self-contained NSObject delegate proxy.
+Move the entire `SessionDelegateProxy` class (lines 664-697) to its own file. Completely self-contained NSObject delegate proxy.
 
 - Change access from `private` to `internal`
 - No behavioral change — closures set at init, then read-only
 
 ### Step 3: Extract `PlaylistResolver.swift` (Safe, ~76 lines)
 
-Move all static playlist resolution code (lines 365-440) to a standalone utility:
+Move all static playlist resolution code (lines 358-430) to a standalone utility:
 - `isPlaylistURL(_:)` (static)
 - `resolvePlaylistURL(_:)` (static async throws)
 - `parsePLS(content:)` (static)
@@ -36,18 +36,13 @@ Move all static playlist resolution code (lines 365-440) to a standalone utility
 
 These have **zero instance state coupling** — all `static` or `private static`. Move `PlaylistResolveError` into the same file (not its own file — too small).
 
-### Step 4: Extract `StreamFormatHint.swift` (Safe, ~21 lines)
+### Step 4: Extract `StreamFormatHint.swift` (Safe, ~14 lines)
 
-Move both static format hint functions (lines 442-462):
-- `formatHint(for:)` (static)
-- `formatHint(forContentType:)` (static — **dead code**, zero callers)
-
-Keep both in one file. Flag the dead code in `placeholder.md`.
+Move `formatHint(for:)` (lines 434-445, static). `formatHint(forContentType:)` was already removed in Phase 2.5 (zero callers). At only 14 lines, consider folding into `PlaylistResolver.swift` instead of a separate file.
 
 ### Step 5: Clean up residual pipeline (no extraction)
 
 - Update `StreamDecodePipeline.swift` to reference extracted types
-- Remove dead `formatHint(forContentType:)` callers if any appear during extraction
 - Verify generation-token semantics still work across file boundaries
 
 **NOT extracting `StreamState`/`StreamTerminationReason` (23 lines).** Per Gemini guidance: these are tiny enums consumed primarily within the same file. Extracting them to their own file adds a file with no distinct lifecycle. They stay in `StreamDecodePipeline.swift`.
@@ -56,13 +51,13 @@ Keep both in one file. Flag the dead code in `placeholder.md`.
 
 | File | Lines | Source |
 |------|-------|--------|
-| `Audio/Streaming/DecodeContext.swift` | ~207 | Nested class extraction |
-| `Audio/Streaming/SessionDelegateProxy.swift` | ~41 | Nested class extraction |
-| `Audio/Streaming/PlaylistResolver.swift` | ~76 | Static methods + error enum |
-| `Audio/Streaming/StreamFormatHint.swift` | ~21 | Static methods |
+| `Audio/Streaming/DecodeContext.swift` | ~199 | Nested class extraction |
+| `Audio/Streaming/SessionDelegateProxy.swift` | ~34 | Nested class extraction |
+| `Audio/Streaming/PlaylistResolver.swift` | ~87 | Static methods + error enum + format hint |
+| ~~`Audio/Streaming/StreamFormatHint.swift`~~ | ~~~14~~ | Folded into PlaylistResolver (too small for own file) |
 
-**Total new files: 4** (consolidated from original 5 — merged types into PlaylistResolver)
-**Residual StreamDecodePipeline.swift: ~345 lines**
+**Total new files: 3** (StreamFormatHint folded into PlaylistResolver — only 14 lines after Phase 2.5 cleanup)
+**Residual StreamDecodePipeline.swift: ~380 lines**
 
 ## Constraints
 

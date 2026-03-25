@@ -1,27 +1,26 @@
 # State: VisualizerPipeline Decomposition
 
 > **Description:** Tracks readiness and progress for the `VisualizerPipeline.swift` decomposition task.
-> **Updated:** 2026-03-24 (S2 complete, responsibility map done, plan implementation-ready)
+> **Updated:** 2026-03-25 (line numbers refreshed post-Phase 2.5 cleanup; Phase 2a COMPLETE)
 
 ---
 
 ## Status
 
-READY TO START. Responsibility map and implementation plan complete.
+READY TO START. Phase 2a dedup complete. Plans refreshed with current line numbers.
 
 ## Scheduling
 
-- S2 dependency resolved: `video-audio-engine-routing` deferred to S3 — file is at final shape (699 lines).
-- Execution order: **Task 2 of 5** (clean section boundaries, well-understood threading)
+- Phase 2a complete (PR #71 + PR #72): resample, copyFloatBuffer, dead guards, onDataUpdate all handled.
+- Execution order: **Task 3 of 5** (clean section boundaries, well-understood threading)
 
 ## Current Line Count
 
-699 lines (unchanged from planning time)
+645 lines (down from 699 — Phase 2a/2.5 removed ~54 lines)
 
 ## Key Decision
 
 - Decompose in place within `Audio/` — no moves to `Audio/Visualization/` (post-S3)
 - Extract 4 new files: VisualizerTypes, VisualizerScratchBuffers, VisualizerSharedBuffer, VisualizerTapHandler
-- Residual pipeline: ~268 lines
+- Residual pipeline: ~231 lines
 - Private types become internal (minimum required visibility)
-- Flag near-duplicate code for future dedup pass in placeholder.md

@@ -1,24 +1,24 @@
 # Research: SkinManager Decomposition
 
 > **Description:** Responsibility map for decomposing `SkinManager.swift` into smaller, focused files.
-> **Updated:** 2026-03-24 (responsibility map complete)
+> **Updated:** 2026-03-25 (line numbers refreshed post-Phase 2.5 cleanup; Phase 2a COMPLETE)
 
 ---
 
 ## File Overview
 
 **File:** `MacAmpApp/ViewModels/SkinManager.swift`
-**Lines:** 783
-**Class:** `SkinManager` (lines 111-783) — `@Observable @MainActor final class`
-**Supporting types:** `SkinArchivePayload` (lines 10-14), `SkinArchiveLoader` (lines 16-80), `SkinImportError` (lines 82-103)
+**Lines:** 766 (down from 783 — Phase 2a/2.5 removed dead imports, extracted parsing helpers)
+**Class:** `SkinManager` (lines 109-766) — `@Observable @MainActor final class`
+**Supporting types:** `SkinArchivePayload` (lines 8-12), `SkinArchiveLoader` (lines 14-78), `SkinImportError` (lines 80-101)
 
 ## Imports
 
 ```
-Foundation, Combine, @preconcurrency ZIPFoundation, AppKit, CoreGraphics, SwiftUI, UserNotifications, Observation
+Foundation, @preconcurrency ZIPFoundation, AppKit, SwiftUI, UserNotifications, Observation
 ```
 
-**Dead import:** `Combine` is imported but never used anywhere in the file.
+**Phase 2.5:** Dead `Combine` and `CoreGraphics` imports removed.
 
 ---
 
@@ -100,16 +100,17 @@ Foundation, Combine, @preconcurrency ZIPFoundation, AppKit, CoreGraphics, SwiftU
 
 ---
 
-## Duplicated Logic
+## Duplicated Logic — Phase 2a Status
 
-1. **Playlist style parsing** in both `parseDefaultSkinFully` and `applySkinPayload` with slightly different defaults (possible bug: green vs blue for playlist colors)
-2. **Visualizer color parsing** in both methods with different fallback behavior
-3. **Sprite extraction loop** (iterating sheets, cropping, autoreleasepool) in three places
+1. ~~**Playlist style parsing**~~ — **RESOLVED in Phase 2a**: shared `parsePlaylistStyle(from:fallback:)` at line 741
+2. ~~**Visualizer color parsing**~~ — **RESOLVED in Phase 2a**: shared `parseVisualizerColors(from:fallback:)` at line 750
+3. **Sprite extraction loop** (iterating sheets, cropping, autoreleasepool) at lines 154-169 and 664-680 — still duplicated (deferred to Phase 2c)
 
-## Dead Code
+## Dead Code — RESOLVED in Phase 2.5
 
-- `Combine` import (line 2) — no Combine usage anywhere
-- NUMS_EX sprites hard-coded inline (lines 634-647) — belong in `SkinSprites.swift`
+- ~~`Combine` import~~ — removed
+- ~~`CoreGraphics` import~~ — removed (AppKit re-exports)
+- NUMS_EX sprites hard-coded inline (lines 615-628) — still deferred to Phase 2c (move to `SkinSprites.swift`)
 
 ---
 

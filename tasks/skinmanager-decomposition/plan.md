@@ -1,41 +1,30 @@
 # Plan: SkinManager Decomposition
 
-> **Description:** Implementation plan for decomposing `SkinManager.swift` (783 lines) into focused files.
-> **Updated:** 2026-03-24 (Oracle review v2 — added Phase 2a dedup, fixed visibility design)
+> **Description:** Implementation plan for decomposing `SkinManager.swift` (766 lines) into focused files.
+> **Updated:** 2026-03-25 (line numbers refreshed post-Phase 2.5 cleanup; Phase 2a items COMPLETE)
 
 ---
 
 ## Objective
 
-Reduce `SkinManager.swift` from 783 to ~250 lines by first deduplicating intra-file logic, then extracting self-contained types and utilities into neighboring files within `ViewModels/`.
+Reduce `SkinManager.swift` from 766 to ~392 lines by extracting self-contained types and utilities into neighboring files within `ViewModels/`.
 
-## Phase 2a: Intra-File Dedup BEFORE Extraction
+**Note:** Original estimate of ~250 residual was too optimistic. Core loading section (~190 lines) + state/init/discovery/switching (~200 lines) account for more than anticipated.
 
-Per Oracle + Gemini hybrid guidance: deduplicate highly localized code while it's still visible side-by-side in the same file. These are easier to consolidate now than after they're scattered across files.
+## Phase 2a: Intra-File Dedup — COMPLETE (PR #71 + PR #72)
 
-### Dedup 1: Playlist Style Parsing (ALSO investigate possible bug)
-
-`parseDefaultSkinFully` (lines 177-188) and `applySkinPayload` (lines 744-753) both parse `pledit.txt` into `PlaylistStyle` with **different defaults**:
-- `parseDefaultSkinFully`: `Color.green` / `Color.white` / `Color.black` / `Color.blue`
-- `applySkinPayload`: `.white` / `.white` / `.black` / `Color(red:0, green:0, blue:0.776)`
-
-**Action:** Add characterization test for default skin vs missing-pledit behavior. Then extract shared `parsePlaylistStyle(from:fallbackNormal:fallbackCurrent:fallbackBackground:fallbackHighlight:) -> PlaylistStyle` helper method. Resolve the color inconsistency (decide which defaults are correct).
-
-### Dedup 2: Visualizer Color Parsing
-
-`parseDefaultSkinFully` (lines 190-195) and `applySkinPayload` (lines 755-758) both parse `viscolor.txt` with different fallbacks (24 green colors vs empty array).
-
-**Action:** Extract shared `parseVisualizerColors(from:fallbackColors:) -> [Color]` helper method. Keep fallback differences intentional if they serve different purposes.
-
-### Dedup 3: Remove dead import
-
-Remove `import Combine` (line 2) — zero usage.
+All Phase 2a items completed in prior sprints:
+- **parsePlaylistStyle(from:fallback:)** extracted (line 741) — with `.winampDefault` and `.pleditParserDefault` in Skin.swift
+- **parseVisualizerColors(from:fallback:)** extracted (line 750) — with intentional fallback differences preserved
+- **Dead imports removed**: `import Combine` + `import CoreGraphics` both gone
+- **Color inconsistency resolved**: Canonical `PlaylistStyle.winampDefault` (green text) for default skin, `.pleditParserDefault` (white text) for custom skins missing pledit.txt
+- **Characterization tests added**: `SkinManagerTests.swift` (fontName=="Arial", count==24)
 
 ## Phase 2b: Structural Extraction
 
 ### Step 1: Extract `SkinArchiveLoader.swift` (Safe, ~70 lines)
 
-Move `SkinArchivePayload` struct (lines 10-14) and `SkinArchiveLoader` enum (lines 16-80) together.
+Move `SkinArchivePayload` struct (lines 8-12) and `SkinArchiveLoader` enum (lines 14-78) together.
 
 - Change access from `private` to `internal`
 - Already fully self-contained (caseless enum namespace pattern)
@@ -77,7 +66,7 @@ SkinManager retains: observable state, `loadDefaultSkinIfNeeded`, `parseDefaultS
 | `ViewModels/SkinManager+Fallback.swift` | ~77 | Fallback sprite generation methods |
 
 **Total new files: 4**
-**Residual SkinManager.swift: ~250 lines**
+**Residual SkinManager.swift: ~392 lines** (revised — core loading + orchestration larger than originally estimated)
 
 ## Visibility Changes
 
@@ -96,8 +85,7 @@ These are all `@ObservationIgnored` internal caches, not observable published st
 - Preserve current skin behavior and fallback semantics
 - Do not turn this into a skin-system rewrite
 - Decompose in place within `ViewModels/` — no moves to `Features/Skins/` (post-S3)
-- Phase 2a dedup: add characterization tests before changing parsing defaults
-- Remove trivially dead code during decomposition (Combine import)
+- ~~Phase 2a dedup~~ — COMPLETE (parsePlaylistStyle, parseVisualizerColors, dead imports, color bug)
 - Flag-but-defer: NUMS_EX sprites, sprite extraction loop dedup
 
 ## Verification
