@@ -207,10 +207,10 @@ final class WindowCoordinator {
     func showAllWindows() { visibility.showAllWindows() }
     func showMain() { visibility.showMain() }
     func hideMain() { visibility.hideMain() }
-    func showEqualizer() { visibility.showEqualizer() }
-    func hideEqualizer() { visibility.hideEqualizer() }
-    func showPlaylist() { visibility.showPlaylist() }
-    func hidePlaylist() { visibility.hidePlaylist() }
+    func showEqualizer() { visibility.showEQWindow(makeKey: true) }
+    func hideEqualizer() { visibility.hideEQWindow() }
+    func showPlaylist() { visibility.showPlaylistWindow(makeKey: true) }
+    func hidePlaylist() { visibility.hidePlaylistWindow() }
     func showVideo() { visibility.showVideo() }
     func hideVideo() { visibility.hideVideo() }
     func showMilkdrop() { visibility.showMilkdrop() }

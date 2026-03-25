@@ -18,10 +18,7 @@ class WinampEqualizerWindowController: NSWindowController {
         // CRITICAL FIX #2: Apply standard Winamp window configuration
         WinampWindowConfigurator.apply(to: window)
 
-        // Borderless visual configuration
-        window.isOpaque = false
         window.hasShadow = true
-        window.backgroundColor = .clear
 
         // Create view with environment injection
         let rootView = WinampEqualizerWindow()

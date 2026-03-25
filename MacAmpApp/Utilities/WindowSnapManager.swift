@@ -44,10 +44,6 @@ final class WindowSnapManager: NSObject, NSWindowDelegate {
     }
 
     func register(window: NSWindow, kind: WindowKind) {
-        // Set minimum titlebar style and disable tabs for classic look
-        window.tabbingMode = .disallowed
-        window.titleVisibility = .hidden
-        window.titlebarAppearsTransparent = true
         windows[kind] = TrackedWindow(window: window, kind: kind)
         // Delegate is set via WindowDelegateMultiplexer in WindowCoordinator
         lastOrigins[ObjectIdentifier(window)] = window.frame.origin

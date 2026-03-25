@@ -12,6 +12,15 @@ final class WindowResizeController {
         self.persistence = persistence
     }
 
+    // MARK: - Top-Left Anchor Helper
+
+    /// Compute a new frame anchored at top-left after resizing.
+    /// macOS uses bottom-left origins, so this preserves the visual top-left corner.
+    private func topLeftAnchoredFrame(from frame: NSRect, newSize: CGSize) -> NSRect {
+        let topLeft = NSPoint(x: round(frame.origin.x), y: round(frame.origin.y + frame.size.height))
+        return NSRect(origin: NSPoint(x: topLeft.x, y: topLeft.y - newSize.height), size: newSize)
+    }
+
     // MARK: - Double-Size Resize
 
     func resizeMainAndEQWindows(doubled: Bool, animated _: Bool = true, persistResult: Bool = true) {
@@ -205,12 +214,7 @@ final class WindowResizeController {
 
         AppLog.debug(.window, "[VIDEO RESIZE] Before: Frame: \(frame), Origin: (\(frame.origin.x), \(frame.origin.y)), Size: \(frame.size), ContentView: \(video.contentView?.frame ?? .zero)")
 
-        let topLeft = NSPoint(
-            x: round(frame.origin.x),
-            y: round(frame.origin.y + frame.size.height)
-        )
-        frame.size = pixelSize
-        frame.origin = NSPoint(x: topLeft.x, y: topLeft.y - pixelSize.height)
+        frame = topLeftAnchoredFrame(from: frame, newSize: pixelSize)
 
         video.setFrame(frame, display: true)
 
@@ -228,12 +232,7 @@ final class WindowResizeController {
             height: round(pixelSize.height)
         )
 
-        let topLeft = NSPoint(
-            x: round(frame.origin.x),
-            y: round(frame.origin.y + frame.size.height)
-        )
-        frame.size = roundedSize
-        frame.origin = NSPoint(x: topLeft.x, y: topLeft.y - roundedSize.height)
+        frame = topLeftAnchoredFrame(from: frame, newSize: roundedSize)
 
         milkdrop.setFrame(frame, display: true)
 
@@ -246,12 +245,7 @@ final class WindowResizeController {
         var frame = playlist.frame
         guard frame.size != pixelSize else { return }
 
-        let topLeft = NSPoint(
-            x: round(frame.origin.x),
-            y: round(frame.origin.y + frame.size.height)
-        )
-        frame.size = pixelSize
-        frame.origin = NSPoint(x: topLeft.x, y: topLeft.y - pixelSize.height)
+        frame = topLeftAnchoredFrame(from: frame, newSize: pixelSize)
 
         playlist.setFrame(frame, display: true)
 
