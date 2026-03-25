@@ -25,13 +25,20 @@ enum WinampAlertHelper {
 
     /// Prompt for text input. Returns the entered string, or nil if cancelled.
     @MainActor
-    static func promptText(title: String, message: String, placeholder: String = "", defaultValue: String = "") -> String? {
+    static func promptText(
+        title: String,
+        message: String,
+        placeholder: String = "",
+        defaultValue: String = "",
+        confirmButton: String = "OK",
+        cancelButton: String = "Cancel"
+    ) -> String? {
         let alert = NSAlert()
         alert.messageText = title
         alert.informativeText = message
         alert.alertStyle = .informational
-        alert.addButton(withTitle: "Save")
-        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: confirmButton)
+        alert.addButton(withTitle: cancelButton)
         let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: 200, height: 24))
         textField.placeholderString = placeholder
         textField.stringValue = defaultValue
