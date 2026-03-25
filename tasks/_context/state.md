@@ -310,21 +310,27 @@ All doc updates verified complete by sub-agent scan:
 |---|-------------|-------------|------|--------|------------|
 | 0 | `intra-file-dedup-simplification` | First-pass dedup: consolidate intra-file duplications + remove dead code in 4 implementation targets (excludes AudioPlayer) | Small-Medium | COMPLETE (PR #71 merged 2026-03-24) | None — runs first |
 | 0.5 | `codebase-wide-simplification` | Codebase-wide dead code + DRY consolidation (-732 lines, 6 files deleted, 4 utilities created) | Medium | COMPLETE (PR #72 merged 2026-03-24) | After Task 0 |
-| 1 | `streamdecodepipeline-decomposition` | Decompose `StreamDecodePipeline.swift` (697 lines) → 3 new files (~380 residual) | Medium | PLANS REFRESHED | After Task 0.5 (done) |
-| 2 | `winamp-equalizer-window-decomposition` | Decompose `WinampEqualizerWindow.swift` (616 lines) → 5 new files (~100 residual) | Medium | PLANS REFRESHED | After Task 1 merges |
-| 3 | `visualizerpipeline-decomposition` | Decompose `VisualizerPipeline.swift` (645 lines) → 4 new files (~231 residual) | Medium | PLANS REFRESHED | After Task 2 merges |
-| 4 | `skinmanager-decomposition` | Decompose `SkinManager.swift` (766 lines) → 4 new files (~392 residual) | Medium | PLANS REFRESHED | After Task 3 merges |
-| 5 | `audioplayer-seek-extraction` | Extract seek state machine from AudioPlayer.swift (734 lines) → SeekController (~554 residual). Removes last 2 swiftlint suppressions. | Medium-High | PLANS REFRESHED | After Task 4 merges |
+| 1 | `streamdecodepipeline-decomposition` | ~~3 new files~~ → Optional: extract DecodeContext only (narrow API) | Small | **OPTIONAL GO** | Independent |
+| 2 | `winamp-equalizer-window-decomposition` | ~~5 new files~~ → Selective: extract WinampVerticalSlider + PresetPickerView only | Small | **SELECTIVE GO** | Independent |
+| 3 | `visualizerpipeline-decomposition` | ~~4 new files~~ → Cancelled (private @unchecked Sendable surface risk) | N/A | **NO-GO** | N/A |
+| 4 | `skinmanager-decomposition` | ~~4 new files~~ → Steps 1-3 only (ArchiveLoader, Import, Preprocessor). Step 4 cancelled (visibility leak). 766→~460 lines. | Medium | **PARTIAL GO** | Independent |
+| 5 | `audioplayer-seek-extraction` | **DEFERRED (Option C).** 734 lines, one responsibility (facade). Accept swiftlint suppressions. Revisit as Option B (lean SeekController with direct engine refs, 2 callbacks max) only if AudioPlayer grows past 800 lines during S3 or a new responsibility emerges. | N/A | **DEFERRED** | Re-evaluate during S3 |
 
-**Execution order rationale (Oracle, 2026-03-24):** Safest first → riskiest last. UI before audio-thread. StreamDecode (9/10) → EQ Window (7/10) → Visualizer (8/10) → SkinManager (6/10) → AudioPlayer seek (5/10).
+**Responsibility sweep (2026-03-25, PR #74):** 5-agent SRP + AHA audit of all 109 files. Result: 76 Clean, 26 Justified, 7 Actionable. Applied Swift Architecture & Decomposition principles (Cohesion > LOC, AHA Rule of Three, no visibility leaks, no pass-through middlemen). 4 of 5 original decomposition plans revised or cancelled. See `tasks/responsibility-sweep/research.md`.
 
-**Phase 2a scope:** SkinManager (2 dedup + dead import), VisualizerPipeline (2 dedup + dead guards), StreamDecodePipeline (dead function), WinampEqualizerWindow (dead constant). No AudioPlayer changes.
-
-**Phase 2b creates ~18 new files** across the 5 tasks (reduced from 21 — StreamFormatHint folded into PlaylistResolver). Project goes from 110 → ~128 .swift files.
+**Revised Phase 2b scope:** ~7 new files (was ~18). Dead code cleanup: PresetsButton.swift, WinampButtonStyle.swift, WinampAlertHelper.promptText. New opportunity: WindowSizeState protocol (3x persistence duplication).
 
 **Phase 2c deferred items** (tracked in `intra-file-dedup-simplification/placeholder.md`): SkinManager sprite extraction loop dedup, NUMS_EX move to SkinSprites.swift.
 
-**Plan refresh (2026-03-25):** All 5 decomposition plans refreshed with current line numbers. Key changes: StreamFormatHint folded into PlaylistResolver (14 lines too small for own file), SkinManager residual revised to ~392 (was ~250), VisualizerPipeline residual improved to ~231 (was ~258), all Phase 2a items marked COMPLETE, `PlaybackStopReason` confirmed NOT dead (remove from deferred list).
+### D8: AudioPlayer — Defer seek extraction (Option C, 2026-03-25)
+
+**Decision:** AudioPlayer.swift (734 lines) stays as-is. The responsibility sweep confirmed it has one cohesive responsibility (local audio playback orchestration). The swiftlint suppressions (file_length + type_body_length) are threshold mismatches, not architecture signals.
+
+**Rationale:** Per Principle 1 (Problem-First), there is no concrete failure mode — no merge conflicts, no independent change vectors, no tangled state machines. The seek state (`currentSeekID`, `seekGuardActive`, `isHandlingCompletion`) is tightly coupled to play/stop/onPlaybackEnded. The 6-callback SeekController pattern would create pass-through indirection.
+
+**Fallback (Option B):** If AudioPlayer grows past 800 lines during S3 (e.g., `video-audio-engine-routing`) or gains a genuinely new responsibility, revisit with a lean SeekController design: give it direct references to `engine` and `videoPlaybackController` instead of callbacks, reducing to ~2 callbacks (`onRequestNextTrack`, `onPlaylistAdvanceRequest`). This eliminates the pass-through middleman concern while still extracting the seek state machine as an atomic unit.
+
+**Kill switch:** If the lean design still requires fragmenting state ownership across SeekController and AudioPlayer, cancel entirely.
 
 ### Post-S3 Structure Sprint: All Consolidation (D-STRUCTURE decision 2026-03-15)
 

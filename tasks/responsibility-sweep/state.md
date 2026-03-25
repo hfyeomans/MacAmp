@@ -5,7 +5,7 @@
 
 ## Status
 
-PLANNED. Spec complete, pending execution.
+COMPLETE. 5-agent sweep finished 2026-03-25. Findings in research.md.
 
 ## Context
 
