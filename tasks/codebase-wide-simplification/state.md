@@ -7,11 +7,22 @@
 
 ## Status
 
-IN PROGRESS. Rebased onto main (post-PR #71 merge). Agent team sweep complete, synthesizing findings into implementation batches.
+COMPLETE. PR #72 merged to main 2026-03-24.
 
 **Sprint:** Post-Task 0 / Pre-Task 1
 **Created:** 2026-03-24
 **Last Updated:** 2026-03-24
+
+## Result
+
+- -732 lines of source code (207 added, 939 removed)
+- 6 dead files deleted (393 lines)
+- ~270 lines dead functions removed across 19 files
+- 8 dead imports removed
+- 6 DRY consolidations (96 lines) + 3 moderate DRY consolidations (50 lines)
+- 4 new utility files: QueueConfined, TimeFormatting, MenuActionTarget, WinampAlertHelper
+- 110 .swift files remain (was 112)
+- Oracle gpt-5.4 xhigh: zero findings on both review passes
 
 ## Context
 

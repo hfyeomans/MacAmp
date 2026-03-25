@@ -7,48 +7,51 @@
 
 ## Phase 1: Research (Agent Team Sweep)
 
-- [ ] Create branch `refactor/codebase-wide-simplification`
-- [ ] Update state.md to IN PROGRESS
-- [ ] Launch audio-agent: sweep `Audio/` (~15 files)
-- [ ] Launch views-agent: sweep `Views/` (~44 files)
-- [ ] Launch models-agent: sweep `Models/` (~22 files)
-- [ ] Launch viewmodels-agent: sweep `ViewModels/` (~6 files)
-- [ ] Launch infra-agent: sweep `Windows/` + `Utilities/` + root (~25 files)
-- [ ] Collect all findings into research.md
+- [x] Create branch `refactor/codebase-wide-simplification`
+- [x] Update state.md to IN PROGRESS
+- [x] Launch audio-agent: sweep `Audio/` (~15 files)
+- [x] Launch views-agent: sweep `Views/` (~44 files)
+- [x] Launch models-agent: sweep `Models/` (~22 files)
+- [x] Launch viewmodels-agent: sweep `ViewModels/` (~6 files)
+- [x] Launch infra-agent: sweep `Windows/` + `Utilities/` + root (~25 files)
+- [x] Collect all findings into research.md
 
 ## Phase 2: Synthesis
 
-- [ ] Plan agent reads all 5 sections, deduplicates, prioritizes
-- [ ] Group findings into implementation batches
-- [ ] Oracle review on plan before implementation
+- [x] Plan agent reads all 5 sections, deduplicates, prioritizes
+- [x] Group findings into implementation batches
+- [x] Oracle review on plan before implementation
 
 ## Phase 3: Implementation
 
 ### Batch 1: Dead Code Removal
-- [ ] Remove dead functions (zero cross-file callers)
-- [ ] Remove dead imports
-- [ ] Build + test
+- [x] Remove dead functions (zero cross-file callers)
+- [x] Remove dead imports
+- [x] Build + test
 
 ### Batch 2: Syntax Simplification
-- [ ] `Result(catching:)` conversions
-- [ ] Other Swift idiom improvements
-- [ ] Build + test
+- [x] `Result(catching:)` conversions
+- [x] Other Swift idiom improvements
+- [x] Build + test
 
 ### Batch 3: Shared Helper Extraction
-- [ ] Extract duplicate alert/dialog patterns
-- [ ] Extract other 3+ occurrence patterns
-- [ ] Build + test
+- [x] Extract duplicate alert/dialog patterns
+- [x] Extract other 3+ occurrence patterns
+- [x] Build + test
 
 ### Batch 4: Cross-File DRY Consolidation
-- [ ] Consolidate remaining cross-file duplications
-- [ ] Build + test
+- [x] Consolidate remaining cross-file duplications
+- [x] Build + test
+
+### Batch 5: Deferred Items
+- Note: Batch 5 deferred items tracked in placeholder.md
 
 ## Final Verification
 
-- [ ] XcodeBuildMCP build (Thread Sanitizer enabled)
-- [ ] XcodeBuildMCP test — all tests pass
-- [ ] Oracle review on complete branch
-- [ ] Duplicate-code-investigator confirmation pass
+- [x] XcodeBuildMCP build (Thread Sanitizer enabled)
+- [x] XcodeBuildMCP test — all tests pass
+- [x] Oracle review on complete branch
+- [x] Duplicate-code-investigator confirmation pass
 - [ ] Manual test: skins, audio, visualizer, EQ, playlist
-- [ ] Push branch -> create PR for user review
-- [ ] Update state.md on completion
+- [x] Push branch -> create PR for user review
+- [x] Update state.md on completion

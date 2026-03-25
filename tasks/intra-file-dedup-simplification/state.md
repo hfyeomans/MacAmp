@@ -7,11 +7,20 @@
 
 ## Status
 
-IN PROGRESS. Branch `refactor/intra-file-dedup-simplification` created 2026-03-24.
+COMPLETE. PR #71 merged to main 2026-03-24.
 
 **Sprint:** Post-S2 / pre-S3
 **Created:** 2026-03-24
 **Last Updated:** 2026-03-24
+
+## Result
+
+- SkinManager: 783 -> 766 lines
+- VisualizerPipeline: 699 -> 645 lines
+- StreamDecodePipeline: 713 -> 697 lines
+- WinampEqualizerWindow: 626 -> 616 lines
+- Bug fixed: inconsistent playlist color defaults
+- 2 Oracle regressions caught and fixed (P2 viscolor, P3 pledit)
 
 ## Context
 

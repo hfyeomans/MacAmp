@@ -308,20 +308,23 @@ All doc updates verified complete by sub-agent scan:
 
 | # | Task Folder | Description | Size | Status | Dependency |
 |---|-------------|-------------|------|--------|------------|
-| 0 | `intra-file-dedup-simplification` | First-pass dedup: consolidate intra-file duplications + remove dead code in 4 implementation targets (excludes AudioPlayer) | Small-Medium | READY | None — runs first |
-| 1 | `streamdecodepipeline-decomposition` | Decompose `StreamDecodePipeline.swift` → 4 new files (~345 residual) | Medium | PLANNED | After Task 0 merges (refresh plan) |
-| 2 | `winamp-equalizer-window-decomposition` | Decompose `WinampEqualizerWindow.swift` → 5 new files (~100 residual) | Medium | PLANNED | After Task 1 merges |
-| 3 | `visualizerpipeline-decomposition` | Decompose `VisualizerPipeline.swift` → 4 new files (~258 residual) | Medium | PLANNED | After Task 2 merges |
-| 4 | `skinmanager-decomposition` | Decompose `SkinManager.swift` → 4 new files (~250 residual) | Medium | PLANNED | After Task 3 merges |
-| 5 | `audioplayer-seek-extraction` | Extract seek state machine from AudioPlayer.swift → SeekController (~554 residual). Removes last 2 swiftlint suppressions. | Medium-High | PLANNED | After Task 4 merges |
+| 0 | `intra-file-dedup-simplification` | First-pass dedup: consolidate intra-file duplications + remove dead code in 4 implementation targets (excludes AudioPlayer) | Small-Medium | COMPLETE (PR #71 merged 2026-03-24) | None — runs first |
+| 0.5 | `codebase-wide-simplification` | Codebase-wide dead code + DRY consolidation (-732 lines, 6 files deleted, 4 utilities created) | Medium | COMPLETE (PR #72 merged 2026-03-24) | After Task 0 |
+| 1 | `streamdecodepipeline-decomposition` | Decompose `StreamDecodePipeline.swift` (697 lines) → 4 new files (~345 residual) | Medium | PLANNED | After Task 0.5 merges (refresh plan) |
+| 2 | `winamp-equalizer-window-decomposition` | Decompose `WinampEqualizerWindow.swift` (616 lines) → 5 new files (~100 residual) | Medium | PLANNED | After Task 1 merges |
+| 3 | `visualizerpipeline-decomposition` | Decompose `VisualizerPipeline.swift` (645 lines) → 4 new files (~258 residual) | Medium | PLANNED | After Task 2 merges |
+| 4 | `skinmanager-decomposition` | Decompose `SkinManager.swift` (766 lines) → 4 new files (~250 residual) | Medium | PLANNED | After Task 3 merges |
+| 5 | `audioplayer-seek-extraction` | Extract seek state machine from AudioPlayer.swift (734 lines) → SeekController (~554 residual). Removes last 2 swiftlint suppressions. | Medium-High | PLANNED | After Task 4 merges |
 
 **Execution order rationale (Oracle, 2026-03-24):** Safest first → riskiest last. UI before audio-thread. StreamDecode (9/10) → EQ Window (7/10) → Visualizer (8/10) → SkinManager (6/10) → AudioPlayer seek (5/10).
 
 **Phase 2a scope:** SkinManager (2 dedup + dead import), VisualizerPipeline (2 dedup + dead guards), StreamDecodePipeline (dead function), WinampEqualizerWindow (dead constant). No AudioPlayer changes.
 
-**Phase 2b creates ~21 new files** across the 5 tasks. Project goes from 112 → ~133 .swift files (well within Gemini's "conservative for this complexity" assessment).
+**Phase 2b creates ~21 new files** across the 5 tasks. Project goes from 110 → ~131 .swift files (well within Gemini's "conservative for this complexity" assessment).
 
 **Phase 2c deferred items** (tracked in `intra-file-dedup-simplification/placeholder.md`): SkinManager sprite extraction loop dedup, NUMS_EX move to SkinSprites.swift.
+
+**Post-cleanup note (2026-03-24):** All 5 decomposition plans need line number refresh before execution. The codebase changed significantly: -732 lines source, 6 dead files deleted, 4 new utility files created.
 
 ### Post-S3 Structure Sprint: All Consolidation (D-STRUCTURE decision 2026-03-15)
 
@@ -358,4 +361,4 @@ All file-move consolidation work is deferred to a single dedicated "Structure Sp
 |------|--------|
 | `_context/research.md` | Complete (verified, corrections applied) |
 | `_context/plan.md` | Complete (verified, corrections applied) |
-| `_context/state.md` | Active (this file — updated 2026-03-24) |
+| `_context/state.md` | Active (this file — updated 2026-03-24, Task 0 + 0.5 merged) |

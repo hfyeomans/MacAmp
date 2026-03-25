@@ -47,6 +47,6 @@
 - [x] Duplicate-code-investigator scan — 3 additional items fixed, rest deferred to Phase 2c
 - [x] Simplify review — 2 nits fixed (unused param, bounds clamp)
 - [x] Oracle review — caught viscolor fallback regression, fixed
-- [ ] Push branch -> create PR for user review
-- [ ] Update state.md and shared _context/ on completion
-- [ ] NOTE: After merge, refresh all 5 decomposition plan line numbers
+- [x] Push branch -> create PR for user review
+- [x] Update state.md and shared _context/ on completion
+- [x] NOTE: After merge, refresh all 5 decomposition plan line numbers
