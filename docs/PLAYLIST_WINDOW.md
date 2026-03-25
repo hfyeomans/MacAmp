@@ -1,15 +1,10 @@
 # MacAmp Playlist Window Documentation
 
-**Version:** 1.1.0
-**Last Updated:** February 2026
+**Version:** 1.2.0
+**Last Updated:** 2026-03-25
 **Status:** Production Ready
 **Author:** MacAmp Development Team
 **Oracle Grade:** A- (Architecture Aligned)
-
-> **Note (Wave 1 Decomposition, Feb 2026):** Line references such as `WinampPlaylistWindow.swift:390-417`
-> throughout this document predate the playlist window decomposition and may be stale. Verify against
-> current source files in `MacAmpApp/Views/PlaylistWindow/`. See [Architecture Overview](#architecture-overview)
-> for the updated file structure.
 
 ---
 
@@ -140,17 +135,20 @@ var visibleTrackCount: Int {
 
 ### File Structure (Post-Decomposition)
 
-The playlist window was decomposed from a monolithic view + extension into focused child view structs (Wave 1, Feb 2026). `WinampPlaylistWindow.swift` is now ~230 lines (root composer only), down from ~530 lines. The menu extension `WinampPlaylistWindow+Menus.swift` was **deleted** -- its code moved to child views and `PlaylistMenuPresenter`.
+The playlist window was decomposed from a monolithic view + extension into focused child view structs (Wave 1, Feb 2026). `WinampPlaylistWindow.swift` is now ~220 lines (root composer only), down from ~530 lines. The menu extension `WinampPlaylistWindow+Menus.swift` was **deleted** -- its code moved to child views and `PlaylistMenuPresenter`.
 
 ```
 MacAmpApp/Views/PlaylistWindow/
-  PlaylistWindowInteractionState.swift  (47 lines, @Observable state)
-  PlaylistMenuPresenter.swift           (197 lines, AppKit NSMenu bridge)
-  PlaylistTrackListView.swift           (84 lines, track list + selection)
-  PlaylistBottomControlsView.swift      (120 lines, transport + time)
+  PlaylistWindowInteractionState.swift  (61 lines, @Observable state)
+  PlaylistMenuPresenter.swift           (195 lines, AppKit NSMenu bridge)
+  PlaylistTrackListView.swift           (78 lines, track list + selection)
+  PlaylistBottomControlsView.swift      (113 lines, transport + time)
   PlaylistShadeView.swift               (42 lines, shade mode)
   PlaylistResizeHandle.swift            (65 lines, resize drag gesture)
   PlaylistTitleBarButtons.swift         (33 lines, titlebar buttons)
+
+MacAmpApp/Views/
+  PlaylistWindowActions.swift           (318 lines, playlist operations: NEW/LOAD/SAVE LIST, sort, remove, crop)
 ```
 
 ### Three-Layer Pattern
@@ -341,6 +339,20 @@ if showVisualizer {
 SimpleSpriteImage("PLAYLIST_BOTTOM_RIGHT_CORNER", width: 150, height: 38)
     .position(x: windowWidth - 75, y: windowHeight - 19)
 ```
+
+### List Operations (NEW LIST / LOAD LIST / SAVE LIST)
+
+The bottom bar's LEFT section contains buttons for playlist list operations, implemented in `PlaylistWindowActions.swift`:
+
+- **NEW LIST**: Clears the playlist immediately with no confirmation dialog (matches Winamp behavior). Calls `audioPlayer.clearPlaylist()`.
+
+- **LOAD LIST**: Opens `NSOpenPanel` filtered to `.m3u`/`.m3u8` files. Parses the selected file off the main actor. On success, clears the current playlist then adds parsed entries (replaces, not appends). Uses a `playlistGeneration` token to guard against stale metadata tasks from a previous playlist.
+
+- **SAVE LIST**: Opens `NSSavePanel` with `.m3u8` default extension. Writes `#EXTM3U` format via `M3UWriter.write()` off the main actor. All file I/O is performed in the background.
+
+### Track Position Display
+
+`PlaybackCoordinator.trackPositionString` provides a `"3/15"` format playlist position string shown in the main window title area, indicating the current track's position within the playlist.
 
 ---
 
@@ -874,9 +886,10 @@ xcodebuild -scheme MacAmpApp -configuration Debug -enableThreadSanitizer YES bui
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.2.0 | 2026-03-25 | Added list operations (NEW/LOAD/SAVE), PlaylistWindowActions.swift, track position display, updated line counts |
 | 1.1.0 | February 2026 | Wave 1 decomposition: child view structs, deleted Menus extension, staleness note |
 | 1.0.0 | December 2025 | Initial release with full resize system |
 
 ---
 
-**MacAmp Playlist Window Documentation v1.1.0 | Status: Production Ready | Oracle Grade: A-**
+**MacAmp Playlist Window Documentation v1.2.0 | Status: Production Ready | Oracle Grade: A-**

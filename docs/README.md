@@ -1,9 +1,9 @@
 # MacAmp Documentation Guide
 
-**Version:** 3.8.0
-**Date:** 2026-03-22
+**Version:** 3.9.0
+**Date:** 2026-03-25
 **Purpose:** Master index and navigation guide for all MacAmp documentation
-**Total Documentation:** 19,820 active lines across 18 current docs + 26 archived docs
+**Total Documentation:** 19,755 active lines across 18 current docs + 26 archived docs
 
 ---
 
@@ -26,7 +26,7 @@
 
 ## Executive Summary
 
-The MacAmp documentation system consists of **18 active technical documents** (19,820 lines) providing comprehensive coverage of a pixel-perfect Winamp 2.x recreation for macOS. Documentation spans from high-level architecture to implementation details, window management systems, video playback, visualization windows, build processes, and skin system specifications.
+The MacAmp documentation system consists of **18 active technical documents** (19,755 lines) providing comprehensive coverage of a pixel-perfect Winamp 2.x recreation for macOS. Documentation spans from high-level architecture to implementation details, window management systems, video playback, visualization windows, build processes, and skin system specifications.
 
 ### Documentation Purpose
 
@@ -112,11 +112,11 @@ xcodebuild test -scheme MacAmpApp -destination 'platform=macOS'
 
 ## Complete Documentation Inventory
 
-### 🏗️ Architecture & Design (12 documents, 16,777 lines)
+### 🏗️ Architecture & Design (12 documents, 16,675 lines)
 
 #### **[MACAMP_ARCHITECTURE_GUIDE.md](MACAMP_ARCHITECTURE_GUIDE.md)** ⭐
-- **Size**: 168KB, 5,313 lines
-- **Last Updated**: 2026-03-22
+- **Size**: 168KB, 5,249 lines
+- **Last Updated**: 2026-03-25
 - **Status**: ✅ AUTHORITATIVE
 - **Purpose**: Complete architectural reference for MacAmp
 - **Key Sections**:
@@ -133,8 +133,8 @@ xcodebuild test -scheme MacAmpApp -destination 'platform=macOS'
 - **Quality**: ⭐⭐⭐⭐⭐ Authoritative (post-corrections)
 
 #### **[IMPLEMENTATION_PATTERNS.md](IMPLEMENTATION_PATTERNS.md)** ⭐
-- **Size**: 115KB, 3,840 lines
-- **Last Updated**: 2026-03-22
+- **Size**: 115KB, 3,789 lines
+- **Last Updated**: 2026-03-25
 - **Status**: ✅ AUTHORITATIVE
 - **Purpose**: Practical code patterns and best practices
 - **Key Sections**:
@@ -178,7 +178,7 @@ xcodebuild test -scheme MacAmpApp -destination 'platform=macOS'
   - Magnetic snapping coordination
   - Window lifecycle management
   - SwiftUI WindowGroup integration
-  - **WindowCoordinator Refactoring (2026-02)** ⭐ NEW
+  - **WindowCoordinator Refactoring (2026-02)**
     - Facade + Composition pattern (1,357 → 223 lines, -84%)
     - 11-file decomposition with dependency matrix
     - Swift 6.2 concurrency patterns
@@ -205,15 +205,17 @@ xcodebuild test -scheme MacAmpApp -destination 'platform=macOS'
 - **Related Docs**: SPRITE_SYSTEM_COMPLETE.md, WINDOW_FOCUS_ARCHITECTURE.md
 - **Quality**: ⭐⭐⭐⭐⭐ Authoritative
 
-#### **[PLAYLIST_WINDOW.md](PLAYLIST_WINDOW.md)** ⭐ NEW
+#### **[PLAYLIST_WINDOW.md](PLAYLIST_WINDOW.md)** ⭐
 - **Size**: 28KB, 882 lines
-- **Last Updated**: February 2026
+- **Last Updated**: 2026-03-25
 - **Status**: ✅ PRODUCTION
 - **Purpose**: Complete playlist window documentation with segment-based resize system
 - **Key Sections**:
   - Window specifications and segment grid (25×29px)
   - PlaylistWindowSizeState @Observable model
   - Three-section bottom bar (LEFT/CENTER/RIGHT)
+  - List operations (NEW LIST / LOAD LIST / SAVE LIST)
+  - Track position display (`trackPositionString`)
   - Resize gesture with AppKit preview overlay
   - Scroll slider with proportional thumb
   - Mini visualizer (when main window shaded)
@@ -532,7 +534,7 @@ docs/
 │   │
 │   ├── 📺 Window Implementations
 │   │   ├── VIDEO_WINDOW.md (Video playback window)
-│   │   ├── PLAYLIST_WINDOW.md (Playlist window with resize) ⭐ NEW
+│   │   ├── PLAYLIST_WINDOW.md (Playlist window with resize)
 │   │   └── MILKDROP_WINDOW.md (Visualization window)
 │   │
 │   └── 🎨 Skin System
@@ -558,7 +560,7 @@ docs/
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                     README.md                           │
-│           (Master Documentation Index v3.0)             │
+│           (Master Documentation Index v3.9.0)           │
 └─────────────────────┬───────────────────────────────────┘
                       │
         ┌─────────────┴─────────────┬──────────────┐
@@ -767,6 +769,18 @@ Includes:
 | **XcodeGen resource configuration** | MILKDROP_WINDOW.md | §9.2 XcodeGen Resource Config |
 | **macOS 26 WebContent noise** | MILKDROP_WINDOW.md | §11.5 macOS 26 WebContent |
 | **VBR duration alignment** | IMPLEMENTATION_PATTERNS.md | §Audio Processing Patterns |
+| **`os_workgroup` / audio workgroup** | MACAMP_ARCHITECTURE_GUIDE.md | §4 Unified Audio Pipeline |
+| **`Now Playing` / MPNowPlayingInfoCenter** | MACAMP_ARCHITECTURE_GUIDE.md | §4 Unified Audio Pipeline |
+| **`Remote commands` / MPRemoteCommandCenter** | MACAMP_ARCHITECTURE_GUIDE.md | §4 Unified Audio Pipeline |
+| **Stream elapsed time** | IMPLEMENTATION_PATTERNS.md | §4 Audio Processing Patterns |
+| **Playlist list operations (NEW/LOAD/SAVE)** | PLAYLIST_WINDOW.md | §List Operations |
+| **M3UWriter** | PLAYLIST_WINDOW.md | §List Operations |
+| **QueueConfined protocol** | IMPLEMENTATION_PATTERNS.md | §4 Audio Processing Patterns |
+| **TimeFormatting** | IMPLEMENTATION_PATTERNS.md | §Utilities |
+| **MenuActionTarget / MenuItemFactory** | IMPLEMENTATION_PATTERNS.md | §3 UI Component Patterns |
+| **WinampAlertHelper** | IMPLEMENTATION_PATTERNS.md | §Utilities |
+| **PlaylistStyle.winampDefault** | IMPLEMENTATION_PATTERNS.md | §2 State Patterns |
+| **supportsAudioProcessing** | IMPLEMENTATION_PATTERNS.md | §2 Capability Flag Pattern |
 
 ### Common Questions → Answer Location
 
@@ -838,11 +852,11 @@ Includes:
 ┌─────────────────────────────────────────────────────────┐
 │ Category               │ Lines  │ Docs │ Coverage      │
 ├───────────────────────┼────────┼──────┼───────────────┤
-│ Architecture & Design  │16,777  │ 12   │ █████████░ 96%│
+│ Architecture & Design  │16,675  │ 12   │ █████████░ 96%│
 │ Build & Distribution   │ 1,319  │  4   │ █████████░ 95%│
 │ Skin System           │   652  │  1   │ █████████░ 90%│
-│ Navigation & Index     │ 1,072  │  1   │ ██████████100%│
-│ TOTAL                 │19,820  │ 18   │ █████████░ 95%│
+│ Navigation & Index     │ 1,109  │  1   │ ██████████100%│
+│ TOTAL                 │19,755  │ 18   │ █████████░ 95%│
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -851,11 +865,11 @@ Includes:
 ```
 Total Active Docs:        18
 Total Archived Docs:      26 (local only)
-Total Lines:             19,820
-Average Doc Size:        1,101 lines
-Last Full Review:        2026-03-22
-Documentation Version:   3.8.0
-Recent Update:           Updated line counts, added search index entries for auto-reconnect, AudioEngineController, XcodeGen resource config (v3.8.0)
+Total Lines:             19,755
+Average Doc Size:        1,098 lines
+Last Full Review:        2026-03-25
+Documentation Version:   3.9.0
+Recent Update:           Sprint S2 + Phase 2.5 cleanup sync: updated line counts, 12 search index entries, playlist list operations (v3.9.0)
 
 Quality Ratings:
 ⭐⭐⭐⭐⭐ Authoritative:   10 docs (56%)
@@ -989,13 +1003,13 @@ The following documents have been **archived to docs/archive/** (local only, not
 ```
 18 Core Technical Documents
 ─────────────────────────────
-MACAMP_ARCHITECTURE_GUIDE.md         5,313 lines  (27%) ⭐ UPDATED
-IMPLEMENTATION_PATTERNS.md           3,840 lines  (19%) ⭐ UPDATED
+MACAMP_ARCHITECTURE_GUIDE.md         5,249 lines  (27%) ⭐ UPDATED
+IMPLEMENTATION_PATTERNS.md           3,789 lines  (19%) ⭐ UPDATED
 MILKDROP_WINDOW.md                   1,660 lines  (8%)  ⭐ UPDATED
 MULTI_WINDOW_ARCHITECTURE.md         1,382 lines  (7%)  ⭐ UPDATED +322
 VIDEO_WINDOW.md                      1,151 lines  (7%)
-README.md (this file)                1,072 lines  (6%)
-PLAYLIST_WINDOW.md                     882 lines  (5%)
+README.md (this file)                1,109 lines  (6%)
+PLAYLIST_WINDOW.md                     895 lines  (5%)
 SPRITE_SYSTEM_COMPLETE.md              728 lines  (4%)
 WINAMP_SKIN_VARIATIONS.md              652 lines  (3%)
 WINDOW_FOCUS_ARCHITECTURE.md           599 lines  (3%)
@@ -1008,15 +1022,15 @@ CUSTOM_DRAG_FIX.md                     254 lines  (1%)
 RELEASE_BUILD_COMPARISON.md            230 lines  (1%)
 CODE_SIGNING_FIX.md                    200 lines  (1%)
 ─────────────────────────────
-TOTAL:                              19,820 lines
+TOTAL:                              19,755 lines
 ```
 
 ### Documentation by Category
 
-- **Architecture & Design**: 85% (16,777 lines)
+- **Architecture & Design**: 85% (16,675 lines)
 - **Build & Distribution**: 7% (1,319 lines)
 - **Skin System**: 3% (652 lines)
-- **Navigation & Index**: 5% (1,072 lines)
+- **Navigation & Index**: 6% (1,109 lines)
 
 ---
 
@@ -1042,7 +1056,7 @@ The MacAmp documentation system provides **comprehensive, accurate, and authorit
 - **Building a release?** Go to RELEASE_BUILD_GUIDE.md
 - **Fixing a bug?** Check MACAMP_ARCHITECTURE_GUIDE.md §14 Quick Reference
 - **Working with windows?** See MULTI_WINDOW_ARCHITECTURE.md
-- **Playlist resize?** Check PLAYLIST_WINDOW.md ⭐ NEW
+- **Playlist resize?** Check PLAYLIST_WINDOW.md
 - **Video implementation?** Check VIDEO_WINDOW.md
 - **Visualization window?** See MILKDROP_WINDOW.md
 
@@ -1050,11 +1064,17 @@ For questions or corrections, the documentation was comprehensively reviewed on 
 
 ---
 
-**MacAmp Documentation v3.8.0 | Last Updated: 2026-03-22 | Status: Production Authoritative**
+**MacAmp Documentation v3.9.0 | Last Updated: 2026-03-25 | Status: Production Authoritative**
 
-*Master index for 19,820+ lines of verified technical documentation (18 active docs)*
+*Master index for 19,755+ lines of verified technical documentation (18 active docs)*
 
-**Recent Update (v3.8.0 - 2026-03-22): Doc Line Count Sync + Search Index Expansion**
+**Recent Update (v3.9.0 - 2026-03-25): Sprint S2 + Phase 2.5 Cleanup Sync**
+- Updated line counts for MACAMP_ARCHITECTURE_GUIDE.md (5,313->5,249) and IMPLEMENTATION_PATTERNS.md (3,840->3,789)
+- Added 12 search index entries: os_workgroup, Now Playing, remote commands, stream elapsed time, playlist list operations, M3UWriter, QueueConfined, TimeFormatting, MenuActionTarget, WinampAlertHelper, PlaylistStyle, supportsAudioProcessing
+- Removed stale "NEW" labels from PLAYLIST_WINDOW.md entries
+- Updated PLAYLIST_WINDOW.md inventory: added list operations, track position display
+
+**Previous Update (v3.8.0 - 2026-03-22): Doc Line Count Sync + Search Index Expansion**
 - Updated line counts: MACAMP_ARCHITECTURE_GUIDE.md 5,206 -> 5,313 (+107), IMPLEMENTATION_PATTERNS.md 3,584 -> 3,840 (+256), MILKDROP_WINDOW.md 1,623 -> 1,660 (+37)
 - Total documentation: 19,420 -> 19,820 lines (+400)
 - Added search index entries: AudioEngineController, StreamTerminationReason, auto-reconnect/exponential backoff, stream error display, XcodeGen resource configuration, macOS 26 WebContent noise, VBR duration alignment
