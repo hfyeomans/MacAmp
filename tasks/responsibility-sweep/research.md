@@ -24,13 +24,37 @@ The codebase is architecturally healthy. Most files have a single cohesive respo
 
 ## Decomposition Plan Verdicts
 
-| Task | Target | Verdict | Reasoning |
+### Sweep Agent Verdicts (raw)
+
+| Task | Target | Agent Verdict | Reasoning |
 |------|--------|---------|-----------|
-| 1 | StreamDecodePipeline (697→~380) | **No-Go** | DecodeContext + SessionDelegateProxy are `private`. Extraction requires `internal` (Principle 5 violation). PlaylistResolver has 1 caller (Rule of Three not met). ~380 residual is already clean single responsibility. |
-| 2 | WinampEqualizerWindow (616→~100) | **No-Go** | File is verbose declarative SwiftUI with LOW cognitive complexity. 7 @ViewBuilder methods are flat UI declarations. EQFullLayer would be a pass-through middleman (Principle 6). Extraction requires making EQCoords/slider constants internal (Principle 5). All 3 types serve one feature. |
-| 3 | VisualizerPipeline (645→~231) | **No-Go** | SharedBuffer + ScratchBuffers are `private @unchecked Sendable`. Making them `internal` widens unsafe surface area (Principle 5). File is 645 lines but LOW cognitive complexity (verbose DSP math, not interleaved responsibilities). |
-| 4 | SkinManager (766→~392) | **Revise** | Steps 1-3 are Go (genuinely separate types). Step 4 (Fallback extension) is No-Go — requires `private → internal` for 3 mutable caches with append-only invariants (Principle 5). Revised residual: ~460 lines. |
-| 5 | AudioPlayer (734→~554) | **No-Go** | Seek state (`currentSeekID`, `seekGuardActive`, `playbackState`) is tightly coupled to play/stop/onPlaybackEnded. Extraction fragments state ownership (Principle 3). 6-callback pattern creates pass-through middleman (Principle 6). File is a facade with one responsibility: local audio playback orchestration. |
+| 1 | StreamDecodePipeline (697→~380) | **No-Go** | DecodeContext + SessionDelegateProxy are `private`. Extraction requires `internal` (Principle 5). |
+| 2 | WinampEqualizerWindow (616→~100) | **No-Go** | Verbose declarative SwiftUI, low cognitive complexity. EQFullLayer = pass-through middleman. |
+| 3 | VisualizerPipeline (645→~231) | **No-Go** | SharedBuffer/ScratchBuffers are `private @unchecked Sendable`. Widening = unsafe surface risk. |
+| 4 | SkinManager (766→~392) | **Revise** | Steps 1-3 Go. Step 4 No-Go (3 private mutable caches). |
+| 5 | AudioPlayer (734→~554) | **No-Go** | Seek state tightly coupled. 6-callback = pass-through middleman. |
+
+### Oracle Reconsideration (nuanced)
+
+The Oracle (gpt-5.3-codex, xhigh) reviewed the sweep verdicts and applied a middle-ground principle: **treat visibility widening as weighted risk, not automatic veto.** Hard no-go when widening exposes mutable invariant-bearing state or `@unchecked Sendable` internals. Soft go when extracting cohesive units with narrow APIs.
+
+| Task | Oracle-Adjusted Verdict | Oracle Rating | Reasoning |
+|------|------------------------|---------------|-----------|
+| 1 | **Revise (split optional)** | 5/10 agree w/ No-Go | DecodeContext is already a well-bounded class with queue confinement. Extraction to own file is a net readability win if API stays narrow. Not mandatory. |
+| 2 | **No-Go (full plan), selective Go** | 7/10 agree | Main 5-file split to ~100 lines is No-Go. But WinampVerticalSlider and PresetPickerView are already distinct top-level types — extracting those two alone is low-risk for discoverability. |
+| 3 | **No-Go** | 8/10 agree | Real risk with `@unchecked Sendable` surface widening. Keep as-is. |
+| 4 | **Go Steps 1-3, No-Go Step 4** | 9/10 agree | Distinction is correct. Fallback mutates 3 private caches. |
+| 5 | **Revise design** | 6/10 agree w/ No-Go | 6-callback shape is high-indirection, but atomic seek extraction is valid. Needs design revision, not hard cancellation. |
+
+### Final Recommended Verdicts
+
+| Task | Final Verdict | Scope |
+|------|--------------|-------|
+| 1 | **Optional Go** | Extract DecodeContext only if API stays narrow. SessionDelegateProxy + PlaylistResolver stay. |
+| 2 | **Selective Go** | Extract WinampVerticalSlider + PresetPickerView to own files. Cancel EQFullLayer/EQShadeLayer/EQTitlebarButtons. |
+| 3 | **No-Go** | Keep all types in one file. |
+| 4 | **Partial Go** | Steps 1-3 only. Cancel Step 4. Residual ~460 lines. |
+| 5 | **Revise** | Redesign SeekController to reduce callback count. Not cancelled, but needs new approach. |
 
 ### SkinManager Revised Plan (Steps 1-3 only)
 
