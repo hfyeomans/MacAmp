@@ -62,6 +62,7 @@ struct WinampEqualizerWindow: View {
     // EQ slider specs - CORRECTED to match webamp exactly
     private let sliderWidth: CGFloat = 14  // CORRECTED: Each slider is 14px wide
     private let sliderHeight: CGFloat = 62  // CORRECTED: 62px active area (not 63)
+    private let thumbWidth: CGFloat = 11
     private let thumbHeight: CGFloat = 11
     
     var body: some View {
@@ -199,7 +200,8 @@ struct WinampEqualizerWindow: View {
             ),
             range: -12.0...12.0,
             width: sliderWidth,   // 14px exactly
-            height: sliderHeight, // 62px exactly  
+            height: sliderHeight, // 62px exactly
+            thumbWidth: thumbWidth,
             thumbHeight: thumbHeight,
             backgroundSprite: "EQ_SLIDER_BACKGROUND",
             thumbSprite: "EQ_SLIDER_THUMB",
@@ -220,6 +222,7 @@ struct WinampEqualizerWindow: View {
                 range: -12.0...12.0,
                 width: sliderWidth,
                 height: sliderHeight,
+                thumbWidth: thumbWidth,
                 thumbHeight: thumbHeight,
                 backgroundSprite: "EQ_SLIDER_BACKGROUND",
                 thumbSprite: "EQ_SLIDER_THUMB",
@@ -242,7 +245,7 @@ struct WinampEqualizerWindow: View {
         .buttonStyle(.plain)
         .focusable(false)
         .popover(isPresented: $showPresetPicker, arrowEdge: .bottom) {
-            PresetPickerView(
+            EQPresetPickerView(
                 builtInPresets: EQPreset.builtIn,
                 userPresets: audioPlayer.userPresets,
                 onSelect: { preset in
@@ -344,268 +347,6 @@ struct WinampEqualizerWindow: View {
                 .stroke(Color.green, lineWidth: 1)
                 .at(EQCoords.graphArea)
             )
-    }
-}
-
-/// Vertical slider component for EQ bands
-struct WinampVerticalSlider: View {
-    @Environment(SkinManager.self) var skinManager
-    @Binding var value: Float
-    let range: ClosedRange<Float>
-    let width: CGFloat
-    let height: CGFloat
-    let thumbHeight: CGFloat
-    let backgroundSprite: String
-    let thumbSprite: String
-    let thumbActiveSprite: String
-
-    @State private var isDragging = false
-
-    // EQ_SLIDER_BACKGROUND 2D grid constants (14×2 layout, 28 frames total)
-    private let frameWidth: CGFloat = 15
-    private let frameHeight: CGFloat = 65
-    private let gridColumns: Int = 14
-    private let totalFrames: Int = 28
-
-    var body: some View {
-        ZStack(alignment: .topLeading) {
-            // Render colored gradient background from EQ_SLIDER_BACKGROUND
-            // Uses 2D grid positioning (14 columns × 2 rows)
-            if let skin = skinManager.currentSkin,
-               let eqBackground = skin.images[backgroundSprite] {
-                // CRITICAL: frame→offset→clip order (proven from Volume slider)
-                Image(nsImage: eqBackground)
-                    .interpolation(.none)
-                    .frame(width: width, height: height, alignment: .topLeading)
-                    .offset(x: calculateFrameXOffset(), y: calculateFrameYOffset())
-                    .clipped()
-                    .allowsHitTesting(false)
-            } else {
-                // Fallback: programmatic gradient if sprite missing
-                Rectangle()
-                    .fill(sliderColor)
-                    .frame(width: width, height: height)
-            }
-
-            // Slider thumb sprite (11x11 pixels)
-            SimpleSpriteImage(isDragging ? thumbActiveSprite : thumbSprite,
-                            width: 11, height: 11)
-                .offset(x: 1.5, y: thumbPosition) // Position based on webamp formula
-
-            // Invisible interaction area - EXACTLY constrained
-            GeometryReader { geo in
-                Color.clear
-                    .contentShape(Rectangle())
-                    .gesture(
-                        DragGesture(minimumDistance: 0)
-                            .onChanged { gesture in
-                                isDragging = true
-                                updateValue(from: gesture, in: geo)
-                            }
-                            .onEnded { _ in
-                                isDragging = false
-                            }
-                    )
-            }
-            .frame(width: width, height: height) // FORCE exact constraint
-        }
-        .frame(width: width, height: height) // DOUBLE ensure constraints
-        .clipped() // CRITICAL: Clip any overflow
-    }
-    
-    /// Value normalized to 0.0–1.0 within the slider range.
-    private var normalizedValue: Float {
-        (value - range.lowerBound) / (range.upperBound - range.lowerBound)
-    }
-
-    // Solid color that changes based on slider position
-    private var sliderColor: Color {
-        // Map value to color: green (-12) -> yellow (0) -> red (+12)
-        
-        if normalizedValue <= 0.5 {
-            // Green to Yellow (bottom to center)
-            let t = normalizedValue * 2 // 0 to 1 for this half
-            return Color(
-                red: Double(t * 0.9),      // 0 -> 0.9
-                green: Double(0.8),         // Stay high
-                blue: 0
-            )
-        } else {
-            // Yellow to Red (center to top)
-            let t = (normalizedValue - 0.5) * 2 // 0 to 1 for this half
-            return Color(
-                red: Double(0.9 + t * 0.1), // 0.9 -> 1.0
-                green: Double(0.8 * (1 - t)), // 0.8 -> 0
-                blue: 0
-            )
-        }
-    }
-    
-    
-    private var thumbPosition: CGFloat {
-        let thumbSize: CGFloat = 11
-        let trackHeight = height - thumbSize
-        // Inverted: our coordinate system has 0 at top
-        return floor(trackHeight * (1.0 - CGFloat(normalizedValue)))
-    }
-    
-    private func updateValue(from gesture: DragGesture.Value, in geometry: GeometryProxy) {
-        let gestureHeight = geometry.size.height
-        let y = min(max(0, gesture.location.y), gestureHeight)
-
-        // Invert Y coordinate (top = high value, bottom = low value)
-        let normalizedPosition = 1.0 - Float(y / gestureHeight)
-        var newValue = range.lowerBound + (normalizedPosition * (range.upperBound - range.lowerBound))
-
-        // Center snapping: if within ±0.5dB of center (0), snap to exactly 0
-        let snapThreshold: Float = 0.5
-        if abs(newValue) < snapThreshold {
-            newValue = 0
-        }
-
-        value = max(range.lowerBound, min(range.upperBound, newValue))
-    }
-
-    // Calculate which frame (0-27) to display based on EQ value
-    private func calculateFrameIndex() -> Int {
-        let percent = min(max(CGFloat(normalizedValue), 0), 1)
-        let frameIndex = Int(round(percent * CGFloat(totalFrames - 1)))
-        return min(max(frameIndex, 0), totalFrames - 1)
-    }
-
-    // Calculate X offset for 2D grid (column selection)
-    private func calculateFrameXOffset() -> CGFloat {
-        let frameIndex = calculateFrameIndex()
-        let gridX = frameIndex % gridColumns  // Column: 0-13
-        return -CGFloat(gridX) * frameWidth
-    }
-
-    // Calculate Y offset for 2D grid (row selection)
-    private func calculateFrameYOffset() -> CGFloat {
-        let frameIndex = calculateFrameIndex()
-        let gridY = frameIndex / gridColumns  // Row: 0-1
-        return -CGFloat(gridY) * frameHeight
-    }
-}
-
-/// Modern popover view for selecting EQ presets
-struct PresetPickerView: View {
-    let builtInPresets: [EQPreset]
-    let userPresets: [EQPreset]
-    let onSelect: (EQPreset) -> Void
-    let onSave: () -> Void
-    let onDeleteUserPreset: (UUID) -> Void
-    let onImport: () -> Void
-
-    @State private var hoveredPreset: EQPreset.ID?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Header
-            HStack {
-                Text("EQ Presets")
-                    .font(.headline)
-                Spacer()
-                Button {
-                    onSave()
-                } label: {
-                    Image(systemName: "plus.circle.fill")
-                        .foregroundColor(.accentColor)
-                }
-                .buttonStyle(.plain)
-                .help("Save custom preset")
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-
-            Divider()
-
-            // Scrollable preset list
-            ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-                    if !userPresets.isEmpty {
-                        Text("Saved Presets")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal, 12)
-                        presetSection(userPresets, allowDeletion: true)
-                    }
-
-                    Text("Built-in Presets")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .padding(.horizontal, 12)
-                    presetSection(builtInPresets, allowDeletion: false)
-                }
-                .padding(.vertical, 8)
-            }
-            .frame(width: 240, height: 320)
-
-            Divider()
-
-            // Footer with file import option
-            HStack {
-                Image(systemName: "folder")
-                    .foregroundColor(.secondary)
-                Text("Load from .eqf file")
-                    .foregroundColor(.secondary)
-                    .font(.caption)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .frame(maxWidth: .infinity)
-            .background(Color.secondary.opacity(0.05))
-            .onTapGesture {
-                onImport()
-            }
-        }
-        .frame(width: 240)
-    }
-
-    private func presetSection(_ presets: [EQPreset], allowDeletion: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            ForEach(presets) { preset in
-                Button {
-                    onSelect(preset)
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "waveform")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .frame(width: 16)
-
-                        Text(preset.name)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-
-                        if hoveredPreset == preset.id {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundColor(.green)
-                                .font(.caption)
-                        }
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                }
-                .buttonStyle(.plain)
-                .background(
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(hoveredPreset == preset.id ? Color.accentColor.opacity(0.15) : Color.clear)
-                )
-                .onHover { hovering in
-                    hoveredPreset = hovering ? preset.id : nil
-                }
-                .contextMenu {
-                    if allowDeletion {
-                        Button(role: .destructive) {
-                            onDeleteUserPreset(preset.id)
-                        } label: {
-                            Text("Delete")
-                        }
-                    }
-                }
-            }
-        }
-        .padding(.horizontal, 4)
     }
 }
 

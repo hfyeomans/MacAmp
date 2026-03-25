@@ -18,8 +18,8 @@
 |---|---|---|---|---|
 | `parseDefaultSkinFully` playlist parsing (lines 177-188) | `applySkinPayload` playlist parsing (lines 744-753) | Duplicate playlist style parsing with **different defaults** (green vs blue) — possible bug | Extract shared `parsePlaylistStyle(from:)` helper; investigate color inconsistency | **RESOLVED in Phase 2a** |
 | `parseDefaultSkinFully` viscolor parsing (lines 190-195) | `applySkinPayload` viscolor parsing (lines 755-758) | Duplicate visualizer color parsing with **different fallbacks** (24 green colors vs empty array) | Extract shared `parseVisualizerColors(from:)` helper | **RESOLVED in Phase 2a** |
-| `parseDefaultSkinFully` sprite extraction loop (lines 154-169) | `applySkinPayload` sprite extraction loop (lines 664-680) | Similar sheet iteration + cropping + autoreleasepool pattern | Extract shared `extractSpritesFromSheets(_:)` helper | Deferred to Phase 2c (cross-file dedup) |
-| NUMS_EX sprite definitions (lines 615-628) | `SkinSprites.swift` sprite definitions | Inline `Sprite` array that belongs with other sprite definitions | Move to `SkinSprites.swift` as a static property | Deferred to Phase 2c (cross-file dedup) |
+| `parseDefaultSkinFully` sprite extraction loop | `applySkinPayload` sprite extraction loop | 3 identical autoreleasepool+crop loops | Extract shared `extractSprites(from:sprites:)` helper | **RESOLVED** — PR #76. Helper extracts loops 1+2; loop 3 keeps error handling. |
+| NUMS_EX sprite definitions (was inline in SkinManager) | `SkinSprites.swift` sprite definitions | Inline `Sprite` array that belongs with other sprite definitions | Move to `SkinSprites.numsExSprites` static property | **RESOLVED** — PR #76. Moved to SkinSprites.swift. |
 
 ## Possible Bug (Investigate during dedup pass)
 

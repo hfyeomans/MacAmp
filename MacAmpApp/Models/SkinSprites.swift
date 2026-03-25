@@ -37,11 +37,34 @@ struct SkinSprites {
         allSpritesByName[name]
     }
 
-    /// Get the dimensions for a sprite by name
+    /// Get the dimensions for a sprite by name (includes NUMS_EX optional sprites)
     func dimensions(forSprite name: String) -> CGSize? {
-        guard let sprite = sprite(named: name) else { return nil }
-        return CGSize(width: sprite.width, height: sprite.height)
+        if let sprite = sprite(named: name) {
+            return CGSize(width: sprite.width, height: sprite.height)
+        }
+        // Fall back to NUMS_EX sprites (not in defaultSprites.sheets since they're optional)
+        if let exSprite = Self.numsExSprites.first(where: { $0.name == name }) {
+            return CGSize(width: exSprite.width, height: exSprite.height)
+        }
+        return nil
     }
+
+    /// NUMS_EX.bmp sprites (extended digits) — optional sheet, not all skins have this.
+    /// Conditionally added to sheetsToProcess when the archive contains nums_ex.
+    static let numsExSprites: [Sprite] = [
+        Sprite(name: "NO_MINUS_SIGN_EX", x: 90, y: 0, width: 9, height: 13),
+        Sprite(name: "MINUS_SIGN_EX", x: 99, y: 0, width: 9, height: 13),
+        Sprite(name: "DIGIT_0_EX", x: 0, y: 0, width: 9, height: 13),
+        Sprite(name: "DIGIT_1_EX", x: 9, y: 0, width: 9, height: 13),
+        Sprite(name: "DIGIT_2_EX", x: 18, y: 0, width: 9, height: 13),
+        Sprite(name: "DIGIT_3_EX", x: 27, y: 0, width: 9, height: 13),
+        Sprite(name: "DIGIT_4_EX", x: 36, y: 0, width: 9, height: 13),
+        Sprite(name: "DIGIT_5_EX", x: 45, y: 0, width: 9, height: 13),
+        Sprite(name: "DIGIT_6_EX", x: 54, y: 0, width: 9, height: 13),
+        Sprite(name: "DIGIT_7_EX", x: 63, y: 0, width: 9, height: 13),
+        Sprite(name: "DIGIT_8_EX", x: 72, y: 0, width: 9, height: 13),
+        Sprite(name: "DIGIT_9_EX", x: 81, y: 0, width: 9, height: 13),
+    ]
 
     static let defaultSprites = SkinSprites(sheets: [
         // MAIN.bmp
@@ -80,10 +103,6 @@ struct SkinSprites {
             Sprite(name: "DIGIT_8", x: 72, y: 0, width: 9, height: 13),
             Sprite(name: "DIGIT_9", x: 81, y: 0, width: 9, height: 13),
         ],
-        // NUMS_EX.bmp (extended digits) - OPTIONAL: Not all skins have this
-        // Only include this if the skin has NUMS_EX.BMP file
-        // Note: This will be conditionally loaded based on skin contents
-
         // MONOSTER.bmp (mono/stereo indicators)
         "MONOSTER": [
             Sprite(name: "MAIN_STEREO", x: 0, y: 12, width: 29, height: 12),

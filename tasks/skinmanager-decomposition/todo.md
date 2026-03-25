@@ -1,7 +1,7 @@
 # Todo: SkinManager Decomposition
 
 > **Description:** Checklist for executing the `SkinManager.swift` decomposition.
-> **Updated:** 2026-03-24 (Oracle review v2 — Phase 2a dedup added)
+> **Updated:** 2026-03-25 (COMPLETE — PR #75 merged)
 
 ---
 
@@ -14,22 +14,18 @@
 - [x] Extract shared `parseVisualizerColors(from:fallback:)` helper (line 750)
 - [x] Remove dead `import Combine` + `import CoreGraphics`
 
-## Phase 2b: Structural Extraction
+## Phase 2b: Structural Extraction — COMPLETE (PR #75)
 
-- [ ] Create branch `refactor/skinmanager-decomposition`
-- [ ] Update state.md to IN PROGRESS
-
-- [ ] Change `defaultSkinPayload`, `defaultSkinSpriteCache`, `defaultSkinExtractedSheets` from `private` to `internal`
-- [ ] Extract `SkinArchivePayload` + `SkinArchiveLoader` to `ViewModels/SkinArchiveLoader.swift`
-- [ ] Extract import methods + SkinImportError + alerts to `ViewModels/SkinManager+Import.swift` (extension)
-- [ ] Extract `preprocessMainBackground` to `ViewModels/SkinBackgroundPreprocessor.swift`
-- [ ] Extract fallback sprite methods to `ViewModels/SkinManager+Fallback.swift` (extension)
-- [ ] Flag NUMS_EX inline sprites for move to SkinSprites.swift in placeholder.md
-- [ ] Flag sprite extraction loop dedup for Phase 2c in placeholder.md
-- [ ] Run `xcodegen generate`
-- [ ] XcodeBuildMCP build (Thread Sanitizer enabled)
-- [ ] XcodeBuildMCP test
-- [ ] Oracle review on extraction
-- [ ] Manual test: switch skins, import skin, verify fallback behavior, check playlist colors
-- [ ] Push branch -> create PR for user review
-- [ ] Update state.md and shared _context/ on completion
+- [x] Extract `SkinArchivePayload` + `SkinArchiveLoader` to `ViewModels/SkinArchiveLoader.swift`
+- [x] Extract import methods + SkinImportError + alerts to `ViewModels/SkinManager+Import.swift` (extension)
+- [x] ~~Extract `preprocessMainBackground` to `ViewModels/SkinBackgroundPreprocessor.swift`~~ — extracted then DELETED (caused skin artifacts, unnecessary workaround)
+- [x] ~~Extract fallback sprite methods to `ViewModels/SkinManager+Fallback.swift`~~ — CANCELLED (Principle 5: private→internal for mutable caches)
+- [x] ~~Change cache properties from `private` to `internal`~~ — NOT NEEDED (Step 4 cancelled)
+- [x] Run `xcodegen generate`
+- [x] XcodeBuildMCP build (Thread Sanitizer enabled)
+- [x] XcodeBuildMCP test — 55/55 pass
+- [x] Oracle review — 8.5/10
+- [x] Manual test: switch skins, verify no artifacts on non-black skins
+- [x] Push branch → PR #75 → user review → merged
+- [x] Fix Gemini/CodeRabbit comments (validationFailed, int64Value, Phase 2b scope)
+- [x] Update state.md and shared _context/ on completion

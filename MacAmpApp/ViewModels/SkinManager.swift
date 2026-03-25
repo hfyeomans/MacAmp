@@ -53,7 +53,11 @@ final class SkinManager {
     private func parseDefaultSkinFully(payload: SkinArchivePayload) -> Skin {
         var extractedImages: [String: NSImage] = [:]
         var loadedSheets: Set<String> = []
-        let sheetsToProcess = SkinSprites.defaultSprites.sheets
+        var sheetsToProcess = SkinSprites.defaultSprites.sheets
+
+        if payload.sheets.keys.contains("nums_ex") {
+            sheetsToProcess["NUMS_EX"] = SkinSprites.numsExSprites
+        }
 
         for (sheetName, sprites) in sheetsToProcess {
             guard let data = payload.sheets[sheetName.lowercased()],
@@ -62,14 +66,7 @@ final class SkinManager {
             }
 
             loadedSheets.insert(sheetName)
-
-            for sprite in sprites {
-                autoreleasepool {
-                    if let croppedImage = sheetImage.cropped(to: sprite.rect) {
-                        extractedImages[sprite.name] = croppedImage
-                    }
-                }
-            }
+            extractedImages.merge(Self.extractSprites(from: sheetImage, sprites: sprites)) { _, new in new }
         }
 
         // Also populate the sprite cache so fallback lookups are instant
@@ -198,13 +195,7 @@ final class SkinManager {
                 return nil
             }
             defaultSkinExtractedSheets.insert(sheetName)
-            for sprite in sprites {
-                autoreleasepool {
-                    if let croppedImage = sheetImage.cropped(to: sprite.rect) {
-                        defaultSkinSpriteCache[sprite.name] = croppedImage
-                    }
-                }
-            }
+            defaultSkinSpriteCache.merge(Self.extractSprites(from: sheetImage, sprites: sprites)) { _, new in new }
         }
 
         var fallbackSprites: [String: NSImage] = [:]
@@ -300,20 +291,7 @@ final class SkinManager {
         var sheetsToProcess = SkinSprites.defaultSprites.sheets
 
         if payload.sheets.keys.contains("nums_ex") {
-            sheetsToProcess["NUMS_EX"] = [
-                Sprite(name: "NO_MINUS_SIGN_EX", x: 90, y: 0, width: 9, height: 13),
-                Sprite(name: "MINUS_SIGN_EX", x: 99, y: 0, width: 9, height: 13),
-                Sprite(name: "DIGIT_0_EX", x: 0, y: 0, width: 9, height: 13),
-                Sprite(name: "DIGIT_1_EX", x: 9, y: 0, width: 9, height: 13),
-                Sprite(name: "DIGIT_2_EX", x: 18, y: 0, width: 9, height: 13),
-                Sprite(name: "DIGIT_3_EX", x: 27, y: 0, width: 9, height: 13),
-                Sprite(name: "DIGIT_4_EX", x: 36, y: 0, width: 9, height: 13),
-                Sprite(name: "DIGIT_5_EX", x: 45, y: 0, width: 9, height: 13),
-                Sprite(name: "DIGIT_6_EX", x: 54, y: 0, width: 9, height: 13),
-                Sprite(name: "DIGIT_7_EX", x: 63, y: 0, width: 9, height: 13),
-                Sprite(name: "DIGIT_8_EX", x: 72, y: 0, width: 9, height: 13),
-                Sprite(name: "DIGIT_9_EX", x: 81, y: 0, width: 9, height: 13)
-            ]
+            sheetsToProcess["NUMS_EX"] = SkinSprites.numsExSprites
             AppLog.debug(.skin, "OPTIONAL: Found NUMS_EX sprites in archive")
         } else {
             AppLog.debug(.skin, "NUMS_EX sprites not present in archive")
@@ -436,6 +414,19 @@ final class SkinManager {
             return colors
         }
         return fallback
+    }
+
+    /// Extract sprites from a sheet image into a dictionary, silently skipping failures.
+    private static func extractSprites(from sheetImage: NSImage, sprites: [Sprite]) -> [String: NSImage] {
+        var images: [String: NSImage] = [:]
+        for sprite in sprites {
+            autoreleasepool {
+                if let croppedImage = sheetImage.cropped(to: sprite.rect) {
+                    images[sprite.name] = croppedImage
+                }
+            }
+        }
+        return images
     }
 
     private static func describeLoadError(_ error: Error, url: URL) -> String {
