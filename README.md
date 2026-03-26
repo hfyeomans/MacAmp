@@ -2,7 +2,7 @@
 
 ![Platform](https://img.shields.io/badge/platform-macOS%2015.0+-blue?logo=apple)
 ![Swift](https://img.shields.io/badge/Swift-6.2-orange?logo=swift)
-![Version](https://img.shields.io/badge/version-1.2-brightgreen)
+![Version](https://img.shields.io/badge/version-1.3-brightgreen)
 ![Notarized](https://img.shields.io/badge/Notarized-Apple%20Approved-brightgreen?logo=apple)
 ![Maintained](https://img.shields.io/badge/maintained-yes-green)
 
@@ -50,6 +50,10 @@ MacAmp is a SwiftUI-based audio player for macOS that recreates the iconic deskt
 - 🎯 **Native macOS Integration** - Borderless windows with custom title bars
 - ⚡ **Modern SwiftUI** - Utilizes WindowDragGesture and latest macOS APIs
 - 🔄 **Dynamic Skin Switching** - Hot-swap skins without restart
+- 🎵 **Now Playing Integration** - macOS Control Center shows track info, artwork, and playback controls
+- 🎧 **Remote Commands** - Play/pause/next/previous from media keys, Bluetooth headphones, Control Center
+- 📋 **Playlist Load/Save** - NEW LIST, LOAD LIST, SAVE LIST with M3U/M3U8 import and export
+- ⏱️ **Stream Elapsed Timer** - Live elapsed time for internet radio with playlist position display
 - 📦 **Distribution Ready** - Developer ID signed builds for /Applications installation
 - 🚀 **Swift 6.2 Architecture** - Modern, performant, future-proof codebase
 
@@ -61,16 +65,16 @@ MacAmp is a SwiftUI-based audio player for macOS that recreates the iconic deskt
 
 ## Download
 
-### Latest Release: v1.2 (March 2026)
+### Latest Release: v1.3 (March 2026)
 
-[![Download MacAmp](https://img.shields.io/badge/Download-MacAmp%20v1.2-blue?style=for-the-badge)](https://github.com/hfyeomans/MacAmp/releases/tag/v1.2)
+[![Download MacAmp](https://img.shields.io/badge/Download-MacAmp%20v1.3-blue?style=for-the-badge)](https://github.com/hfyeomans/MacAmp/releases/tag/v1.3)
 
-**[Download MacAmp-1.2.dmg](https://github.com/hfyeomans/MacAmp/releases/tag/v1.2)**
+**[Download MacAmp-1.3.dmg](https://github.com/hfyeomans/MacAmp/releases/tag/v1.3)**
 
 | Property | Value |
 |----------|-------|
-| Version | 1.2 |
-| Build | 12 |
+| Version | 1.3 |
+| Build | 13 |
 | Signed | Developer ID Application |
 | Notarized | Yes (Apple approved) |
 | Architecture | Universal (arm64 + x86_64) |
@@ -81,16 +85,13 @@ MacAmp is a SwiftUI-based audio player for macOS that recreates the iconic deskt
 3. Drag MacAmp to Applications folder
 4. Launch from Applications (no Gatekeeper warnings)
 
-**What's New in v1.2:**
-- **Unified Audio Pipeline** - EQ, visualizer, and balance now work for internet radio streams (not just local files)
-- **Auto-Reconnect** - Internet radio streams automatically reconnect after network interruptions with exponential backoff
-- **Stream Error Display** - Clear error messages ("Host not found", "Connection lost") instead of generic "buffer 0%"
-- **Stream Display** - Shows station name + track title together (e.g., "80s80s - Never Gonna Give You Up")
-- **EQ Persistence** - Equalizer on/off state now persists across app restarts
-- **VBR Accuracy** - Improved seek bar accuracy for variable bitrate MP3/AAC files
-- **Butterchurn Reliability** - MilkDrop visualizations load reliably across all build configurations
+**What's New in v1.3:**
+- **Now Playing + Remote Commands** - macOS Control Center shows current track with artwork, title, artist, duration. Play/pause/next/previous from keyboard media keys, Bluetooth headphones, and Control Center widget.
+- **Playlist LIST Operations** - NEW LIST, LOAD LIST, SAVE LIST buttons in playlist window. M3U/M3U8 import and export.
+- **Stream Elapsed Timer** - Live elapsed time counter for internet radio streams. Playlist shows track position (e.g., "3/15").
+- **12 Bug Fixes** - Skin digit artifacts, playlist color defaults, NUMS_EX sprite support, crash guards, and more.
 
-See [Release Notes](https://github.com/hfyeomans/MacAmp/releases/tag/v1.2) for full changelog.
+See [Release Notes](https://github.com/hfyeomans/MacAmp/releases/tag/v1.3) for full changelog.
 
 ## Installation
 
@@ -247,7 +248,9 @@ MacAmp follows a three-layer architecture inspired by modern frontend frameworks
 ```
 MacAmpApp/
 ├── Audio/                              # 🔧 MECHANISM LAYER - Audio Engine & Playback
-│   ├── AudioPlayer.swift                   # AVAudioEngine lifecycle (1,043 lines, refactored)
+│   ├── AudioEngineController.swift         # AVAudioEngine graph, nodes, transport
+│   ├── AudioPlayer.swift                   # Playback facade (734 lines)
+│   ├── EqualizerController.swift           # 10-band EQ state + AVAudioUnitEQ
 │   ├── EQPresetStore.swift                 # EQ preset persistence (UserDefaults + JSON)
 │   ├── MetadataLoader.swift                # Async track/video metadata extraction
 │   ├── PlaybackCoordinator.swift           # Orchestrates dual backend (local + streaming)
@@ -273,14 +276,14 @@ MacAmpApp/
 │   ├── Skin.swift                          # Skin package data model
 │   ├── SkinSprites.swift                   # Sprite name definitions and mappings (VIDEO + GEN letters)
 │   ├── SnapUtils.swift                     # Window snapping utilities
-│   ├── SpritePositions.swift               # Sprite coordinate definitions
 │   ├── SpriteResolver.swift                # Semantic sprite resolution (cross-skin compat)
 │   ├── VisColorParser.swift                # VISCOLOR.TXT gradient parser
-│   └── WindowSpec.swift                    # Window dimension specifications
 │
 ├── ViewModels/                         # 🌉 BRIDGE LAYER - State Management & Controllers
 │   ├── DockingController.swift             # Multi-window coordination and positioning
+│   ├── SkinArchiveLoader.swift             # ZIP archive extraction for skin files
 │   ├── SkinManager.swift                   # Dynamic skin loading, hot-swapping, sprite caching
+│   ├── SkinManager+Import.swift            # Skin import, validation, and notifications
 │   └── WindowCoordinator.swift             # 5-window lifecycle, AppKit bridge, focus tracking
 │
 ├── Windows/                            # 🖼️ NSWindowController Layer (AppKit)
@@ -292,12 +295,14 @@ MacAmpApp/
 │
 ├── Views/                              # 🎨 PRESENTATION LAYER - SwiftUI Windows & Views
 │   ├── Components/                         # Reusable UI Components
+│   │   ├── EQPresetPickerView.swift            # Popover preset selection UI
 │   │   ├── PlaylistBitmapText.swift            # Bitmap font rendering for playlist
 │   │   ├── PlaylistMenuDelegate.swift          # NSMenuDelegate for keyboard navigation
 │   │   ├── PlaylistScrollSlider.swift          # Gold thumb scroll slider with proportional sizing
 │   │   ├── PlaylistTimeText.swift              # Time display component
 │   │   ├── SimpleSpriteImage.swift             # Pixel-perfect sprite rendering (.interpolation(.none))
 │   │   ├── SpriteMenuItem.swift                # Sprite-based popup menu items
+│   │   ├── WinampVerticalSlider.swift          # EQ band vertical slider component
 │   │   └── WinampVolumeSlider.swift            # Frame-based volume/balance sliders
 │   ├── MainWindow/                         # 🎵 Decomposed Main Player Window (10 files)
 │   │   ├── WinampMainWindow.swift              # Root composition + lifecycle (~110 lines)
@@ -315,12 +320,8 @@ MacAmpApp/
 │   │   ├── MilkdropWindowChromeView.swift      # GEN.bmp chrome with two-piece letters
 │   │   ├── AVPlayerViewRepresentable.swift     # NSViewRepresentable for AVPlayerView
 │   │   └── ButterchurnWebView.swift            # WKWebView for Butterchurn visualizations
-│   ├── EqGraphView.swift                   # Equalizer frequency response graph
 │   ├── PreferencesView.swift               # Settings and preferences window
-│   ├── PresetsButton.swift                 # EQ preset selector button
-│   ├── SkinnedBanner.swift                 # Scrolling banner text component
 │   ├── SkinnedText.swift                   # Skinned text rendering
-│   ├── VisualizerOptions.swift             # Visualizer mode switching UI
 │   ├── VisualizerView.swift                # Spectrum analyzer & oscilloscope rendering
 │   ├── WinampEqualizerWindow.swift         # 10-band equalizer window
 │   ├── WinampPlaylistWindow.swift          # Playlist window with sprite-based menus
@@ -328,9 +329,11 @@ MacAmpApp/
 │   └── WinampMilkdropWindow.swift          # Milkdrop visualization window
 │
 ├── Utilities/                          # 🔧 Helper Functions & Extensions
-│   ├── WindowAccessor.swift                # NSWindow access from SwiftUI
-│   ├── WindowFocusDelegate.swift           # NSWindowDelegate for focus tracking
-│   └── WindowSnapManager.swift             # Magnetic window snapping
+│   ├── AppLogger.swift                     # Centralized logging facade
+│   ├── MenuActionTarget.swift              # NSMenu closure-to-selector bridge
+│   ├── TimeFormatting.swift                # Shared time formatting utility
+│   ├── WinampAlertHelper.swift             # Alert presentation helpers
+│   └── WinampWindowConfigurator.swift      # Shared window configuration
 │
 ├── AppCommands.swift                   # Global keyboard shortcuts and menu commands
 ├── MacAmpApp.swift                     # App entry point & dependency injection
@@ -462,6 +465,33 @@ See [`docs/SPRITE_SYSTEM_COMPLETE.md`](docs/SPRITE_SYSTEM_COMPLETE.md) for imple
 - **Progress Timer** - 100ms update interval balances CPU vs. smoothness
 
 ## Recent Updates
+
+### v1.3 (March 2026) - Now Playing, LIST OPTS & Stream Timer
+
+**Features:**
+- **Now Playing + Remote Commands** - macOS Control Center shows current track with artwork, title, artist, duration. Play/pause/next/previous from keyboard media keys, Bluetooth headphones, and Control Center widget.
+- **Playlist LIST Operations** - NEW LIST, LOAD LIST, SAVE LIST buttons in playlist window. M3U/M3U8 import and export with background I/O and generation-token safety.
+- **Stream Elapsed Timer + Playlist Position** - Live elapsed time counter for internet radio streams (anchor-based, not polling). Playlist shows track position (e.g., "3/15"). Auto-play consolidation through PlaybackCoordinator.
+
+**Bugs Fixed:**
+- Skin digit black rectangles on non-black skins
+- Time display hit area and digit positioning
+- Playlist color defaults (green vs white for missing pledit.txt)
+- Viscolor fallback regression
+- NUMS_EX extended digit sprite support
+- File size overflow on skin import (int32 → int64)
+- Import error semantic precision
+- loadAudioFile crash guard
+- Case-insensitive stream URL schemes
+- M3U import safety fixes
+- Now Playing lifecycle cleanup
+
+**Technical:**
+- Swift 6.2 with strict concurrency
+- 55 automated tests
+- Developer ID signed and Apple notarized
+
+---
 
 ### v1.2 (March 2026) - Unified Audio Pipeline & Stream Reliability
 
@@ -730,10 +760,10 @@ See [`docs/SPRITE_SYSTEM_COMPLETE.md`](docs/SPRITE_SYSTEM_COMPLETE.md) for imple
 
 We welcome contributions! High-impact areas from our [tasks backlog](tasks/):
 
-1. **AirPlay Support** - Stream audio to AirPlay speakers and devices ([tasks/airplay](tasks/airplay/))
-2. **Playlist Drag & Drop** - Drop files directly into the playlist window ([tasks/playlist-drag-and-drop](tasks/playlist-drag-and-drop/))
-3. **Media Key Support** - Respond to macOS keyboard media keys (Play/Pause/Next/Previous)
-4. **OGG/Opus Codecs** - Add Vorbis and Opus audio format support via FFmpeg or native decoders
+1. **Playlist Drag & Drop** - Drop files directly into the playlist window
+2. **HLS Streaming** - Add HLS protocol support to stream decode pipeline
+3. **OGG/Opus Codecs** - Add Vorbis and Opus audio format support via FFmpeg or native decoders
+4. **Video Audio Routing** - Route video audio through AVAudioEngine for EQ/visualizer
 5. **Dock Integration** - Show transport controls in macOS dock menu
 
 ## Documentation
