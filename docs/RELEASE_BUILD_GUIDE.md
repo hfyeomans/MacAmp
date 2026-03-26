@@ -79,19 +79,34 @@ This creates a signed, notarization-ready `.app` bundle.
 
 ### Method 2: Command Line Build
 
+**Pre-flight:** Read project config before running any build commands:
+```bash
+# Check product name, version, and build dir
+grep -E "MARKETING_VERSION|CURRENT_PROJECT_VERSION|PRODUCT_NAME|CONFIGURATION_BUILD_DIR" project.yml
+# IMPORTANT: Product name is "MacAmp" — exported app is MacAmp.app (NOT MacAmpApp.app)
+# IMPORTANT: Release CONFIGURATION_BUILD_DIR is $(PROJECT_DIR)/dist — do NOT delete dist/
+ls -d build/ dist/ 2>/dev/null  # check existing state
+```
+
 ```bash
 # Generate Xcode project (required — xcodeproj is gitignored)
 xcodegen generate
 
-# Clean previous builds
-xcodebuild clean -project MacAmpApp.xcodeproj -scheme MacAmpApp -configuration Release
-
-# Build for release
+# Archive with manual signing overrides
+# NOTE: CONFIGURATION_BUILD_DIR override is required — project.yml sets it to dist/
+# which conflicts with the archive intermediate paths
 xcodebuild archive \
   -project MacAmpApp.xcodeproj \
   -scheme MacAmpApp \
   -configuration Release \
-  -archivePath ./build/MacAmp.xcarchive
+  -archivePath ./build/MacAmp.xcarchive \
+  CODE_SIGN_STYLE=Manual \
+  "CODE_SIGN_IDENTITY=Developer ID Application" \
+  DEVELOPMENT_TEAM=AC3LGVEJJ8 \
+  CONFIGURATION_BUILD_DIR='$(BUILD_DIR)/$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)'
+
+# If SPM packages fail to resolve:
+# xcodebuild -resolvePackageDependencies -project MacAmpApp.xcodeproj -scheme MacAmpApp
 
 # Export the archive
 xcodebuild -exportArchive \
@@ -159,10 +174,10 @@ xcrun notarytool store-credentials "notarytool-password" \
 ```bash
 # Create a ZIP of your app
 cd build/Release
-ditto -c -k --keepParent MacAmpApp.app MacAmpApp.zip
+ditto -c -k --keepParent MacAmp.app MacAmp.zip
 
 # Submit to Apple
-xcrun notarytool submit MacAmpApp.zip \
+xcrun notarytool submit MacAmp.zip \
   --keychain-profile "notarytool-password" \
   --wait
 
@@ -192,10 +207,10 @@ Once accepted, staple the notarization ticket to your app:
 
 ```bash
 # Staple to the app bundle
-xcrun stapler staple MacAmpApp.app
+xcrun stapler staple MacAmp.app
 
 # Verify stapling
-xcrun stapler validate MacAmpApp.app
+xcrun stapler validate MacAmp.app
 ```
 
 ## Creating a DMG for Distribution
@@ -211,7 +226,7 @@ brew install create-dmg  # if not installed
 
 # Copy signed+stapled app to dist/
 mkdir -p dist
-cp -R build/Release/MacAmpApp.app dist/
+cp -R build/Release/MacAmp.app dist/
 
 create-dmg \
   --volname "MacAmp" \
@@ -220,8 +235,8 @@ create-dmg \
   --window-pos 200 120 \
   --window-size 800 530 \
   --icon-size 100 \
-  --icon "MacAmpApp.app" 250 450 \
-  --hide-extension "MacAmpApp.app" \
+  --icon "MacAmp.app" 250 450 \
+  --hide-extension "MacAmp.app" \
   --app-drop-link 550 450 \
   "dist/MacAmp-VERSION.dmg" \
   "dist/"
@@ -252,7 +267,7 @@ magick SOURCE_SCREENSHOT.png \
 
 ```bash
 hdiutil create -volname "MacAmp" \
-  -srcfolder build/Release/MacAmpApp.app \
+  -srcfolder build/Release/MacAmp.app \
   -ov -format UDZO \
   MacAmp-VERSION.dmg
 
@@ -270,8 +285,8 @@ Before distributing, verify your app works:
 ### 1. Check Code Signature
 
 ```bash
-codesign --verify --deep --strict --verbose=2 MacAmpApp.app
-codesign -dv --verbose=4 MacAmpApp.app
+codesign --verify --deep --strict --verbose=2 MacAmp.app
+codesign -dv --verbose=4 MacAmp.app
 ```
 
 Should show:
@@ -282,7 +297,7 @@ Should show:
 ### 2. Check Hardened Runtime
 
 ```bash
-codesign -d --entitlements - MacAmpApp.app
+codesign -d --entitlements - MacAmp.app
 ```
 
 Should show your entitlements from `MacAmp.entitlements`.
@@ -290,10 +305,10 @@ Should show your entitlements from `MacAmp.entitlements`.
 ### 3. Check Notarization
 
 ```bash
-spctl --assess --verbose=4 --type execute MacAmpApp.app
+spctl --assess --verbose=4 --type execute MacAmp.app
 ```
 
-Should show: `MacAmpApp.app: accepted`
+Should show: `MacAmp.app: accepted`
 
 ### 4. Test on Clean Mac
 
@@ -331,10 +346,10 @@ Before releasing:
 **Fix:**
 ```bash
 # Check notarization
-spctl --assess --verbose MacAmpApp.app
+spctl --assess --verbose MacAmp.app
 
 # If testing unsigned build, remove quarantine
-xattr -cr MacAmpApp.app
+xattr -cr MacAmp.app
 ```
 
 ### "Developer cannot be verified"
