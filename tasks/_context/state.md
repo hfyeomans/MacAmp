@@ -202,8 +202,8 @@ Target (MainWindowFullLayer.body):
 
 | Item | Source | Size | Priority | Blocks Future? |
 |------|--------|------|----------|----------------|
-| ~~T5 Phase 2 MTAudioProcessingTap~~ | N/A | N/A | N/A | **STALE** — reverted, replaced by T7 |
-| ~~UI dimming un-dim~~ | N/A | N/A | N/A | **STALE** — completed in T7 |
+| ~~T5 Phase 2 MTAudioProcessingTap~~ | N/A | N/A | N/A | **Reverted.** Replaced by T7. |
+| ~~UI dimming un-dim~~ | N/A | N/A | N/A | **Done.** Completed in T7. |
 | ~~os_workgroup integration~~ | N/A | N/A | N/A | ✅ COMPLETE — PR #66 (S2) |
 | ~~Network auto-reconnect~~ | N/A | N/A | N/A | ✅ COMPLETE — PR #61 (S1) |
 | ~~docs/ folder update~~ | N/A | N/A | N/A | ✅ COMPLETE — 2026-03-14 |
