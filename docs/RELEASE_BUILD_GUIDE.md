@@ -202,52 +202,66 @@ xcrun stapler validate MacAmpApp.app
 
 Users expect a `.dmg` file for macOS apps. Here's how to create one:
 
-### Option 1: Quick DMG
+### Option 1: Branded DMG (Recommended)
+
+Uses the branded background image at `assets/dmg-background.png` (MacAmp screenshot with gradient overlay and install instructions).
 
 ```bash
-# Create a simple DMG
-hdiutil create -volname "MacAmp" \
-  -srcfolder build/Release/MacAmpApp.app \
-  -ov -format UDZO \
-  MacAmp-0.1.0.dmg
+brew install create-dmg  # if not installed
 
-# Notarize the DMG too
-xcrun notarytool submit MacAmp-0.1.0.dmg \
+# Copy signed+stapled app to dist/
+mkdir -p dist
+cp -R build/Release/MacAmpApp.app dist/
+
+create-dmg \
+  --volname "MacAmp" \
+  --volicon "MacAmpApp/Assets.xcassets/AppIcon.appiconset/icon_512x512.png" \
+  --background "assets/dmg-background.png" \
+  --window-pos 200 120 \
+  --window-size 800 530 \
+  --icon-size 100 \
+  --icon "MacAmpApp.app" 250 450 \
+  --hide-extension "MacAmpApp.app" \
+  --app-drop-link 550 450 \
+  "dist/MacAmp-VERSION.dmg" \
+  "dist/"
+
+# Notarize the DMG
+xcrun notarytool submit dist/MacAmp-VERSION.dmg \
   --keychain-profile "notarytool-password" \
   --wait
 
 # Staple to DMG
-xcrun stapler staple MacAmp-0.1.0.dmg
+xcrun stapler staple dist/MacAmp-VERSION.dmg
 ```
 
-### Option 2: Custom DMG with Background
-
-For a professional installer with custom background:
-
-1. Create a folder with your app and an Applications symlink
-2. Add a custom background image
-3. Use tools like:
-   - [create-dmg](https://github.com/create-dmg/create-dmg)
-   - [node-appdmg](https://github.com/LinusU/node-appdmg)
-
-Example with `create-dmg`:
+**Background image regeneration** (if source screenshot changes):
 ```bash
-brew install create-dmg
-
-create-dmg \
-  --volname "MacAmp Installer" \
-  --volicon "MacAmpApp/Assets.xcassets/AppIcon.appiconset/icon_512x512.png" \
-  --window-pos 200 120 \
-  --window-size 800 400 \
-  --icon-size 100 \
-  --icon "MacAmpApp.app" 200 190 \
-  --hide-extension "MacAmpApp.app" \
-  --app-drop-link 600 185 \
-  "MacAmp-0.1.0.dmg" \
-  "build/Release/"
+magick SOURCE_SCREENSHOT.png \
+  -resize 800x \
+  -background black -gravity north -extent 800x530 \
+  \( -size 800x300 gradient:"rgba(0,0,0,0)"-"rgba(0,0,0,0.95)" \
+     -gravity south -background none -extent 800x530 \) \
+  -composite \
+  -gravity south -font "/System/Library/Fonts/Avenir Next.ttc" -weight 500 -pointsize 22 \
+  -fill "rgba(255,255,255,0.9)" -annotate +0+135 "Drag MacAmp to Applications" \
+  assets/dmg-background.png
 ```
 
-Then notarize and staple the DMG as shown above.
+### Option 2: Quick DMG (No Branding)
+
+```bash
+hdiutil create -volname "MacAmp" \
+  -srcfolder build/Release/MacAmpApp.app \
+  -ov -format UDZO \
+  MacAmp-VERSION.dmg
+
+xcrun notarytool submit MacAmp-VERSION.dmg \
+  --keychain-profile "notarytool-password" \
+  --wait
+
+xcrun stapler staple MacAmp-VERSION.dmg
+```
 
 ## Verification
 
