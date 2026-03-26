@@ -2,32 +2,26 @@
 
 > **Purpose:** Single source of truth for cross-task execution status, wave progress, and coordination decisions.
 > **Date:** 2026-02-21
-> **Updated:** 2026-03-25 (Post-S2 decomposition COMPLETE. Responsibility sweep applied. 3 tasks done, 3 deferred/cancelled per architecture principles.)
+> **Updated:** 2026-03-26 (v1.3 released. Decomposition phase complete. S3 planning queued.)
 
 ### Quick Reference
 
 | Metric | Value |
 |--------|-------|
-| Tasks | 8 (T1-T8) |
-| Plans complete | 6 of 6 |
-| Blocking actions | None — all resolved |
-| Waves | 3 |
-| Branches | 6 |
-| PRs | 8 (Wave 1: 3 merged, Wave 2a: PR #53 merged, Wave 2b: PR #54 merged, Wave 3: PR #56, PR #57, PR #58 merged) |
-| Current wave | Post-S2 decomposition COMPLETE; S3 planning queued |
+| Current release | v1.3 (2026-03-26) |
+| .swift files | ~110 |
+| Tests | 55 |
+| Current phase | S3 planning |
+| PRs merged | 76 total |
+| Architecture principles | `tasks/_context/principles.md` |
 
 ---
 
-## Current Phase: WAVE 3 COMPLETE — All T7/T8 tasks merged
+## Current Phase: v1.3 RELEASED — S3 Planning
 
-Wave 2 complete: T5 Phase 1 merged PR #53 (2026-02-22), T3 merged PR #54 (2026-02-22).
-Wave 3 pivoted: T5 Phase 2 MTAudioProcessingTap failed → replaced by T7 (unified-audio-pipeline).
-New task T8 (swift-concurrency-62-cleanup) added as prerequisite for T7.
-
-**Execution order (2026-03-13):**
-1. T8 PR 1: Swift 6.2 foundation (SWIFT_VERSION upgrade + isolated deinit + DispatchQueue cleanup)
-2. T7: Unified audio pipeline (custom stream decode, benefits from 6.2)
-3. T8 PR 2: AudioPlayer isolated deinit + @concurrent (post-pipeline, final shape)
+**v1.3 released 2026-03-26** — Now Playing, LIST OPTS, stream timer, 12 bug fixes.
+Post-S2 decomposition complete: SkinManager 766→454, EQ Window 616→354, dead code removed.
+Responsibility sweep confirmed codebase is architecturally sound (76 Clean, 26 Justified, 7 Actionable).
 
 ---
 
@@ -202,23 +196,23 @@ Target (MainWindowFullLayer.body):
 
 **Context (Hide Main Window):** The "Hide Main" menu item (`AppCommands.swift:13`) calls `DockingController.toggleMain()` which only toggles an internal `panes[idx].visible` boolean. This boolean is not wired to actually hide/show the NSWindow. `WindowVisibilityController.hideMain()` exists and calls `registry.mainWindow?.orderOut(nil)` but is never invoked by the toggle path. Pre-existing — not caused by T3 decomposition.
 
-**Context (spm-multiple-producers-fix):** ✅ RESOLVED (2026-03-22). The error no longer reproduces — resolved by Wave 3 swift-tools-version 6.2 upgrade. `swift test` passes (40 tests, 11 suites). CLI test runs are unblocked.
+**Context (spm-multiple-producers-fix):** ✅ RESOLVED (2026-03-22). Resolved by Wave 3 swift-tools-version 6.2 upgrade. 55 tests passing.
 
 ### From Wave 3 — Pivot + Deferred Items
 
 | Item | Source | Size | Priority | Blocks Future? |
 |------|--------|------|----------|----------------|
-| ~~T5 Phase 2 MTAudioProcessingTap code — REVERTED~~ | feature/stream-loopback-bridge commit 987b2f3 | N/A | N/A | **STALE** — Code reverted. Replaced by T7 unified pipeline. No action needed. |
-| ~~UI dimming un-dim for streams~~ | unified-audio-pipeline plan.md | Small | Part of T7 | **STALE** — Completed as part of T7 merge. Capability flags already updated. |
-| HLS streaming support | unified-audio-pipeline Phase 3 | Large | Low | → Sprint S3 task: `hls-streaming-support` |
-| OGG Vorbis support | unified-audio-pipeline Phase 2.4 | Medium | Low | → Sprint S3 task: `ogg-vorbis-support` |
-| os_workgroup integration | unified-audio-pipeline Phase 2.2 | Small | Medium | → Sprint S2 task: `os-workgroup-integration` |
-| macOS 26 passthrough guard | unified-audio-pipeline Phase 2.3 | Small | Low | Remains deferred — only affects HDMI/optical output devices. |
-| Network auto-reconnect | unified-audio-pipeline Phase 2.1 | Medium | HIGH | → Sprint S1 task: `network-auto-reconnect` |
-| Stream pause audio tail | Post-merge Oracle P2 (deferred) | Small | Low | → Sprint S3 task: `stream-pause-tail` |
-| Default MainActor isolation (T8 Phase 5) | swift-concurrency-62-cleanup research.md | Medium | Low | Remains deferred — questionable ROI. |
-| Video audio through AVAudioEngine | unified-audio-pipeline/state.md | Medium | Medium | → Sprint S2 task: `video-audio-engine-routing` |
-| ~~docs/ folder update for unified pipeline~~ | unified-audio-pipeline/state.md | Medium | Medium | **DONE** — All docs updated and verified (2026-03-14). |
+| ~~T5 Phase 2 MTAudioProcessingTap~~ | N/A | N/A | N/A | **STALE** — reverted, replaced by T7 |
+| ~~UI dimming un-dim~~ | N/A | N/A | N/A | **STALE** — completed in T7 |
+| ~~os_workgroup integration~~ | N/A | N/A | N/A | ✅ COMPLETE — PR #66 (S2) |
+| ~~Network auto-reconnect~~ | N/A | N/A | N/A | ✅ COMPLETE — PR #61 (S1) |
+| ~~docs/ folder update~~ | N/A | N/A | N/A | ✅ COMPLETE — 2026-03-14 |
+| HLS streaming support | unified-audio-pipeline Phase 3 | Large | Low | → S3 |
+| OGG Vorbis support | unified-audio-pipeline Phase 2.4 | Medium | Low | → S3 |
+| Stream pause audio tail | Post-merge Oracle P2 | Small | Low | → S3 |
+| Video audio through AVAudioEngine | unified-audio-pipeline | Medium | Medium | → S3 (deferred from S2) |
+| macOS 26 passthrough guard | unified-audio-pipeline Phase 2.3 | Small | Low | Deferred — HDMI/optical only |
+| Default MainActor isolation | T8 Phase 5 | Medium | Low | Deferred — questionable ROI |
 
 ### Manual Testing (Pre-Merge Recommended)
 
