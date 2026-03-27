@@ -2711,8 +2711,9 @@ The 10-band parametric EQ has been extracted from AudioPlayer into `EqualizerCon
 // AudioPlayer forwards: var isEqOn { equalizer.isEqOn }
 
 private func configureEQ() {
-    // Winamp 10-band centers (Hz): 60,170,310,600,1k,3k,6k,12k,14k,16k
-    let freqs: [Float] = [60, 170, 310, 600, 1000, 3000, 6000, 12000, 14000, 16000]
+    // Actual Winamp internal frequencies (skin labels show 60/170/310 but processing uses 70/180/320)
+    // Tight 12k/14k/16k clustering is intentional — designed for MP3 artifact tuning
+    let freqs: [Float] = [70, 180, 320, 600, 1000, 3000, 6000, 12000, 14000, 16000]
     for i in 0..<min(eqNode.bands.count, freqs.count) {
         let band = eqNode.bands[i]
         if i == 0 {

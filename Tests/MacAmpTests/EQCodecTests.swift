@@ -1,9 +1,34 @@
+import AVFoundation
 import Testing
 import Foundation
 @testable import MacAmp
 
 @Suite("EQ Codec", .tags(.audio, .parsing))
 struct EQCodecTests {
+    // MARK: - Band Configuration Guard
+
+    @Test("EQ band frequencies match Winamp 2.x/3.x internal values")
+    @MainActor func eqBandFrequenciesMatchWinamp() {
+        let eq = EqualizerController()
+        let expectedFreqs: [Float] = [70, 180, 320, 600, 1000, 3000, 6000, 12000, 14000, 16000]
+
+        #expect(eq.eqNode.bands.count == 10)
+        for (i, band) in eq.eqNode.bands.enumerated() {
+            #expect(band.frequency == expectedFreqs[i], "Band \(i) frequency: expected \(expectedFreqs[i]), got \(band.frequency)")
+        }
+    }
+
+    @Test("EQ band filter types: shelf endpoints, parametric middle")
+    @MainActor func eqBandFilterTypes() {
+        let eq = EqualizerController()
+
+        #expect(eq.eqNode.bands[0].filterType == .lowShelf, "Band 0 should be lowShelf")
+        for i in 1..<9 {
+            #expect(eq.eqNode.bands[i].filterType == .parametric, "Band \(i) should be parametric")
+        }
+        #expect(eq.eqNode.bands[9].filterType == .highShelf, "Band 9 should be highShelf")
+    }
+
     @Test("EQPreset clamps out-of-range preamp and band values")
     func eqPresetClampsBands() {
         let preset = EQPreset(

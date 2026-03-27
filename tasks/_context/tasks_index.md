@@ -2,10 +2,8 @@
 
 > **Purpose:** Index of all currently open (non-done) tasks in `tasks/`. Each entry notes the task name, purpose, and current status.
 >
-> **Updated:** 2026-03-22
+> **Updated:** 2026-03-26
 > **Excludes:** `tasks/done/`, `tasks/stale/`, `tasks/depreciated/`
->
-> **Housekeeping (2026-03-22):** 69 stale tasks moved to `tasks/stale/` for later review. 1 completed task (`docs-implementation-patterns-update`) moved to `tasks/done/`. 2 duplicates (`oscilloscope-toggle`, `oi-button-bugfix-review`) removed (already in `done/`).
 
 ---
 
@@ -13,21 +11,9 @@
 
 | Status | Meaning |
 |--------|---------|
-| 🔄 IN PROGRESS | Active implementation underway |
 | 📋 PLANNED | Research/planning done, awaiting implementation |
 | 🟡 DEFERRED | Postponed to future milestone |
 | 📄 REFERENCE | Documentation/analysis artifact, not an implementation task |
-
----
-
-## Sprint S2: MEDIUM Priority — Features + Polish
-
-| Task | Purpose | Size | Status |
-|------|---------|------|--------|
-| `os-workgroup-integration` | Apple Silicon os_workgroup for audio render thread | Small | ✅ COMPLETE — PR #66 merged. Oracle 8.5/10. |
-| `stream-track-counter` | Stream elapsed timer + playlist position + auto-play fix + crash guard | Medium | ✅ COMPLETE — PR #68 merged. Oracle 8/10. |
-| `playlist-list-operations` | NEW LIST, LOAD LIST, SAVE LIST buttons in playlist window | Medium | ✅ COMPLETE — PR #67 merged. Oracle 9/10. |
-| `airplay-integration` | ~~AirPlay routing~~ + Now Playing + remote commands | Medium | ✅ COMPLETE — PR #69 merged. Phase 1 (AirPlay triggers) DEFUNCT. Phase 2 (Now Playing + remote commands) Oracle 9/10. |
 
 ---
 
@@ -43,15 +29,13 @@
 
 ---
 
-## Post-S2 / Pre-S3: Architecture Decomposition
+## Deferred Decomposition (Re-evaluate during/after S3)
 
 | Task | Purpose | Size | Status |
 |------|---------|------|--------|
-| `skinmanager-decomposition` | Decompose `SkinManager.swift` into smaller pieces | Medium | 📋 PLANNED |
-| `visualizerpipeline-decomposition` | Decompose `VisualizerPipeline.swift` | Medium | 📋 PLANNED |
-| `streamdecodepipeline-decomposition` | Decompose `StreamDecodePipeline.swift` | Medium | 📋 PLANNED |
-| `winamp-equalizer-window-decomposition` | Decompose `WinampEqualizerWindow.swift` | Medium | 📋 PLANNED |
-| `audioplayer-seek-extraction` | Extract seek state machine from AudioPlayer.swift (Phase 5) | Medium | 📋 PLANNED |
+| `streamdecodepipeline-decomposition` | DecodeContext extraction from StreamDecodePipeline.swift (697 lines) | Medium | 🟡 DEFERRED — One responsibility, architecturally sound. Revisit if file grows or gains new responsibility. |
+| `audioplayer-seek-extraction` | Extract seek state machine from AudioPlayer.swift (734 lines) | Medium | 🟡 DEFERRED (Option C) — One responsibility (facade). Revisit as Option B only if AudioPlayer grows past 800 lines or gains new responsibility. |
+| `visualizerpipeline-decomposition` | VisualizerPipeline.swift decomposition | Medium | 🟡 NO-GO — Cancelled. Private @unchecked Sendable surface risk. |
 
 ---
 
@@ -59,19 +43,30 @@
 
 | Task | Purpose | Size | Status |
 |------|---------|------|--------|
-| `windowing-structure-consolidation` | Move window infrastructure under `Windowing/` | Medium | 🟡 DEFERRED |
-| `milkdrop-feature-consolidation` | Move Milkdrop/Butterchurn under `Features/Milkdrop/` | Medium | 🟡 DEFERRED |
+| `windowing-structure-consolidation` | Move window infrastructure under `Windowing/` | Medium | 🟡 DEFERRED to post-S3 |
+| `milkdrop-feature-consolidation` | Move Milkdrop/Butterchurn under `Features/Milkdrop/` | Medium | 🟡 DEFERRED to post-S3 |
+| *(not yet created)* | `Features/` consolidation (Video, EQ, Playlist) | Medium | NOT CREATED |
+| *(not yet created)* | `Audio/` consolidation (ownership boundaries) | Medium | NOT CREATED |
+| *(not yet created)* | `App/`, `Core/`, `Shared/` consolidation | Medium | NOT CREATED |
 
 ---
 
-## Active References + Backlog
+## Backlog / Research
 
 | Task | Purpose | Status |
 |------|---------|--------|
-| `audioplayer-decomposition` | Ph1-4 COMPLETE. Phase 5 (seek) tracked by `audioplayer-seek-extraction`. Historical context for decomposition patterns. | 📄 REFERENCE |
+| `branded-dmg-installer` | Professional branded DMG installer with MacAmp logo | 📋 PLANNED (low priority — current DMG works) |
+| `ios-port-feasibility-research` | Research feasibility of iOS/iPadOS port | 📄 REFERENCE |
+
+---
+
+## Active References
+
+| Task | Purpose | Status |
+|------|---------|--------|
+| `audioplayer-decomposition` | Ph1-4 COMPLETE (PR #52 + #60). Phase 5 (seek) tracked by `audioplayer-seek-extraction`. | 📄 REFERENCE |
 | `lock-free-ring-buffer` | COMPLETE. Deferred: benchmarks, flaky high-throughput test (`withKnownIssue`). | 📄 REFERENCE |
-| `swift-project-structure-research` | Approved placement-policy reference for S1-S3. Not an implementation task. | 📄 REFERENCE |
-| `branded-dmg-installer` | Professional branded DMG installer with MacAmp logo. Not sprinted. | 📋 PLANNED |
+| `swift-project-structure-research` | Approved placement-policy reference for S1-S3 and Structure Sprint. | 📄 REFERENCE |
 
 ---
 
@@ -79,25 +74,41 @@
 
 | Category | Count |
 |---------|-------|
-| Total active task folders | 20 |
-| 📋 PLANNED (ready to implement) | 16 |
-| 🟡 DEFERRED | 2 |
+| Total active task folders | 15 |
+| 📋 PLANNED (ready to implement) | 6 |
+| 🟡 DEFERRED / NO-GO | 5 |
 | 📄 REFERENCE | 3 |
-| In `tasks/stale/` (for later review) | 69 folders + 8 standalone files |
-| In `tasks/done/` | ~55 completed tasks |
+| Backlog | 1 |
+| In `tasks/done/` | ~75 completed tasks |
+| In `tasks/stale/` | 69 folders + 8 standalone files |
 
 ---
 
-## Sprint S1 (COMPLETE — 2026-03-22)
+## Completed Sprints
 
-All S1 tasks done. See `_context/state.md` for full scorecard.
+### Sprint S2 (COMPLETE — 2026-03-24)
 
 | Task | Result |
 |------|--------|
-| `spm-multiple-producers-fix` | Resolved by Wave 3 |
-| `audioplayer-decomposition` Ph4 | PR #60 — AudioPlayer 1,143→705 lines |
-| `network-auto-reconnect` | PR #61 — Exponential backoff, typed errors |
-| `xcode-butterchurn-webcontent-diagnosis` | PR #63 — XcodeGen resource gap |
-| Hotfix: VBR duration | PR #62 |
-| Test suite hygiene | PR #64 |
-| v1.2 Release + docs | PR #65, tag v1.2, DMG uploaded |
+| `os-workgroup-integration` | PR #66 — Oracle 8.5/10 |
+| `stream-track-counter` | PR #68 — Oracle 8/10 |
+| `playlist-list-operations` | PR #67 — Oracle 9/10 |
+| `airplay-integration` | PR #69 — Now Playing + remote commands. AirPlay triggers DEFUNCT. |
+
+### Post-S2 Decomposition (COMPLETE — 2026-03-26)
+
+| Task | Result |
+|------|--------|
+| `intra-file-dedup-simplification` | PR #71 — First-pass dedup across 4 files |
+| `codebase-wide-simplification` | PR #72 — -732 lines, 6 files deleted, 4 utilities created |
+| `responsibility-sweep` | PR #74 — 109 files audited: 76 Clean, 26 Justified, 7 Actionable |
+| `skinmanager-decomposition` | PR #75 — 766→454 lines. ArchiveLoader, Import extracted. Preprocessor removed. |
+| `winamp-equalizer-window-decomposition` | PR #76 — 616→354 lines. WinampVerticalSlider + EQPresetPickerView extracted. |
+
+### Sprint S1 (COMPLETE — 2026-03-22)
+
+See `_context/state.md` for full scorecard. 4 tasks + 1 hotfix, 4 PRs merged (#60-#64).
+
+### Sprint S0 (COMPLETE — 2026-03-14)
+
+`docs-implementation-patterns-update` — PR #59.
