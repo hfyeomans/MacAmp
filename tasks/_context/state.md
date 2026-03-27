@@ -2,7 +2,7 @@
 
 > **Purpose:** Single source of truth for cross-task execution status, wave progress, and coordination decisions.
 > **Date:** 2026-02-21
-> **Updated:** 2026-03-26 (v1.3 released. Decomposition phase complete. S3 planning queued.)
+> **Updated:** 2026-03-27 (EQ frequency correction: 60/170/310→70/180/320 to match actual Winamp internals.)
 
 ### Quick Reference
 
@@ -185,7 +185,7 @@ Target (MainWindowFullLayer.body):
 | Ring buffer AudioBufferList overload tests | lock-free-ring-buffer todo.md | Small | Low | No — add during T7 |
 | DockingController debounce `try?` fix | lock-free-ring-buffer deprecated.md | Small | Low | No |
 | Gate verbose sprite logging behind `#if DEBUG` | memory-cpu-optimization todo.md 4.1 | Small | Low | No |
-| Precompute spectrum band coefficients | memory-cpu-optimization todo.md 4.2 | Small | Low | No — performance optimization |
+| ~~Precompute spectrum band coefficients~~ | memory-cpu-optimization todo.md 4.2→5.7 | N/A | N/A | **Done.** `GoertzelCoefficients` struct caches per sample rate. |
 | NSMenu "Internal inconsistency" warnings | S1 manual testing (2026-03-22) | Small | Low | No — harmless AppKit menu hierarchy warnings for system-injected text menus (Font, Spelling, Substitutions, etc.). Pre-existing, not caused by any sprint work. Common in SwiftUI+AppKit bridging apps. |
 | Real-time VBR bitrate display | S1 manual testing (2026-03-22) | Medium | Low | No — Feature request: Winamp classic updates bitrate display in real-time during VBR playback. MacAmp currently reads bitrate once at track load (MetadataLoader). Would require periodic re-reading from the engine during playback. Evaluate as a Winamp fidelity feature. |
 | LockFreeRingBuffer "High throughput" flaky overrun threshold | PR #64 (2026-03-22) | Small | Low | No — Wrapped with `withKnownIssue(isIntermittent: true)`. Root cause: overrun count is non-deterministic under task scheduling contention. Threshold (chunksToWrite/2) too tight for loaded CI. Needs either a relaxed threshold or a redesigned stress test that measures throughput without a hard overrun cap. |

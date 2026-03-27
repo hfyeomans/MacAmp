@@ -464,20 +464,22 @@ for bar in 0..<maxBars {  // maxBars = 20 (hybrid log-linear mapping over FFT bi
 ### EQ Implementation
 
 ```swift
-// 10-band equalizer matching Winamp
-let frequencies: [Float] = [60, 170, 310, 600, 1000, 3000, 6000, 12000, 14000, 16000]
+// 10-band equalizer matching Winamp 2.x/3.x internal frequencies
+// NOTE: Classic skin labels show 60/170/310 but actual processing uses 70/180/320.
+// Tight 12k/14k/16k clustering is intentional — Nullsoft designed it for MP3 artifact tuning.
+let frequencies: [Float] = [70, 180, 320, 600, 1000, 3000, 6000, 12000, 14000, 16000]
 
 for (i, band) in eqNode.bands.enumerated() {
     band.frequency = frequencies[i]
-    band.bandwidth = 1.0  // 1 octave
+    band.bandwidth = 1.0  // ~1 octave; Winamp's proportional Q ranged ~0.6-1.4
 
-    // Filter types
+    // Shelf filters at endpoints better approximate Winamp's perceptual behavior
     if i == 0 {
-        band.filterType = .lowShelf   // Bass boost/cut
+        band.filterType = .lowShelf   // Sub-bass control below 70Hz
     } else if i == 9 {
-        band.filterType = .highShelf  // Treble boost/cut
+        band.filterType = .highShelf  // Air/treble above 16kHz
     } else {
-        band.filterType = .parametric // Mid bands
+        band.filterType = .parametric // Bell curve for mid bands
     }
 
     band.gain = eqBands[i]  // -12 to +12 dB

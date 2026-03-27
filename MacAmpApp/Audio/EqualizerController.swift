@@ -181,10 +181,18 @@ final class EqualizerController {
 
     // MARK: - EQ Configuration
 
-    /// Configure the 10-band EQ with Winamp frequency centers
+    /// Configure the 10-band EQ with Winamp frequency centers.
+    ///
+    /// Classic skin labels show "60 170 310" but actual Winamp 2.x/3.x processing
+    /// frequencies are 70, 180, 320. The tight 12k/14k/16k clustering is intentional —
+    /// Nullsoft likely designed it to help users tune out high-frequency MP3 encoding artifacts.
+    ///
+    /// Winamp's FFT-based "Fast EQ" had no traditional filter shapes. Shelf filters
+    /// at the endpoints better approximate Winamp's perceptual behavior (sub-bass and
+    /// air control) than strict parametric everywhere.
     private func configureEQ() {
-        // Winamp 10-band centers (Hz): 60,170,310,600,1k,3k,6k,12k,14k,16k
-        let freqs: [Float] = [60, 170, 310, 600, 1000, 3000, 6000, 12000, 14000, 16000]
+        // Actual Winamp internal frequencies (NOT the skin label values 60/170/310)
+        let freqs: [Float] = [70, 180, 320, 600, 1000, 3000, 6000, 12000, 14000, 16000]
         for i in 0..<min(eqNode.bands.count, freqs.count) {
             let band = eqNode.bands[i]
             if i == 0 {
@@ -195,7 +203,7 @@ final class EqualizerController {
                 band.filterType = .parametric
             }
             band.frequency = freqs[i]
-            band.bandwidth = 1.0 // Octaves for parametric; harmless for shelves
+            band.bandwidth = 1.0 // ~1 octave; Winamp's proportional Q ranged ~0.6-1.4
             band.gain = eqBands[i]
             band.bypass = false
         }
