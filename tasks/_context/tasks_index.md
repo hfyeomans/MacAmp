@@ -2,7 +2,7 @@
 
 > **Purpose:** Index of all currently open (non-done) tasks in `tasks/`. Each entry notes the task name, purpose, and current status.
 >
-> **Updated:** 2026-03-26
+> **Updated:** 2026-04-28
 > **Excludes:** `tasks/done/`, `tasks/stale/`, `tasks/depreciated/`
 
 ---
@@ -23,11 +23,19 @@
 
 | Step | Task | Purpose | Size | Status | Oracle Score |
 |------|------|---------|------|--------|:---:|
-| S3-1A | `mainwindow-visualizer-isolation` | SwiftUI recomposition boundary; conditional UserDefaults debounce | Small | ✅ READY (Phase 0 spike first) | 9.4/10 |
+| S3-1A | `mainwindow-visualizer-isolation` | Visualizer freeze fix (run-loop-mode mismatch in producer) | Small | 🔄 IN PROGRESS — V.1 PASS, pending Oracle gate + PR | 9.4/10 |
 | S3-1B | `stream-pause-tail` | Fix 0.7s pause tail (silence gate + producer quiesce) + latent reconnect-during-pause bug | Small-Medium | ✅ READY | 9.1/10 |
 | S3-2  | `video-audio-engine-routing` | Route video audio through AVAudioEngine; engine config observer | Medium-High | ✅ READY (Phase 0 sync spike first) | 9.4/10 |
 | S3-3  | `hls-streaming-support` | Audio-only HLS (M3U8 + AAC ADTS, live + VOD) | Large | ✅ READY | 9.0/10 |
 | S3-4  | `ogg-vorbis-support` | OGG Vorbis (libvorbis), local + Icecast streams; chained-format gap fix | Medium-Large | ✅ READY (Phase 0a/0b spikes first) | 9.3/10 |
+
+---
+
+## Post-S3-1A Follow-Up (discovered during mwvi)
+
+| Task | Purpose | Size | Status |
+|------|---------|------|--------|
+| `timer-runloop-mode-audit` | Fix 3 remaining `Timer.scheduledTimer` callsites that pause during gestures (Winamp marquee scroll + 2 Butterchurn timers); 4 other callsites already correct | Small | 📋 PLANNED — runs after mwvi PR #A merges |
 
 ---
 

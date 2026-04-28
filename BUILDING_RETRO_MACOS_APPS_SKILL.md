@@ -533,6 +533,63 @@ struct SpectrumBar: View {
 
 ---
 
+### Lesson: RunLoop Mode Discipline in Feeding Pipelines (Part 23, April 2026)
+
+**Problem:** A SwiftUI body that re-evaluates at the timer's expected rate during a `DragGesture` can still render frozen output if the *upstream producer* is paused.
+
+**The pattern that bit MacAmp:** the spectrum analyzer (`VisualizerView`) used `Timer.publish(every: 1.0/30.0, on: .main, in: .common).autoconnect()` — explicitly `.common` mode, so the consumer-side timer correctly kept firing during slider gestures (which switch the main run loop into `.eventTracking`). However, the **producer** that feeds it (`VisualizerPipeline.startPollTimer`) used `Timer.scheduledTimer(withTimeInterval:repeats:block:)`, which adds the timer to the run loop in `.default` mode. `.default`-mode timers are **paused** during `.eventTracking`. The result: during volume / balance / position-slider drag (and even during click-and-hold without motion), the consumer body fired at full rate but `pollVisualizerData()` never ran, so `levels` stayed stale and the spectrum bars looked frozen for the duration of the gesture.
+
+**Why it's hard to diagnose:** the symptom is at the consumer (visualizer freezes), but the cause is at the producer (data pipeline paused). Standard SwiftUI debugging (instrument body re-evaluation, look for parent-body invalidation) shows nothing wrong on the consumer side. Two rounds of fixes targeting consumer-side hypotheses (Phase 1B: move `UserDefaults` writes off `volume.didSet`; Phase 1B+: idempotent guards + dead-write removal + pixel-step coalescing) reduced the freeze by single-digit percent without resolving it. The actual fix took one line of producer-side change.
+
+**The fix:**
+
+```swift
+// Buggy — schedules on .default mode only:
+fooTimer = Timer.scheduledTimer(withTimeInterval: 1.0/30.0, repeats: true) { [weak self] _ in
+    // ... fires only in .default mode → paused during gestures
+}
+
+// Correct — schedules on .common mode (.default + .eventTracking + .modalPanel):
+let timer = Timer(timeInterval: 1.0/30.0, repeats: true) { [weak self] _ in
+    // ... body
+}
+RunLoop.main.add(timer, forMode: .common)
+fooTimer = timer
+```
+
+**Where MacAmp gets this right (audit, post-mwvi):**
+
+| Callsite | Status |
+|---|---|
+| `AudioEngineController.progressTimer` (playback time / progress) | ✅ `.common` (always was) |
+| `StreamPlayer.elapsedTimer` (internet-radio elapsed clock) | ✅ `.common` (always was) |
+| `VideoWindowChromeView.metadataScrollTimer` (video metadata scroll) | ✅ `.common` (always was) |
+| `VisualizerPipeline.pollTimer` (audio data poll for visualizer) | ✅ `.common` (mwvi commit `6a6bbf2`) |
+
+**Where MacAmp still gets it wrong (deferred to follow-up `tasks/timer-runloop-mode-audit/`):**
+
+| Callsite | User-visible symptom during gesture | Severity |
+|---|---|---|
+| `WinampMainWindowInteractionState.scrollTimer` (Winamp marquee title scroll) | Title text freezes during any slider drag | HIGH |
+| `ButterchurnPresetManager.cycleTimer` (auto-preset-cycle) | Cycle pauses for the gesture | LOW |
+| `ButterchurnPresetManager.trackTitleTimer` (Butterchurn track-title overlay) | Refresh pauses for the gesture | LOW |
+
+**The deeper principle (saved as `feedback_pipeline_end_to_end_diagnosis.md`):** *symptoms manifest at the consumer; root causes often live at the producer or in the transport between them. Diagnose pipelines end-to-end, not just the symptom site.* When a symptom appears at the consumer, instrument **at least two stages** of the producer-transport-consumer pipeline. If forced to pick one, instrument the producer — consumer logic is usually easy to reason about from code; producer liveness under external conditions (run-loop mode, queue saturation, network state) is what surprises. Marginal improvement after a hypothesis-driven fix is a warning that the hypothesis is on the wrong *stage*, not the wrong *details* of the right stage.
+
+**The structural-search corollary (saved as `feedback_ast_grep_structural_search.md`):** before editing setter chains or timer-based pipelines, use `ast-grep` (`sg --lang swift -p '<pattern>'`) to enumerate all callsites and writes structurally — `rg` text-matching alone misses dead writes, duplicate paths, and unused `@Observable` properties. The duplicate `videoPlaybackController.volume = vol` and the dead `StreamPlayer.volume`/`.balance` properties surfaced this way during the mwvi diagnosis.
+
+**Audit habit for future MacAmp work:**
+
+```bash
+# After adding any new Timer-based pipeline, structurally enumerate every
+# Timer.scheduledTimer in the codebase and verify each is followed by
+# RunLoop.main.add(timer, forMode: .common) — or has an explicit reason
+# documented in a one-line comment for why .default mode is correct.
+rg -n "Timer\.scheduledTimer" MacAmpApp/
+```
+
+---
+
 ## SwiftUI Rendering Techniques
 
 ### Pixel-Perfect Positioning

@@ -1951,7 +1951,7 @@ final class VideoPlaybackController {
 ┌──────────────────────────────────────────────────────────────┐
 │                    MAIN THREAD (30 Hz Timer)                  │
 │                                                              │
-│  pollVisualizerData() ← Timer.scheduledTimer @ 30 Hz        │
+│  pollVisualizerData() ← Timer @ 30 Hz on RunLoop.main .common│
 │  ┌────────────────────────────────────────────────────────┐  │
 │  │ 1. sharedBuffer.consume()                              │  │
 │  │    ├─ os_unfair_lock_lock()    (OK to block here)      │  │
@@ -2082,15 +2082,24 @@ final class VisualizerPipeline {
         startPollTimer()  // Start 30 Hz consumer
     }
 
-    // 30 Hz timer polls shared buffer on main thread
+    // 30 Hz timer polls shared buffer on main thread.
+    //
+    // CRITICAL: Use Timer(...) + RunLoop.main.add(timer, forMode: .common), NOT
+    // Timer.scheduledTimer(...). The convenience scheduledTimer schedules on the
+    // run loop in .default mode, which is paused during .eventTracking (any
+    // active DragGesture, window-move, scroll). A producer-side timer paused
+    // during gestures stalls feeding pipelines and causes consumer-side
+    // freezes (see mwvi PR #A — spectrum analyzer froze during slider drag
+    // because this exact callsite was using the wrong run-loop mode).
     private func startPollTimer() {
         pollTimer?.invalidate()
-        pollTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0,
-                                         repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 self?.pollVisualizerData()
             }
         }
+        RunLoop.main.add(timer, forMode: .common)
+        pollTimer = timer
     }
 
     private func pollVisualizerData() {

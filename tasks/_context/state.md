@@ -2,8 +2,8 @@
 
 > **Purpose:** Single source of truth for cross-task execution status, wave progress, and coordination decisions.
 > **Date:** 2026-02-21
-> **Updated:** 2026-04-27 (S3 plans + todos all Oracle-approved ≥ 9/10. 5 task folders implementation-ready.)
-> **Previous:** 2026-03-27 (EQ frequency fix PR #77 merged. Tasks housekeeping: 14 folders→done/. 57 tests.)
+> **Updated:** 2026-04-28 (S3-1A `mainwindow-visualizer-isolation` implementation complete + V.1 PASS; pending Oracle gate + PR. New follow-up task: `timer-runloop-mode-audit`.)
+> **Previous:** 2026-04-27 (S3 plans + todos all Oracle-approved ≥ 9/10. 5 task folders implementation-ready.)
 
 ### Quick Reference
 
@@ -288,17 +288,18 @@ All doc updates verified complete by sub-agent scan:
 
 ### Sprint S3: LOW-MEDIUM Priority — Edge Cases + Optimization + Video Routing
 
-> **Status (2026-04-27):** All 5 task research.md files Oracle-validated. Ordering locked. Plan + todo writing in progress (Oracle gate ≥ 9/10).
+> **Status (2026-04-28):** S3-1A `mainwindow-visualizer-isolation` implementation complete + V.1 PASS — pending Oracle code-review gate + PR. Other S3 tasks (S3-1B through S3-4) still PLAN APPROVED, awaiting their wave order.
 
 **Locked S3 ordering and branch plan:**
 
-| Wave | Step | Task Folder | Branch | PR # | Predecessors | Pre-Plan Spike |
-|------|------|-------------|--------|------|--------------|----------------|
-| S3-1 | A (parallel) | `mainwindow-visualizer-isolation` | `feat/mainwindow-visualizer-isolation` | A | none | `spike/mwvi-volume-drag-profile` (Instruments) |
-| S3-1 | B (parallel) | `stream-pause-tail` | `fix/stream-pause-tail` | B | none | none |
-| S3-2 | sequential | `video-audio-engine-routing` | `feat/video-audio-engine-routing` | C | S3-1 merged | `spike/vaer-av-drift-measurement` |
-| S3-3 | sequential | `hls-streaming-support` | `feat/hls-streaming-support` | D | S3-2 merged | none (Gemini re-run optional at plan-time) |
-| S3-4 | sequential | `ogg-vorbis-support` | `feat/ogg-vorbis-support` | E | S3-3 merged | `spike/ogg-build-wiring` (0a) + `spike/ogg-local-playback` (0b) |
+| Wave | Step | Task Folder | Branch | PR # | Predecessors | Pre-Plan Spike | Status |
+|------|------|-------------|--------|------|--------------|----------------|--------|
+| S3-1 | A (parallel) | `mainwindow-visualizer-isolation` | `feat/mainwindow-visualizer-isolation` | A | none | `spike/mwvi-volume-drag-profile` (Instruments) | **IN PROGRESS** — V.1 PASS, pending Oracle gate + PR |
+| S3-1 | B (parallel) | `stream-pause-tail` | `fix/stream-pause-tail` | B | none | none | PLAN APPROVED |
+| S3-2 | sequential | `video-audio-engine-routing` | `feat/video-audio-engine-routing` | C | S3-1 merged | `spike/vaer-av-drift-measurement` | PLAN APPROVED |
+| S3-3 | sequential | `hls-streaming-support` | `feat/hls-streaming-support` | D | S3-2 merged | none (Gemini re-run optional at plan-time) | PLAN APPROVED |
+| S3-4 | sequential | `ogg-vorbis-support` | `feat/ogg-vorbis-support` | E | S3-3 merged | `spike/ogg-build-wiring` (0a) + `spike/ogg-local-playback` (0b) | PLAN APPROVED |
+| Post-S3-1A | follow-up | `timer-runloop-mode-audit` | `fix/timer-runloop-mode-audit` | G | S3-1A merged | none | PLANNED — see "Post-S3-1A Follow-Ups" below |
 
 **Cross-task file conflict map:**
 
@@ -329,13 +330,24 @@ All doc updates verified complete by sub-agent scan:
 
 | Task Folder | research.md | plan.md | todo.md | Oracle plan score | Iterations |
 |-------------|------------|---------|---------|-------------------|:---:|
-| `mainwindow-visualizer-isolation` | ✅ 9/9 applied | ✅ | ✅ | **9.4/10** | 4 |
+| `mainwindow-visualizer-isolation` | ✅ 9/9 applied + Phase 0 results appended | ✅ | ✅ | **9.4/10** (plan); **8/10** (post-1B Oracle diagnostic) | 4 + 1 |
 | `stream-pause-tail` | ✅ 8/8 applied | ✅ (8 ADRs) | ✅ | **9.1/10** | 5 |
 | `video-audio-engine-routing` | ✅ existing | ✅ | ✅ | **9.4/10** | 3 |
 | `hls-streaming-support` | ✅ 8/8 applied | ✅ | ✅ | **9.0/10** | 4 |
 | `ogg-vorbis-support` | ✅ 10/10 applied | ✅ (22 sections) | ✅ | **9.3/10** | 3 |
 
-**S3 is implementation-ready.** First wave (S3-1 Worktrees A + B) can start now.
+**S3 is implementation-ready.** S3-1A (mwvi) is in progress; S3-1B (spt) onwards still queued.
+
+### Post-S3-1A Follow-Ups (discovered during mwvi)
+
+| Task Folder | Description | Size | Status | Trigger |
+|-------------|-------------|------|--------|---------|
+| `timer-runloop-mode-audit` | Audit + fix the 3 remaining `Timer.scheduledTimer` callsites that schedule on `.default` mode and pause during gestures (`WinampMainWindowInteractionState.scrollTimer` HIGH; `ButterchurnPresetManager.cycleTimer` + `.trackTitleTimer` LOW). 4 other callsites already use `.common` correctly. Mirrors mwvi commit `6a6bbf2`. | Small (~30-40 lines diff) | PLANNED — runs after mwvi PR #A merges | Discovered during mwvi diagnosis (2026-04-28). Same gesture-pause bug pattern, 3 separate user-visible defects (most prominently the Winamp marquee scroll). |
+
+**mwvi-derived lessons (cross-task):**
+
+- **End-to-end pipeline diagnosis** — Symptoms manifest at the consumer; root causes often live at the producer. Phase 0 instrumented only the SwiftUI consumer side; the actual root cause was upstream at `VisualizerPipeline.pollTimer`. See `~/.claude/projects/-Users-hank-dev-src-MacAmp/memory/feedback_pipeline_end_to_end_diagnosis.md` and `BUILDING_RETRO_MACOS_APPS_SKILL.md`.
+- **ast-grep structural search before edits** — relying on `rg` text matching alone missed a duplicate `videoPlaybackController.volume` write and dead `streamPlayer.volume`/`.balance` properties. See `~/.claude/projects/-Users-hank-dev-src-MacAmp/memory/feedback_ast_grep_structural_search.md`.
 
 ### Post-S2 / Pre-S3 Architecture Follow-Ons: Hybrid Dedup + Decomposition (6 tasks)
 

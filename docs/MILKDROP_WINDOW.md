@@ -701,13 +701,21 @@ is `AudioPlayer` -> `AudioEngineController` -> `VisualizerPipeline`.
 **30 FPS Swift→JS Audio Updates:**
 
 ```swift
-// ButterchurnBridge.swift - Timer-based audio streaming
+// ButterchurnBridge.swift - Timer-based audio streaming.
+//
+// IMPORTANT: Timer must be added to RunLoop.main in .common mode so it keeps
+// firing during user gestures. Timer.scheduledTimer(withTimeInterval:repeats:block:)
+// defaults to .default mode and pauses during .eventTracking (any active
+// DragGesture / window-move / scroll). A paused producer-side timer stalls
+// the visualizer pipeline and freezes the rendered output. See mwvi PR #A.
 private func startAudioTimer() {
-    audioTimer = Timer.scheduledTimer(withTimeInterval: 1.0/30.0, repeats: true) { [weak self] _ in
+    let timer = Timer(timeInterval: 1.0/30.0, repeats: true) { [weak self] _ in
         Task { @MainActor in
             self?.sendAudioData()
         }
     }
+    RunLoop.main.add(timer, forMode: .common)
+    audioTimer = timer
 }
 
 private func sendAudioData() {
