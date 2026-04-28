@@ -203,6 +203,14 @@ final class PlaybackCoordinator {
         streamPlayer.balance = bal
     }
 
+    /// Drag-end forwarder — writes current `volume` to `UserDefaults`.
+    /// Called from `WinampVolumeSlider.onDragEnded` to keep persistence off
+    /// the gesture-tick path (Phase 1B fix; see mwvi Phase 0 results).
+    func commitVolume() { audioPlayer.commitVolumeToDefaults() }
+
+    /// Drag-end forwarder for balance. See `commitVolume()`.
+    func commitBalance() { audioPlayer.commitBalanceToDefaults() }
+
     // MARK: - Unified Playback Control
 
     /// Stop both backends and deactivate the stream bridge.

@@ -106,23 +106,25 @@ struct AudioPlayerStateTests {
         #expect(player.playbackState == .idle)
     }
 
-    @Test("volume persists via UserDefaults")
+    @Test("volume persists via UserDefaults on commit")
     func volumePersistence() {
         let savedVolume = UserDefaults.standard.float(forKey: "volume")
         defer { UserDefaults.standard.set(savedVolume, forKey: "volume") }
 
         let player = AudioPlayer()
         player.volume = 0.42
+        player.commitVolumeToDefaults()
         #expect(UserDefaults.standard.float(forKey: "volume") == 0.42)
     }
 
-    @Test("balance persists via UserDefaults")
+    @Test("balance persists via UserDefaults on commit")
     func balancePersistence() {
         let savedBalance = UserDefaults.standard.float(forKey: "balance")
         defer { UserDefaults.standard.set(savedBalance, forKey: "balance") }
 
         let player = AudioPlayer()
         player.balance = -0.5
+        player.commitBalanceToDefaults()
         #expect(UserDefaults.standard.float(forKey: "balance") == -0.5)
     }
 

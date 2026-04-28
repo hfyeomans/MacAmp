@@ -62,18 +62,38 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     var isEngineRendering: Bool { engine.isEngineRunning && (isPlaying || isBridgeActive) }
 
     /// Audio volume (0.0-1.0 linear amplitude).
+    ///
+    /// Persistence is **call-site-driven** — call `commitVolumeToDefaults()`
+    /// (or `PlaybackCoordinator.commitVolume()`) at gesture-end. The setter
+    /// only propagates to audio backends; writing `UserDefaults` per gesture
+    /// tick was shown to starve the main thread (mwvi Phase 0, Mechanism B).
     var volume: Float = 0.75 {
         didSet {
             engine?.setVolume(volume)
             videoPlaybackController.volume = volume
-            UserDefaults.standard.set(volume, forKey: Keys.volume)
         }
     }
+    /// Audio balance (-1.0 left to 1.0 right).
+    ///
+    /// Persistence is call-site-driven — see `commitBalanceToDefaults()` /
+    /// `PlaybackCoordinator.commitBalance()`.
     var balance: Float = 0.0 {
         didSet {
             engine?.setBalance(balance)
-            UserDefaults.standard.set(balance, forKey: Keys.balance)
         }
+    }
+
+    /// Commit the current `volume` to `UserDefaults`.
+    /// Approved callers (plan §6.1): `PlaybackCoordinator.commitVolume()`.
+    internal func commitVolumeToDefaults() {
+        UserDefaults.standard.set(volume, forKey: Keys.volume)
+    }
+
+    /// Commit the current `balance` to `UserDefaults`.
+    /// Approved callers (plan §6.1, mirrored per todo 1B.9):
+    /// `PlaybackCoordinator.commitBalance()`.
+    internal func commitBalanceToDefaults() {
+        UserDefaults.standard.set(balance, forKey: Keys.balance)
     }
 
     // MARK: - Playlist (extracted to PlaylistController)

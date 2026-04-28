@@ -49,8 +49,11 @@ struct MainWindowSlidersLayer: View {
             get: { audioPlayer.volume },
             set: { playbackCoordinator.setVolume($0) }
         )
-        WinampVolumeSlider(volume: volumeBinding)
-            .at(Layout.volumeSlider)
+        WinampVolumeSlider(
+            volume: volumeBinding,
+            onDragEnded: { playbackCoordinator.commitVolume() }
+        )
+        .at(Layout.volumeSlider)
     }
 
     @ViewBuilder
@@ -59,10 +62,13 @@ struct MainWindowSlidersLayer: View {
             get: { audioPlayer.balance },
             set: { playbackCoordinator.setBalance($0) }
         )
-        WinampBalanceSlider(balance: balanceBinding)
-            .at(Layout.balanceSlider)
-            .opacity(playbackCoordinator.supportsAudioProcessing ? 1.0 : 0.5)
-            .allowsHitTesting(playbackCoordinator.supportsAudioProcessing)
-            .help(playbackCoordinator.supportsAudioProcessing ? "Balance" : "Balance unavailable during streaming")
+        WinampBalanceSlider(
+            balance: balanceBinding,
+            onDragEnded: { playbackCoordinator.commitBalance() }
+        )
+        .at(Layout.balanceSlider)
+        .opacity(playbackCoordinator.supportsAudioProcessing ? 1.0 : 0.5)
+        .allowsHitTesting(playbackCoordinator.supportsAudioProcessing)
+        .help(playbackCoordinator.supportsAudioProcessing ? "Balance" : "Balance unavailable during streaming")
     }
 }

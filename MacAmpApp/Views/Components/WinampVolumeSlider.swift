@@ -4,7 +4,11 @@ import SwiftUI
 struct WinampVolumeSlider: View {
     @Binding var volume: Float
     @Environment(SkinManager.self) var skinManager
-    
+
+    /// Invoked when the drag gesture ends. Use to commit gesture-rate state
+    /// (e.g., `UserDefaults` persistence) off the per-tick path.
+    var onDragEnded: (() -> Void)?
+
     @State private var isDragging = false
     
     // Winamp volume slider specs
@@ -63,6 +67,7 @@ struct WinampVolumeSlider: View {
                         }
                         .onEnded { _ in
                             isDragging = false
+                            onDragEnded?()
                         }
                 )
         }
@@ -131,6 +136,9 @@ struct WinampBalanceSlider: View {
     @Binding var balance: Float  // -1.0 to 1.0
     @Environment(SkinManager.self) var skinManager
 
+    /// Invoked when the drag gesture ends. See `WinampVolumeSlider.onDragEnded`.
+    var onDragEnded: (() -> Void)?
+
     @State private var isDragging = false
     @State private var isSnappedToCenter = false
 
@@ -183,6 +191,7 @@ struct WinampBalanceSlider: View {
                         .onEnded { _ in
                             isDragging = false
                             isSnappedToCenter = false
+                            onDragEnded?()
                         }
                 )
         }
