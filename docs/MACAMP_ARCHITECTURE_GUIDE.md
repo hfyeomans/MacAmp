@@ -4891,6 +4891,8 @@ Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] timer i
 }
 ```
 
+> **Companion pitfall — run-loop mode (mwvi PR #A, April 2026):** `Timer.scheduledTimer(withTimeInterval:repeats:block:)` schedules the timer on the run loop in `.default` mode only. During an active `DragGesture` (or any `.eventTracking` mode change — window move, scroll, menu), `.default`-mode timers are **paused**. If the timer is feeding a producer→consumer pipeline (e.g., audio data poll → SwiftUI visualizer body), the consumer keeps running but reads stale data → looks frozen. **Use `Timer(...)` + `RunLoop.main.add(timer, forMode: .common)` for any timer that must keep firing during user gestures.** See `BUILDING_RETRO_MACOS_APPS_SKILL.md` → "Lesson: RunLoop Mode Discipline in Feeding Pipelines" for the full pattern + audit checklist.
+
 ### Pitfall 5: SwiftUI Redraw Storms
 
 **Problem**: Entire view hierarchy redraws on state change

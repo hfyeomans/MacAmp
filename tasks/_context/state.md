@@ -2,7 +2,8 @@
 
 > **Purpose:** Single source of truth for cross-task execution status, wave progress, and coordination decisions.
 > **Date:** 2026-02-21
-> **Updated:** 2026-03-27 (EQ frequency correction: 60/170/310→70/180/320 to match actual Winamp internals.)
+> **Updated:** 2026-04-28 (S3-1A `mainwindow-visualizer-isolation` implementation complete + V.1 PASS; pending Oracle gate + PR. New follow-up task: `timer-runloop-mode-audit`.)
+> **Previous:** 2026-04-27 (S3 plans + todos all Oracle-approved ≥ 9/10. 5 task folders implementation-ready.)
 
 ### Quick Reference
 
@@ -10,9 +11,9 @@
 |--------|-------|
 | Current release | v1.3 (2026-03-26) |
 | .swift files | ~110 |
-| Tests | 55 |
+| Tests | 57 |
 | Current phase | S3 planning |
-| PRs merged | 76 total |
+| PRs merged | 77 total |
 | Architecture principles | `tasks/_context/principles.md` |
 
 ---
@@ -84,7 +85,7 @@ Responsibility sweep confirmed codebase is architecturally sound (76 Clean, 26 J
 **Wave 3 execution is strictly sequential:** Each step depends on the previous merge.
 T8 is split across 3a and 3c because AudioPlayer.swift is modified by both T8 and T7.
 
-**Wave 3 Pivot:** MTAudioProcessingTap does not work with streaming AVPlayerItems (Apple QA1716). CoreAudio Process Tap rejected (feedback loop). New approach: replace AVPlayer with custom URLSession + AudioFileStream + AudioConverter pipeline feeding PCM into existing AVAudioEngine graph. See: `tasks/unified-audio-pipeline/` and `tasks/_context/lessons-dual-backend-dead-end.md`.
+**Wave 3 Pivot:** MTAudioProcessingTap does not work with streaming AVPlayerItems (Apple QA1716). CoreAudio Process Tap rejected (feedback loop). New approach: replace AVPlayer with custom URLSession + AudioFileStream + AudioConverter pipeline feeding PCM into existing AVAudioEngine graph. See: `tasks/done/unified-audio-pipeline/` and `tasks/_context/depreciated/lessons-dual-backend-dead-end.md`.
 
 **T1 Phase 4 status:** Still desired but must wait until unified pipeline lands. The engine transport boundaries will change when streamSourceNode receives PCM from a custom decode pipeline instead of a loopback tap. Extracting transport BEFORE the pipeline change would require re-extraction afterward.
 
@@ -287,13 +288,66 @@ All doc updates verified complete by sub-agent scan:
 
 ### Sprint S3: LOW-MEDIUM Priority — Edge Cases + Optimization + Video Routing
 
-| Task Folder | Description | Size | Status | Dependency |
-|-------------|-------------|------|--------|------------|
-| `mainwindow-visualizer-isolation` | SwiftUI recomposition boundary for visualizer during slider drag | Small | PLANNED | None |
-| `stream-pause-tail` | Fix ~0.7s audio tail after pausing stream (ring buffer flush) | Small | PLANNED | None |
-| `video-audio-engine-routing` | Route video audio through AVAudioEngine (MTAudioProcessingTap) | Medium-High | PLANNED — Deferred from S2. Gemini deep research pending. | Engine config observer (deferred from AirPlay task) |
-| `hls-streaming-support` | Add HLS protocol to stream decode pipeline | Large | PLANNED | None |
-| `ogg-vorbis-support` | Add OGG Vorbis codec (needs libvorbis or pure Swift decoder) | Medium | PLANNED | None |
+> **Status (2026-04-28):** S3-1A `mainwindow-visualizer-isolation` implementation complete + V.1 PASS — pending Oracle code-review gate + PR. Other S3 tasks (S3-1B through S3-4) still PLAN APPROVED, awaiting their wave order.
+
+**Locked S3 ordering and branch plan:**
+
+| Wave | Step | Task Folder | Branch | PR # | Predecessors | Pre-Plan Spike | Status |
+|------|------|-------------|--------|------|--------------|----------------|--------|
+| S3-1 | A (parallel) | `mainwindow-visualizer-isolation` | `feat/mainwindow-visualizer-isolation` | A | none | `spike/mwvi-volume-drag-profile` (Instruments) | **IN PROGRESS** — V.1 PASS, pending Oracle gate + PR |
+| S3-1 | B (parallel) | `stream-pause-tail` | `fix/stream-pause-tail` | B | none | none | PLAN APPROVED |
+| S3-2 | sequential | `video-audio-engine-routing` | `feat/video-audio-engine-routing` | C | S3-1 merged | `spike/vaer-av-drift-measurement` | PLAN APPROVED |
+| S3-3 | sequential | `hls-streaming-support` | `feat/hls-streaming-support` | D | S3-2 merged | none (Gemini re-run optional at plan-time) | PLAN APPROVED |
+| S3-4 | sequential | `ogg-vorbis-support` | `feat/ogg-vorbis-support` | E | S3-3 merged | `spike/ogg-build-wiring` (0a) + `spike/ogg-local-playback` (0b) | PLAN APPROVED |
+| Post-S3-1A | follow-up | `timer-runloop-mode-audit` | `fix/timer-runloop-mode-audit` | G | S3-1A merged | none | PLANNED — see "Post-S3-1A Follow-Ups" below |
+
+**Cross-task file conflict map:**
+
+| File | mwvi | spt | vaer | hls | ogg |
+|------|:---:|:---:|:---:|:---:|:---:|
+| `Views/MainWindow/MainWindowFullLayer.swift` | ✓ | | | | |
+| `Audio/StreamDecodePipeline.swift` | | ✓ | | ✓ | ✓ |
+| `Audio/StreamPlayer.swift` | | ✓ | | ✓ | |
+| `Audio/AudioFileStreamParser.swift` | | | | ✓ | |
+| `Audio/AudioConverterDecoder.swift` | | ✓ | | | ✓ |
+| `Audio/AudioEngineController.swift` | | ✓ | possibly | | ✓ |
+| `Audio/AudioPlayer.swift` | | ✓ | | | ✓ |
+| `Audio/PlaybackCoordinator.swift` | | ✓ | | | |
+| `Audio/VideoPlaybackController.swift` | | | ✓ | | |
+| `Audio/MetadataLoader.swift` | | | | | ✓ |
+| `Package.swift` / `project.yml` | | | | | ✓ |
+
+**Hard ordering constraints:**
+- `mwvi` and `spt` are non-overlapping → parallel as Wave S3-1 (sequential merge: A first, B second).
+- `hls`, `ogg`, and `spt` all modify `StreamDecodePipeline.swift` → strict serial.
+- `ogg` is last because it touches Package.swift + project.yml + vendored C deps and includes the chained-format `onFormatReady` gap fix that benefits from a stable pipeline.
+
+**Spike policy:** All Phase 0 spikes run on throwaway branches; findings are written back to research.md; branches are deleted.
+
+**Oracle gate:** Each plan.md is iterated with Oracle (`mcp__codex-cli__codex`, `gpt-5.5`, `reasoningEffort: xhigh`) until score ≥ 9/10 before implementation begins.
+
+**Per-task plan + todo status (all complete, all Oracle-approved ≥ 9/10):**
+
+| Task Folder | research.md | plan.md | todo.md | Oracle plan score | Iterations |
+|-------------|------------|---------|---------|-------------------|:---:|
+| `mainwindow-visualizer-isolation` | ✅ 9/9 applied + Phase 0 results appended | ✅ | ✅ | **9.4/10** (plan); **8/10** (post-1B Oracle diagnostic) | 4 + 1 |
+| `stream-pause-tail` | ✅ 8/8 applied | ✅ (8 ADRs) | ✅ | **9.1/10** | 5 |
+| `video-audio-engine-routing` | ✅ existing | ✅ | ✅ | **9.4/10** | 3 |
+| `hls-streaming-support` | ✅ 8/8 applied | ✅ | ✅ | **9.0/10** | 4 |
+| `ogg-vorbis-support` | ✅ 10/10 applied | ✅ (22 sections) | ✅ | **9.3/10** | 3 |
+
+**S3 is implementation-ready.** S3-1A (mwvi) is in progress; S3-1B (spt) onwards still queued.
+
+### Post-S3-1A Follow-Ups (discovered during mwvi)
+
+| Task Folder | Description | Size | Status | Trigger |
+|-------------|-------------|------|--------|---------|
+| `timer-runloop-mode-audit` | Audit + fix the 3 remaining `Timer.scheduledTimer` callsites that schedule on `.default` mode and pause during gestures (`WinampMainWindowInteractionState.scrollTimer` HIGH; `ButterchurnPresetManager.cycleTimer` + `.trackTitleTimer` LOW). 4 other callsites already use `.common` correctly. Mirrors mwvi commit `6a6bbf2`. | Small (~30-40 lines diff) | PLANNED — runs after mwvi PR #A merges | Discovered during mwvi diagnosis (2026-04-28). Same gesture-pause bug pattern, 3 separate user-visible defects (most prominently the Winamp marquee scroll). |
+
+**mwvi-derived lessons (cross-task):**
+
+- **End-to-end pipeline diagnosis** — Symptoms manifest at the consumer; root causes often live at the producer. Phase 0 instrumented only the SwiftUI consumer side; the actual root cause was upstream at `VisualizerPipeline.pollTimer`. See `~/.claude/projects/-Users-hank-dev-src-MacAmp/memory/feedback_pipeline_end_to_end_diagnosis.md` and `BUILDING_RETRO_MACOS_APPS_SKILL.md`.
+- **ast-grep structural search before edits** — relying on `rg` text matching alone missed a duplicate `videoPlaybackController.volume` write and dead `streamPlayer.volume`/`.balance` properties. See `~/.claude/projects/-Users-hank-dev-src-MacAmp/memory/feedback_ast_grep_structural_search.md`.
 
 ### Post-S2 / Pre-S3 Architecture Follow-Ons: Hybrid Dedup + Decomposition (6 tasks)
 

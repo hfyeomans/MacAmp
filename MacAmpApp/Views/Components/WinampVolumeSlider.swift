@@ -4,7 +4,11 @@ import SwiftUI
 struct WinampVolumeSlider: View {
     @Binding var volume: Float
     @Environment(SkinManager.self) var skinManager
-    
+
+    /// Invoked when the drag gesture ends. Use to commit gesture-rate state
+    /// (e.g., `UserDefaults` persistence) off the per-tick path.
+    var onDragEnded: (() -> Void)?
+
     @State private var isDragging = false
     
     // Winamp volume slider specs
@@ -63,6 +67,7 @@ struct WinampVolumeSlider: View {
                         }
                         .onEnded { _ in
                             isDragging = false
+                            onDragEnded?()
                         }
                 )
         }
@@ -76,8 +81,12 @@ struct WinampVolumeSlider: View {
     private func updateVolume(from gesture: DragGesture.Value, in geometry: GeometryProxy) {
         let width = geometry.size.width
         let x = min(max(0, gesture.location.x), width)
-        let newVolume = Float(x / width)
-        volume = max(0, min(1, newVolume))
+        let newVolume = max(0, min(1, Float(x / width)))
+        // Skip writes that resolve to the same visible pixel position. This
+        // eliminates gesture-tick churn when the user clicks-and-holds without
+        // motion (DragGesture re-fires onChanged per run-loop tick).
+        guard abs(volume - newVolume) >= 1.0 / Float(sliderWidth) else { return }
+        volume = newVolume
     }
 
     // Calculate VOLUME.BMP frame offset
@@ -131,6 +140,9 @@ struct WinampBalanceSlider: View {
     @Binding var balance: Float  // -1.0 to 1.0
     @Environment(SkinManager.self) var skinManager
 
+    /// Invoked when the drag gesture ends. See `WinampVolumeSlider.onDragEnded`.
+    var onDragEnded: (() -> Void)?
+
     @State private var isDragging = false
     @State private var isSnappedToCenter = false
 
@@ -183,6 +195,7 @@ struct WinampBalanceSlider: View {
                         .onEnded { _ in
                             isDragging = false
                             isSnappedToCenter = false
+                            onDragEnded?()
                         }
                 )
         }
@@ -210,7 +223,11 @@ struct WinampBalanceSlider: View {
             isSnappedToCenter = false
         }
 
-        balance = max(-1, min(1, newBalance))
+        let clamped = max(-1, min(1, newBalance))
+        // Skip pixel-equivalent writes (parallels WinampVolumeSlider.updateVolume).
+        // Range is 2.0 across `sliderWidth` pixels.
+        guard abs(balance - clamped) >= 2.0 / Float(sliderWidth) else { return }
+        balance = clamped
     }
 
     private var thumbPosition: CGFloat {

@@ -365,6 +365,14 @@ final class VisualizerPipeline {
 
     init() {}
 
+    isolated deinit {
+        // Belt-and-suspenders: today the lifecycle is owned by AudioEngineController,
+        // which calls removeTap() (and thereby stopPollTimer()) on shutdown. This
+        // guards future lifecycle refactors that might drop the last reference
+        // without going through removeTap().
+        pollTimer?.invalidate()
+    }
+
     // MARK: - Tap Management
 
     /// Install visualizer tap on the given mixer node
@@ -423,12 +431,20 @@ final class VisualizerPipeline {
 
     private func startPollTimer() {
         pollTimer?.invalidate()
-        pollTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
+        // Add to .common run-loop mode so polling continues during user
+        // gestures. Timer.scheduledTimer defaults to .default mode, which
+        // pauses while the main run loop is in .eventTracking (active
+        // DragGesture). That stalled the data pipeline and made the
+        // visualizer appear frozen during slider interaction even though
+        // VisualizerView's own .common-mode display timer kept firing.
+        let timer = Timer(timeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
             dispatchPrecondition(condition: .onQueue(.main))
             MainActor.assumeIsolated {
                 self?.pollVisualizerData()
             }
         }
+        RunLoop.main.add(timer, forMode: .common)
+        pollTimer = timer
     }
 
     private func pollVisualizerData() {

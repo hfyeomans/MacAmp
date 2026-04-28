@@ -2,7 +2,7 @@
 
 > **Purpose:** Index of all currently open (non-done) tasks in `tasks/`. Each entry notes the task name, purpose, and current status.
 >
-> **Updated:** 2026-03-26
+> **Updated:** 2026-04-28
 > **Excludes:** `tasks/done/`, `tasks/stale/`, `tasks/depreciated/`
 
 ---
@@ -19,13 +19,23 @@
 
 ## Sprint S3: LOW-MEDIUM Priority — Edge Cases + Optimization + Video Routing
 
+> **Status (2026-04-27):** All 5 tasks Oracle-validated through plan + todo phases (≥ 9/10). Implementation-ready. Locked execution order in `_context/state.md`.
+
+| Step | Task | Purpose | Size | Status | Oracle Score |
+|------|------|---------|------|--------|:---:|
+| S3-1A | `mainwindow-visualizer-isolation` | Visualizer freeze fix (run-loop-mode mismatch in producer) | Small | 🔄 IN PROGRESS — V.1 PASS, pending Oracle gate + PR | 9.4/10 |
+| S3-1B | `stream-pause-tail` | Fix 0.7s pause tail (silence gate + producer quiesce) + latent reconnect-during-pause bug | Small-Medium | ✅ READY | 9.1/10 |
+| S3-2  | `video-audio-engine-routing` | Route video audio through AVAudioEngine; engine config observer | Medium-High | ✅ READY (Phase 0 sync spike first) | 9.4/10 |
+| S3-3  | `hls-streaming-support` | Audio-only HLS (M3U8 + AAC ADTS, live + VOD) | Large | ✅ READY | 9.0/10 |
+| S3-4  | `ogg-vorbis-support` | OGG Vorbis (libvorbis), local + Icecast streams; chained-format gap fix | Medium-Large | ✅ READY (Phase 0a/0b spikes first) | 9.3/10 |
+
+---
+
+## Post-S3-1A Follow-Up (discovered during mwvi)
+
 | Task | Purpose | Size | Status |
 |------|---------|------|--------|
-| `mainwindow-visualizer-isolation` | SwiftUI recomposition boundary for visualizer during slider drag | Small | 📋 PLANNED |
-| `stream-pause-tail` | Fix ~0.7s audio tail after pausing stream (ring buffer flush) | Small | 📋 PLANNED |
-| `video-audio-engine-routing` | Route video audio through AVAudioEngine (MTAudioProcessingTap) | Medium-High | 📋 PLANNED — Deferred from S2. Gemini deep research pending. |
-| `hls-streaming-support` | Add HLS protocol to stream decode pipeline | Large | 📋 PLANNED |
-| `ogg-vorbis-support` | Add OGG Vorbis codec to stream decode pipeline | Medium | 📋 PLANNED |
+| `timer-runloop-mode-audit` | Fix 3 remaining `Timer.scheduledTimer` callsites that pause during gestures (Winamp marquee scroll + 2 Butterchurn timers); 4 other callsites already correct | Small | 📋 PLANNED — runs after mwvi PR #A merges |
 
 ---
 
@@ -55,7 +65,6 @@
 
 | Task | Purpose | Status |
 |------|---------|--------|
-| `branded-dmg-installer` | Professional branded DMG installer with MacAmp logo | 📋 PLANNED (low priority — current DMG works) |
 | `ios-port-feasibility-research` | Research feasibility of iOS/iPadOS port | 📄 REFERENCE |
 
 ---
@@ -67,6 +76,7 @@
 | `audioplayer-decomposition` | Ph1-4 COMPLETE (PR #52 + #60). Phase 5 (seek) tracked by `audioplayer-seek-extraction`. | 📄 REFERENCE |
 | `lock-free-ring-buffer` | COMPLETE. Deferred: benchmarks, flaky high-throughput test (`withKnownIssue`). | 📄 REFERENCE |
 | `swift-project-structure-research` | Approved placement-policy reference for S1-S3 and Structure Sprint. | 📄 REFERENCE |
+| `agent-docs-history-search` | One-shot research: located prior agent-doc / `AGENTS.md` / `CLAUDE.md` / `GEMINI.md` work across `done/` and `stale/`. | 📄 REFERENCE |
 
 ---
 
@@ -75,9 +85,9 @@
 | Category | Count |
 |---------|-------|
 | Total active task folders | 15 |
-| 📋 PLANNED (ready to implement) | 6 |
+| 📋 PLANNED (ready to implement) | 5 |
 | 🟡 DEFERRED / NO-GO | 5 |
-| 📄 REFERENCE | 3 |
+| 📄 REFERENCE | 4 |
 | Backlog | 1 |
 | In `tasks/done/` | ~75 completed tasks |
 | In `tasks/stale/` | 69 folders + 8 standalone files |
