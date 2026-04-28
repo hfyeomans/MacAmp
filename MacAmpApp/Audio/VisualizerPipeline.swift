@@ -365,6 +365,14 @@ final class VisualizerPipeline {
 
     init() {}
 
+    isolated deinit {
+        // Belt-and-suspenders: today the lifecycle is owned by AudioEngineController,
+        // which calls removeTap() (and thereby stopPollTimer()) on shutdown. This
+        // guards future lifecycle refactors that might drop the last reference
+        // without going through removeTap().
+        pollTimer?.invalidate()
+    }
+
     // MARK: - Tap Management
 
     /// Install visualizer tap on the given mixer node
