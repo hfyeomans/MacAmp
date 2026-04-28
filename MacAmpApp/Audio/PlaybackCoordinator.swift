@@ -125,10 +125,6 @@ final class PlaybackCoordinator {
         self.audioPlayer = audioPlayer
         self.streamPlayer = streamPlayer
 
-        // Sync persisted volume/balance to stream player so first stream play uses saved values
-        streamPlayer.volume = audioPlayer.volume
-        streamPlayer.balance = audioPlayer.balance
-
         self.audioPlayer.onTrackMetadataUpdate = { [weak self] track in
             guard let self else { return }
             self.updateTrackMetadata(track)
@@ -188,19 +184,24 @@ final class PlaybackCoordinator {
 
     // MARK: - Volume & Balance Routing
 
-    /// Propagate volume to ALL backends unconditionally.
-    /// Simpler than checking which is active, zero cost on idle players (no-op).
+    /// Routes volume through `AudioPlayer`. The `AudioPlayer.volume.didSet`
+    /// handles propagation to `AVAudioEngine` (`playerNode.volume` +
+    /// `streamSourceNode?.volume`) and to `videoPlaybackController.volume`.
+    /// Idempotent — same-value writes short-circuit before reaching the
+    /// audio backends. This is the gesture-tick choke point that keeps the
+    /// main run loop free for SwiftUI rendering during slider drag (mwvi
+    /// Phase 0 / Phase 1B+ fix).
     func setVolume(_ vol: Float) {
+        guard audioPlayer.volume != vol else { return }
         audioPlayer.volume = vol
-        streamPlayer.volume = vol
-        audioPlayer.videoPlaybackController.volume = vol
     }
 
-    /// Propagate balance to ALL backends unconditionally.
-    /// With the unified pipeline, balance is applied via AVAudioEngine (streamSourceNode.pan).
+    /// Routes balance through `AudioPlayer`. `AudioPlayer.balance.didSet`
+    /// applies the value via `AVAudioEngine` (`playerNode.pan` +
+    /// `streamSourceNode?.pan`). Idempotent — same-value writes short-circuit.
     func setBalance(_ bal: Float) {
+        guard audioPlayer.balance != bal else { return }
         audioPlayer.balance = bal
-        streamPlayer.balance = bal
     }
 
     /// Drag-end forwarder — writes current `volume` to `UserDefaults`.

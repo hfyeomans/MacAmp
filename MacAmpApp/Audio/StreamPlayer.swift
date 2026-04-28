@@ -42,12 +42,6 @@ final class StreamPlayer {
     private(set) var streamArtist: String?
     private(set) var error: String?
 
-    /// Stream volume (0.0-1.0 linear amplitude).
-    var volume: Float = 0.75
-
-    /// Stream balance (-1.0 left to 1.0 right).
-    var balance: Float = 0.0
-
     // MARK: - Pipeline
 
     private let pipeline = StreamDecodePipeline()
