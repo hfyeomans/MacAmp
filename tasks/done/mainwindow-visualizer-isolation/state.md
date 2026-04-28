@@ -3,14 +3,14 @@
 > **Purpose:** Eliminate spectrum-analyzer freeze during volume / balance slider drag (and click-and-hold without motion).
 > **Created:** 2026-03-14
 > **Sprint:** S3, Wave S3-1 Worktree A (parallel with `stream-pause-tail` Worktree B)
-> **Status:** IMPLEMENTATION COMPLETE — V.1 PASS — pending Oracle code-review gate + PR
+> **Status:** ✅ **MERGED** — PR #80 merged to `main` 2026-04-28 (merge commit `7f3d76f`)
 
 ---
 
 ## Current Status
 
-**Phase:** Implementation complete on `feat/mainwindow-visualizer-isolation`. V.1 Path A retest #3 passed (V1–V4 all show continuous spectrum animation during gesture). Pending pre-PR Oracle gate.
-**Last Updated:** 2026-04-28.
+**Phase:** ✅ COMPLETE. PR #80 merged to `main`. Wave S3-1A done. Unblocks parallel start of S3-1B (`stream-pause-tail`).
+**Last Updated:** 2026-04-28 (post-merge close-out).
 
 ### Implementation Summary
 
@@ -78,13 +78,32 @@ The lesson — *symptoms manifest at the consumer; root causes often live at the
 
 ---
 
-## Next Steps (post-implementation)
+## Close-out
 
-1. Documentation sweep: refresh `state.md` (this file ✅), `todo.md`, shared `tasks/_context/state.md`.
-2. Update `docs/IMPLEMENTATION_PATTERNS.md` — `Timer.scheduledTimer` example in the VisualizerPipeline pattern needs the `.common`-mode correction.
-3. Update `docs/MILKDROP_WINDOW.md` — `audioTimer` example currently shows the buggy pattern.
-4. Update `BUILDING_RETRO_MACOS_APPS_SKILL.md` — add lesson on RunLoop mode mismatch in feeding pipelines.
-5. Run Codex Oracle code-review gate against the 3-commit diff `main..feat/mainwindow-visualizer-isolation`.
-6. Apply ACTIONABLE Oracle feedback (if any).
-7. Push branch and open PR #A.
-8. Track follow-up: codebase-wide audit of the other 6 `Timer.scheduledTimer` callsites (deferred item in shared `_context/state.md`).
+✅ All steps completed (2026-04-28):
+
+1. ✅ Documentation sweep: refreshed `state.md`, `todo.md`, shared `tasks/_context/state.md`, `tasks/_context/tasks_index.md`.
+2. ✅ `docs/IMPLEMENTATION_PATTERNS.md` — corrected `Timer.scheduledTimer` example in the VisualizerPipeline pattern + diagram annotation.
+3. ✅ `docs/MILKDROP_WINDOW.md` — corrected `audioTimer` example.
+4. ✅ `docs/MACAMP_ARCHITECTURE_GUIDE.md` — added "companion pitfall" cross-ref next to the existing Timer retain-cycle pitfall.
+5. ✅ `BUILDING_RETRO_MACOS_APPS_SKILL.md` — added "Lesson: RunLoop Mode Discipline in Feeding Pipelines" (Part 23, April 2026).
+6. ✅ Codex Oracle pre-PR code-review gate: **9.3/10** verdict; both NITs applied (negative-regression tests + defensive `isolated deinit`).
+7. ✅ PR #80 opened, reviewed, **MERGED** (merge commit `7f3d76f`).
+8. ✅ Follow-up task spec'd as `tasks/timer-runloop-mode-audit/` (full 6-file canonical structure) for the 3 remaining buggy `Timer.scheduledTimer` callsites. Tracked in shared `_context/state.md` "Post-S3-1A Follow-Ups" section.
+
+**Final branch state on `main`:**
+
+| SHA | Subject |
+|---|---|
+| `7f3d76f` | Merge pull request #80 |
+| `c04f6a8` | docs(mwvi): capture run-loop-mode lesson + new follow-up task |
+| `e18b5f7` | test(visualizer-pipeline): defensive isolated deinit invalidates pollTimer |
+| `0c5dca7` | test(audio-player): negative-regression tests for Phase 1B persistence contract |
+| `6a6bbf2` | **fix(visualizer-pipeline): poll timer in .common run-loop mode** ← THE ACTUAL FIX |
+| `309a02f` | fix(audio-player): idempotent volume/balance routing, dead-write removal, slider pixel-step coalescing |
+| `f806465` | fix(audio-player): commit volume/balance UserDefaults persistence on drag-end |
+| `5d693c0` | docs(mwvi): record Phase 0 spike results — Mechanism B confirmed |
+
+**Test count:** 57 → 59 (+2 negative-regression tests).
+
+**This task folder is being archived to `tasks/done/mainwindow-visualizer-isolation/` per project convention.**

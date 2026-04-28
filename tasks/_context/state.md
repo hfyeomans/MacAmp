@@ -2,7 +2,7 @@
 
 > **Purpose:** Single source of truth for cross-task execution status, wave progress, and coordination decisions.
 > **Date:** 2026-02-21
-> **Updated:** 2026-04-28 (S3-1A `mainwindow-visualizer-isolation` implementation complete + V.1 PASS; pending Oracle gate + PR. New follow-up task: `timer-runloop-mode-audit`.)
+> **Updated:** 2026-04-28 (S3-1A `mainwindow-visualizer-isolation` MERGED — PR #80 merge commit `7f3d76f`. Wave S3-1B `stream-pause-tail` is unblocked and is next. New follow-up task: `timer-runloop-mode-audit`.)
 > **Previous:** 2026-04-27 (S3 plans + todos all Oracle-approved ≥ 9/10. 5 task folders implementation-ready.)
 
 ### Quick Reference
@@ -11,9 +11,9 @@
 |--------|-------|
 | Current release | v1.3 (2026-03-26) |
 | .swift files | ~110 |
-| Tests | 57 |
-| Current phase | S3 planning |
-| PRs merged | 77 total |
+| Tests | 59 (+2 from PR #80 negative-regression tests) |
+| Current phase | S3 — Wave S3-1A merged, S3-1B next |
+| PRs merged | 78 total (PR #80 mwvi) |
 | Architecture principles | `tasks/_context/principles.md` |
 
 ---
@@ -288,18 +288,18 @@ All doc updates verified complete by sub-agent scan:
 
 ### Sprint S3: LOW-MEDIUM Priority — Edge Cases + Optimization + Video Routing
 
-> **Status (2026-04-28):** S3-1A `mainwindow-visualizer-isolation` implementation complete + V.1 PASS — pending Oracle code-review gate + PR. Other S3 tasks (S3-1B through S3-4) still PLAN APPROVED, awaiting their wave order.
+> **Status (2026-04-28):** S3-1A `mainwindow-visualizer-isolation` ✅ **MERGED** (PR #80, merge commit `7f3d76f`). Wave S3-1B (`stream-pause-tail`) is now unblocked and is the next implementation task. The new follow-up `timer-runloop-mode-audit` is also unblocked and can run in parallel with S3-1B (no file conflicts).
 
 **Locked S3 ordering and branch plan:**
 
 | Wave | Step | Task Folder | Branch | PR # | Predecessors | Pre-Plan Spike | Status |
 |------|------|-------------|--------|------|--------------|----------------|--------|
-| S3-1 | A (parallel) | `mainwindow-visualizer-isolation` | `feat/mainwindow-visualizer-isolation` | A | none | `spike/mwvi-volume-drag-profile` (Instruments) | **IN PROGRESS** — V.1 PASS, pending Oracle gate + PR |
-| S3-1 | B (parallel) | `stream-pause-tail` | `fix/stream-pause-tail` | B | none | none | PLAN APPROVED |
-| S3-2 | sequential | `video-audio-engine-routing` | `feat/video-audio-engine-routing` | C | S3-1 merged | `spike/vaer-av-drift-measurement` | PLAN APPROVED |
+| S3-1 | A (parallel) | `mainwindow-visualizer-isolation` | `feat/mainwindow-visualizer-isolation` | **#80** | none | `spike/mwvi-volume-drag-profile` (Instruments) | ✅ **MERGED** 2026-04-28 |
+| S3-1 | B (parallel) | `stream-pause-tail` | `fix/stream-pause-tail` | B | none | none | 📋 **NEXT** — plan approved 9.1/10, ready to implement |
+| S3-2 | sequential | `video-audio-engine-routing` | `feat/video-audio-engine-routing` | C | S3-1 merged | `spike/vaer-av-drift-measurement` | PLAN APPROVED — gated on S3-1B merge |
 | S3-3 | sequential | `hls-streaming-support` | `feat/hls-streaming-support` | D | S3-2 merged | none (Gemini re-run optional at plan-time) | PLAN APPROVED |
 | S3-4 | sequential | `ogg-vorbis-support` | `feat/ogg-vorbis-support` | E | S3-3 merged | `spike/ogg-build-wiring` (0a) + `spike/ogg-local-playback` (0b) | PLAN APPROVED |
-| Post-S3-1A | follow-up | `timer-runloop-mode-audit` | `fix/timer-runloop-mode-audit` | G | S3-1A merged | none | PLANNED — see "Post-S3-1A Follow-Ups" below |
+| Post-S3-1A | follow-up | `timer-runloop-mode-audit` | `fix/timer-runloop-mode-audit` | G | S3-1A merged ✅ | none | 📋 **READY** — can run parallel with S3-1B (no file conflicts) |
 
 **Cross-task file conflict map:**
 
@@ -330,13 +330,13 @@ All doc updates verified complete by sub-agent scan:
 
 | Task Folder | research.md | plan.md | todo.md | Oracle plan score | Iterations |
 |-------------|------------|---------|---------|-------------------|:---:|
-| `mainwindow-visualizer-isolation` | ✅ 9/9 applied + Phase 0 results appended | ✅ | ✅ | **9.4/10** (plan); **8/10** (post-1B Oracle diagnostic) | 4 + 1 |
+| `done/mainwindow-visualizer-isolation` ✅ | ✅ 9/9 applied + Phase 0 results appended | ✅ | ✅ | **9.4/10** (plan); **8/10** (post-1B Oracle diagnostic); **9.3/10** (pre-PR code-review gate) | 4 + 1 + 1 → MERGED PR #80 |
 | `stream-pause-tail` | ✅ 8/8 applied | ✅ (8 ADRs) | ✅ | **9.1/10** | 5 |
 | `video-audio-engine-routing` | ✅ existing | ✅ | ✅ | **9.4/10** | 3 |
 | `hls-streaming-support` | ✅ 8/8 applied | ✅ | ✅ | **9.0/10** | 4 |
 | `ogg-vorbis-support` | ✅ 10/10 applied | ✅ (22 sections) | ✅ | **9.3/10** | 3 |
 
-**S3 is implementation-ready.** S3-1A (mwvi) is in progress; S3-1B (spt) onwards still queued.
+**S3 progress:** S3-1A (mwvi) ✅ MERGED. S3-1B (spt) is next. S3-2/S3-3/S3-4 still queued behind S3-1B.
 
 ### Post-S3-1A Follow-Ups (discovered during mwvi)
 
