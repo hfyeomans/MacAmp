@@ -128,6 +128,31 @@ struct AudioPlayerStateTests {
         #expect(UserDefaults.standard.float(forKey: "balance") == -0.5)
     }
 
+    // Locks in the Phase 1B contract that persistence is gesture-end-driven —
+    // setter alone must NOT write UserDefaults. Guards against the per-tick
+    // persistence pattern silently regressing.
+    @Test("volume setter without commit does not persist")
+    func volumeNoPersistenceWithoutCommit() {
+        let savedVolume = UserDefaults.standard.float(forKey: "volume")
+        defer { UserDefaults.standard.set(savedVolume, forKey: "volume") }
+
+        UserDefaults.standard.set(Float(0.123), forKey: "volume")
+        let player = AudioPlayer()  // init reads UserDefaults → player.volume == 0.123
+        player.volume = 0.789       // setter triggers didSet but should NOT write UserDefaults
+        #expect(UserDefaults.standard.float(forKey: "volume") == 0.123)
+    }
+
+    @Test("balance setter without commit does not persist")
+    func balanceNoPersistenceWithoutCommit() {
+        let savedBalance = UserDefaults.standard.float(forKey: "balance")
+        defer { UserDefaults.standard.set(savedBalance, forKey: "balance") }
+
+        UserDefaults.standard.set(Float(0.321), forKey: "balance")
+        let player = AudioPlayer()
+        player.balance = -0.789
+        #expect(UserDefaults.standard.float(forKey: "balance") == 0.321)
+    }
+
     @Test("isBridgeActive is initially false")
     func bridgeInitiallyInactive() {
         let player = AudioPlayer()
