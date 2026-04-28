@@ -344,3 +344,103 @@ No rejected feedback — all 8 actionable items were applied.
 - `tasks/_context/principles.md` (full)
 - `tasks/done/mainwindow-layer-decomposition/{research,plan,state,todo}.md` (parent task context)
 - `project.yml:1-80` (XcodeGen target sources strategy)
+
+---
+
+## Phase 0 — Spike Results
+
+> **Captured:** 2026-04-28
+> **Spike branch:** `spike/mwvi-volume-drag-profile` (deleted post-capture per plan §4.3 / todo 0.14)
+> **Outcome:** Mechanism B confirmed for both volume and balance axes. Phase 1 scope = **Phase 1B only** (no extraction, no timer-promotion fallback).
+
+### Environment
+
+| Item | Value |
+|---|---|
+| Host | Apple M4 Max, arm64 |
+| macOS | 26.4.1 |
+| Xcode | 26.4.1 |
+| Instruments template | SwiftUI (with `os_signpost` instrument added) |
+| Build | Debug, Thread Sanitizer **disabled** (per plan §4.1 step 2 — TSan distorts timer/signpost timings) |
+| Recording mode | Deferred, 45 s auto-stop per trace |
+
+### Signpost Configuration
+
+Three temporary `os_signpost(.event, log:..., name:...)` call-sites were added to:
+- `MainWindowFullLayer.body` → name `MainWindowFullLayer-body`
+- `MainWindowSlidersLayer.body` → name `MainWindowSlidersLayer-body`
+- `VisualizerView.body` → name `VisualizerView-body`
+
+All three under `OSLog(subsystem: "com.macamp.spike", category: "swiftui-body")`. Edits were reverted before any commit (todo 0.12 cleanup verified clean tree).
+
+### Raw Trace Counts
+
+Each trace = ~45 s recording, with ~5–10 s of app launch + load + Play before steady-state, then ~30 s of the prescribed condition.
+
+| Trace | Condition | FullLayer | SlidersLayer | VisualizerView | Total |
+|-------|-----------|----------:|-------------:|---------------:|------:|
+| **T1** | Volume control (idle, no interaction) | 506 | 507 | 1,514 | 2,527 |
+| **T2** | Volume drag (~30 s sustained) | 459 | 1,239 | 1,298 | 2,996 |
+| **T3** | Balance control (idle, no interaction) | 631 | 632 | 1,907 | 3,170 |
+| **T4** | Balance drag (~30 s sustained) | 568 | 1,443 | 1,652 | 3,663 |
+
+Counts measured via the `os_signpost` instrument, Input Filter `ANY CONTAINS com.macamp.spike` then per-name substitution. Sum-checks all match (T1 = 2,527 ✓, T2 = 2,996 ✓, T3 = 3,170 ✓, T4 = 3,663 ✓).
+
+### Decision-Rule Application (plan §4.2)
+
+Applied independently per axis (volume axis = T2/T1, balance axis = T4/T3).
+
+| Axis | Signpost | Drag/Control ratio | Decision-rule band | Verdict |
+|---|---|---:|---|---|
+| **Volume (T2/T1)** | FullLayer | 0.91× | within ±20% (range 0.80–1.20) | ✓ |
+| | VisualizerView | 0.86× | within ±20% | ✓ |
+| | (SlidersLayer) | 2.44× | expected — slider IS bound to volume; not a mechanism signal |
+| **Balance (T4/T3)** | FullLayer | 0.90× | within ±20% | ✓ |
+| | VisualizerView | 0.87× | within ±20% | ✓ |
+| | (SlidersLayer) | 2.28× | expected — slider IS bound to balance; not a mechanism signal |
+
+Both axes:
+1. FullLayer rate within ±20% of control (no parent-body invalidation spike).
+2. VisualizerView rate within ±20% of control (the timer is still firing — slightly slower under run-loop pressure, not silenced).
+3. **Visualizer freezes visually during drag** (qualitative observation, both axes).
+
+These three conditions together match plan §4.2 row 2 → **Mechanism B (main-thread starvation from synchronous setter chain)**.
+
+- Mechanism A is ruled out: FullLayer never reached the ≥3× threshold (it actually fell slightly below baseline).
+- A+B compound is ruled out: neither FullLayer nor VisualizerView spiked.
+- Mechanism C alone is ruled out: VisualizerView did not exceed +20% of control.
+- Heisenbug is ruled out: visual freeze was reproducible and consistent.
+
+Volume and balance axes agree on the dominant mechanism, so no Phase 1 scope union is required (plan §4.2 final paragraph).
+
+### Qualitative Observation (Important Nuance)
+
+The visualizer freeze begins **the instant the user clicks-and-holds the slider** and persists **for as long as the gesture is held**, regardless of whether the user is actually moving the slider. Releasing the gesture immediately unfreezes it.
+
+This refines the mechanism: the trigger is not "slider value is changing" but "drag gesture is active." Because `DragGesture(minimumDistance: 0)` re-fires `onChanged` while held even without motion, and Swift property `didSet` fires on every assignment regardless of value equality, the synchronous setter chain (`UserDefaults.standard.set(...)` + multi-backend volume routing through `PlaybackCoordinator.setVolume`) executes on every `onChanged` tick — even when the gesture is stationary.
+
+This **strengthens** the case for Phase 1B (move `UserDefaults` write off the per-tick path) and is a useful sanity-check for V.1 verification: after Phase 1B, click-and-hold-without-motion should no longer freeze the spectrum.
+
+### Residual Risk Note
+
+Phase 1B removes only the `UserDefaults` write from `volume.didSet` / `balance.didSet`. The per-tick `engine.setVolume(volume)`, `videoPlaybackController.volume = volume`, and `streamPlayer.volume = vol` writes (via `PlaybackCoordinator.setVolume`) still fire on every `onChanged` tick. These calls are individually fast, but if their cumulative cost is enough to sustain main-thread pressure, the visual freeze could persist after Phase 1B alone.
+
+V.1 verification will repeat the T1–T4 capture protocol on `feat/mainwindow-visualizer-isolation` post-fix. Acceptance:
+- All three signpost rates pass within ±20% bounds (already true pre-fix);
+- AND the visual freeze is gone during volume/balance drag and during click-and-hold.
+
+If V.1 shows the freeze persists, the contingency per plan §4.2 row 4 is **Phase 1C** (promote `Timer.publish` to `@State` so its identity survives any residual parent-body churn). Phase 1C also requires Oracle consultation per plan §11 stop-criterion 2 before being applied.
+
+### Phase 1 Scope Decision
+
+| Phase | Status | Rationale |
+|---|---|---|
+| **Phase 1A — `MainWindowVisualizerLayer` extraction** | **SKIP** | Mechanism A ruled out on both axes. Extraction creates a recomposition boundary that addresses parent-body invalidation, which is not the issue here. Doing 1A would add a file without fixing the freeze. |
+| **Phase 1B — call-site-driven `UserDefaults` persistence** | **EXECUTE** (volume + balance) | Mechanism B confirmed. Per plan §6.1 Option B-i. Mirror to balance axis per todo 1B.9 since balance also exhibits Mechanism B. |
+| **Phase 1C — `@State` timer promotion** | **CONTINGENT** | Run only if V.1 verification shows the freeze persists post-1B. Requires Oracle consultation (plan §11 stop-criterion 2). |
+
+### Spike Hygiene Confirmation
+
+- Signpost edits reverted before any commit (`git checkout --` on three view files; verified clean working tree).
+- `spike/mwvi-volume-drag-profile` branch is local-only; never pushed (`git ls-remote --heads origin 'spike/*'` returns zero rows).
+- Branch will be deleted in todo 0.14 after this Phase 0 results commit lands on `feat/mainwindow-visualizer-isolation`.
