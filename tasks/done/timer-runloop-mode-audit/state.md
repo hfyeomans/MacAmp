@@ -3,17 +3,17 @@
 > **Purpose:** Normalize all timer-on-RunLoop callsites in `MacAmpApp/` onto Pattern A (mwvi-canonical: `Timer(timeInterval:...)` + `RunLoop.main.add(timer, forMode: .common)`). Fixes 2 buggy Butterchurn callsites and converts 4 Pattern-B callsites for consistency.
 > **Created:** 2026-04-28
 > **Revised:** 2026-04-29 (audit corrected at HEAD `883d085`; scope expanded from 3 → 6 callsites for full normalization)
-> **Status:** IMPLEMENTED — branch cut, doc updates done, code edits done, TSan build + 59/59 tests passing, Oracle review 9/10 ACTIONABLE items applied. Awaiting user review before PR push.
+> **Status:** ✅ **MERGED** — PR #81 merged 2026-04-29, merge commit `ac09dd4`. Final delivery: 6 callsites converted to Pattern A across 5 source files; 59/59 tests passing with TSan; CodeRabbit feedback addressed in `7876f2c` (placeholder + MD040). Codex Oracle pre-PR review: 9/10. Branch `fix/timer-runloop-mode-audit` archived; task folder moved to `tasks/done/`.
 
 ---
 
 ## Branch + Wave
 
-- **Branch:** `fix/timer-runloop-mode-audit` (cut from `main` at `883d085`)
+- **Branch:** `fix/timer-runloop-mode-audit` (cut from `main` at `883d085`; merged into `main` at `ac09dd4` on 2026-04-29)
 - **Wave:** Post-S3-1A follow-up (independent of S3-2 / S3-3 / S3-4)
-- **PR target:** PR #81 (opened 2026-04-29; not blocking S3 sequence)
+- **PR:** [#81](https://github.com/hfyeomans/MacAmp/pull/81) — opened + merged 2026-04-29
 - **Predecessors:** mwvi PR #80 merged ✅
-- **Successors:** None for this task. Optional follow-up task `timer-scheduled-on-common-extension` (helper extraction) tracked in `plan.md` §8.
+- **Successors:** None for this task. Optional follow-up task `timer-scheduled-on-common-extension` (helper extraction) deferred — pre-tracked in `tasks/_context/state.md` "Post-S3-1A `timer-runloop-mode-audit` Follow-Ups" section.
 
 ---
 
@@ -49,7 +49,9 @@ mwvi's scope was the spectrum analyzer freeze. Adding 6 unrelated file changes t
 
 ---
 
-## Next Steps
+## Final Status
+
+All steps complete (closed 2026-04-29):
 
 1. ✅ Read all 6 canonical files at HEAD; verify line numbers; confirm audit; `git status` clean.
 2. ✅ Cut branch `fix/timer-runloop-mode-audit` from `main`.
@@ -57,8 +59,6 @@ mwvi's scope was the spectrum analyzer freeze. Adding 6 unrelated file changes t
 4. ✅ Execute Phase 1 (4 Pattern B → A conversions) and Phase 2 (2 Buggy → A conversions).
 5. ✅ Phase 3 verification: TSan build clean, 59/59 tests passing, audit re-run shows zero `Timer.scheduledTimer` matches in production code.
 6. ✅ Phase 4 — Codex Oracle code-review gate (9/10, ACTIONABLE doc-accuracy items applied).
-7. ⏳ Phase 5 — commit changes; **stop and report to user before pushing PR**.
-8. ⏳ User-go-ahead → push + open PR #81.
-9. ⏳ Post-merge close-out (move to `tasks/done/`, update `_context/state.md` + `tasks_index.md` + `resume-prompt.md`).
-
-> **Update 2026-04-29:** Steps 7-8 complete — feature commit `726d847` pushed to `origin/fix/timer-runloop-mode-audit`; PR #81 opened. CodeRabbit feedback (placeholder + MD040) addressed in a follow-up commit on the same branch.
+7. ✅ Phase 5 — commit `726d847` (refactor) pushed; CodeRabbit fixes in `7876f2c` (placeholder + MD040 lint).
+8. ✅ PR #81 opened, reviewed, merged 2026-04-29 (merge commit `ac09dd4`).
+9. ✅ Post-merge close-out: this folder moved to `tasks/done/`; `_context/state.md` + `tasks_index.md` + `resume-prompt.md` refreshed.

@@ -9,34 +9,18 @@
 
 ## Current State (update after each PR merge)
 
-**Last update:** 2026-04-28 (post-PR-#80 merge).
-**Main HEAD:** `7f3d76f` — Merge pull request #80 from `feat/mainwindow-visualizer-isolation`.
+**Last update:** 2026-04-29 (post-PR-#81 merge).
+**Main HEAD:** `ac09dd4` — Merge pull request #81 from `fix/timer-runloop-mode-audit`.
 **Tests:** 59 passing (TSan ON).
-**PRs merged total:** 78.
+**PRs merged total:** 79.
 
-**Most recent task closed:** `tasks/done/mainwindow-visualizer-isolation/` (S3-1A, PR #80, 2026-04-28). The visualizer-freeze fix landed: producer-side `VisualizerPipeline.pollTimer` switched from `Timer.scheduledTimer` (default `.default` mode) to `Timer(...)` + `RunLoop.main.add(timer, forMode: .common)`. See the task folder's `state.md` for full close-out.
+**Most recent task closed:** `tasks/done/timer-runloop-mode-audit/` (Post-S3-1A follow-up, PR #81, 2026-04-29). Pattern A normalization across the entire codebase: all 7 timer-on-RunLoop callsites in `MacAmpApp/` now use `Timer(timeInterval:repeats:block:)` + `RunLoop.main.add(timer, forMode: .common)` + assign. The 2 LOW-severity Butterchurn timer bugs (preset auto-cycle and track-title overlay paused during gestures) were fixed as a side-effect. CodeRabbit feedback addressed inline. New deferred sub-follow-up `timer-scheduled-on-common-extension` (helper extension extraction) pre-tracked in `tasks/_context/state.md`.
 
 ---
 
 ## Active Work Queue (ordered — start at the top)
 
-### 1. NEXT — `tasks/timer-runloop-mode-audit/`
-
-**Why first:** Quick win, same run-loop-mode pattern that just shipped. Completes the "no UI element freezes during a drag" story. Estimated 1-2 hours including Oracle gate + PR.
-
-**Scope:** 3 buggy `Timer.scheduledTimer` callsites still using `.default`-mode scheduling:
-
-| File | Line | Severity | Symptom during gesture |
-|---|---:|---|---|
-| `MacAmpApp/Views/MainWindow/WinampMainWindowInteractionState.swift` | 34 | **HIGH** | Winamp marquee title scroll freezes during any slider drag |
-| `MacAmpApp/ViewModels/ButterchurnPresetManager.swift` | 208 | LOW | Butterchurn auto-preset-cycle pauses |
-| `MacAmpApp/ViewModels/ButterchurnPresetManager.swift` | 239 | LOW | Butterchurn track-title overlay refresh pauses |
-
-**Branch:** `fix/timer-runloop-mode-audit` → target PR #G.
-**Phase 0 spike:** none required (structural fix mirroring mwvi commit `6a6bbf2`).
-**Plan + todo already in task folder, Oracle-ready.**
-
-### 2. THEN — `tasks/stream-pause-tail/` (S3-1B)
+### 1. NEXT — `tasks/stream-pause-tail/` (S3-1B)
 
 **Status:** Plan Oracle-approved 9.1/10 over 5 iterations. Ready to implement.
 
@@ -48,12 +32,21 @@
 **Phase 0 spike:** none required.
 **8 phases / 8 ADRs (SPT-1 through SPT-8) / ~8 files touched** — see `tasks/stream-pause-tail/{plan,todo}.md`.
 
+### 2. DEFERRED — `timer-scheduled-on-common-extension`
+
+Sub-follow-up of `timer-runloop-mode-audit` (now merged). Extract a `Timer.scheduledOnMainCommon(every:repeats:_:)` helper into `MacAmpApp/Utilities/Timer+CommonMode.swift` and migrate all 7 timer-on-RunLoop callsites in `MacAmpApp/` to use it. With 7 Pattern-A callsites now in the codebase, AHA Rule-of-Three is exceeded by 4× — the helper is the natural next step.
+
+**Predecessor:** `timer-runloop-mode-audit` PR #81 ✅ merged 2026-04-29.
+**Task folder:** not yet created (centrally tracked in `tasks/_context/state.md` "Post-S3-1A `timer-runloop-mode-audit` Follow-Ups" section).
+**Risk:** `@Sendable` closure migration may surface concurrency-checker edge cases at callsites using `[weak self]` + `MainActor.assumeIsolated` — warrants per-site review.
+**When to start:** any time after S3-1B; not blocking any S3 wave.
+
 ---
 
 ## S3 work map (current state — refresh on each merge)
 
 ```
-S3-1A mwvi  ✅ MERGED (PR #80, merge commit 7f3d76f)
+S3-1A mwvi  ✅ MERGED (PR #80, merge commit 7f3d76f, 2026-04-28)
      │
      ├──► S3-1B spt                       ←── PR #B   📋 NEXT (plan Oracle-approved 9.1/10)
      │       │
@@ -67,16 +60,16 @@ S3-1A mwvi  ✅ MERGED (PR #80, merge commit 7f3d76f)
      │    S3-4 ogg                        ←── PR #E
      │           └── runs spike/ogg-build-wiring (0a) + spike/ogg-local-playback (0b) FIRST
      │
-     └──► timer-runloop-mode-audit         ←── PR #G   🔧 IN PROGRESS (parallel with S3-1B; no file conflicts)
+     └──► timer-runloop-mode-audit         ←── PR #81  ✅ MERGED (merge commit ac09dd4, 2026-04-29)
               │
               ▼
-          timer-scheduled-on-common-extension   ←── PR #H   ⏸ DEFERRED
+          timer-scheduled-on-common-extension   ←── PR #H   ⏸ DEFERRED (predecessor merged ✅; ready when scheduled)
               Extract `Timer.scheduledOnMainCommon` helper into
               `MacAmpApp/Utilities/Timer+CommonMode.swift`.
               Migrate all 7 timer-on-RunLoop callsites to use it.
               `@Sendable` closure migration may surface concurrency-checker
               edge cases at some callsites — warrants per-site review.
-              Pre-tracked in `tasks/_context/state.md`.
+              Pre-tracked in `tasks/_context/state.md`. Task folder not yet created.
 ```
 
 **Spike policy (default — do NOT deviate without explicit reason):** each Phase 0 spike runs at its parent task's pickup time on a throwaway branch, findings written to that task's `research.md`, branch deleted. Do NOT run `spike/vaer-av-drift-measurement`, `spike/ogg-build-wiring`, or `spike/ogg-local-playback` early. The vaer drift spike is the kill-switch on whether vaer is feasible at all (>100 ms drift → cancel task), but its strategic value of running early is not worth the workflow break.

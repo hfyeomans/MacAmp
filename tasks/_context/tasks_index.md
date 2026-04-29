@@ -2,7 +2,7 @@
 
 > **Purpose:** Index of all currently open (non-done) tasks in `tasks/`. Each entry notes the task name, purpose, and current status.
 >
-> **Updated:** 2026-04-28 (post-PR-#80 merge)
+> **Updated:** 2026-04-29 (post-PR-#81 merge — timer-runloop-mode-audit shipped)
 > **Excludes:** `tasks/done/`, `tasks/stale/`, `tasks/depreciated/`
 
 ---
@@ -31,11 +31,12 @@
 
 ---
 
-## Post-S3-1A Follow-Up (discovered during mwvi)
+## Post-S3-1A Follow-Ups
 
 | Task | Purpose | Size | Status |
 |------|---------|------|--------|
-| `timer-runloop-mode-audit` | Fix 3 remaining `Timer.scheduledTimer` callsites that pause during gestures (Winamp marquee scroll + 2 Butterchurn timers); 4 other callsites already correct | Small | 📋 **READY** — S3-1A merged ✅; can run parallel with S3-1B |
+| `done/timer-runloop-mode-audit` | Normalized all 6 non-Pattern-A timer-on-RunLoop callsites onto Pattern A; 2 Butterchurn bugs fixed as side-effect; codebase now uniform on `Timer(...)` + `RunLoop.main.add(.common)` | Small | ✅ **MERGED** PR #81 (2026-04-29, merge `ac09dd4`) |
+| `timer-scheduled-on-common-extension` | Extract `Timer.scheduledOnMainCommon` helper, migrate all 7 timer-on-RunLoop callsites to use it; `@Sendable` closure migration warrants per-site review | Small-Medium | 🟡 **DEFERRED** — discovered during `timer-runloop-mode-audit`; predecessor merged ✅; task folder not yet created |
 
 ---
 
@@ -84,8 +85,8 @@
 
 | Category | Count |
 |---------|-------|
-| Total active task folders | 15 |
-| 📋 PLANNED (ready to implement) | 5 |
+| Total active task folders | 14 |
+| 📋 PLANNED (ready to implement) | 4 |
 | 🟡 DEFERRED / NO-GO | 5 |
 | 📄 REFERENCE | 4 |
 | Backlog | 1 |

@@ -2,8 +2,8 @@
 
 > **Purpose:** Single source of truth for cross-task execution status, wave progress, and coordination decisions.
 > **Date:** 2026-02-21
-> **Updated:** 2026-04-29 (Pre-tracked deferred follow-up `timer-scheduled-on-common-extension` discovered during `timer-runloop-mode-audit` execution. Helper-extension extraction with `@Sendable` migration of all 7 Pattern-A timer callsites; deferred to its own task per Problem-First + API Surface Minimization. See "Post-S3-1A `timer-runloop-mode-audit` Follow-Ups" section.)
-> **Previous:** 2026-04-28 (S3-1A `mainwindow-visualizer-isolation` MERGED — PR #80 merge commit `7f3d76f`. Wave S3-1B `stream-pause-tail` is unblocked and is next. New follow-up task: `timer-runloop-mode-audit`.)
+> **Updated:** 2026-04-29 (Post-S3-1A follow-up `timer-runloop-mode-audit` MERGED — PR #81 merge commit `ac09dd4`. Pattern A normalization: 6 timer-on-RunLoop callsites converted across 5 source files; codebase now uniform. Wave S3-1B `stream-pause-tail` remains NEXT. Sub-follow-up `timer-scheduled-on-common-extension` still DEFERRED, predecessor merged.)
+> **Previous:** 2026-04-29 (Pre-tracked deferred follow-up `timer-scheduled-on-common-extension` discovered during `timer-runloop-mode-audit` execution. Helper-extension extraction with `@Sendable` migration of all 7 Pattern-A timer callsites; deferred to its own task per Problem-First + API Surface Minimization. See "Post-S3-1A `timer-runloop-mode-audit` Follow-Ups" section.)
 
 ### Quick Reference
 
@@ -13,7 +13,7 @@
 | .swift files | ~110 |
 | Tests | 59 (+2 from PR #80 negative-regression tests) |
 | Current phase | S3 — Wave S3-1A merged, S3-1B next |
-| PRs merged | 78 total (PR #80 mwvi) |
+| PRs merged | 79 total (PR #80 mwvi, PR #81 timer-runloop-mode-audit) |
 | Architecture principles | `tasks/_context/principles.md` |
 
 ---
@@ -299,7 +299,7 @@ All doc updates verified complete by sub-agent scan:
 | S3-2 | sequential | `video-audio-engine-routing` | `feat/video-audio-engine-routing` | C | S3-1 merged | `spike/vaer-av-drift-measurement` | PLAN APPROVED — gated on S3-1B merge |
 | S3-3 | sequential | `hls-streaming-support` | `feat/hls-streaming-support` | D | S3-2 merged | none (Gemini re-run optional at plan-time) | PLAN APPROVED |
 | S3-4 | sequential | `ogg-vorbis-support` | `feat/ogg-vorbis-support` | E | S3-3 merged | `spike/ogg-build-wiring` (0a) + `spike/ogg-local-playback` (0b) | PLAN APPROVED |
-| Post-S3-1A | follow-up | `timer-runloop-mode-audit` | `fix/timer-runloop-mode-audit` | G | S3-1A merged ✅ | none | 📋 **READY** — can run parallel with S3-1B (no file conflicts) |
+| Post-S3-1A | follow-up | `done/timer-runloop-mode-audit` | `fix/timer-runloop-mode-audit` | **#81** | S3-1A merged ✅ | none | ✅ **MERGED** 2026-04-29 (merge commit `ac09dd4`) |
 
 **Cross-task file conflict map:**
 
@@ -342,7 +342,7 @@ All doc updates verified complete by sub-agent scan:
 
 | Task Folder | Description | Size | Status | Trigger |
 |-------------|-------------|------|--------|---------|
-| `timer-runloop-mode-audit` | Audit + fix the 3 remaining `Timer.scheduledTimer` callsites that schedule on `.default` mode and pause during gestures (`WinampMainWindowInteractionState.scrollTimer` HIGH; `ButterchurnPresetManager.cycleTimer` + `.trackTitleTimer` LOW). 4 other callsites already use `.common` correctly. Mirrors mwvi commit `6a6bbf2`. | Small (~30-40 lines diff) | PLANNED — runs after mwvi PR #A merges | Discovered during mwvi diagnosis (2026-04-28). Same gesture-pause bug pattern, 3 separate user-visible defects (most prominently the Winamp marquee scroll). |
+| `done/timer-runloop-mode-audit` | Normalized all 6 non-Pattern-A `Timer.scheduledTimer` callsites onto Pattern A (`Timer(timeInterval:...)` + `RunLoop.main.add(.common)`). Original audit (3 buggy) was textually inconsistent — corrected at HEAD: 1 Pattern A + 4 Pattern B + 2 buggy. Scope expanded to 6-callsite consistency pass; the 2 LOW Butterchurn bugs fixed as a side-effect. The marquee freeze claimed HIGH-severity in the original audit was already correct on `main` (Pattern B works functionally). | Small (~36 LOC code + 4 task-doc revisions) | ✅ **MERGED** PR #81, merge commit `ac09dd4` (2026-04-29). Codex Oracle 9/10. CodeRabbit feedback addressed. | Discovered during mwvi diagnosis (2026-04-28). |
 
 **mwvi-derived lessons (cross-task):**
 
@@ -353,7 +353,7 @@ All doc updates verified complete by sub-agent scan:
 
 | Task Folder | Description | Size | Status | Trigger |
 |-------------|-------------|------|--------|---------|
-| `timer-scheduled-on-common-extension` | Extract `Timer.scheduledOnMainCommon(every:repeats:_:)` helper into `MacAmpApp/Utilities/Timer+CommonMode.swift`. Migrate all 7 timer-on-RunLoop callsites in `MacAmpApp/` (`VisualizerPipeline.pollTimer`, `AudioEngineController.progressTimer`, `StreamPlayer.elapsedTimer`, `VideoWindowChromeView.metadataScrollTimer`, `WinampMainWindowInteractionState.scrollTimer`, `ButterchurnPresetManager.cycleTimer`, `.trackTitleTimer`) to use it. Eliminates the 3-line + 1-comment ritual at every callsite and makes the `.common`-mode requirement impossible to forget on new code. | Small-Medium (~30 LOC helper + 7 callsite migrations + `project.yml` resource entry) | **DEFERRED** — runs after `timer-runloop-mode-audit` PR #G merges. Codex Oracle endorsed deferring (Problem-First + API Surface Minimization). Concurrency-checker edge cases possible (`@Sendable` closure capture interactions with existing `[weak self]` and `MainActor.assumeIsolated` patterns) — warrant their own review. | Discovered during `timer-runloop-mode-audit` (2026-04-29). With 7 Pattern-A callsites after the task lands, AHA Rule-of-Three is exceeded by 4×. |
+| `timer-scheduled-on-common-extension` | Extract `Timer.scheduledOnMainCommon(every:repeats:_:)` helper into `MacAmpApp/Utilities/Timer+CommonMode.swift`. Migrate all 7 timer-on-RunLoop callsites in `MacAmpApp/` (`VisualizerPipeline.pollTimer`, `AudioEngineController.progressTimer`, `StreamPlayer.elapsedTimer`, `VideoWindowChromeView.metadataScrollTimer`, `WinampMainWindowInteractionState.scrollTimer`, `ButterchurnPresetManager.cycleTimer`, `.trackTitleTimer`) to use it. Eliminates the 3-line + 1-comment ritual at every callsite and makes the `.common`-mode requirement impossible to forget on new code. | Small-Medium (~30 LOC helper + 7 callsite migrations + `project.yml` resource entry) | 🟡 **DEFERRED** — predecessor `timer-runloop-mode-audit` merged 2026-04-29 ✅; ready when scheduled. Codex Oracle endorsed deferring (Problem-First + API Surface Minimization). Concurrency-checker edge cases possible (`@Sendable` closure capture interactions with existing `[weak self]` and `MainActor.assumeIsolated` patterns) — warrant their own review. Task folder not yet created. | Discovered during `timer-runloop-mode-audit` (2026-04-29). With 7 Pattern-A callsites now in `MacAmpApp/`, AHA Rule-of-Three is exceeded by 4×. |
 
 ### Post-S2 / Pre-S3 Architecture Follow-Ons: Hybrid Dedup + Decomposition (6 tasks)
 
