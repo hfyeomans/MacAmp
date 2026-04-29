@@ -2,8 +2,8 @@
 
 > **Purpose:** Single source of truth for cross-task execution status, wave progress, and coordination decisions.
 > **Date:** 2026-02-21
-> **Updated:** 2026-04-28 (S3-1A `mainwindow-visualizer-isolation` MERGED — PR #80 merge commit `7f3d76f`. Wave S3-1B `stream-pause-tail` is unblocked and is next. New follow-up task: `timer-runloop-mode-audit`.)
-> **Previous:** 2026-04-27 (S3 plans + todos all Oracle-approved ≥ 9/10. 5 task folders implementation-ready.)
+> **Updated:** 2026-04-29 (Pre-tracked deferred follow-up `timer-scheduled-on-common-extension` discovered during `timer-runloop-mode-audit` execution. Helper-extension extraction with `@Sendable` migration of all 7 Pattern-A timer callsites; deferred to its own task per Problem-First + API Surface Minimization. See "Post-S3-1A `timer-runloop-mode-audit` Follow-Ups" section.)
+> **Previous:** 2026-04-28 (S3-1A `mainwindow-visualizer-isolation` MERGED — PR #80 merge commit `7f3d76f`. Wave S3-1B `stream-pause-tail` is unblocked and is next. New follow-up task: `timer-runloop-mode-audit`.)
 
 ### Quick Reference
 
@@ -348,6 +348,12 @@ All doc updates verified complete by sub-agent scan:
 
 - **End-to-end pipeline diagnosis** — Symptoms manifest at the consumer; root causes often live at the producer. Phase 0 instrumented only the SwiftUI consumer side; the actual root cause was upstream at `VisualizerPipeline.pollTimer`. See `~/.claude/projects/-Users-hank-dev-src-MacAmp/memory/feedback_pipeline_end_to_end_diagnosis.md` and `BUILDING_RETRO_MACOS_APPS_SKILL.md`.
 - **ast-grep structural search before edits** — relying on `rg` text matching alone missed a duplicate `videoPlaybackController.volume` write and dead `streamPlayer.volume`/`.balance` properties. See `~/.claude/projects/-Users-hank-dev-src-MacAmp/memory/feedback_ast_grep_structural_search.md`.
+
+### Post-S3-1A `timer-runloop-mode-audit` Follow-Ups (discovered during this task)
+
+| Task Folder | Description | Size | Status | Trigger |
+|-------------|-------------|------|--------|---------|
+| `timer-scheduled-on-common-extension` | Extract `Timer.scheduledOnMainCommon(every:repeats:_:)` helper into `MacAmpApp/Utilities/Timer+CommonMode.swift`. Migrate all 7 timer-on-RunLoop callsites in `MacAmpApp/` (`VisualizerPipeline.pollTimer`, `AudioEngineController.progressTimer`, `StreamPlayer.elapsedTimer`, `VideoWindowChromeView.metadataScrollTimer`, `WinampMainWindowInteractionState.scrollTimer`, `ButterchurnPresetManager.cycleTimer`, `.trackTitleTimer`) to use it. Eliminates the 3-line + 1-comment ritual at every callsite and makes the `.common`-mode requirement impossible to forget on new code. | Small-Medium (~30 LOC helper + 7 callsite migrations + `project.yml` resource entry) | **DEFERRED** — runs after `timer-runloop-mode-audit` PR #G merges. Codex Oracle endorsed deferring (Problem-First + API Surface Minimization). Concurrency-checker edge cases possible (`@Sendable` closure capture interactions with existing `[weak self]` and `MainActor.assumeIsolated` patterns) — warrant their own review. | Discovered during `timer-runloop-mode-audit` (2026-04-29). With 7 Pattern-A callsites after the task lands, AHA Rule-of-Three is exceeded by 4×. |
 
 ### Post-S2 / Pre-S3 Architecture Follow-Ons: Hybrid Dedup + Decomposition (6 tasks)
 
