@@ -3,7 +3,7 @@
 > **Status:** IN PROGRESS — branch `fix/timer-runloop-mode-audit` cut from `main` at `883d085`.
 > **Sprint:** Post-S3-1A follow-up (independent of other S3 work).
 > **Branch:** `fix/timer-runloop-mode-audit`
-> **PR target:** PR #G
+> **PR target:** PR #81 (opened 2026-04-29)
 
 ---
 
@@ -106,7 +106,7 @@ Single commit. Total expected diff: ~36 added, ~30 removed across 5 source files
 
 Suggested commit message:
 
-```
+```text
 refactor(runloop): normalize all timers onto Pattern A (.common mode)
 
 The codebase had three coexisting forms of timer-on-RunLoop scheduling:

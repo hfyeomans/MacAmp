@@ -11,7 +11,7 @@
 
 - **Branch:** `fix/timer-runloop-mode-audit` (cut from `main` at `883d085`)
 - **Wave:** Post-S3-1A follow-up (independent of S3-2 / S3-3 / S3-4)
-- **PR target:** PR #G (numbering tentative; not blocking S3 sequence)
+- **PR target:** PR #81 (opened 2026-04-29; not blocking S3 sequence)
 - **Predecessors:** mwvi PR #80 merged ✅
 - **Successors:** None for this task. Optional follow-up task `timer-scheduled-on-common-extension` (helper extraction) tracked in `plan.md` §8.
 
@@ -58,5 +58,7 @@ mwvi's scope was the spectrum analyzer freeze. Adding 6 unrelated file changes t
 5. ✅ Phase 3 verification: TSan build clean, 59/59 tests passing, audit re-run shows zero `Timer.scheduledTimer` matches in production code.
 6. ✅ Phase 4 — Codex Oracle code-review gate (9/10, ACTIONABLE doc-accuracy items applied).
 7. ⏳ Phase 5 — commit changes; **stop and report to user before pushing PR**.
-8. ⏳ User-go-ahead → push + open PR #G.
+8. ⏳ User-go-ahead → push + open PR #81.
 9. ⏳ Post-merge close-out (move to `tasks/done/`, update `_context/state.md` + `tasks_index.md` + `resume-prompt.md`).
+
+> **Update 2026-04-29:** Steps 7-8 complete — feature commit `726d847` pushed to `origin/fix/timer-runloop-mode-audit`; PR #81 opened. CodeRabbit feedback (placeholder + MD040) addressed in a follow-up commit on the same branch.
