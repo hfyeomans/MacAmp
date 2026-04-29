@@ -1,18 +1,19 @@
 # State: Timer.scheduledTimer Run-Loop Mode Audit
 
-> **Purpose:** Bring the 3 remaining buggy `Timer.scheduledTimer` callsites in `MacAmpApp/` onto `.common` run-loop mode so they keep firing during user gestures. Mirrors the mwvi `VisualizerPipeline` fix.
+> **Purpose:** Normalize all timer-on-RunLoop callsites in `MacAmpApp/` onto Pattern A (mwvi-canonical: `Timer(timeInterval:...)` + `RunLoop.main.add(timer, forMode: .common)`). Fixes 2 buggy Butterchurn callsites and converts 4 Pattern-B callsites for consistency.
 > **Created:** 2026-04-28
-> **Status:** PLANNED — ready to implement after mwvi PR #A merges.
+> **Revised:** 2026-04-29 (audit corrected at HEAD `883d085`; scope expanded from 3 → 6 callsites for full normalization)
+> **Status:** IMPLEMENTED — branch cut, doc updates done, code edits done, TSan build + 59/59 tests passing, Oracle review 9/10 ACTIONABLE items applied. Awaiting user review before PR push.
 
 ---
 
 ## Branch + Wave
 
-- **Branch:** `fix/timer-runloop-mode-audit`
+- **Branch:** `fix/timer-runloop-mode-audit` (cut from `main` at `883d085`)
 - **Wave:** Post-S3-1A follow-up (independent of S3-2 / S3-3 / S3-4)
 - **PR target:** PR #G (numbering tentative; not blocking S3 sequence)
-- **Predecessors:** mwvi PR #A merged (so we re-audit against post-mwvi `main`)
-- **Successors:** None
+- **Predecessors:** mwvi PR #80 merged ✅
+- **Successors:** None for this task. Optional follow-up task `timer-scheduled-on-common-extension` (helper extraction) tracked in `plan.md` §8.
 
 ---
 
@@ -20,37 +21,42 @@
 
 | File | Status |
 |------|--------|
-| `research.md` | ✅ Complete (audit findings 2026-04-28) |
-| `plan.md` | ✅ Complete |
-| `todo.md` | ✅ Complete (5 phases, derived from plan) |
+| `research.md` | ✅ Revised 2026-04-29 (audit re-done at HEAD; corrected the original textual-only audit) |
+| `plan.md` | ✅ Revised 2026-04-29 (scope expanded to 6 callsites for full normalization) |
+| `todo.md` | ✅ Revised 2026-04-29 (5 phases, derived from revised plan) |
 | `depreciated.md` | Empty |
 | `placeholder.md` | Empty |
 
 ---
 
-## Audit Summary
+## Audit Summary (corrected 2026-04-29)
 
-7 `Timer.scheduledTimer` callsites total in `MacAmpApp/` (post-mwvi):
+7 `Timer.scheduledTimer` / `Timer(...)` callsites total in `MacAmpApp/` at HEAD `883d085`:
 
-- ✅ 4 already correct (`AudioEngineController.progressTimer`, `StreamPlayer.elapsedTimer`, `VideoWindowChromeView.metadataScrollTimer`, `VisualizerPipeline.pollTimer` after mwvi commit `6a6bbf2`).
-- ❌ 3 need fixing:
-  - **HIGH:** `WinampMainWindowInteractionState.scrollTimer` — Winamp marquee title scroll freezes during gestures.
-  - **LOW:** `ButterchurnPresetManager.cycleTimer` — Butterchurn preset auto-cycle pauses.
-  - **LOW:** `ButterchurnPresetManager.trackTitleTimer` — Butterchurn track-title overlay refresh pauses.
+- ✅ **1 Pattern A** (mwvi-canonical): `VisualizerPipeline.pollTimer` (fixed in commit `6a6bbf2`).
+- ⚠️ **4 Pattern B** (functionally correct but stylistically inconsistent — `Timer.scheduledTimer` + later `.common` add): `AudioEngineController.progressTimer`, `StreamPlayer.elapsedTimer`, `VideoWindowChromeView.metadataScrollTimer`, `WinampMainWindowInteractionState.scrollTimer`.
+- ❌ **2 buggy** (no `.common` add): `ButterchurnPresetManager.cycleTimer`, `.trackTitleTimer`.
+
+This task normalizes all 6 non-A callsites to Pattern A.
+
+The original audit (2026-04-28) was textual and inconsistent — see the "Audit correction" section in `research.md`. The HIGH-severity user-visible defect it claimed (Winamp marquee freeze during slider drag) does not exist on `main`; the marquee scrolls correctly during gestures (manually verified by user 2026-04-29). The two LOW-severity Butterchurn defects are real and get fixed as a side-effect of the consistency pass.
 
 ---
 
 ## Why this is its own task (not folded into mwvi PR)
 
-mwvi's scope is the spectrum analyzer freeze. Adding 3 unrelated file changes there would be scope creep — the fixes are structurally similar but each callsite has its own semantic context (marquee scroll, preset cycle, title overlay) that warrants independent review. Per project Principle 1 (Problem-First), one task = one problem statement. This task's problem statement is "audit and fix the codebase-wide pattern"; mwvi's was "fix the visualizer freeze."
+mwvi's scope was the spectrum analyzer freeze. Adding 6 unrelated file changes there would be scope creep — the fixes are structurally similar but each callsite has its own semantic context that warrants independent review. Per project Principle 1 (Problem-First), one task = one problem statement. This task's problem statement is "audit and normalize the codebase-wide pattern"; mwvi's was "fix the visualizer freeze."
 
 ---
 
 ## Next Steps
 
-1. Wait for mwvi PR #A to merge (so this task's audit re-runs against post-mwvi `main`).
-2. Cut branch `fix/timer-runloop-mode-audit`.
-3. Execute Phases 1-2 (fixes) and Phase 3 (verification) per todo.md.
-4. Run Oracle code-review gate.
-5. Open PR #G.
-6. Merge.
+1. ✅ Read all 6 canonical files at HEAD; verify line numbers; confirm audit; `git status` clean.
+2. ✅ Cut branch `fix/timer-runloop-mode-audit` from `main`.
+3. ✅ Update task docs to reflect revised scope.
+4. ✅ Execute Phase 1 (4 Pattern B → A conversions) and Phase 2 (2 Buggy → A conversions).
+5. ✅ Phase 3 verification: TSan build clean, 59/59 tests passing, audit re-run shows zero `Timer.scheduledTimer` matches in production code.
+6. ✅ Phase 4 — Codex Oracle code-review gate (9/10, ACTIONABLE doc-accuracy items applied).
+7. ⏳ Phase 5 — commit changes; **stop and report to user before pushing PR**.
+8. ⏳ User-go-ahead → push + open PR #G.
+9. ⏳ Post-merge close-out (move to `tasks/done/`, update `_context/state.md` + `tasks_index.md` + `resume-prompt.md`).

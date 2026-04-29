@@ -31,7 +31,8 @@ final class WinampMainWindowInteractionState {
         guard scrollTimer == nil else { return }
         guard isViewVisible else { return }
 
-        scrollTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { [weak self] _ in
+        // .common run-loop mode keeps this firing during user gestures (.eventTracking).
+        let timer = Timer(timeInterval: 0.15, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 let trackText = self.displayTitleProvider()
@@ -47,9 +48,8 @@ final class WinampMainWindowInteractionState {
                 }
             }
         }
-        if let timer = scrollTimer {
-            RunLoop.main.add(timer, forMode: .common)
-        }
+        RunLoop.main.add(timer, forMode: .common)
+        scrollTimer = timer
     }
 
     private var scrollRestartTask: Task<Void, Never>?

@@ -1,104 +1,151 @@
 # Plan: Timer.scheduledTimer Run-Loop Mode Audit
 
-> **Status:** PLANNED — ready to implement after mwvi PR #A merges.
+> **Status:** IN PROGRESS — branch `fix/timer-runloop-mode-audit` cut from `main` at `883d085`.
 > **Sprint:** Post-S3-1A follow-up (independent of other S3 work).
 > **Branch:** `fix/timer-runloop-mode-audit`
-> **PR target:** PR #G (after S3-1, S3-2, S3-3, S3-4 finish; not blocking)
+> **PR target:** PR #G
 
 ---
 
 ## 1. Problem Statement
 
-Three production-code call sites of `Timer.scheduledTimer(withTimeInterval:repeats:block:)` schedule timers on the run loop in `.default` mode only, so they pause during any active gesture (run loop in `.eventTracking`). The most visible defect is the main-window Winamp marquee title scroll freezing during slider drags. This task fixes the three callsites uniformly and adds a structural guard against regression.
+The codebase has three coexisting forms of timer-on-RunLoop scheduling:
+
+- **Pattern A (1 callsite, mwvi-canonical):** `Timer(timeInterval:repeats:block:)` + `RunLoop.main.add(timer, forMode: .common)` + assignment.
+- **Pattern B (4 callsites):** `Timer.scheduledTimer(...)` + later `RunLoop.main.add(timer, forMode: .common)`. Functionally correct (the same timer is registered on both `.default` and `.common` modes; Apple permits a timer to be in multiple modes in the same RunLoop) but stylistically inconsistent and has a quieter failure mode if the `.common` add is ever removed (the timer silently degrades to `.default`-only).
+- **Buggy (2 callsites):** `Timer.scheduledTimer(...)` with **no** `.common` add. Both are in `ButterchurnPresetManager` (`cycleTimer`, `trackTitleTimer`). Fires only in `.default` mode → pauses during any gesture.
+
+The user-visible defect (HIGH severity) reported in the original audit — Winamp marquee freeze during slider drag — was based on a misread; that callsite already has the `.common` add and the marquee scrolls correctly during gestures (manually verified by user on `main` 2026-04-29). The two LOW-severity Butterchurn defects are real.
+
+This task **normalizes all 6 non-Pattern-A callsites onto Pattern A** so the codebase has one canonical run-loop-mode idiom. The 2 Butterchurn callsites get fixed in the process.
 
 ## 2. Non-Goals
 
 - **Not** rewriting any timer's behavior or interval.
-- **Not** changing what each timer does — only **where** (which run-loop mode) it's scheduled.
-- **Not** introducing a new abstraction. Three callsites is below the AHA Rule-of-Three threshold for extraction; we apply the fix in place at each callsite. (Callsite #4 already exists in `AudioEngineController.swift` etc — but that's an *informal* pattern, not an enforced helper.)
+- **Not** changing what each timer does — only **how** it's constructed and scheduled.
+- **Not** introducing a `Timer.scheduledOnCommon(...)` extension helper. With 7 Pattern-A callsites after this task, AHA Rule-of-Three is exceeded; extracting a helper is an obvious next step but is its own concern (visibility, `Sendable` checks, where the extension lives, comment-as-doc placement). Tracked as a follow-up below.
 - **Not** auditing other timer APIs (`DispatchSourceTimer`, `Timer.publish`, `RunLoop.perform(after:)`, `Task.sleep` loops). Out of scope for this task; covered separately if regressions appear.
 
-## 3. Files to Modify
+## 3. Files to Modify (6 callsites in 5 files)
 
-### File 1: `MacAmpApp/Views/MainWindow/WinampMainWindowInteractionState.swift` (HIGH severity)
+### File 1: `MacAmpApp/Audio/AudioEngineController.swift` (Pattern B → A)
 
-Lines 30-50. Convert `Timer.scheduledTimer` to manual `Timer(...)` + `RunLoop.main.add(timer, forMode: .common)`.
+Lines 207-224. Convert `progressTimer` setup.
 
 ```swift
 // Before:
-scrollTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { [weak self] _ in
-    Task { @MainActor [weak self] in
-        // ...
+func startProgressTimer() {
+    progressTimer?.invalidate()
+    let timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+        // ... body ...
     }
+    progressTimer = timer
+    RunLoop.main.add(timer, forMode: .common)
 }
 
 // After:
-let timer = Timer(timeInterval: 0.15, repeats: true) { [weak self] _ in
-    Task { @MainActor [weak self] in
-        // ...
+func startProgressTimer() {
+    progressTimer?.invalidate()
+    // .common mode keeps this firing during gestures (.default would pause in .eventTracking).
+    let timer = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in
+        // ... body ...
     }
+    RunLoop.main.add(timer, forMode: .common)
+    progressTimer = timer
 }
-RunLoop.main.add(timer, forMode: .common)
-scrollTimer = timer
 ```
 
-Add a brief explanatory comment (one line) noting the `.common`-mode requirement so a future contributor doesn't regress this back to `.scheduledTimer`.
+### File 2: `MacAmpApp/Audio/StreamPlayer.swift` (Pattern B → A)
 
-### File 2: `MacAmpApp/ViewModels/ButterchurnPresetManager.swift` (LOW severity, both callsites)
+Lines 232-244. Convert `elapsedTimer` setup. Same shape as File 1.
 
-Lines 204-213 (`cycleTimer`) and lines 232-244 (`trackTitleTimer`). Same conversion pattern.
+### File 3: `MacAmpApp/Views/Windows/VideoWindowChromeView.swift` (Pattern B → A)
+
+Lines 216-234. Convert `metadataScrollTimer` setup. The current code uses an `if let timer = metadataScrollTimer { RunLoop.main.add(...) }` guard which becomes unnecessary when we move to manual construction.
+
+### File 4: `MacAmpApp/Views/MainWindow/WinampMainWindowInteractionState.swift` (Pattern B → A)
+
+Lines 30-53. Convert `scrollTimer` setup. Same `if let` simplification as File 3.
+
+### File 5+6: `MacAmpApp/ViewModels/ButterchurnPresetManager.swift` (Buggy → A) — TWO callsites
+
+- Lines 204-213 (`cycleTimer`)
+- Lines 232-244 (`trackTitleTimer`)
+
+Convert both to Pattern A. These currently have no `.common` add.
 
 ## 4. Acceptance Criteria
 
-- All three callsites converted to manual-Timer + `.common`-mode add.
-- Visual: with the app open and a track playing, the main-window track title scrolls continuously during a 5-second volume slider drag (was: freezes).
+- All 6 callsites use Pattern A: manual `Timer(...)` + `RunLoop.main.add(timer, forMode: .common)` + assignment.
+- Each Pattern A callsite has a single-line comment explaining why `.common` is required.
 - Build clean with TSan ON.
-- All 57 tests pass.
-- (No new tests required — these are run-loop-mode fixes; existing tests don't reach into run-loop mode behavior, and writing tests that exercise gesture-vs-timer interactions is high-cost / low-value relative to the structural fix.)
+- All 59 tests pass with TSan ON.
+- Manual: Butterchurn preset cycle continues during a 6-second slider drag (was: paused). Set cycle interval to ~5s for testing.
+- Manual: Marquee title scrolls during slider drag (no regression — was already working).
+- Audit re-run: `rg -n "Timer\.scheduledTimer" MacAmpApp/` returns zero matches in production code (post-conversion). Only `Timer(timeInterval:...)` appears.
 
 ## 5. Stop Criteria / Rollback
 
-- If TSan flags any new race after the fix, halt and consult Oracle (the `.common`-mode add is performed during init, so race risk is minimal but not zero).
-- If the marquee scroll is still frozen during gesture after the fix on `WinampMainWindowInteractionState`, halt — that means there's a second cause we haven't found.
-- Rollback: standard `git revert <commit>` per file, or full revert if all three turn out wrong (low likelihood).
+- If TSan flags any new race, halt and consult Oracle. The pattern conversion is mechanical (init order swap), so race risk is essentially zero, but `Timer(timeInterval:repeats:block:)` does have subtly different threading guarantees from `scheduledTimer` and we should confirm.
+- If any timer stops firing entirely after the conversion, halt — that means we forgot the `RunLoop.main.add(...)` somewhere.
+- If a callsite turns out to require `.default`-mode-only behavior (none we know of, but Oracle should confirm), revert that single callsite and document why.
+- Rollback: `git revert <commit>` restores the original mixed Pattern A/B/buggy state.
 
 ## 6. Verification
 
-Per Phase 0 mwvi lesson: the symptom (consumer-side freeze) is at the marquee text and the preset cycling. Manual qualitative verification is sufficient — no Instruments spike needed because the diagnosis is already structural.
-
-- V.1 — Manual gesture-during-scroll test on the main-window marquee.
-- V.2 — Manual: open Milkdrop window, observe a preset cycle, then mid-cycle drag the volume slider. Confirm cycle still ticks (will require waiting through one full cycle interval; configurable to a short interval like 5 s for testing).
-- V.3 — TSan-enabled build + 57-test suite.
+- V.1 — Manual: marquee scroll during 5-second slider drag (smoke; should already work).
+- V.2 — Manual: Butterchurn preset cycle ticking during 6-second slider drag (real test of the bug-fix portion).
+- V.3 — Manual: Butterchurn track-title overlay refresh during slider drag (real test of the second buggy callsite).
+- V.4 — `xcodebuildmcp macos build --json '{"extraArgs":["-enableThreadSanitizer","YES"]}'` passes.
+- V.5 — `xcodebuildmcp macos test --json '{"extraArgs":["-enableThreadSanitizer","YES"]}'` passes (59/59).
+- V.6 — Audit re-run: `rg -n "Timer\.scheduledTimer" MacAmpApp/` returns zero. Pattern is normalized.
 
 ## 7. Commit + PR Plan
 
-Single PR, single commit (or three atomic commits, one per file — we'll decide based on size; total expected diff is ~30-40 lines added, ~6 lines removed).
+Single commit. Total expected diff: ~36 added, ~30 removed across 5 source files (mostly line reordering + comment additions), plus 4 task-doc updates.
 
 Suggested commit message:
 
 ```
-fix(runloop): schedule three remaining timers on .common run-loop mode
+refactor(runloop): normalize all timers onto Pattern A (.common mode)
 
-The Winamp marquee title scroll and the Butterchurn cycle / track-title
-timers were using Timer.scheduledTimer(withTimeInterval:repeats:block:)
-which adds the timer to the run loop in .default mode. During any active
-DragGesture (slider drag, window move, etc.) the main run loop switches
-to .eventTracking, pausing those timers for the gesture's duration.
-The marquee scroll freezing during slider drags was the most visible
-symptom.
+The codebase had three coexisting forms of timer-on-RunLoop scheduling:
 
-Mirrors the fix in mwvi commit 6a6bbf2 for VisualizerPipeline. Three
-other timers in the codebase already use the correct .common pattern
-(AudioEngineController.progressTimer, StreamPlayer.elapsedTimer,
-VideoWindowChromeView.metadataScrollTimer); this commit brings the
-remaining three into alignment.
+  * Pattern A (1 callsite, mwvi-canonical): Timer(...) + .common add.
+  * Pattern B (4 callsites): scheduledTimer + later .common add.
+  * Buggy (2 ButterchurnPresetManager callsites): scheduledTimer with
+    no .common add at all — paused during gestures.
 
-Co-Authored-By: Claude <noreply@anthropic.com>
+Pattern B is functionally equivalent to A (a timer can be registered on
+multiple modes within one RunLoop), but Pattern A has clearer intent and
+a louder failure mode if the .common add is ever removed (the timer
+becomes unscheduled rather than silently .default-only).
+
+This commit normalizes all 6 non-A callsites onto Pattern A:
+
+  - AudioEngineController.progressTimer        (B → A)
+  - StreamPlayer.elapsedTimer                  (B → A)
+  - VideoWindowChromeView.metadataScrollTimer  (B → A)
+  - WinampMainWindowInteractionState.scrollTimer (B → A)
+  - ButterchurnPresetManager.cycleTimer        (Buggy → A)
+  - ButterchurnPresetManager.trackTitleTimer   (Buggy → A)
+
+The two ButterchurnPresetManager bugs (LOW severity) are fixed as a
+side-effect of the consistency pass: their auto-preset cycle and track-
+title overlay refresh no longer pause during user gestures.
+
+Mirrors the pattern in mwvi commit 6a6bbf2 (VisualizerPipeline.pollTimer).
+
+Build clean with TSan ON; all 59 tests pass.
+
+Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>
 ```
 
-## 8. Future-Proofing (Optional, Out of Scope)
+## 8. Future-Proofing — Helper Extension (separate task)
 
-The repeated boilerplate pattern (Timer + add-to-`.common` + assign) appears 6 times after this task. That's exactly at the AHA Rule-of-Three threshold. **Don't extract a helper now** — wait for a 7th callsite or a related refactor. If extraction is eventually warranted, candidate signature:
+After this task lands, all 7 timer-on-RunLoop callsites in `MacAmpApp/` use Pattern A literally. AHA Rule of Three is exceeded by 4×. The boilerplate is mechanical and easy to forget the `.common` add on a future addition.
+
+A `Timer.scheduledOnCommon(every:repeats:_:)` extension would centralize the pattern:
 
 ```swift
 extension Timer {
@@ -118,4 +165,10 @@ extension Timer {
 }
 ```
 
-But this is a candidate for a separate task — *not* this one — because adding it requires migrating all 6 callsites and may surface concurrency-checking edge cases that warrant their own review. Tracked in the "Future Work" section of `tasks/_context/state.md`.
+This is **not** done in this task because:
+
+1. It expands the diff and PR scope into adding a new public API.
+2. The `Sendable` annotation on the closure may surface concurrency-checker edge cases at some callsites that warrant individual review (e.g., Pattern A callsites currently use `[weak self]` + `MainActor.assumeIsolated` patterns that interact with `@Sendable`).
+3. Where the extension lives (a new `Utilities/Timer+CommonMode.swift` file) is its own naming/placement decision that touches `project.yml`.
+
+Tracked as a follow-up task: `timer-scheduled-on-common-extension` (to be created post-merge of this PR).
