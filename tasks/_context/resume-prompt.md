@@ -124,13 +124,16 @@ Index lives at `~/.claude/projects/-Users-hank-dev-src-MacAmp/memory/MEMORY.md`.
 
 `BUILDING_RETRO_MACOS_APPS_SKILL.md` is the canonical lessons-learned doc. Most relevant for current work:
 
-- **Part 23 — Lesson: RunLoop Mode Discipline in Feeding Pipelines (April 2026)** — direct guidance for `timer-runloop-mode-audit`. Includes the audit-habit shell snippet to enumerate all `Timer.scheduledTimer` callsites and verify each is followed by `RunLoop.main.add(timer, forMode: .common)`.
-- **Part 21 — Video/Milkdrop Window Patterns** (Pattern 3: `Task { @MainActor in }` for Timer/Observer Closures) — relevant when modifying timer closures during the audit.
+- **`feedback_pipeline_end_to_end_diagnosis.md`** — directly applicable to `stream-pause-tail`: the pause-tail bug is a producer-vs-consumer pipeline issue (silence-gate at consumer + producer-quiesce). Instrument both ends before diagnosing.
+- **Part 23 — Lesson: RunLoop Mode Discipline in Feeding Pipelines (April 2026)** — historical context for the merged `timer-runloop-mode-audit` (PR #81) and direct guidance for the deferred follow-up `timer-scheduled-on-common-extension`. Includes the audit-habit shell snippet to enumerate all `Timer.scheduledTimer` callsites and verify each is followed by `RunLoop.main.add(timer, forMode: .common)`.
+- **Part 21 — Video/Milkdrop Window Patterns** (Pattern 3: `Task { @MainActor in }` for Timer/Observer Closures) — relevant whenever modifying timer closures.
 
 ---
 
 ## First Action for the Resuming Agent
 
-Open `tasks/timer-runloop-mode-audit/`, read all 6 canonical files, and run the pre-flight verification: re-read `WinampMainWindowInteractionState.swift:25-50` and `ButterchurnPresetManager.swift:200-260` at HEAD to confirm the line numbers in the task's `research.md` haven't drifted. Then proceed with the standard pickup process from step 5 onward (cut branch, execute phases, Oracle gate, PR).
+Open `tasks/stream-pause-tail/` (S3-1B), read all 6 canonical files (`research.md`, `plan.md`, `todo.md`, `state.md`, `placeholder.md`, `depreciated.md`). Re-read every "Files Affected" source listed in `plan.md` at HEAD to reconcile line-number drift since the plan was Oracle-approved (9.1/10, 5 iterations). Confirm `git status` is clean and `git pull origin main` is up to date (most recent merge: PR #81 `timer-runloop-mode-audit`, merge commit `ac09dd4`, 2026-04-29). Then proceed with the standard pickup process from step 6 onward — cut branch `fix/stream-pause-tail` from `main`, execute the 8 phases / 8 ADRs (SPT-1 through SPT-8) in order with TSan-on builds + tests after each phase, run the Codex Oracle pre-PR code-review gate, then push + open PR #B.
 
 Stop and report back to me before pushing the PR — I'll review before merge.
+
+> **Optional sub-track (after S3-1B is on its way or done):** `timer-scheduled-on-common-extension` — extract a `Timer.scheduledOnMainCommon` helper, migrate all 7 Pattern-A timer callsites. Predecessor `timer-runloop-mode-audit` (PR #81) is merged ✅; this task does not block any S3 wave. Task folder doesn't exist yet — create it on pickup using the same 6-file canonical layout.
