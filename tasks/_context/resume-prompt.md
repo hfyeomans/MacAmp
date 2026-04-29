@@ -50,21 +50,33 @@
 
 ---
 
-## After S3-1B merges (S3 ladder, locked)
+## S3 work map (current state — refresh on each merge)
 
 ```
-S3-1A mwvi ✅ MERGED (PR #80)
+S3-1A mwvi  ✅ MERGED (PR #80, merge commit 7f3d76f)
      │
-     ├──► S3-1B spt           ←── PR #B (next after timer-runloop-mode-audit)
+     ├──► S3-1B spt                       ←── PR #B   📋 NEXT (plan Oracle-approved 9.1/10)
      │       │
-     └───────┴──► S3-2 vaer    ←── PR #C
-                    │   └── runs spike/vaer-av-drift-measurement FIRST (kill-switch)
-                    ▼
-                 S3-3 hls       ←── PR #D
-                    │
-                    ▼
-                 S3-4 ogg       ←── PR #E
-                     └── runs spike/ogg-build-wiring (0a) + spike/ogg-local-playback (0b) FIRST
+     │       ▼
+     │    S3-2 vaer                       ←── PR #C   (gated on S3-1B merge)
+     │       │   └── runs spike/vaer-av-drift-measurement FIRST (kill-switch)
+     │       ▼
+     │    S3-3 hls                        ←── PR #D
+     │       │
+     │       ▼
+     │    S3-4 ogg                        ←── PR #E
+     │           └── runs spike/ogg-build-wiring (0a) + spike/ogg-local-playback (0b) FIRST
+     │
+     └──► timer-runloop-mode-audit         ←── PR #G   🔧 IN PROGRESS (parallel with S3-1B; no file conflicts)
+              │
+              ▼
+          timer-scheduled-on-common-extension   ←── PR #H   ⏸ DEFERRED
+              Extract `Timer.scheduledOnMainCommon` helper into
+              `MacAmpApp/Utilities/Timer+CommonMode.swift`.
+              Migrate all 7 timer-on-RunLoop callsites to use it.
+              `@Sendable` closure migration may surface concurrency-checker
+              edge cases at some callsites — warrants per-site review.
+              Pre-tracked in `tasks/_context/state.md`.
 ```
 
 **Spike policy (default — do NOT deviate without explicit reason):** each Phase 0 spike runs at its parent task's pickup time on a throwaway branch, findings written to that task's `research.md`, branch deleted. Do NOT run `spike/vaer-av-drift-measurement`, `spike/ogg-build-wiring`, or `spike/ogg-local-playback` early. The vaer drift spike is the kill-switch on whether vaer is feasible at all (>100 ms drift → cancel task), but its strategic value of running early is not worth the workflow break.
