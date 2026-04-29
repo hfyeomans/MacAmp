@@ -205,11 +205,14 @@ final class ButterchurnPresetManager {
         guard isCycling else { return }
         stopCycling()
 
-        cycleTimer = Timer.scheduledTimer(withTimeInterval: cycleInterval, repeats: true) { [weak self] _ in
+        // .common run-loop mode keeps this firing during user gestures (.eventTracking).
+        let timer = Timer(timeInterval: cycleInterval, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.nextPreset()
             }
         }
+        RunLoop.main.add(timer, forMode: .common)
+        cycleTimer = timer
     }
 
     /// Stop automatic preset cycling
@@ -236,11 +239,14 @@ final class ButterchurnPresetManager {
         // Show title immediately on start
         showCurrentTrackTitle()
 
-        trackTitleTimer = Timer.scheduledTimer(withTimeInterval: trackTitleInterval, repeats: true) { [weak self] _ in
+        // .common run-loop mode keeps this firing during user gestures (.eventTracking).
+        let timer = Timer(timeInterval: trackTitleInterval, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.showCurrentTrackTitle()
             }
         }
+        RunLoop.main.add(timer, forMode: .common)
+        trackTitleTimer = timer
     }
 
     /// Stop automatic track title display

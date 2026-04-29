@@ -232,15 +232,16 @@ final class StreamPlayer {
     private func startElapsedTimer() {
         elapsedStartedAt = .now
         elapsedTimer?.invalidate()
-        let timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+        // .common run-loop mode keeps this firing during user gestures (.eventTracking).
+        let timer = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self, let startedAt = self.elapsedStartedAt else { return }
                 let elapsed = Self.durationSeconds(startedAt.duration(to: .now))
                 self.elapsedTime = self.elapsedAccumulated + elapsed
             }
         }
-        elapsedTimer = timer
         RunLoop.main.add(timer, forMode: .common)
+        elapsedTimer = timer
     }
 
     private func stopElapsedTimer() {

@@ -206,7 +206,8 @@ final class AudioEngineController {
 
     func startProgressTimer() {
         progressTimer?.invalidate()
-        let timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+        // .common run-loop mode keeps this firing during user gestures (.eventTracking).
+        let timer = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in
             dispatchPrecondition(condition: .onQueue(.main))
             MainActor.assumeIsolated {
                 guard let self = self else { return }
@@ -219,8 +220,8 @@ final class AudioEngineController {
                 }
             }
         }
-        progressTimer = timer
         RunLoop.main.add(timer, forMode: .common)
+        progressTimer = timer
     }
 
     func invalidateProgressTimer() {

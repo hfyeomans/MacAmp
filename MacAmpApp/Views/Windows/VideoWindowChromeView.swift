@@ -217,7 +217,8 @@ struct VideoWindowChromeView<Content: View>: View {
         metadataScrollTimer?.invalidate()
         metadataScrollOffset = 0
 
-        metadataScrollTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { _ in
+        // .common run-loop mode keeps this firing during user gestures (.eventTracking).
+        let timer = Timer(timeInterval: 0.15, repeats: true) { _ in
             // Hop to main actor explicitly for UI updates
             Task { @MainActor in
                 metadataScrollOffset -= 5  // Move left by one character width
@@ -228,9 +229,8 @@ struct VideoWindowChromeView<Content: View>: View {
                 }
             }
         }
-        if let timer = metadataScrollTimer {
-            RunLoop.main.add(timer, forMode: .common)
-        }
+        RunLoop.main.add(timer, forMode: .common)
+        metadataScrollTimer = timer
     }
 
     private func resetMetadataScrolling() {
