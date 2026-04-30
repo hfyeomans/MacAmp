@@ -49,6 +49,12 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     @ObservationIgnored private var isHandlingCompletion = false
     @ObservationIgnored private var seekGuardActive = false
     @ObservationIgnored private var playlistGeneration: UInt64 = 0
+
+    /// Snapshot captured by the engine config observer's onWill callback,
+    /// consumed by the matching onDid callback. Carries the pre-rewire state
+    /// AudioPlayer needs to decide whether to resume after the route change.
+    /// nil except during the ~150 ms gap between will and did.
+    @ObservationIgnored private var pendingReconfigureSnapshot: PreReconfigureSnapshot?
     var currentTrackURL: URL?
     var currentTitle: String = "No Track Loaded"
     var currentDuration: Double = 0.0
@@ -189,6 +195,12 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
         }
         engine.onBridgeStateChanged = { [weak self] isActive in
             self?.isBridgeActive = isActive
+        }
+        engine.onEngineWillReconfigure = { [weak self] snapshot in
+            self?.handleEngineWillReconfigure(snapshot: snapshot)
+        }
+        engine.onEngineDidReconfigure = { [weak self] in
+            self?.handleEngineDidReconfigure()
         }
 
         // Apply restored volume/balance to engine nodes
@@ -631,6 +643,76 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
         Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: 100_000_000)
             self?.seekGuardActive = false
+        }
+    }
+
+    // MARK: - Engine Reconfiguration Handlers
+
+    /// Invoked at the START of an output-route reconfigure burst (Control Center,
+    /// AirPlay, HDMI hot-plug, sleep/wake). Captures the engine's pre-rewire
+    /// snapshot and arms seek guards before the engine restart fires a stale
+    /// playerNode completion. The matching `handleEngineDidReconfigure` consumes
+    /// the stored snapshot to decide whether to resume.
+    ///
+    /// **Pairing note:** if `stop()` or `deinit` interrupts the burst before
+    /// `onDidReconfigure` fires, `seekGuardActive` and `isHandlingCompletion`
+    /// stay armed; that's intentional and safe — the next user action (play,
+    /// seek, stop) clears them via the existing paths.
+    private func handleEngineWillReconfigure(snapshot: PreReconfigureSnapshot) {
+        pendingReconfigureSnapshot = snapshot
+        // Bump currentSeekID BEFORE engine restart so the impending stale
+        // playerNode completion (carrying the OLD seekID) is filtered by
+        // shouldIgnoreCompletion. Same pattern as seek() / playTrack().
+        currentSeekID = UUID()
+        seekGuardActive = true
+        isHandlingCompletion = true
+    }
+
+    /// Invoked once at the END of a reconfigure burst (150 ms quiet window).
+    /// The engine has been restarted and stream-bridge graph format refreshed
+    /// for the new output device. AudioPlayer re-applies volume + balance,
+    /// reschedules the local-file player from the saved time, and releases
+    /// seek guards on the same 100/200 ms cadence as `seek()`.
+    private func handleEngineDidReconfigure() {
+        guard let snapshot = pendingReconfigureSnapshot else { return }
+        pendingReconfigureSnapshot = nil
+
+        // 1. Re-apply volume + balance — engine nodes may have been recreated.
+        engine.setVolume(volume)
+        engine.setBalance(balance)
+
+        // 2. Local-file path: ALWAYS reschedule from saved time, even when paused.
+        //    play() does NOT itself reschedule (see line 417), so a subsequent
+        //    play() would resume the now-detached pre-restart segment.
+        if !snapshot.wasStreamBridge && !snapshot.wasVideoBridge && engine.audioFile != nil {
+            _ = engine.scheduleFrom(time: snapshot.currentTime, seekID: currentSeekID)
+            currentTime = snapshot.currentTime
+            if snapshot.wasPlaying {
+                engine.startEngineIfNeeded()
+                engine.installVisualizerTapIfNeeded()
+                engine.playAudio()
+                engine.startProgressTimer()
+                transition(to: .playing)
+            } else {
+                transition(to: .paused)
+            }
+        }
+        // 3. Stream-bridge path: AVAudioSourceNode + ring buffer survived; the
+        //    workgroup refresh is delegated to PlaybackCoordinator (Phase 1.1.7).
+        // 4. Video-bridge path: AVPlayer manages its own clock — paused stays
+        //    paused. Phase 3 (plan §8.1) wires the actual videoSourceNode
+        //    refresh in handleEngineDidReconfigure on the engine side.
+
+        // 5. Release seek guards on the same cadence as seek() / onPlaybackEnded.
+        //    Modern Duration API (Swift 5.7+) — matches the pattern introduced
+        //    in AudioEngineConfigurationObserver.
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(100))
+            self?.seekGuardActive = false
+        }
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(200))
+            self?.isHandlingCompletion = false
         }
     }
 
