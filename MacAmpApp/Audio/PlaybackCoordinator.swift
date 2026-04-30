@@ -185,6 +185,17 @@ final class PlaybackCoordinator {
             self?.audioPlayer.setStreamSilenced(silenced)
         }
 
+        // After an engine reconfigure (output route change), the post-restart
+        // outputNode may live on a different audio HAL device with a different
+        // real-time workgroup. Re-share the workgroup with the stream-decode
+        // thread so it stays joined to the IO scheduling group.
+        self.audioPlayer.onEngineReconfigured = { [weak self] in
+            guard let self else { return }
+            if self.audioPlayer.isBridgeActive {
+                self.streamPlayer.setAudioWorkgroup(self.audioPlayer.audioWorkgroup)
+            }
+        }
+
         setupRemoteCommands()
     }
 
