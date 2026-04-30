@@ -229,13 +229,16 @@ Numbering convention: `<Phase>.<Item>`. Mark `[x]` on completion. Use `[~]` for 
 
 - [x] 3.7.1 `xcodegen generate` after adding test file.
 - [x] 3.7.2 Build + tests with TSan green at every checkpoint (84 → 90 tests).
-- [x] 3.7.3 Per-step commits (six total):
+- [x] 3.7.3 Per-step commits (nine total — six implementation + three regression-fix from real-video manual test):
     - `dcce548` feat(audio): add video bridge to AudioEngineController
     - `33d9e49` feat(audio): wire AudioPlayer video branch through engine bridge
     - `4aac795` test(audio): video bridge state machine + render block tests
     - `3fd4d26` fix(audio): guard video tap attach against player swaps mid-await
-    - `7e953bd` fix(audio): tap-identity stale check + cancellable load task (Oracle pass-1, 8.4/10 → 9.2/10)
-    - `1fa5aad` fix(audio): cancel video load + drop bridge in AudioPlayer deinit (Oracle pass-2, 9.2/10 → 9.4/10)
+    - `7e953bd` fix(audio): tap-identity stale check + cancellable load task (impl Oracle pass-1, 8.4/10 → 9.2/10)
+    - `1fa5aad` fix(audio): cancel video load + drop bridge in AudioPlayer deinit (impl Oracle pass-2, 9.2/10 → 9.4/10 — initial gate clear)
+    - `f41418a` fix(audio): video display + double-audio regressions from Phase 3 wiring (real-video manual surfaced @ObservationIgnored re-render miss + slider-un-mute double-audio)
+    - `f18c518` fix(audio): tighten video-bridge teardown + play() ordering (regression-fix Oracle pass-1, 7/10 → 8/10 — tear-down restore over-broad; play()-before-attach race)
+    - `d112e1b` fix(audio): clear videoLoadTask after Task body claims active load (regression-fix Oracle pass-2, 8/10 → **9.5/10 final** — completed task was permanently blocking pause/resume)
 
 ---
 

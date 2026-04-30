@@ -25,7 +25,7 @@
 |------|------|---------|------|--------|:---:|
 | S3-1A | `done/mainwindow-visualizer-isolation` | Visualizer freeze fix (run-loop-mode mismatch in producer) | Small | ✅ **MERGED** PR #80 (2026-04-28) | 9.4/10 plan + 9.3/10 pre-PR |
 | S3-1B | `done/stream-pause-tail` | Fix 0.7s pause tail (silence gate + producer quiesce) + latent reconnect-during-pause bug | Small-Medium | ✅ **MERGED** PR #82 (2026-04-30, merge `b60fd57`) | 9.1/10 plan; 9/10 final impl |
-| S3-2  | `video-audio-engine-routing` | Route video audio through AVAudioEngine; engine config observer | Medium-High | 📋 **NEXT** (Phase 0 sync spike first; kill-switch >100 ms drift) | 9.4/10 |
+| S3-2  | `video-audio-engine-routing` | Route video audio through AVAudioEngine; engine config observer | Medium-High | 🔧 **IN PROGRESS** (Phase 0/1/2/3 ✅ done; Phase 5 next; Phase 4 no-op per Phase 0) | 9.4/10 plan; 9.5 Phase 3 final |
 | S3-3  | `hls-streaming-support` | Audio-only HLS (M3U8 + AAC ADTS, live + VOD) | Large | ✅ READY | 9.0/10 |
 | S3-4  | `ogg-vorbis-support` | OGG Vorbis (libvorbis), local + Icecast streams; chained-format gap fix | Medium-Large | ✅ READY (Phase 0a/0b spikes first) | 9.3/10 |
 

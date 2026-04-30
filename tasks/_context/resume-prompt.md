@@ -9,10 +9,10 @@
 
 ## Current State (update after each PR merge)
 
-**Last update:** 2026-04-30 (S3-2 Phase 0 + 1 + 2 + 3 ✅ — engine source node + AudioPlayer wiring ships at 9.4/10; `feat/video-audio-engine-routing` has 24 commits; Phase 5 next, Phase 4 is no-op).
+**Last update:** 2026-04-30 (S3-2 Phase 0 + 1 + 2 + 3 ✅ — engine source node + AudioPlayer wiring ships at **9.5/10 final** after a 3-commit regression-fix arc post real-video manual test; `feat/video-audio-engine-routing` has 30 commits; Phase 5 next, Phase 4 is no-op).
 **Main HEAD:** `9cca40a` — `docs(_context): close out Phase 2; advance vaer to Phase 3-next` (will advance once Phase 3 closeout commit lands on main).
-**feat/video-audio-engine-routing HEAD:** `5b5e8ac` — `docs(vaer): close out Phase 3 in task-folder docs` (rebased onto main).
-**Tests:** 90/90 passing on the feat branch (TSan ON; +6 from Phase 3: +4 video-bridge state-machine, +2 video-render-block).
+**feat/video-audio-engine-routing HEAD:** `d112e1b` — `fix(audio): clear videoLoadTask after Task body claims active load` (rebased onto main).
+**Tests:** 90/90 passing on the feat branch (TSan ON; +6 from Phase 3: +4 video-bridge state-machine, +2 video-render-block). Manual video verified: frame displays, single audio path, slider clean, EQ + spectrum analyzer respond. Milkdrop deferred to Phase 6 per plan §11.3.
 **PRs merged total:** 80. Phase 3 work continues to land on the feat branch; no PR opened yet.
 
 **Most recent docs commits on main:**
@@ -39,7 +39,7 @@
 
 **Phase 2 outcome (5 commits, ending at `749b91d`):** `MacAmpApp/Audio/VideoAudioTap.swift` (~340 LOC) ships per plan §7. C-convention callbacks via `Unmanaged<VideoAudioTapContext>`; `MTAudioProcessingTap` CFType auto-managed by Swift bridging. AudioConverter handles all four format-edge cases (mono duplication, surround downmix with `PerformDownmix=1` + actual source layout, non-Float32, sample-rate). Oracle three-pass review converged at **9.3/10**.
 
-**Phase 3 outcome (6 commits, ending at `1fa5aad` + `5b5e8ac` task-folder closeout):** Engine source node wired into the graph. `AudioEngineController` gains `videoSourceNode` / `videoRingBuffer` / `isVideoBridgeActive` parallel to the stream bridge, plus mutual exclusion across the three engine paths and reconfigure-refresh of the video graph format. `AudioPlayer.playTrack` video branch refactored into `startVideoTrack(track)` which spawns a stored Task (`videoLoadTask`) that awaits `VideoAudioTap.attach(to:)` before activating the engine bridge. `VideoPlaybackController.loadVideo` is now async, accepts an `audioTap:` parameter, and runs a post-await `self.player === newPlayer` guard to bail if a newer setup ran during the asset-load suspension. Two-tier stale defence: tap-identity guard at AudioPlayer level (`videoAudioTap === tap`) closes the same-URL replay race, and player-identity guard at VideoPlaybackController level closes the mid-await player swap. `videoLoadTask` is cancelled by `tearDownVideoBridge()` (called from stop, playTrack-switch, eject, and isolated deinit). Oracle two-pass review converged at **9.4/10** (8.4 → 9.2 → 9.4). 84 → 90 tests with TSan: +4 video-bridge state-machine, +2 video-render-block.
+**Phase 3 outcome (6 implementation commits + 3 regression-fix commits, ending at `d112e1b`):** Engine source node wired into the graph. `AudioEngineController` gains `videoSourceNode` / `videoRingBuffer` / `isVideoBridgeActive` parallel to the stream bridge, plus mutual exclusion across the three engine paths and reconfigure-refresh of the video graph format. `AudioPlayer.playTrack` video branch refactored into `startVideoTrack(track)` which spawns a stored Task (`videoLoadTask`) that awaits `VideoAudioTap.attach(to:)` before activating the engine bridge. `VideoPlaybackController.loadVideo` is now async, accepts an `audioTap:` parameter, and runs a post-await `self.player === newPlayer` guard. Two-tier stale defence: tap-identity at AudioPlayer level (`videoAudioTap === tap`) closes same-URL replay; player-identity at VideoPlaybackController level closes mid-await player swap. `videoLoadTask` is cancelled by `tearDownVideoBridge()` (stop/playTrack-switch/eject/isolated deinit) and cleared via `defer` after the identity guard passes (so completed loads don't permanently block resume). Implementation-Oracle: 8.4 → 9.2 → 9.4. Real-video manual test then surfaced three regressions resolved by the fix arc: (a) `@ObservationIgnored` on `VideoPlaybackController.player` blocked SwiftUI re-render after the async player assignment — removed; (b) volume slider un-muted AVPlayer while bridge was active (double audio) — gated `volume.didSet` forwarding on `engine.isVideoBridgeActive != true`; (c) `videoLoadTask` never cleared after normal completion — `defer` fix. Regression-fix Oracle: 7 → 8 → **9.5**. Phase 3 final 9.5/10. Manual video verified: frame displays, single audio path, slider clean, EQ + spectrum analyzer respond. Milkdrop intentionally deferred to Phase 6 per plan §11.3 (`snapshotButterchurnFrame` is gated on `currentMediaType == .audio`; Phase 6 swaps to a bridge-aware guard).
 
 **Architectural notes (relevant for Phase 5 implementation):**
 - AsyncSequence-based notification observation (`NotificationCenter.notifications(named:object:)`) — modern Swift 6.2 pattern; future similar work follows it.
@@ -169,7 +169,7 @@ Open `tasks/video-audio-engine-routing/` (S3-2). Read all 6 canonical files (`re
 
 **Phase 0 + Phase 1 + Phase 2 + Phase 3 are done.** Skip them. Phase 4 (sync strategy) is a no-op per todo §4.NONE. **Phase 5 (tap-failure watchdog + fallback per plan §10) is next.**
 
-**Branch already exists:** `feat/video-audio-engine-routing` is rebased onto main HEAD `07a3ee8` and has 24 commits (10 Phase-1 + 1 Phase-1 closeout + 5 Phase-2 + 1 Phase-2 closeout + 6 Phase-3 + 1 Phase-3 closeout). Switch to it (`git checkout feat/video-audio-engine-routing`).
+**Branch already exists:** `feat/video-audio-engine-routing` is rebased onto main HEAD `07a3ee8` and has 30 commits (10 Phase-1 + 1 Phase-1 closeout + 5 Phase-2 + 1 Phase-2 closeout + 6 Phase-3 + 1 Phase-3 task-folder closeout + 1 Phase-3 _context closeout + 3 regression-fix + 1 doc closeout). Switch to it (`git checkout feat/video-audio-engine-routing`).
 
 Phase 5 sketch (per plan §10):
 - AudioPlayer fields: `videoTapWatchdogTask: Task<Void, Never>?` and `videoTapFallbackActive: Bool = false`. Reset both at the start of `playTrack` (per-track fresh slate).
@@ -184,7 +184,7 @@ Standard pickup process from step 7 onward:
 - TSan-on builds + tests after each commit per `feedback_xcodebuildmcp_workflow.md`.
 - Per-step commits with build+test between (the established Phase 1/2/3 cadence).
 - Match the modern Swift 6.2 idioms used in Phase 1/3: `@preconcurrency import` for unannotated frameworks, `Task.sleep(for: Duration)`, `isolated deinit`, AsyncSequence over block-based observers where applicable.
-- Codex Oracle review at end of phase per the existing pattern (Phase 1 closed at 9.5/10; Phase 2 at 9.3/10; Phase 3 at 9.4/10; aim for ≥9/10 at end of Phase 5).
+- Codex Oracle review at end of phase per the existing pattern (Phase 1 closed at 9.5/10; Phase 2 at 9.3/10; Phase 3 at 9.5/10 final after regression-fix arc; aim for ≥9/10 at end of Phase 5).
 
 Stop and report back to me before pushing the PR — I'll review before merge.
 

@@ -11,8 +11,8 @@
 
 **Phase:** Phase 0 + 1 + 2 + 3 done. Phase 5 (tap-failure watchdog per plan §10) next; Phase 4 is a no-op per Phase 0 Path NONE.
 **Last Updated:** 2026-04-30.
-**Branch HEAD:** `1fa5aad`. 24 commits ahead of main (10 Phase-1 + 1 Phase-1 task-folder closeout + 1 Phase-1 SHA-cleanup + 5 Phase-2 + 1 Phase-2 closeout + 6 Phase-3 commits). SHAs may rotate on future rebases — match by commit message.
-**Tests:** 90/90 pass with TSan (84 → 90: +4 video-bridge state-machine, +2 video-render-block).
+**Branch HEAD:** `d112e1b`. 30 commits ahead of main (10 Phase-1 + 1 Phase-1 task-folder closeout + 1 Phase-1 SHA-cleanup + 5 Phase-2 + 1 Phase-2 closeout + 6 Phase-3 + 1 Phase-3 task-folder closeout + 1 Phase-3 _context closeout + 3 Phase-3 regression-fix commits + 1 Phase-3 closeout pending). SHAs may rotate on future rebases — match by commit message.
+**Tests:** 90/90 pass with TSan (84 → 90: +4 video-bridge state-machine, +2 video-render-block). Manual video playback verified post-regression-fix arc (video frame displays, single audio path through bridge, slider clean, EQ + spectrum analyzer respond — Milkdrop visualizer remains gated to `.audio` per plan §11.3 and is intentionally a Phase 6 scope).
 
 ### Phase 1 outcome (engine configuration change observer)
 
@@ -69,15 +69,20 @@
 
 ### Phase 3 outcome (engine source node + wiring)
 
-6 commits implementing plan §8 — `videoSourceNode` joins the engine graph alongside `streamSourceNode`, `AudioPlayer.playTrack` builds a per-track ring + tap and awaits the async attach before activating the bridge, and the AVPlayer's direct audio is muted (`volume = 0`) only after a successful tap install. Oracle two-pass review converged at **9.2/10 → 9.4/10** (cleared the ≥9/10 gate).
+9 commits implementing plan §8 — `videoSourceNode` joins the engine graph alongside `streamSourceNode`, `AudioPlayer.playTrack` builds a per-track ring + tap and awaits the async attach before activating the bridge, and the AVPlayer's direct audio is muted (`volume = 0`) only after a successful tap install. Oracle review arc spans **two stages**: code-review at end of implementation converged 8.4 → 9.2 → 9.4/10 (initial gate clear); then real-video manual test surfaced two regressions (video frame display blank; double-audio on volume slider) which a 3-commit fix arc resolved at **9.5/10** final (passes: 7 → 8 → 9.5). Phase 3 final at **9.5/10**, all manual paths working (video display, single audio, slider, EQ, spectrum analyzer).
 
-**Commits in order (oldest → newest):**
+**Implementation commits (oldest → newest):**
 - `dcce548` feat(audio): add video bridge to AudioEngineController (plan §8.1, §8.2 — fields, render block, activate/deactivate, mutual exclusion, volume/balance forwarding, reconfigure refresh)
 - `33d9e49` feat(audio): wire AudioPlayer video branch through engine bridge (plan §8.3, §8.4, §8.5, §3.5 — async loadVideo, detachAudioTap ordering, startVideoTrack Task, tearDownVideoBridge, isEngineRendering)
 - `4aac795` test(audio): video bridge state machine + render block tests (6 tests covering mutual-exclusion contract and ring drain)
 - `3fd4d26` fix(audio): guard video tap attach against player swaps mid-await (post-await `self.player === newPlayer` guard inside loadVideo; drop erroneous detachAudioTap from stale-track bail)
 - `7e953bd` fix(audio): tap-identity stale check + cancellable load task (Oracle pass-1: same-URL replay race — switched URL equality → tap identity, stored Task in `videoLoadTask` cancelled by tearDownVideoBridge, gated reconfigure local-audio reschedule on `currentMediaType == .audio`)
 - `1fa5aad` fix(audio): cancel video load + drop bridge in AudioPlayer deinit (Oracle pass-2: `tearDownVideoBridge()` runs BEFORE `engine.shutdown()` for cancellation + `audioMix=nil-before-detach` ordering symmetry)
+
+**Regression-fix arc (after manual video playback test, oldest → newest):**
+- `f41418a` fix(audio): video display + double-audio regressions from Phase 3 wiring — removed `@ObservationIgnored` from `VideoPlaybackController.player` (Phase 3's async Task moved player assignment to a later run-loop tick than `currentMediaType`; SwiftUI body wasn't re-rendering); gated `AudioPlayer.volume.didSet` forwarding to `videoPlaybackController.volume` on `engine.isVideoBridgeActive != true` so slider doesn't un-mute AVPlayer while bridge is the audible path
+- `f18c518` fix(audio): tighten video-bridge teardown + play() ordering (Oracle pass-1: 7 → 8) — moved volume re-sync out of generic `tearDownVideoBridge` (was un-muting old AVPlayer in video-to-video handoff for one tick) into the attach-failure branch only; gated `AudioPlayer.play()` video branch on `videoLoadTask == nil` to defer remote-play / media-key triggers until §8.4 ordering completes; refreshed stale `PlaybackCoordinator.setVolume` docstring
+- `d112e1b` fix(audio): clear `videoLoadTask` after Task body claims active load (Oracle pass-2: 8 → **9.5**) — added `defer { self.videoLoadTask = nil }` after the identity guard so completed loads don't permanently block subsequent `play()` (was breaking pause/resume after initial load); cancelled / superseded paths still clear via `tearDownVideoBridge`
 
 ### Phase 3 architectural notes (relevant to Phase 5+ implementers)
 
