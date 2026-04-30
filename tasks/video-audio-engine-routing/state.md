@@ -3,16 +3,16 @@
 > **Purpose:** Route AVPlayer video audio through AVAudioEngine via `MTAudioProcessingTap` so video gets EQ + visualization. Includes engine config change observer (deferred from AirPlay PR #69).
 > **Created:** 2026-03-14
 > **Sprint:** S3, Wave S3-2 (sequential after S3-1 merges)
-> **Status:** PHASE 0 ✅ + PHASE 1 ✅ + PHASE 2 ✅ COMPLETE — implementation in progress on `feat/video-audio-engine-routing`; Phase 3 (engine source node + wiring) next
+> **Status:** PHASE 0 ✅ + PHASE 1 ✅ + PHASE 2 ✅ + PHASE 3 ✅ COMPLETE — implementation in progress on `feat/video-audio-engine-routing`; Phase 5 (tap-failure watchdog) next (Phase 4 is no-op per Phase 0)
 
 ---
 
 ## Current Status
 
-**Phase:** Phase 0 + 1 + 2 done. Phase 3 (engine source node + wiring per plan §8) next.
+**Phase:** Phase 0 + 1 + 2 + 3 done. Phase 5 (tap-failure watchdog per plan §10) next; Phase 4 is a no-op per Phase 0 Path NONE.
 **Last Updated:** 2026-04-30.
-**Branch HEAD:** `749b91d`. 17 commits ahead of main (10 Phase-1 + 1 Phase-1 task-folder closeout + 1 Phase-1 SHA-cleanup + 5 Phase-2 commits). SHAs may rotate on future rebases — match by commit message.
-**Tests:** 84/84 pass with TSan (76 → 84: +4 attach/detach/state, +6 bypass classification, +2 surround layout map).
+**Branch HEAD:** `1fa5aad`. 24 commits ahead of main (10 Phase-1 + 1 Phase-1 task-folder closeout + 1 Phase-1 SHA-cleanup + 5 Phase-2 + 1 Phase-2 closeout + 6 Phase-3 commits). SHAs may rotate on future rebases — match by commit message.
+**Tests:** 90/90 pass with TSan (84 → 90: +4 video-bridge state-machine, +2 video-render-block).
 
 ### Phase 1 outcome (engine configuration change observer)
 
@@ -66,6 +66,41 @@
 3. **AudioConverter is load-bearing AND surround-aware** — Phase 0 surfaced sample-rate conversion as load-bearing. Phase 2 Oracle review surfaced two more landmines: `AudioConverter` defaults to channel ROUTING not MIXING on a channel-count change (mono → L+silent-R, 5.1 → drops 4 channels), and even with input/output layouts installed, `kAudioConverterPropertyPerformDownmix` defaults to 0 (no mixing). Both are now configured. Production reads the actual source layout from `CMAudioFormatDescriptionGetChannelLayout` when present, falls back to AAC-style tags by channel count when not.
 
 4. **Testable format-classification helpers** — `shouldBypassConverter(source:expectedSampleRate:)` and `inferredSurroundChannelLayoutTag(forChannelCount:)` extracted as module-level functions and exercised by 8 unit tests. Pure functions reachable via `@testable import MacAmp` (no `@_spi` needed since the test target uses `@testable`).
+
+### Phase 3 outcome (engine source node + wiring)
+
+6 commits implementing plan §8 — `videoSourceNode` joins the engine graph alongside `streamSourceNode`, `AudioPlayer.playTrack` builds a per-track ring + tap and awaits the async attach before activating the bridge, and the AVPlayer's direct audio is muted (`volume = 0`) only after a successful tap install. Oracle two-pass review converged at **9.2/10 → 9.4/10** (cleared the ≥9/10 gate).
+
+**Commits in order (oldest → newest):**
+- `dcce548` feat(audio): add video bridge to AudioEngineController (plan §8.1, §8.2 — fields, render block, activate/deactivate, mutual exclusion, volume/balance forwarding, reconfigure refresh)
+- `33d9e49` feat(audio): wire AudioPlayer video branch through engine bridge (plan §8.3, §8.4, §8.5, §3.5 — async loadVideo, detachAudioTap ordering, startVideoTrack Task, tearDownVideoBridge, isEngineRendering)
+- `4aac795` test(audio): video bridge state machine + render block tests (6 tests covering mutual-exclusion contract and ring drain)
+- `3fd4d26` fix(audio): guard video tap attach against player swaps mid-await (post-await `self.player === newPlayer` guard inside loadVideo; drop erroneous detachAudioTap from stale-track bail)
+- `7e953bd` fix(audio): tap-identity stale check + cancellable load task (Oracle pass-1: same-URL replay race — switched URL equality → tap identity, stored Task in `videoLoadTask` cancelled by tearDownVideoBridge, gated reconfigure local-audio reschedule on `currentMediaType == .audio`)
+- `1fa5aad` fix(audio): cancel video load + drop bridge in AudioPlayer deinit (Oracle pass-2: `tearDownVideoBridge()` runs BEFORE `engine.shutdown()` for cancellation + `audioMix=nil-before-detach` ordering symmetry)
+
+### Phase 3 architectural notes (relevant to Phase 5+ implementers)
+
+1. **Tap identity is the canonical session token, not URL.** Each `startVideoTrack` mints a fresh `VideoAudioTap`; `videoAudioTap === tap` inside the load Task body is the stale-check that survives same-URL replay. URL equality breaks down because replaying the same video produces two taps that are pointer-distinct but URL-identical. Phase 5 watchdog should follow the same pattern when comparing against the active tap.
+
+2. **Async attach + post-await player-identity guard.** `VideoAudioTap.attach(to:)` suspends on `loadTracks(withMediaType:)` / `load(.formatDescriptions)`. While suspended, AudioPlayer can be re-entered (`stop`, `playTrack`, deinit). `VideoPlaybackController.loadVideo` checks `self.player === newPlayer` after the await and bails if a newer setup ran during the suspension — installing the resolved `audioMix` on the new playerItem would otherwise mutate state for a torpedoed session.
+
+3. **Two-tier stale defence.** AudioPlayer's tap-identity check + VideoPlaybackController's player-identity check are independent and cooperating. Either alone leaves a window; together they cover stop-during-await, playTrack-different-URL-during-await, playTrack-same-URL-during-await (replay), and deinit-during-await.
+
+4. **Cancellable load task.** `videoLoadTask: Task<Void, Never>?` is stored on AudioPlayer and cancelled by `tearDownVideoBridge()` (called from stop, playTrack switch, eject, AND isolated deinit). Cancellation is hygiene — the identity guards are load-bearing — but it makes the Task return promptly instead of waiting for asset loading to time out.
+
+5. **Mutual-exclusion contract.** Three engine paths now coexist (`playerNode` / stream bridge / video bridge). `rewireForFile` drops both bridges; `activateStreamBridge` drops the video bridge first; `activateVideoBridge` drops the stream bridge first AND stops `playerNode` if running. AudioPlayer's `tearDownVideoBridge` plus `engine.deactivateVideoBridge` symmetry covers all teardown paths; stream-bridge teardown remains owned by `PlaybackCoordinator` / `StreamPlayer`.
+
+6. **Reconfigure refresh.** `handleEngineDidReconfigure` now refreshes the video-bridge graph format on output route changes, parallel to the stream-bridge refresh. AVAudioEngine inserts an internal converter between the source node's declared rate (the tap's `expectedSampleRate`, fixed at attach time) and the new output rate; the source node itself stays as-is. AudioPlayer's `handleEngineDidReconfigure` local-audio reschedule branch is gated on `currentMediaType == .audio` so a tap-failed video session with stale `engine.audioFile` doesn't get reschedule mid-route-change.
+
+### Phase 3 follow-ups (deferred — not blocking Phase 5)
+
+| # | Item | Phase | Reason for deferral |
+|---|------|-------|---------------------|
+| 1 | Tap watchdog reads BOTH `lastCallbackHostTime` AND `fallbackRequested` | Phase 5 (plan §10.1) | Phase 5 work — tap is in place and exposes both signals; watchdog is the consumer. |
+| 2 | `supportsAudioProcessing` capability flag dimming for tap-fallback path | Phase 6 (plan §11.2) | Out of Phase 3 scope; existing per-plan Phase 6 work covers it. |
+| 3 | `snapshotButterchurnFrame` media-type guard relaxation for video bridge | Phase 6 (plan §11.3) | Phase 3 set `isEngineRendering` to include `engine.isVideoBridgeActive`, but `snapshotButterchurnFrame` still gates on `currentMediaType == .audio`. Phase 6 swaps the guard. |
+| 4 | Volume `didSet` AVPlayer.volume forwarding gating | Phase 6 (plan §11.6) | Currently `videoPlaybackController.volume = volume` is unconditional. Phase 6 gates this on `videoTapFallbackActive` only (plan §11.6). For now the tap path mutes via `player.volume = 0` directly, overriding the didSet. |
 
 ### Phase 2 follow-ups (deferred — not blocking Phase 3)
 

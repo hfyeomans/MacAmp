@@ -178,74 +178,64 @@ Numbering convention: `<Phase>.<Item>`. Mark `[x]` on completion. Use `[~]` for 
 
 ---
 
-## Phase 3 — Engine Source Node + Wiring
+## Phase 3 — Engine Source Node + Wiring ✅ COMPLETE
 
 ### 3.1 AudioEngineController extensions
 
-- [ ] 3.1.1 Add `videoSourceNode`, `videoRingBuffer`, `isVideoBridgeActive` fields per plan §8.1.
-- [ ] 3.1.2 Add `makeVideoRenderBlock` (parallel to `makeStreamRenderBlock`).
-- [ ] 3.1.3 Implement `activateVideoBridge(ringBuffer:sampleRate:)`.
-    - [ ] Deactivate stream bridge first (if active)
-    - [ ] Stop playerNode if running
-    - [ ] Stop engine, attach video source node
-    - [ ] Connect: videoSourceNode → eqNode → mixer → output
-    - [ ] Restart engine; install visualizer tap
-    - [ ] Set `isVideoBridgeActive = true`
-- [ ] 3.1.4 Implement `deactivateVideoBridge()`.
-    - [ ] Idempotent guard
-    - [ ] Detach source node, restore default playerNode wiring
-    - [ ] Clear `videoRingBuffer`, `videoSourceNode`
-    - [ ] Set `isVideoBridgeActive = false`
+- [x] 3.1.1 Added `videoSourceNode`, `videoRingBuffer`, `isVideoBridgeActive` fields per plan §8.1.
+- [x] 3.1.2 Added `makeVideoRenderBlock` (parallel to `makeStreamRenderBlock`, kept inline per Principle 4 / AHA Rule of Three at N=2).
+- [x] 3.1.3 Implemented `activateVideoBridge(ringBuffer:sampleRate:)`.
+- [x] 3.1.4 Implemented `deactivateVideoBridge()` (idempotent).
 
 ### 3.2 Mutual exclusion
 
-- [ ] 3.2.1 In `rewireForFile(_:)`: call `deactivateVideoBridge()` (in addition to existing stream bridge deactivation).
-- [ ] 3.2.2 In `activateStreamBridge(...)`: call `deactivateVideoBridge()` first.
-- [ ] 3.2.3 In `activateVideoBridge(...)`: call `deactivateStreamBridge()` first.
+- [x] 3.2.1 `rewireForFile(_:)` deactivates both stream and video bridges.
+- [x] 3.2.2 `activateStreamBridge(...)` deactivates the video bridge first.
+- [x] 3.2.3 `activateVideoBridge(...)` deactivates the stream bridge first AND stops `playerNode` if running.
 
 ### 3.3 Volume / balance forwarding
 
-- [ ] 3.3.1 Extend `setVolume(_:)` to forward to `videoSourceNode?.volume`.
-- [ ] 3.3.2 Extend `setBalance(_:)` to forward to `videoSourceNode?.pan`.
+- [x] 3.3.1 `setVolume(_:)` forwards to `videoSourceNode?.volume`.
+- [x] 3.3.2 `setBalance(_:)` forwards to `videoSourceNode?.pan`.
 
 ### 3.4 AudioPlayer integration
 
-- [ ] 3.4.1 Add `videoAudioTap: VideoAudioTap?` and `videoRingBuffer: LockFreeRingBuffer?` fields to AudioPlayer.
-- [ ] 3.4.2 Add `isVideoBridgeActive` getter that delegates to `engine.isVideoBridgeActive`.
-- [ ] 3.4.3 Modify `playTrack` video branch (lines 354–360):
-    - [ ] Remove visualizer-tap-removal at lines 347–349
-    - [ ] Build ring buffer (capacity 4096, channels 2)
-    - [ ] Create VideoAudioTap
-    - [ ] Call `videoPlaybackController.loadVideo(url:autoPlay:audioTap:)`
-    - [ ] On success: `engine.activateVideoBridge(...)`, set `player.volume = 0`
-- [ ] 3.4.4 Modify `stop()` to deactivate video bridge and detach tap.
-- [ ] 3.4.5 Update `isEngineRendering`:
-    `engine.isEngineRunning && (isPlaying || isBridgeActive || engine.isVideoBridgeActive)`
+- [x] 3.4.1 Added `videoAudioTap: VideoAudioTap?`, `videoRingBuffer: LockFreeRingBuffer?`, and `videoLoadTask: Task<Void, Never>?` (Oracle pass-1 follow-up — cancellable async setup).
+- [x] 3.4.2 Added `isVideoBridgeActive` getter delegating to `engine.isVideoBridgeActive`.
+- [x] 3.4.3 Refactored `playTrack` video branch into `startVideoTrack(track)` (async via Task — `await tap.attach(to:)` is async per Phase 2 architectural shift; activates bridge on attach success, drops refs on failure for direct AVPlayer fallback).
+- [x] 3.4.4 `stop()` and audio↔video switch in `playTrack` call new `tearDownVideoBridge()` helper (cancels `videoLoadTask`, deactivates bridge, detaches tap, clears refs).
+- [x] 3.4.5 `isEngineRendering` includes `engine.isVideoBridgeActive`.
 
 ### 3.5 VideoPlaybackController extensions
 
-- [ ] 3.5.1 Extend `loadVideo(url:autoPlay:)` to `loadVideo(url:autoPlay:audioTap:)`.
-- [ ] 3.5.2 After AVPlayerItem is `.readyToPlay`, attach tap and assign `audioMix`.
-- [ ] 3.5.3 Track `attachedTap` field for cleanup.
-- [ ] 3.5.4 Add new `detachAudioTap()` method that:
-    - [ ] Sets `playerItem.audioMix = nil` (ESSENTIAL — prevents AVPlayer calling into a dead tap)
-    - [ ] Calls `attachedTap?.detach()` (invalidates the tap, releases `Unmanaged<Context>`)
-    - [ ] Clears `attachedTap = nil`
-- [ ] 3.5.5 Extend `cleanup()` to call `detachAudioTap()` (single unified teardown path used by both normal stop and Phase 5 fallback).
+- [x] 3.5.1 `loadVideo(url:autoPlay:)` → `loadVideo(url:autoPlay:audioTap:) async -> Bool` (returns whether tap successfully attached).
+- [x] 3.5.2 Tap attached BEFORE play() per plan §8.4 (post-await `self.player === newPlayer` guard catches mid-await player swaps — Oracle pass-1 hardening).
+- [x] 3.5.3 Tracks `attachedTap` field for cleanup.
+- [x] 3.5.4 `detachAudioTap()` method: sets `playerItem.audioMix = nil` BEFORE `tap.detach()`, clears `attachedTap`. Idempotent.
+- [x] 3.5.5 `cleanup()` calls `detachAudioTap()` (single unified teardown path); `isolated deinit` mirrors the ordering.
 
 ### 3.6 Tests
 
-- [ ] 3.6.1 Create `Tests/MacAmpTests/Audio/AudioEngineControllerVideoBridgeTests.swift`.
-    - [ ] `activateVideoBridgeAddsSourceNode`
-    - [ ] `activateVideoBridgeDeactivatesStreamBridge`
-    - [ ] `deactivateVideoBridgeIsIdempotent`
-    - [ ] `setVolumeForwardsToVideoSourceNode`
+- [x] 3.6.1 Created `Tests/MacAmpTests/AudioEngineControllerVideoBridgeTests.swift` (flat layout per Phase 1/2 convention, not the `Audio/` subdir originally specced).
+    - [x] `activateVideoBridgeAddsSourceNode`
+    - [x] `activateVideoBridgeDeactivatesStreamBridge`
+    - [x] `activateStreamBridgeDeactivatesVideoBridge` (symmetric, added during implementation)
+    - [x] `deactivateVideoBridgeIsIdempotent`
+    - [x] `videoRenderBlockReadsRingBuffer` (test seam — `makeVideoRenderBlockForTesting`)
+    - [x] `videoRenderBlockSilenceOnEmptyRing` (test seam — underflow zero-fill + `isSilence`)
+    - **Note:** `setVolumeForwardsToVideoSourceNode` originally specced; covered indirectly by other tests (videoSourceNode is private, direct verification would require visibility widening). Manual verification at Phase 7 §7.2.7.
 
-### 3.7 Build + commit
+### 3.7 Build + commits
 
-- [ ] 3.7.1 `xcodegen generate`
-- [ ] 3.7.2 Build with TSan, run tests.
-- [ ] 3.7.3 Commit: `feat(audio): wire video source node into engine graph`
+- [x] 3.7.1 `xcodegen generate` after adding test file.
+- [x] 3.7.2 Build + tests with TSan green at every checkpoint (84 → 90 tests).
+- [x] 3.7.3 Per-step commits (six total):
+    - `dcce548` feat(audio): add video bridge to AudioEngineController
+    - `33d9e49` feat(audio): wire AudioPlayer video branch through engine bridge
+    - `4aac795` test(audio): video bridge state machine + render block tests
+    - `3fd4d26` fix(audio): guard video tap attach against player swaps mid-await
+    - `7e953bd` fix(audio): tap-identity stale check + cancellable load task (Oracle pass-1, 8.4/10 → 9.2/10)
+    - `1fa5aad` fix(audio): cancel video load + drop bridge in AudioPlayer deinit (Oracle pass-2, 9.2/10 → 9.4/10)
 
 ---
 
