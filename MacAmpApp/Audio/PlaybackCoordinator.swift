@@ -152,6 +152,8 @@ final class PlaybackCoordinator {
             guard let self,
                   let ringBuffer = self.streamPlayer.currentRingBuffer else { return }
             self.audioPlayer.activateStreamBridge(ringBuffer: ringBuffer, sampleRate: sampleRate)
+            // Belt-and-suspenders: a fresh bridge already has gate=0, but be explicit.
+            self.audioPlayer.setStreamSilenced(false)
 
             // Pass the audio IO workgroup to the decode pipeline so its thread
             // shares the real-time scheduling group with the Core Audio IO thread
@@ -177,6 +179,10 @@ final class PlaybackCoordinator {
         self.streamPlayer.onStreamStateChanged = { [weak self] in
             guard let self else { return }
             self.updateNowPlayingInfo()
+        }
+
+        self.streamPlayer.silenceGateForwarder = { [weak self] silenced in
+            self?.audioPlayer.setStreamSilenced(silenced)
         }
 
         setupRemoteCommands()

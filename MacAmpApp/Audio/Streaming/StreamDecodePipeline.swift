@@ -57,6 +57,10 @@ final class StreamDecodePipeline {
     var onMetadata: (@MainActor @Sendable (ICYFramer.ICYMetadata) -> Void)?
     var onTermination: (@MainActor @Sendable (StreamTerminationReason) -> Void)?
 
+    /// Fires when buffered frames reach `resumePrebufferThreshold` after a pause→resume.
+    /// One-shot per resume cycle (re-armed by `resetPrebufferTracking`).
+    var onPrebufferReady: (@MainActor @Sendable () -> Void)?
+
     // MARK: - Ring Buffer (shared with AudioPlayer's AVAudioSourceNode)
 
     private(set) var ringBuffer: LockFreeRingBuffer?
@@ -171,6 +175,12 @@ final class StreamDecodePipeline {
                     self.onTermination?(.decodeError(message))
                     AppLog.error(.audio, "StreamDecodePipeline: Decode error — \(message)")
                 }
+            },
+            onPrebufferReady: { [weak self] gen in
+                Task { @MainActor [weak self] in
+                    guard let self, gen == self.generation else { return }
+                    self.onPrebufferReady?()
+                }
             }
         )
         decodeContext = context
@@ -224,13 +234,39 @@ final class StreamDecodePipeline {
         AppLog.info(.audio, "StreamDecodePipeline: Starting — \(url.absoluteString)")
     }
 
-    func pause() {
+    /// Suspends the URLSession data task, then awaits a decode-queue barrier that raises
+    /// `isPausedByUser`, clears the decoder, and flushes the ring (see `setPausedByUser`).
+    /// Returns only after the producer is fully quiesced.
+    func pauseByUser() async {
         guard case .playing = state else { return }
+        if Task.isCancelled { return }
         dataTask?.suspend()
+        await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+            guard let ctx = decodeContext else { cont.resume(); return }
+            ctx.setPausedByUser(true) { cont.resume() }
+        }
+        if Task.isCancelled { return }
+        // Re-check: a concurrent stop() could have torn the pipeline down during the await.
+        guard case .playing = state else { return }
         setState(.paused)
     }
 
-    func resume() {
+    /// Resets prebuffer tracking BEFORE clearing the pause flag so first bytes count toward
+    /// the resume threshold. StreamPlayer keeps user-visible state suppressed until
+    /// `onPrebufferReady`; transport state and user state diverge by design.
+    func resumeByUser() async {
+        guard case .paused = state else { return }
+        if Task.isCancelled { return }
+        await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+            guard let ctx = decodeContext else { cont.resume(); return }
+            ctx.resetPrebufferTracking { cont.resume() }
+        }
+        if Task.isCancelled { return }
+        await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+            guard let ctx = decodeContext else { cont.resume(); return }
+            ctx.setPausedByUser(false) { cont.resume() }
+        }
+        if Task.isCancelled { return }
         guard case .paused = state else { return }
         dataTask?.resume()
         setState(.playing)
@@ -444,6 +480,38 @@ final class StreamDecodePipeline {
         return 0
     }
 
+    #if DEBUG
+    // MARK: - Test Seams (DEBUG only)
+
+    /// Test-only injection of a termination event without going through URLSession.
+    /// Routes through `onTermination` so StreamPlayer.handleTermination runs end-to-end.
+    internal func injectTerminationForTesting(_ reason: StreamTerminationReason) {
+        onTermination?(reason)
+    }
+
+    /// Test-only: snapshot of whether `DecodeContext.isPausedByUser` is set.
+    /// Hops onto the decode queue with a sync barrier; safe because tests run on the main queue.
+    internal func isPausedByUserForTesting() -> Bool {
+        decodeContext?.isPausedByUserSnapshotForTesting() ?? false
+    }
+
+    /// Test-only: snapshot of `decoder.hasQueuedPackets` via the decode-queue barrier.
+    internal func decoderHasQueuedPacketsForTesting() -> Bool {
+        decodeContext?.decoderHasQueuedPacketsForTesting() ?? false
+    }
+
+    /// Test-only: ring buffer telemetry (relaxed loads — safe to call from any thread).
+    internal func ringBufferAvailableFramesForTesting() -> Int {
+        decodeContext?.ringBufferAvailableFramesForTesting() ?? 0
+    }
+
+    /// Test-only: drive `pipeline.state` directly to exercise StreamPlayer code paths
+    /// (e.g. `resume()` while `.playing`) without spinning up a real URLSession.
+    internal func setStateForTesting(_ state: StreamState) {
+        setState(state)
+    }
+    #endif
+
 }
 
 // MARK: - DecodeContext (queue-confined, NOT @MainActor)
@@ -468,15 +536,25 @@ private final class DecodeContext: @unchecked Sendable {
     private var detectedSampleRate: Float64 = 0
     private var isShutdown: Bool = false
 
+    /// While true, `handleIncomingData` and `handlePackets` short-circuit. Set on the decode queue.
+    private var isPausedByUser: Bool = false
+
+    /// One-shot per resume cycle. Starts `true` (initial stream uses `formatReadyFired` instead);
+    /// `resetPrebufferTracking` flips it to `false` at resume time.
+    private var prebufferReadyFiredOnResume: Bool = true
+
     /// Audio IO workgroup — set after bridge activation, used for per-block join/leave.
     /// Queue-confined: only accessed from decodeQueue.
     var audioWorkgroup: os_workgroup_t?
 
     private static let prebufferThreshold: Int = 16384
+    /// ~185 ms @ 44.1 kHz — snappier than initial buffering.
+    private static let resumePrebufferThreshold: Int = 8192
 
     private let onFormatReady: @Sendable (Float64, UInt64) -> Void
     private let onMetadata: @Sendable (ICYFramer.ICYMetadata, UInt64) -> Void
     private let onError: @Sendable (String, UInt64) -> Void
+    private let onPrebufferReady: @Sendable (UInt64) -> Void
 
     init(
         decodeQueue: DispatchQueue,
@@ -485,7 +563,8 @@ private final class DecodeContext: @unchecked Sendable {
         generation: UInt64,
         onFormatReady: @escaping @Sendable (Float64, UInt64) -> Void,
         onMetadata: @escaping @Sendable (ICYFramer.ICYMetadata, UInt64) -> Void,
-        onError: @escaping @Sendable (String, UInt64) -> Void
+        onError: @escaping @Sendable (String, UInt64) -> Void,
+        onPrebufferReady: @escaping @Sendable (UInt64) -> Void
     ) {
         self.decodeQueue = decodeQueue
         self.ringBuffer = ringBuffer
@@ -493,6 +572,7 @@ private final class DecodeContext: @unchecked Sendable {
         self.onFormatReady = onFormatReady
         self.onMetadata = onMetadata
         self.onError = onError
+        self.onPrebufferReady = onPrebufferReady
 
         decodeQueue.async { [self] in
             let parser = AudioFileStreamParser(formatHint: formatHint)
@@ -536,7 +616,9 @@ private final class DecodeContext: @unchecked Sendable {
     /// Joins audio workgroup for the duration of decode work (per-block join/leave).
     func handleIncomingData(_ data: Data) {
         decodeQueue.async { [self] in
-            guard !isShutdown else { return }
+            // `isPausedByUser` is raised in the same async block as the flush, so late
+            // URLSession callbacks delivered after pause are dropped here.
+            guard !isShutdown, !isPausedByUser else { return }
 
             let token = joinWorkgroupIfAvailable()
             defer {
@@ -553,6 +635,31 @@ private final class DecodeContext: @unchecked Sendable {
                     onMetadata(metadata, generation)
                 }
             }
+        }
+    }
+
+    /// On `paused=true`, in this exact order: gate up, drop in-flight packets, flush the
+    /// ring. The serial queue guarantees no other handler runs between steps.
+    func setPausedByUser(_ paused: Bool, completion: @escaping @Sendable () -> Void) {
+        decodeQueue.async { [self] in
+            guard !isShutdown else { completion(); return }
+            isPausedByUser = paused
+            if paused {
+                decoder?.clearQueue()
+                ringBuffer.flush(newGeneration: false)
+            }
+            completion()
+        }
+    }
+
+    /// Caller must invoke this BEFORE clearing `isPausedByUser` so first post-resume bytes
+    /// count toward `resumePrebufferThreshold`, not the stale pre-pause counter.
+    func resetPrebufferTracking(completion: @escaping @Sendable () -> Void) {
+        decodeQueue.async { [self] in
+            guard !isShutdown else { completion(); return }
+            prebufferedFrames = 0
+            prebufferReadyFiredOnResume = false
+            completion()
         }
     }
 
@@ -640,7 +747,7 @@ private final class DecodeContext: @unchecked Sendable {
 
         // Decode all enqueued packets
         while decoder.hasQueuedPackets {
-            guard !isShutdown else { break }
+            guard !isShutdown, !isPausedByUser else { break }
             guard let (pcmBuffer, frameCount) = decoder.decode() else { break }
 
             let framesWritten = ringBuffer.write(from: pcmBuffer, frameCount: frameCount)
@@ -650,8 +757,29 @@ private final class DecodeContext: @unchecked Sendable {
                 formatReadyFired = true
                 onFormatReady(detectedSampleRate, generation)
             }
+
+            if !prebufferReadyFiredOnResume && prebufferedFrames >= Self.resumePrebufferThreshold {
+                prebufferReadyFiredOnResume = true
+                onPrebufferReady(generation)
+            }
         }
     }
+
+    #if DEBUG
+    // MARK: - Test Seams (DEBUG only — never compiled into release builds)
+
+    internal func isPausedByUserSnapshotForTesting() -> Bool {
+        decodeQueue.sync { isPausedByUser }
+    }
+
+    internal func decoderHasQueuedPacketsForTesting() -> Bool {
+        decodeQueue.sync { decoder?.hasQueuedPackets ?? false }
+    }
+
+    internal func ringBufferAvailableFramesForTesting() -> Int {
+        ringBuffer.availableFrames
+    }
+    #endif
 }
 
 // MARK: - URLSession Delegate Proxy

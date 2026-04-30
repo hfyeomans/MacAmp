@@ -555,6 +555,15 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
         engine.deactivateStreamBridge()
     }
 
+    /// No-op when the stream bridge is inactive.
+    func setStreamSilenced(_ silenced: Bool) {
+        engine.setStreamSilenced(silenced)
+    }
+
+    #if DEBUG
+    var isStreamSilenceGateActive: Bool { engine.isStreamSilenceGateActive }
+    #endif
+
     /// The audio IO workgroup from the engine output node.
     /// Valid only while the engine is running (i.e., after bridge activation).
     var audioWorkgroup: os_workgroup_t? {
