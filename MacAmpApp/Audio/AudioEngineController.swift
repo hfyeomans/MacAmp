@@ -53,6 +53,12 @@ final class AudioEngineController {
     private var streamSilenceGate: ManagedAtomic<UInt8>?
     private(set) var isBridgeActive: Bool = false
 
+    // MARK: - Video Bridge State
+
+    private var videoSourceNode: AVAudioSourceNode?
+    private var videoRingBuffer: LockFreeRingBuffer?
+    private(set) var isVideoBridgeActive: Bool = false
+
     // MARK: - Engine Configuration Observer
 
     private let configObserver: AudioEngineConfigurationObserver
@@ -108,7 +114,14 @@ final class AudioEngineController {
         configObserver.stop()
         progressTimer?.invalidate()
         deactivateStreamBridge()
+        deactivateVideoBridge()
         visualizerPipeline.removeTap()
+    }
+
+    /// Sample rate of the engine output node's input bus. Bridges target this
+    /// so the source node format matches the graph's downstream consumer rate.
+    var outputSampleRate: Double {
+        audioEngine.outputNode.inputFormat(forBus: 0).sampleRate
     }
 
     // MARK: - Engine Setup
@@ -128,9 +141,12 @@ final class AudioEngineController {
     func rewireForFile(_ file: AVAudioFile) {
         audioFile = file
 
-        // Deactivate stream bridge if active
+        // Deactivate any active bridge before rewiring to playerNode path
         if isBridgeActive {
             deactivateStreamBridge()
+        }
+        if isVideoBridgeActive {
+            deactivateVideoBridge()
         }
 
         // Stop engine if running (between tracks)
@@ -309,11 +325,13 @@ final class AudioEngineController {
     func setVolume(_ volume: Float) {
         playerNode.volume = volume
         streamSourceNode?.volume = volume
+        videoSourceNode?.volume = volume
     }
 
     func setBalance(_ balance: Float) {
         playerNode.pan = balance
         streamSourceNode?.pan = balance
+        videoSourceNode?.pan = balance
     }
 
     /// Silence the stream render block. No-op when bridge is inactive.
@@ -390,6 +408,9 @@ final class AudioEngineController {
     /// - MUST verify mixer→output after reset (lesson #4)
     func activateStreamBridge(ringBuffer: LockFreeRingBuffer, sampleRate: Float64) {
         guard !isBridgeActive else { return }
+        if isVideoBridgeActive {
+            deactivateVideoBridge()
+        }
 
         streamRingBuffer = ringBuffer
 
@@ -488,6 +509,159 @@ final class AudioEngineController {
         AppLog.info(.audio, "AudioEngineController: Stream bridge deactivated")
     }
 
+    // MARK: - Video Bridge
+
+    /// Render block for the video AVAudioSourceNode. Reads interleaved Float32
+    /// stereo from `ringBuffer` written by `VideoAudioTap`. Mirrors the stream
+    /// render block but without a silence gate — video pause is enforced at
+    /// AVPlayer (which stops driving the tap), not at the render block.
+    ///
+    /// Per Principle 4 (AHA Rule of Three) we do NOT extract a shared helper
+    /// at N=2 — keep both render blocks inline. Re-evaluate at N=3.
+    private nonisolated static func makeVideoRenderBlock(
+        ringBuffer: LockFreeRingBuffer
+    ) -> AVAudioSourceNodeRenderBlock {
+        { isSilence, _, frameCount, outputData in
+            let ablPointer = UnsafeMutableAudioBufferListPointer(outputData)
+            guard ablPointer.count == 1,
+                  let firstBuffer = ablPointer.first,
+                  firstBuffer.mNumberChannels == 2,
+                  let data = firstBuffer.mData else {
+                isSilence.pointee = ObjCBool(true)
+                return noErr
+            }
+
+            let floatPtr = data.assumingMemoryBound(to: Float.self)
+            let channelCount = Int(firstBuffer.mNumberChannels)
+            let frames = Int(frameCount)
+
+            let framesRead = ringBuffer.read(into: floatPtr, frameCount: frames)
+
+            if framesRead < frames {
+                let remainingSamples = (frames - framesRead) * channelCount
+                let offset = framesRead * channelCount
+                memset(floatPtr + offset, 0, remainingSamples * MemoryLayout<Float>.size)
+            }
+
+            isSilence.pointee = ObjCBool(framesRead == 0)
+            return noErr
+        }
+    }
+
+    #if DEBUG
+    /// Test seam: same render block, exposed without widening production visibility.
+    internal nonisolated static func makeVideoRenderBlockForTesting(
+        ringBuffer: LockFreeRingBuffer
+    ) -> AVAudioSourceNodeRenderBlock {
+        makeVideoRenderBlock(ringBuffer: ringBuffer)
+    }
+    #endif
+
+    /// Activate the video bridge: wire AVAudioSourceNode into the engine graph.
+    /// Replaces the playerNode path with `videoSourceNode → EQ → mixer → output`.
+    /// Mutually exclusive with the stream bridge — deactivates it first.
+    ///
+    /// Mirrors `activateStreamBridge` lessons: explicit interleaved source
+    /// format matching the ring layout, non-interleaved graph format, stop +
+    /// reset before rewire (avoids -10868), verify mixer→output post-reset.
+    func activateVideoBridge(ringBuffer: LockFreeRingBuffer, sampleRate: Float64) {
+        guard !isVideoBridgeActive else { return }
+        if isBridgeActive {
+            deactivateStreamBridge()
+        }
+        if playerNode.isPlaying {
+            playerNode.stop()
+        }
+
+        videoRingBuffer = ringBuffer
+
+        let sourceFormat = AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: sampleRate,
+            channels: 2,
+            interleaved: true
+        )!
+
+        let renderBlock = Self.makeVideoRenderBlock(ringBuffer: ringBuffer)
+        let sourceNode = AVAudioSourceNode(format: sourceFormat, renderBlock: renderBlock)
+        videoSourceNode = sourceNode
+
+        if audioEngine.isRunning {
+            audioEngine.stop()
+            audioEngine.reset()
+        }
+
+        audioEngine.disconnectNodeOutput(playerNode)
+        audioEngine.disconnectNodeOutput(eqNode)
+        audioEngine.attach(sourceNode)
+
+        let graphFormat = AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: outputSampleRate,
+            channels: 2,
+            interleaved: false
+        )
+
+        audioEngine.connect(sourceNode, to: eqNode, format: graphFormat)
+        audioEngine.connect(eqNode, to: audioEngine.mainMixerNode, format: graphFormat)
+
+        if audioEngine.outputConnectionPoints(for: audioEngine.mainMixerNode, outputBus: 0).isEmpty {
+            audioEngine.connect(audioEngine.mainMixerNode, to: audioEngine.outputNode, format: nil)
+        }
+
+        audioEngine.prepare()
+        guard startEngineIfNeeded() else {
+            audioEngine.disconnectNodeOutput(sourceNode)
+            audioEngine.detach(sourceNode)
+            videoSourceNode = nil
+            videoRingBuffer = nil
+            AppLog.error(.audio, "AudioEngineController: Video bridge activation aborted — engine failed to start")
+            return
+        }
+        installVisualizerTapIfNeeded()
+
+        isVideoBridgeActive = true
+        AppLog.info(.audio, "AudioEngineController: Video bridge activated — \(sampleRate)Hz")
+    }
+
+    /// Deactivate the video bridge — detach video source node, restore default
+    /// playerNode wiring. Idempotent.
+    func deactivateVideoBridge() {
+        guard isVideoBridgeActive else { return }
+
+        audioEngine.stop()
+        removeVisualizerTapIfNeeded()
+
+        if let sourceNode = videoSourceNode {
+            audioEngine.detach(sourceNode)
+        }
+
+        audioEngine.disconnectNodeInput(eqNode, bus: 0)
+        audioEngine.disconnectNodeOutput(playerNode)
+        audioEngine.disconnectNodeOutput(eqNode)
+
+        let graphFormat = AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: outputSampleRate,
+            channels: 2,
+            interleaved: false
+        )!
+        audioEngine.connect(playerNode, to: eqNode, format: graphFormat)
+        audioEngine.connect(eqNode, to: audioEngine.mainMixerNode, format: graphFormat)
+
+        if audioEngine.outputConnectionPoints(for: audioEngine.mainMixerNode, outputBus: 0).isEmpty {
+            audioEngine.connect(audioEngine.mainMixerNode, to: audioEngine.outputNode, format: nil)
+        }
+
+        audioEngine.prepare()
+
+        videoSourceNode = nil
+        videoRingBuffer = nil
+        isVideoBridgeActive = false
+
+        AppLog.info(.audio, "AudioEngineController: Video bridge deactivated")
+    }
+
     // MARK: - File Loading
 
     /// Load an audio file for playback. Rewires the engine graph.
@@ -519,8 +693,7 @@ final class AudioEngineController {
             wasPlaying: playerNode.isPlaying,
             currentTime: readPlayerNodeCurrentTime() ?? 0,
             wasStreamBridge: isBridgeActive,
-            // TODO Phase 3 (video-audio-engine-routing §8.1): wire to engine.isVideoBridgeActive
-            wasVideoBridge: false
+            wasVideoBridge: isVideoBridgeActive
         )
         onEngineWillReconfigure?(snapshot)
     }
@@ -548,8 +721,22 @@ final class AudioEngineController {
             audioEngine.connect(eqNode, to: audioEngine.mainMixerNode, format: graphFormat)
         }
 
-        // 2. TODO Phase 3 (video-audio-engine-routing §8.1): refresh video bridge
-        //    graph format here when isVideoBridgeActive becomes a real flag.
+        // 2. Refresh video bridge graph format if active. AVAudioEngine inserts
+        //    an internal converter between the source node's declared rate (the
+        //    tap's expectedSampleRate, fixed at attach time) and the new
+        //    outputNode rate, so the source node itself stays as-is.
+        if isVideoBridgeActive, let sourceNode = videoSourceNode {
+            audioEngine.disconnectNodeOutput(sourceNode)
+            audioEngine.disconnectNodeOutput(eqNode)
+            let graphFormat = AVAudioFormat(
+                commonFormat: .pcmFormatFloat32,
+                sampleRate: outputSampleRate,
+                channels: 2,
+                interleaved: false
+            )!
+            audioEngine.connect(sourceNode, to: eqNode, format: graphFormat)
+            audioEngine.connect(eqNode, to: audioEngine.mainMixerNode, format: graphFormat)
+        }
 
         // 3. Verify mixer → output connection survived the reconfigure.
         if audioEngine.outputConnectionPoints(for: audioEngine.mainMixerNode, outputBus: 0).isEmpty {
