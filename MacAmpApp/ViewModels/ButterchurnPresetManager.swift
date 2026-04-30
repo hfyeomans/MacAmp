@@ -207,7 +207,8 @@ final class ButterchurnPresetManager {
 
         // .common run-loop mode keeps this firing during user gestures (.eventTracking).
         let timer = Timer(timeInterval: cycleInterval, repeats: true) { [weak self] _ in
-            Task { @MainActor in
+            dispatchPrecondition(condition: .onQueue(.main))
+            MainActor.assumeIsolated {
                 self?.nextPreset()
             }
         }
@@ -241,7 +242,8 @@ final class ButterchurnPresetManager {
 
         // .common run-loop mode keeps this firing during user gestures (.eventTracking).
         let timer = Timer(timeInterval: trackTitleInterval, repeats: true) { [weak self] _ in
-            Task { @MainActor in
+            dispatchPrecondition(condition: .onQueue(.main))
+            MainActor.assumeIsolated {
                 self?.showCurrentTrackTitle()
             }
         }
