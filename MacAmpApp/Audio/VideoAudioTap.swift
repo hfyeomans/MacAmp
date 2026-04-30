@@ -54,6 +54,20 @@ final class VideoAudioTap {
             throw Error.noAudioTrack
         }
 
+        // Capture the source channel layout from the format description, when
+        // present. AudioConverter's surround→stereo downmix matrix needs the
+        // exact input layout to do the right thing — guessing from channel
+        // count alone (`kAudioChannelLayoutTag_AAC_5_1` etc.) only handles the
+        // common cases.
+        if let formatDesc = try await audioTrack.load(.formatDescriptions).first {
+            var sizeOut = 0
+            if let layoutPtr = CMAudioFormatDescriptionGetChannelLayout(
+                formatDesc, sizeOut: &sizeOut
+            ), sizeOut > 0 {
+                context.sourceChannelLayout = Data(bytes: layoutPtr, count: sizeOut)
+            }
+        }
+
         let retained = Unmanaged.passRetained(context)
         var callbacks = MTAudioProcessingTapCallbacks(
             version: kMTAudioProcessingTapCallbacksVersion_0,
@@ -122,6 +136,11 @@ final class VideoAudioTapContext: @unchecked Sendable {
     let ringBuffer: LockFreeRingBuffer
     let expectedSampleRate: Float64
 
+    /// Source AudioChannelLayout bytes captured from the asset's format
+    /// description, when available. Threaded into tapPrepare so the converter
+    /// gets the actual surround layout (not a guess from channel count).
+    var sourceChannelLayout: Data?
+
     var processingFormat: AudioStreamBasicDescription?
     var converter: AudioConverterRef?
     var converterScratch: UnsafeMutablePointer<Float>?
@@ -178,25 +197,15 @@ private let tapPrepare: MTAudioProcessingTapPrepareCallback = { tap, maxFrames, 
     let src = processingFormat.pointee
     ctx.processingFormat = src
 
-    let isFloat = (src.mFormatFlags & kAudioFormatFlagIsFloat) != 0
-    let isPacked = (src.mFormatFlags & kAudioFormatFlagIsPacked) != 0
-    let isNonInterleaved = (src.mFormatFlags & kAudioFormatFlagIsNonInterleaved) != 0
+    if shouldBypassConverter(source: src, expectedSampleRate: ctx.expectedSampleRate) {
+        return
+    }
+
     let stereoBytesPerFrame = UInt32(2 * MemoryLayout<Float>.size)
-    let bypassConverter = src.mFormatID == kAudioFormatLinearPCM
-        && isFloat
-        && isPacked
-        && !isNonInterleaved
-        && src.mBitsPerChannel == 32
-        && src.mChannelsPerFrame == 2
-        && src.mBytesPerFrame == stereoBytesPerFrame
-        && src.mSampleRate == ctx.expectedSampleRate
-
-    if bypassConverter { return }
-
     var dst = AudioStreamBasicDescription(
         mSampleRate: ctx.expectedSampleRate,
         mFormatID: kAudioFormatLinearPCM,
-        mFormatFlags: kAudioFormatFlagIsFloat | kAudioFormatFlagIsPacked,
+        mFormatFlags: kAudioFormatFlagsNativeFloatPacked,
         mBytesPerPacket: stereoBytesPerFrame,
         mFramesPerPacket: 1,
         mBytesPerFrame: stereoBytesPerFrame,
@@ -214,9 +223,13 @@ private let tapPrepare: MTAudioProcessingTapPrepareCallback = { tap, maxFrames, 
 
     // AudioConverter's default behavior for a channel-count mismatch is
     // *routing*, not mixing — mono → L+silent-R, 5.1 → drop the last 4
-    // channels. To get duplication for mono and a real downmix matrix for
-    // surround, we install explicit channel maps / layouts.
-    if !configureChannelMapping(converter: converterRef, sourceChannels: src.mChannelsPerFrame) {
+    // channels. We install explicit channel maps / layouts and turn on
+    // PerformDownmix so the converter applies its real mix matrix.
+    if !configureChannelMapping(
+        converter: converterRef,
+        sourceChannels: src.mChannelsPerFrame,
+        sourceLayout: ctx.sourceChannelLayout
+    ) {
         AudioConverterDispose(converterRef)
         ctx.fallbackRequested.store(true, ordering: .relaxed)
         return
@@ -230,13 +243,56 @@ private let tapPrepare: MTAudioProcessingTapPrepareCallback = { tap, maxFrames, 
     ctx.converterScratchFrameCapacity = frames
 }
 
+// MARK: - Format classification (testable)
+
+/// Returns true when the source PCM format is byte-identical to the engine's
+/// canonical format — interleaved native-endian Float32 stereo at the engine's
+/// expected rate — so the converter can be skipped.
+func shouldBypassConverter(
+    source: AudioStreamBasicDescription,
+    expectedSampleRate: Float64
+) -> Bool {
+    let stereoBytesPerFrame = UInt32(2 * MemoryLayout<Float>.size)
+    let nativeFloatPacked = kAudioFormatFlagsNativeFloatPacked
+    return source.mFormatID == kAudioFormatLinearPCM
+        && (source.mFormatFlags & nativeFloatPacked) == nativeFloatPacked
+        && (source.mFormatFlags & kAudioFormatFlagIsNonInterleaved) == 0
+        && source.mBitsPerChannel == 32
+        && source.mChannelsPerFrame == 2
+        && source.mBytesPerFrame == stereoBytesPerFrame
+        && source.mFramesPerPacket == 1
+        && source.mSampleRate == expectedSampleRate
+}
+
+/// Inferred AAC-style channel layout for surround channel counts (3-8) when
+/// the format description didn't carry an explicit layout. mp4/m4v video
+/// audio is overwhelmingly AAC, so AAC tags downmix more accurately than
+/// the older `MPEG_*_A` tags. Returns nil for non-surround counts (mono,
+/// stereo, 9+) — caller handles those separately.
+func inferredSurroundChannelLayoutTag(
+    forChannelCount channels: UInt32
+) -> AudioChannelLayoutTag? {
+    switch channels {
+    case 3: return kAudioChannelLayoutTag_AAC_3_0
+    case 4: return kAudioChannelLayoutTag_AAC_4_0
+    case 5: return kAudioChannelLayoutTag_AAC_5_0
+    case 6: return kAudioChannelLayoutTag_AAC_5_1
+    case 7: return kAudioChannelLayoutTag_AAC_6_1
+    case 8: return kAudioChannelLayoutTag_AAC_7_1
+    default: return nil
+    }
+}
+
+// MARK: - Channel mapping
+
 /// Configure the converter's channel routing for a mono / stereo / surround
 /// source so output is a true stereo signal. Returns false if the source
 /// channel count cannot be mapped to a known layout (caller engages
 /// fallback). Stereo input is a no-op — AudioConverter passes it through.
 private func configureChannelMapping(
     converter: AudioConverterRef,
-    sourceChannels: UInt32
+    sourceChannels: UInt32,
+    sourceLayout: Data?
 ) -> Bool {
     switch sourceChannels {
     case 2:
@@ -256,43 +312,56 @@ private func configureChannelMapping(
         }
         return status == noErr
     default:
-        // Surround / unusual channel counts: install standard layouts so
-        // AudioConverter applies its built-in downmix matrix to stereo.
-        guard let inputTag = surroundLayoutTag(forChannelCount: sourceChannels) else {
-            return false
+        // Surround: install input + output layouts and turn on
+        // PerformDownmix so AudioConverter applies its built-in mix matrix.
+        // Prefer the actual layout from the format description; fall back to
+        // an AAC-style guess only if metadata didn't carry one.
+        let inStatus: OSStatus
+        if let sourceLayout {
+            inStatus = sourceLayout.withUnsafeBytes { buffer -> OSStatus in
+                guard let baseAddress = buffer.baseAddress else { return -1 }
+                return AudioConverterSetProperty(
+                    converter,
+                    kAudioConverterInputChannelLayout,
+                    UInt32(buffer.count),
+                    baseAddress
+                )
+            }
+        } else {
+            guard let inputTag = inferredSurroundChannelLayoutTag(
+                forChannelCount: sourceChannels
+            ) else {
+                return false
+            }
+            var inputLayout = AudioChannelLayout()
+            inputLayout.mChannelLayoutTag = inputTag
+            inStatus = AudioConverterSetProperty(
+                converter,
+                kAudioConverterInputChannelLayout,
+                UInt32(MemoryLayout<AudioChannelLayout>.size),
+                &inputLayout
+            )
         }
-        var inputLayout = AudioChannelLayout()
-        inputLayout.mChannelLayoutTag = inputTag
+        guard inStatus == noErr else { return false }
+
         var outputLayout = AudioChannelLayout()
         outputLayout.mChannelLayoutTag = kAudioChannelLayoutTag_Stereo
-        let layoutSize = UInt32(MemoryLayout<AudioChannelLayout>.size)
-        let inStatus = AudioConverterSetProperty(
-            converter,
-            kAudioConverterInputChannelLayout,
-            layoutSize,
-            &inputLayout
-        )
         let outStatus = AudioConverterSetProperty(
             converter,
             kAudioConverterOutputChannelLayout,
-            layoutSize,
+            UInt32(MemoryLayout<AudioChannelLayout>.size),
             &outputLayout
         )
-        return inStatus == noErr && outStatus == noErr
-    }
-}
+        guard outStatus == noErr else { return false }
 
-/// Common surround layouts found in mp4/mov/m4v audio tracks. Returns nil
-/// for non-standard channel counts; the caller treats that as fallback.
-private func surroundLayoutTag(forChannelCount channels: UInt32) -> AudioChannelLayoutTag? {
-    switch channels {
-    case 3: return kAudioChannelLayoutTag_MPEG_3_0_A    // L R C
-    case 4: return kAudioChannelLayoutTag_Quadraphonic
-    case 5: return kAudioChannelLayoutTag_MPEG_5_0_A    // L R C Ls Rs
-    case 6: return kAudioChannelLayoutTag_MPEG_5_1_A    // L R C LFE Ls Rs
-    case 7: return kAudioChannelLayoutTag_MPEG_6_1_A
-    case 8: return kAudioChannelLayoutTag_MPEG_7_1_A
-    default: return nil
+        var performDownmix: UInt32 = 1
+        let dmStatus = AudioConverterSetProperty(
+            converter,
+            kAudioConverterPropertyPerformDownmix,
+            UInt32(MemoryLayout<UInt32>.size),
+            &performDownmix
+        )
+        return dmStatus == noErr
     }
 }
 
