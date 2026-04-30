@@ -2,8 +2,8 @@
 
 > **Purpose:** Single source of truth for cross-task execution status, wave progress, and coordination decisions.
 > **Date:** 2026-02-21
-> **Updated:** 2026-04-29 (Post-S3-1A follow-up `timer-runloop-mode-audit` MERGED — PR #81 merge commit `ac09dd4`. Pattern A normalization: 6 timer-on-RunLoop callsites converted across 5 source files; codebase now uniform. Wave S3-1B `stream-pause-tail` remains NEXT. Sub-follow-up `timer-scheduled-on-common-extension` still DEFERRED, predecessor merged.)
-> **Previous:** 2026-04-29 (Pre-tracked deferred follow-up `timer-scheduled-on-common-extension` discovered during `timer-runloop-mode-audit` execution. Helper-extension extraction with `@Sendable` migration of all 7 Pattern-A timer callsites; deferred to its own task per Problem-First + API Surface Minimization. See "Post-S3-1A `timer-runloop-mode-audit` Follow-Ups" section.)
+> **Updated:** 2026-04-30 (Wave S3-1B `stream-pause-tail` IMPLEMENTATION COMPLETE — PR #82 OPEN, awaiting review. 9 implementation review iterations (Codex Oracle final score 9/10 + parallel code-reviewer agent pass). 68/68 tests pass with TSan. All 7 manual scenarios validated on real SomaFM stream. Two Lows deferred — see "Post-S3-1B Follow-Ups". S3-2 / S3-3 / S3-4 remain gated on this merge.)
+> **Previous:** 2026-04-29 (Post-S3-1A follow-up `timer-runloop-mode-audit` MERGED — PR #81 merge commit `ac09dd4`. Pattern A normalization: 6 timer-on-RunLoop callsites converted across 5 source files; codebase now uniform. Sub-follow-up `timer-scheduled-on-common-extension` still DEFERRED, predecessor merged.)
 
 ### Quick Reference
 
@@ -11,9 +11,9 @@
 |--------|-------|
 | Current release | v1.3 (2026-03-26) |
 | .swift files | ~110 |
-| Tests | 59 (+2 from PR #80 negative-regression tests) |
-| Current phase | S3 — Wave S3-1A merged, S3-1B next |
-| PRs merged | 79 total (PR #80 mwvi, PR #81 timer-runloop-mode-audit) |
+| Tests | 68 (+9 from S3-1B `stream-pause-tail` PR #82) |
+| Current phase | S3 — Wave S3-1A merged, S3-1B PR open |
+| PRs merged | 79 total (PR #80 mwvi, PR #81 timer-runloop-mode-audit); PR #82 spt OPEN |
 | Architecture principles | `tasks/_context/principles.md` |
 
 ---
@@ -210,7 +210,7 @@ Target (MainWindowFullLayer.body):
 | ~~docs/ folder update~~ | N/A | N/A | N/A | ✅ COMPLETE — 2026-03-14 |
 | HLS streaming support | unified-audio-pipeline Phase 3 | Large | Low | → S3 |
 | OGG Vorbis support | unified-audio-pipeline Phase 2.4 | Medium | Low | → S3 |
-| Stream pause audio tail | Post-merge Oracle P2 | Small | Low | → S3 |
+| ~~Stream pause audio tail~~ | Post-merge Oracle P2 | Small | Low | **→ S3-1B PR #82 OPEN** (2026-04-30) |
 | Video audio through AVAudioEngine | unified-audio-pipeline | Medium | Medium | → S3 (deferred from S2) |
 | macOS 26 passthrough guard | unified-audio-pipeline Phase 2.3 | Small | Low | Deferred — HDMI/optical only |
 | Default MainActor isolation | T8 Phase 5 | Medium | Low | Deferred — questionable ROI |
@@ -288,14 +288,14 @@ All doc updates verified complete by sub-agent scan:
 
 ### Sprint S3: LOW-MEDIUM Priority — Edge Cases + Optimization + Video Routing
 
-> **Status (2026-04-28):** S3-1A `mainwindow-visualizer-isolation` ✅ **MERGED** (PR #80, merge commit `7f3d76f`). Wave S3-1B (`stream-pause-tail`) is now unblocked and is the next implementation task. The new follow-up `timer-runloop-mode-audit` is also unblocked and can run in parallel with S3-1B (no file conflicts).
+> **Status (2026-04-30):** S3-1A `mainwindow-visualizer-isolation` ✅ **MERGED** (PR #80, 2026-04-28). S3-1B `stream-pause-tail` 🟢 **PR #82 OPEN** (2026-04-30) — implementation complete, awaiting review. Post-S3-1A follow-up `timer-runloop-mode-audit` ✅ MERGED (PR #81, 2026-04-29). S3-2 / S3-3 / S3-4 remain gated on PR #82 merge.
 
 **Locked S3 ordering and branch plan:**
 
 | Wave | Step | Task Folder | Branch | PR # | Predecessors | Pre-Plan Spike | Status |
 |------|------|-------------|--------|------|--------------|----------------|--------|
 | S3-1 | A (parallel) | `mainwindow-visualizer-isolation` | `feat/mainwindow-visualizer-isolation` | **#80** | none | `spike/mwvi-volume-drag-profile` (Instruments) | ✅ **MERGED** 2026-04-28 |
-| S3-1 | B (parallel) | `stream-pause-tail` | `fix/stream-pause-tail` | B | none | none | 📋 **NEXT** — plan approved 9.1/10, ready to implement |
+| S3-1 | B (parallel) | `stream-pause-tail` | `fix/stream-pause-tail` | **#82** | none | none | 🟢 **PR OPEN** 2026-04-30 — Oracle 9/10 final, 68/68 TSan tests, manual smoke validated |
 | S3-2 | sequential | `video-audio-engine-routing` | `feat/video-audio-engine-routing` | C | S3-1 merged | `spike/vaer-av-drift-measurement` | PLAN APPROVED — gated on S3-1B merge |
 | S3-3 | sequential | `hls-streaming-support` | `feat/hls-streaming-support` | D | S3-2 merged | none (Gemini re-run optional at plan-time) | PLAN APPROVED |
 | S3-4 | sequential | `ogg-vorbis-support` | `feat/ogg-vorbis-support` | E | S3-3 merged | `spike/ogg-build-wiring` (0a) + `spike/ogg-local-playback` (0b) | PLAN APPROVED |
@@ -336,7 +336,7 @@ All doc updates verified complete by sub-agent scan:
 | `hls-streaming-support` | ✅ 8/8 applied | ✅ | ✅ | **9.0/10** | 4 |
 | `ogg-vorbis-support` | ✅ 10/10 applied | ✅ (22 sections) | ✅ | **9.3/10** | 3 |
 
-**S3 progress:** S3-1A (mwvi) ✅ MERGED. S3-1B (spt) is next. S3-2/S3-3/S3-4 still queued behind S3-1B.
+**S3 progress:** S3-1A (mwvi) ✅ MERGED. S3-1B (spt) 🟢 PR #82 OPEN. S3-2/S3-3/S3-4 still queued behind S3-1B merge.
 
 ### Post-S3-1A Follow-Ups (discovered during mwvi)
 
@@ -348,6 +348,13 @@ All doc updates verified complete by sub-agent scan:
 
 - **End-to-end pipeline diagnosis** — Symptoms manifest at the consumer; root causes often live at the producer. Phase 0 instrumented only the SwiftUI consumer side; the actual root cause was upstream at `VisualizerPipeline.pollTimer`. See `~/.claude/projects/-Users-hank-dev-src-MacAmp/memory/feedback_pipeline_end_to_end_diagnosis.md` and `BUILDING_RETRO_MACOS_APPS_SKILL.md`.
 - **ast-grep structural search before edits** — relying on `rg` text matching alone missed a duplicate `videoPlaybackController.volume` write and dead `streamPlayer.volume`/`.balance` properties. See `~/.claude/projects/-Users-hank-dev-src-MacAmp/memory/feedback_ast_grep_structural_search.md`.
+
+### Post-S3-1B `stream-pause-tail` Follow-Ups (discovered during this task — Lows deferred)
+
+| Task | Description | Size | Priority | Status |
+|------|-------------|------|:--------:|--------|
+| `streamdecodepipeline-stop-generation-guard` | `StreamDecodePipeline.stop()` fires `onTermination?(.userStopped)` without a generation guard. Benign double-fire only when `wasActivelyPlaying=false` is already cleared by callers; not a present bug, but a generation guard would close the theoretical hole. | Trivial | Low | 🟡 DEFERRED |
+| `audioconverterdecoder-confinement-doc` | `AudioConverterDecoder.clearQueue()` is decode-queue-confined via `assertConfinement()`, but the assertion is debug-only. Release builds would silently corrupt memory if a future caller invokes it off-queue. Doc gap, not a present bug. | Trivial | Low | 🟡 DEFERRED |
 
 ### Post-S3-1A `timer-runloop-mode-audit` Follow-Ups (discovered during this task)
 
