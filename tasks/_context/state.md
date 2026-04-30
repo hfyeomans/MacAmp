@@ -2,8 +2,8 @@
 
 > **Purpose:** Single source of truth for cross-task execution status, wave progress, and coordination decisions.
 > **Date:** 2026-02-21
-> **Updated:** 2026-04-30 (S3-2 Phase 0 ✅ **complete** — Path NONE confirmed empirically. Spike harness measured frequency-locked clocks across 5 corpus files; constant -200 ms is AVPlayer pipeline depth (decoded vs presentation time per Gemini), not perceptible drift. Plan §9 Phase 4 collapses to no-op. Plan §7.5 AudioConverter is load-bearing. Findings in `tasks/video-audio-engine-routing/research.md` "Phase 0 — Spike Results"; commit `1d4eca1`. Spike branch `spike/vaer-av-drift-measurement` deleted (4 commits, never pushed). `feat/video-audio-engine-routing` cut from main; Phase 1 (engine config observer) next.)
-> **Previous:** 2026-04-30 (Wave S3-1B `stream-pause-tail` ✅ **MERGED** — PR #82 merge commit `b60fd57`. Atomic silence gate + producer-quiesce barrier + seqlock+CAS in `LockFreeRingBuffer` eliminates ~0.7 s pause-tail; `userPaused` flag suppresses reconnect-during-pause; resume restarts at live edge with bridge teardown.)
+> **Updated:** 2026-04-30 (S3-2 Phase 0 ✅ + Phase 1 ✅ **both complete**. Engine config observer ships engine-recovery-on-output-route-change for local-file + stream paths (deferred from AirPlay PR #69 in S2). 10 commits on `feat/video-audio-engine-routing` including 3 Oracle-driven follow-ups. Plan §6.3 updated post-implementation to reflect split state ownership + cancellation contract. 72/72 tests pass with TSan. Manual verification clean across local↔external↔AirPlay routing. Phase 2 (MTAudioProcessingTap wrapper per plan §7) next.)
+> **Previous:** 2026-04-30 (S3-2 Phase 0 ✅ — Path NONE confirmed empirically. Spike harness measured frequency-locked clocks across 5 corpus files; constant -200 ms is AVPlayer pipeline depth, not perceptible drift. Plan §9 Phase 4 collapses to no-op. Plan §7.5 AudioConverter is load-bearing. Spike branch deleted; findings in research.md commit `1d4eca1`.)
 
 ### Quick Reference
 
@@ -288,7 +288,7 @@ All doc updates verified complete by sub-agent scan:
 
 ### Sprint S3: LOW-MEDIUM Priority — Edge Cases + Optimization + Video Routing
 
-> **Status (2026-04-30):** Wave S3-1 ✅ **COMPLETE** — S3-1A `mainwindow-visualizer-isolation` merged PR #80 (2026-04-28); S3-1B `stream-pause-tail` merged PR #82 (2026-04-30, merge commit `b60fd57`). Post-S3-1A follow-up `timer-runloop-mode-audit` merged PR #81 (2026-04-29). S3-2 `video-audio-engine-routing` Phase 0 ✅ complete (2026-04-30) — Path NONE confirmed empirically; spike branch deleted; `feat/video-audio-engine-routing` cut from main; Phase 1 (engine config observer) is next. S3-3 / S3-4 still queued behind S3-2 PR.
+> **Status (2026-04-30):** Wave S3-1 ✅ **COMPLETE** — S3-1A `mainwindow-visualizer-isolation` merged PR #80 (2026-04-28); S3-1B `stream-pause-tail` merged PR #82 (2026-04-30, merge commit `b60fd57`). Post-S3-1A follow-up `timer-runloop-mode-audit` merged PR #81 (2026-04-29). S3-2 `video-audio-engine-routing` Phase 0 + Phase 1 both ✅ complete (2026-04-30) — Path NONE confirmed empirically; engine config observer ships engine-recovery-on-output-route-change. 10 commits on `feat/video-audio-engine-routing`; manual verification clean across local↔external↔AirPlay. **Phase 2 (MTAudioProcessingTap wrapper) is next.** S3-3 / S3-4 still queued behind S3-2 PR.
 
 **Locked S3 ordering and branch plan:**
 
@@ -296,7 +296,7 @@ All doc updates verified complete by sub-agent scan:
 |------|------|-------------|--------|------|--------------|----------------|--------|
 | S3-1 | A (parallel) | `done/mainwindow-visualizer-isolation` | `feat/mainwindow-visualizer-isolation` | **#80** | none | `spike/mwvi-volume-drag-profile` (Instruments) | ✅ **MERGED** 2026-04-28 |
 | S3-1 | B (parallel) | `done/stream-pause-tail` | `fix/stream-pause-tail` | **#82** | none | none | ✅ **MERGED** 2026-04-30 (merge `b60fd57`) — Oracle 9/10 final, 68/68 TSan tests, manual smoke validated |
-| S3-2 | sequential | `video-audio-engine-routing` | `feat/video-audio-engine-routing` | C | S3-1 merged ✅ + Phase 0 ✅ | `spike/vaer-av-drift-measurement` ✅ deleted | 🔧 **IN PROGRESS** — Phase 0 done (Path NONE); Phase 1 next |
+| S3-2 | sequential | `video-audio-engine-routing` | `feat/video-audio-engine-routing` | C | S3-1 merged ✅ + Phase 0 ✅ + Phase 1 ✅ | `spike/vaer-av-drift-measurement` ✅ deleted | 🔧 **IN PROGRESS** — Phase 0 + Phase 1 done; Phase 2 (MTAudioProcessingTap) next |
 | S3-3 | sequential | `hls-streaming-support` | `feat/hls-streaming-support` | D | S3-2 merged | none (Gemini re-run optional at plan-time) | PLAN APPROVED |
 | S3-4 | sequential | `ogg-vorbis-support` | `feat/ogg-vorbis-support` | E | S3-3 merged | `spike/ogg-build-wiring` (0a) + `spike/ogg-local-playback` (0b) | PLAN APPROVED |
 | Post-S3-1A | follow-up | `done/timer-runloop-mode-audit` | `fix/timer-runloop-mode-audit` | **#81** | S3-1A merged ✅ | none | ✅ **MERGED** 2026-04-29 (merge commit `ac09dd4`) |

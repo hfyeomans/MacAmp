@@ -9,12 +9,17 @@
 
 ## Current State (update after each PR merge)
 
-**Last update:** 2026-04-30 (S3-2 Phase 0 spike complete — Path NONE confirmed; spike branch deleted; `feat/video-audio-engine-routing` cut from main, ready for Phase 1).
-**Main HEAD:** `1d4eca1` — `docs(vaer): record Phase 0 spike findings — Path NONE confirmed`.
-**Tests:** 68 passing (TSan ON).
-**PRs merged total:** 80.
+**Last update:** 2026-04-30 (S3-2 Phase 0 ✅ + Phase 1 ✅ — engine config observer ships; `feat/video-audio-engine-routing` has 10 commits; Phase 2 next).
+**Main HEAD:** `07a3ee8` — `docs(_context): capture HLS video constraints + future-work options`.
+**feat/video-audio-engine-routing HEAD:** `0c3a7fe` — `docs(vaer): close out Phase 1 in task-folder docs` (rebased onto main).
+**Tests:** 72/72 passing on the feat branch (TSan ON).
+**PRs merged total:** 80. Phase 2 work continues to land on the feat branch; no PR opened yet.
 
-**Most recent docs commit on main:** `1d4eca1` — Phase 0 spike findings appended to `tasks/video-audio-engine-routing/research.md` (Path NONE selected; plan §9 Phase 4 collapses to a no-op; plan §7.5 AudioConverter promoted from edge-case handler to load-bearing).
+**Most recent docs commits on main:**
+- `07a3ee8` HLS video future-work doc (S3-2 vs S3-3 naming clarification + 3 options for hypothetical HLS-video work)
+- `9fa0238` `*.m4v` gitignore
+- `5dea7d3` Phase 0 status sweep
+- `1d4eca1` Phase 0 spike findings — Path NONE selected; plan §9 Phase 4 = no-op; plan §7.5 AudioConverter is load-bearing
 
 **Most recent task closed:** `tasks/done/stream-pause-tail/` (S3-1B, PR #82, merged 2026-04-30, merge commit `b60fd57`). Atomic silence gate on the `AVAudioSourceNode` render block + producer-quiesce barrier (gate→clearQueue→ring flush in one decode-queue block) + seqlock + CAS in `LockFreeRingBuffer.read()` eliminates the ~0.7 s pause-tail and closes the consumer-side render-vs-flush race. `userPaused` flag suppresses reconnect-during-pause; `resume()` switches on pipeline state for safe live-edge restart with explicit bridge teardown. 9 implementation review iterations (Codex Oracle final 9/10 + parallel code-reviewer agent pass that caught a `deinit` task-leak Oracle missed). All 7 manual scenarios validated on real SomaFM stream. Two Lows deferred (see `_context/state.md` "Post-S3-1B Follow-Ups"): `StreamDecodePipeline.stop()` generation guard and `AudioConverterDecoder.clearQueue()` confinement-doc gap.
 
@@ -26,16 +31,23 @@
 
 ### 1. IN PROGRESS — `tasks/video-audio-engine-routing/` (S3-2)
 
-**Status:** Phase 0 spike ✅ complete (2026-04-30) — **Path NONE confirmed empirically**. Frequency-locked clocks across all 5 corpus files (slope mean -0.75 ms/sec, 95% CI [-6.4, +4.9]). Constant -200 ms phase offset is AVPlayer pipeline depth, not perceptible drift. Findings in `tasks/video-audio-engine-routing/research.md` "Phase 0 — Spike Results" section. Spike branch deleted per plan §5.5. **Implementation begins at Phase 1.**
+**Status:** Phase 0 ✅ + Phase 1 ✅ both complete (2026-04-30). **Phase 2 (MTAudioProcessingTap wrapper per plan §7) is next.**
 
-**Plan §9 Phase 4 collapses to a no-op** — todo §4.NONE only. Skip directly to Phase 5+ after Phase 1-3 land.
-**Plan §7.5 AudioConverter is load-bearing** (not optional edge-case handler) — the spike confirmed that without resampling, 44.1 kHz audio plays as discontinuous bursts every ~76 ms.
+**Phase 0 outcome (commit `1d4eca1` on main):** Path NONE — frequency-locked clocks across all 5 corpus files (slope mean -0.75 ms/sec, 95% CI [-6.4, +4.9]). Constant -200 ms phase offset is AVPlayer pipeline depth, not perceptible drift. Plan §9 Phase 4 collapses to no-op. Plan §7.5 AudioConverter is **load-bearing** (not optional) — without resampling, 44.1 kHz audio plays as discontinuous bursts every ~76 ms.
 
-**Branch:** `feat/video-audio-engine-routing` (cut from main 2026-04-30, post-Phase-0) → PR target #C.
-**Predecessors:** S3-1A ✅ + S3-1B ✅ + Phase 0 ✅ all complete.
+**Phase 1 outcome (10 commits on `feat/video-audio-engine-routing`, ending at `0c3a7fe`):** Engine configuration change observer ships. Output-route changes (Control Center, AirPlay, HDMI hot-plug, sleep/wake) trigger graceful engine recovery for local-file + stream paths. Manually verified across local↔external↔AirPlay routing including paused, mid-track, and seek scenarios. 72/72 tests pass with TSan. Three Oracle-driven follow-up commits address all HIGH-priority review items (cancel-pending-reconfigure-on-user-intent, lifecycle-interruption tests, plan §6.3 contract update).
+
+**Architectural notes from Phase 1 (relevant for Phase 2/3 implementation):**
+- AsyncSequence-based notification observation (`NotificationCenter.notifications(named:object:)`) — modern Swift 6.2 pattern; future similar work follows it.
+- `PreReconfigureSnapshot` has split state ownership: bridge flags are MacAmp-owned (authoritative); `wasPlaying` / `currentTime` are best-effort placeholders that AudioPlayer overrides with its own state. Documented in plan §6.3. Phase 3 candidate refactor: narrow the type to bridge-flags-only.
+- Reconfigure cancellation contract: `AudioPlayer.cancelPendingReconfigure()` called at start of `play`/`pause`/`stop`/`seek`/`playTrack` so stale `onDid` can't override new user intent during the 150 ms will/did gap.
+- HAL log noise (`!obj`, `!dev`, `'nope'`) on AirPlay→built-in transitions is OS-level device-teardown chatter, not MacAmp-actionable. Documented in task state.md.
+
+**Branch:** `feat/video-audio-engine-routing` (rebased onto main HEAD `07a3ee8`) → PR target #C.
+**Predecessors:** S3-1A ✅ + S3-1B ✅ + Phase 0 ✅ + Phase 1 ✅ all complete.
 **Successors:** S3-3 (`hls-streaming-support`) gated on this merge.
 
-**Phase 1 (engine config observer) is next** per plan §6 + todo Phase 1.
+**Phase 2 (MTAudioProcessingTap wrapper) is next** per plan §7 + todo Phase 2 on the feat branch (todo.md is updated on feat; main has the pre-Phase-1 version until merge).
 
 ### 2. DEFERRED — `timer-scheduled-on-common-extension`
 
@@ -56,7 +68,7 @@ S3-1A mwvi  ✅ MERGED (PR #80, merge commit 7f3d76f, 2026-04-28)
      ├──► S3-1B spt                       ←── PR #82  ✅ MERGED (merge commit b60fd57, 2026-04-30)
      │       │
      │       ▼
-     │    S3-2 vaer                       ←── PR #C   🔧 IN PROGRESS (Phase 0 ✅ Path NONE; feat branch cut; Phase 1 next)
+     │    S3-2 vaer                       ←── PR #C   🔧 IN PROGRESS (Phase 0 ✅ + Phase 1 ✅; Phase 2 MTAudioProcessingTap next)
      │       │
      │       ▼
      │    S3-3 hls                        ←── PR #D
@@ -131,16 +143,27 @@ Index lives at `~/.claude/projects/-Users-hank-dev-src-MacAmp/memory/MEMORY.md`.
 
 ## First Action for the Resuming Agent
 
-Open `tasks/video-audio-engine-routing/` (S3-2). Read all 6 canonical files (`research.md`, `plan.md`, `todo.md`, `state.md`, `placeholder.md`, `depreciated.md`). The "Phase 0 — Spike Results" section in `research.md` is required reading — it documents what the spike empirically proved (Path NONE; frequency-locked) and what that means for Phase 4.
+Open `tasks/video-audio-engine-routing/` (S3-2). Read all 6 canonical files (`research.md`, `plan.md`, `todo.md`, `state.md`, `placeholder.md`, `depreciated.md`). Required reading on the **feat branch** (where Phase 1 closed):
+- `state.md` — full Phase 1 outcome including 10-commit list, architectural notes, follow-ups deferred to Phase 3, and the CoreAudio HAL log observation
+- `plan.md §6.3` — split state ownership + cancellation contract documented post-implementation (commit `e7f8eed`)
+- `todo.md` Phase 1 — all items marked [x]; reads as a closeout record for Phase 1 work
+- `research.md` Phase 0 results — Path NONE; AudioConverter is load-bearing for Phase 2
 
-**Phase 0 is done.** Skip the spike step entirely. Phase 4 (sync strategy) is a no-op per todo §4.NONE.
+**Phase 0 + Phase 1 are done.** Skip both. Phase 4 (sync strategy) is a no-op per todo §4.NONE. **Phase 2 (MTAudioProcessingTap wrapper per plan §7) is next.**
 
-**Branch already exists:** `feat/video-audio-engine-routing` was cut from main on 2026-04-30 post-Phase-0. If your `git status` shows you're on `main`, switch to the feat branch (`git checkout feat/video-audio-engine-routing`).
+**Branch already exists:** `feat/video-audio-engine-routing` is rebased onto main HEAD `07a3ee8` and has 10 Phase-1 commits. Switch to it (`git checkout feat/video-audio-engine-routing`).
 
-Proceed with the standard pickup process from step 7 onward:
-- Re-read every "Files Affected" source listed in `plan.md` at HEAD to reconcile line-number drift. Known drift in `AudioPlayer.swift` (now 763 lines): `currentSeekID` bumps live at 337/397/487/604 (was 317/377/595); audio→video tap-removal at 363-366 (was 347-349); `snapshotButterchurnFrame` at 661-663 (was 632-635); `isHandlingCompletion` 200ms reset at 703 (was 673); declarations at 48-50 and `isEngineRendering` at 62 are unchanged.
-- Execute Phase 1 (engine config observer per plan §6) → Phase 2 (MTAudioProcessingTap per plan §7) → Phase 3 (engine source node per plan §8) → **skip Phase 4** → Phase 5 (tap fallback per plan §10) → Phase 6 (capability flags per plan §11) → Phase 7 (tests).
-- TSan-on builds + tests after each phase per `feedback_xcodebuildmcp_workflow.md`.
+Phase 2 sketch (per plan §7):
+- New file `MacAmpApp/Audio/VideoAudioTap.swift` (~250 LOC). C-convention `MTAudioProcessingTap` callbacks, `Unmanaged<Context>` plumbing, ring-buffer producer side.
+- **AudioConverter is load-bearing** (Phase 0 finding). Without it, 44.1 kHz source audio plays as discontinuous bursts every ~76 ms. Phase 2 todo 2.3.x covers it.
+- Tests: `Tests/MacAmpTests/VideoAudioTapTests.swift` (~120 LOC). Tap wrapper plumbing tests use a `@_spi(Testing)` injection seam; the C-callback path is exercised via manual integration testing in Phase 7.
+- Phase 2 does NOT touch the engine graph yet — that's Phase 3 (`videoSourceNode` wiring).
+
+Standard pickup process from step 7 onward:
+- TSan-on builds + tests after each commit per `feedback_xcodebuildmcp_workflow.md`.
+- Per-step commits with build+test between (the established Phase 1 cadence).
+- Match the modern Swift 6.2 idioms from Phase 1: `@preconcurrency import` for unannotated frameworks, `Task.sleep(for: Duration)`, `isolated deinit`, AsyncSequence over block-based observers where applicable.
+- Codex Oracle review at end of phase per the existing pattern (Oracle gave PASS-WITH-FOLLOWUPS at end of Phase 1; aim for clean PASS or ≥9/10 at end of Phase 2).
 
 Stop and report back to me before pushing the PR — I'll review before merge.
 
