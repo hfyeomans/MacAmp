@@ -256,6 +256,11 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     }
 
     isolated deinit {
+        // Tear down the video bridge BEFORE engine.shutdown() so the
+        // detachAudioTap audioMix=nil-before-detach ordering and the
+        // videoLoadTask cancellation both run while the engine is still
+        // alive. shutdown() drops the stream bridge.
+        tearDownVideoBridge()
         engine.shutdown()
     }
 
