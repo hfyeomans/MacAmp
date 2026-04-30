@@ -32,8 +32,8 @@ final class AudioEngineController {
 
     private var streamSourceNode: AVAudioSourceNode?
     private var streamRingBuffer: LockFreeRingBuffer?
-    /// Bridge-scoped silence gate. Single writer (MainActor `setStreamSilenced`),
-    /// single reader (render block, relaxed load).
+    /// Bridge-scoped silence gate. Single writer (MainActor `setStreamSilenced`,
+    /// releasing store), single reader (render block, acquiring load).
     private var streamSilenceGate: ManagedAtomic<UInt8>?
     private(set) var isBridgeActive: Bool = false
 
