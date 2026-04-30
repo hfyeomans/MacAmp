@@ -54,6 +54,11 @@ final class VideoAudioTap {
             throw Error.noAudioTrack
         }
 
+        // Reset per-attach context state so a reused tap instance can't
+        // inherit a previous asset's channel layout when the new one carries
+        // no metadata.
+        context.sourceChannelLayout = nil
+
         // Capture the source channel layout from the format description, when
         // present. AudioConverter's surround→stereo downmix matrix needs the
         // exact input layout to do the right thing — guessing from channel
