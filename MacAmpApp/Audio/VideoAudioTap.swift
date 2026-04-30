@@ -178,13 +178,17 @@ private let tapPrepare: MTAudioProcessingTapPrepareCallback = { tap, maxFrames, 
     let src = processingFormat.pointee
     ctx.processingFormat = src
 
-    let isFloat32 = (src.mFormatFlags & kAudioFormatFlagIsFloat) != 0
+    let isFloat = (src.mFormatFlags & kAudioFormatFlagIsFloat) != 0
     let isPacked = (src.mFormatFlags & kAudioFormatFlagIsPacked) != 0
     let isNonInterleaved = (src.mFormatFlags & kAudioFormatFlagIsNonInterleaved) != 0
-    let bypassConverter = isFloat32
+    let stereoBytesPerFrame = UInt32(2 * MemoryLayout<Float>.size)
+    let bypassConverter = src.mFormatID == kAudioFormatLinearPCM
+        && isFloat
         && isPacked
         && !isNonInterleaved
+        && src.mBitsPerChannel == 32
         && src.mChannelsPerFrame == 2
+        && src.mBytesPerFrame == stereoBytesPerFrame
         && src.mSampleRate == ctx.expectedSampleRate
 
     if bypassConverter { return }
@@ -193,9 +197,9 @@ private let tapPrepare: MTAudioProcessingTapPrepareCallback = { tap, maxFrames, 
         mSampleRate: ctx.expectedSampleRate,
         mFormatID: kAudioFormatLinearPCM,
         mFormatFlags: kAudioFormatFlagIsFloat | kAudioFormatFlagIsPacked,
-        mBytesPerPacket: 2 * UInt32(MemoryLayout<Float>.size),
+        mBytesPerPacket: stereoBytesPerFrame,
         mFramesPerPacket: 1,
-        mBytesPerFrame: 2 * UInt32(MemoryLayout<Float>.size),
+        mBytesPerFrame: stereoBytesPerFrame,
         mChannelsPerFrame: 2,
         mBitsPerChannel: UInt32(MemoryLayout<Float>.size * 8),
         mReserved: 0
@@ -207,12 +211,89 @@ private let tapPrepare: MTAudioProcessingTapPrepareCallback = { tap, maxFrames, 
         ctx.fallbackRequested.store(true, ordering: .relaxed)
         return
     }
+
+    // AudioConverter's default behavior for a channel-count mismatch is
+    // *routing*, not mixing — mono → L+silent-R, 5.1 → drop the last 4
+    // channels. To get duplication for mono and a real downmix matrix for
+    // surround, we install explicit channel maps / layouts.
+    if !configureChannelMapping(converter: converterRef, sourceChannels: src.mChannelsPerFrame) {
+        AudioConverterDispose(converterRef)
+        ctx.fallbackRequested.store(true, ordering: .relaxed)
+        return
+    }
+
     ctx.converter = converterRef
     // Allocate scratch with 2× headroom over maxFrames to absorb upsampling
     // ratios (worst realistic case is 44.1 → 48 kHz at ~1.088×).
     let frames = max(Int(maxFrames) * 2, 1)
     ctx.converterScratch = .allocate(capacity: frames * 2)
     ctx.converterScratchFrameCapacity = frames
+}
+
+/// Configure the converter's channel routing for a mono / stereo / surround
+/// source so output is a true stereo signal. Returns false if the source
+/// channel count cannot be mapped to a known layout (caller engages
+/// fallback). Stereo input is a no-op — AudioConverter passes it through.
+private func configureChannelMapping(
+    converter: AudioConverterRef,
+    sourceChannels: UInt32
+) -> Bool {
+    switch sourceChannels {
+    case 2:
+        return true
+    case 1:
+        // Duplicate the single channel into both L and R. Channel-map index
+        // i means "output channel i comes from input channel map[i]".
+        let map: [Int32] = [0, 0]
+        let size = UInt32(map.count * MemoryLayout<Int32>.size)
+        let status = map.withUnsafeBufferPointer { ptr in
+            AudioConverterSetProperty(
+                converter,
+                kAudioConverterChannelMap,
+                size,
+                ptr.baseAddress!
+            )
+        }
+        return status == noErr
+    default:
+        // Surround / unusual channel counts: install standard layouts so
+        // AudioConverter applies its built-in downmix matrix to stereo.
+        guard let inputTag = surroundLayoutTag(forChannelCount: sourceChannels) else {
+            return false
+        }
+        var inputLayout = AudioChannelLayout()
+        inputLayout.mChannelLayoutTag = inputTag
+        var outputLayout = AudioChannelLayout()
+        outputLayout.mChannelLayoutTag = kAudioChannelLayoutTag_Stereo
+        let layoutSize = UInt32(MemoryLayout<AudioChannelLayout>.size)
+        let inStatus = AudioConverterSetProperty(
+            converter,
+            kAudioConverterInputChannelLayout,
+            layoutSize,
+            &inputLayout
+        )
+        let outStatus = AudioConverterSetProperty(
+            converter,
+            kAudioConverterOutputChannelLayout,
+            layoutSize,
+            &outputLayout
+        )
+        return inStatus == noErr && outStatus == noErr
+    }
+}
+
+/// Common surround layouts found in mp4/mov/m4v audio tracks. Returns nil
+/// for non-standard channel counts; the caller treats that as fallback.
+private func surroundLayoutTag(forChannelCount channels: UInt32) -> AudioChannelLayoutTag? {
+    switch channels {
+    case 3: return kAudioChannelLayoutTag_MPEG_3_0_A    // L R C
+    case 4: return kAudioChannelLayoutTag_Quadraphonic
+    case 5: return kAudioChannelLayoutTag_MPEG_5_0_A    // L R C Ls Rs
+    case 6: return kAudioChannelLayoutTag_MPEG_5_1_A    // L R C LFE Ls Rs
+    case 7: return kAudioChannelLayoutTag_MPEG_6_1_A
+    case 8: return kAudioChannelLayoutTag_MPEG_7_1_A
+    default: return nil
+    }
 }
 
 private let tapUnprepare: MTAudioProcessingTapUnprepareCallback = { tap in
