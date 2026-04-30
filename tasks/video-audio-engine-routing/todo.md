@@ -116,52 +116,65 @@ Numbering convention: `<Phase>.<Item>`. Mark `[x]` on completion. Use `[~]` for 
 
 ---
 
-## Phase 2 — MTAudioProcessingTap Implementation
+## Phase 2 — MTAudioProcessingTap Implementation ✅ COMPLETE
+
+> **Outcome:** 4 commits on `feat/video-audio-engine-routing`. Oracle pass-3 score 9.3/10 (clears the ≥9/10 bar). Tests 76 → 84 (+8 format-classification tests). All 84 pass with TSan. Plan §7 contract delivered; Phase 3 will wire the tap into AudioEngineController.
 
 ### 2.1 VideoAudioTap class
 
-- [ ] 2.1.1 Create `MacAmpApp/Audio/VideoAudioTap.swift` per plan §7.
-- [ ] 2.1.2 Define `VideoAudioTapContext` (final class, `@unchecked Sendable`, queue-confined).
-    - [ ] Holds `LockFreeRingBuffer` reference
-    - [ ] Holds `AudioStreamBasicDescription` + optional `AudioConverterRef`
-    - [ ] Atomic `lastCallbackHostTime` (`ManagedAtomic<UInt64>`)
-- [ ] 2.1.3 Implement `init(ringBuffer:expectedSampleRate:)`.
-- [ ] 2.1.4 Implement `attach(to: AVPlayerItem) throws -> AVMutableAudioMix`.
-    - [ ] Build `MTAudioProcessingTapCallbacks`
-    - [ ] `MTAudioProcessingTapCreate` with `kMTAudioProcessingTapCreationFlag_PostEffects`
-    - [ ] `Unmanaged<Context>.passRetained` for clientInfo
-    - [ ] Build `AVMutableAudioMixInputParameters` for first audio track
-    - [ ] Return assembled `AVMutableAudioMix`
-- [ ] 2.1.5 Implement `detach()` — invalidate tap, release `Unmanaged<Context>`.
-- [ ] 2.1.6 Implement `lastCallbackHostTime` accessor.
-- [ ] 2.1.7 Implement deinit — call detach if not already.
+- [x] 2.1.1 Created `MacAmpApp/Audio/VideoAudioTap.swift` (~340 LOC) per plan §7.
+- [x] 2.1.2 `VideoAudioTapContext` defined as `final class @unchecked Sendable`, queue-confined to the tap render thread.
+    - [x] Holds `LockFreeRingBuffer` reference
+    - [x] Holds optional `AudioConverterRef` + scratch buffer + processingFormat ASBD
+    - [x] Atomic `lastCallbackHostTime` (`ManagedAtomic<UInt64>`)
+    - [x] Atomic `fallbackRequested` (`ManagedAtomic<Bool>`) — Phase 5 watchdog reads this in addition to the host-time stall
+    - [x] `sourceChannelLayout: Data?` captured in attach() from the asset's format description (Oracle pass-2 follow-up)
+- [x] 2.1.3 `init(ringBuffer:expectedSampleRate:)`.
+- [x] 2.1.4 `attach(to: AVPlayerItem) async throws -> AVMutableAudioMix` — modernized to async to use the non-deprecated `loadTracks(withMediaType:)` (deviation from plan §7.3's sync signature).
+    - [x] Builds `MTAudioProcessingTapCallbacks`
+    - [x] `MTAudioProcessingTapCreate` with `kMTAudioProcessingTapCreationFlag_PostEffects`
+    - [x] `Unmanaged<VideoAudioTapContext>.passRetained` for clientInfo (released exactly once in tapFinalize)
+    - [x] Builds `AVMutableAudioMixInputParameters` for first audio track
+    - [x] Returns assembled `AVMutableAudioMix`
+    - [x] Captures source channel layout from `CMAudioFormatDescriptionGetChannelLayout` for surround downmix accuracy
+    - [x] Resets stale layout state on reattach (defensive — Oracle pass-3 follow-up)
+- [x] 2.1.5 `detach()` — nils our hold on the tap CFType (auto-managed in Swift; no `Unmanaged` needed for the tap itself). Caller responsibility: set `playerItem.audioMix = nil` BEFORE detach so AVPlayer's hold is gone too.
+- [x] 2.1.6 `lastCallbackHostTime` + `fallbackRequested` accessors.
+- [x] 2.1.7 No explicit deinit needed — Swift ARC handles tap CFType release; tapFinalize drops the Unmanaged context.
 
 ### 2.2 C-convention callbacks
 
-- [ ] 2.2.1 `tapPrepare`: capture format, lazily build AudioConverter on mismatch.
-- [ ] 2.2.2 `tapProcess`: call `MTAudioProcessingTapGetSourceAudio`, optionally convert, write to ring buffer, update `lastCallbackHostTime`. **Must NOT zero the bufferList.**
-- [ ] 2.2.3 `tapUnprepare`: tear down converter.
-- [ ] 2.2.4 `tapFinalize`: release `Unmanaged<Context>`.
+- [x] 2.2.1 `tapPrepare`: captures format, classifies via `shouldBypassConverter`, lazily builds AudioConverter on mismatch, configures channel mapping for non-stereo sources.
+- [x] 2.2.2 `tapProcess`: calls `MTAudioProcessingTapGetSourceAudio`, optionally converts, writes to ring buffer, updates `lastCallbackHostTime`. **Does NOT zero the bufferList** (AVPlayer plays it; mute via `player.volume = 0` in Phase 3).
+- [x] 2.2.3 `tapUnprepare`: disposes converter, deallocates scratch.
+- [x] 2.2.4 `tapFinalize`: releases `Unmanaged<VideoAudioTapContext>`.
 
 ### 2.3 Format-edge handling
 
-- [ ] 2.3.1 Mono source → stereo via AudioConverter.
-- [ ] 2.3.2 5.1 source → stereo downmix via AudioConverter.
-- [ ] 2.3.3 Non-Float32 source → Float32 conversion via AudioConverter.
-- [ ] 2.3.4 Sample-rate mismatch → resample via AudioConverter.
-- [ ] 2.3.5 If `AudioConverterNew` fails → mark context for fallback (Phase 5 picks up).
+- [x] 2.3.1 Mono source → stereo via explicit `kAudioConverterChannelMap = [0, 0]` (duplicates single channel to L+R; default routing would leave R silent).
+- [x] 2.3.2 3-8 channel surround → stereo via input/output AudioChannelLayout properties + `kAudioConverterPropertyPerformDownmix = 1` (Oracle pass-2 follow-up; without PerformDownmix the converter installs layouts but never applies the downmix matrix).
+- [x] 2.3.3 Non-Float32 source → Float32 conversion via AudioConverter.
+- [x] 2.3.4 Sample-rate mismatch → resample via AudioConverter (load-bearing per Phase 0 — without it 44.1 kHz audio plays as bursts at engine's 48 kHz consumer rate).
+- [x] 2.3.5 If `AudioConverterNew` fails OR channel-mapping fails → `ctx.fallbackRequested.store(true)`, ring writes skipped. Phase 5 picks up.
 
 ### 2.4 Tests
 
-- [ ] 2.4.1 Create `Tests/MacAmpTests/Audio/VideoAudioTapTests.swift`.
-    - [ ] `attachReturnsValidAudioMix` (stub AVPlayerItem with audio track)
-    - [ ] `detachReleasesContext` (weak var leak check)
-    - [ ] `ringBufferReceivesFramesFromTap` (use `@_spi(Testing) testInjectFrames`)
-    - [ ] `formatMismatchTriggersAudioConverter`
+- [x] 2.4.1 Created `Tests/MacAmpTests/VideoAudioTapTests.swift` (flat layout, no `Audio/` subdir per Phase 1 convention).
+    - [x] `attachReturnsAudioMixForAudioAsset` — happy path with synthetic silence WAV
+    - [x] `attachThrowsForVideoOnlyAsset` — empty AVMutableComposition exercises `.noAudioTrack` guard
+    - [x] `detachIsIdempotent`
+    - [x] `initialStateBeforeFirstCallback` — `lastCallbackHostTime == 0`, `fallbackRequested == false`
+    - [x] 6 bypass-classification tests (canonical Float32 stereo, Float64, mono, sample-rate mismatch, non-interleaved, integer PCM)
+    - [x] 2 surround-layout-map tests (3-8 channel coverage + non-surround rejection)
+    - **Note:** ring-buffer-throughput and formatMismatchTriggersAudioConverter behavior fires only inside Core Audio render-thread callbacks; deferred to Phase 7 manual verification (plan §14, todo §7.4.2/7.4.3).
 
-### 2.5 Commit
+### 2.5 Commits
 
-- [ ] 2.5.1 `feat(audio): add VideoAudioTap with MTAudioProcessingTap callbacks`
+- [x] `14d47af` feat(audio): add VideoAudioTap with MTAudioProcessingTap callbacks
+- [x] `48244f4` test(audio): add VideoAudioTap unit tests
+- [x] `09cb521` fix(audio): tighten format detection + channel mapping (Oracle pass-1, 8.2/10)
+- [x] `b9a8478` fix(audio): surround downmix + AAC layouts + tests (Oracle pass-2, 8.4/10 → 9.3/10)
+- [x] `749b91d` fix(audio): clear stale channel layout on tap reattach (Oracle pass-3 defensive)
 
 ---
 
