@@ -415,6 +415,37 @@ All file-move consolidation work is deferred to a single dedicated "Structure Sp
 
 ---
 
+## Future Considerations: HLS Video (Out of Current Roadmap)
+
+> **Naming clarification:** S3-2 (`video-audio-engine-routing`) addresses local video files only. S3-3 (`hls-streaming-support`) addresses HLS *audio*-only streams (radio `.m3u8` referencing AAC-ADTS segments). **HLS video is not on the roadmap** — neither task touches it. This section captures the constraints and trade-offs for any hypothetical future HLS-video task so we don't re-derive them under deadline pressure.
+
+### Platform constraint (permanent, not negotiable)
+
+`MTAudioProcessingTap` is documented (Apple QA1716) and empirically validated (during T7 unified-audio-pipeline research) to **not fire reliably for streaming AVPlayerItems**. This means HLS video *audio* cannot be intercepted and routed through `AVAudioEngine`. The S3-2 tap-based architecture therefore cannot be extended to HLS video — this is a platform limit, not an engineering choice.
+
+### What HLS video CAN do today / would do in a future task
+
+- AVPlayer plays HLS video natively. A future task would only need to (a) teach `detectMediaType` to probe `.m3u8` contents and distinguish video-bearing from audio-only HLS, and (b) route video-bearing HLS to `VideoPlaybackController` instead of `StreamDecodePipeline`. ~50 LOC.
+- HLS video would play with audio, but **without EQ, visualizer, or balance** — the user-visible failure modes that S3-2 fixes for local video would resurface for HLS video. This is the "UI lie" problem (controls visible but silently no-op).
+
+### Three options for future HLS-video work (decision deferred)
+
+1. **Ship with the UI lie** — EQ window and balance slider remain enabled but silently no-op for HLS video. Net regression in UI honesty vs S3-2 goals. **Not recommended** — undoes the consistency win S3-2 buys for local video.
+
+2. **Ship with capability-flag dimming (recommended if/when HLS video is implemented)** — extend `PlaybackCoordinator.supportsAudioProcessing` (the single capability flag introduced by S3-2) with a fourth branch: `if currentMediaType == .video && currentMediaSource == .hls` ⇒ false. EQ window dimmed, balance slider dimmed, visualizer paused. User gets HLS video playback with honest UI affordances. ~50 LOC of new wiring + capability-flag changes; no audio-engine plumbing. Reuses everything S3-2 builds.
+
+3. **Don't ship HLS video at all** — explicitly reject HLS-video URLs at media-type detection time with a non-reconnectable error message. Most pragmatic if HLS video is rarely encountered in real Winamp use (Winamp was historically an audio app). Keeps the codebase smaller, avoids the platform constraint entirely.
+
+### When to revisit
+
+- A user-reported demand signal for HLS video specifically (no current evidence)
+- A related task that makes bundling natural (e.g., a future `Features/Video/` consolidation in the post-S3 Structure Sprint)
+- macOS / AVFoundation API changes that lift the QA1716 constraint (unlikely; the constraint has been stable since macOS 10.9)
+
+Until one of those triggers, the codebase status quo is: HLS-video URLs hit MacAmp → mishandled by the legacy M3U parser → visible failure (same bug S3-3 fixes for HLS audio, just unfixed for video). Acceptable as a known limitation given there's no evidence of demand.
+
+---
+
 ## Resolved Questions
 
 | # | Question | Resolution |
