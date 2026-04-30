@@ -54,52 +54,65 @@ Numbering convention: `<Phase>.<Item>`. Mark `[x]` on completion. Use `[~]` for 
 
 ---
 
-## Phase 1 — Engine Configuration Change Observer
+## Phase 1 — Engine Configuration Change Observer ✅ COMPLETE
+
+> **Outcome:** 10 commits on `feat/video-audio-engine-routing` (`d5081e9` … `e7f8eed`). Local-file + stream + AirPlay verified manually; 72/72 tests pass with TSan. Three Oracle-driven follow-up commits address all HIGH-priority review items. Plan §6.3 updated to reflect actual implementation contract.
 
 ### 1.1 Implementation
 
-- [ ] 1.1.1 Create branch `feat/video-audio-engine-routing` from main (S3-1 merged).
-- [ ] 1.1.2 Create `MacAmpApp/Audio/AudioEngineConfigurationObserver.swift` per plan §6.1.
-    - [ ] @MainActor class
-    - [ ] init takes `AVAudioEngine`
-    - [ ] `start()` / `stop()` idempotent
-    - [ ] Debounce window 150 ms with generation counter
-    - [ ] `onWillReconfigure` / `onDidReconfigure` callbacks
-- [ ] 1.1.3 Add observer to `AudioEngineController.swift` per plan §6.2.
-    - [ ] `@ObservationIgnored private let configObserver`
-    - [ ] Initialize in `setupEngine()`
-    - [ ] Wire `handleEngineWillReconfigure` / `handleEngineDidReconfigure`
-- [ ] 1.1.4 Add `PreReconfigureSnapshot` struct + `onEngineWillReconfigure` / `onEngineDidReconfigure` callbacks per plan §6.3.
-- [ ] 1.1.5 Wire `onEngineWillReconfigure` callback in `AudioPlayer` init per plan §6.4 step list:
-    - [ ] Save `savedSeekID = currentSeekID`, `savedTime = currentTime`
-    - [ ] Bump `currentSeekID = UUID()` BEFORE engine restart (filters stale completions)
-    - [ ] Set `seekGuardActive = true`, `isHandlingCompletion = true`
-- [ ] 1.1.6 Wire `onEngineDidReconfigure` callback in `AudioPlayer` per plan §6.4 step list:
-    - [ ] Re-apply volume + balance via `engine.setVolume` / `engine.setBalance`
-    - [ ] If local audio path AND `engine.audioFile != nil`: ALWAYS reschedule from `savedTime` with new `currentSeekID` (even if paused — `play()` does NOT reschedule per AudioPlayer.swift:417)
-        - [ ] Sub-branch: if `wasPlaying`, call `engine.playAudio()` + `engine.startProgressTimer()`
-        - [ ] Sub-branch: if was paused, do NOT call `playAudio()`; restore `playbackState = .paused`
-    - [ ] If stream bridge: fire `onEngineReconfigured` callback (workgroup refresh)
-    - [ ] If video bridge: no resume needed (AVPlayer manages clock; paused video stays paused)
-    - [ ] Clear `seekGuardActive` after 100 ms (matches existing pattern at AudioPlayer.swift:603)
-    - [ ] Clear `isHandlingCompletion` after 200 ms (matches existing pattern at AudioPlayer.swift:673)
-- [ ] 1.1.7 Wire `onEngineReconfigured` in `PlaybackCoordinator` to refresh stream workgroup via `streamPlayer.setAudioWorkgroup(audioPlayer.audioWorkgroup)`.
+- [x] 1.1.1 Created branch `feat/video-audio-engine-routing` from main (post-S3-1).
+- [x] 1.1.2 Created `MacAmpApp/Audio/AudioEngineConfigurationObserver.swift` (commits `d5081e9` + `c454c49` for Oracle-driven re-entrancy guard).
+    - [x] @MainActor class
+    - [x] init takes `AVAudioEngine`
+    - [x] `start()` / `stop()` idempotent
+    - [x] Debounce window 150 ms (cancel-and-replace pattern, semantically equivalent to plan-spec'd generation counter for single-task case)
+    - [x] `onWillReconfigure` / `onDidReconfigure` callbacks
+    - **Modernizations applied:** AsyncSequence (`NotificationCenter.notifications(named:object:)`), `Task.sleep(for: Duration)`, `Notification.Name` (not `NSNotification.Name`), `isolated deinit`, `@preconcurrency import AVFoundation`.
+- [x] 1.1.3 Added observer to `AudioEngineController.swift` (commit `63dda27`).
+    - [x] `private let configObserver` (no `@ObservationIgnored` needed — class is not `@Observable`; plan note was mistaken)
+    - [x] Initialized in `init()` after `setupEngine()`
+    - [x] Wired `handleEngineWillReconfigure` / `handleEngineDidReconfigure`
+- [x] 1.1.4 Added `PreReconfigureSnapshot` struct + `onEngineWillReconfigure` / `onEngineDidReconfigure` callbacks per plan §6.3 (commit `63dda27`).
+- [x] 1.1.5 Wired `onEngineWillReconfigure` callback in `AudioPlayer` init (commits `d95cccf` + `3267091` for AirPlay-resume regression fix):
+    - [x] Stores received snapshot in `pendingReconfigureSnapshot` (with currentTime/wasPlaying overridden by AudioPlayer's authoritative state — see `3267091` rationale)
+    - [x] Bumps `currentSeekID = UUID()` BEFORE engine restart (filters stale completions)
+    - [x] Sets `seekGuardActive = true`, `isHandlingCompletion = true`
+- [x] 1.1.6 Wired `onEngineDidReconfigure` callback in `AudioPlayer` (commit `d95cccf`):
+    - [x] Re-applies volume + balance via `engine.setVolume` / `engine.setBalance`
+    - [x] Local-audio path: ALWAYS reschedules from `snapshot.currentTime` (since `play()` does NOT itself reschedule per AudioPlayer.swift:476)
+        - [x] If `wasPlaying`: `engine.startEngineIfNeeded()` + `installVisualizerTapIfNeeded()` + `playAudio()` + `startProgressTimer()` + `transition(to: .playing)`
+        - [x] Else: `transition(to: .paused)` (segment is primed; next user `play()` resumes from saved point)
+    - [x] Stream bridge: fires `onEngineReconfigured` callback (workgroup refresh — see 1.1.7)
+    - [x] Video bridge: TODO comment placeholder for Phase 3 (no-op currently since `wasVideoBridge` is hardcoded false)
+    - [x] Clears `seekGuardActive` after 100 ms (modern `Task.sleep(for: .milliseconds(100))`)
+    - [x] Clears `isHandlingCompletion` after 200 ms (modern Duration API)
+- [x] 1.1.7 Wired `onEngineReconfigured` in `PlaybackCoordinator` to refresh stream workgroup via `streamPlayer.setAudioWorkgroup(audioPlayer.audioWorkgroup)` (commit `ce7e889`). Bridge-active gate keeps it a no-op when no stream is playing.
 
 ### 1.2 Tests
 
-- [ ] 1.2.1 Create `Tests/MacAmpTests/Audio/EngineConfigObserverTests.swift`.
-    - [ ] `observerFiresOnSyntheticNotification`
-    - [ ] `observerDebouncesBurst` (3 notifications < 50 ms → 1 fire)
+- [x] 1.2.1 Created `Tests/MacAmpTests/EngineConfigObserverTests.swift` (commits `694666c` + `1052331`):
+    - [x] `observerFiresOnSyntheticNotification` — single notification fires one will/did pair
+    - [x] `observerDebouncesBurst` — 3 notifications within 60 ms collapse to one will/did pair
+    - [x] `observerStopDuringBurstCancelsDid` — Oracle-flagged contract test (commit `1052331`)
+    - [x] `observerSurvivesStartStopCycles` — multiple start/stop cycles + posts-while-stopped no-op (commit `1052331`)
+    - **Note:** test file lives at `Tests/MacAmpTests/` (flat layout matches existing convention) rather than the plan-spec'd `Tests/MacAmpTests/Audio/` subdir which doesn't exist in this codebase.
 
-### 1.3 Manual verification
+### 1.3 Manual verification ✅
 
-- [ ] 1.3.1 Build with `xcodegen generate && xcodebuildmcp macos build --json '{"extraArgs":["-enableThreadSanitizer","YES"]}'`.
-- [ ] 1.3.2 Local file playing → switch output via Control Center → audio resumes < 1 s, EQ still active.
-- [ ] 1.3.3 Stream playing → switch output → audio resumes < 1 s, ICY metadata still flowing.
+- [x] 1.3.1 Built with `xcodegen generate && xcodebuildmcp macos build/test --json '{"extraArgs":["-enableThreadSanitizer","YES"]}'`. TSan-on, 72/72 pass.
+- [x] 1.3.2 Local file: play → switch output via Control Center (built-in ↔ external) → audio resumes from saved time, EQ still active. Verified.
+- [x] 1.3.3 Stream: play → switch output → audio resumes < 1 s, ICY metadata flowing, visualizer animating. Verified.
+- [x] 1.3.4 AirPlay coverage (added during verification): play → switch to/from AirPlay → resumes from saved time. Initial regression on this path was caught and fixed by `3267091`. Verified post-fix.
+- [x] 1.3.5 Paused-then-routed-then-resume: works for both local and stream paths.
+- [x] 1.3.6 Seek mid-track + switch output: seek state stays clean (no spurious "track ended" or position reset).
+- [x] 1.3.7 Local↔stream↔local transitions across output switches: no audio leakage, no engine errors.
+- [x] 1.3.8 `/usr/bin/log show` over the 15-minute test window: zero `<Error>`/`<Fault>`-level MacAmp entries; zero `-10868`; zero `AudioEngine.start error`. CoreAudio HAL `!obj`/`!dev`/`'nope'` chatter on AirPlay→built-in transitions noted as OS-level device-teardown noise (not actionable; documented in state.md "CoreAudio HAL log observation").
 
-### 1.4 Commit
+### 1.4 Phase 1 follow-up commits (Oracle-driven, post-implementation review)
 
-- [ ] 1.4.1 `feat(audio): add AudioEngineConfigurationObserver`
+- [x] `fabe5e2` `cancelPendingReconfigure()` called from `play()`/`pause()`/`stop()`/`seek()`/`playTrack()` — addresses Oracle items #2, #4, #7 (stale `onDid` overriding new user intent).
+- [x] `1052331` Lifecycle-interruption + start/stop cycle tests — addresses Oracle item #5 (untested contract from `c454c49`).
+- [x] `e7f8eed` Plan §6.3 updated to document split state ownership + cancellation contract — addresses Oracle item #8 (plan/implementation drift).
 
 ---
 
