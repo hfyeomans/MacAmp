@@ -203,11 +203,14 @@ final class PlaybackCoordinator {
 
     /// Routes volume through `AudioPlayer`. The `AudioPlayer.volume.didSet`
     /// handles propagation to `AVAudioEngine` (`playerNode.volume` +
-    /// `streamSourceNode?.volume`) and to `videoPlaybackController.volume`.
-    /// Idempotent — same-value writes short-circuit before reaching the
-    /// audio backends. This is the gesture-tick choke point that keeps the
-    /// main run loop free for SwiftUI rendering during slider drag (mwvi
-    /// Phase 0 / Phase 1B+ fix).
+    /// `streamSourceNode?.volume` + `videoSourceNode?.volume`). Forwarding
+    /// to `videoPlaybackController.volume` (which writes `AVPlayer.volume`)
+    /// is gated on `engine.isVideoBridgeActive` — when the bridge is the
+    /// audible path, AVPlayer must stay muted to avoid double-stacked
+    /// audio. Idempotent — same-value writes short-circuit before reaching
+    /// the audio backends. This is the gesture-tick choke point that keeps
+    /// the main run loop free for SwiftUI rendering during slider drag
+    /// (mwvi Phase 0 / Phase 1B+ fix).
     func setVolume(_ vol: Float) {
         guard audioPlayer.volume != vol else { return }
         audioPlayer.volume = vol

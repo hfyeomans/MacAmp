@@ -485,10 +485,16 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
                 self.engine.setVolume(self.volume)
                 self.engine.setBalance(self.balance)
             } else {
-                // Tap attach failed — drop the bridge plumbing; AVPlayer's
-                // own audio path is already restored at user volume.
+                // Tap attach failed (silent video, asset load error,
+                // converter setup failure). AVPlayer becomes the audible
+                // path — re-sync the controller's stored volume to the
+                // current AudioPlayer level. While the bridge was being
+                // set up, volume.didSet's gate skipped forwarding because
+                // we expected the bridge to take over; now that it didn't,
+                // AVPlayer needs the user's slider position.
                 self.videoAudioTap = nil
                 self.videoRingBuffer = nil
+                self.videoPlaybackController.volume = self.volume
             }
 
             if self.equalizer.eqAutoEnabled {
@@ -514,12 +520,15 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
         videoPlaybackController.detachAudioTap()
         videoAudioTap = nil
         videoRingBuffer = nil
-        // Re-sync controller volume to AudioPlayer's source-of-truth. While
-        // the bridge was active, volume.didSet skipped forwarding to keep
-        // AVPlayer muted — the controller's stored volume drifted. If a
-        // subsequent video plays without the bridge (tap-fallback or no
-        // audio track), AVPlayer needs the correct user volume.
-        videoPlaybackController.volume = volume
+        // Do NOT re-sync videoPlaybackController.volume here. This helper
+        // runs on stop, video-to-video switch, eject, and isolated deinit.
+        // In the video-to-video case the old AVPlayer is still alive at
+        // this point (its cleanup runs inside the next loadVideo), and a
+        // restore would un-mute it for one main-loop tick — exactly the
+        // double-audio failure mode this gating system exists to prevent.
+        // Volume restore belongs only on direct-audio-continuation paths
+        // (attach-failure branch in startVideoTrack, future Phase 5
+        // tap-fallback) where AVPlayer becomes the sole audible path.
     }
 
     private func detectMediaType(url: URL) -> MediaType {
@@ -565,6 +574,16 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
         }
 
         if currentMediaType == .video {
+            // While the load Task is in-flight the tap hasn't attached
+            // and AVPlayer is still at user volume — calling play() now
+            // would emit direct AVPlayer audio before the engine bridge
+            // takes over (plan §8.4 ordering violation, audible as a
+            // brief un-bridged blip on remote-play / media-key triggers).
+            // The Task itself plays + transitions once attach completes.
+            guard videoLoadTask == nil else {
+                AppLog.debug(.audio, "Play (Video) — load task in flight; deferring to Task completion")
+                return
+            }
             videoPlaybackController.play()
             transition(to: .playing)
             AppLog.debug(.audio, "Play (Video)")
