@@ -74,6 +74,14 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     /// its lifetime alongside the tap and engine bridge activation.
     @ObservationIgnored private var videoRingBuffer: LockFreeRingBuffer?
 
+    /// In-flight async setup for the current video track. Cancelled by
+    /// teardown paths (stop, playTrack-switch, deinit) so a stale Task
+    /// can't mutate AudioPlayer state or activate the bridge after the
+    /// session has been replaced. Identity guards inside the Task body
+    /// (`videoAudioTap === tap`) catch any race that slips past
+    /// cancellation, including same-URL replay.
+    @ObservationIgnored private var videoLoadTask: Task<Void, Never>?
+
     /// True when the engine's video source node is wired into the graph.
     /// Mirrors `engine.isVideoBridgeActive` for capability-flag readers.
     var isVideoBridgeActive: Bool { engine.isVideoBridgeActive }
@@ -439,7 +447,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
         videoRingBuffer = ring
         videoAudioTap = tap
 
-        Task { @MainActor [weak self] in
+        videoLoadTask = Task { @MainActor [weak self] in
             guard let self else { return }
             let attached = await self.videoPlaybackController.loadVideo(
                 url: track.url,
@@ -447,12 +455,14 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
                 audioTap: tap
             )
 
-            // Bail if the user moved on to a different track while we were
-            // loading. Don't touch videoPlaybackController state here — the
-            // path that supplanted us (playTrack→tearDownVideoBridge or
-            // stop()→videoPlaybackController.stop) already ran cleanup, and
-            // detaching now could clobber a newer track's tap.
-            guard self.currentTrack?.url == track.url else {
+            // Identity check: bail if a newer setup ran during the await
+            // (playTrack-switch, stop, same-URL replay, deinit). URL
+            // equality is NOT enough — replay of the same track produces
+            // a fresh tap that we'd otherwise match. The path that
+            // supplanted us already ran tearDownVideoBridge / cleanup, so
+            // we don't touch shared state here — the orphaned `ring` and
+            // `tap` locals fall out of scope as the closure returns.
+            guard !Task.isCancelled, self.videoAudioTap === tap else {
                 return
             }
 
@@ -482,6 +492,8 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     /// matching `videoPlaybackController` cleanup (or `cleanup()` will run
     /// `detachAudioTap()` itself, which is idempotent with this).
     private func tearDownVideoBridge() {
+        videoLoadTask?.cancel()
+        videoLoadTask = nil
         if engine.isVideoBridgeActive {
             engine.deactivateVideoBridge()
         }
@@ -818,7 +830,12 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
         // 2. Local-file path: ALWAYS reschedule from saved time, even when paused.
         //    play() does NOT itself reschedule (see line 417), so a subsequent
         //    play() would resume the now-detached pre-restart segment.
-        if !snapshot.wasStreamBridge && !snapshot.wasVideoBridge && engine.audioFile != nil {
+        //    Gate on currentMediaType too — engine.audioFile can be stale from
+        //    a prior local-audio session while a tap-failed video plays its
+        //    own audio direct, and we mustn't reschedule that.
+        if !snapshot.wasStreamBridge && !snapshot.wasVideoBridge
+            && currentMediaType == .audio
+            && engine.audioFile != nil {
             _ = engine.scheduleFrom(time: snapshot.currentTime, seekID: currentSeekID)
             currentTime = snapshot.currentTime
             if snapshot.wasPlaying {
