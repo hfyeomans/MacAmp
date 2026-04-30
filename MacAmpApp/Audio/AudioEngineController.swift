@@ -506,6 +506,14 @@ final class AudioEngineController {
     /// Invoked at burst start by `configObserver.onWillReconfigure`. Captures a
     /// snapshot of pre-rewire state and forwards it to AudioPlayer so seek guards
     /// can be armed before the engine restart fires a stale playerNode completion.
+    ///
+    /// **Caller note:** the system posts AVAudioEngineConfigurationChange *after*
+    /// auto-stopping the engine, so by the time this runs `playerNode.isPlaying`
+    /// is false and `lastRenderTime` is nil. The `wasPlaying` / `currentTime`
+    /// fields below are therefore best-effort placeholders — AudioPlayer
+    /// overrides them with its own authoritative state in
+    /// `handleEngineWillReconfigure`. The bridge flags are MacAmp-owned and
+    /// remain accurate.
     private func handleEngineWillReconfigure() {
         let snapshot = PreReconfigureSnapshot(
             wasPlaying: playerNode.isPlaying,

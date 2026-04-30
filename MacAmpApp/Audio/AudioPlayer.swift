@@ -659,7 +659,21 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     /// stay armed; that's intentional and safe — the next user action (play,
     /// seek, stop) clears them via the existing paths.
     private func handleEngineWillReconfigure(snapshot: PreReconfigureSnapshot) {
-        pendingReconfigureSnapshot = snapshot
+        // The engine captures its snapshot at notification-receipt time, by
+        // which point the system has ALREADY auto-stopped the engine —
+        // `playerNode.isPlaying` is false and `playerNode.lastRenderTime` is
+        // nil. The engine's `wasPlaying` / `currentTime` fields are therefore
+        // unreliable. Override with AudioPlayer's own state: `isPlaying` is
+        // transition-managed (reflects user intent, not engine running state)
+        // and `currentTime` is updated by the progress timer ~100 ms before
+        // the reconfigure — accurate to within one tick.
+        let corrected = PreReconfigureSnapshot(
+            wasPlaying: isPlaying,
+            currentTime: currentTime,
+            wasStreamBridge: snapshot.wasStreamBridge,
+            wasVideoBridge: snapshot.wasVideoBridge
+        )
+        pendingReconfigureSnapshot = corrected
         // Bump currentSeekID BEFORE engine restart so the impending stale
         // playerNode completion (carrying the OLD seekID) is filtered by
         // shouldIgnoreCompletion. Same pattern as seek() / playTrack().
