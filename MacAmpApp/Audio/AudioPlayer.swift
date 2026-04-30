@@ -100,7 +100,16 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     var volume: Float = 0.75 {
         didSet {
             engine?.setVolume(volume)
-            videoPlaybackController.volume = volume
+            // When the engine video bridge is active, AVPlayer must stay
+            // muted (`player.volume = 0`) — the bridge is the audible path.
+            // Forwarding here would un-mute AVPlayer's direct output and
+            // double-stack with the bridge. Plan §11.6 schedules a
+            // tap-fallback flag for Phase 6; until then, the bridge flag
+            // is the right gate. Tap-fallback (no bridge) still forwards
+            // because AVPlayer is the only audible path in that case.
+            if engine?.isVideoBridgeActive != true {
+                videoPlaybackController.volume = volume
+            }
         }
     }
     /// Audio balance (-1.0 left to 1.0 right).
@@ -505,6 +514,12 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
         videoPlaybackController.detachAudioTap()
         videoAudioTap = nil
         videoRingBuffer = nil
+        // Re-sync controller volume to AudioPlayer's source-of-truth. While
+        // the bridge was active, volume.didSet skipped forwarding to keep
+        // AVPlayer muted — the controller's stored volume drifted. If a
+        // subsequent video plays without the bridge (tap-fallback or no
+        // audio track), AVPlayer needs the correct user volume.
+        videoPlaybackController.volume = volume
     }
 
     private func detectMediaType(url: URL) -> MediaType {

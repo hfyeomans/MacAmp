@@ -15,8 +15,14 @@ import Observation
 final class VideoPlaybackController {
     // MARK: - AVPlayer State
 
-    /// The underlying AVPlayer instance for video playback
-    @ObservationIgnored private(set) var player: AVPlayer?
+    /// The underlying AVPlayer instance for video playback. Observed so that
+    /// SwiftUI views (e.g. `WinampVideoWindow`) re-render when the player
+    /// goes from nil to non-nil — Phase 3's async tap-attach setup means the
+    /// player gets assigned in a later run-loop tick than `currentMediaType`,
+    /// so the view body needs an observable signal on the player itself.
+    /// AVPlayer's own state changes are KVO-driven (not Observation-driven),
+    /// so this only fires on our `player = newPlayer` / `player = nil` writes.
+    private(set) var player: AVPlayer?
 
     /// Formatted metadata string for display (codec, resolution, etc.)
     private(set) var metadataString: String = ""
