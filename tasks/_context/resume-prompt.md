@@ -9,10 +9,10 @@
 
 ## Current State (update after each PR merge)
 
-**Last update:** 2026-04-30 (S3-2 Phase 0 + 1 + 2 ✅ — MTAudioProcessingTap wrapper ships at 9.3/10; `feat/video-audio-engine-routing` has 17 commits; Phase 3 next).
-**Main HEAD:** `07a3ee8` — `docs(_context): capture HLS video constraints + future-work options`.
-**feat/video-audio-engine-routing HEAD:** `749b91d` — `fix(audio): clear stale channel layout on tap reattach` (rebased onto main).
-**Tests:** 84/84 passing on the feat branch (TSan ON; +12 from Phase 2: +4 attach/state, +6 bypass classification, +2 surround layout map).
+**Last update:** 2026-04-30 (S3-2 Phase 0 + 1 + 2 + 3 ✅ — engine source node + AudioPlayer wiring ships at 9.4/10; `feat/video-audio-engine-routing` has 24 commits; Phase 5 next, Phase 4 is no-op).
+**Main HEAD:** `9cca40a` — `docs(_context): close out Phase 2; advance vaer to Phase 3-next` (will advance once Phase 3 closeout commit lands on main).
+**feat/video-audio-engine-routing HEAD:** `5b5e8ac` — `docs(vaer): close out Phase 3 in task-folder docs` (rebased onto main).
+**Tests:** 90/90 passing on the feat branch (TSan ON; +6 from Phase 3: +4 video-bridge state-machine, +2 video-render-block).
 **PRs merged total:** 80. Phase 3 work continues to land on the feat branch; no PR opened yet.
 
 **Most recent docs commits on main:**
@@ -31,33 +31,36 @@
 
 ### 1. IN PROGRESS — `tasks/video-audio-engine-routing/` (S3-2)
 
-**Status:** Phase 0 + 1 + 2 ✅ all complete (2026-04-30). **Phase 3 (engine source node + wiring per plan §8) is next.**
+**Status:** Phase 0 + 1 + 2 + 3 ✅ all complete (2026-04-30). **Phase 5 (tap-failure watchdog per plan §10) is next; Phase 4 is no-op per Phase 0 Path NONE.**
 
 **Phase 0 outcome (commit `1d4eca1` on main):** Path NONE — frequency-locked clocks across all 5 corpus files (slope mean -0.75 ms/sec, 95% CI [-6.4, +4.9]). Constant -200 ms phase offset is AVPlayer pipeline depth, not perceptible drift. Plan §9 Phase 4 collapses to no-op. Plan §7.5 AudioConverter is **load-bearing** (not optional) — without resampling, 44.1 kHz audio plays as discontinuous bursts every ~76 ms.
 
 **Phase 1 outcome (10 commits + 2 closeout on `feat/video-audio-engine-routing`):** Engine configuration change observer ships. Output-route changes (Control Center, AirPlay, HDMI hot-plug, sleep/wake) trigger graceful engine recovery for local-file + stream paths. Manually verified across local↔external↔AirPlay routing. 72/72 tests pass with TSan. Three Oracle-driven follow-up commits address all HIGH-priority review items.
 
-**Phase 2 outcome (5 commits, ending at `749b91d`):** `MacAmpApp/Audio/VideoAudioTap.swift` (~340 LOC) ships per plan §7. C-convention callbacks via `Unmanaged<VideoAudioTapContext>`; `MTAudioProcessingTap` CFType auto-managed by Swift bridging (no manual `Unmanaged` for the tap itself, only for the context). AudioConverter handles all four format-edge cases per plan §7.5: mono duplication (channel map `[0,0]`), surround downmix (`kAudioConverterPropertyPerformDownmix=1` + actual source `AudioChannelLayout` from `CMAudioFormatDescriptionGetChannelLayout`, AAC-tag fallback when metadata absent), non-Float32 conversion, sample-rate resampling. Oracle three-pass review converged at **9.3/10** (8.2 → 8.4 → 9.3). 76 → 84 tests with TSan: +4 attach/state, +6 bypass classification, +2 surround layout map.
+**Phase 2 outcome (5 commits, ending at `749b91d`):** `MacAmpApp/Audio/VideoAudioTap.swift` (~340 LOC) ships per plan §7. C-convention callbacks via `Unmanaged<VideoAudioTapContext>`; `MTAudioProcessingTap` CFType auto-managed by Swift bridging. AudioConverter handles all four format-edge cases (mono duplication, surround downmix with `PerformDownmix=1` + actual source layout, non-Float32, sample-rate). Oracle three-pass review converged at **9.3/10**.
 
-**Architectural notes (relevant for Phase 3 implementation):**
+**Phase 3 outcome (6 commits, ending at `1fa5aad` + `5b5e8ac` task-folder closeout):** Engine source node wired into the graph. `AudioEngineController` gains `videoSourceNode` / `videoRingBuffer` / `isVideoBridgeActive` parallel to the stream bridge, plus mutual exclusion across the three engine paths and reconfigure-refresh of the video graph format. `AudioPlayer.playTrack` video branch refactored into `startVideoTrack(track)` which spawns a stored Task (`videoLoadTask`) that awaits `VideoAudioTap.attach(to:)` before activating the engine bridge. `VideoPlaybackController.loadVideo` is now async, accepts an `audioTap:` parameter, and runs a post-await `self.player === newPlayer` guard to bail if a newer setup ran during the asset-load suspension. Two-tier stale defence: tap-identity guard at AudioPlayer level (`videoAudioTap === tap`) closes the same-URL replay race, and player-identity guard at VideoPlaybackController level closes the mid-await player swap. `videoLoadTask` is cancelled by `tearDownVideoBridge()` (called from stop, playTrack-switch, eject, and isolated deinit). Oracle two-pass review converged at **9.4/10** (8.4 → 9.2 → 9.4). 84 → 90 tests with TSan: +4 video-bridge state-machine, +2 video-render-block.
+
+**Architectural notes (relevant for Phase 5 implementation):**
 - AsyncSequence-based notification observation (`NotificationCenter.notifications(named:object:)`) — modern Swift 6.2 pattern; future similar work follows it.
-- `PreReconfigureSnapshot` has split state ownership: bridge flags are MacAmp-owned (authoritative); `wasPlaying` / `currentTime` are best-effort placeholders that AudioPlayer overrides with its own state. Phase 3 candidate refactor: narrow the type to bridge-flags-only.
-- Reconfigure cancellation contract: `AudioPlayer.cancelPendingReconfigure()` called at start of `play`/`pause`/`stop`/`seek`/`playTrack` — Phase 3 video-bridge teardown should also call it.
-- `VideoAudioTap.attach(to:)` is **async** (uses `loadTracks(withMediaType:)` and `load(.formatDescriptions)` — non-deprecated successors). Plan §7.3 specced sync; the modern Swift 6.2 alternatives are async, so the signature shifted. Phase 3 wires this into a `Task { ... }` after AVPlayerItem is `.readyToPlay`.
-- `MTAudioProcessingTap` CFType is auto-managed in Swift 6.2 (not `Unmanaged`). Plan §7.3 specced manual `Unmanaged` lifecycle — only the `VideoAudioTapContext` clientInfo needs it.
-- Tap watchdog (Phase 5) must check **BOTH** `tap.lastCallbackHostTime` (host-time stall) AND `tap.fallbackRequested` (immediate-engage on AudioConverter creation failure). Documented on the public properties; flagged in state.md Phase 2 follow-ups.
+- `PreReconfigureSnapshot.wasVideoBridge` is wired to the real flag now. The TODO comments in `handleEngineWillReconfigure` / `handleEngineDidReconfigure` are filled.
+- Reconfigure cancellation contract: `AudioPlayer.cancelPendingReconfigure()` called at start of `play`/`pause`/`stop`/`seek`/`playTrack`. `tearDownVideoBridge()` cancels `videoLoadTask` on the same teardown paths.
+- `VideoAudioTap.attach(to:)` is **async** — Phase 3 wraps this in a stored Task (`videoLoadTask`). Phase 5 watchdog should expect the Task is in-flight during the asset-load gap and not engage fallback before the first tap callback.
+- Tap watchdog (Phase 5) must check **BOTH** `tap.lastCallbackHostTime` (host-time stall) AND `tap.fallbackRequested` (immediate-engage on AudioConverter creation failure). Documented on the public properties; flagged in state.md Phase 2/3 follow-ups.
+- Phase 5 watchdog must use **tap identity**, not URL, for "is this the active tap?" — same lesson as Phase 3 stale checks. URL equality fails for same-URL replay.
 - HAL log noise (`!obj`, `!dev`, `'nope'`) on AirPlay→built-in transitions is OS-level device-teardown chatter, not MacAmp-actionable.
 
 **Branch:** `feat/video-audio-engine-routing` (rebased onto main HEAD `07a3ee8`) → PR target #C.
-**Predecessors:** S3-1A ✅ + S3-1B ✅ + Phase 0 ✅ + Phase 1 ✅ + Phase 2 ✅ all complete.
+**Predecessors:** S3-1A ✅ + S3-1B ✅ + Phase 0 ✅ + Phase 1 ✅ + Phase 2 ✅ + Phase 3 ✅ all complete.
 **Successors:** S3-3 (`hls-streaming-support`) gated on this merge.
 
-**Phase 3 (engine source node + wiring per plan §8) is next:**
-- Add `videoSourceNode`, `videoRingBuffer`, `isVideoBridgeActive` fields to `AudioEngineController` (parallel to `streamSourceNode`).
-- Implement `activateVideoBridge(ringBuffer:sampleRate:)` / `deactivateVideoBridge()` with mutual exclusion against the stream bridge.
-- Modify `AudioPlayer.playTrack` video branch (lines 354-360 area): build ring, instantiate `VideoAudioTap`, `await tap.attach(to:)`, set `playerItem.audioMix = mix`, `engine.activateVideoBridge(...)`, `player.volume = 0`.
-- Modify `VideoPlaybackController.loadVideo` and `cleanup` per plan §3.5 (or have AudioPlayer handle the tap externally — plan flexible).
-- Wire `wasVideoBridge` to a real flag in `PreReconfigureSnapshot`; fill in TODO comments at `AudioEngineController.handleEngineWillReconfigure` / `handleEngineDidReconfigure`.
+**Phase 5 (tap-failure watchdog + fallback per plan §10) is next:**
+- Add `videoTapWatchdogTask: Task<Void, Never>?` to AudioPlayer; `videoTapFallbackActive: Bool = false`.
+- Watchdog checks every 250 ms: `(now - tap.lastCallbackHostTime) > 1000 ms` AND `videoPlaybackController.isPlaying` AND `engine.isVideoBridgeActive` — OR `tap.fallbackRequested == true` (engage immediately).
+- Use tap identity (`videoAudioTap === tap`) to ensure the watchdog ignores stale taps after teardown.
+- Fallback sequence (must run on @MainActor in this exact order, per plan §10.2): cancel watchdog → set `videoTapFallbackActive = true` → log error → `engine.deactivateVideoBridge()` → `videoPlaybackController.detachAudioTap()` → clear `videoAudioTap` / `videoRingBuffer` → restore `videoPlaybackController.player.volume = audioPlayer.volume` → reset `seekGuardActive = false`.
+- Reset `videoTapFallbackActive = false` at start of `playTrack` (per-track fresh slate).
+- Volume.didSet: forward to `videoPlaybackController.volume` only when `videoTapFallbackActive` (Phase 6 finalizes — Phase 5 gate is sufficient).
 
 ### 2. DEFERRED — `timer-scheduled-on-common-extension`
 
@@ -153,31 +156,35 @@ Index lives at `~/.claude/projects/-Users-hank-dev-src-MacAmp/memory/MEMORY.md`.
 
 ## First Action for the Resuming Agent
 
-Open `tasks/video-audio-engine-routing/` (S3-2). Read all 6 canonical files (`research.md`, `plan.md`, `todo.md`, `state.md`, `placeholder.md`, `depreciated.md`). Required reading on the **feat branch** (where Phase 0/1/2 closed):
-- `state.md` — full Phase 0/1/2 outcome including 17-commit list, architectural notes, follow-ups deferred to Phase 3
+Open `tasks/video-audio-engine-routing/` (S3-2). Read all 6 canonical files (`research.md`, `plan.md`, `todo.md`, `state.md`, `placeholder.md`, `depreciated.md`). Required reading on the **feat branch** (where Phase 0/1/2/3 closed):
+- `state.md` — full Phase 0/1/2/3 outcome including 24-commit list, architectural notes, follow-ups deferred to Phase 5/6
 - `plan.md §6.3` — split state ownership + cancellation contract (Phase 1 contract)
-- `plan.md §7` — MTAudioProcessingTap spec (Phase 2 implementation lives at `MacAmpApp/Audio/VideoAudioTap.swift`)
-- `plan.md §8` — engine source node + wiring spec (Phase 3 — what comes next)
-- `todo.md` Phase 1 + Phase 2 — all items marked [x]; reads as a closeout record
+- `plan.md §7` — MTAudioProcessingTap spec (Phase 2 implementation at `MacAmpApp/Audio/VideoAudioTap.swift`)
+- `plan.md §8` — engine source node + wiring spec (Phase 3 implementation at `MacAmpApp/Audio/AudioEngineController.swift` + `MacAmpApp/Audio/AudioPlayer.swift` + `MacAmpApp/Audio/VideoPlaybackController.swift`)
+- `plan.md §10` — tap-failure watchdog spec (Phase 5 — what comes next)
+- `todo.md` Phase 1/2/3 — all items marked [x]; reads as a closeout record
 - `research.md` Phase 0 results — Path NONE; AudioConverter is load-bearing
-- `MacAmpApp/Audio/VideoAudioTap.swift` itself — read the doc comments at the top of the file and on `attach(to:)` / `detach()` / `lastCallbackHostTime` / `fallbackRequested`. Phase 3 is the consumer.
+- `MacAmpApp/Audio/VideoAudioTap.swift` — read doc comments on `attach(to:)` / `detach()` / `lastCallbackHostTime` / `fallbackRequested`. Phase 5 watchdog reads both atomic accessors.
+- `MacAmpApp/Audio/AudioPlayer.swift` `startVideoTrack` / `tearDownVideoBridge` / `videoLoadTask` — Phase 5 watchdog wires alongside this (cancelled by tearDownVideoBridge, identity-checked against `videoAudioTap`).
 
-**Phase 0 + Phase 1 + Phase 2 are done.** Skip them. Phase 4 (sync strategy) is a no-op per todo §4.NONE. **Phase 3 (engine source node + wiring per plan §8) is next.**
+**Phase 0 + Phase 1 + Phase 2 + Phase 3 are done.** Skip them. Phase 4 (sync strategy) is a no-op per todo §4.NONE. **Phase 5 (tap-failure watchdog + fallback per plan §10) is next.**
 
-**Branch already exists:** `feat/video-audio-engine-routing` is rebased onto main HEAD `07a3ee8` and has 17 commits (10 Phase-1 + closeout + 5 Phase-2). Switch to it (`git checkout feat/video-audio-engine-routing`).
+**Branch already exists:** `feat/video-audio-engine-routing` is rebased onto main HEAD `07a3ee8` and has 24 commits (10 Phase-1 + 1 Phase-1 closeout + 5 Phase-2 + 1 Phase-2 closeout + 6 Phase-3 + 1 Phase-3 closeout). Switch to it (`git checkout feat/video-audio-engine-routing`).
 
-Phase 3 sketch (per plan §8):
-- Modify `MacAmpApp/Audio/AudioEngineController.swift`: add `videoSourceNode`, `videoRingBuffer`, `isVideoBridgeActive` fields parallel to the stream bridge; add `makeVideoRenderBlock`; implement `activateVideoBridge(ringBuffer:sampleRate:)` / `deactivateVideoBridge()` with mutual exclusion against the stream bridge; extend `setVolume`/`setBalance` to forward to `videoSourceNode`. Fill the Phase 1 TODO comments at `handleEngineWillReconfigure` / `handleEngineDidReconfigure` (wire `wasVideoBridge` to a real flag).
-- Modify `MacAmpApp/Audio/AudioPlayer.swift` video branch in `playTrack`: build ring buffer (capacity 4096, channels 2), instantiate `VideoAudioTap`, **`await tap.attach(to:)`** (note: async signature), assign `playerItem.audioMix = mix`, call `engine.activateVideoBridge(...)`, set `player.volume = 0`. Update `stop()` to deactivate video bridge + detach tap. Update `isEngineRendering` to include video bridge.
-- Modify `MacAmpApp/Audio/VideoPlaybackController.swift` per plan §3.5 — extend `loadVideo` to accept optional tap (or have AudioPlayer wire externally), add `detachAudioTap()` that sets `playerItem.audioMix = nil` BEFORE calling `tap.detach()` (essential ordering), unify cleanup.
-- Tests: `Tests/MacAmpTests/AudioEngineControllerVideoBridgeTests.swift` per todo §3.6.
-- Phase 3 does NOT add the watchdog — that's Phase 5.
+Phase 5 sketch (per plan §10):
+- AudioPlayer fields: `videoTapWatchdogTask: Task<Void, Never>?` and `videoTapFallbackActive: Bool = false`. Reset both at the start of `playTrack` (per-track fresh slate).
+- Watchdog body: every 250 ms while `engine.isVideoBridgeActive && videoPlaybackController.isPlaying`, check (a) `(mach_absolute_time() - tap.lastCallbackHostTime) > 1_000_000_000 ns` (1s host-time stall) — convert via mach_timebase, OR (b) `tap.fallbackRequested == true` (engage immediately). Use the captured `tap` reference and verify `videoAudioTap === tap` each tick; bail if a newer track replaced the tap.
+- Start watchdog when `engine.activateVideoBridge` succeeds inside `startVideoTrack`. Stop watchdog inside `tearDownVideoBridge` (alongside `videoLoadTask?.cancel()`).
+- Fallback sequence (must run on @MainActor in this exact order, per plan §10.2): idempotency guard `guard !videoTapFallbackActive else { return }` → cancel watchdog → set `videoTapFallbackActive = true` → log error → `engine.deactivateVideoBridge()` → `videoPlaybackController.detachAudioTap()` → clear `videoAudioTap` / `videoRingBuffer` → restore `videoPlaybackController.player?.volume = volume` → reset `seekGuardActive = false` (do NOT bump `currentSeekID`, no scheduled segment to invalidate).
+- Volume `didSet`: forward to `videoPlaybackController.volume` only when `videoTapFallbackActive` (Phase 6 finalizes per plan §11.6 — Phase 5 gate is sufficient for now).
+- Tests: `Tests/MacAmpTests/VideoTapFallbackTests.swift` per todo §5.4 (fallback idempotency, host-time stall trigger, fallbackRequested-immediate trigger).
+- Phase 5 does NOT update the capability flag surface — that's Phase 6.
 
 Standard pickup process from step 7 onward:
 - TSan-on builds + tests after each commit per `feedback_xcodebuildmcp_workflow.md`.
-- Per-step commits with build+test between (the established Phase 1 cadence).
-- Match the modern Swift 6.2 idioms from Phase 1: `@preconcurrency import` for unannotated frameworks, `Task.sleep(for: Duration)`, `isolated deinit`, AsyncSequence over block-based observers where applicable.
-- Codex Oracle review at end of phase per the existing pattern (Phase 1 closed at 9.5/10; Phase 2 at 9.3/10; aim for ≥9/10 at end of Phase 3).
+- Per-step commits with build+test between (the established Phase 1/2/3 cadence).
+- Match the modern Swift 6.2 idioms used in Phase 1/3: `@preconcurrency import` for unannotated frameworks, `Task.sleep(for: Duration)`, `isolated deinit`, AsyncSequence over block-based observers where applicable.
+- Codex Oracle review at end of phase per the existing pattern (Phase 1 closed at 9.5/10; Phase 2 at 9.3/10; Phase 3 at 9.4/10; aim for ≥9/10 at end of Phase 5).
 
 Stop and report back to me before pushing the PR — I'll review before merge.
 

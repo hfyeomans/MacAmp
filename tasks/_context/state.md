@@ -2,8 +2,8 @@
 
 > **Purpose:** Single source of truth for cross-task execution status, wave progress, and coordination decisions.
 > **Date:** 2026-02-21
-> **Updated:** 2026-04-30 (S3-2 Phase 0 + 1 + 2 ✅ **all complete**. Phase 2 ships the `MTAudioProcessingTap` wrapper at `MacAmpApp/Audio/VideoAudioTap.swift` (~340 LOC) — C-convention callbacks via `Unmanaged<VideoAudioTapContext>`, AudioConverter handles all four format-edge cases per plan §7.5 (mono duplication via channel map, surround downmix via `kAudioConverterPropertyPerformDownmix=1` + actual source channel layout, non-Float32, sample-rate). 5 commits, Oracle three-pass review converged at **9.3/10** (8.2 → 8.4 → 9.3). 84/84 tests pass with TSan (76 → 84: +4 attach/state, +6 bypass classification, +2 surround layout map). Phase 3 (engine source node + wiring per plan §8) next.)
-> **Previous:** 2026-04-30 (S3-2 Phase 0 ✅ + Phase 1 ✅ — engine config observer ships; 10 commits on `feat/video-audio-engine-routing`; Path NONE confirmed empirically; manual verification clean across local↔external↔AirPlay.)
+> **Updated:** 2026-04-30 (S3-2 Phase 0 + 1 + 2 + 3 ✅ **all complete**. Phase 3 wires `videoSourceNode` into `AudioEngineController` parallel to `streamSourceNode`, refactors `AudioPlayer.playTrack` video branch through an async `startVideoTrack` Task that awaits `VideoAudioTap.attach(to:)` before activating the engine bridge, and gives `VideoPlaybackController.loadVideo` an `audioTap:` parameter with a post-await player-identity guard. Stale-task defence is two-tier: tap-identity at AudioPlayer level (closes same-URL replay race) plus player-identity at VideoPlaybackController level (closes mid-await player swap). 6 commits, Oracle two-pass review converged at **9.4/10** (8.4 → 9.2 → 9.4). 90/90 tests pass with TSan (84 → 90: +4 video-bridge state-machine, +2 video-render-block). **Phase 5 (tap-failure watchdog per plan §10) is next; Phase 4 is no-op per Phase 0 Path NONE.**)
+> **Previous:** 2026-04-30 (S3-2 Phase 0 ✅ + Phase 1 ✅ + Phase 2 ✅ — `VideoAudioTap` MTAudioProcessingTap wrapper ships at 9.3/10; 17 commits on `feat/video-audio-engine-routing`; 84/84 tests pass; AudioConverter is load-bearing per Phase 0.)
 
 ### Quick Reference
 
@@ -288,7 +288,7 @@ All doc updates verified complete by sub-agent scan:
 
 ### Sprint S3: LOW-MEDIUM Priority — Edge Cases + Optimization + Video Routing
 
-> **Status (2026-04-30):** Wave S3-1 ✅ **COMPLETE** — S3-1A `mainwindow-visualizer-isolation` merged PR #80 (2026-04-28); S3-1B `stream-pause-tail` merged PR #82 (2026-04-30, merge commit `b60fd57`). Post-S3-1A follow-up `timer-runloop-mode-audit` merged PR #81 (2026-04-29). S3-2 `video-audio-engine-routing` Phase 0 + 1 + 2 all ✅ complete (2026-04-30) — Path NONE confirmed empirically; engine config observer ships engine-recovery-on-output-route-change; MTAudioProcessingTap wrapper ships at 9.3/10. 17 commits on `feat/video-audio-engine-routing`; 84/84 tests pass with TSan; manual verification clean across local↔external↔AirPlay. **Phase 3 (engine source node + wiring per plan §8) is next.** S3-3 / S3-4 still queued behind S3-2 PR.
+> **Status (2026-04-30):** Wave S3-1 ✅ **COMPLETE** — S3-1A `mainwindow-visualizer-isolation` merged PR #80 (2026-04-28); S3-1B `stream-pause-tail` merged PR #82 (2026-04-30, merge commit `b60fd57`). Post-S3-1A follow-up `timer-runloop-mode-audit` merged PR #81 (2026-04-29). S3-2 `video-audio-engine-routing` Phase 0 + 1 + 2 + 3 all ✅ complete (2026-04-30) — Path NONE confirmed empirically; engine config observer ships engine-recovery-on-output-route-change; MTAudioProcessingTap wrapper ships at 9.3/10; engine source node + AudioPlayer wiring ships at 9.4/10 with two-tier stale defence (tap-identity + player-identity guards). 24 commits on `feat/video-audio-engine-routing`; 90/90 tests pass with TSan. **Phase 5 (tap-failure watchdog per plan §10) is next; Phase 4 is no-op per Phase 0 Path NONE.** S3-3 / S3-4 still queued behind S3-2 PR.
 
 **Locked S3 ordering and branch plan:**
 
@@ -296,7 +296,7 @@ All doc updates verified complete by sub-agent scan:
 |------|------|-------------|--------|------|--------------|----------------|--------|
 | S3-1 | A (parallel) | `done/mainwindow-visualizer-isolation` | `feat/mainwindow-visualizer-isolation` | **#80** | none | `spike/mwvi-volume-drag-profile` (Instruments) | ✅ **MERGED** 2026-04-28 |
 | S3-1 | B (parallel) | `done/stream-pause-tail` | `fix/stream-pause-tail` | **#82** | none | none | ✅ **MERGED** 2026-04-30 (merge `b60fd57`) — Oracle 9/10 final, 68/68 TSan tests, manual smoke validated |
-| S3-2 | sequential | `video-audio-engine-routing` | `feat/video-audio-engine-routing` | C | S3-1 merged ✅ + Phase 0 ✅ + Phase 1 ✅ + Phase 2 ✅ | `spike/vaer-av-drift-measurement` ✅ deleted | 🔧 **IN PROGRESS** — Phase 0/1/2 done; Phase 3 (engine source node + wiring per plan §8) next |
+| S3-2 | sequential | `video-audio-engine-routing` | `feat/video-audio-engine-routing` | C | S3-1 merged ✅ + Phase 0 ✅ + Phase 1 ✅ + Phase 2 ✅ + Phase 3 ✅ | `spike/vaer-av-drift-measurement` ✅ deleted | 🔧 **IN PROGRESS** — Phase 0/1/2/3 done; Phase 5 (tap-failure watchdog per plan §10) next; Phase 4 no-op |
 | S3-3 | sequential | `hls-streaming-support` | `feat/hls-streaming-support` | D | S3-2 merged | none (Gemini re-run optional at plan-time) | PLAN APPROVED |
 | S3-4 | sequential | `ogg-vorbis-support` | `feat/ogg-vorbis-support` | E | S3-3 merged | `spike/ogg-build-wiring` (0a) + `spike/ogg-local-playback` (0b) | PLAN APPROVED |
 | Post-S3-1A | follow-up | `done/timer-runloop-mode-audit` | `fix/timer-runloop-mode-audit` | **#81** | S3-1A merged ✅ | none | ✅ **MERGED** 2026-04-29 (merge commit `ac09dd4`) |
