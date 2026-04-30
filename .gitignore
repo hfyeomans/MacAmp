@@ -48,6 +48,7 @@ MacAmpApp.xcodeproj/
 *.mp4
 *.wav
 *.dmg
+*.m4v
 
 # PNG files (except app icons)
 frames/
