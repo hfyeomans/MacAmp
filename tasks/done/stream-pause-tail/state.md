@@ -3,17 +3,17 @@
 > **Purpose:** Fix ~0.7s audio tail that plays after pausing an internet radio stream + latent reconnect-during-pause bug.
 > **Created:** 2026-03-14
 > **Sprint:** S3, Wave S3-1 Worktree B (parallel with `mainwindow-visualizer-isolation`)
-> **Status:** IMPLEMENTATION COMPLETE — PR #82 open, awaiting review.
+> **Status:** ✅ **MERGED** — PR [#82](https://github.com/hfyeomans/MacAmp/pull/82), merge commit `b60fd57`, 2026-04-30.
 
 ---
 
 ## Current Status
 
-**Phase:** PR review.
+**Phase:** Closed out (moved to `tasks/done/stream-pause-tail/`).
 **Last Updated:** 2026-04-30.
-**Branch:** `fix/stream-pause-tail`
-**PR:** [#82](https://github.com/hfyeomans/MacAmp/pull/82)
-**Tests:** 68/68 pass with TSan (was 59 baseline; +8 new + 1 ring-buffer regression).
+**Branch:** `fix/stream-pause-tail` (merged into `main`).
+**PR:** [#82](https://github.com/hfyeomans/MacAmp/pull/82) — merged 2026-04-30, merge commit `b60fd57`.
+**Tests on main:** 68/68 pass with TSan (was 59 baseline; +8 new + 1 ring-buffer regression).
 
 ### Artifacts
 | File | Status |
@@ -91,8 +91,11 @@ Tracked in `tasks/_context/state.md` (Sprint S3 follow-ups section):
 
 ---
 
-## Next steps
+## Post-merge
 
-1. Address any reviewer feedback on PR #82.
-2. Merge.
-3. Post-merge close-out per resume-prompt.md template (move task to `tasks/done/`, update `_context/state.md` + `tasks_index.md` + `resume-prompt.md`, single `chore:` commit).
+- ✅ PR #82 merged 2026-04-30 (merge commit `b60fd57`).
+- ✅ Task folder moved to `tasks/done/stream-pause-tail/`.
+- ✅ `_context/state.md`, `tasks_index.md`, `resume-prompt.md` refreshed.
+- 🟡 Two Lows remain tracked in `_context/state.md` for future cleanup:
+  - `StreamDecodePipeline.stop()` `.userStopped` generation guard.
+  - `AudioConverterDecoder.clearQueue()` confinement-doc gap (`assertConfinement` is debug-only).

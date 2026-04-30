@@ -2,7 +2,7 @@
 
 > **Purpose:** Index of all currently open (non-done) tasks in `tasks/`. Each entry notes the task name, purpose, and current status.
 >
-> **Updated:** 2026-04-30 (PR #82 OPENED — `stream-pause-tail` awaiting review)
+> **Updated:** 2026-04-30 (post-PR-#82 merge — `stream-pause-tail` shipped; Wave S3-1 complete; S3-2 `video-audio-engine-routing` is NEXT)
 > **Excludes:** `tasks/done/`, `tasks/stale/`, `tasks/depreciated/`
 
 ---
@@ -12,7 +12,6 @@
 | Status | Meaning |
 |--------|---------|
 | 📋 PLANNED | Research/planning done, awaiting implementation |
-| 🟢 PR OPEN | Implementation complete, PR awaiting review/merge |
 | 🟡 DEFERRED | Postponed to future milestone |
 | 📄 REFERENCE | Documentation/analysis artifact, not an implementation task |
 
@@ -25,8 +24,8 @@
 | Step | Task | Purpose | Size | Status | Oracle Score |
 |------|------|---------|------|--------|:---:|
 | S3-1A | `done/mainwindow-visualizer-isolation` | Visualizer freeze fix (run-loop-mode mismatch in producer) | Small | ✅ **MERGED** PR #80 (2026-04-28) | 9.4/10 plan + 9.3/10 pre-PR |
-| S3-1B | `stream-pause-tail` | Fix 0.7s pause tail (silence gate + producer quiesce) + latent reconnect-during-pause bug | Small-Medium | 🟢 **PR #82 OPEN** (2026-04-30) | 9.1/10 plan; 9/10 final impl |
-| S3-2  | `video-audio-engine-routing` | Route video audio through AVAudioEngine; engine config observer | Medium-High | ✅ READY (gated on S3-1B; Phase 0 sync spike first) | 9.4/10 |
+| S3-1B | `done/stream-pause-tail` | Fix 0.7s pause tail (silence gate + producer quiesce) + latent reconnect-during-pause bug | Small-Medium | ✅ **MERGED** PR #82 (2026-04-30, merge `b60fd57`) | 9.1/10 plan; 9/10 final impl |
+| S3-2  | `video-audio-engine-routing` | Route video audio through AVAudioEngine; engine config observer | Medium-High | 📋 **NEXT** (Phase 0 sync spike first; kill-switch >100 ms drift) | 9.4/10 |
 | S3-3  | `hls-streaming-support` | Audio-only HLS (M3U8 + AAC ADTS, live + VOD) | Large | ✅ READY | 9.0/10 |
 | S3-4  | `ogg-vorbis-support` | OGG Vorbis (libvorbis), local + Icecast streams; chained-format gap fix | Medium-Large | ✅ READY (Phase 0a/0b spikes first) | 9.3/10 |
 
@@ -86,8 +85,7 @@
 
 | Category | Count |
 |---------|-------|
-| Total active task folders | 14 |
-| 🟢 PR OPEN | 1 |
+| Total active task folders | 13 |
 | 📋 PLANNED (ready to implement) | 3 |
 | 🟡 DEFERRED / NO-GO | 5 |
 | 📄 REFERENCE | 4 |

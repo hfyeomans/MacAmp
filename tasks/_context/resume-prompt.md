@@ -9,33 +9,30 @@
 
 ## Current State (update after each PR merge)
 
-**Last update:** 2026-04-30 (PR #82 OPENED — `stream-pause-tail`, awaiting review).
-**Main HEAD:** `ac09dd4` — Merge pull request #81 from `fix/timer-runloop-mode-audit`.
-**Branch HEAD (PR #82):** `c6a5b23` on `fix/stream-pause-tail`.
-**Tests:** 68 passing on PR branch (TSan ON); 59 on `main`.
-**PRs merged total:** 79. **PRs open:** 1 (#82).
+**Last update:** 2026-04-30 (post-PR-#82 merge — `stream-pause-tail` shipped; Wave S3-1 complete).
+**Main HEAD:** `b60fd57` — Merge pull request #82 from `fix/stream-pause-tail`.
+**Tests:** 68 passing (TSan ON).
+**PRs merged total:** 80.
 
-**Most recently opened PR:** [#82 `fix/stream-pause-tail`](https://github.com/hfyeomans/MacAmp/pull/82) (S3-1B, 2026-04-30). Eliminates ~0.7 s audio bleed when pausing internet radio (atomic silence gate on the AVAudioSourceNode render block + producer-quiesce barrier + ring-buffer flush guarded by seqlock + CAS in `LockFreeRingBuffer`). Fixes latent reconnect-during-pause bug (`userPaused` flag suppresses auto-reconnect; resume restarts at live edge with bridge teardown). 9 implementation review iterations (Codex Oracle final 9/10 + parallel code-reviewer agent pass that caught a `deinit` task-leak Oracle missed). All 7 manual scenarios validated on real SomaFM stream. Two Lows deferred (see `_context/state.md` "Post-S3-1B Follow-Ups"): `StreamDecodePipeline.stop()` generation guard and `AudioConverterDecoder.clearQueue()` confinement-doc gap.
+**Most recent task closed:** `tasks/done/stream-pause-tail/` (S3-1B, PR #82, merged 2026-04-30, merge commit `b60fd57`). Atomic silence gate on the `AVAudioSourceNode` render block + producer-quiesce barrier (gate→clearQueue→ring flush in one decode-queue block) + seqlock + CAS in `LockFreeRingBuffer.read()` eliminates the ~0.7 s pause-tail and closes the consumer-side render-vs-flush race. `userPaused` flag suppresses reconnect-during-pause; `resume()` switches on pipeline state for safe live-edge restart with explicit bridge teardown. 9 implementation review iterations (Codex Oracle final 9/10 + parallel code-reviewer agent pass that caught a `deinit` task-leak Oracle missed). All 7 manual scenarios validated on real SomaFM stream. Two Lows deferred (see `_context/state.md` "Post-S3-1B Follow-Ups"): `StreamDecodePipeline.stop()` generation guard and `AudioConverterDecoder.clearQueue()` confinement-doc gap.
 
-**Most recent task closed:** `tasks/done/timer-runloop-mode-audit/` (Post-S3-1A follow-up, PR #81, 2026-04-29). Pattern A normalization across the entire codebase. New deferred sub-follow-up `timer-scheduled-on-common-extension` pre-tracked in `tasks/_context/state.md`.
+**Previous closeout:** `tasks/done/timer-runloop-mode-audit/` (Post-S3-1A follow-up, PR #81, 2026-04-29). Pattern A normalization across the codebase. Deferred sub-follow-up `timer-scheduled-on-common-extension` pre-tracked.
 
 ---
 
 ## Active Work Queue (ordered — start at the top)
 
-### 1. IN REVIEW — `tasks/stream-pause-tail/` (S3-1B)
+### 1. NEXT — `tasks/video-audio-engine-routing/` (S3-2)
 
-**Status:** PR #82 OPEN, awaiting human review/merge. Implementation complete, 68/68 TSan tests pass, manual smoke validated. Final Oracle score 9/10 across 9 implementation review iterations.
+**Status:** Plan Oracle-approved 9.4/10. S3-1B merge precondition is satisfied. Ready to implement.
 
-**Branch:** `fix/stream-pause-tail` → PR [#82](https://github.com/hfyeomans/MacAmp/pull/82).
-**Action when merged:** post-merge close-out per "Standard Pickup Process" step 12 below.
+**Phase 0 spike:** `spike/vaer-av-drift-measurement` — **kill-switch**. Run on a throwaway branch FIRST. If measured A/V drift exceeds 100 ms, **cancel the task entirely**.
 
-### 2. NEXT after S3-1B merge — `tasks/video-audio-engine-routing/` (S3-2)
+**Branch:** `feat/video-audio-engine-routing` → PR target #C.
+**Predecessors:** S3-1A ✅ + S3-1B ✅ both merged.
+**Successors:** S3-3 (`hls-streaming-support`) gated on this merge.
 
-**Status:** Plan Oracle-approved 9.4/10. Gated on S3-1B merge.
-**Phase 0 spike:** `spike/vaer-av-drift-measurement` — kill-switch on whether vaer is feasible (>100 ms drift → cancel task).
-
-### 3. DEFERRED — `timer-scheduled-on-common-extension`
+### 2. DEFERRED — `timer-scheduled-on-common-extension`
 
 Sub-follow-up of `timer-runloop-mode-audit` (now merged). Extract a `Timer.scheduledOnMainCommon(every:repeats:_:)` helper into `MacAmpApp/Utilities/Timer+CommonMode.swift` and migrate all 7 timer-on-RunLoop callsites in `MacAmpApp/` to use it. With 7 Pattern-A callsites now in the codebase, AHA Rule-of-Three is exceeded by 4× — the helper is the natural next step.
 
@@ -51,11 +48,11 @@ Sub-follow-up of `timer-runloop-mode-audit` (now merged). Extract a `Timer.sched
 ```
 S3-1A mwvi  ✅ MERGED (PR #80, merge commit 7f3d76f, 2026-04-28)
      │
-     ├──► S3-1B spt                       ←── PR #82  🟢 OPEN (Oracle 9/10 final, 68/68 TSan, smoke validated)
+     ├──► S3-1B spt                       ←── PR #82  ✅ MERGED (merge commit b60fd57, 2026-04-30)
      │       │
      │       ▼
-     │    S3-2 vaer                       ←── PR #C   (gated on S3-1B merge)
-     │       │   └── runs spike/vaer-av-drift-measurement FIRST (kill-switch)
+     │    S3-2 vaer                       ←── PR #C   📋 NEXT (plan 9.4/10; spike/vaer-av-drift-measurement FIRST as kill-switch)
+     │       │
      │       ▼
      │    S3-3 hls                        ←── PR #D
      │       │
@@ -129,8 +126,15 @@ Index lives at `~/.claude/projects/-Users-hank-dev-src-MacAmp/memory/MEMORY.md`.
 
 ## First Action for the Resuming Agent
 
-**If PR #82 (`stream-pause-tail`) is still open:** check its status. Respond to any review comments. After merge, perform the post-merge close-out (step 12 below): bump `tasks/stream-pause-tail/state.md` to MERGED with merge commit, `git mv tasks/stream-pause-tail/ tasks/done/stream-pause-tail/`, update `_context/state.md` Sprint S3 row + this file's "Current State" + `tasks_index.md`, single `chore:` commit.
+Open `tasks/video-audio-engine-routing/` (S3-2). Read all 6 canonical files (`research.md`, `plan.md`, `todo.md`, `state.md`, `placeholder.md`, `depreciated.md`).
 
-**If PR #82 is merged:** proceed to S3-2 (`tasks/video-audio-engine-routing/`). Run its Phase 0 spike (`spike/vaer-av-drift-measurement`) FIRST as a kill-switch — if measured A/V drift > 100 ms, cancel the task entirely. Otherwise read all 6 canonical files, reconcile line-number drift, cut branch `feat/video-audio-engine-routing` from post-S3-1B `main`, execute phases.
+**Phase 0 first — kill-switch.** Cut a throwaway branch and run `spike/vaer-av-drift-measurement` to measure A/V drift on the candidate routing path. If measured drift exceeds 100 ms, **cancel the task entirely** — record findings in `research.md`, archive task to `tasks/depreciated/` or annotate as NO-GO, and skip ahead to S3-3 (`hls-streaming-support`).
+
+If drift is acceptable, proceed with the standard pickup process from step 6 onward:
+- Confirm `git status` is clean and `git pull origin main` is up to date (most recent merge: PR #82 `stream-pause-tail`, merge commit `b60fd57`, 2026-04-30).
+- Re-read every "Files Affected" source listed in `plan.md` at HEAD to reconcile line-number drift since the plan was Oracle-approved (9.4/10).
+- Cut branch `feat/video-audio-engine-routing` from `main` and execute phases with TSan-on builds + tests after each.
+
+Stop and report back to me before pushing the PR — I'll review before merge.
 
 > **Optional sub-track:** `timer-scheduled-on-common-extension` — extract a `Timer.scheduledOnMainCommon` helper, migrate all 7 Pattern-A timer callsites. Predecessor `timer-runloop-mode-audit` (PR #81) is merged ✅; this task does not block any S3 wave. Task folder doesn't exist yet — create it on pickup using the same 6-file canonical layout.

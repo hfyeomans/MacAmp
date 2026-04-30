@@ -2,8 +2,8 @@
 
 > **Purpose:** Single source of truth for cross-task execution status, wave progress, and coordination decisions.
 > **Date:** 2026-02-21
-> **Updated:** 2026-04-30 (Wave S3-1B `stream-pause-tail` IMPLEMENTATION COMPLETE — PR #82 OPEN, awaiting review. 9 implementation review iterations (Codex Oracle final score 9/10 + parallel code-reviewer agent pass). 68/68 tests pass with TSan. All 7 manual scenarios validated on real SomaFM stream. Two Lows deferred — see "Post-S3-1B Follow-Ups". S3-2 / S3-3 / S3-4 remain gated on this merge.)
-> **Previous:** 2026-04-29 (Post-S3-1A follow-up `timer-runloop-mode-audit` MERGED — PR #81 merge commit `ac09dd4`. Pattern A normalization: 6 timer-on-RunLoop callsites converted across 5 source files; codebase now uniform. Sub-follow-up `timer-scheduled-on-common-extension` still DEFERRED, predecessor merged.)
+> **Updated:** 2026-04-30 (Wave S3-1B `stream-pause-tail` ✅ **MERGED** — PR #82 merge commit `b60fd57`. Atomic silence gate + producer-quiesce barrier + seqlock+CAS in `LockFreeRingBuffer` eliminates ~0.7 s pause-tail; `userPaused` flag suppresses reconnect-during-pause; resume restarts at live edge with bridge teardown. 9 implementation review iterations + parallel agent. Task moved to `tasks/done/stream-pause-tail/`. S3-2 `video-audio-engine-routing` is now NEXT — gated on `spike/vaer-av-drift-measurement` kill-switch.)
+> **Previous:** 2026-04-30 (Wave S3-1B PR #82 OPENED.)
 
 ### Quick Reference
 
@@ -11,9 +11,9 @@
 |--------|-------|
 | Current release | v1.3 (2026-03-26) |
 | .swift files | ~110 |
-| Tests | 68 (+9 from S3-1B `stream-pause-tail` PR #82) |
-| Current phase | S3 — Wave S3-1A merged, S3-1B PR open |
-| PRs merged | 79 total (PR #80 mwvi, PR #81 timer-runloop-mode-audit); PR #82 spt OPEN |
+| Tests | 68 |
+| Current phase | S3 — S3-1 wave complete, S3-2 next |
+| PRs merged | 80 total (PR #80 mwvi, PR #81 timer-runloop-mode-audit, PR #82 stream-pause-tail) |
 | Architecture principles | `tasks/_context/principles.md` |
 
 ---
@@ -210,7 +210,7 @@ Target (MainWindowFullLayer.body):
 | ~~docs/ folder update~~ | N/A | N/A | N/A | ✅ COMPLETE — 2026-03-14 |
 | HLS streaming support | unified-audio-pipeline Phase 3 | Large | Low | → S3 |
 | OGG Vorbis support | unified-audio-pipeline Phase 2.4 | Medium | Low | → S3 |
-| ~~Stream pause audio tail~~ | Post-merge Oracle P2 | Small | Low | **→ S3-1B PR #82 OPEN** (2026-04-30) |
+| ~~Stream pause audio tail~~ | Post-merge Oracle P2 | Small | Low | **✅ DONE** — S3-1B PR #82 merged 2026-04-30 |
 | Video audio through AVAudioEngine | unified-audio-pipeline | Medium | Medium | → S3 (deferred from S2) |
 | macOS 26 passthrough guard | unified-audio-pipeline Phase 2.3 | Small | Low | Deferred — HDMI/optical only |
 | Default MainActor isolation | T8 Phase 5 | Medium | Low | Deferred — questionable ROI |
@@ -288,15 +288,15 @@ All doc updates verified complete by sub-agent scan:
 
 ### Sprint S3: LOW-MEDIUM Priority — Edge Cases + Optimization + Video Routing
 
-> **Status (2026-04-30):** S3-1A `mainwindow-visualizer-isolation` ✅ **MERGED** (PR #80, 2026-04-28). S3-1B `stream-pause-tail` 🟢 **PR #82 OPEN** (2026-04-30) — implementation complete, awaiting review. Post-S3-1A follow-up `timer-runloop-mode-audit` ✅ MERGED (PR #81, 2026-04-29). S3-2 / S3-3 / S3-4 remain gated on PR #82 merge.
+> **Status (2026-04-30):** Wave S3-1 ✅ **COMPLETE** — S3-1A `mainwindow-visualizer-isolation` merged PR #80 (2026-04-28); S3-1B `stream-pause-tail` merged PR #82 (2026-04-30, merge commit `b60fd57`). Post-S3-1A follow-up `timer-runloop-mode-audit` merged PR #81 (2026-04-29). S3-2 `video-audio-engine-routing` is now NEXT — must run `spike/vaer-av-drift-measurement` kill-switch FIRST (>100 ms drift → cancel task). S3-3 / S3-4 still queued behind S3-2.
 
 **Locked S3 ordering and branch plan:**
 
 | Wave | Step | Task Folder | Branch | PR # | Predecessors | Pre-Plan Spike | Status |
 |------|------|-------------|--------|------|--------------|----------------|--------|
-| S3-1 | A (parallel) | `mainwindow-visualizer-isolation` | `feat/mainwindow-visualizer-isolation` | **#80** | none | `spike/mwvi-volume-drag-profile` (Instruments) | ✅ **MERGED** 2026-04-28 |
-| S3-1 | B (parallel) | `stream-pause-tail` | `fix/stream-pause-tail` | **#82** | none | none | 🟢 **PR OPEN** 2026-04-30 — Oracle 9/10 final, 68/68 TSan tests, manual smoke validated |
-| S3-2 | sequential | `video-audio-engine-routing` | `feat/video-audio-engine-routing` | C | S3-1 merged | `spike/vaer-av-drift-measurement` | PLAN APPROVED — gated on S3-1B merge |
+| S3-1 | A (parallel) | `done/mainwindow-visualizer-isolation` | `feat/mainwindow-visualizer-isolation` | **#80** | none | `spike/mwvi-volume-drag-profile` (Instruments) | ✅ **MERGED** 2026-04-28 |
+| S3-1 | B (parallel) | `done/stream-pause-tail` | `fix/stream-pause-tail` | **#82** | none | none | ✅ **MERGED** 2026-04-30 (merge `b60fd57`) — Oracle 9/10 final, 68/68 TSan tests, manual smoke validated |
+| S3-2 | sequential | `video-audio-engine-routing` | `feat/video-audio-engine-routing` | C | S3-1 merged ✅ | `spike/vaer-av-drift-measurement` | 📋 **NEXT** — plan approved 9.4/10 |
 | S3-3 | sequential | `hls-streaming-support` | `feat/hls-streaming-support` | D | S3-2 merged | none (Gemini re-run optional at plan-time) | PLAN APPROVED |
 | S3-4 | sequential | `ogg-vorbis-support` | `feat/ogg-vorbis-support` | E | S3-3 merged | `spike/ogg-build-wiring` (0a) + `spike/ogg-local-playback` (0b) | PLAN APPROVED |
 | Post-S3-1A | follow-up | `done/timer-runloop-mode-audit` | `fix/timer-runloop-mode-audit` | **#81** | S3-1A merged ✅ | none | ✅ **MERGED** 2026-04-29 (merge commit `ac09dd4`) |
@@ -331,12 +331,12 @@ All doc updates verified complete by sub-agent scan:
 | Task Folder | research.md | plan.md | todo.md | Oracle plan score | Iterations |
 |-------------|------------|---------|---------|-------------------|:---:|
 | `done/mainwindow-visualizer-isolation` ✅ | ✅ 9/9 applied + Phase 0 results appended | ✅ | ✅ | **9.4/10** (plan); **8/10** (post-1B Oracle diagnostic); **9.3/10** (pre-PR code-review gate) | 4 + 1 + 1 → MERGED PR #80 |
-| `stream-pause-tail` | ✅ 8/8 applied | ✅ (8 ADRs) | ✅ | **9.1/10** | 5 |
+| `done/stream-pause-tail` ✅ | ✅ 8/8 applied | ✅ (8 ADRs) | ✅ | **9.1/10** plan; **9/10** final impl | 5 plan + 9 impl → MERGED PR #82 |
 | `video-audio-engine-routing` | ✅ existing | ✅ | ✅ | **9.4/10** | 3 |
 | `hls-streaming-support` | ✅ 8/8 applied | ✅ | ✅ | **9.0/10** | 4 |
 | `ogg-vorbis-support` | ✅ 10/10 applied | ✅ (22 sections) | ✅ | **9.3/10** | 3 |
 
-**S3 progress:** S3-1A (mwvi) ✅ MERGED. S3-1B (spt) 🟢 PR #82 OPEN. S3-2/S3-3/S3-4 still queued behind S3-1B merge.
+**S3 progress:** Wave S3-1 ✅ COMPLETE (mwvi PR #80 + spt PR #82 both merged). S3-2 (vaer) is NEXT. S3-3 / S3-4 queued behind S3-2.
 
 ### Post-S3-1A Follow-Ups (discovered during mwvi)
 
