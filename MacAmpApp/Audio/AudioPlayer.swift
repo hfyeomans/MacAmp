@@ -112,6 +112,12 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     var onTrackMetadataUpdate: ((Track) -> Void)?
     var onPlaylistAdvanceRequest: ((Track) -> Void)?
     var onPlaybackFinished: (() -> Void)?
+    /// Fired once at the end of an engine reconfigure burst, after AudioPlayer
+    /// has re-applied volume/balance and rescheduled local-file playback.
+    /// PlaybackCoordinator hooks this to refresh the stream-decode thread's
+    /// audio IO workgroup, since the post-reconfigure outputNode may live on
+    /// a different audio HAL device with a different real-time workgroup.
+    var onEngineReconfigured: (() -> Void)?
     var shuffleEnabled: Bool {
         get { playlistController.shuffleEnabled }
         set { playlistController.shuffleEnabled = newValue }
@@ -728,6 +734,10 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
             try? await Task.sleep(for: .milliseconds(200))
             self?.isHandlingCompletion = false
         }
+
+        // 6. Notify external subscribers (PlaybackCoordinator refreshes the
+        //    stream workgroup; future subscribers may update Now Playing, etc.).
+        onEngineReconfigured?()
     }
 
     /// Shared completion handler for video seek operations.
