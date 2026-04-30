@@ -10,6 +10,13 @@
 /// can rewire the graph for the new output device and AudioPlayer can resume from
 /// the saved position).
 ///
+/// **Pairing contract (important):** `onDidReconfigure` is NOT guaranteed to fire after
+/// `onWillReconfigure` if `stop()` or `deinit` interrupts the debounce window. Callers
+/// MUST clear any transient state armed in `onWillReconfigure` (seek guards, completion
+/// flags) via their own teardown paths — do not assume strict will/did symmetry on
+/// observer shutdown. During normal route changes the pair is balanced; only on
+/// observer teardown is `did` skipped.
+///
 /// Notifications arrive on an arbitrary thread; consumed via the modern
 /// `NotificationCenter.notifications(named:object:)` AsyncSequence so delivery to
 /// the @MainActor-isolated watch task is automatic — no manual `Task { @MainActor in }`
@@ -68,6 +75,11 @@ final class AudioEngineConfigurationObserver {
         if debounceTask == nil {
             onWillReconfigure?()
         }
+        // Re-entrancy guard: if `onWillReconfigure` synchronously called `stop()`, the
+        // watch task is now cancelled. Do not resurrect the observer by scheduling a
+        // fresh debounce. (Documented contract: `did` is not guaranteed after `will`
+        // on stop/deinit; the caller must clean up its own state.)
+        guard watchTask != nil else { return }
         // Each new notification supersedes any in-flight debounce — the latest
         // arrival resets the quiet window.
         debounceTask?.cancel()
