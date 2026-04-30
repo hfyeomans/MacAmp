@@ -659,6 +659,25 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
 
     // MARK: - Engine Reconfiguration Handlers
 
+    /// Discard any in-flight reconfigure-resume context. Called from user-intent
+    /// entry points (play/pause/stop/seek/playTrack) so that a stale `onDid`
+    /// callback fired during the 150 ms debounce window can't override the
+    /// user's new intent. handleEngineDidReconfigure early-returns when
+    /// `pendingReconfigureSnapshot` is nil, so the snapshot nil-out is the
+    /// cancel hook.
+    ///
+    /// Also clears `seekGuardActive` and `isHandlingCompletion` — the will-handler
+    /// armed both, and the did-handler is the only path that schedules their
+    /// 100/200 ms release tasks. Without this clear, the early-returned did
+    /// would leave both guards stuck on indefinitely, wedging the next
+    /// `onPlaybackEnded` completion. (No-op when no burst is in flight; both
+    /// fields are independently managed by the seek() / onPlaybackEnded paths.)
+    private func cancelPendingReconfigure() {
+        pendingReconfigureSnapshot = nil
+        seekGuardActive = false
+        isHandlingCompletion = false
+    }
+
     /// Invoked at the START of an output-route reconfigure burst (Control Center,
     /// AirPlay, HDMI hot-plug, sleep/wake). Captures the engine's pre-rewire
     /// snapshot and arms seek guards before the engine restart fires a stale
@@ -666,18 +685,13 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     /// the stored snapshot to decide whether to resume.
     ///
     /// **Pairing note:** if `stop()` or `deinit` interrupts the burst before
-    /// `onDidReconfigure` fires, `seekGuardActive` and `isHandlingCompletion`
-    /// stay armed; that's intentional and safe — the next user action (play,
-    /// seek, stop) clears them via the existing paths.
-    /// Discard any in-flight reconfigure-resume context. Called from user-intent
-    /// entry points (play/pause/stop/seek/playTrack) so that a stale `onDid`
-    /// callback fired during the 150 ms debounce window can't override the
-    /// user's new intent. handleEngineDidReconfigure early-returns when
-    /// `pendingReconfigureSnapshot` is nil, so this is the cancel hook.
-    private func cancelPendingReconfigure() {
-        pendingReconfigureSnapshot = nil
-    }
-
+    /// `onDidReconfigure` fires, the 100/200 ms guard release tasks scheduled
+    /// inside `handleEngineDidReconfigure` never run. The user-intent entry
+    /// points (play/pause/stop/seek/playTrack) cover this gap by calling
+    /// `cancelPendingReconfigure()`, which clears both guards. The only
+    /// remaining "stuck guards" case is observer-stop / deinit during a burst
+    /// without any subsequent user action — and at that point AudioPlayer
+    /// itself is being torn down, so the leftover state is harmless.
     private func handleEngineWillReconfigure(snapshot: PreReconfigureSnapshot) {
         // The engine captures its snapshot at notification-receipt time, by
         // which point the system has ALREADY auto-stopped the engine —

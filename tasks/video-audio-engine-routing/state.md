@@ -11,24 +11,25 @@
 
 **Phase:** Phase 0 ✅ + Phase 1 ✅ done. Phase 2 (MTAudioProcessingTap implementation per plan §7) next.
 **Last Updated:** 2026-04-30.
-**Branch HEAD:** `e7f8eed` (10 commits ahead of main).
+**Branch HEAD:** `d34b882` (rebased onto main 2026-04-30; 11 commits ahead — SHAs are post-rebase). 10 Phase-1 commits + the task-folder docs closeout commit. SHAs may rotate again on future rebases — match by commit message if numbers don't line up.
 **Tests:** 72/72 pass with TSan.
 
 ### Phase 1 outcome (engine configuration change observer)
 
 10 commits implementing plan §6 (engine config observer) plus three Oracle-driven follow-ups. The observer gracefully recovers the engine when the user switches output devices (Control Center, AirPlay, HDMI hot-plug, sleep/wake). Local-file and stream paths both verified.
 
-**Commits in order:**
-- `d5081e9` add `AudioEngineConfigurationObserver` (plan §6.1)
-- `c454c49` re-entrancy guard + pairing-contract docs (Oracle pre-wiring review)
-- `63dda27` wire observer into `AudioEngineController` (plan §6.2-§6.3)
-- `d95cccf` wire reconfigure handlers into `AudioPlayer` (plan §6.4)
-- `3267091` AirPlay-resume fix: AudioPlayer overrides snapshot.currentTime / wasPlaying with its own state (manual-verification regression)
-- `ce7e889` `PlaybackCoordinator` workgroup refresh on reconfigure (plan §6.4 last step)
-- `694666c` `EngineConfigObserverTests` (plan §12.1)
-- `fabe5e2` cancel pending reconfigure on user-intent actions (Oracle item #2/#4/#7)
-- `1052331` lifecycle interruption + start/stop cycle tests (Oracle item #5)
-- `e7f8eed` plan §6.3 doc update reflecting actual contract (Oracle item #8)
+**Commits in order (post-rebase SHAs; oldest → newest):**
+- `f34c4a0` add `AudioEngineConfigurationObserver` (plan §6.1)
+- `8de8009` re-entrancy guard + pairing-contract docs (Oracle pre-wiring review)
+- `eea98de` wire observer into `AudioEngineController` (plan §6.2-§6.3)
+- `985eceb` wire reconfigure handlers into `AudioPlayer` (plan §6.4)
+- `2f5cdf9` AirPlay-resume fix: AudioPlayer overrides snapshot.currentTime / wasPlaying with its own state (manual-verification regression)
+- `53fbba0` `PlaybackCoordinator` workgroup refresh on reconfigure (plan §6.4 last step)
+- `2498ca8` `EngineConfigObserverTests` (plan §12.1)
+- `c1cb925` cancel pending reconfigure on user-intent actions (Oracle item #2/#4/#7)
+- `d735946` lifecycle interruption + start/stop cycle tests (Oracle item #5)
+- `6e179d5` plan §6.3 doc update reflecting actual contract (Oracle item #8)
+- `d34b882` task-folder state.md / todo.md closeout
 
 **Manual verification result:** local-file + stream playback resume cleanly across local↔external speaker, AirPlay route changes (in/out, paused, mid-track), local↔stream↔local transitions. Observed CoreAudio HAL logs (`!obj`, `!dev`, `nope`) on AirPlay→built-in transitions are device-teardown chatter from the OS, not from MacAmp — see "Architectural notes" below.
 
@@ -38,10 +39,10 @@
 
 2. **Will/did pairing contract with split state ownership.** `PreReconfigureSnapshot` fields are NOT all authoritative:
     - `wasStreamBridge` / `wasVideoBridge`: MacAmp-owned, accurate at notification time.
-    - `wasPlaying` / `currentTime`: best-effort placeholders — system stops the engine *before* posting the notification, so `playerNode.isPlaying` is false and `lastRenderTime` is nil. AudioPlayer overrides both with its own state in `handleEngineWillReconfigure` (commit `3267091`).
-    - Documented in plan §6.3 (commit `e7f8eed`). Phase 3 candidate refactor: narrow `PreReconfigureSnapshot` to bridge-flags-only.
+    - `wasPlaying` / `currentTime`: best-effort placeholders — system stops the engine *before* posting the notification, so `playerNode.isPlaying` is false and `lastRenderTime` is nil. AudioPlayer overrides both with its own state in `handleEngineWillReconfigure` (commit `2f5cdf9`).
+    - Documented in plan §6.3 (commit `6e179d5`). Phase 3 candidate refactor: narrow `PreReconfigureSnapshot` to bridge-flags-only.
 
-3. **Reconfigure cancellation contract.** `AudioPlayer.cancelPendingReconfigure()` is called at the start of every user-intent entry point (`play`, `pause`, `stop`, `seek`, `playTrack`). The existing did-handler early-return on nil snapshot is the cancel hook. Prevents stale `onDid` from overriding new user intent in the ~150 ms gap between will and did. Documented in plan §6.3 (commit `e7f8eed`).
+3. **Reconfigure cancellation contract.** `AudioPlayer.cancelPendingReconfigure()` is called at the start of every user-intent entry point (`play`, `pause`, `stop`, `seek`, `playTrack`). It nils the pending snapshot AND clears `seekGuardActive` / `isHandlingCompletion` (which the will-handler armed and the did-handler is the only path that schedules to release). The early-returned did would otherwise leave both guards stuck on indefinitely. Prevents stale `onDid` from overriding new user intent in the ~150 ms gap between will and did. Documented in plan §6.3 (commit `6e179d5`).
 
 4. **Modern Swift 6.2 idioms applied throughout new code:** `Notification.Name` (not `NSNotification.Name`), `Task.sleep(for: Duration)` (not `nanoseconds:`), `isolated deinit`, `@preconcurrency import AVFoundation` for unannotated frameworks (matching established MacAmp pattern in `StreamDecodePipeline`, `SkinManager`, `SkinArchiveLoader`).
 
