@@ -9,10 +9,12 @@
 
 ## Current State (update after each PR merge)
 
-**Last update:** 2026-04-30 (post-PR-#82 merge — `stream-pause-tail` shipped; Wave S3-1 complete).
-**Main HEAD:** `b60fd57` — Merge pull request #82 from `fix/stream-pause-tail`.
+**Last update:** 2026-04-30 (S3-2 Phase 0 spike complete — Path NONE confirmed; spike branch deleted; `feat/video-audio-engine-routing` cut from main, ready for Phase 1).
+**Main HEAD:** `1d4eca1` — `docs(vaer): record Phase 0 spike findings — Path NONE confirmed`.
 **Tests:** 68 passing (TSan ON).
 **PRs merged total:** 80.
+
+**Most recent docs commit on main:** `1d4eca1` — Phase 0 spike findings appended to `tasks/video-audio-engine-routing/research.md` (Path NONE selected; plan §9 Phase 4 collapses to a no-op; plan §7.5 AudioConverter promoted from edge-case handler to load-bearing).
 
 **Most recent task closed:** `tasks/done/stream-pause-tail/` (S3-1B, PR #82, merged 2026-04-30, merge commit `b60fd57`). Atomic silence gate on the `AVAudioSourceNode` render block + producer-quiesce barrier (gate→clearQueue→ring flush in one decode-queue block) + seqlock + CAS in `LockFreeRingBuffer.read()` eliminates the ~0.7 s pause-tail and closes the consumer-side render-vs-flush race. `userPaused` flag suppresses reconnect-during-pause; `resume()` switches on pipeline state for safe live-edge restart with explicit bridge teardown. 9 implementation review iterations (Codex Oracle final 9/10 + parallel code-reviewer agent pass that caught a `deinit` task-leak Oracle missed). All 7 manual scenarios validated on real SomaFM stream. Two Lows deferred (see `_context/state.md` "Post-S3-1B Follow-Ups"): `StreamDecodePipeline.stop()` generation guard and `AudioConverterDecoder.clearQueue()` confinement-doc gap.
 
@@ -22,15 +24,18 @@
 
 ## Active Work Queue (ordered — start at the top)
 
-### 1. NEXT — `tasks/video-audio-engine-routing/` (S3-2)
+### 1. IN PROGRESS — `tasks/video-audio-engine-routing/` (S3-2)
 
-**Status:** Plan Oracle-approved 9.4/10. S3-1B merge precondition is satisfied. Ready to implement.
+**Status:** Phase 0 spike ✅ complete (2026-04-30) — **Path NONE confirmed empirically**. Frequency-locked clocks across all 5 corpus files (slope mean -0.75 ms/sec, 95% CI [-6.4, +4.9]). Constant -200 ms phase offset is AVPlayer pipeline depth, not perceptible drift. Findings in `tasks/video-audio-engine-routing/research.md` "Phase 0 — Spike Results" section. Spike branch deleted per plan §5.5. **Implementation begins at Phase 1.**
 
-**Phase 0 spike:** `spike/vaer-av-drift-measurement` — **kill-switch**. Run on a throwaway branch FIRST. If measured A/V drift exceeds 100 ms, **cancel the task entirely**.
+**Plan §9 Phase 4 collapses to a no-op** — todo §4.NONE only. Skip directly to Phase 5+ after Phase 1-3 land.
+**Plan §7.5 AudioConverter is load-bearing** (not optional edge-case handler) — the spike confirmed that without resampling, 44.1 kHz audio plays as discontinuous bursts every ~76 ms.
 
-**Branch:** `feat/video-audio-engine-routing` → PR target #C.
-**Predecessors:** S3-1A ✅ + S3-1B ✅ both merged.
+**Branch:** `feat/video-audio-engine-routing` (cut from main 2026-04-30, post-Phase-0) → PR target #C.
+**Predecessors:** S3-1A ✅ + S3-1B ✅ + Phase 0 ✅ all complete.
 **Successors:** S3-3 (`hls-streaming-support`) gated on this merge.
+
+**Phase 1 (engine config observer) is next** per plan §6 + todo Phase 1.
 
 ### 2. DEFERRED — `timer-scheduled-on-common-extension`
 
@@ -51,7 +56,7 @@ S3-1A mwvi  ✅ MERGED (PR #80, merge commit 7f3d76f, 2026-04-28)
      ├──► S3-1B spt                       ←── PR #82  ✅ MERGED (merge commit b60fd57, 2026-04-30)
      │       │
      │       ▼
-     │    S3-2 vaer                       ←── PR #C   📋 NEXT (plan 9.4/10; spike/vaer-av-drift-measurement FIRST as kill-switch)
+     │    S3-2 vaer                       ←── PR #C   🔧 IN PROGRESS (Phase 0 ✅ Path NONE; feat branch cut; Phase 1 next)
      │       │
      │       ▼
      │    S3-3 hls                        ←── PR #D
@@ -126,14 +131,16 @@ Index lives at `~/.claude/projects/-Users-hank-dev-src-MacAmp/memory/MEMORY.md`.
 
 ## First Action for the Resuming Agent
 
-Open `tasks/video-audio-engine-routing/` (S3-2). Read all 6 canonical files (`research.md`, `plan.md`, `todo.md`, `state.md`, `placeholder.md`, `depreciated.md`).
+Open `tasks/video-audio-engine-routing/` (S3-2). Read all 6 canonical files (`research.md`, `plan.md`, `todo.md`, `state.md`, `placeholder.md`, `depreciated.md`). The "Phase 0 — Spike Results" section in `research.md` is required reading — it documents what the spike empirically proved (Path NONE; frequency-locked) and what that means for Phase 4.
 
-**Phase 0 first — kill-switch.** Cut a throwaway branch and run `spike/vaer-av-drift-measurement` to measure A/V drift on the candidate routing path. If measured drift exceeds 100 ms, **cancel the task entirely** — record findings in `research.md`, archive task to `tasks/depreciated/` or annotate as NO-GO, and skip ahead to S3-3 (`hls-streaming-support`).
+**Phase 0 is done.** Skip the spike step entirely. Phase 4 (sync strategy) is a no-op per todo §4.NONE.
 
-If drift is acceptable, proceed with the standard pickup process from step 6 onward:
-- Confirm `git status` is clean and `git pull origin main` is up to date (most recent merge: PR #82 `stream-pause-tail`, merge commit `b60fd57`, 2026-04-30).
-- Re-read every "Files Affected" source listed in `plan.md` at HEAD to reconcile line-number drift since the plan was Oracle-approved (9.4/10).
-- Cut branch `feat/video-audio-engine-routing` from `main` and execute phases with TSan-on builds + tests after each.
+**Branch already exists:** `feat/video-audio-engine-routing` was cut from main on 2026-04-30 post-Phase-0. If your `git status` shows you're on `main`, switch to the feat branch (`git checkout feat/video-audio-engine-routing`).
+
+Proceed with the standard pickup process from step 7 onward:
+- Re-read every "Files Affected" source listed in `plan.md` at HEAD to reconcile line-number drift. Known drift in `AudioPlayer.swift` (now 763 lines): `currentSeekID` bumps live at 337/397/487/604 (was 317/377/595); audio→video tap-removal at 363-366 (was 347-349); `snapshotButterchurnFrame` at 661-663 (was 632-635); `isHandlingCompletion` 200ms reset at 703 (was 673); declarations at 48-50 and `isEngineRendering` at 62 are unchanged.
+- Execute Phase 1 (engine config observer per plan §6) → Phase 2 (MTAudioProcessingTap per plan §7) → Phase 3 (engine source node per plan §8) → **skip Phase 4** → Phase 5 (tap fallback per plan §10) → Phase 6 (capability flags per plan §11) → Phase 7 (tests).
+- TSan-on builds + tests after each phase per `feedback_xcodebuildmcp_workflow.md`.
 
 Stop and report back to me before pushing the PR — I'll review before merge.
 

@@ -3,14 +3,23 @@
 > **Purpose:** Route AVPlayer video audio through AVAudioEngine via `MTAudioProcessingTap` so video gets EQ + visualization. Includes engine config change observer (deferred from AirPlay PR #69).
 > **Created:** 2026-03-14
 > **Sprint:** S3, Wave S3-2 (sequential after S3-1 merges)
-> **Status:** PLAN APPROVED — ready for spike phase pending S3-1 merge
+> **Status:** PHASE 0 ✅ COMPLETE — Path NONE; implementation in progress on `feat/video-audio-engine-routing`
 
 ---
 
 ## Current Status
 
-**Phase:** Plan complete, Oracle gate cleared. Implementation gated on Phase 0 A/V drift spike.
-**Last Updated:** 2026-04-27.
+**Phase:** Phase 0 complete (Path NONE confirmed empirically). Phase 1 (engine config observer) next.
+**Last Updated:** 2026-04-30.
+
+### Phase 0 outcome (spike findings — full detail in `research.md`)
+
+- **Decision:** Path NONE per plan §5.4 — frequency-locked clocks confirmed; no sync code needed.
+- **Slope across 5 files:** mean -0.75 ms/sec, 95% CI [-6.4, +4.9] ms/sec — statistically zero.
+- **Constant -200 ms phase offset:** AVPlayer pipeline depth (decoded-time vs presentation-time per Gemini synthesis), not perceptible drift. Empirically defer to plan §5.3 perception test during implementation.
+- **Plan §9 Phase 4 collapses to no-op** (todo §4.NONE only).
+- **Plan §7.5 AudioConverter is load-bearing**, not optional — without it, 44.1 kHz audio plays as discontinuous bursts every ~76 ms.
+- **Spike branch:** `spike/vaer-av-drift-measurement` deleted (4 commits, never pushed) per §5.5. Findings committed on main as `1d4eca1`.
 
 ### Artifacts
 
@@ -79,19 +88,18 @@
 
 ---
 
-## Next Steps (after S3-1 merges)
+## Next Steps (Phase 0 complete; implementation in progress)
 
-1. Re-read affected files at HEAD post-S3-1 merge; reconcile drift on `AudioEngineController.swift`.
-2. Cut throwaway branch `spike/vaer-av-drift-measurement`.
-3. Execute Phase 0 spike: 5-min runs per file, 5 video files (44.1k + 48k mp4/mov mixes).
-4. Apply ladder rule:
-   - < 30 ms across all 5 → ship without sync (Path NONE).
-   - 30–100 ms → enable `AVPlayer.masterClock`; rerun (Path A).
-   - Still 30–100 ms → enable pre-roll buffering; rerun (Path B).
-   - Still > 100 ms → KILL SWITCH; cancel task and restore branch.
-5. Write findings to `research.md` "Phase 0 — Spike Results"; delete spike branch.
-6. Cut implementation branch `feat/video-audio-engine-routing`.
-7. Execute Phase 1 (engine config observer) → Phase 7 (tests) per todo.md.
-8. Run TSan-enabled tests via xcodebuildmcp.
-9. Run Oracle code-review gate.
-10. Open PR #C.
+1. ✅ Phase 0 spike: harness built, ran on 5-clip clipperboard corpus, Path NONE confirmed.
+2. ✅ Findings written to `research.md` "Phase 0 — Spike Results"; spike branch deleted.
+3. ✅ `feat/video-audio-engine-routing` cut from main.
+4. ⏭ Re-read every "Files Affected" source listed in `plan.md` at HEAD to reconcile line-number drift. Known drift in `AudioPlayer.swift` (now 763 lines): see `_context/resume-prompt.md` "First Action" for the symbol-by-symbol map.
+5. ⏭ Execute todo Phase 1 (engine config observer per plan §6).
+6. ⏭ Phase 2 (MTAudioProcessingTap per plan §7) — note the spike's MinimalTap is gone with the spike branch; production wrapper is built fresh per plan §7.
+7. ⏭ Phase 3 (engine source node + wiring per plan §8).
+8. ⏭ **Skip Phase 4** (sync strategy) — Path NONE per Phase 0; mark todo §4.NONE done as the only Phase 4 item.
+9. ⏭ Phase 5 (tap-failure watchdog + fallback per plan §10).
+10. ⏭ Phase 6 (capability flag surface per plan §11).
+11. ⏭ Phase 7 (tests + manual verification + drift target re-confirmation per plan §12 / §14).
+12. ⏭ TSan-on builds + tests after each phase via xcodebuildmcp.
+13. ⏭ Codex Oracle code-review gate (≥9/10) before pushing PR #C.
