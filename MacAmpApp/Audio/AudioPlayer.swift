@@ -345,6 +345,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     }
 
     func playTrack(track: Track) {
+        cancelPendingReconfigure()
         guard !track.isStream else {
             AppLog.error(.audio, "Cannot play internet radio streams. Stream URL: \(track.url). Use PlaybackCoordinator to route streams to StreamPlayer.")
             return
@@ -440,6 +441,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     // MARK: - Transport
 
     func play() {
+        cancelPendingReconfigure()
         if playlistController.hasEnded && !playlist.isEmpty {
             playTrack(track: playlist[0])
             return
@@ -477,6 +479,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     }
 
     func pause() {
+        cancelPendingReconfigure()
         if currentMediaType == .video {
             videoPlaybackController.pause()
             transition(to: .paused)
@@ -493,6 +496,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     }
 
     func stop() {
+        cancelPendingReconfigure()
         transition(to: .stopped(.manual))
 
         if currentMediaType == .video {
@@ -607,6 +611,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     }
 
     func seek(to time: Double, resume: Bool? = nil) {
+        cancelPendingReconfigure()
         if currentMediaType == .video {
             videoPlaybackController.seek(to: time, resume: resume, completion: videoSeekCompletion)
             return
@@ -664,6 +669,15 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     /// `onDidReconfigure` fires, `seekGuardActive` and `isHandlingCompletion`
     /// stay armed; that's intentional and safe — the next user action (play,
     /// seek, stop) clears them via the existing paths.
+    /// Discard any in-flight reconfigure-resume context. Called from user-intent
+    /// entry points (play/pause/stop/seek/playTrack) so that a stale `onDid`
+    /// callback fired during the 150 ms debounce window can't override the
+    /// user's new intent. handleEngineDidReconfigure early-returns when
+    /// `pendingReconfigureSnapshot` is nil, so this is the cancel hook.
+    private func cancelPendingReconfigure() {
+        pendingReconfigureSnapshot = nil
+    }
+
     private func handleEngineWillReconfigure(snapshot: PreReconfigureSnapshot) {
         // The engine captures its snapshot at notification-receipt time, by
         // which point the system has ALREADY auto-stopped the engine —
