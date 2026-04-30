@@ -448,9 +448,11 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
             )
 
             // Bail if the user moved on to a different track while we were
-            // loading (the new track's setup will rebuild its own bridge).
+            // loading. Don't touch videoPlaybackController state here — the
+            // path that supplanted us (playTrack→tearDownVideoBridge or
+            // stop()→videoPlaybackController.stop) already ran cleanup, and
+            // detaching now could clobber a newer track's tap.
             guard self.currentTrack?.url == track.url else {
-                self.videoPlaybackController.detachAudioTap()
                 return
             }
 

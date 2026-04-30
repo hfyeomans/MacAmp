@@ -129,6 +129,13 @@ final class VideoPlaybackController {
         if let audioTap, let playerItem = newPlayer.currentItem {
             do {
                 let mix = try await audioTap.attach(to: playerItem)
+                // Bail if cleanup() or a newer loadVideo() ran during the
+                // attach await — the player we built is no longer the one
+                // the controller owns, so installing this audioMix would
+                // mutate state for a torpedoed playback session.
+                guard self.player === newPlayer else {
+                    return false
+                }
                 playerItem.audioMix = mix
                 attachedTap = audioTap
                 newPlayer.volume = 0
