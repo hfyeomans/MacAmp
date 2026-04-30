@@ -29,6 +29,10 @@ final class VideoPlaybackController {
     /// Task for async metadata loading (cancelled on cleanup to prevent race conditions)
     @ObservationIgnored private var metadataTask: Task<Void, Never>?
 
+    /// Tap currently attached to the player item's audioMix, if any. Cleared
+    /// by `detachAudioTap()` after the matching audioMix=nil teardown.
+    @ObservationIgnored private(set) var attachedTap: VideoAudioTap?
+
     // MARK: - Playback State (for AudioPlayer sync)
 
     private(set) var isPlaying: Bool = false
@@ -62,6 +66,10 @@ final class VideoPlaybackController {
     isolated deinit {
         // isolated deinit runs on @MainActor — safe to access all properties directly
         metadataTask?.cancel()
+        if let playerItem = player?.currentItem, attachedTap != nil {
+            playerItem.audioMix = nil
+        }
+        attachedTap?.detach()
         if let observer = timeObserver, let player {
             player.removeTimeObserver(observer)
         }
@@ -73,21 +81,34 @@ final class VideoPlaybackController {
 
     // MARK: - Video Loading
 
-    /// Load and prepare a video file for playback
+    /// Load and prepare a video file for playback. When `audioTap` is supplied,
+    /// the tap is attached to the player item's audioMix BEFORE play() so audio
+    /// flows through the engine bridge from the first frame; the AVPlayer's
+    /// own audio is muted (`volume = 0`) so the bridge is the only output path.
+    /// If tap attach fails (e.g. silent video, no audio track), AVPlayer's
+    /// volume is left at the user's level so direct playback still works.
     /// - Parameters:
     ///   - url: URL of the video file
     ///   - autoPlay: Whether to start playback immediately (default: true)
-    func loadVideo(url: URL, autoPlay: Bool = true) {
-        // Clean up any existing video player
+    ///   - audioTap: Optional engine-bridge tap to install on the audio track.
+    /// - Returns: `true` if `audioTap` was supplied and successfully attached,
+    ///   `false` otherwise (no tap requested, or attach failed).
+    @discardableResult
+    func loadVideo(
+        url: URL,
+        autoPlay: Bool = true,
+        audioTap: VideoAudioTap? = nil
+    ) async -> Bool {
+        // Clean up any existing video player + previous tap.
         cleanup()
 
         // Create video player
         let newPlayer = AVPlayer(url: url)
         player = newPlayer
-        player?.volume = volume
+        newPlayer.volume = volume
 
         // Observe video completion
-        if let playerItem = player?.currentItem {
+        if let playerItem = newPlayer.currentItem {
             endObserver = NotificationCenter.default.addObserver(
                 forName: .AVPlayerItemDidPlayToEndTime,
                 object: playerItem,
@@ -102,9 +123,24 @@ final class VideoPlaybackController {
         // Setup time observer BEFORE play
         setupTimeObserver()
 
+        // Attach the engine tap BEFORE play() so audio flows through the
+        // bridge from the first frame (plan §8.4 ordering).
+        var tapAttached = false
+        if let audioTap, let playerItem = newPlayer.currentItem {
+            do {
+                let mix = try await audioTap.attach(to: playerItem)
+                playerItem.audioMix = mix
+                attachedTap = audioTap
+                newPlayer.volume = 0
+                tapAttached = true
+            } catch {
+                AppLog.warn(.audio, "VideoPlaybackController: tap attach failed (\(error)) — falling back to direct AVPlayer audio")
+            }
+        }
+
         // Start video playback if autoPlay
         if autoPlay {
-            player?.play()
+            newPlayer.play()
             isPlaying = true
             isPaused = false
         }
@@ -117,6 +153,21 @@ final class VideoPlaybackController {
             guard !Task.isCancelled else { return }  // Prevent stale metadata from overwriting
             self.metadataString = metadata.displayString
         }
+
+        return tapAttached
+    }
+
+    /// Detach the engine tap from the current player item. Sets
+    /// `playerItem.audioMix = nil` BEFORE invalidating the tap so AVPlayer
+    /// stops calling into a dead tap (essential ordering — see VideoAudioTap
+    /// header). Idempotent; safe to call when no tap is attached.
+    func detachAudioTap() {
+        guard let tap = attachedTap else { return }
+        if let playerItem = player?.currentItem {
+            playerItem.audioMix = nil
+        }
+        tap.detach()
+        attachedTap = nil
     }
 
     // MARK: - Playback Control
@@ -252,6 +303,10 @@ final class VideoPlaybackController {
         // Cancel any in-flight metadata loading to prevent race conditions
         metadataTask?.cancel()
         metadataTask = nil
+
+        // Detach the engine tap BEFORE dropping the player so audioMix=nil
+        // happens while the player item is still around.
+        detachAudioTap()
 
         tearDownTimeObserver()
         if let observer = endObserver {

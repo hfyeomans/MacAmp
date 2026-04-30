@@ -64,8 +64,24 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     // MARK: - Stream Bridge State (observable, updated via engine callback)
     private(set) var isBridgeActive: Bool = false
 
+    // MARK: - Video Bridge State
+
+    /// Tap currently routing video audio into the engine. nil when no video
+    /// is playing or the tap attach failed (direct AVPlayer audio path).
+    @ObservationIgnored private var videoAudioTap: VideoAudioTap?
+
+    /// Ring buffer paired with `videoAudioTap` — kept here so AudioPlayer owns
+    /// its lifetime alongside the tap and engine bridge activation.
+    @ObservationIgnored private var videoRingBuffer: LockFreeRingBuffer?
+
+    /// True when the engine's video source node is wired into the graph.
+    /// Mirrors `engine.isVideoBridgeActive` for capability-flag readers.
+    var isVideoBridgeActive: Bool { engine.isVideoBridgeActive }
+
     /// True when the audio engine is running AND producing audio output.
-    var isEngineRendering: Bool { engine.isEngineRunning && (isPlaying || isBridgeActive) }
+    var isEngineRendering: Bool {
+        engine.isEngineRunning && (isPlaying || isBridgeActive || engine.isVideoBridgeActive)
+    }
 
     /// Audio volume (0.0-1.0 linear amplitude).
     ///
@@ -380,6 +396,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
 
         if currentMediaType != mediaType {
             if currentMediaType == .video {
+                tearDownVideoBridge()
                 videoPlaybackController.cleanup()
                 AppLog.debug(.audio, "Switching from video to audio - cleanup complete")
             } else if currentMediaType == .audio {
@@ -394,8 +411,11 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
         case .audio:
             loadAudioFile(url: track.url)
         case .video:
-            videoPlaybackController.loadVideo(url: track.url, autoPlay: false)
-            transition(to: .playing)
+            // Tear down any previous video bridge before starting the new one
+            // so back-to-back video tracks don't double-attach taps.
+            tearDownVideoBridge()
+            startVideoTrack(track)
+            return  // eqAutoEnabled + play() handled inside the async setup
         }
 
         if equalizer.eqAutoEnabled {
@@ -403,6 +423,69 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
         }
 
         play()
+    }
+
+    /// Build a ring buffer + VideoAudioTap, kick off async tap attach, activate
+    /// the engine video bridge on success, and start playback. Mute the
+    /// AVPlayer's direct audio (`volume = 0`) only after the tap is in place
+    /// so the bridge is the sole output path. On attach failure (silent
+    /// video, asset load error), the tap and ring are released and AVPlayer
+    /// drives its own audio at the user's volume — capability flags reflect
+    /// the absence of engine routing.
+    private func startVideoTrack(_ track: Track) {
+        let sampleRate = engine.outputSampleRate
+        let ring = LockFreeRingBuffer(capacity: 4096, channelCount: 2)
+        let tap = VideoAudioTap(ringBuffer: ring, expectedSampleRate: sampleRate)
+        videoRingBuffer = ring
+        videoAudioTap = tap
+
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let attached = await self.videoPlaybackController.loadVideo(
+                url: track.url,
+                autoPlay: false,
+                audioTap: tap
+            )
+
+            // Bail if the user moved on to a different track while we were
+            // loading (the new track's setup will rebuild its own bridge).
+            guard self.currentTrack?.url == track.url else {
+                self.videoPlaybackController.detachAudioTap()
+                return
+            }
+
+            if attached {
+                self.engine.activateVideoBridge(ringBuffer: ring, sampleRate: sampleRate)
+                self.engine.setVolume(self.volume)
+                self.engine.setBalance(self.balance)
+            } else {
+                // Tap attach failed — drop the bridge plumbing; AVPlayer's
+                // own audio path is already restored at user volume.
+                self.videoAudioTap = nil
+                self.videoRingBuffer = nil
+            }
+
+            if self.equalizer.eqAutoEnabled {
+                self.equalizer.applyAutoPreset(for: track)
+            }
+
+            self.videoPlaybackController.play()
+            self.transition(to: .playing)
+        }
+    }
+
+    /// Drop the active video bridge: deactivate the engine source node,
+    /// detach the tap, and release the tap + ring buffer references. Safe
+    /// to call when no bridge is active. Caller is responsible for the
+    /// matching `videoPlaybackController` cleanup (or `cleanup()` will run
+    /// `detachAudioTap()` itself, which is idempotent with this).
+    private func tearDownVideoBridge() {
+        if engine.isVideoBridgeActive {
+            engine.deactivateVideoBridge()
+        }
+        videoPlaybackController.detachAudioTap()
+        videoAudioTap = nil
+        videoRingBuffer = nil
     }
 
     private func detectMediaType(url: URL) -> MediaType {
@@ -500,6 +583,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
         transition(to: .stopped(.manual))
 
         if currentMediaType == .video {
+            tearDownVideoBridge()
             videoPlaybackController.stop()
             currentMediaType = .audio
             AppLog.debug(.audio, "Stop (Video) - cleaned up AVPlayer")
