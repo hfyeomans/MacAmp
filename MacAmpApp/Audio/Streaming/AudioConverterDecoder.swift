@@ -132,6 +132,19 @@ final class AudioConverterDecoder: QueueConfined {
         packetQueue.append((data: data, descriptions: descriptions))
     }
 
+    /// Drop queued + in-flight packets across a stream discontinuity (e.g. user pause).
+    /// Resets the converter so accumulated decoder state from before the gap doesn't
+    /// produce artifacts on the first packet after resume. Idempotent. Doesn't tear
+    /// down the converter (use `dispose()` for that).
+    func clearQueue() {
+        assertConfinement()
+        if let converter {
+            AudioConverterReset(converter)
+        }
+        packetQueue.removeAll()
+        freeCurrentInput()
+    }
+
     // MARK: - Decoding
 
     /// Decode all queued packets into Float32 PCM in a single call.

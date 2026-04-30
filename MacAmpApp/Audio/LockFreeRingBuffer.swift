@@ -24,6 +24,11 @@ final class LockFreeRingBuffer: @unchecked Sendable {
     private let readHead = ManagedAtomic<UInt64>(0)
     private let generation = ManagedAtomic<UInt64>(0)
 
+    /// Seqlock counter — even = stable, odd = flush mid-mutation. `read()` bails on odd
+    /// (fast path); the actual race against `flush()` is closed by a CAS on `readHead`
+    /// at commit time.
+    private let flushGeneration = ManagedAtomic<UInt64>(0)
+
     private let underrunCount = ManagedAtomic<UInt64>(0)
     private let overrunCount = ManagedAtomic<UInt64>(0)
 
@@ -104,6 +109,11 @@ final class LockFreeRingBuffer: @unchecked Sendable {
     func read(into destination: UnsafeMutablePointer<Float>, frameCount: Int) -> Int {
         guard frameCount > 0 else { return 0 }
 
+        let preFlushGen = flushGeneration.load(ordering: .acquiring)
+        // Odd = flush is mid-mutation. Bail without touching readHead.
+        if preFlushGen & 1 == 1 {
+            return 0
+        }
         let rh = readHead.load(ordering: .relaxed)
         let wh = writeHead.load(ordering: .acquiring)
 
@@ -127,22 +137,40 @@ final class LockFreeRingBuffer: @unchecked Sendable {
             memcpy(destination + firstChunk, storage, secondChunk * MemoryLayout<Float>.size)
         }
 
-        _ = readHead.wrappingIncrementThenLoad(by: UInt64(framesToRead), ordering: .releasing)
+        #if DEBUG
+        beforeReadHeadAdvanceForTesting?()
+        #endif
+
+        // Compare-and-swap: only advance if readHead is still what we copied from.
+        // A concurrent flush() will have stored readHead = writeHead, so this CAS fails
+        // and we return 0 — caller zero-fills. Closes the window between the seqlock
+        // post-check and the readHead advance that an unconditional increment leaves open.
+        let result = readHead.compareExchange(
+            expected: rh,
+            desired: rh &+ UInt64(framesToRead),
+            successOrdering: .releasing,
+            failureOrdering: .acquiring
+        )
+        guard result.exchanged else { return 0 }
         return framesToRead
     }
 
     // MARK: - Generation (Format Changes)
 
     /// Flush all buffered data, optionally incrementing the generation counter.
-    /// Called from setup callbacks (NOT real-time).
-    /// Caller must ensure the producer is quiesced before calling; concurrent writes
-    /// during flush may cause readHead to appear to move backward.
+    /// Called from setup callbacks (NOT real-time). Caller must quiesce the producer first;
+    /// concurrent writes during flush can make readHead appear to move backward.
     func flush(newGeneration: Bool = true) {
+        // Two-phase bump (seqlock): odd = mid-flush, even = stable. A concurrent reader
+        // bails fast on the odd pre-value; if it slips through, the readHead CAS in
+        // `read()` fails (because `readHead.store(wh)` below moves it off `expected: rh`).
+        // Producer quiescence is still required by contract — this only protects the consumer.
+        flushGeneration.wrappingIncrement(by: 1, ordering: .releasing)
         // Preserve monotonic head counters: an empty buffer is represented by
         // readHead == writeHead, not by resetting either counter to zero.
-        // This avoids transient wh<rh observations across threads.
         let wh = writeHead.load(ordering: .acquiring)
         readHead.store(wh, ordering: .releasing)
+        flushGeneration.wrappingIncrement(by: 1, ordering: .releasing)
         if newGeneration {
             generation.wrappingIncrement(by: 1, ordering: .releasing)
         }
@@ -177,4 +205,14 @@ final class LockFreeRingBuffer: @unchecked Sendable {
             overruns: overrunCount.load(ordering: .relaxed)
         )
     }
+
+    #if DEBUG
+    /// Test seam: invoked between memcpy and the CAS in `read()`. Lets a test inject
+    /// a `flush()` (or any other ring mutation) at exactly the race window the CAS is
+    /// designed to detect, making the regression deterministic.
+    internal var beforeReadHeadAdvanceForTesting: (() -> Void)?
+
+    internal var readHeadForTesting: UInt64 { readHead.load(ordering: .relaxed) }
+    internal var writeHeadForTesting: UInt64 { writeHead.load(ordering: .relaxed) }
+    #endif
 }

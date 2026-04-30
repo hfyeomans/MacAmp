@@ -65,6 +65,37 @@ final class StreamPlayer {
     private static let maxReconnectAttempts = 10
     private static let maxBackoffSeconds: Double = 16.0
 
+    // MARK: - Pause / Resume State
+
+    /// True between `pause()` and the next `resume()`/`play()`/`stop()`. Suppresses
+    /// auto-reconnect in `handleTermination` so a socket death during pause stays paused.
+    @ObservationIgnored private var userPaused: Bool = false
+
+    /// Drained by `pipeline.onPrebufferReady`, the warmup timeout sub-task, or `cancelResumeWarmup`.
+    @ObservationIgnored private var prebufferReadyContinuation: CheckedContinuation<Void, Never>?
+
+    @ObservationIgnored private var resumeWarmupTask: Task<Void, Never>?
+
+    /// Identity guard so a cancelled warmup's tail can't clobber `resumeWarmupTask` after a
+    /// newer warmup has been assigned.
+    @ObservationIgnored private var resumeWarmupGeneration: UInt64 = 0
+
+    /// While true, the pipeline `.playing` callback skips the user-visible `isPlaying` flip
+    /// — the warmup task owns that transition until the silence gate drops.
+    @ObservationIgnored private var isResumeWarming: Bool = false
+
+    /// Serial chain of async transport calls; prevents rapid pause/resume from racing.
+    @ObservationIgnored private var pipelineTransportTask: Task<Void, Never>?
+
+    /// Bumped on every session reset (`play`, `stop`, `handleTermination`, warmup-timeout fallback).
+    /// `chainTransport` captures it and bails after `await prior?.value` if it changed —
+    /// covers stale tasks that aren't the chain tail and so don't get cancelled.
+    @ObservationIgnored private var transportGeneration: UInt64 = 0
+
+    /// Set by `PlaybackCoordinator.init`; calls `AudioPlayer.setStreamSilenced` (engine no-ops
+    /// when bridge is inactive, so this is safe to call any time).
+    @ObservationIgnored var silenceGateForwarder: (@MainActor (Bool) -> Void)?
+
     // MARK: - Initialization
 
     init() {
@@ -75,6 +106,8 @@ final class StreamPlayer {
         elapsedTimer?.invalidate()
         reconnectTask?.cancel()
         playbackStableTask?.cancel()
+        resumeWarmupTask?.cancel()
+        pipelineTransportTask?.cancel()
         pipeline.stop()
     }
 
@@ -82,7 +115,12 @@ final class StreamPlayer {
 
     func play(station: RadioStation) async {
         cancelReconnect()
+        cancelResumeWarmup()
+        pipelineTransportTask?.cancel()
+        pipelineTransportTask = nil
+        transportGeneration &+= 1                       // invalidate any in-flight chained transport
         resetElapsedTime()
+        userPaused = false
         wasActivelyPlaying = false
         currentStation = station
         error = nil
@@ -108,32 +146,96 @@ final class StreamPlayer {
     }
 
     func pause() {
+        cancelResumeWarmup()
         cancelReconnect()
         stopElapsedTimer()
-        pipeline.pause()
-        // Also stop the pipeline if it's mid-connect/buffer (pause is no-op in those states)
-        if case .connecting = pipeline.state { pipeline.stop() }
-        if case .buffering = pipeline.state { pipeline.stop() }
+        userPaused = true
+        silenceGateForwarder?(true)
+
+        if case .connecting = pipeline.state {
+            pipeline.stop()
+        } else if case .buffering = pipeline.state {
+            pipeline.stop()
+        } else {
+            // Chained so a rapid prior resume completes before this pause runs.
+            chainTransport { [weak self] in
+                await self?.pipeline.pauseByUser()
+            }
+        }
+
         isPlaying = false
         isBuffering = false
+        // wasActivelyPlaying intentionally not cleared — needed for socket-death-during-pause.
     }
 
     func resume() {
-        if case .paused = pipeline.state {
-            pipeline.resume()
-            isPlaying = true
-        } else if let station = currentStation {
-            // Pipeline was stopped (not paused) — e.g. pause during connecting/buffering.
-            // Restart the stream instead of just flipping isPlaying.
-            let rb = LockFreeRingBuffer(capacity: 32768, channelCount: 2)
-            ringBuffer = rb
-            pipeline.start(url: station.streamURL, ringBuffer: rb)
+        cancelResumeWarmup()
+        userPaused = false
+
+        // Set BEFORE chainTransport — resumeByUser will transition pipeline to .playing and we
+        // need onStateChange to defer to the warmup task for the user-visible isPlaying flip.
+        isResumeWarming = true
+        isBuffering = true
+
+        chainTransport { [weak self] in
+            guard let self else { return }
+            if Task.isCancelled || self.userPaused { return }
+
+            switch self.pipeline.state {
+            case .paused:
+                // Arm warmup AFTER the resume barrier — earlier and `startResumeWarmup`'s
+                // `availableFrames >= 8192` short-circuit would fire on stale pre-pause PCM.
+                await self.pipeline.resumeByUser()
+                if Task.isCancelled || self.userPaused { return }
+                self.startResumeWarmup()
+
+            case .idle, .error:
+                // Pipeline torn down — bridge is guaranteed inactive in these states.
+                // Fresh DecodeContext won't fire onPrebufferReady (it's for live-context
+                // resume), so don't arm warmup; let onStateChange handle the .playing flip.
+                if let station = self.currentStation {
+                    let rb = LockFreeRingBuffer(capacity: 32768, channelCount: 2)
+                    self.ringBuffer = rb
+                    #if DEBUG
+                    self.pipelineStartInvocationCountForTesting += 1
+                    #endif
+                    self.pipeline.start(url: station.streamURL, ringBuffer: rb)
+                    self.isResumeWarming = false
+                } else {
+                    self.cancelResumeWarmup()
+                    self.isBuffering = false              // resume()'s sync set is wrong without a station
+                    self.onStreamStateChanged?()
+                }
+
+            case .connecting, .buffering, .playing:
+                // Already alive — restarting would re-bind the engine to a new ring without
+                // first deactivating the bridge, stranding render on the old (empty) ring.
+                self.isResumeWarming = false
+                // Drop the gate: a duplicate resume during warmup cancels the warmup before
+                // its own gate-drop ran. (For first-play .connecting/.buffering this is a no-op.)
+                self.silenceGateForwarder?(false)
+
+                if case .playing = self.pipeline.state {
+                    // No future state-change will clear isBuffering; do it here.
+                    self.isBuffering = false
+                    self.isPlaying = true
+                    self.onStreamStateChanged?()
+                }
+            }
         }
     }
 
     func stop() {
         cancelReconnect()
+        cancelResumeWarmup()
+        pipelineTransportTask?.cancel()
+        pipelineTransportTask = nil
+        transportGeneration &+= 1                       // invalidate any in-flight chained transport
         resetElapsedTime()
+        userPaused = false
+        // Drop the gate in case stop() interrupted a paused state — otherwise a future
+        // source-node reuse path would inherit a stuck-raised gate.
+        silenceGateForwarder?(false)
         pipeline.stop()
         isPlaying = false
         isBuffering = false
@@ -176,12 +278,17 @@ final class StreamPlayer {
                 self.isBuffering = true
                 self.stopElapsedTimer()
             case .playing:
-                self.isPlaying = true
-                self.isBuffering = false
-                self.isReconnecting = false
-                self.wasActivelyPlaying = true
-                self.startPlaybackStableTimer()
-                self.startElapsedTimer()
+                if self.isResumeWarming {
+                    // Render is still gated; warmup owns the user-visible flip.
+                    self.startPlaybackStableTimer()
+                } else {
+                    self.isPlaying = true
+                    self.isBuffering = false
+                    self.isReconnecting = false
+                    self.wasActivelyPlaying = true
+                    self.startPlaybackStableTimer()
+                    self.startElapsedTimer()
+                }
             case .paused:
                 self.isPlaying = false
                 self.isBuffering = false
@@ -203,6 +310,14 @@ final class StreamPlayer {
             guard let self else { return }
             self.currentSampleRate = sampleRate
             self.onFormatReady?(sampleRate)
+        }
+
+        pipeline.onPrebufferReady = { [weak self] in
+            guard let self else { return }
+            if let pending = self.prebufferReadyContinuation {
+                self.prebufferReadyContinuation = nil
+                pending.resume()
+            }
         }
 
         pipeline.onMetadata = { [weak self] (metadata: ICYFramer.ICYMetadata) in
@@ -265,10 +380,27 @@ final class StreamPlayer {
     // MARK: - Reconnect Logic
 
     private func handleTermination(_ reason: StreamDecodePipeline.StreamTerminationReason) {
+        cancelResumeWarmup()
+        // Must clear; otherwise a subsequent reconnect's .playing transition stays suppressed.
+        isResumeWarming = false
+        pipelineTransportTask?.cancel()
+        pipelineTransportTask = nil
+        transportGeneration &+= 1
+
+        if userPaused {
+            // No auto-reconnect during user pause. Bridge teardown is still required —
+            // without it, `activateStreamBridge`'s `guard !isBridgeActive` blocks the
+            // post-resume re-activation, stranding render on the dead ring.
+            ringBuffer = nil
+            isReconnecting = false
+            onStreamTerminated?()
+            // Skip onStreamStateChanged so Now Playing keeps "paused" instead of flickering "stopped".
+            return
+        }
+
         if wasActivelyPlaying && isReconnectable(reason) {
             attemptReconnect()
         } else {
-            // Terminal failure — no reconnect
             isReconnecting = false
             ringBuffer = nil
             let message = reason.userMessage
@@ -298,6 +430,10 @@ final class StreamPlayer {
     }
 
     private func attemptReconnect() {
+        isResumeWarming = false
+        #if DEBUG
+        attemptReconnectInvocationCountForTesting += 1
+        #endif
         reconnectAttempt += 1
         guard reconnectAttempt <= Self.maxReconnectAttempts else {
             isReconnecting = false
@@ -347,6 +483,116 @@ final class StreamPlayer {
         isReconnecting = false
     }
 
+    // MARK: - Pause / Resume Helpers
+
+    /// Serialize an async transport call onto the chain. The post-await `transportGeneration`
+    /// guard catches stale tasks that aren't the chain tail and so don't get `cancel()`-ed.
+    private func chainTransport(_ op: @escaping @MainActor @Sendable () async -> Void) {
+        let prior = pipelineTransportTask
+        let myGeneration = transportGeneration
+        pipelineTransportTask = Task { @MainActor [weak self] in
+            await prior?.value
+            guard let self else { return }
+            guard !Task.isCancelled, self.transportGeneration == myGeneration else { return }
+            await op()
+        }
+    }
+
+    /// Drain the continuation FIRST, then cancel — lets the child exit through its
+    /// `withCheckedContinuation` instead of needing an `onCancel` handler.
+    private func cancelResumeWarmup() {
+        if let pending = prebufferReadyContinuation {
+            prebufferReadyContinuation = nil
+            pending.resume()
+        }
+        resumeWarmupTask?.cancel()
+        resumeWarmupTask = nil
+        isResumeWarming = false
+        resumeWarmupGeneration &+= 1
+    }
+
+    /// Caller must ensure no prior warmup is in flight (every cancel site calls
+    /// `cancelResumeWarmup()` first).
+    private func startResumeWarmup() {
+        cancelResumeWarmup()
+        isResumeWarming = true
+
+        resumeWarmupGeneration &+= 1
+        let myGeneration = resumeWarmupGeneration
+        resumeWarmupTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+
+            // Don't nil `resumeWarmupTask` if a newer warmup has been assigned.
+            @MainActor func clearTaskIfMine() {
+                if self.resumeWarmupGeneration == myGeneration {
+                    self.resumeWarmupTask = nil
+                }
+            }
+
+            // Sibling task drains the continuation after 1s so the parent can't hang.
+            // The generation guard prevents an older warmup's timeout from waking a newer one.
+            let timeoutTask: Task<Void, Never> = Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(1))
+                guard let self else { return }
+                guard self.resumeWarmupGeneration == myGeneration else { return }
+                if let pending = self.prebufferReadyContinuation {
+                    self.prebufferReadyContinuation = nil
+                    pending.resume()
+                }
+            }
+
+            await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+                if let rb = self.ringBuffer, rb.availableFrames >= 8192 {
+                    cont.resume()
+                    return
+                }
+                if let stale = self.prebufferReadyContinuation {
+                    self.prebufferReadyContinuation = nil
+                    stale.resume()
+                }
+                self.prebufferReadyContinuation = cont
+            }
+
+            timeoutTask.cancel()
+
+            guard !Task.isCancelled, !self.userPaused else {
+                clearTaskIfMine()
+                return
+            }
+
+            let havePrebuffer = (self.ringBuffer?.availableFrames ?? 0) >= 8192
+
+            if !havePrebuffer {
+                self.isResumeWarming = false
+                clearTaskIfMine()
+                if let station = self.currentStation {
+                    self.transportGeneration &+= 1
+                    // Bridge teardown BEFORE fresh start — `activateStreamBridge` short-circuits
+                    // on `!isBridgeActive`, otherwise the engine stays bound to the dead ring.
+                    self.onStreamTerminated?()
+                    let fresh = LockFreeRingBuffer(capacity: 32768, channelCount: 2)
+                    self.ringBuffer = fresh
+                    #if DEBUG
+                    self.pipelineStartInvocationCountForTesting += 1
+                    #endif
+                    self.pipeline.start(url: station.streamURL, ringBuffer: fresh)
+                } else {
+                    self.isBuffering = false
+                    self.onStreamStateChanged?()
+                }
+                return
+            }
+
+            self.silenceGateForwarder?(false)
+            self.isBuffering = false
+            self.isResumeWarming = false
+            self.isPlaying = true
+            self.startElapsedTimer()
+            self.onStreamStateChanged?()
+            clearTaskIfMine()
+        }
+    }
+
     private func startPlaybackStableTimer() {
         playbackStableTask?.cancel()
         playbackStableTask = Task { @MainActor [weak self] in
@@ -379,6 +625,65 @@ final class StreamPlayer {
     /// Called when stream transport state changes (connecting/buffering/playing/paused/error).
     /// PlaybackCoordinator uses this to update Now Playing playback state.
     var onStreamStateChanged: (@MainActor () -> Void)?
+
+    #if DEBUG
+    // MARK: - Test Seams (DEBUG only — never compiled into release builds)
+
+    internal var isResumeWarmupActiveForTesting: Bool {
+        guard let task = resumeWarmupTask else { return false }
+        return !task.isCancelled
+    }
+
+    internal var hasPrebufferContinuationForTesting: Bool { prebufferReadyContinuation != nil }
+    internal var isResumeWarmingForTesting: Bool { isResumeWarming }
+    internal var userPausedForTesting: Bool { userPaused }
+    internal var pipelineStateForTesting: StreamDecodePipeline.StreamState { pipeline.state }
+
+    /// Counts every invocation of `attemptReconnect()` since process start.
+    /// Used by `longPauseSuppressesReconnect` to assert no reconnect fires while paused.
+    internal private(set) var attemptReconnectInvocationCountForTesting: Int = 0
+
+    /// Counts every fresh `pipeline.start(...)` issued from `resume()`'s live-edge restart
+    /// branch and from the warmup task's timeout fallback. Used by `longPauseSuppressesReconnect`
+    /// to assert resume after socket-death produces a fresh start, not `dataTask.resume()`.
+    internal private(set) var pipelineStartInvocationCountForTesting: Int = 0
+
+    /// Test-only: inject a pipeline termination event without going through URLSession.
+    /// Routes through `pipeline.onTermination` → `handleTermination` end-to-end.
+    internal func injectPipelineTerminationForTesting(_ reason: StreamDecodePipeline.StreamTerminationReason) {
+        pipeline.injectTerminationForTesting(reason)
+    }
+
+    /// Test-only: bypass full `play(station:)` pipeline by directly setting the active-play
+    /// flag. Used to set up `longPauseSuppressesReconnect` without spinning up a real URLSession.
+    internal func setWasActivelyPlayingForTesting(_ value: Bool) {
+        wasActivelyPlaying = value
+    }
+
+    /// Test-only: set the current station without going through `play(station:)`.
+    /// Used to drive `resume()`'s live-edge restart branch when pipeline.state is not `.paused`.
+    internal func setCurrentStationForTesting(_ station: RadioStation) {
+        currentStation = station
+    }
+
+    /// Test-only: drive `pipeline.state` directly. Used to verify `resume()` no-ops when the
+    /// pipeline is already in `.playing` / `.connecting` / `.buffering`.
+    internal func injectPipelineStateForTesting(_ state: StreamDecodePipeline.StreamState) {
+        pipeline.setStateForTesting(state)
+    }
+
+    /// Await the current transport-chain tail. Deterministic alternative to `Task.yield()`
+    /// loops in tests that need to observe state after chained `pause()`/`resume()` calls.
+    internal func drainTransportChainForTesting() async {
+        await pipelineTransportTask?.value
+    }
+
+    /// Await the current resume-warmup task if any. For tests that need to observe state
+    /// after the warmup completes (or times out).
+    internal func drainResumeWarmupForTesting() async {
+        await resumeWarmupTask?.value
+    }
+    #endif
 }
 
 // MARK: - StreamTerminationReason User Message

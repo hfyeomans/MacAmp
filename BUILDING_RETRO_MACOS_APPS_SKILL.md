@@ -7399,6 +7399,71 @@ panel.allowedContentTypes = [
 
 ---
 
+### 39. Atomic Silence Gate + Seqlock-Style Flush for RT Producer-Consumer Pause (Apr 2026)
+
+**Context:** Pausing an internet radio stream produced ~0.7 s of audio bleed. Decoded PCM was sitting in a 32 768-frame SPSC ring buffer being drained by an `AVAudioSourceNode` render block while `dataTask.suspend()` only stopped the producer at the URLSession level.
+
+**The two-layer fix:**
+
+1. **Atomic silence gate, RT-safe.** A `ManagedAtomic<UInt8>` lives in the engine controller, allocated when the bridge activates and dropped when it deactivates. The render block reads it with `.acquiring` ordering before touching the ring; if non-zero, it `memset`s the output to 0, sets `isSilence=true`, returns. MainActor pause raises the gate with a `.releasing` store — silence within ~1 render quantum.
+2. **Producer-quiesce barrier (decode queue).** Inside one `decodeQueue.async` block, in this exact order: set `isPausedByUser = true` (drops late URLSession callbacks), `decoder.clearQueue()` (drops in-flight compressed packets), `ringBuffer.flush()` (drops decoded PCM). Plus `AudioConverterReset()` so resume doesn't drag stale converter state across the discontinuity.
+
+**The non-obvious part — the consumer-side race:**
+
+Even with both layers, a render call already past the gate check can be inside `ringBuffer.read()` when `flush()` runs. The reader's post-flush `wrappingIncrementThenLoad(by: framesToRead)` then pushes `readHead` past `writeHead`, stalling reads until the producer catches up — undoes the whole point.
+
+**Resolution: seqlock + CAS in `LockFreeRingBuffer`:**
+
+```swift
+// even = stable, odd = mid-flush
+private let flushGeneration = ManagedAtomic<UInt64>(0)
+
+func read(...) -> Int {
+    let preFlushGen = flushGeneration.load(ordering: .acquiring)
+    if preFlushGen & 1 == 1 { return 0 }       // fast-path bail
+    let rh = readHead.load(...)
+    let wh = writeHead.load(...)
+    // ... compute framesToRead, memcpy ...
+
+    // Atomic commit: only advance if readHead is still what we copied from.
+    // A concurrent flush stored readHead = writeHead, so this CAS fails → return 0.
+    let result = readHead.compareExchange(
+        expected: rh,
+        desired: rh &+ UInt64(framesToRead),
+        successOrdering: .releasing,
+        failureOrdering: .acquiring
+    )
+    guard result.exchanged else { return 0 }
+    return framesToRead
+}
+
+func flush(...) {
+    flushGeneration.wrappingIncrement(by: 1, ordering: .releasing)  // → odd
+    let wh = writeHead.load(...)
+    readHead.store(wh, ordering: .releasing)
+    flushGeneration.wrappingIncrement(by: 1, ordering: .releasing)  // → even
+}
+```
+
+**Failed approaches tried first (and why):**
+
+- **30 ms `Task.sleep` in `pauseByUser`:** "Wait one render quantum before flushing." Works on built-in output (~12–23 ms) but fails on AirPlay / HDMI where Core Audio can use a 4096-frame buffer (~93 ms quantum). A wall-clock wait is heuristic, not a synchronization proof.
+- **One-bump generation counter (no seqlock parity):** Bump on flush, read pre/post-memcpy, bail if mismatch. Tighter window than the sleep but still racy — a reader landing between the bump and the `readHead.store` sees the new generation but not yet the new readHead.
+- **Two-bump seqlock alone (no CAS):** Catches "flush in progress" and "flush finished during memcpy" but the post-check + unconditional `wrappingIncrementThenLoad` still leaves a window between check and increment.
+
+The CAS commit closes that last window: the reader can ONLY advance if `readHead` is still what it copied from. Anything else (flush, overrun) → CAS fails → return 0 → caller zero-fills.
+
+**Key Takeaways:**
+1. For RT producer-consumer pause, you need BOTH a fast silence path (atomic gate) AND a structural fix to the in-flight read window. Either alone is incomplete.
+2. Wall-clock waits between concurrent atomic operations are heuristic; replace them with structural synchronization (seqlock, CAS) when the timing isn't bounded by the platform.
+3. Memory ordering: `.releasing` store + `.acquiring` load is the correct pair for a flag that gates subsequent data access. `.relaxed` is a theoretical hole even if it works in practice on Apple Silicon.
+4. Test the race deterministically with a DEBUG seam injecting `flush()` between memcpy and CAS — beats stress-test flakiness.
+5. Producer quiescence is an external contract (set by the caller via `dataTask.suspend()` + decode-queue gate). The seqlock + CAS protects only the consumer side; the SPSC contract remains intact for the producer.
+
+**Reference:** `tasks/stream-pause-tail/plan.md` (Oracle-approved 9.1/10), `tasks/stream-pause-tail/state.md` (9-iteration implementation review trail).
+
+---
+
 **Built with ❤️ for retro computing on modern macOS**
 
-*This skill document captures 10+ months of lessons learned building MacAmp (38 lessons), distilled into actionable patterns for building similar retro-styled macOS applications with modern Swift 6.2 patterns. Updated with Sprint S2 + Phase 2.5 cleanup lessons (Mar 2026) — Now Playing/remote commands, per-block os_workgroup join/leave, anchor-based stream timer, SwiftUI .offset() hit area bug, DRY dedup with fallback preservation, agent team codebase sweep methodology, UTType.playlist vs .m3u, AirPlay integration failure analysis, AudioEngineController extraction, auto-reconnect with exponential backoff, and XcodeGen resource migration audit.*
+*This skill document captures 10+ months of lessons learned building MacAmp (39 lessons), distilled into actionable patterns for building similar retro-styled macOS applications with modern Swift 6.2 patterns. Updated through Sprint S3 (Apr 2026) — atomic silence gate + seqlock+CAS for RT pause, RunLoop mode discipline, mainwindow visualizer isolation, plus all prior S0/S1/S2 lessons.*

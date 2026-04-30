@@ -1,4 +1,5 @@
 import AVFoundation
+import Atomics
 import os
 
 /// Owns the AVAudioEngine graph and all node-level operations.
@@ -31,6 +32,9 @@ final class AudioEngineController {
 
     private var streamSourceNode: AVAudioSourceNode?
     private var streamRingBuffer: LockFreeRingBuffer?
+    /// Bridge-scoped silence gate. Single writer (MainActor `setStreamSilenced`,
+    /// releasing store), single reader (render block, acquiring load).
+    private var streamSilenceGate: ManagedAtomic<UInt8>?
     private(set) var isBridgeActive: Bool = false
 
     // MARK: - Injected Dependencies
@@ -270,15 +274,28 @@ final class AudioEngineController {
         streamSourceNode?.pan = balance
     }
 
+    /// Silence the stream render block. No-op when bridge is inactive.
+    /// Producer side must be quiesced and ring flushed BEFORE clearing.
+    func setStreamSilenced(_ silenced: Bool) {
+        streamSilenceGate?.store(silenced ? 1 : 0, ordering: .releasing)
+    }
+
+    #if DEBUG
+    var isStreamSilenceGateActive: Bool {
+        (streamSilenceGate?.load(ordering: .relaxed) ?? 0) != 0
+    }
+    #endif
+
     // MARK: - Stream Bridge
 
-    /// Build the render block for AVAudioSourceNode. MUST be nonisolated static
-    /// to avoid @MainActor isolation crash on the real-time audio thread.
-    /// Reads interleaved Float32 PCM from the ring buffer.
+    /// Render block for AVAudioSourceNode. MUST be nonisolated static — runs on the RT thread.
+    /// Reads interleaved Float32 from `ringBuffer`; zero-fills + sets `isSilence=true` while
+    /// `silenceGate` is non-zero (closes the pause window where decoded PCM is still in the ring).
     private nonisolated static func makeStreamRenderBlock(
-        ringBuffer: LockFreeRingBuffer
+        ringBuffer: LockFreeRingBuffer,
+        silenceGate: ManagedAtomic<UInt8>
     ) -> AVAudioSourceNodeRenderBlock {
-        { isSilence, timestamp, frameCount, outputData in
+        { isSilence, _, frameCount, outputData in
             let ablPointer = UnsafeMutableAudioBufferListPointer(outputData)
             guard ablPointer.count == 1,
                   let firstBuffer = ablPointer.first,
@@ -289,11 +306,19 @@ final class AudioEngineController {
             }
 
             let floatPtr = data.assumingMemoryBound(to: Float.self)
-            let framesRead = ringBuffer.read(into: floatPtr, frameCount: Int(frameCount))
+            let channelCount = Int(firstBuffer.mNumberChannels)
+            let frames = Int(frameCount)
 
-            if framesRead < Int(frameCount) {
-                let channelCount = Int(firstBuffer.mNumberChannels)
-                let remainingSamples = (Int(frameCount) - framesRead) * channelCount
+            if silenceGate.load(ordering: .acquiring) != 0 {
+                memset(floatPtr, 0, frames * channelCount * MemoryLayout<Float>.size)
+                isSilence.pointee = ObjCBool(true)
+                return noErr
+            }
+
+            let framesRead = ringBuffer.read(into: floatPtr, frameCount: frames)
+
+            if framesRead < frames {
+                let remainingSamples = (frames - framesRead) * channelCount
                 let offset = framesRead * channelCount
                 memset(floatPtr + offset, 0, remainingSamples * MemoryLayout<Float>.size)
             }
@@ -302,6 +327,16 @@ final class AudioEngineController {
             return noErr
         }
     }
+
+    #if DEBUG
+    /// Test seam: same render block, exposed without widening production visibility.
+    internal nonisolated static func makeStreamRenderBlockForTesting(
+        ringBuffer: LockFreeRingBuffer,
+        silenceGate: ManagedAtomic<UInt8>
+    ) -> AVAudioSourceNodeRenderBlock {
+        makeStreamRenderBlock(ringBuffer: ringBuffer, silenceGate: silenceGate)
+    }
+    #endif
 
     /// Activate the stream bridge: wire AVAudioSourceNode into the engine graph.
     /// Replaces the playerNode path with streamSourceNode → EQ → mixer → output.
@@ -316,6 +351,10 @@ final class AudioEngineController {
 
         streamRingBuffer = ringBuffer
 
+        // Allocate gate before the render block captures it; lifetime ends in deactivateStreamBridge.
+        let gate = ManagedAtomic<UInt8>(0)
+        streamSilenceGate = gate
+
         let sourceFormat = AVAudioFormat(
             commonFormat: .pcmFormatFloat32,
             sampleRate: sampleRate,
@@ -323,7 +362,7 @@ final class AudioEngineController {
             interleaved: true
         )!
 
-        let renderBlock = Self.makeStreamRenderBlock(ringBuffer: ringBuffer)
+        let renderBlock = Self.makeStreamRenderBlock(ringBuffer: ringBuffer, silenceGate: gate)
         let sourceNode = AVAudioSourceNode(format: sourceFormat, renderBlock: renderBlock)
         streamSourceNode = sourceNode
 
@@ -356,6 +395,7 @@ final class AudioEngineController {
             audioEngine.detach(sourceNode)
             streamSourceNode = nil
             streamRingBuffer = nil
+            streamSilenceGate = nil
             AppLog.error(.audio, "AudioEngineController: Stream bridge activation aborted — engine failed to start")
             return
         }
@@ -399,6 +439,7 @@ final class AudioEngineController {
 
         streamSourceNode = nil
         streamRingBuffer = nil
+        streamSilenceGate = nil
         isBridgeActive = false
         onBridgeStateChanged?(false)
 
