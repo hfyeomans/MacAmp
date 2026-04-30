@@ -11,7 +11,7 @@
 
 **Phase:** Phase 0 ✅ + Phase 1 ✅ done. Phase 2 (MTAudioProcessingTap implementation per plan §7) next.
 **Last Updated:** 2026-04-30.
-**Branch HEAD:** `d34b882` (rebased onto main 2026-04-30; 11 commits ahead — SHAs are post-rebase). 10 Phase-1 commits + the task-folder docs closeout commit. SHAs may rotate again on future rebases — match by commit message if numbers don't line up.
+**Branch HEAD:** `0a88d37` (rebased onto main 2026-04-30; 12 commits ahead — SHAs are post-rebase). 10 Phase-1 commits + the task-folder docs closeout commit + the final Oracle-driven cancellation-contract fix. SHAs may rotate again on future rebases — match by commit message if numbers don't line up.
 **Tests:** 72/72 pass with TSan.
 
 ### Phase 1 outcome (engine configuration change observer)
@@ -51,7 +51,7 @@
 | # | Item | Phase | Reason for deferral |
 |---|------|-------|---------------------|
 | 1 | Narrow `PreReconfigureSnapshot` to MacAmp-owned bridge flags only | Phase 3 candidate | Refactor for clarity, not a correctness fix. Folds naturally into Phase 3 when `wasVideoBridge` becomes a real flag. |
-| 2 | AudioPlayer-level test for user-intent-during-reconfigure | Integration suite | `pendingReconfigureSnapshot` is private; testing requires either visibility widening (`@testable` doesn't reach private) or a heavier integration harness. The observer-level test in `1052331` covers the cancel pattern at the contract level. |
+| 2 | AudioPlayer-level test for user-intent-during-reconfigure | Integration suite | `pendingReconfigureSnapshot` is private; testing requires either visibility widening (`@testable` doesn't reach private) or a heavier integration harness. The observer-level tests in `d735946` cover the cancel pattern at the contract level. |
 | 3 | `supportsAudioProcessing` capability-flag dimming for video tap-fallback | Phase 6 (already in plan §11.2) | Out of Phase 1 scope; the existing per-plan Phase 6 work covers it. |
 
 ### Phase 0 outcome (spike findings — full detail in `research.md`)
