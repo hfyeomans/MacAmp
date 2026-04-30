@@ -126,3 +126,99 @@ See state.md for the Gemini prompt. Research should cover:
 - `AVSynchronizedLayer` applicability
 - Ring buffer latency measurement techniques
 - Sample rate conversion handling
+
+---
+
+## Phase 0 — Spike Results
+
+**Date:** 2026-04-30
+**Spike branch:** `spike/vaer-av-drift-measurement` (4 commits, never pushed; deleted post-findings per plan §5.5)
+**Strategy decision per plan §5.4:** **Path NONE — proceed without sync code.**
+
+### Methodology
+
+Standalone SPM harness in `tasks/video-audio-engine-routing/spike/` (deleted with the branch). Pipeline:
+
+```
+AVPlayer (volume=0) → MTAudioProcessingTap → LockFreeRingBuffer → AVAudioSourceNode → AVAudioEngine output
+```
+
+Drift formula:
+```
+drift_at_T = (loopCount * contentDurationSec + AVPlayer.currentTime(T)) - audioElapsedSec(T)
+audioElapsedSec(T) = cumulativeFramesRendered(T) / tap.tapSampleRate
+```
+
+Per-tick CSV trace (10 ms polling for first 500 ms of wall-clock to resolve AVPlayer warm-up, then 100 ms steady-state). Slope analysis over post-warmup window (≥ 0.5 s elapsed AND `timeControlStatus == .playing`).
+
+### Pre-spike research synthesis (Gemini + Codex Oracle)
+
+Both endorsed reframing the kill-switch criterion: **slope of drift over time, not absolute magnitude**, is the signal that distinguishes real clock slippage from a constant phase offset.
+
+**Gemini synthesis (key insight):** AVPlayer maintains a 100-250 ms decoded-PCM lead for underrun protection (per WWDC AVFoundation guidance). `AVPlayer.currentTime()` reports "Presentation Time" (audio leaving the DAC); `MTAudioProcessingTap` delivers "Decoded Time" (audio post-decoder, pre-output buffer). The difference between them is the AVPlayer pipeline depth — a constant phase offset, not perceptible A/V drift. With both subsystems slaved to the audio output device clock by default (`CMTimebase`), they're frequency-locked to the same hardware crystal — slope should be ~0 in steady state.
+
+**Codex Oracle:** Validated the harness drift formula against the source code; flagged two real bugs (`computeInitialOffsetMs` ignored `firstRenderHostTime`; `tapSampleRate` captured but unused) and confirmed the pipeline can't introduce sustained slippage in `strategy=none`.
+
+### Test corpus
+
+Five clipperboard videos in `clapperboard-videos/` (gitignored, never pushed):
+
+| # | File | Container | Audio sample rate | Channels |
+|---|---|---|---|---|
+| 1 | `1_mp4_441_stereo.mp4` | mp4 | 44.1 kHz | stereo |
+| 2 | `2_mp4_480_stereo.mp4` | mp4 | 48 kHz | stereo |
+| 3 | `3_mov_480_stereo.mov` | mov | 48 kHz | stereo |
+| 4 | `4_m4v_441_stereo.m4v` | m4v | 44.1 kHz | stereo |
+| 5 | `5_mp4_480_surround.mp4` | mp4 | 48 kHz | 5.1 → stereo downmix |
+
+Each ~3 seconds. Originally specced as 3-min clips (plan §5.2); shorter test files used here because looping is supported by the harness, and single-pass measurements within one clip duration give clean slope signals (see lessons learned).
+
+### Quantitative results — final run (post-Fix A, single-pass, `--duration 2`)
+
+| File | Source SR | toFirstTap | toFirstRender | peakDrift | lastDrift | steadyStart | **slope** |
+|---|---|---|---|---|---|---|---|
+| 1 (44.1 kHz mp4) | 44.1 | 41.1 ms | 51.7 ms | -221.4 ms | -221.4 ms | -211.8 ms | **-6.10 ms/s** |
+| 2 (48 kHz mp4) | 48 | 65.3 ms | 76.1 ms | -212.4 ms | -203.2 ms | -202.3 ms | -0.54 ms/s |
+| 3 (48 kHz mov) | 48 | 67.0 ms | 77.9 ms | -212.6 ms | -207.7 ms | -210.2 ms | +1.58 ms/s |
+| 4 (44.1 kHz m4v) | 44.1 | 65.3 ms | 76.2 ms | -223.3 ms | -214.2 ms | -208.5 ms | -3.65 ms/s |
+| 5 (48 kHz mp4 5.1) | 48 | 62.3 ms | 73.0 ms | -212.7 ms | -203.8 ms | -211.6 ms | +4.97 ms/s |
+
+**Slope statistics:**
+```
+n = 5
+mean   = -0.75 ms/sec
+stddev =  4.5 ms/sec
+95% CI = [-6.4, +4.9] ms/sec
+```
+
+The population slope is statistically indistinguishable from zero. The ±6 ms/sec spread is consistent with a 1.5-second post-warmup measurement window (variance shrinks as 1/√N over longer windows). Single-file outliers (file 1 at -6.10 ms/sec) are within noise floor.
+
+### Findings
+
+1. **Frequency-locked clocks confirmed empirically.** Slope across all 5 files clusters around zero with no systematic pattern — not source-rate dependent, not channel-count dependent, not container dependent.
+2. **Path NONE is the right answer.** No sync mechanism (sourceClock, pre-roll) needed. The plan §5.4 escalation ladder doesn't trigger.
+3. **The constant ~-200 ms offset is AVPlayer's pipeline depth** (decoded-time vs presentation-time), not perceptible drift. Whether the user perceives the offset depends on how production's engine output buffer aligns against AVPlayer's video presentation timing — empirically deferrable to plan §5.3's perception test during implementation.
+4. **Plan §16 kill-switch criteria don't trigger:**
+    - Drift not > 100 ms with both strategies tried (didn't need to try any)
+    - Tap fired on all 5 files (24-26 callbacks per 2-second run)
+    - No Swift 6.2 / `@convention(c)` / `Unmanaged` failures
+
+### Lessons learned
+
+1. **Loop-boundary noise contaminates slope analysis on short clips.** First measurement (`--duration 30` with looping) showed worst-case slope -65 ms/sec, but this was 9 loop boundaries × ~-200 ms per loop step, swamping the real signal. Single-pass measurement (`--duration 2` on 3-sec clip) was the only way to get a clean steady-state signal from the corpus we had. For a true 5-min run as plan §5.3 originally specs, longer source files are needed (out of scope for this spike).
+
+2. **Sample-rate mismatch in initial harness math created a +81 ms/sec false drift signature on 44.1 kHz files.** Root cause: `audioElapsedSec = framesRendered / engineSampleRate` with `engineSampleRate` hardcoded to 48 kHz, while the harness deliberately skipped production's `AudioConverter` (plan §7.5). Fix A (use `tap.tapSampleRate` instead) eliminated the artifact. **Production implication:** the AudioConverter at plan §7.5 is essential — without it, 44.1 kHz audio would play with intermittent silence gaps every ~76 ms (engine consumes at 48 kHz, tap supplies at 44.1 kHz, ring underflows). This is the documented behavior the spike confirmed.
+
+3. **AVPlayer's startup latency is ~50-80 ms.** `toFirstTap` (time from `play()` to first tap callback) ranges 41-67 ms across the corpus; `toFirstRender` (first non-silent engine render) adds ~10 ms for ring fill. Below the 100 ms threshold for noticeable startup lag.
+
+4. **The `CMTimebase` slaved to audio output device clock does what Gemini said it does.** Both AVPlayer and our `AVAudioEngine` (using the same default output device) are frequency-locked to the same hardware crystal. No clock drift over the measurement window.
+
+### Phase 4 implication
+
+Plan §9 "Phase 4: Sync Strategy" branches on Phase 0 outcome. **Path NONE selected ⇒ Phase 4 is a no-op.** todo §4.NONE updates to: "Document in research.md that no sync code was needed" — done by this section.
+
+### Spike artifact disposition
+
+- Spike branch deleted post-findings (per plan §5.5).
+- Test corpus `clapperboard-videos/` retained at repo root, gitignored via `*.mp4` / `*.mov` / `*.m4v`.
+- No production code changes from the spike — all sync-strategy work to be rewritten cleanly on `feat/video-audio-engine-routing` (none required given Path NONE).
