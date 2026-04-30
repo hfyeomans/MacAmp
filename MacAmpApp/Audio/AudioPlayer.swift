@@ -480,6 +480,14 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
                 return
             }
 
+            // Clear our slot in `videoLoadTask` now that we've claimed
+            // the active load. The `play()` guard uses `videoLoadTask !=
+            // nil` to defer user-initiated play during the load window;
+            // leaving the field set after we complete would permanently
+            // block resume / remote-play. tearDownVideoBridge clears it
+            // for the cancelled / superseded paths.
+            defer { self.videoLoadTask = nil }
+
             if attached {
                 self.engine.activateVideoBridge(ringBuffer: ring, sampleRate: sampleRate)
                 self.engine.setVolume(self.volume)
