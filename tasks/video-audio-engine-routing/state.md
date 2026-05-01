@@ -3,16 +3,16 @@
 > **Purpose:** Route AVPlayer video audio through AVAudioEngine via `MTAudioProcessingTap` so video gets EQ + visualization. Includes engine config change observer (deferred from AirPlay PR #69).
 > **Created:** 2026-03-14
 > **Sprint:** S3, Wave S3-2 (sequential after S3-1 merges)
-> **Status:** PHASE 0 ✅ + PHASE 1 ✅ + PHASE 2 ✅ + PHASE 3 ✅ COMPLETE — implementation in progress on `feat/video-audio-engine-routing`; Phase 5 (tap-failure watchdog) next (Phase 4 is no-op per Phase 0)
+> **Status:** PHASE 0 ✅ + PHASE 1 ✅ + PHASE 2 ✅ + PHASE 3 ✅ + PHASE 5 ✅ COMPLETE — implementation in progress on `feat/video-audio-engine-routing`; Phase 6 (capability flag surface) next (Phase 4 is no-op per Phase 0)
 
 ---
 
 ## Current Status
 
-**Phase:** Phase 0 + 1 + 2 + 3 done. Phase 5 (tap-failure watchdog per plan §10) next; Phase 4 is a no-op per Phase 0 Path NONE.
+**Phase:** Phase 0 + 1 + 2 + 3 + 5 done. Phase 6 (capability flag surface per plan §11) next; Phase 4 is a no-op per Phase 0 Path NONE.
 **Last Updated:** 2026-04-30.
-**Branch HEAD:** `d112e1b`. 30 commits ahead of main (10 Phase-1 + 1 Phase-1 task-folder closeout + 1 Phase-1 SHA-cleanup + 5 Phase-2 + 1 Phase-2 closeout + 6 Phase-3 + 1 Phase-3 task-folder closeout + 1 Phase-3 _context closeout + 3 Phase-3 regression-fix commits + 1 Phase-3 closeout pending). SHAs may rotate on future rebases — match by commit message.
-**Tests:** 90/90 pass with TSan (84 → 90: +4 video-bridge state-machine, +2 video-render-block). Manual video playback verified post-regression-fix arc (video frame displays, single audio path through bridge, slider clean, EQ + spectrum analyzer respond — Milkdrop visualizer remains gated to `.audio` per plan §11.3 and is intentionally a Phase 6 scope).
+**Branch HEAD:** `adf3fa4`. 32 commits ahead of main (10 Phase-1 + 1 Phase-1 task-folder closeout + 1 Phase-1 SHA-cleanup + 5 Phase-2 + 1 Phase-2 closeout + 6 Phase-3 + 1 Phase-3 task-folder closeout + 1 Phase-3 _context closeout + 3 Phase-3 regression-fix commits + 1 Phase-3 final closeout + 1 Phase-5 + 1 Phase-5 closeout pending). SHAs may rotate on future rebases — match by commit message.
+**Tests:** 94/94 pass with TSan (90 → 94: +3 video-tap fallback state-machine, +1 watchdog detection). Manual video playback verified post-regression-fix arc (video frame displays, single audio path through bridge, slider clean, EQ + spectrum analyzer respond — Milkdrop visualizer remains gated to `.audio` per plan §11.3 and is intentionally a Phase 6 scope).
 
 ### Phase 1 outcome (engine configuration change observer)
 
@@ -98,14 +98,40 @@
 
 6. **Reconfigure refresh.** `handleEngineDidReconfigure` now refreshes the video-bridge graph format on output route changes, parallel to the stream-bridge refresh. AVAudioEngine inserts an internal converter between the source node's declared rate (the tap's `expectedSampleRate`, fixed at attach time) and the new output rate; the source node itself stays as-is. AudioPlayer's `handleEngineDidReconfigure` local-audio reschedule branch is gated on `currentMediaType == .audio` so a tap-failed video session with stale `engine.audioFile` doesn't get reschedule mid-route-change.
 
-### Phase 3 follow-ups (deferred — not blocking Phase 5)
+### Phase 5 outcome (tap-failure watchdog + AVPlayer fallback)
+
+1 commit (`adf3fa4`) implementing plan §10. 250 ms `@MainActor` watchdog Task observes `videoAudioTap` for stalls and process-side errors; on trigger, `engageVideoTapFallback()` demotes the session from the engine bridge to direct AVPlayer audio so the user keeps hearing sound. Sticky for the current track; cleared at the start of the next `playTrack`.
+
+**Triggers:**
+
+- `tap.fallbackRequested` — set immediately by the C-side prepare/process callbacks on AudioConverterNew failure, MTAudioProcessingTapGetSourceAudio error, or mid-stream AudioConverterFillComplexBuffer fault.
+- Host-time stall — `(now - tap.lastCallbackHostTime) > 1 s`, gated on `videoPlaybackController.isPlaying`. Pause→resume baseline reset (`max(last, resumeBaselineHost)`) prevents a stale pre-pause callback from immediately demoting on resume.
+
+**Fallback sequence (plan §10.2 ordering on `@MainActor`):** idempotency guard, cancel watchdog, set `videoTapFallbackActive = true` (observable for Phase 6 capability surface), log error, deactivate engine bridge, `detachAudioTap` (audioMix=nil before tap.detach), clear `videoAudioTap`/`videoRingBuffer`, restore `videoPlaybackController.volume`, clear `seekGuardActive` (no `currentSeekID` bump per plan §10.2 step 7).
+
+**Co-fixes pulled in to make Phase 5 correct:**
+
+- `VideoAudioTap.tapProcess` now flags `fallbackRequested` on `MTAudioProcessingTapGetSourceAudio` non-noErr AND on `AudioConverterFillComplexBuffer` non-noErr/non-noMoreInputData. `lastCallbackHostTime` only advances after a successful ring write so converter-fault loops can no longer mask the stall by appearing healthy.
+- `startVideoTrack` Task body now guards `engine.isVideoBridgeActive` after `engine.activateVideoBridge`; if the engine refused to (re)start (HAL device error etc.), detaches the tap and restores AVPlayer volume so silent-with-mute=0 video can't slip through.
+
+**Oracle review:** gpt-5.5 xhigh, 2 passes. Pass 1 = 8/10 with 3 MUST-FIXes (process-side fallback flagging, pause→resume false-positive, activateVideoBridge internal failure). Pass 2 (after fixes + deterministic watchdog test) = **9.2/10, gate clear**.
+
+**Tests:** +4 (`VideoTapFallbackTests`: engageRestoresAVPlayerVolume, engageIsIdempotent, watchdogEngagesOnFallbackRequested, playTrackResetsFallbackFlag). 94/94 pass with TSan. Watchdog detection test uses 600 ms sleep (cadence-based, not perfectly deterministic — Oracle non-blocker).
+
+**Test seams added (`#if DEBUG`):** `AudioPlayer._testEngageVideoTapFallback()`, `AudioPlayer._testActivateVideoBridgeAndStartWatchdog(tap:ringBuffer:)`, `VideoAudioTap._testRequestFallback()`.
+
+#### Commit list (Phase 5):
+
+- `adf3fa4` feat(audio): add video tap-failure watchdog + AVPlayer fallback
+
+### Phase 3 follow-ups (deferred — Phase 5 handled #1; #2-4 still Phase 6)
 
 | # | Item | Phase | Reason for deferral |
 |---|------|-------|---------------------|
-| 1 | Tap watchdog reads BOTH `lastCallbackHostTime` AND `fallbackRequested` | Phase 5 (plan §10.1) | Phase 5 work — tap is in place and exposes both signals; watchdog is the consumer. |
-| 2 | `supportsAudioProcessing` capability flag dimming for tap-fallback path | Phase 6 (plan §11.2) | Out of Phase 3 scope; existing per-plan Phase 6 work covers it. |
+| 1 | Tap watchdog reads BOTH `lastCallbackHostTime` AND `fallbackRequested` | ✅ Phase 5 | Done in `adf3fa4` — watchdog consumes both signals. |
+| 2 | `supportsAudioProcessing` capability flag dimming for tap-fallback path | Phase 6 (plan §11.2) | `videoTapFallbackActive` flag is now in place and observable; Phase 6 wires it into the capability surface. |
 | 3 | `snapshotButterchurnFrame` media-type guard relaxation for video bridge | Phase 6 (plan §11.3) | Phase 3 set `isEngineRendering` to include `engine.isVideoBridgeActive`, but `snapshotButterchurnFrame` still gates on `currentMediaType == .audio`. Phase 6 swaps the guard. |
-| 4 | Volume `didSet` AVPlayer.volume forwarding gating | Phase 6 (plan §11.6) | Currently `videoPlaybackController.volume = volume` is unconditional. Phase 6 gates this on `videoTapFallbackActive` only (plan §11.6). For now the tap path mutes via `player.volume = 0` directly, overriding the didSet. |
+| 4 | Volume `didSet` AVPlayer.volume forwarding gating | Phase 6 (plan §11.6) | Currently gated on `engine?.isVideoBridgeActive != true`; after fallback the bridge deactivates so forwarding resumes naturally. Phase 6 makes this gate `videoTapFallbackActive`-aware explicitly. |
 
 ### Phase 2 follow-ups (deferred — not blocking Phase 3)
 
@@ -203,17 +229,17 @@ When switching output device FROM AirPlay TO built-in speakers, CoreAudio emits 
 
 ---
 
-## Next Steps (Phase 0 ✅ + 1 ✅ + 2 ✅ complete; Phase 3 next)
+## Next Steps (Phase 0 ✅ + 1 ✅ + 2 ✅ + 3 ✅ + 5 ✅ complete; Phase 6 next)
 
 1. ✅ Phase 0 spike: harness built, ran on 5-clip clipperboard corpus, Path NONE confirmed.
 2. ✅ Findings written to `research.md` "Phase 0 — Spike Results"; spike branch deleted.
 3. ✅ `feat/video-audio-engine-routing` cut from main.
 4. ✅ Phase 1 (engine config observer) — 10 commits + closeout, 72/72 tests pass, manual verification clean across local-file + stream + AirPlay routing.
-5. ✅ Phase 2 (MTAudioProcessingTap wrapper per plan §7) — 5 commits, Oracle 9.3/10, 84/84 tests pass with TSan. C-convention callbacks via `Unmanaged<VideoAudioTapContext>`, AudioConverter handles all four format-edge cases per plan §7.5 (mono duplication, surround downmix, non-Float32, sample-rate). Doesn't touch the engine graph — that's Phase 3.
-6. ⏭ **Phase 3 (engine source node + wiring per plan §8)** — adds `videoSourceNode` parallel to `streamSourceNode` in `AudioEngineController`. Wires `activateVideoBridge`/`deactivateVideoBridge` with mutual exclusion against the stream bridge. Modifies `AudioPlayer.playTrack` video branch to instantiate `VideoAudioTap` + ring buffer, await `tap.attach(to:)`, assign `playerItem.audioMix`, set `player.volume = 0`. Modifies `VideoPlaybackController.loadVideo` to accept the tap (or have AudioPlayer wire it externally). Wires `wasVideoBridge` to a real flag in Phase 1's `PreReconfigureSnapshot`; the TODO comments at `AudioEngineController.handleEngineWillReconfigure`/`handleEngineDidReconfigure` get filled in here.
+5. ✅ Phase 2 (MTAudioProcessingTap wrapper per plan §7) — 5 commits, Oracle 9.3/10, 84/84 tests pass with TSan.
+6. ✅ Phase 3 (engine source node + wiring per plan §8) — 9 commits + closeout (regression-fix arc included), Oracle **9.5/10** final, 90/90 tests pass with TSan, manual video verified.
 7. ⏭ **Skip Phase 4** (sync strategy) — Path NONE per Phase 0; todo §4.NONE already done.
-8. ⏭ Phase 5 (tap-failure watchdog + fallback per plan §10) — watchdog must check BOTH `tap.lastCallbackHostTime` stall AND `tap.fallbackRequested` flag.
-9. ⏭ Phase 6 (capability flag surface per plan §11) — three-branch `supportsAudioProcessing` (local/stream/video).
+8. ✅ Phase 5 (tap-failure watchdog + fallback per plan §10) — 1 commit (`adf3fa4`), Oracle **9.2/10** (pass 2, gate clear), 94/94 tests pass with TSan. Watchdog consumes both `tap.lastCallbackHostTime` stall and `tap.fallbackRequested` signals; pause→resume baseline reset prevents stale-callback false positives; co-fixed VideoAudioTap process-side fallback flagging and activateVideoBridge internal-failure handling.
+9. ⏭ **Phase 6 (capability flag surface per plan §11) — NEXT.** Three-branch `supportsAudioProcessing` (local/stream/video) reading `videoTapFallbackActive`; `snapshotButterchurnFrame` swap from `currentMediaType == .audio` to bridge-aware guard so Milkdrop/Butterchurn works with video.
 10. ⏭ Phase 7 (tests + manual verification + drift target re-confirmation per plan §12 / §14).
 11. ⏭ TSan-on builds + tests after each phase via xcodebuildmcp.
 12. ⏭ Codex Oracle code-review gate (≥9/10) before pushing PR #C.

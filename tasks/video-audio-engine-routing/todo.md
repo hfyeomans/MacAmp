@@ -266,43 +266,50 @@ Numbering convention: `<Phase>.<Item>`. Mark `[x]` on completion. Use `[~]` for 
 
 ---
 
-## Phase 5 — Tap Failure Fallback
+## Phase 5 — Tap Failure Fallback ✅ COMPLETE (1 commit, Oracle 9.2/10 pass 2, 94/94 TSan)
 
-### 5.1 Watchdog
+### 5.1 Watchdog ✅
 
-- [ ] 5.1.1 Add `videoTapWatchdogTask: Task<Void, Never>?` to AudioPlayer.
-- [ ] 5.1.2 Add `videoTapFallbackActive: Bool = false` flag.
-- [ ] 5.1.3 Implement watchdog logic: every 250 ms check `(now - tap.lastCallbackHostTime) > 1000 ms` AND `videoPlaybackController.isPlaying` AND `engine.isVideoBridgeActive`.
-- [ ] 5.1.4 Start watchdog when video bridge activates; stop when video stops or fallback engages.
+- [x] 5.1.1 Add `videoTapWatchdogTask: Task<Void, Never>?` to AudioPlayer.
+- [x] 5.1.2 Add `videoTapFallbackActive: Bool = false` flag (`private(set) var`, observable for Phase 6 capability surface).
+- [x] 5.1.3 Implement watchdog logic: every 250 ms check `(now - tap.lastCallbackHostTime) > 1000 ms` AND `videoPlaybackController.isPlaying` AND `engine.isVideoBridgeActive`. **Co-design from Oracle pass 1:** uses `max(last, resumeBaselineHost)` so a stale pre-pause callback can't false-positive on resume.
+- [x] 5.1.4 Start watchdog when video bridge activates (only when `engine.isVideoBridgeActive == true` after activation); stop when video stops, fallback engages, or bridge deactivates.
 
-### 5.2 Fallback sequence (must run on @MainActor in this exact order, per plan §10.2)
+### 5.2 Fallback sequence ✅ (`@MainActor` per plan §10.2)
 
-- [ ] 5.2.1 Idempotency guard: `guard !videoTapFallbackActive else { return }` at top of fallback method.
-- [ ] 5.2.2 Cancel watchdog FIRST: `videoTapWatchdogTask?.cancel(); videoTapWatchdogTask = nil`.
-- [ ] 5.2.3 Set `videoTapFallbackActive = true` (capability surface re-evaluates).
-- [ ] 5.2.4 Log error: `AppLog.error(.audio, "Video audio tap stalled — restoring AVPlayer.volume fallback")`.
-- [ ] 5.2.5 `engine.deactivateVideoBridge()` (engine returns to default playerNode wiring).
-- [ ] 5.2.6 `videoPlaybackController.detachAudioTap()` — new method that:
-    - [ ] Sets `playerItem.audioMix = nil` (ESSENTIAL — failed tap must not stay attached)
-    - [ ] Calls `videoAudioTap.detach()` (invalidates tap, releases `Unmanaged<Context>`)
-- [ ] 5.2.7 Clear `videoAudioTap = nil` and `videoRingBuffer = nil` on AudioPlayer side.
-- [ ] 5.2.8 Restore AVPlayer volume: `videoPlaybackController.player?.volume = audioPlayer.volume`.
-- [ ] 5.2.9 Reset transient guards: `seekGuardActive = false` (do NOT bump `currentSeekID` — no scheduled segment to invalidate).
-- [ ] 5.2.10 In `playTrack`, reset `videoTapFallbackActive = false` BEFORE per-track setup runs (fresh slate per track).
+- [x] 5.2.1 Idempotency guard: `guard !videoTapFallbackActive else { return }`.
+- [x] 5.2.2 Cancel watchdog FIRST: `stopVideoTapWatchdog()`.
+- [x] 5.2.3 Set `videoTapFallbackActive = true`.
+- [x] 5.2.4 Log error: `AppLog.error(.audio, "Video audio tap stalled — restoring AVPlayer.volume fallback")`.
+- [x] 5.2.5 `engine.deactivateVideoBridge()` (guarded with `if engine.isVideoBridgeActive`).
+- [x] 5.2.6 `videoPlaybackController.detachAudioTap()` — already present from Phase 3, sets audioMix=nil before tap.detach.
+- [x] 5.2.7 Clear `videoAudioTap = nil` and `videoRingBuffer = nil`.
+- [x] 5.2.8 Restore AVPlayer volume: `videoPlaybackController.volume = volume` (didSet propagates to `player.volume`).
+- [x] 5.2.9 Reset `seekGuardActive = false` (no `currentSeekID` bump per plan).
+- [x] 5.2.10 In `playTrack`, reset `videoTapFallbackActive = false` after `updatePlaylistPosition` and before per-track setup.
 
-### 5.3 Volume-during-fallback
+### 5.3 Volume-during-fallback ✅
 
-- [ ] 5.3.1 In `volume.didSet`: forward to `videoPlaybackController.volume` only when `videoTapFallbackActive`.
+- [x] 5.3.1 Existing gate `if engine?.isVideoBridgeActive != true { videoPlaybackController.volume = volume }` is preserved per plan §10.3 — bridge deactivates in fallback so forwarding resumes naturally. Phase 6 §11.6 tightens the gate to `videoTapFallbackActive`-aware semantics.
 
-### 5.4 Tests
+### 5.4 Tests ✅ (4 added)
 
-- [ ] 5.4.1 Create `Tests/MacAmpTests/Audio/VideoTapFallbackTests.swift`.
-    - [ ] `watchdogDetectsStaleCallback`
-    - [ ] `fallbackRestoresAVPlayerVolume`
+- [x] 5.4.1 `Tests/MacAmpTests/VideoTapFallbackTests.swift`:
+    - [x] `engageRestoresAVPlayerVolume` — engage flips flag and restores controller volume.
+    - [x] `engageIsIdempotent` — second engage no-ops; external mute survives.
+    - [x] `watchdogEngagesOnFallbackRequested` — real bridge + real tap, sets `fallbackRequested`, sleeps 600 ms, asserts `videoTapFallbackActive == true` and `isVideoBridgeActive == false`.
+    - [x] `playTrackResetsFallbackFlag` — flag cleared on next track.
 
-### 5.5 Commit
+### 5.5 Co-fixes (pulled in to make Phase 5 correct, Oracle pass-1 MUST-FIXes)
 
-- [ ] 5.5.1 `feat(audio): add tap-failure watchdog and fallback`
+- [x] 5.5.1 `VideoAudioTap.tapProcess` flags `fallbackRequested` on `MTAudioProcessingTapGetSourceAudio` non-noErr.
+- [x] 5.5.2 `VideoAudioTap.tapProcess` flags `fallbackRequested` on `AudioConverterFillComplexBuffer` non-noErr/non-noMoreInputData.
+- [x] 5.5.3 `lastCallbackHostTime` now updated only after a successful ring write (both converter path and bypass path), so converter-fault loops can't mask the stall by appearing healthy.
+- [x] 5.5.4 `startVideoTrack` Task body guards `engine.isVideoBridgeActive` after `engine.activateVideoBridge`; if engine refused to start, detaches tap and restores AVPlayer volume.
+
+### 5.6 Commit ✅
+
+- [x] 5.6.1 `adf3fa4` feat(audio): add video tap-failure watchdog + AVPlayer fallback
 
 ---
 
