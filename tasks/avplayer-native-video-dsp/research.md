@@ -320,7 +320,7 @@ The render-thread C callback is the **only** anachronism we accept, and it's App
 
 **Why it matters:** This is the *load-bearing* assumption of the entire architecture. If the answer is no, the approach pivots.
 
-**What "yes" looks like:** A tap created with `kMTAudioProcessingTapCreationFlag_PreEffects` (or `_PostEffects`?) can modify the source buffer in `tapProcess`, and AVPlayer plays the modified buffer. EQ-effected audio is audible. AVPlayer's master clock is unaffected (no ring under-runs, no master-clock stalls).
+**What "yes" looks like:** A tap created with `kMTAudioProcessingTapCreationFlag_PreEffects` (resolved post-Step-2: `_PreEffects` for source-side DSP) can modify the source buffer in `tapProcess`, and AVPlayer plays the modified buffer. EQ-effected audio is audible. AVPlayer owns its master clock end-to-end. Tap-thread overruns can transiently stall both audio and video clocks (bounded per render cycle, no drift accumulation) — but the architecture removes the engine-routing topology's ring-underrun + dual-clock-domain failure classes that required watchdog/fallback machinery. (See topology deltas table above for the canonical comparison.)
 
 **What "no" looks like:** AVPlayer treats the modified buffer specially / re-reads source / ignores modifications. Modifications are read-only by design. Tap mode forces drain semantics regardless of flag.
 
@@ -364,10 +364,10 @@ If the audio is audibly attenuated, in-place modification works. If volume is un
 
 **Why it matters:** All DSP runs on the AVPlayer audio render thread. Too much work → render thread misses its deadline → audio glitches → AVPlayer master clock stalls → video stalls. Worse than the ring-buffer architecture's failure mode (which at least had the watchdog).
 
-**Budget components:**
+**Budget components (per `tapProcess` invocation; see Q3 in synthesis above for the authoritative numbers):**
 - 10-band biquad cascade: ~5 mults + 4 adds per sample per band per channel = ~180 ops/sample stereo
 - Balance: 2 mults per sample stereo
-- Visualizer feed write: 1 ring write per buffer (low frequency)
+- Visualizer DSP (mono mix + 20-bar RMS + 20-bar Goertzel + 2048-pt vDSP FFT) + single-slot `feed.tryPublish` (drop on contention) — same shape as today's engine tap, proven feasible
 
 **Total at 48 kHz stereo:** ~9 M ops/sec. Apple Silicon can do this several times over per core. Intel is the constraint — particularly older Intel Macs in MacAmp's support matrix.
 
