@@ -99,8 +99,8 @@ User-aligned 2026-05-01. This is the topology research must validate; if Phase 0
 | Where video audio leaves AVPlayer | Drained out via tap → ring → source node | Never leaves — tap modifies in place |
 | Clock domains | Two (engine output + AVPlayer master) | One (AVPlayer native) |
 | Sample-rate conversion stages | Two (asset→48 k for ring, then 48 k→hw) | One (AVPlayer's native, untouched) |
-| Failure mode if DSP is slow | Ring underrun → master-clock stall → video freeze | Render-thread overrun → audio glitch only (video clock is upstream of tap) |
-| Route-change handling | Engine reconfigure observer (unreliable for AirPods) | AVPlayer handles natively |
+| Failure mode if DSP is slow | Ring underrun → master-clock stall + drift accumulation → persistent video freeze, requires fallback machinery | Render-thread overrun → transient audio glitch + transient video stall, bounded per render cycle, no drift accumulation, no fallback needed |
+| Route-change handling | Engine reconfigure observer (unreliable for AirPods — proven by missing log line in Phase 7 traces) | AVPlayer handles natively (assumed; plan.md verification matrix must validate AirPods + AirPlay route switches end-to-end before S3-2 merge) |
 | Capability flag | `videoTapFallbackActive` (could flip false) | Always true; no fallback path |
 
 ---
@@ -151,12 +151,12 @@ Apple's archived **AudioTapProcessor** sample (`developer.apple.com/library/arch
 
 **Flag selection:** `kMTAudioProcessingTapCreationFlag_PreEffects`. Saved branch used `_PostEffects` because it was draining for a downstream consumer; we're modifying for AVPlayer's own downstream chain (AVPlayer's spatial audio / mixing / hardware effects layer on top of our DSP). `_PostEffects` would suit a later observation/metering tap (e.g. Milkdrop-only mode).
 
-**Concurrency pattern (Swift 6.2 + macOS 15+):**
-- Context class: `final class Context: @unchecked Sendable` — silences C-callback FFI checking on the envelope
-- Cross-thread fields: `Synchronization.Atomic<T>` / `Synchronization.Mutex<T>` (Swift 6.0 stdlib)
-- `nonisolated(unsafe)` on individual stored properties where the field is render-thread-confined and atomic discipline is guaranteed
-- Render thread reads with `.load(.relaxed)`; main thread writes with `.store(.relaxed)` (or `.sequentiallyConsistent` on activate/deactivate where ordering matters)
-- `Unmanaged<Context>.passRetained()` in `tapInit` → `MTAudioProcessingTapGetStorage` retrieves opaque pointer in callbacks → `Unmanaged.fromOpaque(...).release()` in `tapFinalize` (exactly once)
+**Concurrency pattern (Swift 6.2 + macOS 15+ — single contract):**
+- Context class: non-actor `final class Context: @unchecked Sendable` — silences C-callback FFI checking on the envelope. The Context is not `@MainActor`-isolated; the render thread accesses it directly via `Unmanaged`.
+- Cross-thread fields: `Synchronization.Atomic<T>` / `Synchronization.Mutex<T>` (Swift 6.0 stdlib). `Atomic<T>` is `Sendable` by stdlib design, so individual atomic fields do NOT need `nonisolated(unsafe)` markers.
+- `nonisolated(unsafe)` is reserved for the rare case of an actor-isolated context holding a non-`Sendable` stored property that must cross to the render thread. **Not applicable on this branch** — the Context is non-isolated by construction.
+- Render thread reads atomics with `.load(.relaxed)`; main thread writes with `.store(.relaxed)` (or `.sequentiallyConsistent` on activate/deactivate flags where ordering matters)
+- `Unmanaged<Context>.passRetained()` at tap-build time; **release on tap-create failure to prevent leak** (see spike-findings.md "Production-translation hazards"); `MTAudioProcessingTapGetStorage` retrieves opaque pointer in callbacks (`takeUnretainedValue()`); `Unmanaged.fromOpaque(...).release()` in `tapFinalize` (exactly once)
 
 Spike's residual role narrows from "discover" to "validate runtime behavior on macOS 15+ + Swift 6.2 toolchain in our codebase." See "Spike scope decision" below.
 
@@ -205,7 +205,18 @@ Per-tap-callback DSP cost at 48 kHz stereo:
 - Balance: ~96 K ops/sec
 - Visualizer pre-publish DSP (mono mix + 20-bar RMS + 20-bar Goertzel + 2048-pt vDSP FFT): proven feasible — engine path runs identical DSP on its render thread today
 
-**Net new cost on the video tap thread vs today's engine tap:** ~9 Mops/sec (biquad + balance only). Apple Silicon: ≪1% of a core. Intel: ≪2%. Empirical sample-and-alarm logging deferred to implementation phase (alarm threshold: >10 % of the buffer's wall-clock budget — for 2048 frames @ 44.1 kHz that's 4.6 ms, generous).
+**Net new cost on the video tap thread vs today's engine tap (estimated, NOT validated):** ~9 Mops/sec (biquad + balance only). Apple Silicon: estimated ≪1% of a core. Intel: estimated ≪2%.
+
+**The Phase 0 spike applied only `*= gain` (trivial cost); the full BiquadCascade + balance + visualizer DSP cost was not measured.** plan.md must include a pre-implementation benchmark gate as a hard prerequisite:
+
+- **Hardware:** Apple Silicon (M1+) **AND** Intel build target
+- **Corpus:** the full clapperboard variety — 44.1 kHz stereo, 48 kHz stereo, 48 kHz 5.1 surround
+- **Comparison:** baseline (no DSP, pass-through tap) vs full chain (10-band biquad + balance + visualizer DSP)
+- **Measurement:** average + 99th-percentile wall-clock time spent in `tapProcess` per buffer, sampled over ≥30 s of playback per configuration
+- **Pass criterion:** 99th-percentile ≤ 10 % of the buffer's wall-clock budget (4.6 ms at 2048 frames @ 44.1 kHz; 4.3 ms at 48 kHz)
+- **Hard reject:** any single sample > 50 % of buffer budget (deadline-miss risk indicator)
+
+If the benchmark fails, plan.md must include a fallback strategy (lower-order biquad, fewer bands, drop visualizer for video, or push DSP cost to a different stage).
 
 ### Q4 — Channel/SR variety in test corpus
 
@@ -232,7 +243,7 @@ ALLOWLIST (5 platform-API plumbing patterns — file:line cited in `research-not
 
 **Modernization deltas (non-negotiable on this branch):**
 - Drop `import Atomics` + `ManagedAtomic` → `Synchronization.Atomic<T>`
-- Refine blanket `@unchecked Sendable` on Context: keep at class level for FFI silence, add `nonisolated(unsafe)` on individual stored properties to localize the unsafety
+- Keep `@unchecked Sendable` envelope on Context (necessary at the C-callback FFI boundary). **No per-field `nonisolated(unsafe)` markers needed:** `Synchronization.Atomic<T>` is itself `Sendable`, so atomic-disciplined fields don't require localized unsafety markers. (See Q1 "Concurrency pattern" above for the canonical single-contract description.)
 
 DENYLIST (11 engine-routing-bound patterns confirmed at file:line on saved branch — all explicitly NOT carried forward): `LockFreeRingBuffer` for video, `AVAudioSourceNode` + engine bridge wiring, `AudioConverter` + Mastering quality, `AudioConverterSetProperty`-shaped channel mapping, watchdog/fallback machinery, HAL property listener, video-side `AVAudioEngineConfigurationChange` observer, `videoTapFallbackActive` capability branch, Phase 7 watchdog gate v2 + 3 s threshold, `wasVideoBridge` snapshot field, `swift-atomics` `ManagedAtomic`.
 
@@ -242,11 +253,46 @@ DENYLIST (11 engine-routing-bound patterns confirmed at file:line on saved branc
 
 **Implication for the video tap:** `tapProcess` step 4 must run the same DSP as today's engine tap (mono mix → 20-bar RMS → Goertzel → 2048-pt vDSP FFT into pre-allocated `VisualizerScratchBuffers`), then call `feed.tryPublish(from: scratch, ...)`. Same cost shape, same drop-on-contention semantics, same data shape. The diagram (above) has been updated.
 
-**Extraction scope:** rename `VisualizerSharedBuffer` → `VisualizerFeed`, promote visibility (private nested class → file-scope `internal`), move to its own file (`MacAmpApp/Audio/VisualizerFeed.swift`). 2-line edit in `VisualizerPipeline.swift` for type rename. ~60 LOC across 2 files + 1 new file. **Engine path: byte-for-byte identical behavior.** `xcodegen generate` once.
+**Extraction scope (revised after Oracle review — original "rename + visibility only" understatement corrected):**
+
+The actual changes touch three nested types in `VisualizerPipeline.swift`, not just one:
+
+1. **`VisualizerSharedBuffer` → `VisualizerFeed`** (`VisualizerPipeline.swift:36`): rename + promote from `private final class` to module-internal visibility, move to its own file. ~60 LOC.
+
+2. **`VisualizerScratchBuffers`** (`VisualizerPipeline.swift:169`): also currently `private final class`. The video tap needs its own instance (render-thread isolation per producer), so visibility must be promoted at minimum to module-internal. Either keep nested-but-non-private or extract to its own file. ~30 LOC visibility audit + minor signature work.
+
+3. **`makeTapHandler` (`VisualizerPipeline.swift:565`)** signature currently takes the private nested types and is engine-tap-specific (consumes `AVAudioPCMBuffer`). The video tap path needs a parallel render function that consumes `AudioBufferList` + reads ASBD from `tapPrepare`. Two options:
+   - (a) Keep `makeTapHandler` engine-only; write a parallel `videoTapRender` that uses the same `VisualizerFeed` + `VisualizerScratchBuffers`. **Preferred** — different threading contract (engine `nonisolated static @Sendable` closure vs C-callback) + different buffer shape; flag-driven generalization would be the wrong abstraction (Principle 4 / AHA Rule of Three: 2 callers ≠ extract).
+   - (b) Generalize `makeTapHandler` to accept any source-buffer type. Rejected pending plan.md review — fits AHA's "wrong abstraction" warning sign.
+
+**Net scope estimate:** ~100–150 LOC across `VisualizerPipeline.swift` + 1–2 new files (`VisualizerFeed.swift`, optionally `VisualizerScratchBuffers.swift`). **Engine path: byte-for-byte identical behavior.** `xcodegen generate` once. plan.md Phase 1 work item.
 
 ### Spike scope decision: option (A) — executed
 
 User selected option (A) reduced-scope spike on 2026-05-01. Executed: `spike/avplayer-inplace-tap-dsp` throwaway branch, ~170-line Swift 6.2 CLI tool, single `_PreEffects` tap, `*= gain` in-place modification, play stereo clip, A/B auditory comparison vs control. ✅ Both programmatic and auditory verification passed. Full findings in `research-notes/spike-findings.md`. Spike branch retained locally as reference for the implementation phase.
+
+### Plan.md prerequisites (from Oracle review 2026-05-01, score 7.8/10 → 9+/10 after edits)
+
+Oracle review of the Step 2 package surfaced three open architectural decisions that plan.md must answer concretely (not defer to implementation). These are not research gaps — they are design choices the research has framed but not pinned down.
+
+1. **Single source-of-truth fanout for EQ + balance state.** Both engine `AVAudioUnitEQ` and the new tap-side `BiquadCascade` consume the same user-facing EQ/balance values (preamp, 10-band gains, balance L/R). plan.md must specify: where the canonical user state lives (likely the existing `EqualizerController`), how it fans out to two consumers (engine path + tap-side Context), and how state changes propagate (push to both atomically vs each consumer pulls on its own schedule). Avoid duplicating user state — the math is duplicated, the values are not.
+
+2. **Coefficient hand-off model from main thread to render thread.** Three candidates:
+   - (a) Per-coefficient `Atomic<UInt32>` (Float bit-pattern). 100 atomics for 10 bands × 5 coefs × 2 channels. Lock-free; coefficient sets can tear (e.g., render thread reads 4-of-5 new + 1-of-5 old) — usually inaudible at user-EQ-update rate but theoretically possible.
+   - (b) Atomic-pointer double-buffer snapshot. Two pre-allocated `BiquadCoefficientSet` blocks; main thread writes inactive block, atomically swaps pointer; render thread reads via pointer. Zero teardown risk; one indirect load per buffer. **Oracle's preference.**
+   - (c) `Synchronization.Mutex<BiquadCoefficientSet>` with `withLockIfAvailable`. Render thread skips coefficient update on contention (uses old set); main thread blocks. Acceptable if coefficient updates are rare. Not preferred — adds a contention path.
+   
+   plan.md picks one with explicit rationale.
+
+3. **Verification gate matrix for plan.md sign-off.** Lock down the empirical gates BEFORE implementation, not as a post-hoc afterthought:
+   - **CPU benchmark** (Q3): 99th-percentile `tapProcess` wall-clock ≤ 10 % of buffer budget across Apple Silicon + Intel × 44.1 / 48 kHz × stereo / 5.1 surround
+   - **Numerical EQ match** (Q2): ≤0.5 dB worst-case magnitude error vs `AVAudioUnitEQ` across 20 Hz – 20 kHz, log sine sweep
+   - **Long-playback drift** (Q3 / pivot): ≥10 minutes continuous video playback, no perceptible drift, A/V sync within ±40 ms
+   - **Route-change** (Q1 / pivot motivation): AirPods connect mid-playback, AirPods disconnect mid-playback, AirPlay handoff to AirPlay receiver, system default-output change — all four with no audio drop / video stall / EQ-state loss
+   - **Surround handling** (Q4): 5.1 source plays through native AVPlayer downmix correctly, visualizer feed downmix to mono is non-clipping, EQ applies to all 6 channels uniformly
+   - **TSan**: full test suite green with `-enableThreadSanitizer YES` (project-standard prerequisite for any audio-path PR)
+
+These plan.md prerequisites are tracked separately from the Q1-Q6 research findings — they belong to plan.md authoring, not Step 2 research.
 
 ---
 
@@ -366,9 +412,9 @@ Not reusable (engine-routing-specific):
 
 **Today's code:** `VisualizerPipeline` reads from `AVAudioEngine.installTap(onBus:)` on the main mixer node. That feeds the spectrum analyzer + Butterchurn snapshot.
 
-**New architecture:** Both engine path and tap path need to feed the visualizer. Cleanest approach: extract a generic `VisualizerFeed` (small SPSC ring of stereo Float32 frames at fixed cadence). Engine path's mixer-node tap writes into it; new video tap also writes into it. `VisualizerPipeline` consumes from `VisualizerFeed`.
+**New architecture (corrected after Step 2 reading — see Q6 in the synthesis above for detail):** Both engine path and tap path need to feed the visualizer. The existing `VisualizerSharedBuffer` is already a single-slot SPSC hand-off carrying **pre-computed visualizer arrays** (RMS×20 + Goertzel×20 + oscilloscope×76 + Butterchurn FFT×1024+1024) — not raw PCM. Extraction = rename + visibility promotion of `VisualizerSharedBuffer` and `VisualizerScratchBuffers`; video tap runs the same engine-side DSP into its own per-tap scratch buffers and calls `feed.tryPublish`.
 
-**Question for research:** Where exactly does the engine-tap currently write its data? What's the consumer side? How disruptive is the refactor to extract the feed without changing engine-path behavior? Read existing code in Step 2.
+**Original "question for research" resolved by `research-notes/visualizer-feed.md`** — see that file for full producer/consumer mapping and synthesis Q6 above for the corrected scope.
 
 ---
 

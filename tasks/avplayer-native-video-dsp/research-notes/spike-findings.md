@@ -85,6 +85,36 @@ These were explicitly excluded from the spike scope per "reduced-scope" decision
 
 ---
 
+## Production-translation hazards (informs plan.md hardening checklist)
+
+The spike intentionally cuts corners that would not be acceptable in production. Items captured here for the implementation phase, raised by Oracle review (2026-05-01):
+
+1. **`Unmanaged.passRetained` leak on tap-create failure** — `spikes/avplayer-inplace-tap-dsp/Sources/InPlaceTapSpike/main.swift` lines 131-149. The spike calls `passRetained(context)` to populate `clientInfo`, then `MTAudioProcessingTapCreate`. If `Create` fails, `tapInit` never fires and the +1 retain leaks. Production must release the `Unmanaged` on the create-failure path:
+   ```swift
+   let retained = Unmanaged.passRetained(context)
+   var callbacks = MTAudioProcessingTapCallbacks(...)
+   callbacks.clientInfo = UnsafeMutableRawPointer(retained.toOpaque())
+
+   var tapOut: MTAudioProcessingTap?
+   let status = MTAudioProcessingTapCreate(..., &tapOut)
+   guard status == noErr, let tap = tapOut else {
+       retained.release()  // production-required cleanup
+       throw TapError.createFailed(status)
+   }
+   ```
+
+2. **Float sample-format assumption** — `main.swift` lines 84-87 assume `bufferList.mBuffers.mData` is `Float`-typed. Production must guard via `tapPrepare`'s `AudioStreamBasicDescription` inspection: only enable the DSP path when `mFormatID == kAudioFormatLinearPCM && (mFormatFlags & kAudioFormatFlagIsFloat) != 0 && mBitsPerChannel == 32`. Bypass DSP (pass-through) on any other format.
+
+3. **No deadline-miss instrumentation.** Spike does not measure tap-callback wall-clock time. Production must add periodic sample-and-alarm logging (`mach_absolute_time` delta on `tapProcess` entry/exit, alarm if >10 % of buffer budget) — necessary for the Q3 CPU benchmark gate and for production observability.
+
+4. **No tear-down sequencing.** Spike runs to clip-end and exits (process tear-down handles cleanup). Production must handle pause / seek / stop with the EQ-active flag, ensure `tapFinalize` fires after all in-flight `tapProcess` calls, and verify no `Unmanaged` access after release.
+
+5. **Channel-count assumption.** Spike accepts whatever ASBD `tapPrepare` reports (44.1 kHz stereo Float32 in this case). Production must handle 1 / 2 / 5.1 / 7.1 channel counts: stereo is a no-op for the audible path, mono duplicates to L+R, surround applies the `inferredSurroundChannelLayoutTag` downmix table (see Q5 allowlist) **for the visualizer feed only** — the audible path leaves the layout untouched.
+
+6. **No long-playback / route-change validation.** Spike is 3 s; the architecture's claim that AVPlayer handles route changes natively (vs the failed engine-routing path) is not yet empirically validated for the in-place tap topology. plan.md verification matrix must include AirPods connect/disconnect mid-playback, AirPlay handoff, and >10-minute continuous playback to validate drift behavior under the new clock topology.
+
+---
+
 ## Spike branch disposition
 
 `spike/avplayer-inplace-tap-dsp` retained locally as reference for the implementation phase. To be deleted at S3-2 close. `spikes/` directory exists only on this branch — not merged to `feat/avplayer-native-video-dsp` or `main`.

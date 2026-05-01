@@ -7,8 +7,9 @@
 **File:** `MacAmpApp/Audio/VisualizerPipeline.swift`
 
 - `VisualizerPipeline` (L325) is a `@MainActor @Observable` class.
-- Internal hand-off is a `VisualizerSharedBuffer` (L330) — a private `os_unfair_lock`-guarded struct
-  with a `generation` counter. Not a ring buffer; it is a single-slot double-buffer (last-write-wins).
+- Internal hand-off is a `VisualizerSharedBuffer` (defined L36, held at L330) — a `private final class`
+  guarded by `os_unfair_lock` with a `generation` counter. Not a ring buffer; it is a single-slot
+  double-buffer (last-write-wins).
 - **Consumer thread:** Main thread. A `Timer` fires at 30 Hz (L440, `.common` run-loop mode).
   Each tick calls `sharedBuffer.consume()` (L451), which takes the lock normally (blocking is safe on
   main thread), reads out the latest data if `generation != lastConsumed`, then calls `updateLevels`.
