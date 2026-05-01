@@ -1,9 +1,27 @@
 # State: Video Audio Engine Routing
 
+> ⚠️ **BRANCH PAUSED — S3-2 ARCHITECTURAL PIVOT (2026-05-01)**
+>
+> This task and branch are preserved as a reference but are NOT being merged. Phase 7 testing on real hardware revealed that the engine-routing approach for video audio fights the macOS platform too hard:
+> - AVAudioEngineConfigurationChange unreliable for AirPlay/AirPods route changes (proven by missing log line in user traces)
+> - Master-clock-coupled stalls between AVPlayer and engine consumer when the ring under-runs
+> - Dual-clock-domain drift over long playback
+> - Tinning artifacts from a second SRC stage (mitigated but not eliminated by Mastering quality)
+>
+> S3-2 is being re-attempted as a parallel architecture — AVPlayer-native DSP — on a new branch and task:
+>
+> **Branch:** `feat/avplayer-native-video-dsp` (cut from `main`, Phase 1 cherry-picked)
+> **Task:** `tasks/avplayer-native-video-dsp/`
+> **Pivot tracker:** `tasks/_context/s3-2-pivot.md`
+>
+> This branch (`feat/video-audio-engine-routing`) remains as a reference for: channel-mapping/surround-downmix logic, C-side `MTAudioProcessingTap` callback patterns, watchdog/fallback machinery, atomics-driven cross-thread state, the Oracle review history, and the Phase 7 quality investigation findings (which informed the pivot).
+
+---
+
 > **Purpose:** Route AVPlayer video audio through AVAudioEngine via `MTAudioProcessingTap` so video gets EQ + visualization. Includes engine config change observer (deferred from AirPlay PR #69).
 > **Created:** 2026-03-14
 > **Sprint:** S3, Wave S3-2 (sequential after S3-1 merges)
-> **Status:** PHASE 0 ✅ + PHASE 1 ✅ + PHASE 2 ✅ + PHASE 3 ✅ + PHASE 5 ✅ + PHASE 6 ✅ COMPLETE — implementation in progress on `feat/video-audio-engine-routing`; Phase 7 (tests + manual verification + drift target re-confirmation) next (Phase 4 is no-op per Phase 0)
+> **Status:** PHASE 0 ✅ + PHASE 1 ✅ + PHASE 2 ✅ + PHASE 3 ✅ + PHASE 5 ✅ + PHASE 6 ✅ + PHASE 7 PARTIAL → ⚠️ **PAUSED 2026-05-01** for architectural pivot (see banner above).
 
 ---
 
