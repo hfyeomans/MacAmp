@@ -313,32 +313,44 @@ Numbering convention: `<Phase>.<Item>`. Mark `[x]` on completion. Use `[~]` for 
 
 ---
 
-## Phase 6 — Capability Flag Surface
+## Phase 6 — Capability Flag Surface ✅ COMPLETE (1 commit, Oracle 9/10 pass 2, 102/102 TSan)
 
-### 6.1 PlaybackCoordinator
+### 6.1 PlaybackCoordinator ✅
 
-- [ ] 6.1.1 Update `supportsAudioProcessing` per plan §11.2 (three-branch implementation).
+- [x] 6.1.1 Update `supportsAudioProcessing` per plan §11.2 (three-branch: stream / video / local).
 
-### 6.2 AudioPlayer
+### 6.2 AudioPlayer ✅
 
-- [ ] 6.2.1 Update `snapshotButterchurnFrame()` per plan §11.3 (replace media-type guard with bridge-aware guard).
-- [ ] 6.2.2 Already done in Phase 3.4.5: extend `isEngineRendering` to include video bridge.
-- [ ] 6.2.3 Update `volume.didSet` per plan §11.6 (gate AVPlayer forwarding on fallback flag).
+- [x] 6.2.1 Update `snapshotButterchurnFrame()` per plan §11.3 (bridge-aware guard).
+- [x] 6.2.2 `isEngineRendering` already extended to include video bridge in Phase 3.
+- [x] 6.2.3 Update `volume.didSet` per plan §11.6. **Deviation:** uses `currentMediaType == .video, engine?.isVideoBridgeActive != true` rather than the plan's narrower `videoTapFallbackActive`. Oracle-approved — broader gate covers attach-failure and engine-activation-failure paths added in Phase 3 that aren't watchdog-flagged.
+- [x] 6.2.4 Remove `engine.removeVisualizerTapIfNeeded()` from `playTrack` audio→video transition per plan §11.4.
 
-### 6.3 PlaybackCoordinator volume forwarding
+### 6.3 Observation fix (Oracle pass-1 MUST-FIX)
 
-- [ ] 6.3.1 In `setVolume(_:)`: skip explicit `videoPlaybackController.volume = vol` (now handled by `engine.setVolume` via `videoSourceNode`).
+- [x] 6.3.1 Add `onVideoBridgeStateChanged` callback to `AudioEngineController`, fire on activate/deactivate.
+- [x] 6.3.2 Switch `AudioPlayer.isVideoBridgeActive` from computed-passthrough to `private(set) var` mirror updated via the callback. SwiftUI Observation now tracks bridge flips correctly.
+- [x] 6.3.3 Update `isEngineRendering` to read the mirror property.
 
-### 6.4 Tests
+### 6.4 Tests ✅ (5 added)
 
-- [ ] 6.4.1 Create `Tests/MacAmpTests/Audio/AudioPlayerVideoCapabilityTests.swift`.
-    - [ ] `supportsAudioProcessingWithActiveVideoBridge`
-    - [ ] `supportsAudioProcessingWithVideoTapFallback`
-    - [ ] `snapshotButterchurnFrameWorksForVideo`
+- [x] 6.4.1 `Tests/MacAmpTests/AudioPlayerVideoCapabilityTests.swift`:
+    - [x] `supportsAudioProcessingForLocalAudioReturnsTrue`
+    - [x] `supportsAudioProcessingWithActiveVideoBridge`
+    - [x] `supportsAudioProcessingWithVideoTapFallback`
+    - [x] `supportsAudioProcessingForVideoWithoutBridgeReturnsFalse`
+    - [x] `snapshotButterchurnFrameNilForVideoWithoutBridge`
+    - [x] `snapshotButterchurnFrameWorksForVideoBridge`
+    - [x] `volumeDoesNotForwardWhileBridgeActive`
+    - [x] `volumeForwardsToAVPlayerWhenBridgeInactive`
 
-### 6.5 Commit
+### 6.5 UI copy
 
-- [ ] 6.5.1 `feat(audio): enable EQ + visualizer + balance for video sessions`
+- [x] 6.5.1 `MainWindowSlidersLayer` balance tooltip: "unavailable during streaming" → "unavailable on this audio path".
+
+### 6.6 Commit ✅
+
+- [x] 6.6.1 `d840a2b` feat(audio): enable EQ + visualizer + balance for video sessions
 
 ---
 

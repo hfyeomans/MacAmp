@@ -3,16 +3,16 @@
 > **Purpose:** Route AVPlayer video audio through AVAudioEngine via `MTAudioProcessingTap` so video gets EQ + visualization. Includes engine config change observer (deferred from AirPlay PR #69).
 > **Created:** 2026-03-14
 > **Sprint:** S3, Wave S3-2 (sequential after S3-1 merges)
-> **Status:** PHASE 0 ✅ + PHASE 1 ✅ + PHASE 2 ✅ + PHASE 3 ✅ + PHASE 5 ✅ COMPLETE — implementation in progress on `feat/video-audio-engine-routing`; Phase 6 (capability flag surface) next (Phase 4 is no-op per Phase 0)
+> **Status:** PHASE 0 ✅ + PHASE 1 ✅ + PHASE 2 ✅ + PHASE 3 ✅ + PHASE 5 ✅ + PHASE 6 ✅ COMPLETE — implementation in progress on `feat/video-audio-engine-routing`; Phase 7 (tests + manual verification + drift target re-confirmation) next (Phase 4 is no-op per Phase 0)
 
 ---
 
 ## Current Status
 
-**Phase:** Phase 0 + 1 + 2 + 3 + 5 done. Phase 6 (capability flag surface per plan §11) next; Phase 4 is a no-op per Phase 0 Path NONE.
+**Phase:** Phase 0 + 1 + 2 + 3 + 5 + 6 done. Phase 7 (tests + manual verification per plan §12 / §14) next; Phase 4 is a no-op per Phase 0 Path NONE.
 **Last Updated:** 2026-04-30.
-**Branch HEAD:** `adf3fa4`. 32 commits ahead of main (10 Phase-1 + 1 Phase-1 task-folder closeout + 1 Phase-1 SHA-cleanup + 5 Phase-2 + 1 Phase-2 closeout + 6 Phase-3 + 1 Phase-3 task-folder closeout + 1 Phase-3 _context closeout + 3 Phase-3 regression-fix commits + 1 Phase-3 final closeout + 1 Phase-5 + 1 Phase-5 closeout pending). SHAs may rotate on future rebases — match by commit message.
-**Tests:** 94/94 pass with TSan (90 → 94: +3 video-tap fallback state-machine, +1 watchdog detection). Manual video playback verified post-regression-fix arc (video frame displays, single audio path through bridge, slider clean, EQ + spectrum analyzer respond — Milkdrop visualizer remains gated to `.audio` per plan §11.3 and is intentionally a Phase 6 scope).
+**Branch HEAD:** `d840a2b`. 34 commits ahead of main. SHAs may rotate on future rebases — match by commit message.
+**Tests:** 102/102 pass with TSan (94 → 102: +5 capability tests covering flag transitions across local/video-bridge/fallback/no-bridge states, positive Butterchurn frame for video bridge, and volume forwarding gate across bridge-active/inactive video). EQ window + balance slider now correctly dim during video without an active engine bridge (attach-failure, engine-fail, watchdog fallback) and light up when the bridge is the audible path. Milkdrop/Butterchurn now drives during video bridge sessions.
 
 ### Phase 1 outcome (engine configuration change observer)
 
@@ -124,14 +124,37 @@
 
 - `adf3fa4` feat(audio): add video tap-failure watchdog + AVPlayer fallback
 
-### Phase 3 follow-ups (deferred — Phase 5 handled #1; #2-4 still Phase 6)
+### Phase 6 outcome (capability flag surface — EQ + visualizer + balance for video)
 
-| # | Item | Phase | Reason for deferral |
-|---|------|-------|---------------------|
+1 commit (`d840a2b`) implementing plan §11. Capability flag surface now tells the truth across every audible path: EQ window, balance slider, Milkdrop/Butterchurn visualizer all light up when the engine bridge is processing audio, dim when AVPlayer is direct.
+
+**Changes:**
+
+- **`PlaybackCoordinator.supportsAudioProcessing`** — three-branch gate per plan §11.2. Stream session reads `audioPlayer.isBridgeActive`; video session reads `audioPlayer.isVideoBridgeActive && !audioPlayer.videoTapFallbackActive`; local file always supported.
+- **`AudioPlayer.snapshotButterchurnFrame`** — bridge-aware guard per plan §11.3. Video sessions through the engine bridge now drive Butterchurn at 30 FPS. Tap-fallback path stays nil.
+- **`playTrack` audio→video transition** — visualizer tap removal call dropped per plan §11.4. Same tap drives both audio and video visualizations through the bridge.
+- **`volume.didSet` gate** — tightened to `currentMediaType == .video, engine?.isVideoBridgeActive != true` (plan §11.6 deviation, see below).
+- **Observation fix (Oracle pass-1 MUST-FIX)** — `AudioPlayer.isVideoBridgeActive` switched from computed-passthrough (not observation-tracked because `engine` is `@ObservationIgnored`) to `private(set) var` mirror updated via new `engine.onVideoBridgeStateChanged` callback. SwiftUI now re-evaluates the capability surface when the bridge flips.
+- **UI copy** — balance slider help text "unavailable during streaming" → "unavailable on this audio path" (covers new video-fallback / pre-bridge dim states).
+
+**Plan §11.6 deviation (Oracle-confirmed correct):** plan specifies `if videoTapFallbackActive { videoPlaybackController.volume = volume }` for the volume forwarding gate. Implementation uses `if currentMediaType == .video, engine?.isVideoBridgeActive != true { ... }` instead — strictly broader. Rationale: the watchdog flag is set only on watchdog-detected stalls, not on attach-failure or engine-activation-failure paths added in Phase 3. Those paths ALSO leave AVPlayer as the audible video path and need volume forwarding. The broader gate captures the actual semantic ("AVPlayer is audible iff video session has no active bridge") cleanly.
+
+**Oracle review:** gpt-5.5 xhigh, 2 passes. Pass 1 = 8/10 with 2 MUST-FIXes (`isVideoBridgeActive` not observation-tracked, missing positive Butterchurn frame test). Pass 2 (after fixes) = **9/10, gate clear**. Plan deviation explicitly approved.
+
+**Tests:** +5 (`AudioPlayerVideoCapabilityTests`: supportsAudioProcessingForLocalAudioReturnsTrue, supportsAudioProcessingWithActiveVideoBridge, supportsAudioProcessingWithVideoTapFallback, supportsAudioProcessingForVideoWithoutBridgeReturnsFalse, snapshotButterchurnFrameNilForVideoWithoutBridge, snapshotButterchurnFrameWorksForVideoBridge, volumeDoesNotForwardWhileBridgeActive, volumeForwardsToAVPlayerWhenBridgeInactive). 102/102 pass with TSan.
+
+#### Commit list (Phase 6):
+
+- `d840a2b` feat(audio): enable EQ + visualizer + balance for video sessions
+
+### Phase 3 follow-ups (all addressed)
+
+| # | Item | Phase | Status |
+|---|------|-------|--------|
 | 1 | Tap watchdog reads BOTH `lastCallbackHostTime` AND `fallbackRequested` | ✅ Phase 5 | Done in `adf3fa4` — watchdog consumes both signals. |
-| 2 | `supportsAudioProcessing` capability flag dimming for tap-fallback path | Phase 6 (plan §11.2) | `videoTapFallbackActive` flag is now in place and observable; Phase 6 wires it into the capability surface. |
-| 3 | `snapshotButterchurnFrame` media-type guard relaxation for video bridge | Phase 6 (plan §11.3) | Phase 3 set `isEngineRendering` to include `engine.isVideoBridgeActive`, but `snapshotButterchurnFrame` still gates on `currentMediaType == .audio`. Phase 6 swaps the guard. |
-| 4 | Volume `didSet` AVPlayer.volume forwarding gating | Phase 6 (plan §11.6) | Currently gated on `engine?.isVideoBridgeActive != true`; after fallback the bridge deactivates so forwarding resumes naturally. Phase 6 makes this gate `videoTapFallbackActive`-aware explicitly. |
+| 2 | `supportsAudioProcessing` capability flag dimming for tap-fallback path | ✅ Phase 6 | Done in `d840a2b` — three-branch gate reads `videoTapFallbackActive` for video sessions. |
+| 3 | `snapshotButterchurnFrame` media-type guard relaxation for video bridge | ✅ Phase 6 | Done in `d840a2b` — bridge-aware guard, Butterchurn drives during video. |
+| 4 | Volume `didSet` AVPlayer.volume forwarding gating | ✅ Phase 6 | Done in `d840a2b` — broader-than-plan gate covers attach-failure / engine-fail paths too. |
 
 ### Phase 2 follow-ups (deferred — not blocking Phase 3)
 
@@ -229,7 +252,7 @@ When switching output device FROM AirPlay TO built-in speakers, CoreAudio emits 
 
 ---
 
-## Next Steps (Phase 0 ✅ + 1 ✅ + 2 ✅ + 3 ✅ + 5 ✅ complete; Phase 6 next)
+## Next Steps (Phase 0 ✅ + 1 ✅ + 2 ✅ + 3 ✅ + 5 ✅ + 6 ✅ complete; Phase 7 next)
 
 1. ✅ Phase 0 spike: harness built, ran on 5-clip clipperboard corpus, Path NONE confirmed.
 2. ✅ Findings written to `research.md` "Phase 0 — Spike Results"; spike branch deleted.
@@ -238,8 +261,8 @@ When switching output device FROM AirPlay TO built-in speakers, CoreAudio emits 
 5. ✅ Phase 2 (MTAudioProcessingTap wrapper per plan §7) — 5 commits, Oracle 9.3/10, 84/84 tests pass with TSan.
 6. ✅ Phase 3 (engine source node + wiring per plan §8) — 9 commits + closeout (regression-fix arc included), Oracle **9.5/10** final, 90/90 tests pass with TSan, manual video verified.
 7. ⏭ **Skip Phase 4** (sync strategy) — Path NONE per Phase 0; todo §4.NONE already done.
-8. ✅ Phase 5 (tap-failure watchdog + fallback per plan §10) — 1 commit (`adf3fa4`), Oracle **9.2/10** (pass 2, gate clear), 94/94 tests pass with TSan. Watchdog consumes both `tap.lastCallbackHostTime` stall and `tap.fallbackRequested` signals; pause→resume baseline reset prevents stale-callback false positives; co-fixed VideoAudioTap process-side fallback flagging and activateVideoBridge internal-failure handling.
-9. ⏭ **Phase 6 (capability flag surface per plan §11) — NEXT.** Three-branch `supportsAudioProcessing` (local/stream/video) reading `videoTapFallbackActive`; `snapshotButterchurnFrame` swap from `currentMediaType == .audio` to bridge-aware guard so Milkdrop/Butterchurn works with video.
-10. ⏭ Phase 7 (tests + manual verification + drift target re-confirmation per plan §12 / §14).
+8. ✅ Phase 5 (tap-failure watchdog + fallback per plan §10) — 1 commit (`adf3fa4`), Oracle **9.2/10** (pass 2, gate clear), 94/94 tests pass with TSan.
+9. ✅ Phase 6 (capability flag surface per plan §11) — 1 commit (`d840a2b`), Oracle **9/10** (pass 2, gate clear), 102/102 tests pass with TSan. Three-branch `supportsAudioProcessing`; `snapshotButterchurnFrame` bridge-aware guard; `volume.didSet` tighter gate (broader-than-plan, Oracle-approved); observation fix for `isVideoBridgeActive` mirror via new `onVideoBridgeStateChanged` callback.
+10. ⏭ **Phase 7 (tests + manual verification + drift target re-confirmation per plan §12 / §14) — NEXT.** Manual verification of EQ/balance/Milkdrop across local audio + stream + video + video-fallback. Drift re-confirmation against Phase 0 corpus.
 11. ⏭ TSan-on builds + tests after each phase via xcodebuildmcp.
 12. ⏭ Codex Oracle code-review gate (≥9/10) before pushing PR #C.
