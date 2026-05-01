@@ -114,10 +114,24 @@ final class PlaybackCoordinator {
         return streamPlayer.error == nil
     }
 
-    /// EQ, balance, and other audio-processing features are available when not streaming,
-    /// OR when the stream bridge is active (stream decoded through AVAudioEngine).
-    /// Dimmed only during stream error or before bridge activates (prebuffering).
-    var supportsAudioProcessing: Bool { !isStreamBackendActive || audioPlayer.isBridgeActive }
+    /// EQ, balance, and other audio-processing features are available when the
+    /// active audible path runs through `AVAudioEngine` and the engine graph
+    /// can therefore process the signal. Three-branch gate (plan §11.2):
+    ///
+    /// - **Stream session:** bridged when the decode pipeline has activated
+    ///   the source node — `audioPlayer.isBridgeActive` true. Stream errors
+    ///   and the prebuffer window read false here so the surface dims.
+    /// - **Video session:** bridged when the video source node is active and
+    ///   the tap watchdog hasn't demoted us. After fallback engages, AVPlayer
+    ///   plays its own audio direct, no engine processing — surface must dim.
+    /// - **Local file:** always supported (default playerNode wiring).
+    var supportsAudioProcessing: Bool {
+        if isStreamBackendActive { return audioPlayer.isBridgeActive }
+        if audioPlayer.currentMediaType == .video {
+            return audioPlayer.isVideoBridgeActive && !audioPlayer.videoTapFallbackActive
+        }
+        return true
+    }
 
     // MARK: - Initialization
 

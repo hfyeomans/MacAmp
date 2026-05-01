@@ -94,13 +94,16 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     /// capability surface (Phase 6 §11.2) re-evaluates when it flips.
     private(set) var videoTapFallbackActive: Bool = false
 
-    /// True when the engine's video source node is wired into the graph.
-    /// Mirrors `engine.isVideoBridgeActive` for capability-flag readers.
-    var isVideoBridgeActive: Bool { engine.isVideoBridgeActive }
+    /// Observable mirror of `engine.isVideoBridgeActive`. SwiftUI consumers
+    /// (capability surface, visualizer guards) need an Observation-tracked
+    /// property; the engine itself is `@ObservationIgnored`. Updated via
+    /// `engine.onVideoBridgeStateChanged` — parallel to the stream
+    /// `isBridgeActive` mirror.
+    private(set) var isVideoBridgeActive: Bool = false
 
     /// True when the audio engine is running AND producing audio output.
     var isEngineRendering: Bool {
-        engine.isEngineRunning && (isPlaying || isBridgeActive || engine.isVideoBridgeActive)
+        engine.isEngineRunning && (isPlaying || isBridgeActive || isVideoBridgeActive)
     }
 
     /// Audio volume (0.0-1.0 linear amplitude).
@@ -112,14 +115,17 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     var volume: Float = 0.75 {
         didSet {
             engine?.setVolume(volume)
-            // When the engine video bridge is active, AVPlayer must stay
-            // muted (`player.volume = 0`) — the bridge is the audible path.
-            // Forwarding here would un-mute AVPlayer's direct output and
-            // double-stack with the bridge. Plan §11.6 schedules a
-            // tap-fallback flag for Phase 6; until then, the bridge flag
-            // is the right gate. Tap-fallback (no bridge) still forwards
-            // because AVPlayer is the only audible path in that case.
-            if engine?.isVideoBridgeActive != true {
+            // Forward to AVPlayer only while it's the audible path: a
+            // video session WITHOUT an active engine bridge. That covers
+            // tap-fallback (watchdog demoted us), tap attach-failure
+            // (silent video / asset error), and engine activation
+            // failure — all the paths where AVPlayer plays its own audio
+            // direct. During an active bridge AVPlayer is muted and the
+            // engine drives the signal; forwarding would double-stack.
+            // Plan §11.6 specs `videoTapFallbackActive`; this gate is
+            // strictly broader so the non-watchdog AVPlayer-audible
+            // paths stay in sync.
+            if currentMediaType == .video, engine?.isVideoBridgeActive != true {
                 videoPlaybackController.volume = volume
             }
         }
@@ -246,6 +252,9 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
         }
         engine.onBridgeStateChanged = { [weak self] isActive in
             self?.isBridgeActive = isActive
+        }
+        engine.onVideoBridgeStateChanged = { [weak self] isActive in
+            self?.isVideoBridgeActive = isActive
         }
         engine.onEngineWillReconfigure = { [weak self] snapshot in
             self?.handleEngineWillReconfigure(snapshot: snapshot)
@@ -437,10 +446,11 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
                 tearDownVideoBridge()
                 videoPlaybackController.cleanup()
                 AppLog.debug(.audio, "Switching from video to audio - cleanup complete")
-            } else if currentMediaType == .audio {
-                engine.removeVisualizerTapIfNeeded()
-                AppLog.debug(.audio, "Switching from audio to video - tap removed")
             }
+            // audio→video: keep the visualizer tap installed. Video now
+            // feeds the engine through the bridge, so the same tap that
+            // drives the spectrum + Milkdrop frame for audio sessions
+            // works for video sessions too (plan §11.4).
         }
 
         currentMediaType = mediaType
@@ -1085,7 +1095,11 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     }
 
     func snapshotButterchurnFrame() -> ButterchurnFrame? {
-        guard currentMediaType == .audio && isEngineRendering else { return nil }
+        guard isEngineRendering else { return nil }
+        // Video runs through the engine when the bridge is active; the
+        // tap-fallback path bypasses the engine entirely and produces
+        // nothing visualizable.
+        if currentMediaType == .video, !engine.isVideoBridgeActive { return nil }
         return visualizerPipeline.snapshotButterchurnFrame()
     }
 

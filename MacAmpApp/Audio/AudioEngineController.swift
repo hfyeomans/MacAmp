@@ -80,6 +80,12 @@ final class AudioEngineController {
     /// Called when isBridgeActive changes so AudioPlayer can update its observable property.
     var onBridgeStateChanged: ((_ isActive: Bool) -> Void)?
 
+    /// Called when isVideoBridgeActive changes. Mirrors `onBridgeStateChanged`
+    /// so AudioPlayer's observable mirror property fires for SwiftUI tracking
+    /// (capability surface, visualizer guards). Without this, the engine's
+    /// `isVideoBridgeActive` flip wouldn't propagate through Observation.
+    var onVideoBridgeStateChanged: ((_ isActive: Bool) -> Void)?
+
     /// Called at the START of an output-route reconfigure burst, before any rewire.
     /// AudioPlayer arms `seekGuardActive` and bumps `currentSeekID` here so the
     /// stale playerNode completion (that the impending engine restart will fire)
@@ -621,6 +627,7 @@ final class AudioEngineController {
         installVisualizerTapIfNeeded()
 
         isVideoBridgeActive = true
+        onVideoBridgeStateChanged?(true)
         AppLog.info(.audio, "AudioEngineController: Video bridge activated — \(sampleRate)Hz")
     }
 
@@ -658,6 +665,7 @@ final class AudioEngineController {
         videoSourceNode = nil
         videoRingBuffer = nil
         isVideoBridgeActive = false
+        onVideoBridgeStateChanged?(false)
 
         AppLog.info(.audio, "AudioEngineController: Video bridge deactivated")
     }

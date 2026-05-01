@@ -69,6 +69,6 @@ struct MainWindowSlidersLayer: View {
         .at(Layout.balanceSlider)
         .opacity(playbackCoordinator.supportsAudioProcessing ? 1.0 : 0.5)
         .allowsHitTesting(playbackCoordinator.supportsAudioProcessing)
-        .help(playbackCoordinator.supportsAudioProcessing ? "Balance" : "Balance unavailable during streaming")
+        .help(playbackCoordinator.supportsAudioProcessing ? "Balance" : "Balance unavailable on this audio path")
     }
 }
