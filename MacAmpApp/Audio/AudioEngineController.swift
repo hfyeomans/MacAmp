@@ -15,7 +15,6 @@ struct PreReconfigureSnapshot: Sendable {
     let wasPlaying: Bool
     let currentTime: Double
     let wasStreamBridge: Bool
-    let wasVideoBridge: Bool
 }
 
 /// Owns the AVAudioEngine graph and all node-level operations.
@@ -518,9 +517,7 @@ final class AudioEngineController {
         let snapshot = PreReconfigureSnapshot(
             wasPlaying: playerNode.isPlaying,
             currentTime: readPlayerNodeCurrentTime() ?? 0,
-            wasStreamBridge: isBridgeActive,
-            // TODO Phase 3 (video-audio-engine-routing §8.1): wire to engine.isVideoBridgeActive
-            wasVideoBridge: false
+            wasStreamBridge: isBridgeActive
         )
         onEngineWillReconfigure?(snapshot)
     }

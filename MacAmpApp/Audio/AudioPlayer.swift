@@ -704,8 +704,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
         let corrected = PreReconfigureSnapshot(
             wasPlaying: isPlaying,
             currentTime: currentTime,
-            wasStreamBridge: snapshot.wasStreamBridge,
-            wasVideoBridge: snapshot.wasVideoBridge
+            wasStreamBridge: snapshot.wasStreamBridge
         )
         pendingReconfigureSnapshot = corrected
         // Bump currentSeekID BEFORE engine restart so the impending stale
@@ -732,7 +731,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
         // 2. Local-file path: ALWAYS reschedule from saved time, even when paused.
         //    play() does NOT itself reschedule (see line 417), so a subsequent
         //    play() would resume the now-detached pre-restart segment.
-        if !snapshot.wasStreamBridge && !snapshot.wasVideoBridge && engine.audioFile != nil {
+        if !snapshot.wasStreamBridge && engine.audioFile != nil {
             _ = engine.scheduleFrom(time: snapshot.currentTime, seekID: currentSeekID)
             currentTime = snapshot.currentTime
             if snapshot.wasPlaying {
