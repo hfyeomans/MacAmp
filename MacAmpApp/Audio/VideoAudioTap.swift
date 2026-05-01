@@ -228,6 +228,15 @@ private let tapPrepare: MTAudioProcessingTapPrepareCallback = { tap, maxFrames, 
     let src = processingFormat.pointee
     ctx.processingFormat = src
 
+    // Reset failure-classification state so re-prepare (e.g. AVPlayer
+    // re-prepares the tap after engine reconfigure or asset format
+    // change) starts from a clean slate. Without this, a tap that was
+    // previously "converter required but unavailable" would carry that
+    // flag into a re-prepare for a now bypass-safe format and silence
+    // the ring forever.
+    ctx.requiresConverter = false
+    ctx.fallbackRequested.store(false, ordering: .relaxed)
+
     if shouldBypassConverter(source: src, expectedSampleRate: ctx.expectedSampleRate) {
         return
     }
@@ -314,6 +323,13 @@ private let tapPrepare: MTAudioProcessingTapPrepareCallback = { tap, maxFrames, 
 /// Returns true when the source PCM format is byte-identical to the engine's
 /// canonical format — interleaved native-endian Float32 stereo at the engine's
 /// expected rate — so the converter can be skipped.
+///
+/// Predicate is **exact**, not subset: an extra PCM flag (e.g. big-endian
+/// variants) means the format isn't byte-identical and must go through the
+/// converter even if the "native float packed" bits happen to be present.
+/// Both `mBytesPerFrame` and `mBytesPerPacket` are checked since `tapProcess`
+/// reads the source buffer assuming the canonical packed-stereo layout in
+/// both axes.
 func shouldBypassConverter(
     source: AudioStreamBasicDescription,
     expectedSampleRate: Float64
@@ -321,11 +337,11 @@ func shouldBypassConverter(
     let stereoBytesPerFrame = UInt32(2 * MemoryLayout<Float>.size)
     let nativeFloatPacked = kAudioFormatFlagsNativeFloatPacked
     return source.mFormatID == kAudioFormatLinearPCM
-        && (source.mFormatFlags & nativeFloatPacked) == nativeFloatPacked
-        && (source.mFormatFlags & kAudioFormatFlagIsNonInterleaved) == 0
+        && source.mFormatFlags == nativeFloatPacked
         && source.mBitsPerChannel == 32
         && source.mChannelsPerFrame == 2
         && source.mBytesPerFrame == stereoBytesPerFrame
+        && source.mBytesPerPacket == stereoBytesPerFrame
         && source.mFramesPerPacket == 1
         && source.mSampleRate == expectedSampleRate
 }

@@ -164,6 +164,47 @@ struct VideoTapFallbackTests {
         #expect(player.isVideoBridgeActive == false)
     }
 
+    @Test("Late-gate-edge fallback raised right at deadline expiry is absorbed by clean-up tick")
+    func watchdogClearsLateGateEdgeFallback() async {
+        let player = AudioPlayer()
+        let ring = LockFreeRingBuffer(capacity: 4096, channelCount: 2)
+        let tap = VideoAudioTap(ringBuffer: ring, expectedSampleRate: 48_000)
+
+        player._testActivateVideoBridgeAndStartWatchdog(tap: tap, ringBuffer: ring)
+
+        // Open burst so the watchdog observes at least one gated tick
+        // (sets wasReconfigureGated = true). 300 ms buys one tick + slack.
+        player._testSetPendingReconfigureSnapshot(
+            PreReconfigureSnapshot(
+                wasPlaying: true,
+                currentTime: 0,
+                wasStreamBridge: false,
+                wasVideoBridge: true
+            )
+        )
+        try? await Task.sleep(for: .milliseconds(300))
+
+        // Compress the settle deadline to ~50 ms, so the very next
+        // watchdog tick (~250 ms later) is past the deadline. Then trip
+        // fallbackRequested in the boundary window — this simulates HAL
+        // emitting one final source-pull error right at the seam.
+        player._testEndVideoReconfigureBurst(settleSeconds: 0.05)
+        tap._testRequestFallback()
+
+        // Two ticks past the deadline: one to absorb the late-edge flag
+        // (the post-gate clean-up branch), one normal check that should
+        // see a clean state.
+        try? await Task.sleep(for: .milliseconds(600))
+        #expect(player.videoTapFallbackActive == false)
+        #expect(player.isVideoBridgeActive == true)
+
+        // A FRESH failure after the clean-up tick must still demote.
+        tap._testRequestFallback()
+        try? await Task.sleep(for: .milliseconds(400))
+        #expect(player.videoTapFallbackActive == true)
+        #expect(player.isVideoBridgeActive == false)
+    }
+
     @Test("Cancel mid-burst then did-handler arms finite settle and allows fresh fallback")
     func cancelMidBurstThenDidArmsSettleAndAllowsFreshFailure() async {
         let player = AudioPlayer()

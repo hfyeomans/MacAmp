@@ -629,6 +629,15 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
             // covering the post-attach window before the first callback.
             var resumeBaselineHost: UInt64 = mach_absolute_time()
             var wasPlaying: Bool = false
+            // Tracks whether the prior tick was inside the reconfigure
+            // gate. On the FIRST ungated tick we run a one-shot clean-up
+            // that mirrors the gated tick — clears `fallbackRequested`,
+            // resets the baseline, forces the next isPlaying observation
+            // to count as a resume edge. This absorbs any flag raised
+            // between the last gated tick and the deadline expiry (HAL
+            // settle tail can fire its final noise milliseconds after
+            // the deadline elapses).
+            var wasReconfigureGated: Bool = false
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(250))
                 if Task.isCancelled { break }
@@ -658,6 +667,21 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
                 // A real post-gate failure will re-trip the flag from
                 // the C-side tap callback.
                 if mach_absolute_time() < self.videoReconfigureGateUntilHost {
+                    resumeBaselineHost = mach_absolute_time()
+                    wasPlaying = false
+                    tap.clearFallbackRequested()
+                    wasReconfigureGated = true
+                    continue
+                }
+
+                // First tick after the gate expires: HAL noise can land
+                // between the last gated tick and the deadline elapsing,
+                // setting fallbackRequested in a window the gate didn't
+                // cover. Run one more clean-up tick before checking the
+                // flag for real, so a single late-edge spurious trip
+                // can't demote.
+                if wasReconfigureGated {
+                    wasReconfigureGated = false
                     resumeBaselineHost = mach_absolute_time()
                     wasPlaying = false
                     tap.clearFallbackRequested()
