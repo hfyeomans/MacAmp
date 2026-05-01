@@ -23,7 +23,7 @@ No pre-Swift-6 idioms in the callback shape itself; the closures are non-`@Senda
 
 The retained pointer is handed to the tap at creation time through `callbacks.clientInfo`, mirrored into per-callback-accessible storage by `tapInit`, and released exactly once in `tapFinalize`. All intermediate retrievals use `takeUnretainedValue()` so no spurious retain/release occurs on the hot render path. This is the only correct way to share Swift heap state with a C-lifetime callback set.
 
-**Swift-6.2 flag:** `VideoAudioTapContext` is declared `@unchecked Sendable` (line ~154). On the new branch this carve-out is acceptable at the C-callback boundary — but the declaration should carry a `// nonisolated(unsafe) carve-out: render thread is non-cooperative` comment (or use `nonisolated(unsafe)` storage on the specific fields) rather than blanket `@unchecked Sendable` on the whole class. Flag for modernization.
+**Swift-6.2 flag (SUPERSEDED — see research.md "Concurrency decision record"):** `VideoAudioTapContext` is declared `@unchecked Sendable` (line ~154). The original recommendation here was to add `nonisolated(unsafe)` markers on individual fields. **That recommendation is now superseded.** With `Synchronization.Atomic<T>` (Swift 6.0 stdlib), the atomic-disciplined fields are already `Sendable` and don't need per-field unsafety markers. The class envelope's `@unchecked Sendable` is sufficient at the C-callback boundary. Modernization on the new branch is the `swift-atomics` → `Synchronization.Atomic` swap, NOT the Sendable carve-out.
 
 ### 3. `AudioStreamBasicDescription` inspection in `tapPrepare`
 
@@ -60,7 +60,7 @@ No pre-Swift-6 idioms; the seam is already a clean pattern for the new branch's 
 | Item | Location | Issue | New-branch fix |
 |---|---|---|---|
 | `ManagedAtomic<UInt64>` / `ManagedAtomic<Bool>` | `VideoAudioTapContext` lines 187–188 | `swift-atomics` dependency; pre-Swift-6 atomics | Replace with `Synchronization.Atomic<UInt64>` / `Synchronization.Atomic<Bool>` (Swift 6.0, macOS 15+) |
-| `@unchecked Sendable` on `VideoAudioTapContext` | Line ~154 | Blanket suppress suppresses isolation diagnostics | Use `nonisolated(unsafe)` on render-thread-confined stored properties; apply `@unchecked Sendable` only if the class genuinely cannot be annotated per-field |
+| `@unchecked Sendable` on `VideoAudioTapContext` | Line ~154 | (No change needed) | Keep `@unchecked Sendable` envelope. With `Synchronization.Atomic<T>` for cross-thread fields, no per-field `nonisolated(unsafe)` markers needed (atomics are `Sendable`). See research.md "Concurrency decision record" for the canonical contract. |
 | `await playerItem.asset.loadTracks(withMediaType:)` | `VideoAudioTap.swift` line ~52 | Already uses async load — compliant | No change needed |
 | `await audioTrack.load(.formatDescriptions)` | `VideoAudioTap.swift` line ~62 | Already uses async load — compliant | No change needed |
 

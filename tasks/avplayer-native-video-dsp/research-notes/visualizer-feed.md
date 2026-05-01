@@ -94,37 +94,49 @@ sufficient for 1 full consumer interval of jitter headroom — but this is not r
 
 ---
 
-## Engine-side delta
+## Engine-side delta (revised after Oracle review — original "rename only" understated)
 
-Only `VisualizerPipeline.swift` changes. Two edits:
+The actual changes touch THREE nested types, not just `VisualizerSharedBuffer`. See research.md Q6
+for the canonical scope statement; this note retains the file-by-file detail.
 
-1. **Extract `VisualizerSharedBuffer` → `VisualizerFeed`** (rename + remove `private`, move to its
-   own file or promote to `internal`). Body is unchanged. ~0 net new LOC; ~5 lines of visibility
-   change.
+1. **Extract `VisualizerSharedBuffer` → `VisualizerFeed`** (file: `VisualizerPipeline.swift:36`).
+   `private final class` → module-internal, move to its own file. Body unchanged.
 
-2. **`VisualizerPipeline` holds `VisualizerFeed` instead of `VisualizerSharedBuffer`** (type
-   rename at L330). The `installTap` method (L380–398) continues to pass `sharedBuffer` (now a
-   `VisualizerFeed`) into `makeTapHandler` exactly as today. The tap closure calls
-   `feed.tryPublish(...)` — same call, same arguments, same drop-on-contention semantics.
+2. **Promote `VisualizerScratchBuffers` visibility** (file: `VisualizerPipeline.swift:169`). Currently
+   `private final class`. Video tap path needs its own instance (render-thread isolation per producer),
+   so the type must be visible to the new tap module — at minimum module-internal. Either keep nested-
+   but-not-private or extract to `VisualizerScratchBuffers.swift`.
+
+3. **Add a parallel video-tap render path** to consume `AudioBufferList` (vs the engine path's
+   `AVAudioPCMBuffer`) and produce the same `VisualizerFeed` arrays. The current
+   `makeTapHandler` (`VisualizerPipeline.swift:565`) is engine-tap-specific. Preferred (per AHA Rule
+   of Three): keep `makeTapHandler` engine-only and add `videoTapRender` that uses the same
+   `VisualizerFeed` + `VisualizerScratchBuffers` types. Rejected alternative: generalize
+   `makeTapHandler` over `AVAudioPCMBuffer` | `AudioBufferList` — would require flag-driven divergence
+   inside the closure (the wrong abstraction).
 
 Files touched:
-- `MacAmpApp/Audio/VisualizerPipeline.swift` — rename `sharedBuffer: VisualizerSharedBuffer` to
-  `feed: VisualizerFeed` (L330), update type reference in `makeTapHandler` signature (L566).
-- `MacAmpApp/Audio/VisualizerFeed.swift` — new file containing the extracted type (body moved from
-  `VisualizerPipeline.swift`).
+- `MacAmpApp/Audio/VisualizerPipeline.swift` — type renames + visibility-promote (`L36`, `L169`,
+  `L565`, plus the `sharedBuffer` field reference at `L330`).
+- New: `MacAmpApp/Audio/VisualizerFeed.swift` — extracted type.
+- New (optional): `MacAmpApp/Audio/VisualizerScratchBuffers.swift` if extracting rather than
+  keeping nested-but-non-private.
+- New: video-tap render function (file lives in the new tap module, not in `VisualizerPipeline.swift`).
 
-No changes to `AudioEngineController.swift`, `AudioPlayer.swift`, or any consumer call-site.
-Net LOC delta: ~0 (move, not add). `xcodegen generate` required to register the new file.
+No changes to `AudioEngineController.swift`, `AudioPlayer.swift`, or any visualizer consumer call-site.
+**Engine path: byte-for-byte identical behavior.** `xcodegen generate` required once. Net LOC
+estimate: ~100–150 across `VisualizerPipeline.swift` + 1–2 new files. plan.md Phase-1 work item.
 
 ---
 
 ## Tap-side write call
 
-Inside the `tapProcess` C callback, after the MTAudioProcessingTap produces and downmixes a stereo
-mono buffer into `scratch`, the call shape is:
+Inside the `tapProcess` C callback, after the visualizer DSP produces mono into `scratch` (mono mix
++ 20-bar RMS + 20-bar Goertzel + 2048-pt FFT — the same DSP the engine tap runs today), the call
+shape is:
 
 ```swift
-// After step 4 in tapProcess (downmix surround→stereo into scratch already done):
+// After step 4 in tapProcess (visualizer DSP into scratch — mono pre-computed arrays):
 _ = visualizerFeed.tryPublish(
     from: scratch,
     oscilloscopeSamples: 76,

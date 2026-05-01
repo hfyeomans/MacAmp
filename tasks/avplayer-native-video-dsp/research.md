@@ -114,7 +114,7 @@ The saved branch's failures were topology-bound. Some structural plumbing is pla
 - C-callback shape for `tapInit / tapFinalize / tapPrepare / tapUnprepare / tapProcess`
 - `Unmanaged<Context>` handoff via `MTAudioProcessingTapGetStorage` (lifetime pattern)
 - `AudioStreamBasicDescription` inspection in `tapPrepare` (sample-format detection)
-- Surround → stereo downmix coefficients **for the visualizer feed only** (the audible path leaves channel layout untouched)
+- Surround → mono downmix coefficients **for the visualizer feed only** (the audible path leaves channel layout untouched; the visualizer's existing engine-side tap mixes to mono — the canonical contract for the new tap path matches it)
 - TSan test scaffolding patterns + `_test*` API seams (deferred to implementation phase, not Phase 0)
 
 ### DENYLIST — do NOT carry forward (failure-bound or topology-coupled)
@@ -138,6 +138,32 @@ The saved branch's failures were topology-bound. Some structural plumbing is pla
 ## Step 2 findings (synthesis 2026-05-01)
 
 Four parallel research streams + clip enumeration completed. Detailed source documents in `research-notes/`; this section is the canonical synthesis for plan.md inputs.
+
+### Evidence ledger
+
+Single source of truth for what is empirically verified vs. inferred vs. deferred. plan.md gates derive from the **Deferred** rows; the **Estimated** rows tell plan.md what to confirm during implementation; the **Measured** rows are settled.
+
+| Claim | Evidence | Status |
+|---|---|---|
+| In-place buffer modification works (Q1 kill-switch) | Apple SDK header verbatim + Apple AudioTapProcessor sample + Phase 0 spike audible A/B + programmatic write-verify (`pre × gain == post`) | **Measured** |
+| `_PreEffects` is the right flag for source-side DSP | Apple SDK header verbatim (`MTAudioProcessingTap.h`) | **Measured (docs-binding)** |
+| `Synchronization.Atomic<UInt32>` for Float bit-pattern works in Swift 6.2 + macOS 15+ | Phase 0 spike compiles + runs end-to-end | **Measured** |
+| `Unmanaged<Context>` lifetime through C callbacks works in Swift 6.2 | Phase 0 spike: `tapInit/Prepare/Process/Finalize` callbacks fire as expected | **Measured** |
+| `AVAudioUnitEQ` uses RBJ-cookbook octave-BW peaking-EQ | Apple SDK header verbatim (`AudioUnitParameters.h`, `kAUNBandEQFilterType_Parametric`) | **Measured (docs-binding)** |
+| Per-band parameters (frequencies + bandwidth) | Read from current `MacAmpApp/Audio/EqualizerController.swift` | **Measured** |
+| ≤0.5 dB `BiquadCascade` vs `AVAudioUnitEQ` tolerance achievable | Inferred from RBJ algorithm precision; no implementation yet | **Estimated** |
+| 10-band biquad + balance + visualizer DSP within render budget on Apple Silicon | Calculated from op-count × sample rate; engine path runs equivalent visualizer DSP today | **Estimated** |
+| Same on Intel build target | Calculated; no Intel hardware measurement on either branch | **Estimated** |
+| AVPlayer handles AirPods/AirPlay routes natively, no DSP-state loss | Inferred from architecture (no engine bridge to break); not validated for new tap topology | **Deferred** |
+| Long-playback drift bounded (single-clock-domain) | Inferred from architecture; spike was 3 s | **Deferred** |
+| 5.1 surround correct in audible + visualizer paths | Spike tested stereo only; surround clip exists but unused | **Deferred** |
+| `MTAudioProcessingTap` survives `replaceCurrentItem(with:)` | Not investigated | **Deferred** |
+| Mid-playback format re-prepare (track switch, codec change) | Not investigated | **Deferred** |
+| Bluetooth codec/profile switch mid-playback (AAC ↔ SBC ↔ aptX) | Not investigated | **Deferred** |
+| AirPlay 1 vs AirPlay 2 behavioral differences | Not investigated | **Deferred** |
+| Tap behavior under signed-bundle entitlements (CLI spike has none) | Not investigated | **Deferred** |
+
+`Measured` = empirically validated or cited verbatim from Apple authoritative source. `Estimated` = derived from calculation or analogy; not directly observed. `Deferred` = explicit plan.md verification gate.
 
 ### Q1 — In-place buffer modification: ✅ RESOLVED (docs + empirical spike)
 
@@ -284,15 +310,65 @@ Oracle review of the Step 2 package surfaced three open architectural decisions 
    
    plan.md picks one with explicit rationale.
 
-3. **Verification gate matrix for plan.md sign-off.** Lock down the empirical gates BEFORE implementation, not as a post-hoc afterthought:
+3. **Verification gate matrix for plan.md sign-off.** Lock down the empirical gates BEFORE implementation, not as a post-hoc afterthought. Each row produces a pass/fail signal recorded in plan.md:
+
+   **Static gates (run once during implementation):**
    - **CPU benchmark** (Q3): 99th-percentile `tapProcess` wall-clock ≤ 10 % of buffer budget across Apple Silicon + Intel × 44.1 / 48 kHz × stereo / 5.1 surround
    - **Numerical EQ match** (Q2): ≤0.5 dB worst-case magnitude error vs `AVAudioUnitEQ` across 20 Hz – 20 kHz, log sine sweep
-   - **Long-playback drift** (Q3 / pivot): ≥10 minutes continuous video playback, no perceptible drift, A/V sync within ±40 ms
-   - **Route-change** (Q1 / pivot motivation): AirPods connect mid-playback, AirPods disconnect mid-playback, AirPlay handoff to AirPlay receiver, system default-output change — all four with no audio drop / video stall / EQ-state loss
-   - **Surround handling** (Q4): 5.1 source plays through native AVPlayer downmix correctly, visualizer feed downmix to mono is non-clipping, EQ applies to all 6 channels uniformly
    - **TSan**: full test suite green with `-enableThreadSanitizer YES` (project-standard prerequisite for any audio-path PR)
 
+   **Dynamic transition gates (run with active video playback):**
+   - **Long-playback drift** (Q3 / pivot): ≥10 minutes continuous video playback, no perceptible drift, A/V sync within ±40 ms
+   - **Route-change** (Q1 / pivot motivation): AirPods 1st-gen + AirPods Pro + AirPlay-1 receiver + AirPlay-2 receiver. For each: connect mid-playback / disconnect mid-playback. Pass/fail: tap callbacks resume within 500 ms, no DSP-state loss, no silent output, no stale-Context UAF
+   - **System default-output change**: Settings → Sound → Output device switch mid-playback. Pass/fail: same as route-change.
+   - **Bluetooth codec switch**: AAC ↔ SBC ↔ aptX (forced via Settings or `defaults write`) mid-playback. Pass/fail: tap-callback continuity, no audio drop, no DSP-state loss.
+   - **Mid-playback format re-prepare** (`AVPlayerItem` track-set change, audio asset variant): tap callback continuity (`tapPrepare` re-fires; `tapProcess` invocations resume with new ASBD).
+   - **Surround handling** (Q4): 5.1 source plays through native AVPlayer downmix correctly, visualizer feed downmix to mono is non-clipping, EQ applies to all 6 channels uniformly.
+   - **Item replacement during playback**: `player.replaceCurrentItem(with: nextItem)` for video → audio file (and vice versa) at random points. Pass/fail: `tapFinalize` fires for the outgoing item before its Context is released; no leak; no UAF; no audio drop > 200 ms.
+
+   **Lifecycle integrity gates** (see "Tap lifecycle contract" below):
+   - Rapid track skip (10 items in 1 s): no leak, no crash
+   - Tap-create failure path (force-injected): Context released, no leak
+   - Pause/resume cycle: Context state preserved
+   - Seek mid-playback: filter state behavior matches spec (flush-on-StartOfStream or accept transient)
+   - Signed-bundle smoke test: build + sign + run a Debug `.app`; confirm tap behavior matches the unsigned CLI spike
+
 These plan.md prerequisites are tracked separately from the Q1-Q6 research findings — they belong to plan.md authoring, not Step 2 research.
+
+### Tap lifecycle contract
+
+The MTAudioProcessingTap is a C-lifetime resource attached to an `AVPlayerItem`'s `audioMix.inputParameters[…].audioTapProcessor`. plan.md must specify the full state machine — defer nothing here:
+
+- **One-tap-per-item invariant.** Each `AVPlayerItem` for a video file gets its own freshly-built tap + Context pair. Sharing a tap across items is forbidden.
+- **Attach.** Tap is built when the AVPlayerItem is prepared. The `audioMix` is set once, before `play()`. **`audioMix` is NOT mutated during that item's playback** (the spike sets it once at construction and never touches it again — match this in production).
+- **Detach (item replacement / stop).**
+  1. `player.pause()` halts decode within ≤1 buffer of frames; no new `tapProcess` invocations
+  2. `player.replaceCurrentItem(with: …)` drops the outgoing AVPlayerItem reference
+  3. AVPlayer's deallocation chain calls `tapFinalize` once the tap's last reference is dropped (timing: not guaranteed sync — may happen on a background queue)
+  4. `tapFinalize` releases the `Unmanaged<Context>` exactly once
+  
+  `Unmanaged` balance: +1 from `passRetained` at attach, -1 from `release` at finalize.
+- **Pause/resume.** Stops/restarts `tapProcess` invocations from the current playback time. The Context survives across pause/resume — no special handling required.
+- **Seek.** `player.seek(to:)` causes a flush at the AV layer. The tap may receive `kMTAudioProcessingTapFlag_StartOfStream` on the next `tapProcess`. **plan.md decides:** flush `BiquadCascade` filter state on every StartOfStream (eliminates transient artifacts; resets EQ behavior briefly), or accept the transient (smaller code, slight audible artifact at seek points).
+
+**Open implementation questions for plan.md** (not research gaps — design decisions):
+- Does `tapFinalize` fire synchronously on `replaceCurrentItem` or async? Determines whether tear-down can wait synchronously for finalize.
+- Do we need a "tap is alive" atomic on the Context to short-circuit `tapProcess` if we want to pre-emptively disable DSP without waiting for finalize? (Useful for fast item switches.)
+- How does the tap interact with `AVQueuePlayer` (if MacAmp ever adopts it for video)? Currently uses single-item `AVPlayer` per video.
+
+### Concurrency decision record (S3-2)
+
+**Decision (2026-05-01).** Tap Context is a non-actor `final class` declared `@unchecked Sendable`. All cross-thread state uses `Synchronization.Atomic<T>` (or `Synchronization.Mutex<T>` for non-trivially-atomic state like `BiquadCoefficientSet`). No `nonisolated(unsafe)` markers on individual fields.
+
+**Rationale.** `Synchronization.Atomic<T>` is `Sendable` by stdlib design (Swift 6.0). Atomic-disciplined fields don't require localized unsafety markers — the `Atomic` value type carries the safety guarantee. The class envelope's `@unchecked Sendable` exists solely to silence the C-callback FFI boundary check (`Unmanaged` requires Sendable conformance for the Context type to cross the C-callback boundary in Swift 6.2 strict mode).
+
+**Rejected alternatives.**
+- *Per-field `nonisolated(unsafe)` markers.* Unnecessary noise; `Atomic<T>` already carries the safety contract.
+- *Actor-isolated Context with `nonisolated(unsafe)` carve-outs on individual stored properties.* More complexity than needed; the Context is fundamentally non-isolated (render thread accesses it via `Unmanaged`, not via actor messaging).
+- *`swift-atomics` `ManagedAtomic<T>`.* External package dependency we don't need; `Synchronization` ships in stdlib at our deployment target.
+- *Mutex-only state (no atomics).* Render thread blocking on a Mutex is a correctness hazard at the audio render deadline; only acceptable for state that updates rarely AND non-trivially (e.g., `BiquadCoefficientSet` with `tryLock`/skip-update semantics).
+
+**Supersedes.** Prior `saved-branch-retrospective.md` recommendations to use `nonisolated(unsafe)` on render-thread-confined stored properties (those notes assumed pre-`Synchronization.Atomic` workarounds were necessary; they are not on the new branch).
 
 ---
 
@@ -379,9 +455,9 @@ If the audio is audibly attenuated, in-place modification works. If volume is un
 
 **Source variety:** Real video files have 1/2/5.1/7.1 channel counts, 44.1/48/96 kHz sample rates. The tap callback receives whatever the asset's audio track is decoded to.
 
-**Approach (informed by reference-branch lessons):**
-- For visualizer feed: always downmix to stereo (Butterchurn / spectrum analyzer want stereo Float32)
-- For audible path: leave channel layout untouched if AVPlayer's downstream pipeline handles it; reverse-engineer from Phase 0 spike whether buffer in `tapProcess` is pre- or post-engine-mix (the `_PreEffects` / `_PostEffects` flag determines this)
+**Approach (informed by reference-branch lessons + Step 2 reading of `VisualizerPipeline.swift`):**
+- For visualizer feed: **mono** Float32 (canonical — the existing engine-side tap mixes N channels → mono; new tap path matches that contract). Surround sources downmix surround → mono.
+- For audible path: leave channel layout untouched. `_PreEffects` flag means tap receives the asset's native channel layout (stereo, 5.1, etc.) and writes it back unchanged for AVPlayer's downstream mixing.
 - Sample rate: tap delivers audio at the asset's native rate. AVPlayer handles SRC to hardware. We don't need a converter at all — DSP applies in-place at native rate.
 
 **Compare to reference branch:** The engine-routing approach REQUIRED an `AudioConverter` because the engine consumer ran at a different rate (48 kHz fixed) than the tap source (varies). New architecture DROPS the converter entirely — DSP runs at whatever rate AVPlayer is decoding. This is one of the architecture's key fidelity wins.
