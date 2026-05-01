@@ -153,24 +153,31 @@ must be `@unchecked Sendable` (already the case) so it is safe to reference from
 ## Risk + LOC estimate
 
 - **Engine-path behavior change:** Zero. The tap closure body, the `tryPublish` call, and the 30 Hz
-  poll-consume cycle are byte-for-byte identical. Only the type name at the declaration site changes.
-- **New file:** `VisualizerFeed.swift`, ~55 LOC (moved body, visibility tweak, doc comment).
-- **`VisualizerPipeline.swift` edits:** 2 lines changed (type annotation + `makeTapHandler` param).
-- **`xcodegen generate`:** Required once to register the new file. No `project.yml` schema change.
+  poll-consume cycle are byte-for-byte identical.
+- **New file(s):** `VisualizerFeed.swift` (extracted body), optionally `VisualizerScratchBuffers.swift`
+  if extracting rather than keeping nested-non-private.
+- **`VisualizerPipeline.swift` edits:** type renames + visibility-promote at L36, L169, L330, L565
+  (per "Engine-side delta" above).
+- **Plus:** new video-tap render function (lives in the new tap module, not in
+  `VisualizerPipeline.swift`) — consumes `AudioBufferList` and reuses `VisualizerFeed` +
+  `VisualizerScratchBuffers`.
+- **`xcodegen generate`:** Required once to register the new file(s). No `project.yml` schema change.
 - **Test surface:** Existing TSan tests continue to cover the engine path without modification.
-  No new test surface is introduced by this extraction alone.
-- **Regression risk:** Negligible — the lock, generation counter, trylock drop, and consumer nil
-  return on no-new-generation are all identical. The only risk is a typo during the rename, which
-  is caught at compile time.
-- **Scope:** ~60 LOC touched across 2 files, 1 new file. Half-day task maximum.
+  New tests cover the video-tap render path + lifecycle (per research.md verification matrix).
+- **Regression risk for the engine path:** Negligible — the lock, generation counter, trylock drop,
+  and consumer nil-return semantics are byte-for-byte unchanged.
+- **Scope (canonical — matches research.md Q6):** ~100–150 LOC across `VisualizerPipeline.swift` +
+  1–2 new files + new video-tap render function. plan.md Phase-1 work item.
 
 ---
 
 ## TL;DR
 
 The existing `VisualizerSharedBuffer` is already a single-slot SPSC hand-off with exactly the right
-semantics (trylock drop on the render thread, blocking consume on main). Extracting it as
-`VisualizerFeed` requires renaming the type, promoting its visibility, and moving it to its own
-file — no algorithmic change. The engine tap continues to call `tryPublish` with identical
-arguments; the new video tap adds a second callsite with the same signature; `VisualizerPipeline`
-consumes from `VisualizerFeed.consume()` as before, unchanged.
+semantics (trylock drop on the render thread, blocking consume on main). The minimum viable
+extraction for the engine path alone would be a rename + visibility promotion; the **dual-producer
+extraction (engine + video tap) requires three nested types to become module-internal**:
+`VisualizerSharedBuffer` → `VisualizerFeed`, `VisualizerScratchBuffers` (visibility-only), plus a
+parallel video-tap render function (engine `makeTapHandler` stays untouched). Engine path remains
+byte-for-byte identical; video tap reuses the same DSP and publishes mono pre-computed arrays.
+~100–150 LOC across 2 files + 1–2 new files.
