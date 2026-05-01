@@ -55,6 +55,33 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     /// AudioPlayer needs to decide whether to resume after the route change.
     /// nil except during the ~150 ms gap between will and did.
     @ObservationIgnored private var pendingReconfigureSnapshot: PreReconfigureSnapshot?
+
+    /// Mach-time deadline gating the video tap watchdog across an engine
+    /// reconfigure burst + settle window. The Phase 1 observer's quiet
+    /// window is ~150 ms but HAL's actual route-stabilization can take
+    /// multiple seconds (`Abandoning I/O cycle because reconfig pending`
+    /// errors continue long past `handleEngineDidReconfigure`). This is a
+    /// separate lifecycle from `pendingReconfigureSnapshot` because
+    /// user-intent paths (`play`/`pause`/`stop`/`seek`/`playTrack`) clear
+    /// the snapshot via `cancelPendingReconfigure()` and must not
+    /// prematurely reopen the watchdog.
+    ///
+    /// Lifecycle:
+    ///   - 0: gate inactive (default; watchdog runs normally)
+    ///   - UInt64.max: burst window active (will → did)
+    ///   - now + settle: post-burst grace window (did → did + settle)
+    ///
+    /// While `mach_absolute_time() < videoReconfigureGateUntilHost` the
+    /// watchdog skips its fallback-flag and host-time stall checks AND
+    /// quarantines `tap.fallbackRequested` (clears it each tick) so HAL
+    /// source-pull noise during the burst can't carry over and demote
+    /// once the gate clears.
+    @ObservationIgnored private var videoReconfigureGateUntilHost: UInt64 = 0
+
+    /// Post-burst grace window (seconds). Watchdog stays gated this long
+    /// after `handleEngineDidReconfigure` so HAL has time to stabilize
+    /// before stall detection resumes.
+    private static let videoReconfigureSettleSeconds: Double = 2.0
     var currentTrackURL: URL?
     var currentTitle: String = "No Track Loaded"
     var currentDuration: Double = 0.0
@@ -482,12 +509,14 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     /// the absence of engine routing.
     private func startVideoTrack(_ track: Track) {
         let sampleRate = engine.outputSampleRate
-        // ~340 ms of producer headroom at 48 kHz. The previous 4096-frame
-        // (~85 ms) ring under-ran on transient decode/route jitter; because
-        // AVPlayer's audio queue is the master clock for video, an under-run
-        // stalls the video frame too. A larger ring absorbs the jitter at
-        // the cost of a few hundred ms steady-state audio latency, which is
-        // imperceptible against the video render pipeline depth.
+        // 16384 frames = ~340 ms of producer-side headroom at 48 kHz —
+        // capacity, not steady-state latency. Real-world fill levels hover
+        // far below capacity once the consumer keeps pace. The previous
+        // 4096-frame (~85 ms) ring left no margin for transient tap jitter
+        // (decode spikes, route-change preludes, render-thread preemption);
+        // dropouts on the consumer side correlated with perceptible video
+        // hitches. The bigger ring absorbs that jitter without changing
+        // typical audio latency.
         let ring = LockFreeRingBuffer(capacity: 16384, channelCount: 2)
         let tap = VideoAudioTap(ringBuffer: ring, expectedSampleRate: sampleRate)
         videoRingBuffer = ring
@@ -611,17 +640,27 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
                 guard self.engine.isVideoBridgeActive else { break }
                 if self.videoTapFallbackActive { break }
 
-                // Engine reconfigure burst (output-route change). HAL halts
-                // the AVPlayer audio render thread while the new route comes
-                // up, so callbacks pause and tap.fallbackRequested may
-                // briefly trip on source-pull errors — both are expected.
-                // Skip stall + flag checks and reset the baseline so the
-                // next healthy iteration measures from now, and force a
-                // resume-edge reset on whichever post-burst iteration first
-                // sees `isPlaying`.
-                if self.pendingReconfigureSnapshot != nil {
+                // Engine reconfigure burst + post-burst settle window.
+                // HAL halts the AVPlayer audio render thread while the new
+                // route comes up, so callbacks pause and tap.fallbackRequested
+                // may briefly trip on source-pull errors — both are expected
+                // HAL artifacts, not real tap failures. The gate spans the
+                // entire window (will → did + settle); the 150 ms quiet
+                // window between will/did is too short on its own (HAL
+                // recovery routinely takes seconds).
+                //
+                // Skip stall + flag checks, reset the resume baseline so
+                // the post-gate first iteration measures from now, force
+                // a resume-edge reset on whichever post-gate iteration
+                // first sees `isPlaying`, and clear any stale
+                // `fallbackRequested` set during the burst so it can't
+                // demote the moment the gate clears (Oracle MUST-FIX).
+                // A real post-gate failure will re-trip the flag from
+                // the C-side tap callback.
+                if mach_absolute_time() < self.videoReconfigureGateUntilHost {
                     resumeBaselineHost = mach_absolute_time()
                     wasPlaying = false
+                    tap.clearFallbackRequested()
                     continue
                 }
 
@@ -902,11 +941,42 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
         startVideoTapWatchdog(for: tap)
     }
 
-    /// Test seam: simulate the reconfigure-burst window so the watchdog
-    /// gate test can prove route-change-induced tap stalls don't engage
-    /// fallback. Pass nil to clear (post-burst).
+    /// Test seam: simulate an active reconfigure burst (snapshot non-nil
+    /// AND gate open). Pairs with `_testEndVideoReconfigureBurst` for
+    /// burst → settle transitions. Pass nil to fully release.
     func _testSetPendingReconfigureSnapshot(_ snapshot: PreReconfigureSnapshot?) {
         pendingReconfigureSnapshot = snapshot
+        videoReconfigureGateUntilHost = (snapshot == nil) ? 0 : UInt64.max
+    }
+
+    /// Test seam: arm the post-burst settle window with a custom duration
+    /// (production uses `videoReconfigureSettleSeconds`). Used to exercise
+    /// the gate-clears → fresh-failure-demotes path without 2s sleeps.
+    func _testEndVideoReconfigureBurst(settleSeconds: Double) {
+        pendingReconfigureSnapshot = nil
+        let settleTicks = AVAudioTime.hostTime(forSeconds: settleSeconds)
+        videoReconfigureGateUntilHost = mach_absolute_time() &+ settleTicks
+    }
+
+    /// Test seam: simulate a user-intent path (play/pause/stop/seek/playTrack)
+    /// firing during a burst. Should clear `pendingReconfigureSnapshot` but
+    /// MUST NOT clear `videoReconfigureGateUntilHost` — the watchdog gate
+    /// is the HAL-stabilization concern, independent of resume context.
+    func _testCancelPendingReconfigure() {
+        cancelPendingReconfigure()
+    }
+
+    /// Test seam: invoke the production reconfigure-end handler exactly as
+    /// the engine observer would, then optionally compress the resulting
+    /// settle window for time-bounded tests. Validates the production
+    /// lifecycle including the cancel-then-did-handler orphan-gate fix
+    /// (gate must arm even when the snapshot was already canceled).
+    func _testHandleEngineDidReconfigure(overrideSettleSeconds: Double? = nil) {
+        handleEngineDidReconfigure()
+        if let seconds = overrideSettleSeconds {
+            let settleTicks = AVAudioTime.hostTime(forSeconds: seconds)
+            videoReconfigureGateUntilHost = mach_absolute_time() &+ settleTicks
+        }
     }
     #endif
 
@@ -1017,6 +1087,11 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     /// without any subsequent user action — and at that point AudioPlayer
     /// itself is being torn down, so the leftover state is harmless.
     private func handleEngineWillReconfigure(snapshot: PreReconfigureSnapshot) {
+        // Diagnostic: confirms which output-route changes actually fire the
+        // observer. macOS HAL routes through this notification for HDMI,
+        // BT, AirPods (via AirPlay subsystem), built-in toggle, etc.
+        AppLog.info(.audio, "Engine will reconfigure — output route change pending (videoBridge=\(snapshot.wasVideoBridge), streamBridge=\(snapshot.wasStreamBridge))")
+
         // The engine captures its snapshot at notification-receipt time, by
         // which point the system has ALREADY auto-stopped the engine —
         // `playerNode.isPlaying` is false and `playerNode.lastRenderTime` is
@@ -1032,6 +1107,9 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
             wasVideoBridge: snapshot.wasVideoBridge
         )
         pendingReconfigureSnapshot = corrected
+        // Open the watchdog gate for the entire burst (until the matching
+        // `handleEngineDidReconfigure` arms the post-burst settle window).
+        videoReconfigureGateUntilHost = UInt64.max
         // Bump currentSeekID BEFORE engine restart so the impending stale
         // playerNode completion (carrying the OLD seekID) is filtered by
         // shouldIgnoreCompletion. Same pattern as seek() / playTrack().
@@ -1046,6 +1124,17 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     /// reschedules the local-file player from the saved time, and releases
     /// seek guards on the same 100/200 ms cadence as `seek()`.
     private func handleEngineDidReconfigure() {
+        // Close the burst gate FIRST, regardless of whether resume context
+        // survived. If user-intent (`cancelPendingReconfigure()`) already
+        // cleared the snapshot, the early-return below would otherwise
+        // leave `videoReconfigureGateUntilHost` at UInt64.max forever and
+        // permanently neuter the watchdog. The settle window covers HAL's
+        // multi-second route-stabilization tail past the engine's 150 ms
+        // quiet window — `Abandoning I/O cycle because reconfig pending`
+        // errors continue well past the matching did callback.
+        let settleTicks = AVAudioTime.hostTime(forSeconds: Self.videoReconfigureSettleSeconds)
+        videoReconfigureGateUntilHost = mach_absolute_time() &+ settleTicks
+
         guard let snapshot = pendingReconfigureSnapshot else { return }
         pendingReconfigureSnapshot = nil
 

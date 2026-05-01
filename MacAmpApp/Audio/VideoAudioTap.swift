@@ -131,6 +131,15 @@ final class VideoAudioTap {
         context.fallbackRequested.load(ordering: .relaxed)
     }
 
+    /// Reset the fallback-request flag. The watchdog calls this every tick
+    /// while gated by `videoReconfigureGateUntilHost` so HAL source-pull
+    /// errors emitted during a route-change burst can't carry over and
+    /// demote the bridge once the gate clears. A real post-gate failure
+    /// will re-trip the flag from the next C-side tap callback.
+    func clearFallbackRequested() {
+        context.fallbackRequested.store(false, ordering: .relaxed)
+    }
+
     #if DEBUG
     /// Test seam: simulate a process-side fallback request without driving a
     /// real AVPlayer attach. Used by Phase 5 watchdog detection tests.
@@ -158,6 +167,15 @@ final class VideoAudioTapContext: @unchecked Sendable {
     var converter: AudioConverterRef?
     var converterScratch: UnsafeMutablePointer<Float>?
     var converterScratchFrameCapacity: Int = 0
+
+    /// True when `tapPrepare` determined the source format needs an
+    /// AudioConverter (mono/surround/non-Float32/non-target-rate). Decoupled
+    /// from `fallbackRequested` because the watchdog clears the latter
+    /// during gated reconfigure ticks; without this flag, a gated clear of
+    /// a "converter setup failed permanently" trip could let `tapProcess`
+    /// fall through to the bypass write path with mismatched source format.
+    /// Set once in `tapPrepare`, never cleared during the tap's lifetime.
+    var requiresConverter: Bool = false
 
     /// Single-shot handoff for the AudioConverter input callback. tapProcess
     /// stashes the source bufferList here, the input callback drains it once
@@ -214,6 +232,13 @@ private let tapPrepare: MTAudioProcessingTapPrepareCallback = { tap, maxFrames, 
         return
     }
 
+    // From here on the source needs conversion. Mark it BEFORE attempting
+    // setup so a setup failure leaves an authoritative "converter required
+    // but unavailable" signal in the context — `tapProcess` reads this to
+    // suppress the bypass write path even if the watchdog gate transiently
+    // clears `fallbackRequested`.
+    ctx.requiresConverter = true
+
     let stereoBytesPerFrame = UInt32(2 * MemoryLayout<Float>.size)
     var dst = AudioStreamBasicDescription(
         mSampleRate: ctx.expectedSampleRate,
@@ -234,25 +259,33 @@ private let tapPrepare: MTAudioProcessingTapPrepareCallback = { tap, maxFrames, 
         return
     }
 
-    // Lift sample-rate conversion off the default Linear/Medium tier — that
-    // tier produces audible imaging artifacts above ~10 kHz that show up as
-    // a "tinny" / sibilant shimmer on female vocals and high guitar
-    // harmonics on 44.1 → 48 kHz video. Mastering + Max matches what
-    // AVPlayer's native pipeline runs internally.
+    // Lift sample-rate conversion off the default tier — produces audible
+    // imaging artifacts above ~10 kHz on 44.1 → 48 kHz upsampling that
+    // present as "tinny" / sibilant shimmer on female vocals and high
+    // guitar harmonics. Mastering + Max matches what AVPlayer's native
+    // pipeline runs internally. Status is non-fatal: if either property
+    // is rejected we keep the converter (it works, just at default tier)
+    // but log so a regression is visible.
     var complexity: UInt32 = kAudioConverterSampleRateConverterComplexity_Mastering
-    _ = AudioConverterSetProperty(
+    let complexityStatus = AudioConverterSetProperty(
         converterRef,
         kAudioConverterSampleRateConverterComplexity,
         UInt32(MemoryLayout<UInt32>.size),
         &complexity
     )
+    if complexityStatus != noErr {
+        AppLog.warn(.audio, "VideoAudioTap: SRC complexity=Mastering rejected (status: \(complexityStatus)) — falling back to default tier")
+    }
     var quality: UInt32 = UInt32(kAudioConverterQuality_Max)
-    _ = AudioConverterSetProperty(
+    let qualityStatus = AudioConverterSetProperty(
         converterRef,
         kAudioConverterSampleRateConverterQuality,
         UInt32(MemoryLayout<UInt32>.size),
         &quality
     )
+    if qualityStatus != noErr {
+        AppLog.warn(.audio, "VideoAudioTap: SRC quality=Max rejected (status: \(qualityStatus)) — falling back to default tier")
+    }
 
     // AudioConverter's default behavior for a channel-count mismatch is
     // *routing*, not mixing — mono → L+silent-R, 5.1 → drop the last 4
@@ -473,10 +506,15 @@ private let tapProcess: MTAudioProcessingTapProcessCallback = {
         return
     }
 
-    if ctx.fallbackRequested.load(ordering: .relaxed) {
-        // Converter was needed but couldn't be built — skip the ring write
-        // entirely so the consumer drains to silence. Phase 5 fallback will
-        // engage on the flag.
+    if ctx.requiresConverter {
+        // Source needed conversion but no converter is available (setup
+        // failed in tapPrepare, or the watchdog gate transiently cleared
+        // `fallbackRequested` mid-burst). Either way, NEVER fall through
+        // to the bypass write — the source format won't match the ring
+        // layout. Skip the write; the consumer drains to silence and the
+        // watchdog's host-time stall path eventually demotes (callbacks
+        // fire here but `lastCallbackHostTime` only advances on a real
+        // ring write).
         return
     }
 

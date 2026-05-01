@@ -93,6 +93,149 @@ struct VideoTapFallbackTests {
         #expect(player.isVideoBridgeActive == true)
     }
 
+    @Test("Burst-time fallback is quarantined; gate clears flag before settle ends")
+    func watchdogGateQuarantinesBurstFallback() async {
+        let player = AudioPlayer()
+        let ring = LockFreeRingBuffer(capacity: 4096, channelCount: 2)
+        let tap = VideoAudioTap(ringBuffer: ring, expectedSampleRate: 48_000)
+
+        player._testActivateVideoBridgeAndStartWatchdog(tap: tap, ringBuffer: ring)
+
+        // Burst window opens — set fallbackRequested on the C-side flag,
+        // exactly what HAL source-pull errors do during route changes.
+        player._testSetPendingReconfigureSnapshot(
+            PreReconfigureSnapshot(
+                wasPlaying: true,
+                currentTime: 0,
+                wasStreamBridge: false,
+                wasVideoBridge: true
+            )
+        )
+        tap._testRequestFallback()
+
+        // Watchdog runs at least one tick; gate should both skip the
+        // fallbackRequested check AND clear the flag so it can't carry
+        // over into the post-burst window.
+        try? await Task.sleep(for: .milliseconds(350))
+        #expect(player.videoTapFallbackActive == false)
+        #expect(tap.fallbackRequested == false, "Gate must clear stale fallbackRequested raised during burst")
+
+        // End the burst with a short test settle window. Gate is still
+        // active; even with a stale flag (none here, since gate cleared
+        // it) we must not demote.
+        player._testEndVideoReconfigureBurst(settleSeconds: 0.4)
+        try? await Task.sleep(for: .milliseconds(300))
+        #expect(player.videoTapFallbackActive == false)
+        #expect(player.isVideoBridgeActive == true)
+    }
+
+    @Test("Fresh fallback after gate clears engages demotion")
+    func watchdogResumesAfterSettleWindow() async {
+        let player = AudioPlayer()
+        let ring = LockFreeRingBuffer(capacity: 4096, channelCount: 2)
+        let tap = VideoAudioTap(ringBuffer: ring, expectedSampleRate: 48_000)
+
+        player._testActivateVideoBridgeAndStartWatchdog(tap: tap, ringBuffer: ring)
+
+        // Run a tight burst → settle cycle: open the gate, end the burst
+        // with a 200 ms settle window, wait past it. After the gate clears,
+        // the watchdog must behave like a fresh session — a new tap
+        // failure trips demotion.
+        player._testSetPendingReconfigureSnapshot(
+            PreReconfigureSnapshot(
+                wasPlaying: true,
+                currentTime: 0,
+                wasStreamBridge: false,
+                wasVideoBridge: true
+            )
+        )
+        try? await Task.sleep(for: .milliseconds(50))
+        player._testEndVideoReconfigureBurst(settleSeconds: 0.2)
+        // 200 ms settle + one watchdog tick + 150 ms slack.
+        try? await Task.sleep(for: .milliseconds(600))
+
+        #expect(player.videoTapFallbackActive == false)
+
+        // Genuine post-gate failure — watchdog should now engage normally.
+        tap._testRequestFallback()
+        try? await Task.sleep(for: .milliseconds(400))
+
+        #expect(player.videoTapFallbackActive == true)
+        #expect(player.isVideoBridgeActive == false)
+    }
+
+    @Test("Cancel mid-burst then did-handler arms finite settle and allows fresh fallback")
+    func cancelMidBurstThenDidArmsSettleAndAllowsFreshFailure() async {
+        let player = AudioPlayer()
+        let ring = LockFreeRingBuffer(capacity: 4096, channelCount: 2)
+        let tap = VideoAudioTap(ringBuffer: ring, expectedSampleRate: 48_000)
+
+        player._testActivateVideoBridgeAndStartWatchdog(tap: tap, ringBuffer: ring)
+
+        // Burst opens — gate at UInt64.max via the snapshot+gate seam.
+        player._testSetPendingReconfigureSnapshot(
+            PreReconfigureSnapshot(
+                wasPlaying: true,
+                currentTime: 0,
+                wasStreamBridge: false,
+                wasVideoBridge: true
+            )
+        )
+
+        // User-intent cancel clears snapshot but MUST NOT touch the gate.
+        // (Without the orphan-gate fix in handleEngineDidReconfigure, the
+        // matching did handler would early-return on the nil snapshot and
+        // leave the gate at UInt64.max forever — watchdog forever neutered.)
+        player._testCancelPendingReconfigure()
+
+        // Did handler fires through the production path. With the fix the
+        // gate-arming runs BEFORE the snapshot guard, so the finite settle
+        // window arms even with no resume context. Compress to 200 ms for
+        // a time-bounded test.
+        player._testHandleEngineDidReconfigure(overrideSettleSeconds: 0.2)
+
+        // Past settle + one watchdog tick + slack.
+        try? await Task.sleep(for: .milliseconds(600))
+        #expect(player.videoTapFallbackActive == false)
+
+        // Genuine post-gate failure must demote — proves the gate actually
+        // cleared rather than orphaning at UInt64.max.
+        tap._testRequestFallback()
+        try? await Task.sleep(for: .milliseconds(400))
+
+        #expect(player.videoTapFallbackActive == true)
+        #expect(player.isVideoBridgeActive == false)
+    }
+
+    @Test("User-intent cancel during burst does not reopen watchdog gate")
+    func cancelPendingReconfigureDoesNotReopenGate() async {
+        let player = AudioPlayer()
+        let ring = LockFreeRingBuffer(capacity: 4096, channelCount: 2)
+        let tap = VideoAudioTap(ringBuffer: ring, expectedSampleRate: 48_000)
+
+        player._testActivateVideoBridgeAndStartWatchdog(tap: tap, ringBuffer: ring)
+
+        // Burst opens; user-intent path (e.g. user hits pause mid-route-change)
+        // calls cancelPendingReconfigure which clears the snapshot. Gate is
+        // independent and MUST remain active — HAL is still recovering.
+        player._testSetPendingReconfigureSnapshot(
+            PreReconfigureSnapshot(
+                wasPlaying: true,
+                currentTime: 0,
+                wasStreamBridge: false,
+                wasVideoBridge: true
+            )
+        )
+        tap._testRequestFallback()
+        player._testCancelPendingReconfigure()
+
+        // Two watchdog ticks past the cancel.
+        try? await Task.sleep(for: .milliseconds(600))
+
+        #expect(player.videoTapFallbackActive == false)
+        #expect(player.isVideoBridgeActive == true)
+    }
+
     @Test("playTrack resets videoTapFallbackActive for the next session")
     func playTrackResetsFallbackFlag() {
         let player = AudioPlayer()
