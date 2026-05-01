@@ -9,11 +9,14 @@
 
 ## Current State (update after each PR merge)
 
-**Last update:** 2026-04-30 (S3-2 Phase 0 + 1 + 2 ✅ — MTAudioProcessingTap wrapper ships at 9.3/10; `feat/video-audio-engine-routing` has 17 commits; Phase 3 next).
-**Main HEAD:** `07a3ee8` — `docs(_context): capture HLS video constraints + future-work options`.
-**feat/video-audio-engine-routing HEAD:** `749b91d` — `fix(audio): clear stale channel layout on tap reattach` (rebased onto main).
-**Tests:** 84/84 passing on the feat branch (TSan ON; +12 from Phase 2: +4 attach/state, +6 bypass classification, +2 surround layout map).
-**PRs merged total:** 80. Phase 3 work continues to land on the feat branch; no PR opened yet.
+> ⚠️ **S3-2 ARCHITECTURAL PIVOT (2026-05-01)** — `feat/video-audio-engine-routing` is **PAUSED-AS-REFERENCE** (preserved at `5af91eb`, pushed to origin). S3-2 is being re-attempted as **`avplayer-native-video-dsp`** on branch `feat/avplayer-native-video-dsp`. **See `tasks/_context/s3-2-pivot.md` for the strategic decision and three-step plan — that file is authoritative.** The "Last update" line and Active Work Queue below are kept brief during the pivot; rich detail is in the pivot tracker.
+
+**Last update:** 2026-05-01 (S3-2 pivoted — engine-routing approach paused-as-reference; new branch `feat/avplayer-native-video-dsp` cut from main with Phase 1 cherry-picked, scaffold only; Step 2 research NEXT).
+**Main HEAD:** `9cca40a` — `docs(_context): close out Phase 2; advance vaer to Phase 3-next`.
+**feat/avplayer-native-video-dsp HEAD:** `ffd77c1` — `chore(audio): drop wasVideoBridge field on AVPlayer-native branch` (Step 1 mechanical pivot, post-cherry-pick cleanup; subsequent commit will land the task scaffold).
+**feat/video-audio-engine-routing HEAD (paused):** `5af91eb` — `docs(vaer): mark branch paused for S3-2 architectural pivot`. 44 commits ahead of main, pushed to origin.
+**Tests:** 72/72 passing on the new branch (TSan ON, Phase-1-only surface). 110/110 on the paused branch (TSan ON, full Phase 7 surface).
+**PRs merged total:** 80. No PR opened on either S3-2 branch.
 
 **Most recent docs commits on main:**
 - `07a3ee8` HLS video future-work doc (S3-2 vs S3-3 naming clarification + 3 options for hypothetical HLS-video work)
@@ -29,35 +32,49 @@
 
 ## Active Work Queue (ordered — start at the top)
 
-### 1. IN PROGRESS — `tasks/video-audio-engine-routing/` (S3-2)
+### 1. SCAFFOLDED — `tasks/avplayer-native-video-dsp/` (S3-2 PIVOT)
 
-**Status:** Phase 0 + 1 + 2 ✅ all complete (2026-04-30). **Phase 3 (engine source node + wiring per plan §8) is next.**
+**Status:** Step 1 (mechanical pivot) ✅ DONE 2026-05-01. **Step 2 (research phase) is NEXT** — see `tasks/_context/s3-2-pivot.md` for the canonical three-step tracker.
 
-**Phase 0 outcome (commit `1d4eca1` on main):** Path NONE — frequency-locked clocks across all 5 corpus files (slope mean -0.75 ms/sec, 95% CI [-6.4, +4.9]). Constant -200 ms phase offset is AVPlayer pipeline depth, not perceptible drift. Plan §9 Phase 4 collapses to no-op. Plan §7.5 AudioConverter is **load-bearing** (not optional) — without resampling, 44.1 kHz audio plays as discontinuous bursts every ~76 ms.
+**Why pivoted:** The original S3-2 (`feat/video-audio-engine-routing`) reached Phase 7 testing and revealed structural issues with the engine-routing approach: `AVAudioEngineConfigurationChange` unreliable for AirPlay/AirPods routes (proven by missing log line), master-clock-coupled video stalls, dual-clock-domain drift, and tinning artifacts from a second SRC stage. The contrarian solve: don't drag video audio out of AVPlayer — apply DSP in-place inside the same `MTAudioProcessingTap` so AVPlayer's native pipeline plays the modified buffer. No ring, no engine clock for video, no master-clock coupling. Full strategic decision in `tasks/_context/s3-2-pivot.md`.
 
-**Phase 1 outcome (10 commits + 2 closeout on `feat/video-audio-engine-routing`):** Engine configuration change observer ships. Output-route changes (Control Center, AirPlay, HDMI hot-plug, sleep/wake) trigger graceful engine recovery for local-file + stream paths. Manually verified across local↔external↔AirPlay routing. 72/72 tests pass with TSan. Three Oracle-driven follow-up commits address all HIGH-priority review items.
+**Step 1 deliverables (all ✅ done):**
+- Saved branch `feat/video-audio-engine-routing` pushed to origin (44 commits, last `5af91eb`)
+- New branch `feat/avplayer-native-video-dsp` cut from main (`9cca40a`)
+- Phase 1 cherry-picked (13 commits — engine config observer for stream-side resilience)
+- `wasVideoBridge` field cleanly removed from `PreReconfigureSnapshot` (commit `ffd77c1`)
+- 72/72 tests with TSan
+- Task folder `tasks/avplayer-native-video-dsp/` scaffolded with 6 canonical files (skeletons)
+- `tasks/_context/s3-2-pivot.md` created
+- Cross-refs in `_context/state.md`, `tasks_index.md`, this file
 
-**Phase 2 outcome (5 commits, ending at `749b91d`):** `MacAmpApp/Audio/VideoAudioTap.swift` (~340 LOC) ships per plan §7. C-convention callbacks via `Unmanaged<VideoAudioTapContext>`; `MTAudioProcessingTap` CFType auto-managed by Swift bridging (no manual `Unmanaged` for the tap itself, only for the context). AudioConverter handles all four format-edge cases per plan §7.5: mono duplication (channel map `[0,0]`), surround downmix (`kAudioConverterPropertyPerformDownmix=1` + actual source `AudioChannelLayout` from `CMAudioFormatDescriptionGetChannelLayout`, AAC-tag fallback when metadata absent), non-Float32 conversion, sample-rate resampling. Oracle three-pass review converged at **9.3/10** (8.2 → 8.4 → 9.3). 76 → 84 tests with TSan: +4 attach/state, +6 bypass classification, +2 surround layout map.
+**Step 2 (research phase) NEXT — kill-switches:**
+- **Phase 0 spike** — `MTAudioProcessingTap` in-place buffer modification feasibility (throwaway branch, ~1–2 days). If AVPlayer doesn't actually play modified buffers, the architecture pivots and we replan.
+- Apple docs review — TN2249, `AVMutableAudioMix`, `MTAudioProcessingTap` SDK header, `AVAudioUnitEQ` reference
+- Reference-branch retrospective — read `feat/video-audio-engine-routing` end-to-end, catalog reusable patterns
+- `AVAudioUnitEQ` numerical-match research
+- Render-thread CPU budget measurement (Apple Silicon + Intel)
+- Channel-count / sample-rate handling investigation
+- `VisualizerFeed` extraction approach
 
-**Architectural notes (relevant for Phase 3 implementation):**
-- AsyncSequence-based notification observation (`NotificationCenter.notifications(named:object:)`) — modern Swift 6.2 pattern; future similar work follows it.
-- `PreReconfigureSnapshot` has split state ownership: bridge flags are MacAmp-owned (authoritative); `wasPlaying` / `currentTime` are best-effort placeholders that AudioPlayer overrides with its own state. Phase 3 candidate refactor: narrow the type to bridge-flags-only.
-- Reconfigure cancellation contract: `AudioPlayer.cancelPendingReconfigure()` called at start of `play`/`pause`/`stop`/`seek`/`playTrack` — Phase 3 video-bridge teardown should also call it.
-- `VideoAudioTap.attach(to:)` is **async** (uses `loadTracks(withMediaType:)` and `load(.formatDescriptions)` — non-deprecated successors). Plan §7.3 specced sync; the modern Swift 6.2 alternatives are async, so the signature shifted. Phase 3 wires this into a `Task { ... }` after AVPlayerItem is `.readyToPlay`.
-- `MTAudioProcessingTap` CFType is auto-managed in Swift 6.2 (not `Unmanaged`). Plan §7.3 specced manual `Unmanaged` lifecycle — only the `VideoAudioTapContext` clientInfo needs it.
-- Tap watchdog (Phase 5) must check **BOTH** `tap.lastCallbackHostTime` (host-time stall) AND `tap.fallbackRequested` (immediate-engage on AudioConverter creation failure). Documented on the public properties; flagged in state.md Phase 2 follow-ups.
-- HAL log noise (`!obj`, `!dev`, `'nope'`) on AirPlay→built-in transitions is OS-level device-teardown chatter, not MacAmp-actionable.
+Findings written to `tasks/avplayer-native-video-dsp/research.md`; Oracle research-pass review.
 
-**Branch:** `feat/video-audio-engine-routing` (rebased onto main HEAD `07a3ee8`) → PR target #C.
-**Predecessors:** S3-1A ✅ + S3-1B ✅ + Phase 0 ✅ + Phase 1 ✅ + Phase 2 ✅ all complete.
-**Successors:** S3-3 (`hls-streaming-support`) gated on this merge.
+**Step 3 (plan phase) — AFTER Step 2:** write `plan.md`, iterate with Oracle to ≥9/10, get user sign-off, derive `todo.md` phases, begin implementation.
 
-**Phase 3 (engine source node + wiring per plan §8) is next:**
-- Add `videoSourceNode`, `videoRingBuffer`, `isVideoBridgeActive` fields to `AudioEngineController` (parallel to `streamSourceNode`).
-- Implement `activateVideoBridge(ringBuffer:sampleRate:)` / `deactivateVideoBridge()` with mutual exclusion against the stream bridge.
-- Modify `AudioPlayer.playTrack` video branch (lines 354-360 area): build ring, instantiate `VideoAudioTap`, `await tap.attach(to:)`, set `playerItem.audioMix = mix`, `engine.activateVideoBridge(...)`, `player.volume = 0`.
-- Modify `VideoPlaybackController.loadVideo` and `cleanup` per plan §3.5 (or have AudioPlayer handle the tap externally — plan flexible).
-- Wire `wasVideoBridge` to a real flag in `PreReconfigureSnapshot`; fill in TODO comments at `AudioEngineController.handleEngineWillReconfigure` / `handleEngineDidReconfigure`.
+### 2. PAUSED-AS-REFERENCE — `tasks/video-audio-engine-routing/`
+
+Original S3-2 attempt. Branch `feat/video-audio-engine-routing` preserved at `5af91eb` (44 commits ahead of main, pushed to origin). NOT being merged. Useful as research reference for: channel-mapping/surround-downmix logic, C-side `MTAudioProcessingTap` callback patterns, atomics-driven cross-thread state, TSan test patterns, Oracle review history (9 implementation phases, all ≥9/10), Phase 7 quality investigation findings (which informed the pivot).
+
+The task's `state.md` carries a PAUSED-AS-REFERENCE banner pointing here.
+
+### 3. DEFERRED — `timer-scheduled-on-common-extension`
+
+Sub-follow-up of `timer-runloop-mode-audit` (now merged). Extract a `Timer.scheduledOnMainCommon(every:repeats:_:)` helper into `MacAmpApp/Utilities/Timer+CommonMode.swift` and migrate all 7 timer-on-RunLoop callsites in `MacAmpApp/` to use it. With 7 Pattern-A callsites now in the codebase, AHA Rule-of-Three is exceeded by 4× — the helper is the natural next step.
+
+**Predecessor:** `timer-runloop-mode-audit` PR #81 ✅ merged 2026-04-29.
+**Task folder:** not yet created (centrally tracked in `tasks/_context/state.md` "Post-S3-1A `timer-runloop-mode-audit` Follow-Ups" section).
+**Risk:** `@Sendable` closure migration may surface concurrency-checker edge cases at callsites using `[weak self]` + `MainActor.assumeIsolated` — warrants per-site review.
+**When to start:** any time; not blocking any S3 wave.
 
 ### 2. DEFERRED — `timer-scheduled-on-common-extension`
 
@@ -153,32 +170,23 @@ Index lives at `~/.claude/projects/-Users-hank-dev-src-MacAmp/memory/MEMORY.md`.
 
 ## First Action for the Resuming Agent
 
-Open `tasks/video-audio-engine-routing/` (S3-2). Read all 6 canonical files (`research.md`, `plan.md`, `todo.md`, `state.md`, `placeholder.md`, `depreciated.md`). Required reading on the **feat branch** (where Phase 0/1/2 closed):
-- `state.md` — full Phase 0/1/2 outcome including 17-commit list, architectural notes, follow-ups deferred to Phase 3
-- `plan.md §6.3` — split state ownership + cancellation contract (Phase 1 contract)
-- `plan.md §7` — MTAudioProcessingTap spec (Phase 2 implementation lives at `MacAmpApp/Audio/VideoAudioTap.swift`)
-- `plan.md §8` — engine source node + wiring spec (Phase 3 — what comes next)
-- `todo.md` Phase 1 + Phase 2 — all items marked [x]; reads as a closeout record
-- `research.md` Phase 0 results — Path NONE; AudioConverter is load-bearing
-- `MacAmpApp/Audio/VideoAudioTap.swift` itself — read the doc comments at the top of the file and on `attach(to:)` / `detach()` / `lastCallbackHostTime` / `fallbackRequested`. Phase 3 is the consumer.
+**Read `tasks/_context/s3-2-pivot.md` first.** It is authoritative for current S3-2 status — three-step plan, decision log, file index. The "Active Work Queue" above gives a one-paragraph summary; the pivot tracker has the full context.
 
-**Phase 0 + Phase 1 + Phase 2 are done.** Skip them. Phase 4 (sync strategy) is a no-op per todo §4.NONE. **Phase 3 (engine source node + wiring per plan §8) is next.**
+Then open `tasks/avplayer-native-video-dsp/` and read the 6 canonical files (currently scaffolded, not yet researched):
+- `state.md` — Step 1 done, Step 2 next; saved-branch context, dual-architecture topology table
+- `research.md` — research questions for Step 2 (Phase 0 spike kill-switch, Apple docs, retrospective, numerical-match research, render-thread CPU, channel/SRC handling, `VisualizerFeed` extraction)
+- `plan.md` — explicitly a skeleton; do NOT implement from it (research must land first per workflow)
+- `todo.md` — Step 1 items checked, Step 2/3 items pending
+- `placeholder.md` / `depreciated.md` — empty until implementation phase
 
-**Branch already exists:** `feat/video-audio-engine-routing` is rebased onto main HEAD `07a3ee8` and has 17 commits (10 Phase-1 + closeout + 5 Phase-2). Switch to it (`git checkout feat/video-audio-engine-routing`).
+**Step 1 is done.** Skip it. **Step 2 (research phase) is the active work.**
 
-Phase 3 sketch (per plan §8):
-- Modify `MacAmpApp/Audio/AudioEngineController.swift`: add `videoSourceNode`, `videoRingBuffer`, `isVideoBridgeActive` fields parallel to the stream bridge; add `makeVideoRenderBlock`; implement `activateVideoBridge(ringBuffer:sampleRate:)` / `deactivateVideoBridge()` with mutual exclusion against the stream bridge; extend `setVolume`/`setBalance` to forward to `videoSourceNode`. Fill the Phase 1 TODO comments at `handleEngineWillReconfigure` / `handleEngineDidReconfigure` (wire `wasVideoBridge` to a real flag).
-- Modify `MacAmpApp/Audio/AudioPlayer.swift` video branch in `playTrack`: build ring buffer (capacity 4096, channels 2), instantiate `VideoAudioTap`, **`await tap.attach(to:)`** (note: async signature), assign `playerItem.audioMix = mix`, call `engine.activateVideoBridge(...)`, set `player.volume = 0`. Update `stop()` to deactivate video bridge + detach tap. Update `isEngineRendering` to include video bridge.
-- Modify `MacAmpApp/Audio/VideoPlaybackController.swift` per plan §3.5 — extend `loadVideo` to accept optional tap (or have AudioPlayer wire externally), add `detachAudioTap()` that sets `playerItem.audioMix = nil` BEFORE calling `tap.detach()` (essential ordering), unify cleanup.
-- Tests: `Tests/MacAmpTests/AudioEngineControllerVideoBridgeTests.swift` per todo §3.6.
-- Phase 3 does NOT add the watchdog — that's Phase 5.
+**Branch already exists:** `feat/avplayer-native-video-dsp` is on main commit `9cca40a` + 13 cherry-picked Phase 1 commits + 1 cleanup commit (`ffd77c1`) + scaffolding commit (the next one to land). Switch to it (`git checkout feat/avplayer-native-video-dsp`). 72/72 tests with TSan.
 
-Standard pickup process from step 7 onward:
-- TSan-on builds + tests after each commit per `feedback_xcodebuildmcp_workflow.md`.
-- Per-step commits with build+test between (the established Phase 1 cadence).
-- Match the modern Swift 6.2 idioms from Phase 1: `@preconcurrency import` for unannotated frameworks, `Task.sleep(for: Duration)`, `isolated deinit`, AsyncSequence over block-based observers where applicable.
-- Codex Oracle review at end of phase per the existing pattern (Phase 1 closed at 9.5/10; Phase 2 at 9.3/10; aim for ≥9/10 at end of Phase 3).
+Saved reference branch (paused, not for work): `feat/video-audio-engine-routing` at `5af91eb`, pushed to origin. Read end-to-end during Step 2 retrospective (research question Q5 in `research.md`).
 
-Stop and report back to me before pushing the PR — I'll review before merge.
+Step 2 starts with the **Phase 0 spike** (research question Q1) on a throwaway branch — the kill switch on the entire architecture. If `MTAudioProcessingTap` doesn't actually let AVPlayer play in-place modified buffers, replan from there. The spike is documented in `research.md`; stand it up, run it, write findings back to `research.md`. Other research items (Apple docs, retrospective, numerical match, CPU budget, channel handling) can run in parallel or after the spike.
+
+Stop and report back to me before writing `plan.md` (Step 3) — I'll review research findings before plan iteration with Oracle begins.
 
 > **Optional sub-track:** `timer-scheduled-on-common-extension` — extract a `Timer.scheduledOnMainCommon` helper, migrate all 7 Pattern-A timer callsites. Predecessor `timer-runloop-mode-audit` (PR #81) is merged ✅; this task does not block any S3 wave. Task folder doesn't exist yet — create it on pickup using the same 6-file canonical layout.

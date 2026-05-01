@@ -1,5 +1,7 @@
 # Cross-Task State: Execution Coordination
 
+> ⚠️ **S3-2 ARCHITECTURAL PIVOT (2026-05-01):** `video-audio-engine-routing` is **PAUSED-AS-REFERENCE** (preserved branch `feat/video-audio-engine-routing`, last commit `5af91eb`, pushed to origin). S3-2 is being re-attempted as **`avplayer-native-video-dsp`** on branch `feat/avplayer-native-video-dsp` with a different (AVPlayer-native DSP) architecture — Phase 1 cherry-picked, scaffold only, Step 2 (research) NEXT. **See `tasks/_context/s3-2-pivot.md` for the strategic decision and three-step plan — that file is authoritative for current S3-2 status.** This file's S3-2 Updated note, sprint table, and Phase descriptions below still reflect the pre-pivot engine-routing branch's work (preserved for historical accuracy).
+
 > **Purpose:** Single source of truth for cross-task execution status, wave progress, and coordination decisions.
 > **Date:** 2026-02-21
 > **Updated:** 2026-04-30 (S3-2 Phase 0 + 1 + 2 ✅ **all complete**. Phase 2 ships the `MTAudioProcessingTap` wrapper at `MacAmpApp/Audio/VideoAudioTap.swift` (~340 LOC) — C-convention callbacks via `Unmanaged<VideoAudioTapContext>`, AudioConverter handles all four format-edge cases per plan §7.5 (mono duplication via channel map, surround downmix via `kAudioConverterPropertyPerformDownmix=1` + actual source channel layout, non-Float32, sample-rate). 5 commits, Oracle three-pass review converged at **9.3/10** (8.2 → 8.4 → 9.3). 84/84 tests pass with TSan (76 → 84: +4 attach/state, +6 bypass classification, +2 surround layout map). Phase 3 (engine source node + wiring per plan §8) next.)
@@ -296,8 +298,9 @@ All doc updates verified complete by sub-agent scan:
 |------|------|-------------|--------|------|--------------|----------------|--------|
 | S3-1 | A (parallel) | `done/mainwindow-visualizer-isolation` | `feat/mainwindow-visualizer-isolation` | **#80** | none | `spike/mwvi-volume-drag-profile` (Instruments) | ✅ **MERGED** 2026-04-28 |
 | S3-1 | B (parallel) | `done/stream-pause-tail` | `fix/stream-pause-tail` | **#82** | none | none | ✅ **MERGED** 2026-04-30 (merge `b60fd57`) — Oracle 9/10 final, 68/68 TSan tests, manual smoke validated |
-| S3-2 | sequential | `video-audio-engine-routing` | `feat/video-audio-engine-routing` | C | S3-1 merged ✅ + Phase 0 ✅ + Phase 1 ✅ + Phase 2 ✅ | `spike/vaer-av-drift-measurement` ✅ deleted | 🔧 **IN PROGRESS** — Phase 0/1/2 done; Phase 3 (engine source node + wiring per plan §8) next |
-| S3-3 | sequential | `hls-streaming-support` | `feat/hls-streaming-support` | D | S3-2 merged | none (Gemini re-run optional at plan-time) | PLAN APPROVED |
+| ~~S3-2~~ | ~~sequential~~ | ~~`video-audio-engine-routing`~~ | ~~`feat/video-audio-engine-routing`~~ | ~~C~~ | — | — | ⏸ **PAUSED-AS-REFERENCE** 2026-05-01 — see `_context/s3-2-pivot.md`. Branch preserved at `5af91eb`, pushed to origin. |
+| S3-2 (pivot) | sequential | `avplayer-native-video-dsp` | `feat/avplayer-native-video-dsp` | C | S3-1 merged ✅ + Phase 1 cherry-pick ✅ | Phase 0 spike pending (Step 2 research) | 🔧 **SCAFFOLDED** 2026-05-01 — Step 1 ✅; Step 2 (research) NEXT. See `_context/s3-2-pivot.md`. |
+| S3-3 | sequential | `hls-streaming-support` | `feat/hls-streaming-support` | D | S3-2 (pivot) merged | none (Gemini re-run optional at plan-time) | PLAN APPROVED |
 | S3-4 | sequential | `ogg-vorbis-support` | `feat/ogg-vorbis-support` | E | S3-3 merged | `spike/ogg-build-wiring` (0a) + `spike/ogg-local-playback` (0b) | PLAN APPROVED |
 | Post-S3-1A | follow-up | `done/timer-runloop-mode-audit` | `fix/timer-runloop-mode-audit` | **#81** | S3-1A merged ✅ | none | ✅ **MERGED** 2026-04-29 (merge commit `ac09dd4`) |
 
