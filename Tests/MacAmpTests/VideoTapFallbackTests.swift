@@ -52,7 +52,7 @@ struct VideoTapFallbackTests {
 
         // Trip the immediate-trigger path. The watchdog ticks every 250 ms;
         // 600 ms gives two ticks of margin against scheduler jitter without
-        // bleeding into the host-time stall window (1 s).
+        // bleeding into the host-time stall window (3 s).
         tap._testRequestFallback()
         try? await Task.sleep(for: .milliseconds(600))
 
@@ -300,6 +300,39 @@ struct VideoTapFallbackTests {
         player._testArmVideoRouteChangeGate(seconds: 10.0)
         let afterLonger = player._testVideoReconfigureGateUntilHost
         #expect(afterLonger > firstDeadline, "Longer arm must extend the deadline")
+    }
+
+    @Test("HAL-armed gate deadline survives engine will/did cycle without shortening")
+    func halGateSurvivesEngineWillDidCycle() {
+        let player = AudioPlayer()
+
+        // HAL listener fires first and arms a long deadline (5 s).
+        // Sequence: AirPlay route flip prompts the HAL property listener
+        // to arm before the engine eventually catches up.
+        player._testArmVideoRouteChangeGate(seconds: 5.0)
+        let halDeadline = player._testVideoReconfigureGateUntilHost
+        #expect(halDeadline > 0)
+
+        // Engine `will` then fires. With the decoupled state it sets
+        // videoBurstGateOpen but MUST NOT touch the deadline (the
+        // earlier longer HAL deadline must survive).
+        player._testSetPendingReconfigureSnapshot(
+            PreReconfigureSnapshot(
+                wasPlaying: true,
+                currentTime: 0,
+                wasStreamBridge: false,
+                wasVideoBridge: true
+            )
+        )
+        #expect(player._testVideoReconfigureGateUntilHost == halDeadline,
+                "Engine will must not clobber a longer HAL-armed deadline")
+
+        // Engine `did` arms its 2 s settle window via max() coalescing.
+        // 5 s > 2 s so the HAL deadline must remain.
+        player._testHandleEngineDidReconfigure()
+        let afterDid = player._testVideoReconfigureGateUntilHost
+        #expect(afterDid >= halDeadline,
+                "Engine did must not shorten an earlier longer HAL deadline (max-coalescing)")
     }
 
     @Test("playTrack resets videoTapFallbackActive for the next session")
