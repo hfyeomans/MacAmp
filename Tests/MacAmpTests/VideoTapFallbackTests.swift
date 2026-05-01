@@ -60,6 +60,39 @@ struct VideoTapFallbackTests {
         #expect(player.isVideoBridgeActive == false)
     }
 
+    @Test("Watchdog gate holds fallback during engine reconfigure burst")
+    func watchdogGateHoldsDuringReconfigure() async {
+        let player = AudioPlayer()
+        let ring = LockFreeRingBuffer(capacity: 4096, channelCount: 2)
+        let tap = VideoAudioTap(ringBuffer: ring, expectedSampleRate: 48_000)
+
+        player._testActivateVideoBridgeAndStartWatchdog(tap: tap, ringBuffer: ring)
+        #expect(player.videoTapFallbackActive == false)
+        #expect(player.isVideoBridgeActive == true)
+
+        // Simulate the route-change reconfigure window. While the snapshot
+        // is non-nil, HAL has halted the AVPlayer audio render thread —
+        // tap.fallbackRequested may briefly trip on source-pull errors
+        // and lastCallbackHostTime will go stale. The watchdog must NOT
+        // demote in this window; doing so leaves Milkdrop / EQ / balance
+        // dimmed until the user stops + replays.
+        player._testSetPendingReconfigureSnapshot(
+            PreReconfigureSnapshot(
+                wasPlaying: true,
+                currentTime: 0,
+                wasStreamBridge: false,
+                wasVideoBridge: true
+            )
+        )
+        tap._testRequestFallback()
+
+        // Two watchdog ticks plus margin (250 ms × 2 + 100 ms slack).
+        try? await Task.sleep(for: .milliseconds(600))
+
+        #expect(player.videoTapFallbackActive == false)
+        #expect(player.isVideoBridgeActive == true)
+    }
+
     @Test("playTrack resets videoTapFallbackActive for the next session")
     func playTrackResetsFallbackFlag() {
         let player = AudioPlayer()

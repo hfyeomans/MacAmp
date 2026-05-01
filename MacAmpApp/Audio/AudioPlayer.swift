@@ -611,6 +611,20 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
                 guard self.engine.isVideoBridgeActive else { break }
                 if self.videoTapFallbackActive { break }
 
+                // Engine reconfigure burst (output-route change). HAL halts
+                // the AVPlayer audio render thread while the new route comes
+                // up, so callbacks pause and tap.fallbackRequested may
+                // briefly trip on source-pull errors — both are expected.
+                // Skip stall + flag checks and reset the baseline so the
+                // next healthy iteration measures from now, and force a
+                // resume-edge reset on whichever post-burst iteration first
+                // sees `isPlaying`.
+                if self.pendingReconfigureSnapshot != nil {
+                    resumeBaselineHost = mach_absolute_time()
+                    wasPlaying = false
+                    continue
+                }
+
                 // Immediate trigger: the C-side prepare or process callback
                 // already gave up (AudioConverterNew failure, channel-map
                 // mismatch, source-pull error, mid-stream converter fault).
@@ -886,6 +900,13 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
         videoRingBuffer = ringBuffer
         engine.activateVideoBridge(ringBuffer: ringBuffer, sampleRate: 48_000)
         startVideoTapWatchdog(for: tap)
+    }
+
+    /// Test seam: simulate the reconfigure-burst window so the watchdog
+    /// gate test can prove route-change-induced tap stalls don't engage
+    /// fallback. Pass nil to clear (post-burst).
+    func _testSetPendingReconfigureSnapshot(_ snapshot: PreReconfigureSnapshot?) {
+        pendingReconfigureSnapshot = snapshot
     }
     #endif
 
