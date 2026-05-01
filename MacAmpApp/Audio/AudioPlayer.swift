@@ -657,7 +657,8 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     }
 
     /// Spawn the 250 ms watchdog Task that observes `tap` for callback
-    /// stalls (>1 s gap) and `fallbackRequested` flips. Identity-keyed:
+    /// stalls (gap > `videoTapStallThresholdSeconds`) and
+    /// `fallbackRequested` flips. Identity-keyed:
     /// when a different setup replaces `videoAudioTap`, the next tick
     /// breaks. Caller must invoke this only after `engine.activateVideoBridge`
     /// has succeeded for `tap`.
@@ -1293,13 +1294,14 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     /// later the engine observer extends the gate to whichever deadline
     /// is later, never collapsing it short.
     ///
-    /// **Critical:** unlike `handleEngineWillReconfigure` which sets the
-    /// gate to `UInt64.max` and relies on a matching `did` to convert
-    /// it to a finite deadline, this method always installs a finite
-    /// deadline directly. Callers without a guaranteed paired close
-    /// (the HAL listener especially — there's no "did" notification for
-    /// AirPlay route changes) must use this path, never the burst-style
-    /// `UInt64.max` open-ended gate.
+    /// This is the **finite-deadline** path. Burst-window suppression
+    /// (between engine `will` and `did`) uses the separate
+    /// `videoBurstGateOpen` Bool — they're decoupled so a longer
+    /// HAL-armed deadline can't be clobbered by a will/did pair that
+    /// arms a shorter settle. Callers without a guaranteed paired close
+    /// (the HAL listener especially — there's no "did" notification
+    /// for AirPlay route changes) MUST use this method, never set the
+    /// burst flag.
     private func armVideoRouteChangeGate(seconds: Double) {
         let deadline = mach_absolute_time() &+ AVAudioTime.hostTime(forSeconds: seconds)
         videoReconfigureGateUntilHost = max(videoReconfigureGateUntilHost, deadline)

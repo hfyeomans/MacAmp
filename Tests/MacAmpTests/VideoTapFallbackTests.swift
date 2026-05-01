@@ -213,7 +213,7 @@ struct VideoTapFallbackTests {
 
         player._testActivateVideoBridgeAndStartWatchdog(tap: tap, ringBuffer: ring)
 
-        // Burst opens — gate at UInt64.max via the snapshot+gate seam.
+        // Burst opens — videoBurstGateOpen flips true via the seam.
         player._testSetPendingReconfigureSnapshot(
             PreReconfigureSnapshot(
                 wasPlaying: true,
