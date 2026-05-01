@@ -277,6 +277,31 @@ struct VideoTapFallbackTests {
         #expect(player.isVideoBridgeActive == true)
     }
 
+    @Test("armVideoRouteChangeGate uses max() coalescing — never shortens")
+    func armVideoRouteChangeGateCoalescesByMax() {
+        let player = AudioPlayer()
+
+        #expect(player._testVideoReconfigureGateUntilHost == 0)
+
+        // First arm — gate moves forward.
+        player._testArmVideoRouteChangeGate(seconds: 5.0)
+        let firstDeadline = player._testVideoReconfigureGateUntilHost
+        #expect(firstDeadline > 0)
+
+        // A SHORTER second arm must NOT shorten the deadline. Concurrent
+        // signals (HAL listener + engine observer firing for the same
+        // route change) would otherwise leave the gate at whichever
+        // arrived last instead of whichever extends furthest.
+        player._testArmVideoRouteChangeGate(seconds: 1.0)
+        let afterShorter = player._testVideoReconfigureGateUntilHost
+        #expect(afterShorter == firstDeadline, "Shorter arm must not shorten the deadline (max() coalescing)")
+
+        // A LONGER second arm extends the deadline.
+        player._testArmVideoRouteChangeGate(seconds: 10.0)
+        let afterLonger = player._testVideoReconfigureGateUntilHost
+        #expect(afterLonger > firstDeadline, "Longer arm must extend the deadline")
+    }
+
     @Test("playTrack resets videoTapFallbackActive for the next session")
     func playTrackResetsFallbackFlag() {
         let player = AudioPlayer()

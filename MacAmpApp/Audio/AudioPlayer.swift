@@ -1,6 +1,7 @@
 // swiftlint:disable file_length
 import Foundation
 import AVFoundation
+import CoreAudio
 import Observation
 import os
 
@@ -82,6 +83,31 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     /// after `handleEngineDidReconfigure` so HAL has time to stabilize
     /// before stall detection resumes.
     private static let videoReconfigureSettleSeconds: Double = 2.0
+
+    /// Host-time stall threshold. The watchdog demotes the bridge if no
+    /// tap callback fires within this window AND the AVPlayer side
+    /// reports `isPlaying`. 3 s is calibrated to absorb HAL's typical
+    /// 1.5–2.5 s route-transition tail without masking real tap deaths.
+    private static let videoTapStallThresholdSeconds: Double = 3.0
+
+    /// Bounded gate window armed by the HAL default-output property
+    /// listener. Catches AirPlay/AirPods route changes that don't fire
+    /// `AVAudioEngineConfigurationChange` (Apple's engine notification
+    /// only fires when the engine's effective configuration actually
+    /// changes — a same-format route swap doesn't qualify, but HAL still
+    /// destabilizes the AVPlayer audio render thread).
+    private static let videoRouteChangeGateSeconds: Double = 5.0
+
+    /// Dedicated queue for the HAL default-output property listener.
+    /// Retained for the lifetime of `halDefaultOutputListenerBlock` so
+    /// `AudioObjectRemovePropertyListenerBlock` can match the install
+    /// pair exactly at teardown.
+    @ObservationIgnored private var halDefaultOutputListenerQueue: DispatchQueue?
+
+    /// Listener block stored so removal is exact and deterministic. The
+    /// HAL APIs require the same block instance passed to add() to be
+    /// passed to remove(), or the removal silently no-ops.
+    @ObservationIgnored private var halDefaultOutputListenerBlock: AudioObjectPropertyListenerBlock?
     var currentTrackURL: URL?
     var currentTitle: String = "No Track Loaded"
     var currentDuration: Double = 0.0
@@ -290,6 +316,12 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
             self?.handleEngineDidReconfigure()
         }
 
+        // HAL-level default-output listener. Catches AirPlay/AirPods
+        // route changes that AVAudioEngineConfigurationChange misses;
+        // arms the watchdog gate so the bridge survives the multi-second
+        // HAL transition window without false demotion.
+        installHALDefaultOutputListener()
+
         // Apply restored volume/balance to engine nodes
         engine.setVolume(volume)
         engine.setBalance(balance)
@@ -313,6 +345,9 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     }
 
     isolated deinit {
+        // Drop the HAL listener first so no late callback can hop to
+        // MainActor and touch state mid-teardown.
+        removeHALDefaultOutputListener()
         // Tear down the video bridge BEFORE engine.shutdown() so the
         // detachAudioTap audioMix=nil-before-detach ordering and the
         // videoLoadTask cancellation both run while the engine is still
@@ -711,12 +746,21 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
                 // callback host time. If a callback arrived since resume,
                 // `last` wins and we're measuring true tap latency. If
                 // none has arrived yet, `resumeBaselineHost` wins and the
-                // 1 s window starts from resume, not from the stale
-                // pre-pause callback.
+                // window starts from resume, not from the stale pre-pause
+                // callback.
+                //
+                // Threshold is 3 s, not 1 s. macOS HAL route transitions
+                // (BT/AirPods auto-routing in particular, where the
+                // AVAudioEngine notification doesn't fire) can stall the
+                // AVPlayer audio render thread for 1.5–2.5 s while the
+                // new route comes up. A real tap failure still demotes —
+                // just 2 s later than before, which is invisible to the
+                // user (AVPlayer fallback restores audio immediately on
+                // demote anyway).
                 let last = tap.lastCallbackHostTime
                 let baseline = max(last, resumeBaselineHost)
                 let elapsed = AVAudioTime.seconds(forHostTime: mach_absolute_time() &- baseline)
-                if elapsed > 1.0 {
+                if elapsed > Self.videoTapStallThresholdSeconds {
                     self.engageVideoTapFallback()
                     return
                 }
@@ -1002,6 +1046,19 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
             videoReconfigureGateUntilHost = mach_absolute_time() &+ settleTicks
         }
     }
+
+    /// Test seam: invoke the bounded gate helper that the HAL listener
+    /// uses. Validates the `max()` coalescing — repeated calls must
+    /// extend (or no-op) the deadline, never shorten it.
+    func _testArmVideoRouteChangeGate(seconds: Double) {
+        armVideoRouteChangeGate(seconds: seconds)
+    }
+
+    /// Test seam: read the current gate deadline (for asserting
+    /// monotonic max() semantics in the helper test).
+    var _testVideoReconfigureGateUntilHost: UInt64 {
+        videoReconfigureGateUntilHost
+    }
     #endif
 
     /// The audio IO workgroup from the engine output node.
@@ -1208,6 +1265,101 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
         // 6. Notify external subscribers (PlaybackCoordinator refreshes the
         //    stream workgroup; future subscribers may update Now Playing, etc.).
         onEngineReconfigured?()
+    }
+
+    /// Extend the video reconfigure gate by `seconds` from now, never
+    /// shortening it. This is the safe entry point for any signal that
+    /// indicates HAL is mid-route-change (engine observer, HAL property
+    /// listener, future signals). `max()` coalesces overlapping signals
+    /// — e.g. an AirPlay switch that fires both the HAL listener and
+    /// later the engine observer extends the gate to whichever deadline
+    /// is later, never collapsing it short.
+    ///
+    /// **Critical:** unlike `handleEngineWillReconfigure` which sets the
+    /// gate to `UInt64.max` and relies on a matching `did` to convert
+    /// it to a finite deadline, this method always installs a finite
+    /// deadline directly. Callers without a guaranteed paired close
+    /// (the HAL listener especially — there's no "did" notification for
+    /// AirPlay route changes) must use this path, never the burst-style
+    /// `UInt64.max` open-ended gate.
+    private func armVideoRouteChangeGate(seconds: Double) {
+        let deadline = mach_absolute_time() &+ AVAudioTime.hostTime(forSeconds: seconds)
+        videoReconfigureGateUntilHost = max(videoReconfigureGateUntilHost, deadline)
+    }
+
+    /// Install a HAL property listener on the system default output
+    /// device. Fires immediately on ANY default-output change including
+    /// AirPlay/AirPods routes that bypass `AVAudioEngineConfigurationChange`.
+    /// The block hops to `@MainActor` and arms the bounded video route
+    /// gate scoped to active or in-flight video sessions only.
+    private func installHALDefaultOutputListener() {
+        let queue = DispatchQueue(label: "com.macamp.audio.haldefaultoutput", qos: .userInitiated)
+        halDefaultOutputListenerQueue = queue
+
+        let block: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
+            // Hop to MainActor — never touch SwiftUI-observed state,
+            // AVAudioEngine, or AudioPlayer fields from the HAL queue.
+            Task { @MainActor [weak self] in
+                self?.handleHALDefaultOutputChange()
+            }
+        }
+        halDefaultOutputListenerBlock = block
+
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        let status = AudioObjectAddPropertyListenerBlock(
+            AudioObjectID(kAudioObjectSystemObject),
+            &address,
+            queue,
+            block
+        )
+        if status != noErr {
+            AppLog.warn(.audio, "AudioPlayer: HAL default-output listener install failed (status: \(status))")
+            halDefaultOutputListenerBlock = nil
+            halDefaultOutputListenerQueue = nil
+        }
+    }
+
+    /// Remove the HAL property listener installed in
+    /// `installHALDefaultOutputListener`. Idempotent. The same block
+    /// instance must be passed to `Remove` as was passed to `Add` or the
+    /// removal silently no-ops — that's why we store the block.
+    private func removeHALDefaultOutputListener() {
+        guard let block = halDefaultOutputListenerBlock,
+              let queue = halDefaultOutputListenerQueue else { return }
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        AudioObjectRemovePropertyListenerBlock(
+            AudioObjectID(kAudioObjectSystemObject),
+            &address,
+            queue,
+            block
+        )
+        halDefaultOutputListenerBlock = nil
+        halDefaultOutputListenerQueue = nil
+    }
+
+    /// Invoked on `@MainActor` from the HAL listener block when the
+    /// system default output device changes. Scoped to active or
+    /// in-flight video sessions: arming the gate when no video bridge
+    /// could possibly be affected would let unrelated route changes
+    /// mask real tap failures on a newly-started video.
+    private func handleHALDefaultOutputChange() {
+        guard currentMediaType == .video,
+              !videoTapFallbackActive,
+              engine.isVideoBridgeActive
+                || videoAudioTap != nil
+                || videoLoadTask != nil
+        else { return }
+
+        AppLog.info(.audio, "HAL default output device changed — arming video route gate (\(Self.videoRouteChangeGateSeconds)s)")
+        armVideoRouteChangeGate(seconds: Self.videoRouteChangeGateSeconds)
     }
 
     /// Shared completion handler for video seek operations.
