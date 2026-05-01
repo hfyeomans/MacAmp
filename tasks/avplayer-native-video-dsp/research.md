@@ -12,6 +12,262 @@ Validate the architecture's load-bearing assumptions before writing `plan.md`. P
 
 ---
 
+## Architecture (proposed end-state)
+
+User-aligned 2026-05-01. This is the topology research must validate; if Phase 0 spike fails the kill-switch (Q1), this section is rewritten before plan.md.
+
+```
+═══════════════════════════════════════════════════════════════════════════════
+  ENGINE PATH — UNCHANGED  (audio files + streams + future HLS-audio)
+═══════════════════════════════════════════════════════════════════════════════
+
+  AVAudioPlayerNode  ──┐
+  (local files)        │
+                       ├──► AVAudioUnitEQ ──► balance ──► main mixer ──► output
+  AVAudioSourceNode  ──┘                                       │
+  (stream pipeline →                                           │
+   ring → source node)                              installTap (bus 0)
+                                                               │
+                                                               ▼
+                                                      VisualizerFeed.write()  (1)
+
+
+═══════════════════════════════════════════════════════════════════════════════
+  VIDEO PATH — NEW  (local video, future HLS-video)
+═══════════════════════════════════════════════════════════════════════════════
+
+  AVAsset (video file)                       Main thread:                 Render thread:
+       │                                     ─────────────                ──────────────
+       ▼                                     EQ params ───────atomic────►
+  AVPlayerItem                               Balance ─────────atomic────►
+       │                                     Active flag ─────atomic────►
+       │ .audioMix = AVMutableAudioMix
+       │
+       ├── AVMutableAudioMixInputParameters (per audio track)
+       │      .audioTapProcessor = MTAudioProcessingTap  [flag: _PreEffects]
+       │
+       ▼
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │  tapProcess (render thread, in-band — NEVER blocks, NEVER allocs)    │
+  │                                                                      │
+  │   1.  MTAudioProcessingTapGetSourceAudio  →  bufferList              │
+  │                                                                      │
+  │   2.  BiquadCascade.process(bufferList)        ── modifies in place  │
+  │       • 10-band, IIR, fresh impl matched to AVAudioUnitEQ            │
+  │       • coefficient table updated atomically from main               │
+  │                                                                      │
+  │   3.  Balance.applyL/R(bufferList)             ── modifies in place  │
+  │                                                                      │
+  │   4.  Run visualizer DSP into scratch (matches engine-tap today):    │
+  │       • mono mix (downmix surround→mono if needed)                   │
+  │       • 20-bar RMS                                                   │
+  │       • 20-bar Goertzel spectrum                                     │
+  │       • 2048-pt Hann-windowed vDSP FFT (Butterchurn)                 │
+  │       VisualizerFeed.tryPublish(from: scratch) ──► (1)               │
+  │       • single-slot, last-write-wins, trylock-drop on contention     │
+  │       • slot carries pre-computed arrays, not raw PCM                │
+  │                                                                      │
+  │   5.  return  ── AVPlayer reads bufferList downstream as-modified    │
+  │                                                                      │
+  └────────────────────────────┬─────────────────────────────────────────┘
+                               │
+                               ▼
+                  AVPlayer native audio output
+                  (master clock for video frames — owned by AVPlayer,
+                   never coupled to engine, never under-runs because the
+                   tap is the producer's own thread)
+                               │
+                               ▼
+                          🔊 Speakers
+
+
+═══════════════════════════════════════════════════════════════════════════════
+  VISUALIZER (single consumer, both paths feed it)
+═══════════════════════════════════════════════════════════════════════════════
+
+  VisualizerFeed (single-slot SPSC, last-write-wins, pre-computed arrays:
+                  RMS×20 + spectrum×20 + scope×76 + FFT spectrum×1024 + FFT waveform×1024)
+       │
+       ▼
+  VisualizerPipeline (Timer @ 30 Hz on .common run-loop) ─►  Spectrum bars  |  Butterchurn snapshot
+```
+
+### Topological deltas vs the saved branch
+
+| Concern | Saved branch (FAILED) | New arch |
+|---|---|---|
+| Where video audio leaves AVPlayer | Drained out via tap → ring → source node | Never leaves — tap modifies in place |
+| Clock domains | Two (engine output + AVPlayer master) | One (AVPlayer native) |
+| Sample-rate conversion stages | Two (asset→48 k for ring, then 48 k→hw) | One (AVPlayer's native, untouched) |
+| Failure mode if DSP is slow | Ring underrun → master-clock stall → video freeze | Render-thread overrun → audio glitch only (video clock is upstream of tap) |
+| Route-change handling | Engine reconfigure observer (unreliable for AirPods) | AVPlayer handles natively |
+| Capability flag | `videoTapFallbackActive` (could flip false) | Always true; no fallback path |
+
+---
+
+## Reuse policy from `feat/video-audio-engine-routing`
+
+The saved branch's failures were topology-bound. Some structural plumbing is platform-API-level and topology-agnostic; the rest is failure-bound and **must not** be carried forward. This policy is the contract for any retrospective work — Phase 0 spike, sub-agent extraction, plan.md authoring.
+
+### ALLOWLIST — safe to study & adapt (platform-API plumbing)
+
+- C-callback shape for `tapInit / tapFinalize / tapPrepare / tapUnprepare / tapProcess`
+- `Unmanaged<Context>` handoff via `MTAudioProcessingTapGetStorage` (lifetime pattern)
+- `AudioStreamBasicDescription` inspection in `tapPrepare` (sample-format detection)
+- Surround → stereo downmix coefficients **for the visualizer feed only** (the audible path leaves channel layout untouched)
+- TSan test scaffolding patterns + `_test*` API seams (deferred to implementation phase, not Phase 0)
+
+### DENYLIST — do NOT carry forward (failure-bound or topology-coupled)
+
+- `LockFreeRingBuffer` for video — there is no transport ring on this path
+- `AVAudioSourceNode` + engine bridge wiring for video — there is no engine path
+- `AudioConverter` + Mastering quality tier — DSP runs at asset-native rate, no conversion
+- `configureChannelMapping` shaped around the AudioConverter input contract — re-derive cleanly for visualizer-feed downmix only
+- Watchdog / fallback machinery — nothing to fall back from
+- HAL property listener for AirPlay routes — AVPlayer's domain
+- `AVAudioEngineConfigurationChange` observer for the video path — engine isn't on this path
+- `videoTapFallbackActive` capability branch — collapses to constant `true`
+- Phase 7 watchdog gate v2 / 3 s threshold logic — engine-side concept
+- `wasVideoBridge` snapshot field — already dropped on this branch
+- `swift-atomics` `ManagedAtomic` usage — superseded by `Synchronization.Atomic` (see Tooling constraints below)
+
+**Rule of thumb:** if the pattern existed *because* of the engine-routing topology, leave it. If it existed because `MTAudioProcessingTap` is a C API with C lifetime semantics, study it.
+
+---
+
+## Step 2 findings (synthesis 2026-05-01)
+
+Four parallel research streams + clip enumeration completed. Detailed source documents in `research-notes/`; this section is the canonical synthesis for plan.md inputs.
+
+### Q1 — In-place buffer modification: ✅ RESOLVED (docs + empirical spike)
+
+**Empirical confirmation (2026-05-01):** Phase 0 spike on `spike/avplayer-inplace-tap-dsp` produced audible attenuation when applying `sample *= 0.1` in `tapProcess` — programmatic verification (`pre=-0.0695 → post=-0.00695`, exact match to expected `pre × gain`) plus user-confirmed auditory A/B between gain=1.0 and gain=0.1 runs of the same clip. Full findings in `research-notes/spike-findings.md`. Toolchain validation: Swift 6.2 + `Synchronization.Atomic<UInt32>` for Float bit-pattern + `@unchecked Sendable` Context + `Unmanaged.passRetained` lifetime through C callbacks all clean.
+
+Apple's MediaToolbox SDK header (`MTAudioProcessingTap.h`, `MTAudioProcessingTapProcessCallback` doc block) states verbatim:
+
+> "The processing tap may operate on the provided source data in place ('in-place processing') and return pointers to that buffer, rather than its own. This is similar to audio unit render operations."
+
+Apple's archived **AudioTapProcessor** sample (`developer.apple.com/library/archive/samplecode/AudioTapProcessor/`) independently confirms runtime behavior — an `AUBandpassFilter` applied via tap is audible. The architectural kill-switch is **closed by the docs alone**; `tapProcess` writes are what AVPlayer's downstream pipeline plays.
+
+**Flag selection:** `kMTAudioProcessingTapCreationFlag_PreEffects`. Saved branch used `_PostEffects` because it was draining for a downstream consumer; we're modifying for AVPlayer's own downstream chain (AVPlayer's spatial audio / mixing / hardware effects layer on top of our DSP). `_PostEffects` would suit a later observation/metering tap (e.g. Milkdrop-only mode).
+
+**Concurrency pattern (Swift 6.2 + macOS 15+):**
+- Context class: `final class Context: @unchecked Sendable` — silences C-callback FFI checking on the envelope
+- Cross-thread fields: `Synchronization.Atomic<T>` / `Synchronization.Mutex<T>` (Swift 6.0 stdlib)
+- `nonisolated(unsafe)` on individual stored properties where the field is render-thread-confined and atomic discipline is guaranteed
+- Render thread reads with `.load(.relaxed)`; main thread writes with `.store(.relaxed)` (or `.sequentiallyConsistent` on activate/deactivate where ordering matters)
+- `Unmanaged<Context>.passRetained()` in `tapInit` → `MTAudioProcessingTapGetStorage` retrieves opaque pointer in callbacks → `Unmanaged.fromOpaque(...).release()` in `tapFinalize` (exactly once)
+
+Spike's residual role narrows from "discover" to "validate runtime behavior on macOS 15+ + Swift 6.2 toolchain in our codebase." See "Spike scope decision" below.
+
+### Q2 — AVAudioUnitEQ numerical match: ✅ HIGH confidence
+
+Apple SDK header (`AudioUnitParameters.h`, `kAUNBandEQFilterType_Parametric`) — verbatim:
+
+> "Parametric filter based on Butterworth analog prototype. Uses parameterisation where the bandwidth is specified as the relationship of the upper bandedge frequency to the lower bandedge frequency in octaves, where the upper and lower bandedge frequencies are the respective frequencies above and below the center frequency at which the gain is equal to half the peak gain."
+
+Maps exactly to **Robert Bristow-Johnson Audio EQ Cookbook**'s octave-BW peaking formula:
+
+```
+ω₀ = 2π · f / sampleRate
+α  = sin(ω₀) · sinh((ln 2 / 2) · BW · ω₀ / sin(ω₀))
+A  = 10^(dBgain / 40)
+b0 = 1 + α·A    b1 = -2·cos(ω₀)    b2 = 1 - α·A
+a0 = 1 + α/A    a1 = -2·cos(ω₀)    a2 = 1 - α/A
+```
+
+Bands 0 and 9 use the analogous RBJ low/high-shelf formulas (no bandwidth parameter — frequency is shelf midpoint at half-gain).
+
+**Per-band parameters** (from current `EqualizerController.swift`):
+
+| Band | Frequency (Hz) | Type | BW (oct) | Gain range (dB) |
+|------|---|---|---|---|
+| 0 | 70 | Low shelf | n/a | −96 → +24 |
+| 1 | 180 | Parametric | 1.0 | −96 → +24 |
+| 2 | 320 | Parametric | 1.0 | −96 → +24 |
+| 3 | 600 | Parametric | 1.0 | −96 → +24 |
+| 4 | 1 000 | Parametric | 1.0 | −96 → +24 |
+| 5 | 3 000 | Parametric | 1.0 | −96 → +24 |
+| 6 | 6 000 | Parametric | 1.0 | −96 → +24 |
+| 7 | 12 000 | Parametric | 1.0 | −96 → +24 |
+| 8 | 14 000 | Parametric | 1.0 | −96 → +24 |
+| 9 | 16 000 | High shelf | n/a | −96 → +24 |
+
+Note: Winamp's actual internal frequencies, not ISO 10-band.
+
+**Acceptance criterion:** ≤0.5 dB worst-case magnitude error vs `AVAudioUnitEQ` across 20 Hz – 20 kHz (well below the ~1 dB psychoacoustic JND). ≤1 dB is the hard reject. Verified by offline-rendering a 0 dBFS log sine sweep through both implementations and comparing per-bin magnitude.
+
+### Q3 — Render-thread CPU budget
+
+Per-tap-callback DSP cost at 48 kHz stereo:
+
+- 10-band biquad cascade: ~180 ops/sample × 48 000 Hz = ~8.6 Mops/sec
+- Balance: ~96 K ops/sec
+- Visualizer pre-publish DSP (mono mix + 20-bar RMS + 20-bar Goertzel + 2048-pt vDSP FFT): proven feasible — engine path runs identical DSP on its render thread today
+
+**Net new cost on the video tap thread vs today's engine tap:** ~9 Mops/sec (biquad + balance only). Apple Silicon: ≪1% of a core. Intel: ≪2%. Empirical sample-and-alarm logging deferred to implementation phase (alarm threshold: >10 % of the buffer's wall-clock budget — for 2048 frames @ 44.1 kHz that's 4.6 ms, generous).
+
+### Q4 — Channel/SR variety in test corpus
+
+Five 3-second clips in `clapperboard-videos/`:
+
+| File | Container | Sample rate | Channels | Layout |
+|---|---|---|---|---|
+| `1_mp4_441_stereo.mp4` | MP4 | 44 100 | 2 | stereo |
+| `2_mp4_480_stereo.mp4` | MP4 | 48 000 | 2 | stereo |
+| `3_mov_480_stereo.mov` | MOV | 48 000 | 2 | stereo |
+| `4_m4v_441_stereo.m4v` | M4V | 44 100 | 2 | stereo |
+| `5_mp4_480_surround.mp4` | MP4 | 48 000 | 6 | 5.1 |
+
+Coverage: both common SRs, four containers, stereo + 5.1. Sufficient. Surround clip exercises the visualizer-feed mono-downmix path; stereo clips bypass it.
+
+### Q5 — Saved-branch reuse audit
+
+ALLOWLIST (5 platform-API plumbing patterns — file:line cited in `research-notes/saved-branch-retrospective.md`):
+- C-callback shape (`tapInit/Finalize/Prepare/Unprepare/Process` typealiases)
+- `Unmanaged<Context>` lifetime via `MTAudioProcessingTapGetStorage`
+- `AudioStreamBasicDescription` inspection in `tapPrepare`
+- `inferredSurroundChannelLayoutTag` (AAC layout tags for 3–8 ch) — **for visualizer-feed downmix only**
+- `_test*` debug seam pattern under `#if DEBUG`
+
+**Modernization deltas (non-negotiable on this branch):**
+- Drop `import Atomics` + `ManagedAtomic` → `Synchronization.Atomic<T>`
+- Refine blanket `@unchecked Sendable` on Context: keep at class level for FFI silence, add `nonisolated(unsafe)` on individual stored properties to localize the unsafety
+
+DENYLIST (11 engine-routing-bound patterns confirmed at file:line on saved branch — all explicitly NOT carried forward): `LockFreeRingBuffer` for video, `AVAudioSourceNode` + engine bridge wiring, `AudioConverter` + Mastering quality, `AudioConverterSetProperty`-shaped channel mapping, watchdog/fallback machinery, HAL property listener, video-side `AVAudioEngineConfigurationChange` observer, `videoTapFallbackActive` capability branch, Phase 7 watchdog gate v2 + 3 s threshold, `wasVideoBridge` snapshot field, `swift-atomics` `ManagedAtomic`.
+
+### Q6 — VisualizerFeed extraction (architecture diagram corrected)
+
+**Correction to the diagram above:** the original sketch labelled the visualizer hand-off as "SPSC ring of stereo Float32 frames." This is wrong. The existing hand-off (`VisualizerSharedBuffer` in `MacAmpApp/Audio/VisualizerPipeline.swift`) is a **single-slot, last-write-wins** structure carrying **pre-computed arrays** (RMS×20, Goertzel spectrum×20, oscilloscope waveform×76, Butterchurn FFT spectrum×1024, Butterchurn FFT waveform×1024) — not raw PCM. `os_unfair_lock`, trylock-drop on the render thread, blocking-consume on main at 30 Hz.
+
+**Implication for the video tap:** `tapProcess` step 4 must run the same DSP as today's engine tap (mono mix → 20-bar RMS → Goertzel → 2048-pt vDSP FFT into pre-allocated `VisualizerScratchBuffers`), then call `feed.tryPublish(from: scratch, ...)`. Same cost shape, same drop-on-contention semantics, same data shape. The diagram (above) has been updated.
+
+**Extraction scope:** rename `VisualizerSharedBuffer` → `VisualizerFeed`, promote visibility (private nested class → file-scope `internal`), move to its own file (`MacAmpApp/Audio/VisualizerFeed.swift`). 2-line edit in `VisualizerPipeline.swift` for type rename. ~60 LOC across 2 files + 1 new file. **Engine path: byte-for-byte identical behavior.** `xcodegen generate` once.
+
+### Spike scope decision: option (A) — executed
+
+User selected option (A) reduced-scope spike on 2026-05-01. Executed: `spike/avplayer-inplace-tap-dsp` throwaway branch, ~170-line Swift 6.2 CLI tool, single `_PreEffects` tap, `*= gain` in-place modification, play stereo clip, A/B auditory comparison vs control. ✅ Both programmatic and auditory verification passed. Full findings in `research-notes/spike-findings.md`. Spike branch retained locally as reference for the implementation phase.
+
+---
+
+## Tooling constraints
+
+This task targets Swift 6.2 strict concurrency on macOS 15+. No deprecated APIs, no pre-Swift-6 patterns. Specifically:
+
+| Subject | Use | Do NOT use |
+|---|---|---|
+| Atomics | `Synchronization.Atomic<T>` / `Synchronization.Mutex<T>` (Swift 6.0, macOS 15+) | `swift-atomics` `ManagedAtomic` |
+| AVAsset loading | `await asset.load(.tracks, .duration, …)` | `loadValuesAsynchronously(forKeys:)` |
+| State holders | `@Observable` | `ObservableObject` (legacy only) |
+| Threading isolation | `@MainActor` on UI bridges; explicit `Sendable` on cross-boundary types | Implicit `@unchecked Sendable` shortcuts |
+| Render-thread FFI | `nonisolated(unsafe)` carve-out at the C-callback boundary | Swift-isolated callbacks (impossible — render thread is non-cooperative) |
+| Async patterns | Structured concurrency (`async let`, `TaskGroup`) | Manual `DispatchQueue` chains except at FFI boundaries |
+| AVPlayer-side DSP | `MTAudioProcessingTap` (C API — platform-mandated; only acceptable C surface) | Engine bridge / source-node drain |
+
+The render-thread C callback is the **only** anachronism we accept, and it's Apple-platform-mandated for tap-side DSP. Everything Swift-side is modern.
+
+---
+
 ## Research questions (to be answered in Step 2)
 
 ### Q1 — Does `MTAudioProcessingTap` actually support in-place buffer modification?
