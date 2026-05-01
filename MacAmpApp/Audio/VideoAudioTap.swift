@@ -130,6 +130,14 @@ final class VideoAudioTap {
     var fallbackRequested: Bool {
         context.fallbackRequested.load(ordering: .relaxed)
     }
+
+    #if DEBUG
+    /// Test seam: simulate a process-side fallback request without driving a
+    /// real AVPlayer attach. Used by Phase 5 watchdog detection tests.
+    func _testRequestFallback() {
+        context.fallbackRequested.store(true, ordering: .relaxed)
+    }
+    #endif
 }
 
 // MARK: - Context (heap-allocated, queue-confined)
@@ -397,12 +405,17 @@ private let tapProcess: MTAudioProcessingTapProcessCallback = {
     let getStatus = MTAudioProcessingTapGetSourceAudio(
         tap, framesToProcess, bufferList, flagsOut, nil, framesOut
     )
-    guard getStatus == noErr else { return }
+    guard getStatus == noErr else {
+        // Source pull failed — without it we can't produce ring audio at
+        // all. Flag fallback so the watchdog demotes promptly instead of
+        // waiting out the host-time stall (lastCallbackHostTime won't
+        // update on this path either, but the flag is the faster signal).
+        ctx.fallbackRequested.store(true, ordering: .relaxed)
+        return
+    }
 
     let frames = Int(framesOut.pointee)
     guard frames > 0 else { return }
-
-    ctx.lastCallbackHostTime.store(mach_absolute_time(), ordering: .relaxed)
 
     if let converter = ctx.converter, let scratch = ctx.converterScratch {
         ctx.pendingSourceBufferList = bufferList
@@ -428,6 +441,12 @@ private let tapProcess: MTAudioProcessingTapProcessCallback = {
         )
         if (convStatus == noErr || convStatus == noMoreInputData) && outFrames > 0 {
             _ = ctx.ringBuffer.write(from: scratch, frameCount: Int(outFrames))
+            ctx.lastCallbackHostTime.store(mach_absolute_time(), ordering: .relaxed)
+        } else if convStatus != noErr && convStatus != noMoreInputData {
+            // Converter erroring mid-stream is non-recoverable in
+            // practice — flag fallback so the watchdog demotes us before
+            // the ring drains the consumer to silence.
+            ctx.fallbackRequested.store(true, ordering: .relaxed)
         }
         ctx.pendingSourceBufferList = nil
         ctx.pendingSourcePackets = 0
@@ -445,6 +464,7 @@ private let tapProcess: MTAudioProcessingTapProcessCallback = {
     if let dataPtr = bufferList.pointee.mBuffers.mData {
         let floats = dataPtr.bindMemory(to: Float.self, capacity: frames * 2)
         _ = ctx.ringBuffer.write(from: floats, frameCount: frames)
+        ctx.lastCallbackHostTime.store(mach_absolute_time(), ordering: .relaxed)
     }
 }
 

@@ -82,6 +82,18 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     /// cancellation, including same-URL replay.
     @ObservationIgnored private var videoLoadTask: Task<Void, Never>?
 
+    /// 250 ms watchdog observing `videoAudioTap` for stalls. Engages the
+    /// AVPlayer fallback when the tap stops calling back (>1 s) or signals
+    /// `fallbackRequested` from a C-side prepare/process failure. Cancelled
+    /// by `tearDownVideoBridge` and by the fallback itself (step 1).
+    @ObservationIgnored private var videoTapWatchdogTask: Task<Void, Never>?
+
+    /// True once the watchdog has demoted the video session to direct
+    /// AVPlayer audio. Sticky for the current track; cleared at the start
+    /// of the next `playTrack`. Observable so `PlaybackCoordinator`'s
+    /// capability surface (Phase 6 §11.2) re-evaluates when it flips.
+    private(set) var videoTapFallbackActive: Bool = false
+
     /// True when the engine's video source node is wired into the graph.
     /// Mirrors `engine.isVideoBridgeActive` for capability-flag readers.
     var isVideoBridgeActive: Bool { engine.isVideoBridgeActive }
@@ -391,6 +403,10 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
 
         updatePlaylistPosition(with: track)
 
+        // Fresh slate per track — last session's tap fallback must not
+        // suppress this track's capability surface.
+        videoTapFallbackActive = false
+
         currentSeekID = UUID()
         seekGuardActive = true
 
@@ -490,8 +506,21 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
 
             if attached {
                 self.engine.activateVideoBridge(ringBuffer: ring, sampleRate: sampleRate)
-                self.engine.setVolume(self.volume)
-                self.engine.setBalance(self.balance)
+                if self.engine.isVideoBridgeActive {
+                    self.engine.setVolume(self.volume)
+                    self.engine.setBalance(self.balance)
+                    self.startVideoTapWatchdog(for: tap)
+                } else {
+                    // Tap attached but engine refused to start the bridge
+                    // (HAL device error, etc.). The audioMix is wired up,
+                    // so AVPlayer is still muted — detach so the user
+                    // gets direct AVPlayer audio at their slider level.
+                    AppLog.error(.audio, "Video bridge activation failed — falling back to direct AVPlayer audio")
+                    self.videoPlaybackController.detachAudioTap()
+                    self.videoAudioTap = nil
+                    self.videoRingBuffer = nil
+                    self.videoPlaybackController.volume = self.volume
+                }
             } else {
                 // Tap attach failed (silent video, asset load error,
                 // converter setup failure). AVPlayer becomes the audible
@@ -520,6 +549,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     /// matching `videoPlaybackController` cleanup (or `cleanup()` will run
     /// `detachAudioTap()` itself, which is idempotent with this).
     private func tearDownVideoBridge() {
+        stopVideoTapWatchdog()
         videoLoadTask?.cancel()
         videoLoadTask = nil
         if engine.isVideoBridgeActive {
@@ -535,8 +565,101 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
         // restore would un-mute it for one main-loop tick — exactly the
         // double-audio failure mode this gating system exists to prevent.
         // Volume restore belongs only on direct-audio-continuation paths
-        // (attach-failure branch in startVideoTrack, future Phase 5
-        // tap-fallback) where AVPlayer becomes the sole audible path.
+        // (attach-failure branch in startVideoTrack, tap-fallback) where
+        // AVPlayer becomes the sole audible path.
+    }
+
+    /// Spawn the 250 ms watchdog Task that observes `tap` for callback
+    /// stalls (>1 s gap) and `fallbackRequested` flips. Identity-keyed:
+    /// when a different setup replaces `videoAudioTap`, the next tick
+    /// breaks. Caller must invoke this only after `engine.activateVideoBridge`
+    /// has succeeded for `tap`.
+    private func startVideoTapWatchdog(for tap: VideoAudioTap) {
+        videoTapWatchdogTask?.cancel()
+        videoTapWatchdogTask = Task { @MainActor [weak self] in
+            // Baseline for the host-time stall calculation. Reset on each
+            // pause→play transition so a long pause doesn't leave a stale
+            // `lastCallbackHostTime` that immediately demotes on resume.
+            // Initialized as if the watchdog start itself were a "resume",
+            // covering the post-attach window before the first callback.
+            var resumeBaselineHost: UInt64 = mach_absolute_time()
+            var wasPlaying: Bool = false
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(250))
+                if Task.isCancelled { break }
+                guard let self else { break }
+                // Identity / liveness guards. If the user advanced to a
+                // new track, paused-and-stopped, or the bridge tore down
+                // for any reason, drop the watchdog without engaging.
+                guard self.videoAudioTap === tap else { break }
+                guard self.engine.isVideoBridgeActive else { break }
+                if self.videoTapFallbackActive { break }
+
+                // Immediate trigger: the C-side prepare or process callback
+                // already gave up (AudioConverterNew failure, channel-map
+                // mismatch, source-pull error, mid-stream converter fault).
+                // Don't wait out the host-time timeout.
+                if tap.fallbackRequested {
+                    self.engageVideoTapFallback()
+                    return
+                }
+
+                // Host-time stall trigger. Only meaningful while AVPlayer
+                // is actually playing — paused video legitimately produces
+                // no callbacks.
+                let isPlaying = self.videoPlaybackController.isPlaying
+                if isPlaying && !wasPlaying {
+                    resumeBaselineHost = mach_absolute_time()
+                }
+                wasPlaying = isPlaying
+                guard isPlaying else { continue }
+
+                // Use the more recent of the resume baseline and the last
+                // callback host time. If a callback arrived since resume,
+                // `last` wins and we're measuring true tap latency. If
+                // none has arrived yet, `resumeBaselineHost` wins and the
+                // 1 s window starts from resume, not from the stale
+                // pre-pause callback.
+                let last = tap.lastCallbackHostTime
+                let baseline = max(last, resumeBaselineHost)
+                let elapsed = AVAudioTime.seconds(forHostTime: mach_absolute_time() &- baseline)
+                if elapsed > 1.0 {
+                    self.engageVideoTapFallback()
+                    return
+                }
+            }
+        }
+    }
+
+    private func stopVideoTapWatchdog() {
+        videoTapWatchdogTask?.cancel()
+        videoTapWatchdogTask = nil
+    }
+
+    /// Demote the active video session from the engine bridge to direct
+    /// AVPlayer audio. Plan §10.2 ordering, must run on @MainActor:
+    /// idempotency guard → cancel watchdog → set fallback flag → log →
+    /// deactivate engine bridge → detach tap (audioMix=nil first) →
+    /// release tap/ring refs → restore AVPlayer volume → reset seek
+    /// guard. Sticky for the current track; cleared at the start of the
+    /// next `playTrack`.
+    private func engageVideoTapFallback() {
+        guard !videoTapFallbackActive else { return }
+        stopVideoTapWatchdog()
+        videoTapFallbackActive = true
+        AppLog.error(.audio, "Video audio tap stalled — restoring AVPlayer.volume fallback")
+        if engine.isVideoBridgeActive {
+            engine.deactivateVideoBridge()
+        }
+        videoPlaybackController.detachAudioTap()
+        videoAudioTap = nil
+        videoRingBuffer = nil
+        // AVPlayer becomes the sole audible path. Re-sync the controller's
+        // volume so the user's slider position takes effect immediately —
+        // the bridge-active gate in `volume.didSet` had been suppressing
+        // forwarding, and the bridge is now down.
+        videoPlaybackController.volume = volume
+        seekGuardActive = false
     }
 
     private func detectMediaType(url: URL) -> MediaType {
@@ -729,6 +852,25 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
 
     #if DEBUG
     var isStreamSilenceGateActive: Bool { engine.isStreamSilenceGateActive }
+
+    /// Test seam for the watchdog → fallback path. Phase 5 unit tests
+    /// drive the deterministic state machine here; the timing-sensitive
+    /// host-time stall detection is exercised by manual playback.
+    func _testEngageVideoTapFallback() { engageVideoTapFallback() }
+
+    /// Test seam: install a tap + ring under AudioPlayer's ownership and
+    /// run the engine bridge so the watchdog can observe a live state.
+    /// Used by `VideoTapFallbackTests.watchdogEngagesOnFallbackRequested`
+    /// to assert the immediate-trigger path end-to-end.
+    func _testActivateVideoBridgeAndStartWatchdog(
+        tap: VideoAudioTap,
+        ringBuffer: LockFreeRingBuffer
+    ) {
+        videoAudioTap = tap
+        videoRingBuffer = ringBuffer
+        engine.activateVideoBridge(ringBuffer: ringBuffer, sampleRate: 48_000)
+        startVideoTapWatchdog(for: tap)
+    }
     #endif
 
     /// The audio IO workgroup from the engine output node.
