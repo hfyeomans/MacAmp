@@ -234,6 +234,26 @@ private let tapPrepare: MTAudioProcessingTapPrepareCallback = { tap, maxFrames, 
         return
     }
 
+    // Lift sample-rate conversion off the default Linear/Medium tier — that
+    // tier produces audible imaging artifacts above ~10 kHz that show up as
+    // a "tinny" / sibilant shimmer on female vocals and high guitar
+    // harmonics on 44.1 → 48 kHz video. Mastering + Max matches what
+    // AVPlayer's native pipeline runs internally.
+    var complexity: UInt32 = kAudioConverterSampleRateConverterComplexity_Mastering
+    _ = AudioConverterSetProperty(
+        converterRef,
+        kAudioConverterSampleRateConverterComplexity,
+        UInt32(MemoryLayout<UInt32>.size),
+        &complexity
+    )
+    var quality: UInt32 = UInt32(kAudioConverterQuality_Max)
+    _ = AudioConverterSetProperty(
+        converterRef,
+        kAudioConverterSampleRateConverterQuality,
+        UInt32(MemoryLayout<UInt32>.size),
+        &quality
+    )
+
     // AudioConverter's default behavior for a channel-count mismatch is
     // *routing*, not mixing — mono → L+silent-R, 5.1 → drop the last 4
     // channels. We install explicit channel maps / layouts and turn on

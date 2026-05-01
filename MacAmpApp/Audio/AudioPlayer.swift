@@ -482,7 +482,13 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     /// the absence of engine routing.
     private func startVideoTrack(_ track: Track) {
         let sampleRate = engine.outputSampleRate
-        let ring = LockFreeRingBuffer(capacity: 4096, channelCount: 2)
+        // ~340 ms of producer headroom at 48 kHz. The previous 4096-frame
+        // (~85 ms) ring under-ran on transient decode/route jitter; because
+        // AVPlayer's audio queue is the master clock for video, an under-run
+        // stalls the video frame too. A larger ring absorbs the jitter at
+        // the cost of a few hundred ms steady-state audio latency, which is
+        // imperceptible against the video render pipeline depth.
+        let ring = LockFreeRingBuffer(capacity: 16384, channelCount: 2)
         let tap = VideoAudioTap(ringBuffer: ring, expectedSampleRate: sampleRate)
         videoRingBuffer = ring
         videoAudioTap = tap
