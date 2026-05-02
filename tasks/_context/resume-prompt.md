@@ -1,33 +1,38 @@
 # S3 Resume Prompt
 
-> **Purpose:** One-stop pickup file for resuming MacAmp Sprint S3 work in a fresh Claude Code session. Update this file's "Current State" + "Active Work Queue" sections after each PR merge so it always reflects HEAD.
+> **Purpose:** One-stop pickup file for resuming MacAmp Sprint S3 work in a fresh Claude Code session. Update this file's "Current State" + "Active Work Queue" + "First Action" sections after each phase completion or PR merge so it always reflects HEAD.
 >
 > **How to use:** In a new session, paste:
 > *"Read `tasks/_context/resume-prompt.md` and follow it. Start with the next active task."*
 
 ---
 
-## Current State (update after each PR merge)
+## Current State (update after each phase completion or PR merge)
 
-> ⚠️ **S3-2 ARCHITECTURAL PIVOT (2026-05-01 → 2026-05-02 implementation start)** — `feat/video-audio-engine-routing` is **PAUSED-AS-REFERENCE** (preserved at `5af91eb`, pushed to origin). S3-2 re-attempted as **`avplayer-native-video-dsp`** on branch `feat/avplayer-native-video-dsp`. **Steps 1 + 2 + 3 ✅ complete; Phase 1 implementation NEXT.** See `tasks/_context/s3-2-pivot.md` for the strategic decision log + step-by-step status — that file is authoritative.
+> ⚠️ **S3-2 ARCHITECTURAL PIVOT — IMPLEMENTATION IN PROGRESS (2026-05-02).** `feat/video-audio-engine-routing` is **PAUSED-AS-REFERENCE** (preserved at `5af91eb`, pushed to origin). S3-2 re-attempted as **`avplayer-native-video-dsp`** on branch `feat/avplayer-native-video-dsp`. **Steps 1+2+3 ✅ + Phase 1 ✅ done. Phase 2 implementation NEXT.** See `tasks/_context/s3-2-pivot.md` for the strategic decision log + step-by-step status — that file is authoritative.
 
-**Last update:** 2026-05-02 (Step 2 research closed at Oracle 10/10; Step 3 plan closed at Oracle 9.8/10 including ADR-3a `@unchecked Sendable` containment cycle; implementation Phase 1 NEXT — VisualizerFeed + VisualizerScratchBuffers extraction).
-**Main HEAD:** `9cca40a` — `docs(_context): close out Phase 2; advance vaer to Phase 3-next`.
-**feat/avplayer-native-video-dsp HEAD:** `fdce0ed` — `plan(s3-2): finalize plan.md after ADR-3a — Oracle 9.8/10`. 9 commits ahead of main (1 cleanup + 1 scaffold + 5 research + 5 plan).
-**spike/avplayer-inplace-tap-dsp HEAD (throwaway):** `dd53d64` — Phase 0 spike, retained locally for implementation reference.
-**feat/video-audio-engine-routing HEAD (paused):** `5af91eb` — `docs(vaer): mark branch paused for S3-2 architectural pivot`. 44 commits ahead of main, pushed to origin.
-**Tests:** 72/72 passing on the new branch (TSan ON, Phase-1-only surface). New tests land Phase 2+ (target: ≥110/110 by S3-2 close).
-**PRs merged total:** 80. No PR opened on either S3-2 branch.
+**Last update:** 2026-05-02 (Phase 1 — `VisualizerFeed` + `VisualizerScratchBuffers` extraction — landed; engine path byte-for-byte identical, 72/72 tests TSan green; Phase 2 production tap scaffold + ADR-3a containment NEXT).
+**Main HEAD:** `9cca40a` — `docs(_context): close out Phase 2; advance vaer to Phase 3-next` (this is the OLD vaer message; main hasn't advanced).
+**`feat/avplayer-native-video-dsp` HEAD:** `3c4f40c` — `chore(s3-2): mark Phase 1 todo items complete (commit 146a8b4)`. **12 commits ahead of main:**
+- 1 mechanical-pivot cleanup (`ffd77c1`)
+- 1 task-folder scaffold (`a3c9aba`)
+- 5 Step-2 research commits (`4a80bf9` → `46bb6af`) — Oracle 10/10
+- 5 Step-3 plan commits (`1ae8e80` → `fdce0ed`) — Oracle 9.8/10 (incl. ADR-3a containment cycle)
+- 1 docs cleanup + todo derivation (`1f7a0a0`)
+- 1 Phase 1 implementation (`146a8b4`)
+- 1 Phase 1 todo update (`3c4f40c`)
+**`spike/avplayer-inplace-tap-dsp` HEAD (throwaway, retained locally):** `dd53d64` — Phase 0 spike. Kill-switch resolved: in-place tap DSP works on macOS 15+ with Swift 6.2 toolchain.
+**`feat/video-audio-engine-routing` HEAD (paused-as-reference):** `5af91eb`. 44 commits ahead of main, pushed to origin.
+**Tests:** 72/72 with TSan ON. Phase 1 was extraction-only (no test surface change). Target by S3-2 close: 110+/110+ (new tests land Phase 2 [contract], Phase 3 [BiquadNumericalMatch], Phase 7 [lifecycle]).
+**PRs merged total:** 80. No PR opened on either S3-2 branch yet (single PR at S3-2 close).
 
 **Most recent docs commits on main:**
 - `07a3ee8` HLS video future-work doc (S3-2 vs S3-3 naming clarification + 3 options for hypothetical HLS-video work)
 - `9fa0238` `*.m4v` gitignore
 - `5dea7d3` Phase 0 status sweep
-- `1d4eca1` Phase 0 spike findings — Path NONE selected; plan §9 Phase 4 = no-op; plan §7.5 AudioConverter is load-bearing
+- `1d4eca1` Phase 0 spike findings — Path NONE selected (these are OLD-vaer-branch artifacts, kept on main)
 
-**Most recent task closed:** `tasks/done/stream-pause-tail/` (S3-1B, PR #82, merged 2026-04-30, merge commit `b60fd57`). Atomic silence gate on the `AVAudioSourceNode` render block + producer-quiesce barrier (gate→clearQueue→ring flush in one decode-queue block) + seqlock + CAS in `LockFreeRingBuffer.read()` eliminates the ~0.7 s pause-tail and closes the consumer-side render-vs-flush race. `userPaused` flag suppresses reconnect-during-pause; `resume()` switches on pipeline state for safe live-edge restart with explicit bridge teardown. 9 implementation review iterations (Codex Oracle final 9/10 + parallel code-reviewer agent pass that caught a `deinit` task-leak Oracle missed). All 7 manual scenarios validated on real SomaFM stream. Two Lows deferred (see `_context/state.md` "Post-S3-1B Follow-Ups"): `StreamDecodePipeline.stop()` generation guard and `AudioConverterDecoder.clearQueue()` confinement-doc gap.
-
-**Previous closeout:** `tasks/done/timer-runloop-mode-audit/` (Post-S3-1A follow-up, PR #81, 2026-04-29). Pattern A normalization across the codebase. Deferred sub-follow-up `timer-scheduled-on-common-extension` pre-tracked.
+**Most recent task closed:** `tasks/done/stream-pause-tail/` (S3-1B, PR #82, merged 2026-04-30, merge commit `b60fd57`). See `tasks/_context/state.md` for the full S3-1B closeout summary.
 
 ---
 
@@ -35,28 +40,30 @@
 
 ### 1. IMPLEMENTING — `tasks/avplayer-native-video-dsp/` (S3-2 PIVOT)
 
-**Status:** Steps 1 + 2 + 3 ✅ complete. **Phase 1 implementation NEXT** — see `tasks/avplayer-native-video-dsp/todo.md` for the per-phase work breakdown.
+**Status:** Steps 1+2+3 ✅ + Phase 1 ✅ done. **Phase 2 (production tap scaffold + ADR-3a containment) NEXT** — see `tasks/avplayer-native-video-dsp/todo.md` for the per-phase work breakdown.
 
-**Why pivoted:** The original S3-2 (`feat/video-audio-engine-routing`) reached Phase 7 testing and revealed structural issues with the engine-routing approach: `AVAudioEngineConfigurationChange` unreliable for AirPlay/AirPods routes (proven by missing log line), master-clock-coupled video stalls, dual-clock-domain drift, and tinning artifacts from a second SRC stage. The contrarian solve: don't drag video audio out of AVPlayer — apply DSP in-place inside the same `MTAudioProcessingTap` so AVPlayer's native pipeline plays the modified buffer. No ring, no engine clock for video, no master-clock coupling. Full strategic decision in `tasks/_context/s3-2-pivot.md`.
+**Why pivoted:** The original S3-2 (`feat/video-audio-engine-routing`) reached Phase 7 testing and revealed structural issues with the engine-routing approach: `AVAudioEngineConfigurationChange` unreliable for AirPlay/AirPods routes (proven by missing log line), master-clock-coupled video stalls, dual-clock-domain drift, tinning artifacts from a second SRC stage. Contrarian solve: don't drag video audio out of AVPlayer — apply DSP in-place inside the same `MTAudioProcessingTap` so AVPlayer's native pipeline plays the modified buffer. No ring, no engine clock for video, no master-clock coupling. Full strategic decision in `tasks/_context/s3-2-pivot.md`.
 
-**Step 1 — Mechanical pivot ✅ DONE (2026-05-01).** Branch + cherry-pick + scaffold. 72/72 tests with TSan.
+**Step 1 — Mechanical pivot ✅ DONE 2026-05-01.** Branch + cherry-pick + scaffold. 72/72 tests with TSan.
 
-**Step 2 — Research ✅ DONE (2026-05-01).** Oracle 10/10 final after 5 rounds (7.8 → 8.9 → 9.1 → 9.5 → 10). Commits `4a80bf9` → `46bb6af`. Phase 0 spike empirically confirmed in-place tap DSP works (audible -20 dB attenuation A/B vs control on macOS 15+ Swift 6.2). Apple SDK header documents the contract verbatim. Full research package: `research.md` + 5 `research-notes/*.md`.
+**Step 2 — Research ✅ DONE 2026-05-01 (Oracle 10/10 after 5 rounds).** Commits `4a80bf9` → `46bb6af`. Phase 0 spike empirically confirmed in-place tap DSP works (audible -20 dB attenuation A/B vs control on macOS 15+ Swift 6.2). Apple SDK header documents the contract verbatim. Full research package: `research.md` + 5 `research-notes/*.md` + 17-row Evidence Ledger + Tap Lifecycle Contract + Concurrency Decision Record + Tooling Constraints.
 
-**Step 3 — Plan ✅ DONE (2026-05-02).** Oracle 9.8/10 final after 5 rounds (8.3 → 8.9 → 10 → 9.2 → 9.8). Commits `1ae8e80` → `fdce0ed`. The 0.2 below 10 reflects added scope from ADR-3a (Containment of `@unchecked Sendable` drift) added at user request 2026-05-02 with three durable gates: header contract block + `RenderThreadSafe` marker protocol + DEBUG Mirror+source-level reflection tests. User signed off 2026-05-02.
+**Step 3 — Plan ✅ DONE 2026-05-02 (Oracle 9.8/10 after 5 rounds).** Commits `1ae8e80` → `fdce0ed`. The 0.2 below 10 reflects added scope from ADR-3a (Containment of `@unchecked Sendable` drift) added at user request 2026-05-02 with three durable gates: header contract block + `RenderThreadSafe` marker protocol + DEBUG Mirror+source-level reflection tests. User signed off 2026-05-02. 11+1 ADRs, 9 implementation phases, 15-gate verification matrix.
 
-**Phase 1 (implementation) NEXT.** 9-phase plan per `plan.md` §6:
-- Phase 1: `VisualizerFeed` + `VisualizerScratchBuffers` extraction (engine path byte-for-byte identical)
-- Phase 2: production tap scaffold (Context + lifecycle + ASBD guard + ADR-3a containment, pass-through DSP)
+**Phase 1 — `VisualizerFeed` + `VisualizerScratchBuffers` extraction ✅ DONE 2026-05-02.** Commit `146a8b4`. Two private nested types in `VisualizerPipeline.swift` promoted to module-internal across new files (`VisualizerFeed.swift` ~110 LOC + `VisualizerScratchBuffers.swift` ~195 LOC, latter includes `GoertzelCoefficients` as cohesive unit). 5 type renames + 5 field renames in `VisualizerPipeline.swift` (661 → 378 lines). Engine path byte-for-byte identical. 72/72 tests TSan green.
+
+**Phase 2 (production tap scaffold + ADR-3a containment) NEXT.** ~41 work items split into 6 sub-phases. New files: `MacAmpApp/Audio/RenderThreadSafe.swift` (Gate 2 marker protocol), `MacAmpApp/Audio/VideoDSP/VideoTapContext.swift` (with Gate 1 header contract block), `MacAmpApp/Audio/VideoDSP/VideoTap.swift` (C-callbacks + ADR-10 release-on-fail + ADR-11 ASBD format guard), `Tests/MacAmpTests/VideoTapSendableContractTests.swift` (Gate 3a Mirror + Gate 3b source-level regex). Plus `AudioPlayer.swift` modify for `attachVideoTap` / `detachVideoTap` facade. Pass-through DSP only (no biquad math yet). ~520 new LOC + ~30 modified.
+
+**Remaining phases (per plan.md §6):**
 - Phase 3: `BiquadCascade` + balance + numerical match (≤0.5 dB tolerance vs `AVAudioUnitEQ`)
 - Phase 4: visualizer DSP integration (video-tap render path)
 - Phase 5: EQ + balance state fanout (parallel from `EqualizerController` + `AudioPlayer`)
 - Phase 6: production telemetry (deadline-miss instrumentation)
 - Phase 7: lifecycle + production tests (TSan, signed-bundle smoke)
 - Phase 8: verification matrix execution (15 gates: Static / Dynamic / Lifecycle)
-- Phase 9: UI integration polish + final smoke + docs (mandatory `docs/MACAMP_ARCHITECTURE_GUIDE.md` Audio Mechanism Concurrency Contract subsection)
+- Phase 9: UI integration polish + final smoke + mandatory docs (`docs/MACAMP_ARCHITECTURE_GUIDE.md` "Audio Mechanism Concurrency Contract" subsection)
 
-See `todo.md` for the full work-item checklist.
+See `tasks/avplayer-native-video-dsp/todo.md` for the full work-item checklist (90+ items).
 
 ### 2. PAUSED-AS-REFERENCE — `tasks/video-audio-engine-routing/`
 
@@ -66,21 +73,12 @@ The task's `state.md` carries a PAUSED-AS-REFERENCE banner pointing here.
 
 ### 3. DEFERRED — `timer-scheduled-on-common-extension`
 
-Sub-follow-up of `timer-runloop-mode-audit` (now merged). Extract a `Timer.scheduledOnMainCommon(every:repeats:_:)` helper into `MacAmpApp/Utilities/Timer+CommonMode.swift` and migrate all 7 timer-on-RunLoop callsites in `MacAmpApp/` to use it. With 7 Pattern-A callsites now in the codebase, AHA Rule-of-Three is exceeded by 4× — the helper is the natural next step.
+Sub-follow-up of `timer-runloop-mode-audit` (now merged). Extract a `Timer.scheduledOnMainCommon(every:repeats:_:)` helper into `MacAmpApp/Utilities/Timer+CommonMode.swift` and migrate all 7 timer-on-RunLoop callsites in `MacAmpApp/` to use it.
 
 **Predecessor:** `timer-runloop-mode-audit` PR #81 ✅ merged 2026-04-29.
 **Task folder:** not yet created (centrally tracked in `tasks/_context/state.md` "Post-S3-1A `timer-runloop-mode-audit` Follow-Ups" section).
 **Risk:** `@Sendable` closure migration may surface concurrency-checker edge cases at callsites using `[weak self]` + `MainActor.assumeIsolated` — warrants per-site review.
 **When to start:** any time; not blocking any S3 wave.
-
-### 2. DEFERRED — `timer-scheduled-on-common-extension`
-
-Sub-follow-up of `timer-runloop-mode-audit` (now merged). Extract a `Timer.scheduledOnMainCommon(every:repeats:_:)` helper into `MacAmpApp/Utilities/Timer+CommonMode.swift` and migrate all 7 timer-on-RunLoop callsites in `MacAmpApp/` to use it. With 7 Pattern-A callsites now in the codebase, AHA Rule-of-Three is exceeded by 4× — the helper is the natural next step.
-
-**Predecessor:** `timer-runloop-mode-audit` PR #81 ✅ merged 2026-04-29.
-**Task folder:** not yet created (centrally tracked in `tasks/_context/state.md` "Post-S3-1A `timer-runloop-mode-audit` Follow-Ups" section).
-**Risk:** `@Sendable` closure migration may surface concurrency-checker edge cases at callsites using `[weak self]` + `MainActor.assumeIsolated` — warrants per-site review.
-**When to start:** any time after S3-1B; not blocking any S3 wave.
 
 ---
 
@@ -89,25 +87,27 @@ Sub-follow-up of `timer-runloop-mode-audit` (now merged). Extract a `Timer.sched
 ```
 S3-1A mwvi  ✅ MERGED (PR #80, merge commit 7f3d76f, 2026-04-28)
      │
-     ├──► S3-1B spt                       ←── PR #82  ✅ MERGED (merge commit b60fd57, 2026-04-30)
+     ├──► S3-1B spt                              ←── PR #82  ✅ MERGED (b60fd57, 2026-04-30)
      │       │
      │       ▼
-     │    S3-2 vaer                       ←── PR #C   🔧 IN PROGRESS (Phase 0/1/2 ✅; Phase 3 engine source node + wiring next)
+     │    S3-2 avplayer-native-video-dsp         ←── PR #C   🔧 IMPLEMENTING
+     │       │                                                  Step 1+2+3 ✅; Phase 1 ✅;
+     │       │                                                  Phase 2 NEXT (8 phases remain)
      │       │
      │       ▼
-     │    S3-3 hls                        ←── PR #D
+     │    S3-3 hls                               ←── PR #D
      │       │
      │       ▼
-     │    S3-4 ogg                        ←── PR #E
+     │    S3-4 ogg                               ←── PR #E
      │           └── runs spike/ogg-build-wiring (0a) + spike/ogg-local-playback (0b) FIRST
      │
-     └──► timer-runloop-mode-audit         ←── PR #81  ✅ MERGED (merge commit ac09dd4, 2026-04-29)
+     └──► timer-runloop-mode-audit                ←── PR #81  ✅ MERGED (ac09dd4, 2026-04-29)
               │
               ▼
-          timer-scheduled-on-common-extension   ←── PR #H   ⏸ DEFERRED (predecessor merged ✅; ready when scheduled)
+          timer-scheduled-on-common-extension    ←── PR #H   ⏸ DEFERRED
 ```
 
-**Spike policy (default — do NOT deviate without explicit reason):** each Phase 0 spike runs at its parent task's pickup time on a throwaway branch, findings written to that task's `research.md`, branch deleted. Do NOT run `spike/vaer-av-drift-measurement`, `spike/ogg-build-wiring`, or `spike/ogg-local-playback` early. The vaer drift spike is the kill-switch on whether vaer is feasible at all (>100 ms drift → cancel task), but its strategic value of running early is not worth the workflow break.
+**Spike policy (default — do NOT deviate without explicit reason):** each Phase 0 spike runs at its parent task's pickup time on a throwaway branch, findings written to that task's `research.md`, branch deleted. S3-2's spike (`spike/avplayer-inplace-tap-dsp`) ran 2026-05-01 and is **retained locally** until S3-2 close as implementation reference.
 
 **Post-S3:** Structure Sprint (file-move consolidation per `_context/state.md` D-STRUCTURE decision 2026-03-15). Don't start it until S3 closes.
 
@@ -121,24 +121,24 @@ Every S3 task — main task or spike — follows this sequence:
 2. **Read `tasks/_context/principles.md`** — the 7 decomposition principles (Problem-First, Cohesion>LOC, State Ownership, AHA Rule of Three, API Surface, No Pass-Through, ADR + Kill Switch).
 3. **Read all 6 canonical files** in the task folder: `research.md`, `plan.md`, `todo.md`, `state.md`, `placeholder.md`, `depreciated.md`.
 4. **Re-read every "Files Affected" source at HEAD** to reconcile line-number drift since the plan was written. Verify the plan/todo references still match the code.
-5. **Confirm `git status` is clean.** If pending changes exist, commit them as a `chore:` before cutting the new branch.
-6. **Cut branch from `main`:** `git checkout main && git pull && git checkout -b <branch-name>`.
-7. **Execute `todo.md` phases in order.** TSan-on builds + tests after each phase (per `feedback_xcodebuildmcp_workflow.md` memory):
+5. **Confirm `git status` is clean.** If pending changes exist, commit them as a `chore:` before continuing.
+6. **Execute `todo.md` phases in order.** TSan-on builds + tests after each phase (per `feedback_xcodebuildmcp_workflow.md` memory):
    ```bash
+   xcodegen generate
    xcodebuildmcp macos build --json '{"extraArgs":["-enableThreadSanitizer","YES"]}'
    xcodebuildmcp macos test  --json '{"extraArgs":["-enableThreadSanitizer","YES"]}'
    ```
    Note: TSan is per-invocation only — no session-default works (see `feedback_tsan_xcodebuildmcp_cli.md`).
-8. **Use `ast-grep` (`sg --lang swift -p '<pattern>'`)** before editing setter chains, call graphs, or member-access patterns. `rg` text search alone misses duplicates and dead writes (see `feedback_ast_grep_structural_search.md`).
-9. **For diagnostic work on pipelines** (producer → transport → consumer): instrument at least two stages, not just the symptom site (see `feedback_pipeline_end_to_end_diagnosis.md`).
-10. **Run Codex Oracle pre-PR code-review gate** (`mcp__codex-cli__codex`, model `gpt-5.3-codex`, `reasoningEffort: xhigh`). Apply ACTIONABLE feedback. Consider NITs case-by-case.
-11. **Push + `gh pr create`.** Wait for human review before merging.
-12. **Post-merge close-out** (model after the mwvi close-out commit `0358a25`):
+7. **Use `ast-grep` (`sg --lang swift -p '<pattern>'`)** before editing setter chains, call graphs, or member-access patterns. `rg` text search alone misses duplicates and dead writes (see `feedback_ast_grep_structural_search.md`).
+8. **For diagnostic work on pipelines** (producer → transport → consumer): instrument at least two stages, not just the symptom site (see `feedback_pipeline_end_to_end_diagnosis.md`).
+9. **Run Codex Oracle pre-PR code-review gate** (`mcp__codex-cli__codex`, model `gpt-5.3-codex`, `reasoningEffort: xhigh`). Apply ACTIONABLE feedback. Consider NITs case-by-case.
+10. **Push + `gh pr create`.** Wait for human review before merging.
+11. **Post-merge close-out** (model after the mwvi close-out commit `0358a25`):
     - Update task `state.md` to MERGED with PR link + merge commit.
     - `git mv tasks/<task>/ tasks/done/<task>/` (preserves history).
     - Update `tasks/_context/state.md` (Quick Reference, sprint table, follow-up section if any).
     - Update `tasks/_context/tasks_index.md`.
-    - **Update this file** (`tasks/_context/resume-prompt.md`) — bump "Current State" section, advance "Active Work Queue" by removing the merged task and promoting the next task in line.
+    - **Update this file** (`tasks/_context/resume-prompt.md`) — bump "Current State" section, advance "Active Work Queue" by removing the merged task and promoting the next task in line, update "First Action".
     - Single `chore: close out <task> (PR #X)` commit.
 
 ---
@@ -147,11 +147,14 @@ Every S3 task — main task or spike — follows this sequence:
 
 Index lives at `~/.claude/projects/-Users-hank-dev-src-MacAmp/memory/MEMORY.md`. Notable memories that apply directly to S3 work:
 
-- **`feedback_pipeline_end_to_end_diagnosis.md`** — Symptoms manifest at the consumer; root causes often live at the producer. Instrument both ends of any data pipeline before diagnosing. Five operational rules; cross-references the same meta-principle as ast-grep.
+- **`feedback_pipeline_end_to_end_diagnosis.md`** — Symptoms manifest at the consumer; root causes often live at the producer. Instrument both ends of any data pipeline before diagnosing.
 - **`feedback_ast_grep_structural_search.md`** — Use `sg --lang swift -p` for structural enumeration before edits; `rg` text search misses duplicates / dead writes / pass-through middlemen.
 - **`feedback_xcodebuildmcp_workflow.md`** — Always xcodegen + XcodeBuildMCP build AND test (not just `swift build`/`test`) after adding/moving files. TSan must be passed per-invocation.
 - **`feedback_sprint_workflow.md`** — Every sprint task gets Oracle review + PR for user review before merge, regardless of size.
 - **`feedback_architecture_principles.md`** — The 7 decomposition principles (project-canonical at `tasks/_context/principles.md` and `.ai-shared/principles.md`).
+- **`feedback_no_review_trail_in_comments.md`** — Production source comments must describe the invariant, not cite Oracle iters / ADR-IDs / PR numbers.
+- **`feedback_oracle_exhaustive_pass.md`** — Run Oracle exhaustively in one pass over full files instead of iter-by-iter rounds.
+- **`feedback_comment_verbosity.md`** — Default to zero comments; when needed, one short line max.
 
 ---
 
@@ -159,31 +162,81 @@ Index lives at `~/.claude/projects/-Users-hank-dev-src-MacAmp/memory/MEMORY.md`.
 
 `BUILDING_RETRO_MACOS_APPS_SKILL.md` is the canonical lessons-learned doc. Most relevant for current work:
 
-- **`feedback_pipeline_end_to_end_diagnosis.md`** — directly applicable to `stream-pause-tail`: the pause-tail bug is a producer-vs-consumer pipeline issue (silence-gate at consumer + producer-quiesce). Instrument both ends before diagnosing.
-- **Part 23 — Lesson: RunLoop Mode Discipline in Feeding Pipelines (April 2026)** — historical context for the merged `timer-runloop-mode-audit` (PR #81) and direct guidance for the deferred follow-up `timer-scheduled-on-common-extension`. Includes the audit-habit shell snippet to enumerate all `Timer.scheduledTimer` callsites and verify each is followed by `RunLoop.main.add(timer, forMode: .common)`.
 - **Part 21 — Video/Milkdrop Window Patterns** (Pattern 3: `Task { @MainActor in }` for Timer/Observer Closures) — relevant whenever modifying timer closures.
+- **Part 23 — Lesson: RunLoop Mode Discipline in Feeding Pipelines (April 2026)** — historical context for the merged `timer-runloop-mode-audit` (PR #81) and direct guidance for the deferred follow-up `timer-scheduled-on-common-extension`.
 
 ---
 
 ## First Action for the Resuming Agent
 
-**Read `tasks/_context/s3-2-pivot.md` first.** It is authoritative for current S3-2 status — three-step plan, decision log, file index. The "Active Work Queue" above gives a one-paragraph summary; the pivot tracker has the full context.
+You are picking up `avplayer-native-video-dsp` mid-implementation. Steps 1+2+3 ✅ + Phase 1 ✅ are done. **Phase 2 is the active work.**
 
-Then open `tasks/avplayer-native-video-dsp/` and read the 6 canonical files (currently scaffolded, not yet researched):
-- `state.md` — Step 1 done, Step 2 next; saved-branch context, dual-architecture topology table
-- `research.md` — research questions for Step 2 (Phase 0 spike kill-switch, Apple docs, retrospective, numerical-match research, render-thread CPU, channel/SRC handling, `VisualizerFeed` extraction)
-- `plan.md` — explicitly a skeleton; do NOT implement from it (research must land first per workflow)
-- `todo.md` — Step 1 items checked, Step 2/3 items pending
-- `placeholder.md` / `depreciated.md` — empty until implementation phase
+### Pickup checklist
 
-**Step 1 is done.** Skip it. **Step 2 (research phase) is the active work.**
+1. **Switch to the work branch:**
+   ```bash
+   git checkout feat/avplayer-native-video-dsp
+   git status   # should be clean; HEAD = 3c4f40c
+   ```
 
-**Branch already exists:** `feat/avplayer-native-video-dsp` is on main commit `9cca40a` + 13 cherry-picked Phase 1 commits + 1 cleanup commit (`ffd77c1`) + scaffolding commit (the next one to land). Switch to it (`git checkout feat/avplayer-native-video-dsp`). 72/72 tests with TSan.
+2. **Read these files in order** (they describe the architecture, the contract, and the work):
+   - `tasks/_context/s3-2-pivot.md` — strategic decision log (3 steps + phase ownership)
+   - `tasks/avplayer-native-video-dsp/state.md` — current status + dual-architecture topology
+   - `tasks/avplayer-native-video-dsp/research.md` — full Step 2 synthesis (Oracle 10/10), Evidence Ledger, Architecture diagram, Reuse policy, Tap Lifecycle Contract, Concurrency Decision Record, Tooling Constraints
+   - `tasks/avplayer-native-video-dsp/research-notes/spike-findings.md` — Phase 0 empirical confirmation + 6-item production-translation hazards checklist
+   - `tasks/avplayer-native-video-dsp/plan.md` — full 9-phase plan (Oracle 9.8/10), 11+1 ADRs, especially **ADR-3 + ADR-3a** (concurrency contract + `@unchecked Sendable` containment), ADR-4 (atomic-pointer double-buffer), ADR-7 (tap lifecycle), ADR-10 (release-on-fail), ADR-11 (ASBD format guard)
+   - `tasks/avplayer-native-video-dsp/todo.md` — Phase 2 work-item checklist (items 2.1 through 2.41, split into sub-phases 2a Marker Protocol → 2b Context → 2c VideoTap → 2d AudioPlayer facade → 2e Contract Test → 2f Verification)
+   - `tasks/avplayer-native-video-dsp/research-notes/saved-branch-retrospective.md` — ALLOWLIST/DENYLIST scoping for what to study from the saved engine-routing branch (file:line citations)
 
-Saved reference branch (paused, not for work): `feat/video-audio-engine-routing` at `5af91eb`, pushed to origin. Read end-to-end during Step 2 retrospective (research question Q5 in `research.md`).
+3. **Re-read at HEAD** the files Phase 2 will touch (line numbers may have shifted from plan.md authoring):
+   - `MacAmpApp/Audio/AudioPlayer.swift` — locate insertion points for the `attachVideoTap` / `detachVideoTap` facade
+   - `MacAmpApp/Audio/VisualizerFeed.swift` (NEW from Phase 1)
+   - `MacAmpApp/Audio/VisualizerScratchBuffers.swift` (NEW from Phase 1)
+   - `MacAmpApp/Audio/VisualizerPipeline.swift` (post-Phase-1 state — 378 lines)
+   - `MacAmpApp/Windows/WinampVideoWindowController.swift` — to locate where the AVPlayer/AVPlayerItem is constructed (Phase 2d wires `attachVideoTap` here)
 
-Step 2 starts with the **Phase 0 spike** (research question Q1) on a throwaway branch — the kill switch on the entire architecture. If `MTAudioProcessingTap` doesn't actually let AVPlayer play in-place modified buffers, replan from there. The spike is documented in `research.md`; stand it up, run it, write findings back to `research.md`. Other research items (Apple docs, retrospective, numerical match, CPU budget, channel handling) can run in parallel or after the spike.
+4. **Spike code reference** (kept locally, throwaway branch):
+   ```bash
+   git show spike/avplayer-inplace-tap-dsp:spikes/avplayer-inplace-tap-dsp/Sources/InPlaceTapSpike/main.swift
+   ```
+   Phase 2 production tap is the spike's pattern HARDENED per ADR-10 + ADR-11 + ADR-3a. The spike's specific shortcuts (per `spike-findings.md` Production-Translation Hazards section) MUST NOT carry forward.
 
-Stop and report back to me before writing `plan.md` (Step 3) — I'll review research findings before plan iteration with Oracle begins.
+5. **Saved-branch reference** (paused-as-reference, NOT for cherry-picking):
+   ```bash
+   git show feat/video-audio-engine-routing:MacAmpApp/Audio/VideoAudioTap.swift
+   ```
+   Read with the ALLOWLIST/DENYLIST in `research-notes/saved-branch-retrospective.md` open. C-callback shape, `Unmanaged` lifetime, ASBD inspection, surround-channel layout knowledge are reusable as patterns. Ring buffer, AudioConverter, watchdog, HAL listener, fallback flag, `swift-atomics` are explicitly NOT carried forward.
 
-> **Optional sub-track:** `timer-scheduled-on-common-extension` — extract a `Timer.scheduledOnMainCommon` helper, migrate all 7 Pattern-A timer callsites. Predecessor `timer-runloop-mode-audit` (PR #81) is merged ✅; this task does not block any S3 wave. Task folder doesn't exist yet — create it on pickup using the same 6-file canonical layout.
+6. **Then execute Phase 2** per `todo.md`. Sub-phases land in this order:
+   - **2a** Create `MacAmpApp/Audio/RenderThreadSafe.swift` — marker protocol + extensions (no stdlib primitive blanket conformance per Round 4 fix; `Atomic`, `Mutex`, `Optional<RenderThreadSafe>`, unsafe pointer types, `AudioStreamBasicDescription`, `VisualizerFeed`, `VisualizerScratchBuffers`)
+   - **2b** Create `MacAmpApp/Audio/VideoDSP/VideoTapContext.swift` — header contract block (ADR-3a Gate 1) at top + `final class VideoTapContext: @unchecked Sendable` with all `Atomic<T>` fields per todo 2.12.1-2.12.9 + `init`/`deinit` for double-buffer coefficient blocks (Phase 2 placeholder allocation; Phase 3 fills in the real `BiquadCoefficientSet`) + `#if DEBUG _makeForContractTest()` factory
+   - **2c** Create `MacAmpApp/Audio/VideoDSP/VideoTap.swift` — `VideoTapError` enum + 5 file-scope `private let` C-callback closures (`tapInit/Finalize/Prepare/Unprepare/Process`) + `static func attach(to:context:)` factory **with explicit `retained.release()` on `MTAudioProcessingTapCreate` failure** (ADR-10) + `static func detach(from:)` (Phase 2 `tapProcess` body is pass-through after ASBD format gate per ADR-11)
+   - **2d** `AudioPlayer.swift` modify — `private var videoTapContext: VideoTapContext?`, facade `attachVideoTap(to:)` / `detachVideoTap(_:from:)`, wire to existing video playback flow in `WinampVideoWindowController`
+   - **2e** Create `Tests/MacAmpTests/VideoTapSendableContractTests.swift` — Test 3a Mirror reflection + Test 3b source-level regex guard (reads `VideoTapContext.swift` via `SRCROOT`, asserts every stored `var` is `Atomic<...>` or `Mutex<...>`)
+   - **2f** Verify: `xcodegen generate`, build + test with TSan ON, contract test 3a + 3b green, allocation balance via Allocations Instruments, manual smoke on all 5 clapperboard clips
+
+7. **Commit at end of Phase 2:**
+   ```
+   chore(s3-2): Phase 2 — production tap scaffold + ADR-3a containment
+   ```
+   Then mark all Phase 2 todo items `[x]` and update this file's "Current State" + "Active Work Queue" to reflect Phase 2 done / Phase 3 next.
+
+### Critical reminders
+
+- **Engine path must remain byte-for-byte identical.** Phase 1 verified this for the visualizer extraction. Phase 2 introduces a NEW path (video tap) — do not modify the engine path.
+- **No `swift-atomics` `ManagedAtomic`.** Use `Synchronization.Atomic<T>` (Swift 6.0 stdlib, macOS 15+) per ADR-3 + saved-branch retrospective modernization gap.
+- **No `nonisolated(unsafe)` on Context fields.** ADR-3 settled this — `Atomic<T>` is `Sendable`, the class envelope's `@unchecked Sendable` is sufficient at the FFI boundary.
+- **Float not `AtomicRepresentable`.** Use `Atomic<UInt32>` storing `Float.bitPattern` (verified pattern in spike code).
+- **One tap per `AVPlayerItem`.** Per ADR-7. `audioMix` set ONCE before `play()`, never mutated during playback.
+- **`MTAudioProcessingTapCallbacks.init` parameter:** label is `init:` (no backticks). Compiler warns if escaped (verified in spike).
+- **`MTAudioProcessingTapCreate` last parameter:** Swift bridges as `MTAudioProcessingTap?` (NOT `Unmanaged<MTAudioProcessingTap>?`).
+- **TSan after every phase boundary.** Per project convention.
+- **No `// TODO` in production code.** Anything stubbed goes in `tasks/avplayer-native-video-dsp/placeholder.md`.
+
+### After Phase 2
+
+Phase 3 (`BiquadCascade` + balance + numerical match) is the largest DSP-correctness phase. Phase 4-9 are progressively smaller. Total remaining work is ~6-10 hours of focused implementation (varies with verification gate cycles).
+
+### Optional sub-track
+
+`timer-scheduled-on-common-extension` — extract a `Timer.scheduledOnMainCommon` helper, migrate all 7 Pattern-A timer callsites. Predecessor `timer-runloop-mode-audit` (PR #81) is merged ✅; this task does not block any S3 wave. Task folder doesn't exist yet — create it on pickup using the same 6-file canonical layout.
