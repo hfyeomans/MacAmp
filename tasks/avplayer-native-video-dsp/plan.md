@@ -131,22 +131,22 @@ Adding a new field requires updating this comment AND adding a `RenderThreadSafe
 ///   - Be `Sendable` (or equivalent at the FFI boundary)
 ///   - Provide its own thread-safety story (atomics, mutex, immutability)
 ///   - Not capture or invoke `@MainActor`-isolated state on the render thread
+///
+/// **Conformance centralization rule.** All `RenderThreadSafe` conformance
+/// extensions MUST live in this file. PRs that add conformances elsewhere
+/// require explicit reviewer justification and an ADR amendment. This rule
+/// makes Gate 2 reviewable: a single file is the audit surface.
 internal protocol RenderThreadSafe {}
 
 extension Atomic: RenderThreadSafe {}
 extension Mutex: RenderThreadSafe {}
 
-// stdlib value types (allow-listed for `let`-only fields; the header contract
-// forbids `var` of primitives)
-extension Bool: RenderThreadSafe {}
-extension Int: RenderThreadSafe {}
-extension UInt: RenderThreadSafe {}
-extension Int32: RenderThreadSafe {}
-extension UInt32: RenderThreadSafe {}
-extension Int64: RenderThreadSafe {}
-extension UInt64: RenderThreadSafe {}
-extension Float: RenderThreadSafe {}
-extension Double: RenderThreadSafe {}
+// Note: stdlib primitive value types (Bool, Int, Float, Double, etc.) are
+// DELIBERATELY NOT conformed. Per the header contract, primitive cross-thread
+// state must be Atomic-wrapped (mutability is enforced by Gate 3's source-level
+// guard, not by Mirror reflection). Per-instance immutable constants should be
+// captured at init via Atomic<T> with .relaxed semantics, or expressed as
+// `static let` outside the class.
 
 // Optional<T: RenderThreadSafe> is itself RenderThreadSafe
 extension Optional: RenderThreadSafe where Wrapped: RenderThreadSafe {}
@@ -158,7 +158,9 @@ extension UnsafeMutablePointer: RenderThreadSafe {}
 extension UnsafeRawPointer: RenderThreadSafe {}
 extension UnsafeMutableRawPointer: RenderThreadSafe {}
 
-// CoreAudio C structs (POD, trivially copyable)
+// CoreAudio C structs (POD, trivially copyable, immutable when stored as `let`).
+// Source-level guard (Gate 3, second test) enforces that these are stored as
+// `let`, not `var`.
 extension AudioStreamBasicDescription: RenderThreadSafe {}
 
 // MacAmp audio-mechanism types — manual conformance, must satisfy the contract
@@ -167,10 +169,11 @@ extension VisualizerScratchBuffers: RenderThreadSafe {}
 extension BiquadCascade: RenderThreadSafe {}
 ```
 
-The protocol has no requirements; it is a runtime-checkable witness that a type's storage shape has been audited for the contract.
+The protocol has no requirements; it is a runtime-checkable witness that a type's storage shape has been audited for the contract. The file-centralization rule for conformances reduces the audit surface to one reviewable file.
 
-**Gate 3 — DEBUG Swift Testing reflection test** (new file: `Tests/MacAmpTests/VideoTapSendableContractTests.swift`, ~60 LOC).
+**Gate 3 — DEBUG Swift Testing reflection + source guard tests** (new file: `Tests/MacAmpTests/VideoTapSendableContractTests.swift`, ~120 LOC). Two test methods cover the type-shape and mutability dimensions separately because they require different mechanisms:
 
+**Test 3a — Mirror reflection (catches type violations):**
 ```swift
 #if DEBUG
 @Suite("VideoTapContext @unchecked Sendable contract")
@@ -190,10 +193,44 @@ struct VideoTapContextSendableContractTests {
             VideoTapContext stored properties violate the @unchecked Sendable + render-thread \
             contract documented in VideoTapContext.swift's header. Each violation must either:
               (1) Use Atomic<T>/Mutex<T> wrapping, OR
-              (2) Conform via `extension <TypeName>: RenderThreadSafe {}` after auditing.
+              (2) Conform via `extension <TypeName>: RenderThreadSafe {}` in RenderThreadSafe.swift after auditing.
             See plan.md ADR-3a.
             
             Violations:
+            \(violations.joined(separator: "\n"))
+            """)
+    }
+```
+
+**Test 3b — source-level guard (catches `var` of primitive — the dimension Mirror cannot see):**
+```swift
+    @Test
+    func allStoredVarsAreAtomicOrMutex() throws {
+        // Read VideoTapContext.swift via SRCROOT (Xcode test env) or relative path
+        guard let srcRoot = ProcessInfo.processInfo.environment["SRCROOT"] else {
+            Issue.record("SRCROOT not set; cannot run source-level guard")
+            return
+        }
+        let url = URL(fileURLWithPath: "\(srcRoot)/MacAmpApp/Audio/VideoDSP/VideoTapContext.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+        
+        // Match `var name: Type` declarations (storage, not computed).
+        // Computed `var` properties have `{ get }` or `{ get set }` and are excluded
+        // by the regex (which requires a type but not a body brace).
+        let pattern = /^[ \t]*(?:private|internal|fileprivate|public|nonisolated\(unsafe\))?\s*var\s+(\w+)\s*:\s*([^={]+?)(?:\s*=|\s*$)/
+        var violations: [String] = []
+        for match in source.matches(of: pattern) {
+            let name = String(match.output.1)
+            let type = String(match.output.2).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !type.hasPrefix("Atomic<") && !type.hasPrefix("Mutex<") {
+                violations.append("var \(name): \(type)")
+            }
+        }
+        #expect(violations.isEmpty, """
+            VideoTapContext has stored `var` fields that are NOT Atomic<T> or Mutex<T>.
+            Per ADR-3a header contract, all mutable cross-thread fields must wrap their
+            value in Synchronization.Atomic or Synchronization.Mutex. Constants must use
+            `let`. Violations:
             \(violations.joined(separator: "\n"))
             """)
     }
@@ -201,11 +238,18 @@ struct VideoTapContextSendableContractTests {
 #endif
 ```
 
-`VideoTapContext._makeForContractTest()` is a `#if DEBUG` factory that constructs a Context with placeholder dependencies (no AVPlayer required). It exists solely for this test.
+`VideoTapContext._makeForContractTest()` is a `#if DEBUG` factory that constructs a Context with placeholder dependencies (no AVPlayer required). It exists solely for these tests.
 
-**What this catches.** Adding a non-`Sendable` reference field, a `@MainActor` closure, or any unaudited type to `VideoTapContext` fails the test at build time on every PR (CI gate). Code reviewers see the contract violation explicitly.
+**What Gate 3 catches:**
+- *Type violations* (Test 3a / Mirror): non-`Sendable` reference fields, `@MainActor` closures, capturing closures, unaudited types.
+- *Mutability violations* (Test 3b / source-level): `var foo: Bool` and any other `var` of a non-Atomic/Mutex type. Note: this is a regex source-level check; while not as robust as compiler-level enforcement, it covers the documented forbidden case.
 
-**What this does NOT catch.** A future contributor who explicitly adds `extension MyDangerousType: RenderThreadSafe {}` bypasses the test. That is a deliberate code change visible to a reviewer; the comment block + this ADR document the standard for review.
+**What Gate 3 does NOT catch:**
+- A contributor who deliberately adds `extension MyDangerousType: RenderThreadSafe {}` *and* puts it in `RenderThreadSafe.swift` (Gate 2's centralization rule means the change is visible to reviewers in a single file — this is the intended human-review checkpoint).
+- A contributor who circumvents Test 3b's regex via unusual formatting (multi-line type declarations, etc.). The regex is heuristic; egregious bypass requires deliberate effort and would be visible in code review.
+- Release-only code paths (Gate 3 is `#if DEBUG`). Acceptable trade-off: production builds don't pay the reflection cost; CI runs Debug + Release configurations and Debug catches violations.
+
+The combined gates (1 + 2 + 3a + 3b) close the documented forbidden-list cases. Residual reliance on code review is explicit, narrow, and aided by the centralized `RenderThreadSafe.swift` audit file.
 
 **Pattern transfer.** The `RenderThreadSafe` marker + Mirror-test pattern is reusable for other audio-mechanism `@unchecked Sendable` types. `VisualizerSharedBuffer`/`VisualizerScratchBuffers` already conform here; retroactive conformance for `StreamDecodePipeline.DecodeContext` is a candidate for a follow-up task (out of scope for S3-2).
 
@@ -336,7 +380,7 @@ guard status == noErr, let tap = tapOut else {
 | `MacAmpApp/Audio/VideoDSP/VideoTapVisualizerRender.swift` | Tap-side video render function (mono-mix + RMS + Goertzel + FFT + tryPublish) | ~120 | 4 |
 | `Tests/MacAmpTests/BiquadNumericalMatchTests.swift` | Log-sweep numerical match vs `AVAudioUnitEQ`; EQ-toggle bypass test; preamp parity test; balance parity test | ~180 | 3 |
 | `Tests/MacAmpTests/VideoTapLifecycleTests.swift` | TSan-on lifecycle tests | ~200 | 7 |
-| `Tests/MacAmpTests/VideoTapSendableContractTests.swift` | DEBUG-only Mirror-based test enforcing `RenderThreadSafe` conformance on every `VideoTapContext` stored field (ADR-3a Gate 3) | ~60 | 2 |
+| `Tests/MacAmpTests/VideoTapSendableContractTests.swift` | DEBUG-only Mirror reflection test (Test 3a) + source-level regex guard (Test 3b) for `var` mutability — together enforce the ADR-3a Gate 3 contract on `VideoTapContext` stored fields | ~120 | 2 |
 | `Tests/MacAmpTests/VideoTapDSPTests.swift` | Tap DSP unit + integration tests | ~250 | 2-5 |
 
 ### 5.2 Modified files
@@ -685,7 +729,11 @@ Each phase is individually reviewable and individually testable. Each phase ends
 **Files.**
 - Audit: `MacAmpApp/Windows/WinampVideoWindowController.swift`, `MacAmpApp/Views/WinampVideoWindow.swift` (and the chrome view at `MacAmpApp/Views/Windows/VideoWindowChromeView.swift`) — confirm EQ + balance + visualizer-mode UI surfaces exist for the video window context. Add menu items / wiring as needed (likely minimal; the existing video window already shares EQ + balance UI with the audio window via `AppSettings` / `EqualizerController` / `AudioPlayer`).
 - **Documentation (mandatory, not optional):**
-  - **`docs/MACAMP_ARCHITECTURE_GUIDE.md`** — add an "Audio Mechanism Concurrency Contract" subsection codifying the project-wide convention: *audio-mechanism types that cross Apple-render-thread C-callback boundaries (or any non-Swift-concurrency-managed thread) use `final class @unchecked Sendable` with `Synchronization.Atomic<T>` for cross-thread state; conformance to a `RenderThreadSafe` marker protocol (declared in `MacAmpApp/Audio/RenderThreadSafe.swift`) gates the storage allow-list at test time.* Cite ADR-3 + ADR-3a from this plan. Enumerate types that follow this pattern (initially: `VideoTapContext`, `VisualizerFeed`, `VisualizerScratchBuffers`, `BiquadCascade`). Note that `StreamDecodePipeline.DecodeContext` is a candidate for retroactive conformance in a follow-up task.
+  - **`docs/MACAMP_ARCHITECTURE_GUIDE.md`** — add an "Audio Mechanism Concurrency Contract" subsection codifying the project-wide convention. Two key distinctions the section must make explicit:
+    - **`@unchecked Sendable` as implicit shortcut: AVOID.** Bare `@unchecked Sendable` without atomic discipline or contract gating is a code smell. Existing scattered uses in the codebase (`StreamDecodePipeline.DecodeContext`, prior `VisualizerSharedBuffer`/`VisualizerScratchBuffers` annotations) predate this contract; they are candidates for retroactive contract adoption.
+    - **`@unchecked Sendable` as explicitly-gated exception: ACCEPTABLE.** When the boundary is necessary (Apple-render-thread FFI; non-Swift-concurrency-managed threads) and is gated by header contract + `RenderThreadSafe` marker + DEBUG reflection + source-level test (ADR-3a's three gates), the pattern is the canonical project answer. Cite ADR-3 + ADR-3a from this plan.
+    - **Consolidation duty.** This subsection becomes the canonical reference; **scattered guidance elsewhere in the architecture guide (e.g. `MACAMP_ARCHITECTURE_GUIDE.md` lines around 826/1354 referencing `VisualizerSharedBuffer`/`VisualizerScratchBuffers`) is updated to point to this subsection** rather than re-stating the rationale. Eliminates documentation drift.
+    - Enumerate types that follow the contract today: `VideoTapContext`, `VisualizerFeed` (post-Phase 1), `VisualizerScratchBuffers` (post-Phase 1), `BiquadCascade` (post-Phase 3). Mark `StreamDecodePipeline.DecodeContext` as a follow-up retrofit candidate (out of scope for S3-2).
   - **`docs/VIDEO_WINDOW.md`** — add an "Audio DSP Architecture" section describing the in-place tap DSP topology (replaces any prior engine-routing description). Reference research.md and ADRs 1-11 from this plan.
 
 **Verification.**
@@ -766,7 +814,8 @@ If a kill switch fires:
 
 | Layer | Tests | Phase |
 |---|---|---|
-| **Contract (ADR-3a Gate 3)** | `VideoTapSendableContractTests.allStoredFieldsConformToRenderThreadSafe` — DEBUG-only Mirror reflection over `VideoTapContext._makeForContractTest()`; fails CI when any stored property's value is not `RenderThreadSafe`. Catches future drift of `@unchecked Sendable` envelope. | 2 |
+| **Contract (ADR-3a Gate 3a)** | `VideoTapSendableContractTests.allStoredFieldsConformToRenderThreadSafe` — DEBUG-only Mirror reflection over `VideoTapContext._makeForContractTest()`; fails CI when any stored property's value is not `RenderThreadSafe`. Catches type-shape drift. | 2 |
+| **Contract (ADR-3a Gate 3b)** | `VideoTapSendableContractTests.allStoredVarsAreAtomicOrMutex` — DEBUG-only source-level regex guard reading `VideoTapContext.swift`; fails CI when any stored `var` declaration is not `Atomic<...>` or `Mutex<...>`. Catches mutability drift Mirror cannot see. | 2 |
 | Unit (BiquadCascade) | RBJ formula correctness; per-band coefficient values match published RBJ table at 1 kHz, +6 dB, BW=1.0; reset() zeros filter state | 3 |
 | Unit (BiquadCoefficientSet) | Sample-rate change recomputes; preset values map to expected coefficient signatures | 3 |
 | Unit (VideoTapContext) | Atomic-pointer swap is observed by render-thread mock; `installCoefficientSet` doesn't allocate | 2 |
