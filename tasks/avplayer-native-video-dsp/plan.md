@@ -1,6 +1,6 @@
 # Plan: AVPlayer-Native Video DSP
 
-> **Status:** PLANNING — awaiting Oracle gate (target ≥9/10).
+> **Status:** APPROVED (Oracle 10/10 after 3 rounds; awaiting user sign-off before todo.md derivation).
 > **Created:** 2026-05-01
 > **Sprint:** S3, Wave **S3-2** (architectural pivot from `feat/video-audio-engine-routing`).
 > **Branch:** `feat/avplayer-native-video-dsp`
@@ -696,7 +696,11 @@ These items are documented for resolution during the named phase. They are **not
 
 | Date | Round | Score | Findings | Action |
 |---|---|---|---|---|
-| (pending) | 1 | TBD | TBD | |
+| 2026-05-01 | 1 | 8.3/10 | 2 BLOCKER (EQ-state contract incomplete; balance ownership ambiguity), 6 ACTIONABLE (ADR decisiveness, `flagsOut` semantics, file-path error, §3 cross-refs, phase-table drift, undefined helper types), 2 NIT (R7 ABA wording, `project.yml` note) | Applied all in commit `dcb00d0` |
+| 2026-05-01 | 2 | 8.9/10 | 1 BLOCKER partial (ownership still in §3 P3 + §5.5), 1 ACTIONABLE partial (stale path in Phase 9) | Applied both in commit `a92d692` |
+| 2026-05-01 | 3 | **10/10** | None — "ready for implementation" | — |
+
+> **Status:** APPROVED — awaiting user sign-off before todo.md derivation.
 
 ---
 
