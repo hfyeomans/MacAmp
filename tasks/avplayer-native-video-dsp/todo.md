@@ -2,7 +2,7 @@
 
 > **Plan:** `tasks/avplayer-native-video-dsp/plan.md` (Oracle 9.8/10 final, commit `fdce0ed`)
 > **Branch:** `feat/avplayer-native-video-dsp`
-> **Status:** 🔧 IMPLEMENTING — Phase 1 ✅, Phase 2 NEXT.
+> **Status:** 🔧 IMPLEMENTING — Phase 1 ✅, Phase 2 ✅, Phase 3 NEXT.
 > **Updated:** 2026-05-02
 
 Numbering: `<Phase>.<Item>`. `[x]` complete, `[~]` in-progress, `[!]` blocked.
@@ -80,82 +80,71 @@ Numbering: `<Phase>.<Item>`. `[x]` complete, `[~]` in-progress, `[!]` blocked.
 
 ### Phase 2a — `RenderThreadSafe` marker protocol (ADR-3a Gate 2)
 
-- [ ] 2.1 Create `MacAmpApp/Audio/RenderThreadSafe.swift` with `internal protocol RenderThreadSafe {}`
-- [ ] 2.2 Add documentation comment specifying conformance contract + the centralization rule (all conformances live in this file)
-- [ ] 2.3 Add `extension Synchronization.Atomic: RenderThreadSafe`
-- [ ] 2.4 Add `extension Synchronization.Mutex: RenderThreadSafe`
-- [ ] 2.5 Add `extension Optional: RenderThreadSafe where Wrapped: RenderThreadSafe`
-- [ ] 2.6 Add `extension UnsafePointer: RenderThreadSafe`, `extension UnsafeMutablePointer: RenderThreadSafe`, `extension UnsafeRawPointer: RenderThreadSafe`, `extension UnsafeMutableRawPointer: RenderThreadSafe`
-- [ ] 2.7 Add `extension AudioStreamBasicDescription: RenderThreadSafe` (POD C struct)
-- [ ] 2.8 Add `extension VisualizerFeed: RenderThreadSafe` and `extension VisualizerScratchBuffers: RenderThreadSafe` (Phase 1 outputs)
-- [ ] 2.9 Note: do NOT conform stdlib primitive value types (Bool, Int, Float, Double, etc.); per Phase 4-finding decision, primitives must be Atomic-wrapped
+- [x] 2.1 Create `MacAmpApp/Audio/RenderThreadSafe.swift` with `internal protocol RenderThreadSafe: ~Copyable {}` (the `~Copyable` marker is required so `Synchronization.Atomic`/`Mutex` can conform — Swift 6 makes them `~Copyable` by design)
+- [x] 2.2 Add documentation comment specifying conformance contract + the centralization rule (all conformances live in this file)
+- [x] 2.3 Add `extension Atomic: RenderThreadSafe`
+- [x] 2.4 Add `extension Mutex: RenderThreadSafe`
+- [x] 2.5 Add `extension Optional: RenderThreadSafe where Wrapped: RenderThreadSafe`
+- [x] 2.6 Add `extension UnsafePointer: RenderThreadSafe`, `extension UnsafeMutablePointer: RenderThreadSafe`, `extension UnsafeRawPointer: RenderThreadSafe`, `extension UnsafeMutableRawPointer: RenderThreadSafe`
+- [x] 2.7 Add `extension AudioStreamBasicDescription: RenderThreadSafe` (POD C struct)
+- [x] 2.8 Add `extension VisualizerFeed: RenderThreadSafe` and `extension VisualizerScratchBuffers: RenderThreadSafe` (Phase 1 outputs)
+- [x] 2.9 Note: do NOT conform stdlib primitive value types (Bool, Int, Float, Double, etc.); per Phase 4-finding decision, primitives must be Atomic-wrapped
 
 ### Phase 2b — `VideoTapContext` with ADR-3a Gate 1 header contract
 
-- [ ] 2.10 Create `MacAmpApp/Audio/VideoDSP/` directory
-- [ ] 2.11 Create `MacAmpApp/Audio/VideoDSP/VideoTapContext.swift` with **ADR-3a Gate 1 header contract block** at the top of the file (multi-line comment enumerating storage allow-list and forbidden-list per plan.md §4 ADR-3a)
-- [ ] 2.12 Implement `final class VideoTapContext: @unchecked Sendable` with stored fields:
-   - [ ] 2.12.1 `coefficientSetPointer: Atomic<UnsafePointer<BiquadCoefficientSet>?>` (ADR-4; nil during pass-through)
-   - [ ] 2.12.2 `balance: Atomic<UInt32>` (Float bit-pattern, default 0.5 = 0x3F000000)
-   - [ ] 2.12.3 `isEqOn: Atomic<Bool>` (default false until Phase 5 wires the real state)
-   - [ ] 2.12.4 `preampLinearGainBits: Atomic<UInt32>` (Float bit-pattern, default 1.0)
-   - [ ] 2.12.5 `processingFormatTag: Atomic<UInt32>` (encoded ASBD-validity bit-mask)
-   - [ ] 2.12.6 `pendingSampleRate: Atomic<UInt64>` (Double bit-pattern, set by `tapPrepare`)
-   - [ ] 2.12.7 `processCallCount: Atomic<UInt64>` (telemetry)
-   - [ ] 2.12.8 `frameCount: Atomic<UInt64>` (telemetry)
-   - [ ] 2.12.9 `isActive: Atomic<Bool>`
-- [ ] 2.13 Implement `init` with double-buffer `BiquadCoefficientSet` block allocation (placeholder allocations until Phase 3)
-- [ ] 2.14 Implement `deinit` to deallocate the two coefficient blocks
-- [ ] 2.15 Implement `installCoefficientSet(_:)` (main thread; writes to inactive block + atomic-pointer swap)
-- [ ] 2.16 Add `#if DEBUG` `static func _makeForContractTest() -> VideoTapContext` factory (placeholder dependencies for `VideoTapSendableContractTests`)
+- [x] 2.10 Create `MacAmpApp/Audio/VideoDSP/` directory
+- [x] 2.11 Create `MacAmpApp/Audio/VideoDSP/VideoTapContext.swift` with **ADR-3a Gate 1 header contract block** at the top of the file
+- [x] 2.12 Implement `final class VideoTapContext: @unchecked Sendable` with stored fields:
+   - [x] 2.12.1 `coefficientSetPointer: Atomic<UnsafePointer<BiquadCoefficientSet>?>` (ADR-4; nil during pass-through)
+   - [x] 2.12.2 `balance: Atomic<UInt32>` (Float bit-pattern, default 0.5 = `Float(0.5).bitPattern`)
+   - [x] 2.12.3 `isEqOn: Atomic<Bool>` (default false until Phase 5 wires the real state)
+   - [x] 2.12.4 `preampLinearGainBits: Atomic<UInt32>` (Float bit-pattern, default 1.0)
+   - [x] 2.12.5 `processingFormatTag: Atomic<UInt32>` (`formatTagUnknown`/`formatTagSupportedFloat32LPCM`/`formatTagUnsupported`)
+   - [x] 2.12.6 `pendingSampleRate: Atomic<UInt64>` (Double bit-pattern, set by `tapPrepare`)
+   - [x] 2.12.7 `processCallCount: Atomic<UInt64>` (telemetry)
+   - [x] 2.12.8 `frameCount: Atomic<UInt64>` (telemetry)
+   - [x] 2.12.9 `isActive: Atomic<Bool>`
+- [x] 2.13 Implement `init` with double-buffer `BiquadCoefficientSet` block allocation (placeholder `BiquadCoefficientSet` empty-struct stub created at `MacAmpApp/Audio/VideoDSP/BiquadCoefficientSet.swift`; Phase 3 fills in the bands per `placeholder.md` P-1)
+- [x] 2.14 Implement `deinit` to `deinitialize(count: 1).deallocate()` the two coefficient blocks
+- [x] 2.15 Implement `installCoefficientSet(_:)` (main thread; writes to inactive block + atomic-pointer swap with `.releasing` ordering)
+- [x] 2.16 Add `#if DEBUG` `static func _makeForContractTest() -> VideoTapContext` factory
 
 ### Phase 2c — `VideoTap` C-callbacks + lifecycle
 
-- [ ] 2.17 Create `MacAmpApp/Audio/VideoDSP/VideoTap.swift`
-- [ ] 2.18 Declare `enum VideoTapError: Error` with `createFailed(OSStatus)` + `formatUnsupported(AudioStreamBasicDescription)` cases
-- [ ] 2.19 Define file-scope `private let tapInit: MTAudioProcessingTapInitCallback`
-- [ ] 2.20 Define file-scope `private let tapFinalize: MTAudioProcessingTapFinalizeCallback` — `Unmanaged<VideoTapContext>.fromOpaque(storage).release()` exactly once
-- [ ] 2.21 Define file-scope `private let tapPrepare: MTAudioProcessingTapPrepareCallback` — read ASBD, write `processingFormatTag` (bit-mask: 0=supported, 1=unsupported, 2=sample-rate-changed)
-- [ ] 2.22 Define file-scope `private let tapUnprepare: MTAudioProcessingTapUnprepareCallback`
-- [ ] 2.23 Define file-scope `private let tapProcess: MTAudioProcessingTapProcessCallback` — Phase 2 body: `MTAudioProcessingTapGetSourceAudio` then check format tag; if supported, return immediately (no DSP yet — pass-through)
-- [ ] 2.24 Implement `static func attach(to:context:) throws` — build callbacks struct + `MTAudioProcessingTapCreate` with **ADR-10 release-on-failure**:
-   ```swift
-   let retained = Unmanaged.passRetained(context)
-   var callbacks = MTAudioProcessingTapCallbacks(...)
-   callbacks.clientInfo = UnsafeMutableRawPointer(retained.toOpaque())
-   var tapOut: MTAudioProcessingTap?
-   let status = MTAudioProcessingTapCreate(...)
-   guard status == noErr, let tap = tapOut else {
-       retained.release()
-       throw VideoTapError.createFailed(status)
-   }
-   ```
-- [ ] 2.25 Build `AVMutableAudioMixInputParameters(track:)` and `AVMutableAudioMix`; assign `playerItem.audioMix` (per ADR-7, set ONCE)
-- [ ] 2.26 Implement `static func detach(from playerItem:)` — set `playerItem.audioMix = nil`; AVPlayer chain handles `tapFinalize` async
+- [x] 2.17 Create `MacAmpApp/Audio/VideoDSP/VideoTap.swift`
+- [x] 2.18 Declare `enum VideoTapError: Error` with `createFailed(OSStatus)` + `noAudioTrack` cases
+- [x] 2.19 Define file-scope `private let tapInit: MTAudioProcessingTapInitCallback`
+- [x] 2.20 Define file-scope `private let tapFinalize: MTAudioProcessingTapFinalizeCallback` — `Unmanaged<VideoTapContext>.fromOpaque(storage).release()` exactly once
+- [x] 2.21 Define file-scope `private let tapPrepare: MTAudioProcessingTapPrepareCallback` — read ASBD, write `processingFormatTag` (`formatTagSupportedFloat32LPCM` if `kAudioFormatLinearPCM && IsFloat && 32-bit`, else `formatTagUnsupported`); store `pendingSampleRate`; mark `isActive = true`
+- [x] 2.22 Define file-scope `private let tapUnprepare: MTAudioProcessingTapUnprepareCallback` — mark `isActive = false`
+- [x] 2.23 Define file-scope `private let tapProcess: MTAudioProcessingTapProcessCallback` — Phase 2 body: `MTAudioProcessingTapGetSourceAudio` + telemetry counters + format-tag gate; return after gate (pass-through, no DSP yet)
+- [x] 2.24 Implement `static func attach(to:context:) async throws` — `@MainActor`-isolated; loads audio tracks via `await playerItem.asset.loadTracks(...)`; ADR-10 release-on-failure pattern via `Unmanaged.passRetained` + `retained.release()` on `MTAudioProcessingTapCreate` failure
+- [x] 2.25 Build `AVMutableAudioMixInputParameters(track:)` + `AVMutableAudioMix`; assign `playerItem.audioMix` (per ADR-7, set ONCE)
+- [x] 2.26 Implement `static func detach(from playerItem:)` `@MainActor` — set `playerItem.audioMix = nil`
 
 ### Phase 2d — `AudioPlayer` facade
 
-- [ ] 2.27 Add `private var videoTapContext: VideoTapContext?` to `AudioPlayer`
-- [ ] 2.28 Add facade `func attachVideoTap(to playerItem: AVPlayerItem) throws -> VideoTapContext`
-- [ ] 2.29 Add facade `func detachVideoTap(_ context: VideoTapContext, from playerItem: AVPlayerItem)`
-- [ ] 2.30 Wire to existing video playback flow (intercept after `AVPlayerItem` construction in `WinampVideoWindowController` or wherever the AVPlayer is created — locate during execution)
+- [x] 2.27 Add `@ObservationIgnored private var videoTapContext: VideoTapContext?` to `AudioPlayer`
+- [x] 2.28 Add facade `func attachVideoTap(to playerItem: AVPlayerItem) -> VideoTapContext` (sync, kicks off `Task { @MainActor in try await VideoTap.attach(...) }`; non-throwing because async errors are logged and the stored Context is cleared if attach fails — pure throws was incompatible with the call-site sync flow in `playTrack`)
+- [x] 2.29 Add facade `func detachVideoTap(_:from:)` and private helper `detachVideoTapIfNeeded()`
+- [x] 2.30 Wire detach + attach into `AudioPlayer.playTrack` (line 397 — video case, between `loadVideo` and `transition(to: .playing)`); detach also wired into media-type-switch (line 383) and `stop()` (line 502)
 
 ### Phase 2e — ADR-3a Gate 3 contract test
 
-- [ ] 2.31 Create `Tests/MacAmpTests/VideoTapSendableContractTests.swift`
-- [ ] 2.32 Add `#if DEBUG` `@Suite("VideoTapContext @unchecked Sendable contract")`
-- [ ] 2.33 Implement Test 3a: `func allStoredFieldsConformToRenderThreadSafe()` — Mirror reflection asserts every stored property's value is `RenderThreadSafe`
-- [ ] 2.34 Implement Test 3b: `func allStoredVarsAreAtomicOrMutex()` — read `VideoTapContext.swift` source via `SRCROOT`, regex-match `var name: Type` storage decls, assert type is `Atomic<...>` or `Mutex<...>`
+- [x] 2.31 Create `Tests/MacAmpTests/VideoTapSendableContractTests.swift`
+- [x] 2.32 Add `#if DEBUG` `@Suite("VideoTapContext @unchecked Sendable contract", .tags(.audio, .concurrency))`
+- [x] 2.33 Implement Test 3a: `func allStoredFieldsConformToRenderThreadSafe()` — Mirror reflection over `VideoTapContext._makeForContractTest()`. **Documented coverage gap:** `~Copyable` `Atomic`/`Mutex` fields reflect as `Void` (`Mirror.Child.value: Any` requires `Copyable`); the test skips Void-typed children with an inline comment. Atomic/Mutex are safe by construction. See `placeholder.md` P-2.
+- [x] 2.34 Implement Test 3b: `func allStoredVarsAreAtomicOrMutex()` — read `VideoTapContext.swift` source via `SRCROOT` (or `#filePath` fallback for SPM), regex-match `var name: Type` storage decls (excludes computed properties via `[^={\n]` exclusion), assert type begins with `Atomic<` or `Mutex<`
 
 ### Phase 2f — Verification
 
-- [ ] 2.35 `xcodegen generate`
-- [ ] 2.36 `xcodebuildmcp macos build --json '{"extraArgs":["-enableThreadSanitizer","YES"]}'`
-- [ ] 2.37 `xcodebuildmcp macos test  --json '{"extraArgs":["-enableThreadSanitizer","YES"]}'` — VideoTapSendableContractTests Test 3a + 3b green
-- [ ] 2.38 Unit test: `VideoTap.attach` with synthetic `AVPlayerItem` succeeds; `detach` releases. Inject create-failure (corrupted callbacks struct) — assert `Unmanaged` is released
-- [ ] 2.39 Manual smoke on all 5 clapperboard clips: each plays normally with tap installed, no DSP applied
-- [ ] 2.40 Allocations Instruments: video playback start → end → Context allocation count = N; deallocation count = N (no leak)
-- [ ] 2.41 Commit: `chore(s3-2): Phase 2 — production tap scaffold + ADR-3a containment`
+- [x] 2.35 `xcodegen generate` — clean
+- [x] 2.36 `xcodebuildmcp macos build --json '{"extraArgs":["-enableThreadSanitizer","YES"]}'` — succeeded
+- [x] 2.37 `xcodebuildmcp macos test  --json '{"extraArgs":["-enableThreadSanitizer","YES"]}'` — **74/74 green** (72 baseline + 2 new contract tests). Test 3a + 3b green.
+- [ ] 2.38 Unit test: `VideoTap.attach` with synthetic `AVPlayerItem` succeeds; `detach` releases. Inject create-failure (corrupted callbacks struct) — assert `Unmanaged` is released. **DEFERRED to Phase 7 lifecycle tests** per plan §6 Phase 7 §7.3 (more cohesive with the rest of the lifecycle suite; Phase 2's pass-through tap doesn't add lifecycle-specific risk beyond what Phase 7 covers)
+- [ ] 2.39 Manual smoke on all 5 clapperboard clips: each plays normally with tap installed, no DSP applied. **REQUIRES INTERACTIVE TESTING** — surfaced as a verification item the human must run before PR
+- [ ] 2.40 Allocations Instruments: video playback start → end → Context allocation count = N; deallocation count = N (no leak). **REQUIRES INTERACTIVE TESTING** — surfaced as a verification item the human must run before PR
+- [x] 2.41 Commit: `chore(s3-2): Phase 2 — production tap scaffold + ADR-3a containment` — pending
 
 ---
 

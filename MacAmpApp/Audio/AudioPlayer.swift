@@ -135,6 +135,58 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
         case video
     }
 
+    // MARK: - Video Tap (S3-2 in-place DSP on AVPlayer audio path)
+
+    /// One-tap-per-AVPlayerItem (ADR-7). Replaced when a new video item is
+    /// loaded; cleared when transport stops or media type switches away
+    /// from video. Attach kicks off asynchronously because the asset's
+    /// audio tracks are loaded lazily; until attach completes the video
+    /// plays without DSP (Phase 2 is pass-through anyway).
+    @ObservationIgnored private var videoTapContext: VideoTapContext?
+
+    /// Build a Context, store it, and kick off `VideoTap.attach` on a
+    /// `MainActor` Task. Returns the Context immediately; attach failure
+    /// is logged and the stored Context is cleared if it has not been
+    /// replaced by a subsequent attach.
+    @discardableResult
+    func attachVideoTap(to playerItem: AVPlayerItem) -> VideoTapContext {
+        let context = VideoTapContext()
+        videoTapContext = context
+        Task { @MainActor [weak self] in
+            do {
+                try await VideoTap.attach(to: playerItem, context: context)
+            } catch {
+                AppLog.error(.audio, "Video tap attach failed: \(error)")
+                if self?.videoTapContext === context {
+                    self?.videoTapContext = nil
+                }
+            }
+        }
+        return context
+    }
+
+    /// Detach the tap from the player item. AVPlayer's deallocation chain
+    /// fires `tapFinalize` (possibly asynchronously) which releases the
+    /// Context's +1 retain. The stored Context reference is cleared if it
+    /// matches.
+    func detachVideoTap(_ context: VideoTapContext, from playerItem: AVPlayerItem) {
+        VideoTap.detach(from: playerItem)
+        if videoTapContext === context {
+            videoTapContext = nil
+        }
+    }
+
+    /// Detach + clear the currently stored video tap Context, if any.
+    /// Safe to call when no tap is attached.
+    private func detachVideoTapIfNeeded() {
+        guard let context = videoTapContext else { return }
+        if let item = videoPlaybackController.player?.currentItem {
+            detachVideoTap(context, from: item)
+        } else {
+            videoTapContext = nil
+        }
+    }
+
     /// Repeat mode (Winamp 5 Modern: off/all/one with "1" badge)
     var repeatMode: AppSettings.RepeatMode {
         get { AppSettings.instance().repeatMode }
@@ -380,6 +432,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
 
         if currentMediaType != mediaType {
             if currentMediaType == .video {
+                detachVideoTapIfNeeded()
                 videoPlaybackController.cleanup()
                 AppLog.debug(.audio, "Switching from video to audio - cleanup complete")
             } else if currentMediaType == .audio {
@@ -394,7 +447,12 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
         case .audio:
             loadAudioFile(url: track.url)
         case .video:
+            // Detach any prior tap before loadVideo internally drops the old player.
+            detachVideoTapIfNeeded()
             videoPlaybackController.loadVideo(url: track.url, autoPlay: false)
+            if let newItem = videoPlaybackController.player?.currentItem {
+                attachVideoTap(to: newItem)
+            }
             transition(to: .playing)
         }
 
@@ -500,6 +558,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
         transition(to: .stopped(.manual))
 
         if currentMediaType == .video {
+            detachVideoTapIfNeeded()
             videoPlaybackController.stop()
             currentMediaType = .audio
             AppLog.debug(.audio, "Stop (Video) - cleaned up AVPlayer")

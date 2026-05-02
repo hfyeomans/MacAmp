@@ -9,9 +9,9 @@
 
 ## Current State (update after each phase completion or PR merge)
 
-> ⚠️ **S3-2 ARCHITECTURAL PIVOT — IMPLEMENTATION IN PROGRESS (2026-05-02).** `feat/video-audio-engine-routing` is **PAUSED-AS-REFERENCE** (preserved at `5af91eb`, pushed to origin). S3-2 re-attempted as **`avplayer-native-video-dsp`** on branch `feat/avplayer-native-video-dsp`. **Steps 1+2+3 ✅ + Phase 1 ✅ done. Phase 2 implementation NEXT.** See `tasks/_context/s3-2-pivot.md` for the strategic decision log + step-by-step status — that file is authoritative.
+> ⚠️ **S3-2 ARCHITECTURAL PIVOT — IMPLEMENTATION IN PROGRESS (2026-05-02).** `feat/video-audio-engine-routing` is **PAUSED-AS-REFERENCE** (preserved at `5af91eb`, pushed to origin). S3-2 re-attempted as **`avplayer-native-video-dsp`** on branch `feat/avplayer-native-video-dsp`. **Steps 1+2+3 ✅ + Phase 1 ✅ + Phase 2 ✅ done. Phase 3 implementation NEXT.** See `tasks/_context/s3-2-pivot.md` for the strategic decision log + step-by-step status — that file is authoritative.
 
-**Last update:** 2026-05-02 (Phase 1 — `VisualizerFeed` + `VisualizerScratchBuffers` extraction — landed; engine path byte-for-byte identical, 72/72 tests TSan green; Phase 2 production tap scaffold + ADR-3a containment NEXT).
+**Last update:** 2026-05-02 (Phase 2 — production tap scaffold + ADR-3a containment — landed; 5 new files (`RenderThreadSafe.swift`, `VideoDSP/VideoTapContext.swift`, `VideoDSP/VideoTap.swift`, `VideoDSP/BiquadCoefficientSet.swift` empty-stub, `Tests/VideoTapSendableContractTests.swift`) + `AudioPlayer.swift` modified for `attachVideoTap`/`detachVideoTap` facade. Pass-through DSP only (no biquad math). 74/74 TSan green. Three plan deviations forced by Swift 6 reality documented in `placeholder.md` P-1/P-2/P-3 + task `state.md`. Phase 3 (`BiquadCascade` + balance + numerical match) NEXT).
 **Main HEAD:** `9cca40a` — `docs(_context): close out Phase 2; advance vaer to Phase 3-next` (this is the OLD vaer message; main hasn't advanced).
 **`feat/avplayer-native-video-dsp` HEAD:** latest on branch — run `git log -1 --oneline` to confirm. **31 commits ahead of main** (run `git rev-list --count main..HEAD`):
 - 13 cherry-picked Phase-1 commits (engine config observer for stream-side resilience, range ending at `2aa2f18`)
@@ -26,7 +26,7 @@
 - Plus subsequent self-updates (this verification fix + future) — `git log` is authoritative
 **`spike/avplayer-inplace-tap-dsp` HEAD (throwaway, retained locally):** `dd53d64` — Phase 0 spike. Kill-switch resolved: in-place tap DSP works on macOS 15+ with Swift 6.2 toolchain.
 **`feat/video-audio-engine-routing` HEAD (paused-as-reference):** `5af91eb`. 44 commits ahead of main, pushed to origin.
-**Tests:** 72/72 with TSan ON. Phase 1 was extraction-only (no test surface change). Target by S3-2 close: 110+/110+ (new tests land Phase 2 [contract], Phase 3 [BiquadNumericalMatch], Phase 7 [lifecycle]).
+**Tests:** 74/74 with TSan ON (72 baseline + 2 new `VideoTapSendableContractTests`). Target by S3-2 close: 110+/110+ (Phase 3 BiquadNumericalMatch ~4 tests, Phase 7 lifecycle ~6+ tests).
 **PRs merged total:** 80. No PR opened on either S3-2 branch yet (single PR at S3-2 close).
 
 **Most recent docs commits on main:**
@@ -43,7 +43,7 @@
 
 ### 1. IMPLEMENTING — `tasks/avplayer-native-video-dsp/` (S3-2 PIVOT)
 
-**Status:** Steps 1+2+3 ✅ + Phase 1 ✅ done. **Phase 2 (production tap scaffold + ADR-3a containment) NEXT** — see `tasks/avplayer-native-video-dsp/todo.md` for the per-phase work breakdown.
+**Status:** Steps 1+2+3 ✅ + Phase 1 ✅ + Phase 2 ✅ done. **Phase 3 (`BiquadCascade` + balance + numerical match) NEXT** — see `tasks/avplayer-native-video-dsp/todo.md` for the per-phase work breakdown.
 
 **Why pivoted:** The original S3-2 (`feat/video-audio-engine-routing`) reached Phase 7 testing and revealed structural issues with the engine-routing approach: `AVAudioEngineConfigurationChange` unreliable for AirPlay/AirPods routes (proven by missing log line), master-clock-coupled video stalls, dual-clock-domain drift, tinning artifacts from a second SRC stage. Contrarian solve: don't drag video audio out of AVPlayer — apply DSP in-place inside the same `MTAudioProcessingTap` so AVPlayer's native pipeline plays the modified buffer. No ring, no engine clock for video, no master-clock coupling. Full strategic decision in `tasks/_context/s3-2-pivot.md`.
 
@@ -55,7 +55,9 @@
 
 **Phase 1 — `VisualizerFeed` + `VisualizerScratchBuffers` extraction ✅ DONE 2026-05-02.** Commit `146a8b4`. Two private nested types in `VisualizerPipeline.swift` promoted to module-internal across new files (`VisualizerFeed.swift` ~110 LOC + `VisualizerScratchBuffers.swift` ~195 LOC, latter includes `GoertzelCoefficients` as cohesive unit). 5 type renames + 5 field renames in `VisualizerPipeline.swift` (661 → 378 lines). Engine path byte-for-byte identical. 72/72 tests TSan green.
 
-**Phase 2 (production tap scaffold + ADR-3a containment) NEXT.** ~41 work items split into 6 sub-phases. New files: `MacAmpApp/Audio/RenderThreadSafe.swift` (Gate 2 marker protocol), `MacAmpApp/Audio/VideoDSP/VideoTapContext.swift` (with Gate 1 header contract block), `MacAmpApp/Audio/VideoDSP/VideoTap.swift` (C-callbacks + ADR-10 release-on-fail + ADR-11 ASBD format guard), `Tests/MacAmpTests/VideoTapSendableContractTests.swift` (Gate 3a Mirror + Gate 3b source-level regex). Plus `AudioPlayer.swift` modify for `attachVideoTap` / `detachVideoTap` facade. Pass-through DSP only (no biquad math yet). ~520 new LOC + ~30 modified.
+**Phase 2 — production tap scaffold + ADR-3a containment ✅ DONE 2026-05-02.** Pending commit `chore(s3-2): Phase 2 — production tap scaffold + ADR-3a containment`. New files: `MacAmpApp/Audio/RenderThreadSafe.swift` (Gate 2 marker protocol, declared `~Copyable`), `MacAmpApp/Audio/VideoDSP/VideoTapContext.swift` (Gate 1 header contract block, 9 atomic fields, double-buffer alloc/dealloc), `MacAmpApp/Audio/VideoDSP/VideoTap.swift` (5 C-callbacks + ADR-10 release-on-fail + ADR-11 ASBD format guard, `@MainActor`-isolated attach/detach), `MacAmpApp/Audio/VideoDSP/BiquadCoefficientSet.swift` (empty struct stub for Phase 3), `Tests/MacAmpTests/VideoTapSendableContractTests.swift` (Gate 3a Mirror + Gate 3b source-level regex). Plus `AudioPlayer.swift` modified for `attachVideoTap`/`detachVideoTap` facade wired into `playTrack`/`stop`/media-switch. Pass-through DSP only (no biquad math). 74/74 TSan green. **Three plan deviations forced by Swift 6 reality** documented in task `placeholder.md` P-1/P-2/P-3 + `state.md` "Phase 2 implementation findings": (1) `RenderThreadSafe: ~Copyable` required for Atomic/Mutex conformance; (2) Mirror reflection coverage gap on `~Copyable` fields (Test 3a skips `Void`-reflected children with documented gap); (3) `@preconcurrency import AVFoundation` + `@MainActor` on attach/detach for AVAsset Sendable + audioMix mutation.
+
+**Phase 3 (`BiquadCascade` + balance + numerical match) NEXT.** Replace `BiquadCoefficientSet.swift` empty stub with the real type. Add `BiquadCascade.swift` + tests. Wire `tapProcess` render-path steps 2-6 from ADR-5. ≤0.5 dB numerical match vs `AVAudioUnitEQ` over 5 EQ presets × log sweep 20 Hz – 20 kHz.
 
 **Remaining phases (per plan.md §6):**
 - Phase 3: `BiquadCascade` + balance + numerical match (≤0.5 dB tolerance vs `AVAudioUnitEQ`)
@@ -172,14 +174,14 @@ Index lives at `~/.claude/projects/-Users-hank-dev-src-MacAmp/memory/MEMORY.md`.
 
 ## First Action for the Resuming Agent
 
-You are picking up `avplayer-native-video-dsp` mid-implementation. Steps 1+2+3 ✅ + Phase 1 ✅ are done. **Phase 2 is the active work.**
+You are picking up `avplayer-native-video-dsp` mid-implementation. Steps 1+2+3 ✅ + Phase 1 ✅ + Phase 2 ✅ are done. **Phase 3 (`BiquadCascade` + balance + numerical match) is the active work.**
 
 ### Pickup checklist
 
 1. **Switch to the work branch:**
    ```bash
    git checkout feat/avplayer-native-video-dsp
-   git status   # should be clean; HEAD = 3c4f40c
+   git status   # should be clean; run `git log -1 --oneline` for the actual HEAD
    ```
 
 2. **Read these files in order** (they describe the architecture, the contract, and the work):
@@ -191,12 +193,13 @@ You are picking up `avplayer-native-video-dsp` mid-implementation. Steps 1+2+3 �
    - `tasks/avplayer-native-video-dsp/todo.md` — Phase 2 work-item checklist (items 2.1 through 2.41, split into sub-phases 2a Marker Protocol → 2b Context → 2c VideoTap → 2d AudioPlayer facade → 2e Contract Test → 2f Verification)
    - `tasks/avplayer-native-video-dsp/research-notes/saved-branch-retrospective.md` — ALLOWLIST/DENYLIST scoping for what to study from the saved engine-routing branch (file:line citations)
 
-3. **Re-read at HEAD** the files Phase 2 will touch (line numbers may have shifted from plan.md authoring):
-   - `MacAmpApp/Audio/AudioPlayer.swift` — locate insertion points for the `attachVideoTap` / `detachVideoTap` facade
-   - `MacAmpApp/Audio/VisualizerFeed.swift` (NEW from Phase 1)
-   - `MacAmpApp/Audio/VisualizerScratchBuffers.swift` (NEW from Phase 1)
-   - `MacAmpApp/Audio/VisualizerPipeline.swift` (post-Phase-1 state — 378 lines)
-   - `MacAmpApp/Windows/WinampVideoWindowController.swift` — to locate where the AVPlayer/AVPlayerItem is constructed (Phase 2d wires `attachVideoTap` here)
+3. **Re-read at HEAD** the files Phase 3 will touch (line numbers may have shifted from plan.md authoring):
+   - `MacAmpApp/Audio/VideoDSP/VideoTapContext.swift` (NEW from Phase 2 — note ADR-3a Gate 1 header contract block; Phase 3 init/deinit uses real `BiquadCoefficientSet` stride)
+   - `MacAmpApp/Audio/VideoDSP/VideoTap.swift` (NEW from Phase 2 — Phase 3 fills `tapProcess` body steps 2-6 per ADR-5)
+   - `MacAmpApp/Audio/VideoDSP/BiquadCoefficientSet.swift` (Phase 2 created an empty struct stub; Phase 3 replaces it with the real RBJ-cookbook implementation)
+   - `MacAmpApp/Audio/RenderThreadSafe.swift` (NEW from Phase 2 — Phase 3 adds `extension BiquadCascade: RenderThreadSafe`)
+   - `MacAmpApp/Audio/EqualizerController.swift` — Phase 3 adds private nested `struct EqualizerState: Sendable, Equatable` (consumed by `BiquadCoefficientSet.compute(for:sampleRate:)`); Phase 5 adds the registry + fanout
+   - `MacAmpApp/Audio/AudioPlayer.swift` — note the Phase 2 facade pattern; Phase 5 wires the registry registration into `attachVideoTap`/`detachVideoTap`
 
 4. **Spike code reference** (kept locally, throwaway branch):
    ```bash
@@ -210,19 +213,22 @@ You are picking up `avplayer-native-video-dsp` mid-implementation. Steps 1+2+3 �
    ```
    Read with the ALLOWLIST/DENYLIST in `research-notes/saved-branch-retrospective.md` open. C-callback shape, `Unmanaged` lifetime, ASBD inspection, surround-channel layout knowledge are reusable as patterns. Ring buffer, AudioConverter, watchdog, HAL listener, fallback flag, `swift-atomics` are explicitly NOT carried forward.
 
-6. **Then execute Phase 2** per `todo.md`. Sub-phases land in this order:
-   - **2a** Create `MacAmpApp/Audio/RenderThreadSafe.swift` — marker protocol + extensions (no stdlib primitive blanket conformance per Round 4 fix; `Atomic`, `Mutex`, `Optional<RenderThreadSafe>`, unsafe pointer types, `AudioStreamBasicDescription`, `VisualizerFeed`, `VisualizerScratchBuffers`)
-   - **2b** Create `MacAmpApp/Audio/VideoDSP/VideoTapContext.swift` — header contract block (ADR-3a Gate 1) at top + `final class VideoTapContext: @unchecked Sendable` with all `Atomic<T>` fields per todo 2.12.1-2.12.9 + `init`/`deinit` for double-buffer coefficient blocks (Phase 2 placeholder allocation; Phase 3 fills in the real `BiquadCoefficientSet`) + `#if DEBUG _makeForContractTest()` factory
-   - **2c** Create `MacAmpApp/Audio/VideoDSP/VideoTap.swift` — `VideoTapError` enum + 5 file-scope `private let` C-callback closures (`tapInit/Finalize/Prepare/Unprepare/Process`) + `static func attach(to:context:)` factory **with explicit `retained.release()` on `MTAudioProcessingTapCreate` failure** (ADR-10) + `static func detach(from:)` (Phase 2 `tapProcess` body is pass-through after ASBD format gate per ADR-11)
-   - **2d** `AudioPlayer.swift` modify — `private var videoTapContext: VideoTapContext?`, facade `attachVideoTap(to:)` / `detachVideoTap(_:from:)`, wire to existing video playback flow in `WinampVideoWindowController`
-   - **2e** Create `Tests/MacAmpTests/VideoTapSendableContractTests.swift` — Test 3a Mirror reflection + Test 3b source-level regex guard (reads `VideoTapContext.swift` via `SRCROOT`, asserts every stored `var` is `Atomic<...>` or `Mutex<...>`)
-   - **2f** Verify: `xcodegen generate`, build + test with TSan ON, contract test 3a + 3b green, allocation balance via Allocations Instruments, manual smoke on all 5 clapperboard clips
+6. **Then execute Phase 3** per `todo.md` items 3.1 – 3.18:
+   - Replace the empty `BiquadCoefficientSet.swift` stub with the real `struct BiquadCoefficientSet { let bands: (BiquadCoefs ×10) }` + `static func compute(for:sampleRate:)` factory (RBJ-cookbook formulas per ADR-8 — Butterworth/octave-BW per `AudioUnitParameters.h`'s parametric EQ documentation).
+   - Add private nested `struct EqualizerState: Sendable, Equatable` to `EqualizerController.swift`.
+   - Create `MacAmpApp/Audio/VideoDSP/BiquadCascade.swift` — direct-form-II biquad with per-channel filter history (`z1`, `z2` per band per channel); `process(buffer:channels:frames:coefficients:)` + `reset()`.
+   - Add `extension BiquadCascade: RenderThreadSafe` to `RenderThreadSafe.swift`.
+   - Update `VideoTapContext.swift` so init/deinit exercise the real (non-zero-stride) `BiquadCoefficientSet` allocations.
+   - Implement `tapProcess` render-path steps 2-6 per ADR-5: filter reset on `flagsOut.pointee.contains(.startOfStream)` (ADR-9), preamp multiply, `isEqOn` gate, BiquadCascade.process via atomic pointer load (`.acquiring`), balance L/R multiplies.
+   - Create `Tests/MacAmpTests/BiquadNumericalMatchTests.swift` with 4 tests: (1) full-EQ-active sweep ≤0.5 dB worst-case vs `AVAudioUnitEQ` over 5 presets × 20 Hz – 20 kHz log sweep (offline render via `AVAudioEngine.manualRenderingMode`); (2) EQ-toggle bypass parity; (3) preamp parity (1 kHz at preamp ∈ {-12,-6,0,+6,+12} dB); (4) balance parity (stereo white noise at balance ∈ {0.0, 0.25, 0.5, 0.75, 1.0}).
+   - TSan-on build + test green.
+   - Manual smoke: video plays with EQ presets producing audible differences.
 
-7. **Commit at end of Phase 2:**
+7. **Commit at end of Phase 3:**
    ```
-   chore(s3-2): Phase 2 — production tap scaffold + ADR-3a containment
+   chore(s3-2): Phase 3 — BiquadCascade + balance + numerical match
    ```
-   Then mark all Phase 2 todo items `[x]` and update this file's "Current State" + "Active Work Queue" to reflect Phase 2 done / Phase 3 next.
+   Then mark all Phase 3 todo items `[x]` and update this file's "Current State" + "Active Work Queue" to reflect Phase 3 done / Phase 4 next.
 
 ### Critical reminders
 
@@ -236,9 +242,9 @@ You are picking up `avplayer-native-video-dsp` mid-implementation. Steps 1+2+3 �
 - **TSan after every phase boundary.** Per project convention.
 - **No `// TODO` in production code.** Anything stubbed goes in `tasks/avplayer-native-video-dsp/placeholder.md`.
 
-### After Phase 2
+### After Phase 3
 
-Phase 3 (`BiquadCascade` + balance + numerical match) is the largest DSP-correctness phase. Phase 4-9 are progressively smaller. Total remaining work is ~6-10 hours of focused implementation (varies with verification gate cycles).
+Phase 4 (visualizer DSP integration on the video tap render path) wires `videoTapVisualizerRender` so spectrum + Butterchurn animate from video audio. Phase 5 wires the EQ + balance state fanout (parallel from `EqualizerController` + `AudioPlayer`). Phase 6 adds deadline-miss telemetry. Phase 7 is the lifecycle test suite + signed-bundle smoke. Phase 8 executes the 15-gate verification matrix. Phase 9 is UI integration polish + mandatory docs (`docs/MACAMP_ARCHITECTURE_GUIDE.md` "Audio Mechanism Concurrency Contract" subsection) + pre-PR Oracle review + `gh pr create`.
 
 ### Optional sub-track
 
