@@ -13,7 +13,8 @@
 
 **Last update:** 2026-05-02 (Phase 1 — `VisualizerFeed` + `VisualizerScratchBuffers` extraction — landed; engine path byte-for-byte identical, 72/72 tests TSan green; Phase 2 production tap scaffold + ADR-3a containment NEXT).
 **Main HEAD:** `9cca40a` — `docs(_context): close out Phase 2; advance vaer to Phase 3-next` (this is the OLD vaer message; main hasn't advanced).
-**`feat/avplayer-native-video-dsp` HEAD:** `3c4f40c` — `chore(s3-2): mark Phase 1 todo items complete (commit 146a8b4)`. **12 commits ahead of main:**
+**`feat/avplayer-native-video-dsp` HEAD:** latest on branch — run `git log -1 --oneline` to confirm. **31 commits ahead of main** (run `git rev-list --count main..HEAD`):
+- 13 cherry-picked Phase-1 commits (engine config observer for stream-side resilience, range ending at `2aa2f18`)
 - 1 mechanical-pivot cleanup (`ffd77c1`)
 - 1 task-folder scaffold (`a3c9aba`)
 - 5 Step-2 research commits (`4a80bf9` → `46bb6af`) — Oracle 10/10
@@ -21,6 +22,8 @@
 - 1 docs cleanup + todo derivation (`1f7a0a0`)
 - 1 Phase 1 implementation (`146a8b4`)
 - 1 Phase 1 todo update (`3c4f40c`)
+- 1 resume-prompt rewrite for Phase 2 pickup (`445a051`)
+- Plus subsequent self-updates (this verification fix + future) — `git log` is authoritative
 **`spike/avplayer-inplace-tap-dsp` HEAD (throwaway, retained locally):** `dd53d64` — Phase 0 spike. Kill-switch resolved: in-place tap DSP works on macOS 15+ with Swift 6.2 toolchain.
 **`feat/video-audio-engine-routing` HEAD (paused-as-reference):** `5af91eb`. 44 commits ahead of main, pushed to origin.
 **Tests:** 72/72 with TSan ON. Phase 1 was extraction-only (no test surface change). Target by S3-2 close: 110+/110+ (new tests land Phase 2 [contract], Phase 3 [BiquadNumericalMatch], Phase 7 [lifecycle]).
