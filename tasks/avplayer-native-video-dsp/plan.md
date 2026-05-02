@@ -61,10 +61,10 @@ This task is **architectural pivot + new module**, not pure decomposition. Gate 
   - **P5 API Surface Minimization:** two private nested types in `VisualizerPipeline.swift` are promoted to module-internal (`VisualizerSharedBuffer` → `VisualizerFeed`, `VisualizerScratchBuffers`). Justified because dual-producer (engine + video tap) is a real new capability. No `internal → public` widening anywhere.
   - **P6 No Pass-Through Middlemen:** the new tap render function is a real worker (DSP execution, not forwarding). The `setVideoTapEnabled` facade on `AudioPlayer` (if introduced) follows the existing `setStreamSilenced` / `setVolume` pattern (also a facade, not a middleman).
   - **P7 ADR + Kill Switch:** §4 has 11 ADRs; §9 has Stop Criteria; §12 has Rollback Plan.
-- [x] **4. Responsibility map exists** — see §6.5.
+- [x] **4. Responsibility map exists** — see §5.5.
 - [x] **5. Complexity assessed:** new module `MacAmpApp/Audio/VideoDSP/` (~5 new files, ~800-1000 LOC). Highest-cognitive-density file: `VideoTap.swift` (C-callback closures + Unmanaged lifetime + DSP orchestration). Bounded by §6 phase decomposition and §10 test plan.
 - [x] **6. Candidate split scored:** the new `VideoDSP/` module is a single cohesive unit (one tap + one Context + one BiquadCascade + one render function). Not a decomposition of existing code; it is new functionality with one coherent responsibility (apply DSP in-place to AVPlayer's audio buffer).
-- [x] **7. Public/internal API delta listed** — see §6.4.
+- [x] **7. Public/internal API delta listed** — see §5.4.
 - [x] **8. Stop criteria defined** — see §9.
 
 **Hard gate cleared.**
@@ -103,14 +103,42 @@ This task is **architectural pivot + new module**, not pure decomposition. Gate 
 - `Synchronization.Mutex<BiquadCoefficientSet>` with `withLockIfAvailable` (skip-update on contention). Adds a contention path; render thread could miss coefficient updates indefinitely.
 **Memory model.** Allocation: `UnsafeMutablePointer<BiquadCoefficientSet>.allocate(capacity: 1)`, deallocate in `Context.deinit`. Two long-lived allocations per Context. Pointer swap uses `.acquiringAndReleasing` ordering on store; render thread uses `.acquiring` on load.
 
-### ADR-5: EQ + balance state fanout — single source-of-truth at `EqualizerController`
-**Decision.** `EqualizerController` is the canonical owner of EQ + balance user state. On any user-driven change (slider drag, preset apply, preamp change), `EqualizerController` fans out to **two** consumers:
-1. Engine-side `AVAudioUnitEQ` parameter writes (existing path, unchanged).
-2. Tap-side: compute the new `BiquadCoefficientSet`, write it into the inactive double-buffer block, atomic-swap the pointer (ADR-4).
-The tap Context is registered with `EqualizerController` at attach time and unregistered at detach. No persistent observer storage outside `EqualizerController`.
-**Drivers.** Single source-of-truth for user state (Principle 3). Math is duplicated; values are not. Push-based fan-out is preferable to pull (no polling, no lag between engine and tap).
-**Rejected alternative.** Each consumer pulls on its own schedule. Adds a polling cadence concern; engine and tap can drift out of sync briefly during slider drags.
-**Open implementation question (resolved at Phase 5 boundary, not now).** Whether to fan out `setBalance` separately or piggyback on the same fanout call. Likely separate — balance is a single Float, no coefficient computation.
+### ADR-5: EQ and balance state fanout — two canonical owners, parallel fanout pattern
+**Decision.**
+- **EQ state** (`isEqOn: Bool`, `preampLinearGain: Float`, `bandGainsDB: (Float ×10)`) is owned by `EqualizerController` (current state). On any user-driven change, `EqualizerController` fans out to two consumers:
+  1. Engine-side `AVAudioUnitEQ` parameter writes (existing path, unchanged).
+  2. Tap-side: recompute `BiquadCoefficientSet` for the current sample rate, write it into the inactive double-buffer block, atomic-swap the pointer (ADR-4). Also push `isEqOn` into the Context's atomic gate (used to bypass biquad processing in `tapProcess` when `isEqOn=false`). Also push `preampLinearGain` into the Context's atomic.
+- **Balance state** (`balance: Float`, range 0.0 = full L, 0.5 = center, 1.0 = full R) is owned by `AudioPlayer` (existing state at `AudioPlayer.swift:86`). On change, `AudioPlayer.balance.didSet` fans out to two consumers:
+  1. Engine-side balance node parameter (existing path, unchanged).
+  2. Tap-side: write Float bit-pattern to `VideoTapContext.balance: Atomic<UInt32>`.
+
+Both Contexts (one per video AVPlayerItem) are registered with `EqualizerController` AND `AudioPlayer` at attach and unregistered at detach. Registration immediately pushes current state into the new Context (so the tap is up-to-date before its first `tapProcess` invocation).
+
+**Render-path order in `tapProcess`** (after `MTAudioProcessingTapGetSourceAudio` succeeds):
+1. **Format gate** (ADR-11): if ASBD is not Float32 LPCM, return immediately (pass-through).
+2. **Filter-state reset gate** (ADR-9): if `flagsOut.pointee.contains(.startOfStream)`, call `context.cascade.reset()`.
+3. **Preamp gain**: `let preamp = Float(bitPattern: context.preampLinearGainBits.load(.relaxed))`. If `preamp != 1.0`, multiply every sample by `preamp` (single multiply per sample per channel).
+4. **EQ on/off gate**: if `context.isEqOn.load(.relaxed) == false`, skip step 5.
+5. **`BiquadCascade.process`**: load coefficient pointer atomically; if non-nil, run 10-band cascade in place.
+6. **Balance**: `let bal = Float(bitPattern: context.balance.load(.relaxed))`; compute `lGain = min(1, 2*(1-bal))`, `rGain = min(1, 2*bal)`; multiply L and R buffers (or skip if exactly center, `bal == 0.5`).
+7. **Visualizer DSP** (Phase 4): mono-mix + RMS + Goertzel + FFT into per-tap scratch; `feed.tryPublish`.
+8. Return.
+
+**Bypass semantics summary** (CPU cost when each is "off"):
+
+| State | CPU cost when off |
+|---|---|
+| `isEqOn = false` | Steps 4-5 skipped; preamp + balance still apply |
+| `preamp = 0 dB` (linear=1.0) | Step 3 single load + comparison; multiply skipped |
+| `balance = 0.5` (center) | Step 6 single load + comparison; multiplies skipped |
+| Format unsupported | Steps 2-7 all skipped (pass-through) |
+| Visualizer disabled (future toggle) | Step 7 skipped (TBD; Phase 4 detail) |
+
+**Drivers.** Two existing single-sources-of-truth (EqualizerController for EQ, AudioPlayer for balance). Fanout pattern is identical for both. Avoids forcing a cross-cutting migration of `balance` ownership.
+**Rejected alternatives.**
+- Centralize both EQ and balance into `EqualizerController`. Larger refactor with no clear win — `AudioPlayer.balance` already works correctly with the engine path.
+- Each consumer pulls on its own schedule. Adds polling concerns and engine/tap synchronization lag.
+- Single combined fanout call. Different rate-of-change profiles (EQ recomputes 50 coefficients per change; balance is a single Float) — separate paths are cleaner.
 
 ### ADR-6: Visualizer dual-producer pattern — parallel render functions, no flag-driven generalization
 **Decision.** Keep the existing engine-tap render function (`makeTapHandler` in `VisualizerPipeline.swift:565`) untouched. Add a new render function (`videoTapVisualizerRender`) that consumes `AudioBufferList` (vs `AVAudioPCMBuffer` for engine). Both use the same `VisualizerFeed` + `VisualizerScratchBuffers` types.
@@ -122,9 +150,7 @@ The tap Context is registered with `EqualizerController` at attach time and unre
 **Decision.** Each video `AVPlayerItem` gets a freshly-built `MTAudioProcessingTap` + `VideoTapContext` pair at item construction. `audioMix` is set once before `play()` and **not mutated during playback**. Detach: `pause()` → `replaceCurrentItem(with: …)` → AVPlayer's chain calls `tapFinalize` once the tap's last reference is dropped.
 **`Unmanaged` balance.** +1 from `passRetained(context)` at attach. -1 from `Unmanaged<VideoTapContext>.fromOpaque(storage).release()` in `tapFinalize`. Exactly once.
 **Production-required hardening.** Tap-create failure path releases the `Unmanaged` before throwing/returning (ADR-10).
-**Open implementation questions** (resolved during Phase 2; not now):
-- Does `tapFinalize` fire synchronously on `replaceCurrentItem` or async? Determines whether tear-down can wait synchronously.
-- "Tap is alive" atomic on Context — useful for fast item-switch pre-emption, but adds a load per `tapProcess` invocation. Add only if Phase 8 lifecycle tests demonstrate a UAF window.
+**Tear-down assumption (revisited if Phase 7 testing proves otherwise).** `tapFinalize` may fire asynchronously on a background queue; tear-down code does not wait synchronously for it. A "tap is alive" atomic gate on the Context is **not** added by default; Phase 7 lifecycle tests determine whether one is necessary.
 
 ### ADR-8: `BiquadCascade` implementation — RBJ cookbook formulas
 **Decision.** RBJ (Robert Bristow-Johnson) Audio EQ Cookbook octave-bandwidth peaking-EQ formula for 8 parametric bands; analogous low/high-shelf formulas for bands 0 and 9.
@@ -179,28 +205,40 @@ guard status == noErr, let tap = tapOut else {
 
 ### 5.1 New files
 
-| File | Purpose | LOC est |
-|---|---|---|
-| `MacAmpApp/Audio/VisualizerFeed.swift` | Extracted `VisualizerSharedBuffer`, renamed (Phase 1) | ~80 |
-| `MacAmpApp/Audio/VisualizerScratchBuffers.swift` | Extracted from `VisualizerPipeline.swift` (Phase 1; optional — could stay nested-but-non-private) | ~60 |
-| `MacAmpApp/Audio/VideoDSP/VideoTapContext.swift` | Tap context (atomics, coefficient pointer, Unmanaged lifetime helpers) (Phase 2) | ~150 |
-| `MacAmpApp/Audio/VideoDSP/VideoTap.swift` | C-callback closures, tap creation factory, `AVMutableAudioMix` wiring (Phase 2) | ~250 |
-| `MacAmpApp/Audio/VideoDSP/BiquadCoefficientSet.swift` | 50-coefficient struct + RBJ formula computation (Phase 3) | ~120 |
-| `MacAmpApp/Audio/VideoDSP/BiquadCascade.swift` | 10-band cascade, in-place processing function (Phase 3) | ~100 |
-| `MacAmpApp/Audio/VideoDSP/VideoTapVisualizerRender.swift` | Tap-side video render function (Phase 5) | ~120 |
-| `Tests/MacAmpTests/BiquadNumericalMatchTests.swift` | Log-sweep numerical match vs `AVAudioUnitEQ` (Phase 3) | ~150 |
-| `Tests/MacAmpTests/VideoTapLifecycleTests.swift` | TSan-on lifecycle tests (Phase 7) | ~200 |
-| `Tests/MacAmpTests/VideoTapDSPTests.swift` | Tap DSP unit + integration tests (Phase 2-5) | ~250 |
+| File | Purpose | LOC est | Phase |
+|---|---|---|---|
+| `MacAmpApp/Audio/VisualizerFeed.swift` | Extracted `VisualizerSharedBuffer`, renamed | ~80 | 1 |
+| `MacAmpApp/Audio/VisualizerScratchBuffers.swift` | Extracted from `VisualizerPipeline.swift` (optional — may stay nested-but-non-private) | ~60 | 1 |
+| `MacAmpApp/Audio/VideoDSP/VideoTapContext.swift` | Tap context (atomics, coefficient pointer, Unmanaged lifetime helpers, `VideoTapDiagnostics` snapshot type) | ~180 | 2 |
+| `MacAmpApp/Audio/VideoDSP/VideoTap.swift` | C-callback closures, tap creation factory, `AVMutableAudioMix` wiring, `VideoTapError` | ~250 | 2 |
+| `MacAmpApp/Audio/VideoDSP/BiquadCoefficientSet.swift` | 50-coefficient struct + RBJ formula computation | ~120 | 3 |
+| `MacAmpApp/Audio/VideoDSP/BiquadCascade.swift` | 10-band cascade, in-place processing function, `reset()` | ~100 | 3 |
+| `MacAmpApp/Audio/VideoDSP/VideoTapVisualizerRender.swift` | Tap-side video render function (mono-mix + RMS + Goertzel + FFT + tryPublish) | ~120 | 4 |
+| `Tests/MacAmpTests/BiquadNumericalMatchTests.swift` | Log-sweep numerical match vs `AVAudioUnitEQ`; EQ-toggle bypass test; preamp parity test | ~180 | 3 |
+| `Tests/MacAmpTests/VideoTapLifecycleTests.swift` | TSan-on lifecycle tests | ~200 | 7 |
+| `Tests/MacAmpTests/VideoTapDSPTests.swift` | Tap DSP unit + integration tests | ~250 | 2-5 |
 
 ### 5.2 Modified files
 
-| File | Change | LOC est |
-|---|---|---|
-| `MacAmpApp/Audio/VisualizerPipeline.swift` | Type renames + visibility-promote at L36, L169, L330, L565 (Phase 1) | ~30 modified |
-| `MacAmpApp/Audio/AudioPlayer.swift` | Wire video-item playback to attach tap; add `setVideoTapEnabled` facade if needed (Phase 2-6) | ~60 added |
-| `MacAmpApp/Audio/EqualizerController.swift` | Tap Context registration + fan-out write path on EQ/balance change (Phase 6) | ~50 added |
-| `MacAmpApp/Views/Windows/WinampVideoWindowController.swift` | (potentially) Wire EQ/balance/visualizer UI surfaces to video playback (Phase 9) | ~20 added |
-| `project.yml` | Register new files (Phase 1, 2, 3, 5, 7 each rerun `xcodegen generate`) | n/a |
+| File | Change | LOC est | Phase |
+|---|---|---|---|
+| `MacAmpApp/Audio/VisualizerPipeline.swift` | Type renames + visibility-promote at L36, L169, L330, L565 | ~30 modified | 1 |
+| `MacAmpApp/Audio/AudioPlayer.swift` | Wire video-item playback to attach tap; balance fanout to tap Context (`balance.didSet` adds tap-side write); facade `attachVideoTap`/`detachVideoTap` | ~80 added | 2, 5 |
+| `MacAmpApp/Audio/EqualizerController.swift` | Add `EqualizerState` snapshot struct (private nested); `WeakBox<VideoTapContext>` registry; `registerVideoTapContext`/`unregisterVideoTapContext` API; fanout to registered Contexts on EQ change (preamp, isEqOn, band gains) | ~80 added | 5 |
+| `MacAmpApp/Windows/WinampVideoWindowController.swift` | (potentially) Wire EQ/balance/visualizer UI surfaces to video playback | ~20 added | 9 |
+| `project.yml` | (no manual edits — `project.yml` uses path-based source globs; `xcodegen generate` re-discovers files automatically. Run `xcodegen generate` after each phase that adds files) | n/a | 1, 2, 3, 4, 7 |
+
+### 5.2.1 Helper types specified inline
+
+These are small types declared as part of larger files; called out here so the inventory is complete:
+
+| Type | Purpose | Where declared | LOC | Phase |
+|---|---|---|---|---|
+| `EqualizerState` | `Sendable` snapshot: `isEqOn: Bool`, `preampLinearGain: Float`, `bandGainsDB: (Float ×10)`. Used as the input to `BiquadCoefficientSet.compute`. | private nested in `EqualizerController.swift` | ~10 | 3 (declared) |
+| `BiquadCoefs` | Per-band tuple `(b0, b1, b2, a1, a2)` — five `Float`s. | private nested in `BiquadCoefficientSet.swift` | ~5 | 3 |
+| `WeakBox<T: AnyObject>` | Tiny weak-reference wrapper used by `EqualizerController.registeredVideoTapContexts`. | private nested in `EqualizerController.swift` | ~5 | 5 |
+| `VideoTapDiagnostics` | `Sendable` snapshot for telemetry display: `processCallCount`, `frameCount`, `budgetOverrunCount`, `deadlineRiskCount`. | nested in `VideoTapContext.swift` | ~10 | 6 |
+| `VideoTapError` | `Error` enum: `createFailed(OSStatus)`, `formatUnsupported(AudioStreamBasicDescription)`. | nested in `VideoTap.swift` | ~10 | 2 |
 
 ### 5.3 Files explicitly NOT touched (per non-goals)
 
@@ -287,7 +325,22 @@ Each phase is individually reviewable and individually testable. Each phase ends
 - `tapFinalize`: `Unmanaged<VideoTapContext>.fromOpaque(storage).release()`.
 - `tapPrepare`: read `processingFormat.pointee` (ASBD); store into `VideoTapContext.processingFormatTag` (bit-mask: 0 = supported Float32 LPCM, 1 = unsupported pass-through, 2 = sample-rate change since last prepare). Log once per prepare.
 - `tapUnprepare`: log; no state change.
-- `tapProcess`: `MTAudioProcessingTapGetSourceAudio(...)` → check `processingFormatTag` → if pass-through, return; otherwise (Phase 2) still return after the GetSourceAudio call (no DSP yet, just verify the path works).
+- `tapProcess`:
+  ```swift
+  // 1. Pull source audio in place. The flagsOut pointer is shared between this tap's
+  //    output flags and the source's output flags — GetSourceAudio writes the source's
+  //    StartOfStream/EndOfStream into it, which we both read here AND propagate downstream.
+  let getStatus = MTAudioProcessingTapGetSourceAudio(
+      tap, framesToProcess, bufferList, flagsOut, /* timeRangeOut */ nil, framesOut)
+  guard getStatus == noErr else { return }
+
+  // 2. Format gate (ADR-11)
+  if context.processingFormatTag.load(ordering: .relaxed) != formatTagSupportedFloat32 {
+      return  // pass-through (no DSP)
+  }
+
+  // 3. (Phase 2 stops here — Phase 3 adds steps 3-7 from ADR-5 render-path order.)
+  ```
 
 **Verification.**
 - Unit test: `VideoTap.attach` with a synthetic `AVPlayerItem` succeeds; `detach` releases. Test the create-failure path by injecting a corrupted callbacks struct (or by inserting a `MTAudioProcessingTapCreate` mock if feasible) — assert `Unmanaged` is released.
@@ -313,16 +366,22 @@ Each phase is individually reviewable and individually testable. Each phase ends
   - Stateful per-channel filter history (`z1`, `z2` per band per channel).
   - `mutating func process(buffer: UnsafeMutableBufferPointer<Float>, channels: Int, frames: Int, coefficients: UnsafePointer<BiquadCoefficientSet>)` — in-place direct-form-II biquad, 10 bands cascaded, per channel.
   - `mutating func reset()` — zero filter history (called on `kMTAudioProcessingTapFlag_StartOfStream` per ADR-9).
-- Modify: `VideoTap.swift` `tapProcess` body — after `GetSourceAudio`:
-  1. Check `kMTAudioProcessingTapFlag_StartOfStream` in `flagsOut.pointee`; if set, call `context.cascade.reset()`.
-  2. Load coefficient pointer atomically: `let coefs = context.coefficientSetPointer.load(ordering: .acquiring)`; if nil (no EQ active), skip biquad.
-  3. `context.cascade.process(buffer: …, coefficients: coefs)` per audio buffer.
-  4. Apply balance: `let bal = Float(bitPattern: context.balance.load(ordering: .relaxed))` → multiply L by min(1, 2*(1-bal)), R by min(1, 2*bal) (or whichever balance curve `EqualizerController` already uses).
+- Modify: `VideoTap.swift` `tapProcess` body — implement the full 8-step render path from ADR-5 (format gate already in Phase 2; this phase adds steps 2 through 6):
+  1. (Already done in Phase 2) `MTAudioProcessingTapGetSourceAudio(...)` writes the source's `kMTAudioProcessingTapFlag_StartOfStream` / `_EndOfStream` into `flagsOut.pointee`.
+  2. **Filter-state reset** (ADR-9): if `flagsOut.pointee.contains(.startOfStream)`, call `context.cascade.reset()`.
+  3. **Preamp**: load `context.preampLinearGainBits.load(.relaxed)`, decode to Float; if not 1.0, multiply samples by preamp.
+  4. **EQ on/off gate**: if `context.isEqOn.load(.relaxed) == false`, skip step 5.
+  5. **`BiquadCascade.process`**: load coefficient pointer atomically; if non-nil, run 10-band cascade in place.
+  6. **Balance**: load `context.balance.load(.relaxed)`, decode to Float; compute lGain/rGain (per-channel multiplies), apply if not center.
 - New: `Tests/MacAmpTests/BiquadNumericalMatchTests.swift`
-  - For each of 5 EQ presets (flat, bass-boost, treble-boost, mid-scoop, full-tilt-boost), render a 0 dBFS log sine sweep (20 Hz – 20 kHz, 10 s) through:
+  - **Test 1 — full EQ active.** For each of 5 EQ presets (flat, bass-boost, treble-boost, mid-scoop, full-tilt-boost), render a 0 dBFS log sine sweep (20 Hz – 20 kHz, 10 s) through:
     1. `AVAudioUnitEQ` configured identically (offline render via `AVAudioEngine` `manualRenderingMode`).
     2. `BiquadCascade` configured identically (in-process Float32 array math).
-  - Compare per-frequency-bin magnitude. Assert ≤0.5 dB worst-case across the audible band; ≤1 dB hard reject.
+    
+    Compare per-frequency-bin magnitude. Assert ≤0.5 dB worst-case across the audible band; ≤1 dB hard reject.
+  - **Test 2 — EQ-toggle bypass parity.** Render the same sweep with `isEqOn = false`. Assert `BiquadCascade` output is bit-identical to input scaled by preamp+balance only (no per-band attenuation). Assert engine-side `AVAudioUnitEQ.bypass = true` produces equivalent passthrough.
+  - **Test 3 — preamp parity.** Render sine at 1 kHz, 0 dBFS, with bands flat and preamp values −12, −6, 0, +6, +12 dB. Assert `BiquadCascade` output magnitude matches input × `10^(preamp/20)` within ≤0.1 dB. Assert engine-side `AVAudioUnitEQ.globalGain` produces the same offset.
+  - **Test 4 — balance parity.** Render stereo white noise at 0 dBFS with balance values 0.0, 0.25, 0.5, 0.75, 1.0. Assert `VideoTapContext` balance multiplies match engine-side balance node output channel-by-channel within ≤0.1 dB.
 
 **Verification.**
 - `BiquadNumericalMatchTests` green at ≤0.5 dB.
@@ -364,21 +423,32 @@ Each phase is individually reviewable and individually testable. Each phase ends
 
 ---
 
-### Phase 5 — EQ + balance state fanout from `EqualizerController`
+### Phase 5 — EQ and balance state fanout (parallel from `EqualizerController` + `AudioPlayer`)
 
-**Goal.** Wire `EqualizerController` to fan out user EQ + balance changes to **both** the engine `AVAudioUnitEQ` (existing behavior) and the tap-side `VideoTapContext` (new). Match ADR-5: push-based fan-out, single source-of-truth.
+**Goal.** Wire EQ fanout from `EqualizerController` and balance fanout from `AudioPlayer` (ADR-5 — two canonical owners, parallel fanout). Both feed the new tap-side `VideoTapContext` in addition to their existing engine consumers.
 
 **Files.**
 - Modify: `MacAmpApp/Audio/EqualizerController.swift`
-  - Add: `private var registeredVideoTapContexts: [WeakBox<VideoTapContext>] = []` (weak refs so Context lifecycle is owned by `AudioPlayer`, not `EqualizerController`).
-  - Add: `func registerVideoTapContext(_ context: VideoTapContext)` — appends weak ref; immediately pushes current `BiquadCoefficientSet` into the new Context.
+  - Add private nested type: `struct EqualizerState: Sendable, Equatable { let isEqOn: Bool; let preampLinearGain: Float; let bandGainsDB: (Float, Float, Float, Float, Float, Float, Float, Float, Float, Float) }`
+  - Add private nested type: `final class WeakBox<T: AnyObject> { weak var value: T?; init(_ v: T) { self.value = v } }`
+  - Add: `private var registeredVideoTapContexts: [WeakBox<VideoTapContext>] = []` (weak refs; Context lifecycle owned by `AudioPlayer`).
+  - Add: `func registerVideoTapContext(_ context: VideoTapContext, sampleRate: Double)` — appends weak ref; computes `BiquadCoefficientSet` at the given sample rate; pushes via `context.installCoefficientSet(_:)`; pushes `isEqOn` and `preampLinearGain` atomics.
   - Add: `func unregisterVideoTapContext(_ context: VideoTapContext)` — removes ref by identity.
-  - Modify: existing EQ slider / preset / preamp change handlers — after writing to engine `AVAudioUnitEQ`, also iterate `registeredVideoTapContexts`, compute `BiquadCoefficientSet` for current sample rate, call `context.installCoefficientSet(_:)` on each.
-  - Modify: existing balance change handler — also writes Float bit-pattern to each Context's `balance` atomic.
+  - Add: `func handleSampleRateChange(_ context: VideoTapContext, newSampleRate: Double)` — recomputes coefficient set for the new rate and pushes via `installCoefficientSet`. Called from main-thread polling (see sample-rate handling below).
+  - Modify: existing EQ slider / preset / preamp change handlers — after writing to engine `AVAudioUnitEQ`, iterate `registeredVideoTapContexts` (skipping nil refs), call appropriate atomic-write helpers per context. The EQ-state struct is captured into a local before the loop to avoid re-reading state per iteration.
 - Modify: `MacAmpApp/Audio/AudioPlayer.swift`
-  - `attachVideoTap(...)`: after `VideoTapContext` is created and the tap is attached, call `equalizerController.registerVideoTapContext(context)`.
-  - `detachVideoTap(...)`: call `equalizerController.unregisterVideoTapContext(context)` BEFORE letting the tap go out of scope (so the weak ref is cleaned up promptly).
-- Sample-rate handling: `tapPrepare` notes a sample-rate change in `VideoTapContext.processingFormatTag`. `VideoTapContext` sets a "needs coefficient recompute" flag. On next main-thread main run-loop tick (or via a notification), `EqualizerController` recomputes the `BiquadCoefficientSet` at the new sample rate and pushes via `installCoefficientSet`. Implementation detail: `VideoTapContext` posts a `Notification` from `tapPrepare`? Or sets an atomic the main thread polls? **Decision deferred to Phase 5 implementation; documented as Open Implementation Question.**
+  - Add: `private var registeredVideoTapContexts: [WeakBox<VideoTapContext>] = []` (separate registry for balance fanout).
+  - Modify: `var balance: Float { didSet { ... } }` (existing) — after writing to engine balance, iterate `registeredVideoTapContexts` and write Float bit-pattern to each Context's `balance` atomic.
+  - Add: `func attachVideoTap(to playerItem: AVPlayerItem, sampleRate: Double) throws -> VideoTapContext` — builds Context, calls `VideoTap.attach(...)` (ADR-7, ADR-10), registers Context with both `equalizerController.registerVideoTapContext(context, sampleRate: sampleRate)` and `self.registeredVideoTapContexts`, returns the Context (for caller to retain through item lifetime).
+  - Add: `func detachVideoTap(_ context: VideoTapContext, from playerItem: AVPlayerItem)` — unregisters from both registries, calls `VideoTap.detach(from: playerItem)`.
+- **Sample-rate handling.** Decision: **polled atomic** (no `Notification`). `tapPrepare` writes the new sample rate to `VideoTapContext.pendingSampleRate: Atomic<UInt64>` (Double bit-pattern stored as UInt64). `VisualizerPipeline`'s existing 30 Hz main-thread `Timer` (which already polls visualizer state) gets a small added check: for each registered Context, if `pendingSampleRate` differs from the last seen value, call `equalizerController.handleSampleRateChange(...)`. Justification: avoids a new actor hop on a high-frequency event; piggybacks on existing main-thread polling.
+
+**Verification.**
+- Unit test: register a `VideoTapContext` at 44.1 kHz; call `EqualizerController.setBandGain(_:band:)`; assert the Context's coefficient pointer changed AND the new coefficients match RBJ formula at 44.1 kHz.
+- Unit test: change `AudioPlayer.balance`; assert all registered Contexts' `balance` atomics updated.
+- Manual: drag EQ slider during video playback → audio changes in real time. Drag balance slider → audio pans in real time.
+- Engine-path regression: with EQ slider dragged during AUDIO file playback, audio changes (existing behavior unchanged).
+- TSan-on test suite green.
 
 **Verification.**
 - Unit test: register a `VideoTapContext`; call `EqualizerController.setBandGain(_:band:)`; assert the Context's coefficient pointer changed.
@@ -525,7 +595,7 @@ Each phase is individually reviewable and individually testable. Each phase ends
 | R4 | `tapFinalize` doesn't fire after `replaceCurrentItem` | LOW | HIGH | Phase 7 lifecycle test asserts; if it fires async only, document the timing + add "tap is alive" atomic for fast-skip safety | Phase 7 |
 | R5 | `MTAudioProcessingTap` survives item replacement and reuses Context | UNKNOWN | LOW | One-tap-per-item invariant (ADR-7) makes this moot — each item builds a fresh tap | Phase 2 |
 | R6 | Render-thread overrun causes audible glitch | MEDIUM | MEDIUM | Phase 6 telemetry detects; Phase 8 budget gate enforces; visualizer DSP is the largest single cost — drop-on-contention via `tryPublish` already protects against pathological cases | Phase 6 |
-| R7 | Coefficient pointer atomic ABA hazard | NEGLIGIBLE | n/a | Atomic-pointer is monotonic (always swaps to a different block); no ABA possible with two-block double-buffer | n/a |
+| R7 | Coefficient pointer atomic correctness | NEGLIGIBLE | n/a | No CAS loop is used (the swap is a single `store(_:ordering:)`), so ABA isn't applicable. The two-block double-buffer guarantees the render thread reads either the old block or the new block, never a torn intermediate state | n/a |
 | R8 | `Synchronization.Atomic<T>` Sendable assumption wrong on a future Swift version | NEGLIGIBLE | LOW | Pinned to Swift 6.2+, macOS 15+; `Atomic` is stdlib type with `Sendable` conformance documented | n/a |
 | R9 | Spike branch's `*= gain` simplicity hides surround channel layout edge case | LOW | MEDIUM | Phase 8 gate 9 explicitly tests 5.1 surround clip; ASBD format guard (ADR-11) gates DSP enable | Phase 8 |
 | R10 | UI integration surfaces missing for video-window EQ/balance | MEDIUM | LOW | Phase 9 audit pass; wiring is incremental | Phase 9 |
@@ -607,14 +677,15 @@ This task adds new files (`VideoDSP/` module) and modifies a small number of exi
 
 ## 13. Open Implementation Questions (deferred to phase boundaries; not research gaps)
 
-| Q | Phase | Notes |
-|---|---|---|
-| Does `tapFinalize` fire synchronously on `replaceCurrentItem` or async? | 2 | Determines whether tear-down can wait synchronously for finalize. Apple docs are silent. Phase 7 lifecycle tests should observe empirically. |
-| Need a "tap is alive" atomic on Context for fast item-switch pre-emption? | 7 | Add only if Phase 7 lifecycle tests demonstrate a UAF window. |
-| `VideoTapContext` notifies main thread of sample-rate change via Notification or polled atomic? | 5 | Polled atomic preferred (no main-thread overhead until checked); `Notification` fits MacAmp conventions but has actor-hop cost. |
-| Balance fanout: separate write path or piggyback on EQ fanout? | 5 | Likely separate — balance is a single Float, no coefficient computation. |
-| `VisualizerScratchBuffers` extracted to own file or kept nested in `VisualizerPipeline.swift`? | 1 | Both work; extraction is cleaner if Phase 4 grows its dependencies. Default: extract. |
-| `VideoDSP/` module name — `VideoDSP/` vs `VideoTap/` vs `Video/` subdir? | 2 | Default: `VideoDSP/` (audio-side processing for the video path; orthogonal to `Audio/` umbrella). |
+These items are documented for resolution during the named phase. They are **not** architectural decisions (those are settled in §4 ADRs) — they are tactical choices that depend on observed runtime behavior or developer-time judgment.
+
+| Q | Phase | Default if unresolved at phase start | Notes |
+|---|---|---|---|
+| Does `tapFinalize` fire synchronously on `replaceCurrentItem` or async? | 2 | Assume async (per ADR-7 default) | Phase 7 lifecycle tests observe empirically. If sync, simplify tear-down — but plan does not depend on it. |
+| Add a "tap is alive" atomic on Context for fast item-switch pre-emption? | 7 | No (per ADR-7 default) | Add only if Phase 7 lifecycle tests demonstrate a UAF window. |
+| `VisualizerScratchBuffers` extracted to its own file or kept nested in `VisualizerPipeline.swift`? | 1 | Extract to own file | Both work; extraction is cleaner if Phase 4 grows the type's dependencies. |
+| `VideoDSP/` module name — `VideoDSP/` vs `VideoTap/` vs `Video/` subdir? | 2 | `VideoDSP/` | Audio-side processing for the video path; orthogonal to the `Audio/` umbrella that owns engine-side work. |
+| Visualizer disable for video — should there be a per-tap toggle, or is the visualizer always on? | 4 | Always on (matches engine path; toggle is an app-wide preference orthogonal to per-path) | Decided at Phase 4 implementation; plan as a no-op for now. |
 
 ---
 
