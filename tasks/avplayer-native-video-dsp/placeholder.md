@@ -11,9 +11,9 @@ Per project convention (`/Users/hank/.claude/CLAUDE.md` — "Placeholders" secti
 
 - **File:** `MacAmpApp/Audio/VideoDSP/BiquadCoefficientSet.swift`
 - **Phase:** 2
-- **Purpose:** Forced by Swift's access-control rules — `VideoTapContext.coefficientSetPointer: Atomic<UnsafePointer<BiquadCoefficientSet>?>` and `installCoefficientSet(_:)` need a non-fileprivate type. Empty internal stub created in Phase 2 so the field/method can be `internal`. The two coefficient blocks (`coefficientBlockA/B`) are allocated against this stub's stride (1 byte for an empty struct).
+- **Purpose:** Forced by Swift's access-control rules — `VideoTapContext.coefficientSetPointer: Atomic<UnsafePointer<BiquadCoefficientSet>?>` (a module-internal field) needs a non-fileprivate type. Empty internal stub created in Phase 2 so the field is `internal`. The two coefficient blocks (`coefficientBlockA/B`) are allocated against this stub's stride (1 byte for an empty struct). Phase 2 has NO writer or reader for the pointer (the install method was withdrawn pre-merge per P-4); the pointer stays nil throughout Phase 2 and `tapProcess` never reads it.
 - **Status:** Active
-- **Action (Phase 3):** Replace the empty struct with the real `struct BiquadCoefficientSet { let bands: (BiquadCoefs ×10) }` per plan §6 Phase 3 §3.1. The field declarations on `VideoTapContext` and the `init`/`deinit` allocation pattern stay unchanged because the type name is preserved.
+- **Action (Phase 3):** Replace the empty struct with the real `struct BiquadCoefficientSet { let bands: (BiquadCoefs ×10) }` per plan §6 Phase 3 §3.1. The field declaration on `VideoTapContext` and the `init`/`deinit` allocation pattern stay unchanged because the type name is preserved. Phase 3 must ALSO design and add the install method per P-4 (the prior naive A/B-swap design was withdrawn).
 
 ---
 
@@ -31,6 +31,16 @@ Per project convention (`/Users/hank/.claude/CLAUDE.md` — "Placeholders" secti
 
 - **File:** `MacAmpApp/Audio/VideoDSP/VideoTap.swift:1`
 - **Phase:** 2
-- **Purpose:** `VideoTap.attach(to:context:)` calls `try await playerItem.asset.loadTracks(withMediaType: .audio)`. Under Swift 6 strict concurrency, `AVAsset` is not yet annotated `Sendable`, so the value cannot cross the `await` boundary out of the `@MainActor`-isolated function. `@preconcurrency` downgrades the diagnostic, matching the existing project pattern in `MacAmpApp/Audio/AudioEngineConfigurationObserver.swift`.
+- **Purpose:** `VideoTap.buildAudioMix(...)` is `@MainActor`-isolated and is called from a Task that has previously awaited `asset.loadTracks(...)` (the await happens in the AudioPlayer-side closure). Under Swift 6 strict concurrency, `AVAsset` is not yet annotated `Sendable`, so values cannot cross some of these await boundaries cleanly. `@preconcurrency` downgrades the diagnostic, matching the existing project pattern in `MacAmpApp/Audio/AudioEngineConfigurationObserver.swift`.
 - **Status:** Acceptable workaround
 - **Action:** Drop `@preconcurrency` whenever AVFoundation receives proper `Sendable` annotations for `AVAsset`. Until then, retain the import attribute and document at the call site.
+
+---
+
+## P-4 — ADR-4 double-buffer coefficient hand-off needs redesign before Phase 3 reads coefficients
+
+- **Files:** `MacAmpApp/Audio/VideoDSP/VideoTapContext.swift` (alloc/dealloc still in place; install method withdrawn for Phase 2); `tasks/avplayer-native-video-dsp/plan.md` ADR-4 needs amendment in Phase 3.
+- **Phase:** Phase 2 finding; resolution required by Phase 3.
+- **Purpose:** Oracle review of Phase 2 (gpt-5.5, 2026-05-02, score 8/10 REVISE) flagged that the naive A/B swap from ADR-4 is not race-safe in practice. Sequence: render thread loads pointer → P=A → starts processing using A. Main thread installs new coefficients into B and swaps pointer → P=B. Main thread installs again — picks A as the "inactive" block (since current is B) and writes to A while render thread is STILL reading A (its initial load happened before any of this). Result: render reads partially-overwritten A. Acquire/release ordering does not fix the pointee-lifetime race. Latent in Phase 2 because `tapProcess` does not yet read coefficients, but the scaffold encoded the unsafe invariant — `installCoefficientSet` was withdrawn before Phase 2 close to avoid making the racy contract reusable.
+- **Status:** Open architectural decision; must be resolved BEFORE `tapProcess` reads coefficients (Phase 3 gate).
+- **Action (Phase 3):** Pick one of: (1) triple-buffer + atomic "in-use" counter to mark which slot the render thread is currently reading; (2) RCU-style allocate-fresh-each-install + deferred free of retired buffers (e.g. Hazard Pointers, epoch-based reclamation); (3) `Synchronization.Mutex<BiquadCoefficientSet>` with `withLockIfAvailable` on the render thread (skip-update on contention). Update plan.md ADR-4 with the chosen scheme + rationale; re-run Oracle review on the redesign before implementation.

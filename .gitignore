@@ -50,6 +50,14 @@ MacAmpApp.xcodeproj/
 *.dmg
 *.m4v
 
+# Test fixtures (small clapperboard clips needed by Phase 2 video-tap
+# lifecycle + seek tests; ~12 KB each, safe to track).
+!clapperboard-videos/*.mov
+!clapperboard-videos/*.mp4
+!clapperboard-videos/*.m4v
+# Ad-hoc measurement output that lives next to the fixtures — NOT tracked.
+clapperboard-videos/*.csv
+
 # PNG files (except app icons)
 frames/
 tasks/**/*.png

@@ -4,10 +4,12 @@ import CoreAudioTypes
 import Foundation
 import MediaToolbox
 
-/// Errors raised while building or attaching a video-side processing tap.
+/// Errors raised while building a video-side processing tap. Only
+/// `createFailed` is currently thrown — `noAudioTrack` is handled at
+/// the caller (the audioMixBuilder closure simply returns `nil` to
+/// `loadVideo`, which then constructs the player without a tap).
 enum VideoTapError: Error {
     case createFailed(OSStatus)
-    case noAudioTrack
 }
 
 // MARK: - C-callback closures
@@ -15,7 +17,7 @@ enum VideoTapError: Error {
 // All five callbacks are file-scope `private let` constants typed to the
 // matching `MTAudioProcessingTap*Callback` typealias. They are invoked on
 // the render thread (`MTAudioProcessingTap`-owned, not Swift-concurrency
-// managed). Per ADR-3, the closures use only `Unmanaged` lookup +
+// managed). Per ADR-3 the closures use only `Unmanaged` lookup +
 // atomic-disciplined Context fields; nothing inside captures Swift state.
 
 private let tapInit: MTAudioProcessingTapInitCallback = { _, clientInfo, tapStorageOut in
@@ -71,23 +73,19 @@ private let tapProcess: MTAudioProcessingTapProcessCallback = { tap, framesToPro
     // AVPlayer's downstream pipeline plays the buffer unchanged.
 }
 
-// MARK: - Attach / detach
+// MARK: - Audio-mix builder + detach
 
 enum VideoTap {
-    /// Build the tap, retain the Context across the FFI boundary, and wire
-    /// the tap into the player item's `audioMix`. Per ADR-7 the
-    /// `audioMix` is set ONCE here and not mutated for the lifetime of
-    /// this player item.
-    ///
-    /// On `MTAudioProcessingTapCreate` failure the retained Context is
-    /// released before throwing so the +1 retain does not leak (ADR-10).
+    /// Build the `MTAudioProcessingTap` and wrap it in an
+    /// `AVMutableAudioMix` for assignment to a not-yet-constructed
+    /// `AVPlayerItem.audioMix`. Caller must subsequently set
+    /// `playerItem.audioMix = <returned mix>` BEFORE constructing the
+    /// `AVPlayer` (per ADR-7 — `audioMix` is set once and not mutated
+    /// during playback). On `MTAudioProcessingTapCreate` failure the
+    /// retained Context is released before throwing so the +1 retain
+    /// does not leak (ADR-10).
     @MainActor
-    static func attach(to playerItem: AVPlayerItem, context: VideoTapContext) async throws {
-        let tracks = try await playerItem.asset.loadTracks(withMediaType: .audio)
-        guard let audioTrack = tracks.first else {
-            throw VideoTapError.noAudioTrack
-        }
-
+    static func buildAudioMix(audioTrack: AVAssetTrack, context: VideoTapContext) throws -> AVMutableAudioMix {
         let retained = Unmanaged.passRetained(context)
         var callbacks = MTAudioProcessingTapCallbacks(
             version: kMTAudioProcessingTapCallbacksVersion_0,
@@ -116,12 +114,15 @@ enum VideoTap {
 
         let audioMix = AVMutableAudioMix()
         audioMix.inputParameters = [inputParams]
-        playerItem.audioMix = audioMix
+        return audioMix
     }
 
-    /// Detach the tap from the player item. AVPlayer's deallocation chain
-    /// fires `tapFinalize` (possibly asynchronously) once the last
-    /// reference to the tap drops, releasing the Context.
+    /// Detach the tap from a currently-active player item. Used during
+    /// teardown when the surrounding player is going away. AVPlayer's
+    /// deallocation chain fires `tapFinalize` (possibly asynchronously)
+    /// once the last reference to the tap drops, releasing the Context.
+    /// Caller is expected to pause the player before calling detach to
+    /// honor ADR-7's "audioMix not mutated during playback".
     @MainActor
     static func detach(from playerItem: AVPlayerItem) {
         playerItem.audioMix = nil

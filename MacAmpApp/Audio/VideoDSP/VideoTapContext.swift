@@ -45,17 +45,21 @@ import Synchronization
 /// `Unmanaged.passRetained` at attach time and is released exactly once in
 /// `tapFinalize`.
 final class VideoTapContext: @unchecked Sendable {
-    // MARK: Coefficient hand-off (ADR-4 atomic-pointer double-buffer)
+    // MARK: Coefficient hand-off (Phase 2 placeholder; Phase 3 redesigns per P-4)
 
-    /// Active coefficient block for the render thread. `nil` while
-    /// pass-through (no DSP applied). Main thread writes via
-    /// `installCoefficientSet(_:)`; render thread reads with `.acquiring`.
+    /// Active coefficient block for the render thread. **Permanently
+    /// `nil` in Phase 2** — no install API exists, and `tapProcess`
+    /// does not read this pointer. Phase 3 will introduce an install
+    /// path under a race-safe scheme (per `placeholder.md` P-4); the
+    /// field is declared now so the surrounding lifecycle (alloc /
+    /// dealloc / nil-default) is exercised end-to-end.
     let coefficientSetPointer: Atomic<UnsafePointer<BiquadCoefficientSet>?>
 
-    /// The two pre-allocated coefficient blocks behind the atomic pointer.
-    /// Render thread never accesses these directly — it always goes through
-    /// `coefficientSetPointer`. Main thread writes the inactive block then
-    /// swaps the pointer.
+    /// The two pre-allocated coefficient blocks. Phase 2 only exercises
+    /// their alloc/dealloc lifecycle (init / deinit below). Phase 3's
+    /// install path will repurpose them per the chosen P-4 scheme — or
+    /// replace them with a different storage layout if the scheme
+    /// requires (e.g. RCU allocates fresh per install).
     private let coefficientBlockA: UnsafeMutablePointer<BiquadCoefficientSet>
     private let coefficientBlockB: UnsafeMutablePointer<BiquadCoefficientSet>
 
@@ -123,21 +127,25 @@ final class VideoTapContext: @unchecked Sendable {
         coefficientBlockB.deinitialize(count: 1).deallocate()
     }
 
-    /// Install a new coefficient set (main thread). Writes the inactive
-    /// block then atomically swaps the pointer with `.releasing` ordering
-    /// so the render thread sees the new contents on the next
-    /// `.acquiring` load.
-    func installCoefficientSet(_ new: BiquadCoefficientSet) {
-        let current = coefficientSetPointer.load(ordering: .acquiring)
-        let inactive: UnsafeMutablePointer<BiquadCoefficientSet>
-        if current == UnsafePointer(coefficientBlockA) {
-            inactive = coefficientBlockB
-        } else {
-            inactive = coefficientBlockA
-        }
-        inactive.pointee = new
-        coefficientSetPointer.store(UnsafePointer(inactive), ordering: .releasing)
-    }
+    // NOTE: NO coefficient-install API is exposed in Phase 2.
+    //
+    // ADR-4's original design (atomic-pointer A/B swap) was withdrawn
+    // because it is not race-safe in the multi-install case: a render
+    // thread holding a pointer to slot A from a prior load can have
+    // slot A overwritten by a subsequent main-thread swap A→B→A. No
+    // acquire/release ordering closes that pointee-lifetime window.
+    //
+    // Phase 2 leaves `coefficientSetPointer` as a permanently-nil
+    // `Atomic<UnsafePointer<BiquadCoefficientSet>?>` and `tapProcess`
+    // never reads it. The two pre-allocated coefficient blocks
+    // (`coefficientBlockA` / `coefficientBlockB` declared above)
+    // remain so the alloc/dealloc lifecycle is exercised end-to-end.
+    //
+    // Phase 3 GATING work (see `tasks/avplayer-native-video-dsp/placeholder.md`
+    // P-4): pick a race-safe hand-off scheme before exposing any
+    // install API or before `tapProcess` reads coefficients. Candidates:
+    // triple-buffer + atomic in-use counter, RCU/epoch reclamation,
+    // or `Mutex<BiquadCoefficientSet>` with `withLockIfAvailable`.
 
     #if DEBUG
     /// DEBUG-only factory for `VideoTapSendableContractTests`. Builds a

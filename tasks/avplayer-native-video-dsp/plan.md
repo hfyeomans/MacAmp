@@ -267,6 +267,18 @@ The combined gates (1 + 2 + 3a + 3b) close the documented forbidden-list cases. 
 - `Synchronization.Mutex<BiquadCoefficientSet>` with `withLockIfAvailable` (skip-update on contention). Adds a contention path; render thread could miss coefficient updates indefinitely.
 **Memory model.** Allocation: `UnsafeMutablePointer<BiquadCoefficientSet>.allocate(capacity: 1)`, deallocate in `Context.deinit`. Two long-lived allocations per Context. Pointer swap uses `.acquiringAndReleasing` ordering on store; render thread uses `.acquiring` on load.
 
+#### ADR-4 amendment (Phase 2 implementation finding, 2026-05-02)
+Oracle review of Phase 2 (gpt-5.5, score 8/10 REVISE) flagged that the naive A/B swap above is NOT race-safe in practice. The pointee-lifetime race: render thread loads `P=A`, starts processing using `A`. Main thread installs new coefs into `B`, swaps pointer to `B`. Main thread installs again, picks `A` as inactive (current is `B`), writes to `A` while render thread is STILL reading `A` (its initial load happened before any of this). Result: render reads partially-overwritten `A`. Acquire/release ordering does not fix the pointee-lifetime race.
+
+**Phase 2 action:** the `installCoefficientSet(_:)` API was withdrawn from `VideoTapContext` before Phase 2 close to avoid making the racy contract reusable. The two pre-allocated blocks remain so the alloc/dealloc lifecycle is exercised end-to-end, but the pointer stays nil throughout Phase 2 and `tapProcess` never reads it.
+
+**Phase 3 prerequisite (P-4):** Phase 3 MUST pick a race-safe hand-off scheme BEFORE `tapProcess` reads coefficients. Three candidates:
+1. Triple-buffer + atomic "in-use" counter to mark which slot the render thread is currently reading.
+2. RCU-style allocate-fresh-each-install + deferred free of retired buffers (Hazard Pointers, epoch-based reclamation).
+3. `Synchronization.Mutex<BiquadCoefficientSet>` with `withLockIfAvailable` on the render thread (skip-update on contention; previously rejected per the table above — Phase 3 should re-evaluate now that the simpler double-buffer is off the table).
+
+The chosen scheme replaces this ADR's original "Decision" paragraph and re-runs Oracle review on the redesign before implementation. See `placeholder.md` P-4 for ongoing tracking.
+
 ### ADR-5: EQ and balance state fanout — two canonical owners, parallel fanout pattern
 **Decision.**
 - **EQ state** (`isEqOn: Bool`, `preampLinearGain: Float`, `bandGainsDB: (Float ×10)`) is owned by `EqualizerController` (current state). On any user-driven change, `EqualizerController` fans out to two consumers:
@@ -315,6 +327,16 @@ Both Contexts (one per video AVPlayerItem) are registered with `EqualizerControl
 **`Unmanaged` balance.** +1 from `passRetained(context)` at attach. -1 from `Unmanaged<VideoTapContext>.fromOpaque(storage).release()` in `tapFinalize`. Exactly once.
 **Production-required hardening.** Tap-create failure path releases the `Unmanaged` before throwing/returning (ADR-10).
 **Tear-down assumption (revisited if Phase 7 testing proves otherwise).** `tapFinalize` may fire asynchronously on a background queue; tear-down code does not wait synchronously for it. A "tap is alive" atomic gate on the Context is **not** added by default; Phase 7 lifecycle tests determine whether one is necessary.
+
+#### ADR-7 amendment (Phase 2 implementation finding, 2026-05-02)
+The original ADR specified "audioMix is set once before `play()`". Phase 2 implementation tightened this to "audioMix is set during `AVPlayerItem` construction, BEFORE the `AVPlayer` exists" — strictly stronger. Setting `audioMix` on an already-constructed `AVPlayerItem` (even before `play()`) was flagged by Oracle as a race window if `AVPlayer.play()` could fire before the assignment. The implementation chosen:
+- `VideoTap` exposes `buildAudioMix(audioTrack:context:) throws -> AVMutableAudioMix` (synchronous; caller has already awaited `asset.loadTracks(...)`).
+- `VideoPlaybackController.loadVideo(...)` is `async` and accepts an optional `audioMixBuilder: ((AVURLAsset) async -> AVMutableAudioMix?)?` closure plus an optional `isStillRelevant: (() -> Bool)?` short-circuit.
+- Internal flow: `cleanup()` → `AVURLAsset(url:)` → `await audioMixBuilder(asset)` → check `isStillRelevant` → `AVPlayerItem(asset:)` → `playerItem.audioMix = mix` → `AVPlayer(playerItem:)` → observers + autoplay.
+- `audioMix` is assigned to the `AVPlayerItem` BEFORE the `AVPlayer` adopts the item; AVPlayer cannot ever observe an item without its mix.
+- `AudioPlayer` orchestrates via `startVideoLoad(track:)` → spawns `Task` that calls `loadVideo` with closures capturing a `videoLoadGeneration` counter. Generation is bumped on every new video load, video→audio switch, pause/stop. The `audioMixBuilder` rechecks generation post-`loadTracks` (no `passRetained` on a stale path); the `isStillRelevant` closure rechecks before any AVPlayer/observer mutation. Auto-play after load is gated on `playbackState == .playing`.
+
+The `attachVideoTap(to:)` / `detachVideoTap(_:from:)` facades described in §6 Phase 2 below were removed; the AVPlayerItem-construction-time install pattern replaces them. Detach is now `pauseAndDetachVideoTapIfNeeded()` (private helper) + `VideoTap.detach(from:)` for explicit teardown paths (stop, media-type switch).
 
 ### ADR-8: `BiquadCascade` implementation — RBJ cookbook formulas
 **Decision.** RBJ (Robert Bristow-Johnson) Audio EQ Cookbook octave-bandwidth peaking-EQ formula for 8 parametric bands; analogous low/high-shelf formulas for bands 0 and 9.
@@ -389,7 +411,8 @@ guard status == noErr, let tap = tapOut else {
 | File | Change | LOC est | Phase |
 |---|---|---|---|
 | `MacAmpApp/Audio/VisualizerPipeline.swift` | Type renames + visibility-promote at L36, L169, L330, L565 | ~30 modified | 1 |
-| `MacAmpApp/Audio/AudioPlayer.swift` | Wire video-item playback to attach tap; balance fanout to tap Context (`balance.didSet` adds tap-side write); facade `attachVideoTap`/`detachVideoTap` | ~80 added | 2, 5 |
+| `MacAmpApp/Audio/AudioPlayer.swift` | Phase 2 (revised per ADR-7 amendment): private `startVideoLoad(track:)` orchestrator + `pauseAndDetachVideoTapIfNeeded()` + `invalidateInFlightVideoLoad()` + generation-counter (`videoLoadGeneration`) and in-flight-task handle. NOT `attachVideoTap`/`detachVideoTap` facades — those were removed when Option C structural fix made them redundant. Phase 5: balance fanout (`balance.didSet` adds tap-side write) + register Context with `EqualizerController` from inside `startVideoLoad`'s builder closure. | ~110 added | 2, 5 |
+| `MacAmpApp/Audio/VideoPlaybackController.swift` | Phase 2 (revised per ADR-7 amendment): `loadVideo` becomes `async` and gains optional `audioMixBuilder` + `isStillRelevant` parameters so audioMix is set during `AVPlayerItem` construction (before the `AVPlayer` exists) and superseded loads bail before AVPlayer/observer mutation. NOT in original plan — added during Phase 2 implementation. | ~30 modified | 2 |
 | `MacAmpApp/Audio/EqualizerController.swift` | Add `EqualizerState` snapshot struct (private nested); `WeakBox<VideoTapContext>` registry; `registerVideoTapContext`/`unregisterVideoTapContext` API; fanout to registered Contexts on EQ change (preamp, isEqOn, band gains) | ~80 added | 5 |
 | `MacAmpApp/Windows/WinampVideoWindowController.swift` | (potentially) Wire EQ/balance/visualizer UI surfaces to video playback | ~20 added | 9 |
 | `docs/MACAMP_ARCHITECTURE_GUIDE.md` | Add architecture section for in-place tap DSP (video) and an "Audio Mechanism Concurrency Contract" subsection codifying the `@unchecked Sendable` + `Synchronization.Atomic` + `RenderThreadSafe` pattern as a project-wide convention. Cite ADR-3 / ADR-3a. | ~80 added | 9 |
@@ -425,8 +448,10 @@ These are small types declared as part of larger files; called out here so the i
 - `VisualizerScratchBuffers` (private nested class) → module-internal (extracted or kept nested-but-non-private)
 - `VisualizerPipeline.makeTapHandler` signature: parameter types change from `VisualizerSharedBuffer` to `VisualizerFeed` (private→nothing — same call site)
 - New: `VideoTapContext`, `VideoTap`, `BiquadCoefficientSet`, `BiquadCascade`, `videoTapVisualizerRender(...)` — all module-internal (no `public`)
-- New: `AudioPlayer.attachVideoTap(to:)` / `AudioPlayer.detachVideoTap()` (module-internal — facade only, no state widening)
-- New: `EqualizerController.registerVideoTapContext(_:)` / `EqualizerController.unregisterVideoTapContext(_:)` (module-internal)
+- New: `VideoTap.buildAudioMix(audioTrack:context:)` / `VideoTap.detach(from:)` (module-internal). NOT `VideoTap.attach(to:context:)` — that earlier-planned async facade was replaced by `buildAudioMix` per ADR-7 amendment so audioMix is configured BEFORE the surrounding `AVPlayer` adopts the item.
+- Modified: `VideoPlaybackController.loadVideo` signature gains `audioMixBuilder` + `isStillRelevant` parameters and becomes `async` (per ADR-7 amendment).
+- New: `AudioPlayer.startVideoLoad(track:)` (private), `pauseAndDetachVideoTapIfNeeded()` (private), `invalidateInFlightVideoLoad()` (private). NOT `AudioPlayer.attachVideoTap`/`detachVideoTap` public facades — those were removed when the orchestration moved entirely into `startVideoLoad`'s Task body.
+- New: `EqualizerController.registerVideoTapContext(_:)` / `EqualizerController.unregisterVideoTapContext(_:)` (module-internal) — added Phase 5.
 
 ### 5.5 Responsibility map
 
@@ -439,7 +464,7 @@ These are small types declared as part of larger files; called out here so the i
 | Balance → engine balance node parameter | `AudioPlayer.balance.didSet` (existing) | Bridge |
 | Balance → tap `VideoTapContext.balance: Atomic<UInt32>` (Float bit-pattern) | `AudioPlayer.balance.didSet` fanout (Phase 5 addition) | Bridge → Mechanism |
 | Tap C-callbacks | `VideoTap.swift` (file-scope `private let` closures) | Mechanism |
-| Tap Context lifetime (`Unmanaged` retain/release) | `VideoTap.attach(to:)` (retain) + `tapFinalize` (release) | Mechanism |
+| Tap Context lifetime (`Unmanaged` retain/release) | `VideoTap.buildAudioMix(audioTrack:context:)` (retain via `passRetained` inside `MTAudioProcessingTapCreate` callbacks) + `tapFinalize` (release). Per ADR-7 amendment — supersedes the earlier `VideoTap.attach(to:)` plan. | Mechanism |
 | Render-thread DSP execution | `BiquadCascade.process` + balance gain step + `videoTapVisualizerRender` | Mechanism |
 | ASBD format detection / DSP gating | `tapPrepare` reads ASBD into `VideoTapContext.processingFormat` | Mechanism |
 | Visualizer hand-off (single-slot SPSC) | `VisualizerFeed` | Mechanism |
@@ -452,6 +477,8 @@ These are small types declared as part of larger files; called out here so the i
 ## 6. Implementation Phases
 
 Each phase is individually reviewable and individually testable. Each phase ends with TSan-on build + test green; no phase merges to `main` (single PR at end of Phase 8 / 9).
+
+> **Implementation reality (Phase 2 close, 2026-05-02):** The Phase 2, Phase 4, and Phase 5 narratives below describe the ORIGINAL plan (Oracle 9.8/10 approval). After Phase 2 implementation surfaced an ADR-7 race window (Oracle re-review 8/10 REVISE), the design was tightened: `audioMix` is now configured during `AVPlayerItem` CONSTRUCTION (not after, not on the existing item). This is captured in the ADR-4 amendment (install withdrawn from Phase 2; Phase 3 must redesign per `placeholder.md` P-4) and the ADR-7 amendment (audioMix-on-construction pattern via `VideoTap.buildAudioMix` + `VideoPlaybackController.loadVideo`'s `audioMixBuilder` + `isStillRelevant` parameters + `AudioPlayer.startVideoLoad` orchestrator). Where this conflicts with the per-phase narratives below, the ADR amendments + §5.2/§5.4 tables WIN.
 
 ### Phase 1 — `VisualizerFeed` + `VisualizerScratchBuffers` extraction
 
@@ -485,7 +512,7 @@ Each phase is individually reviewable and individually testable. Each phase ends
   - **Header comment block** enumerating the storage allow-list (Atomic / Mutex / immutable primitive / Unsafe[Mutable]Pointer with documented lifetime / RenderThreadSafe-conforming) and the forbidden list (`@MainActor`-isolated, actor-isolated, non-Sendable reference, capturing closure, `var` of primitive). Cites ADR-3 + ADR-3a + the contract test.
   - `final class VideoTapContext: @unchecked Sendable`
   - Atomic state: `coefficientSetPointer: Atomic<UnsafePointer<BiquadCoefficientSet>?>` (ADR-4 — pointer can be nil during pass-through), `balance: Atomic<UInt32>` (Float bit-pattern, default 0.5), `isActive: Atomic<Bool>`, `processingFormatTag: Atomic<UInt32>` (encoded ASBD-validity bit-mask), `processCallCount: Atomic<UInt64>` (telemetry), `frameCount: Atomic<UInt64>` (telemetry).
-  - Methods: `init`, `deinit` (deallocate coefficient blocks), `installCoefficientSet(_ new: BiquadCoefficientSet)` (called from main thread), `currentCoefficients() -> UnsafePointer<BiquadCoefficientSet>?` (called from render thread).
+  - Methods: `init`, `deinit` (deallocate coefficient blocks). **Per ADR-4 amendment:** the originally-planned `installCoefficientSet` and `currentCoefficients()` were withdrawn before Phase 2 close; Phase 3 designs the race-safe install path under P-4.
   - DEBUG-only factory: `static func _makeForContractTest() -> VideoTapContext` — builds a Context with placeholder dependencies (no AVPlayer required) for `VideoTapSendableContractTests`. Marked `#if DEBUG`.
 - New: `MacAmpApp/Audio/VideoDSP/VideoTap.swift`
   - `enum VideoTapError: Error` (createFailed, formatUnsupported, etc.)
@@ -608,20 +635,25 @@ Each phase is individually reviewable and individually testable. Each phase ends
 
 **Goal.** Wire EQ fanout from `EqualizerController` and balance fanout from `AudioPlayer` (ADR-5 — two canonical owners, parallel fanout). Both feed the new tap-side `VideoTapContext` in addition to their existing engine consumers.
 
+> **Phase 5 amendment (per ADR-7 amendment, 2026-05-02):** The original Phase 5 below referenced `AudioPlayer.attachVideoTap`/`detachVideoTap` facades + `VideoTapContext.installCoefficientSet` API that no longer exist. The actual wiring for Phase 5:
+> - **EQ fanout register/unregister:** Phase 5 still adds `EqualizerController.registerVideoTapContext(_:sampleRate:)` / `unregisterVideoTapContext(_:)`. The Context is registered from inside `AudioPlayer.startVideoLoad`'s `audioMixBuilder` closure (right after `VideoTapContext()` construction, before `VideoTap.buildAudioMix`); unregistered from `pauseAndDetachVideoTapIfNeeded` and `invalidateInFlightVideoLoad`.
+> - **Coefficient install:** the install API itself is Phase 3's job (per `placeholder.md` P-4 — original ADR-4 A/B-swap was withdrawn; Phase 3 must redesign). Until that lands, register/unregister manage Context membership in the registry, but no coefficient writes happen on the Context. Phase 5 simply pushes `isEqOn` and `preampLinearGain` atomics on each fanout (Context fields exist; install of biquad coefs is gated on Phase 3 redesign).
+> - **Balance fanout:** unchanged from below (`balance.didSet` iterates the AudioPlayer-side registry).
+
 **Files.**
 - Modify: `MacAmpApp/Audio/EqualizerController.swift`
   - Add private nested type: `struct EqualizerState: Sendable, Equatable { let isEqOn: Bool; let preampLinearGain: Float; let bandGainsDB: (Float, Float, Float, Float, Float, Float, Float, Float, Float, Float) }`
   - Add private nested type: `final class WeakBox<T: AnyObject> { weak var value: T?; init(_ v: T) { self.value = v } }`
   - Add: `private var registeredVideoTapContexts: [WeakBox<VideoTapContext>] = []` (weak refs; Context lifecycle owned by `AudioPlayer`).
-  - Add: `func registerVideoTapContext(_ context: VideoTapContext, sampleRate: Double)` — appends weak ref; computes `BiquadCoefficientSet` at the given sample rate; pushes via `context.installCoefficientSet(_:)`; pushes `isEqOn` and `preampLinearGain` atomics.
+  - Add: `func registerVideoTapContext(_ context: VideoTapContext, sampleRate: Double)` — appends weak ref; pushes `isEqOn` and `preampLinearGain` atomics. (Coefficient compute + install gated on Phase 3 P-4 redesign — see Phase 5 amendment above.)
   - Add: `func unregisterVideoTapContext(_ context: VideoTapContext)` — removes ref by identity.
-  - Add: `func handleSampleRateChange(_ context: VideoTapContext, newSampleRate: Double)` — recomputes coefficient set for the new rate and pushes via `installCoefficientSet`. Called from main-thread polling (see sample-rate handling below).
+  - Add: `func handleSampleRateChange(_ context: VideoTapContext, newSampleRate: Double)` — when Phase 3 install is in place, recomputes coefficient set for the new rate. Until then, just updates the Context's last-seen sample rate.
   - Modify: existing EQ slider / preset / preamp change handlers — after writing to engine `AVAudioUnitEQ`, iterate `registeredVideoTapContexts` (skipping nil refs), call appropriate atomic-write helpers per context. The EQ-state struct is captured into a local before the loop to avoid re-reading state per iteration.
 - Modify: `MacAmpApp/Audio/AudioPlayer.swift`
   - Add: `private var registeredVideoTapContexts: [WeakBox<VideoTapContext>] = []` (separate registry for balance fanout).
   - Modify: `var balance: Float { didSet { ... } }` (existing) — after writing to engine balance, iterate `registeredVideoTapContexts` and write Float bit-pattern to each Context's `balance` atomic.
-  - Add: `func attachVideoTap(to playerItem: AVPlayerItem, sampleRate: Double) throws -> VideoTapContext` — builds Context, calls `VideoTap.attach(...)` (ADR-7, ADR-10), registers Context with both `equalizerController.registerVideoTapContext(context, sampleRate: sampleRate)` and `self.registeredVideoTapContexts`, returns the Context (for caller to retain through item lifetime).
-  - Add: `func detachVideoTap(_ context: VideoTapContext, from playerItem: AVPlayerItem)` — unregisters from both registries, calls `VideoTap.detach(from: playerItem)`.
+  - Modify: `startVideoLoad` (Phase 2 orchestrator) — register the new Context with both `equalizerController.registerVideoTapContext(context, sampleRate: <pending>)` and `self.registeredVideoTapContexts` from inside the `audioMixBuilder` closure (right after `VideoTapContext()` construction). Sample rate at this point is unknown (asset loaded but `tapPrepare` hasn't fired); register at zero and let `handleSampleRateChange` update on first `tapPrepare`.
+  - Modify: `pauseAndDetachVideoTapIfNeeded` + `invalidateInFlightVideoLoad` (Phase 2 helpers) — unregister Context from both registries before the Context goes out of scope.
 - **Sample-rate handling.** Decision: **polled atomic** (no `Notification`). `tapPrepare` writes the new sample rate to `VideoTapContext.pendingSampleRate: Atomic<UInt64>` (Double bit-pattern stored as UInt64). `VisualizerPipeline`'s existing 30 Hz main-thread `Timer` (which already polls visualizer state) gets a small added check: for each registered Context, if `pendingSampleRate` differs from the last seen value, call `equalizerController.handleSampleRateChange(...)`. Justification: avoids a new actor hop on a high-frequency event; piggybacks on existing main-thread polling.
 
 **Verification.**
@@ -819,7 +851,8 @@ If a kill switch fires:
 | **Contract (ADR-3a Gate 3b)** | `VideoTapSendableContractTests.allStoredVarsAreAtomicOrMutex` — DEBUG-only source-level regex guard reading `VideoTapContext.swift`; fails CI when any stored `var` declaration is not `Atomic<...>` or `Mutex<...>`. Catches mutability drift Mirror cannot see. | 2 |
 | Unit (BiquadCascade) | RBJ formula correctness; per-band coefficient values match published RBJ table at 1 kHz, +6 dB, BW=1.0; reset() zeros filter state | 3 |
 | Unit (BiquadCoefficientSet) | Sample-rate change recomputes; preset values map to expected coefficient signatures | 3 |
-| Unit (VideoTapContext) | Atomic-pointer swap is observed by render-thread mock; `installCoefficientSet` doesn't allocate | 2 |
+| Unit (VideoTapContext) | Phase 2: alloc/dealloc lifecycle balanced under `_makeForContractTest()` factory. Phase 3: install scheme (per `placeholder.md` P-4) atomic-pointer swap is observed by render-thread mock; install is allocation-free. | 2 (lifecycle); 3 (install when redesigned) |
+| Lifecycle (VideoTap × VideoPlaybackController) | `VideoTapLifecycleTests`: single-attach Context release after AVPlayer drop; rapid double-build both Contexts released; detach during AVPlayer lifetime releases Context; `loadVideo` bails when `isStillRelevant` returns false (no AVPlayer constructed); `loadVideo` constructs AVPlayer when `isStillRelevant` returns true. | 2 |
 | Integration (numerical match) | Log sweep through both `AVAudioUnitEQ` and `BiquadCascade`, ≤0.5 dB across 5 presets; EQ-toggle bypass parity; preamp parity; balance parity | 3 |
 | Integration (lifecycle) | 10 rapid track skips no leak; create-fail releases Context; pause/resume preserves state; seek resets filter state | 7 |
 | Integration (DSP application) | `tapProcess` modifies buffer; AVPlayer plays modified buffer (auditory + spectrum capture via `_testTapOutputCapture` seam) | 2-5 |

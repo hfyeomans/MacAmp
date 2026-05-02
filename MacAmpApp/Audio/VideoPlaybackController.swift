@@ -73,36 +73,83 @@ final class VideoPlaybackController {
 
     // MARK: - Video Loading
 
-    /// Load and prepare a video file for playback
-    /// - Parameters:
-    ///   - url: URL of the video file
-    ///   - autoPlay: Whether to start playback immediately (default: true)
-    func loadVideo(url: URL, autoPlay: Bool = true) {
-        // Clean up any existing video player
+    /// Load and prepare a video file for playback.
+    ///
+    /// `audioMixBuilder`, when supplied, is invoked AFTER the asset is
+    /// constructed but BEFORE the `AVPlayerItem` is. This is the only
+    /// way to satisfy ADR-7's "`audioMix` is set once before `play()`"
+    /// invariant — assigning `audioMix` to an already-constructed
+    /// `AVPlayerItem` (or while the surrounding `AVPlayer` is playing)
+    /// counts as mid-playback mutation. Builder returns the configured
+    /// mix or nil (for example: no audio track in the asset, or the
+    /// caller has gone stale and wants to no-op the mix only).
+    ///
+    /// `isStillRelevant`, when supplied, is rechecked AFTER the
+    /// builder returns and BEFORE any AVPlayerItem / AVPlayer /
+    /// observer mutation. A `false` result aborts the load entirely —
+    /// no player is constructed, no observers are installed, no state
+    /// fields on this controller are mutated. Used by the caller's
+    /// generation counter to short-circuit a load that has been
+    /// superseded while its asset was loading. Distinguishing "stale"
+    /// from "no mix" requires a separate signal; `nil` from the
+    /// builder is reserved for the "build a player without a tap" path
+    /// (no audio track or builder declined for a non-stale reason).
+    func loadVideo(
+        url: URL,
+        autoPlay: Bool = true,
+        audioMixBuilder: ((AVURLAsset) async -> AVMutableAudioMix?)? = nil,
+        isStillRelevant: (() -> Bool)? = nil
+    ) async {
+        // Clean up any existing video player (pauses the outgoing
+        // player; safe ordering for any audioMix that needs to be
+        // released before the next item adopts it).
         cleanup()
 
-        // Create video player
-        let newPlayer = AVPlayer(url: url)
+        let asset = AVURLAsset(url: url)
+
+        let audioMix: AVMutableAudioMix?
+        if let audioMixBuilder {
+            audioMix = await audioMixBuilder(asset)
+        } else {
+            audioMix = nil
+        }
+
+        // Stale-check after the audioMix builder's await but BEFORE any
+        // observer/player mutation. Any audioMix that was built ends up
+        // dropped here — the +1 retain inside `MTAudioProcessingTapCreate`
+        // is balanced by the AVMutableAudioMix's deinit chain dropping
+        // the tap, which fires `tapFinalize` and releases the Context.
+        if let isStillRelevant, !isStillRelevant() {
+            AppLog.debug(.audio, "VideoPlaybackController: load aborted (stale)")
+            return
+        }
+
+        let playerItem = AVPlayerItem(asset: asset)
+        if let audioMix {
+            playerItem.audioMix = audioMix  // ADR-7: set ONCE, before AVPlayer exists.
+        }
+
+        let newPlayer = AVPlayer(playerItem: playerItem)
         player = newPlayer
         player?.volume = volume
 
-        // Observe video completion
-        if let playerItem = player?.currentItem {
-            endObserver = NotificationCenter.default.addObserver(
-                forName: .AVPlayerItemDidPlayToEndTime,
-                object: playerItem,
-                queue: .main
-            ) { [weak self] _ in
-                Task { @MainActor in
-                    self?.handlePlaybackEnded()
-                }
+        endObserver = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemDidPlayToEndTime,
+            object: playerItem,
+            queue: .main
+        ) { [weak self, weak playerItem] _ in
+            Task { @MainActor in
+                guard let self, let playerItem else { return }
+                // Identity guard: if a superseding loadVideo has
+                // replaced the active item, ignore this (stale)
+                // end-of-stream notification.
+                guard self.player?.currentItem === playerItem else { return }
+                self.handlePlaybackEnded()
             }
         }
 
-        // Setup time observer BEFORE play
         setupTimeObserver()
 
-        // Start video playback if autoPlay
         if autoPlay {
             player?.play()
             isPlaying = true
@@ -111,10 +158,9 @@ final class VideoPlaybackController {
 
         AppLog.debug(.audio, "VideoPlaybackController: Loading video file: \(url.lastPathComponent)")
 
-        // Extract and format video metadata for display (cancellable to prevent race conditions)
         metadataTask = Task { @MainActor in
             let metadata = await MetadataLoader.loadVideoMetadata(from: url)
-            guard !Task.isCancelled else { return }  // Prevent stale metadata from overwriting
+            guard !Task.isCancelled else { return }
             self.metadataString = metadata.displayString
         }
     }
@@ -157,18 +203,28 @@ final class VideoPlaybackController {
             return
         }
 
-        let shouldPlay = resume ?? isPlaying
+        // `resume: nil` means "maintain the user's current intent." We
+        // re-evaluate that intent inside the completion (against
+        // `self.isPlaying` / `self.isPaused`) so a pause issued during
+        // the seek is honoured AND loaded-but-idle stays loaded-idle
+        // (not converted to paused). `resume: true/false` is an
+        // explicit user choice and overrides the implicit state.
+        let explicitResume: Bool? = resume
 
         let timescale = player.currentItem?.duration.timescale ?? CMTimeScale(NSEC_PER_SEC)
         let targetTime = CMTime(seconds: max(0, time), preferredTimescale: timescale)
 
         // Use default tolerance (not .zero) to allow seeking to nearest keyframe
         // This is MUCH faster and avoids -12860 errors from trying to decode exact frames
-        player.seek(to: targetTime) { [weak self] finished in
+        player.seek(to: targetTime) { [weak self, weak player] finished in
             Task { @MainActor in
-                guard let self, finished else { return }
+                guard let self, let player, finished else { return }
+                // Identity guard: a superseding `loadVideo` may have
+                // replaced `self.player` while we were seeking. Ignore
+                // the stale completion to avoid mutating transport
+                // state for an old player.
+                guard self.player === player else { return }
 
-                // Update to actual seek position (may differ slightly from requested)
                 let actualTime = player.currentTime().seconds
                 self.currentTime = actualTime
 
@@ -177,14 +233,28 @@ final class VideoPlaybackController {
                     self.progress = dur > 0 ? actualTime / dur : 0
                 }
 
-                if shouldPlay {
-                    player.play()
-                    self.isPlaying = true
-                    self.isPaused = false
+                if let explicitResume {
+                    // Explicit user choice — apply unambiguously.
+                    if explicitResume {
+                        player.play()
+                        self.isPlaying = true
+                        self.isPaused = false
+                    } else {
+                        player.pause()
+                        self.isPlaying = false
+                        self.isPaused = true
+                    }
                 } else {
-                    player.pause()
-                    self.isPlaying = false
-                    self.isPaused = true
+                    // Implicit nil — preserve current intent. The
+                    // distinction between "paused" (user-initiated) and
+                    // "loaded-but-idle" (autoPlay=false, never started)
+                    // matters; touch only `isPlaying` and leave
+                    // `isPaused` as it was.
+                    if self.isPlaying {
+                        player.play()
+                    } else {
+                        player.pause()
+                    }
                 }
 
                 completion?(actualTime)
@@ -216,9 +286,13 @@ final class VideoPlaybackController {
         timeObserver = player.addPeriodicTimeObserver(
             forInterval: interval,
             queue: .main
-        ) { [weak self] time in
+        ) { [weak self, weak player] time in
             Task { @MainActor in
-                guard let self else { return }
+                guard let self, let player else { return }
+                // Identity guard: a superseding loadVideo may have
+                // replaced `self.player` while this periodic tick was
+                // queued. Ignore the stale callback.
+                guard self.player === player else { return }
                 let seconds = time.seconds
                 self.currentTime = seconds
 
@@ -227,8 +301,6 @@ final class VideoPlaybackController {
                     if dur.isFinite {
                         self.duration = dur
                         self.progress = dur > 0 ? seconds / dur : 0
-
-                        // Notify AudioPlayer to sync its UI-bound properties
                         self.onTimeUpdate?(seconds, dur, self.progress)
                     }
                 }
