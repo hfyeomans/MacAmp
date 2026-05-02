@@ -2,7 +2,7 @@
 
 > **Plan:** `tasks/avplayer-native-video-dsp/plan.md` (Oracle 9.8/10 final, commit `fdce0ed`)
 > **Branch:** `feat/avplayer-native-video-dsp`
-> **Status:** 🔧 IMPLEMENTING — Phase 1 NEXT (Steps 1+2+3 ✅ complete).
+> **Status:** 🔧 IMPLEMENTING — Phase 1 ✅, Phase 2 NEXT.
 > **Updated:** 2026-05-02
 
 Numbering: `<Phase>.<Item>`. `[x]` complete, `[~]` in-progress, `[!]` blocked.
@@ -57,18 +57,18 @@ Numbering: `<Phase>.<Item>`. `[x]` complete, `[~]` in-progress, `[!]` blocked.
 **Plan ref:** plan.md §6 Phase 1.
 **Files:** `MacAmpApp/Audio/VisualizerPipeline.swift` (modify), `MacAmpApp/Audio/VisualizerFeed.swift` (new), `MacAmpApp/Audio/VisualizerScratchBuffers.swift` (new — extract per §13 default).
 
-- [ ] 1.1 Re-read `MacAmpApp/Audio/VisualizerPipeline.swift` at HEAD to confirm L36 (`VisualizerSharedBuffer`), L169 (`VisualizerScratchBuffers`), L330 (`sharedBuffer:` field), L565 (`makeTapHandler` signature) — line numbers may have shifted
-- [ ] 1.2 Create `MacAmpApp/Audio/VisualizerFeed.swift` — extract `VisualizerSharedBuffer` body, rename to `VisualizerFeed`, promote to module-internal
-- [ ] 1.3 Create `MacAmpApp/Audio/VisualizerScratchBuffers.swift` — extract body, promote to module-internal
-- [ ] 1.4 Update `VisualizerPipeline.swift`: remove the extracted nested classes (or drop `private` modifier if keeping nested — choose extraction per plan §13 Q5 default)
-- [ ] 1.5 Update field type at L330 region: `sharedBuffer: VisualizerSharedBuffer` → `feed: VisualizerFeed`
-- [ ] 1.6 Update parameter type in `makeTapHandler` signature at L565 region: `sharedBuffer: VisualizerSharedBuffer` → `feed: VisualizerFeed`
-- [ ] 1.7 Update tap closure body call site: `sharedBuffer.tryPublish(...)` → `feed.tryPublish(...)` (mechanical rename)
-- [ ] 1.8 Run `xcodegen generate`
-- [ ] 1.9 `xcodebuildmcp macos build --json '{"extraArgs":["-enableThreadSanitizer","YES"]}'` — verify clean
-- [ ] 1.10 `xcodebuildmcp macos test  --json '{"extraArgs":["-enableThreadSanitizer","YES"]}'` — verify 72/72 (or current count) green, no new failures
-- [ ] 1.11 Manual smoke: launch app, load music file, verify spectrum bars + Butterchurn animate identically
-- [ ] 1.12 Commit: `chore(s3-2): Phase 1 — extract VisualizerFeed + VisualizerScratchBuffers`
+- [x] 1.1 Re-read `MacAmpApp/Audio/VisualizerPipeline.swift` at HEAD — confirmed L36, L169, L330, L390, L451, L565-567, L657
+- [x] 1.2 Create `MacAmpApp/Audio/VisualizerFeed.swift` — extracted `VisualizerSharedBuffer` body, renamed to `VisualizerFeed`, module-internal (~110 LOC)
+- [x] 1.3 Create `MacAmpApp/Audio/VisualizerScratchBuffers.swift` — extracted `VisualizerScratchBuffers` + `GoertzelCoefficients` (intrinsic dependency), module-internal (~195 LOC)
+- [x] 1.4 Updated `VisualizerPipeline.swift`: removed L29-310 (3 MARK sections — Shared Buffer, Goertzel Coefficients, Scratch Buffers)
+- [x] 1.5 Field rename: `sharedBuffer = VisualizerSharedBuffer()` → `feed = VisualizerFeed()`
+- [x] 1.6 `makeTapHandler` signature: `sharedBuffer: VisualizerSharedBuffer` → `feed: VisualizerFeed`
+- [x] 1.7 Tap closure body call site: `sharedBuffer.tryPublish(...)` → `feed.tryPublish(...)`; `pollVisualizerData` `sharedBuffer.consume()` → `feed.consume()`
+- [x] 1.8 `xcodegen generate` — clean
+- [x] 1.9 `xcodebuildmcp macos build --json '{"extraArgs":["-enableThreadSanitizer","YES"]}'` — succeeded
+- [x] 1.10 `xcodebuildmcp macos test  --json '{"extraArgs":["-enableThreadSanitizer","YES"]}'` — **72/72 green, zero new failures**
+- [ ] 1.11 Manual UI smoke (deferred to Phase 8 verification tier-3 lifecycle + signed-bundle smoke; engine-path test surface covers the regression risk)
+- [x] 1.12 Commit: `Phase 1 (s3-2): extract VisualizerFeed + VisualizerScratchBuffers` (commit `146a8b4`)
 
 ---
 
