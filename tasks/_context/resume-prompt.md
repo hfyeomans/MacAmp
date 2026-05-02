@@ -12,8 +12,8 @@
 > ⚠️ **S3-2 ARCHITECTURAL PIVOT — IMPLEMENTATION IN PROGRESS (2026-05-02).** `feat/video-audio-engine-routing` is **PAUSED-AS-REFERENCE** (preserved at `5af91eb`, pushed to origin). S3-2 re-attempted as **`avplayer-native-video-dsp`** on branch `feat/avplayer-native-video-dsp`. **Steps 1+2+3 ✅ + Phase 1 ✅ + Phase 2 ✅ done. Phase 3 implementation NEXT.** See `tasks/_context/s3-2-pivot.md` for the strategic decision log + step-by-step status — that file is authoritative.
 
 **Last update:** 2026-05-02 (Phase 2 — production tap scaffold + ADR-3a containment + Oracle-driven Option C revision — landed; 7 Oracle review rounds (final 9.0/10 APPROVED). Final architecture: `audioMix` configured during `AVPlayerItem` CONSTRUCTION via `VideoTap.buildAudioMix(audioTrack:context:)` + `VideoPlaybackController.loadVideo`'s `audioMixBuilder`/`isStillRelevant` parameters + `AudioPlayer.startVideoLoad(track:)` orchestrator. NOT `attachVideoTap`/`detachVideoTap` facades — those were withdrawn during revision. Pass-through DSP only (no biquad math). 85/85 TSan green. Four plan deviations documented in `placeholder.md` P-1/P-2/P-3/P-4 + task `state.md`. Phase 3 (`BiquadCascade` + balance + numerical match) NEXT, gated on P-4 race-safe coefficient hand-off redesign.)
-**Main HEAD:** `9cca40a` — `docs(_context): close out Phase 2; advance vaer to Phase 3-next` (this is the OLD vaer message; main hasn't advanced).
-**`feat/avplayer-native-video-dsp` HEAD:** latest on branch — run `git log -1 --oneline` to confirm. **31 commits ahead of main** (run `git rev-list --count main..HEAD`):
+**Main HEAD:** `9cca40a` (main has not advanced during S3-2 work).
+**`feat/avplayer-native-video-dsp` HEAD:** `7d3367c` — `Phase 2 revision (s3-2): Option C structural fix + Oracle 9.0/10 APPROVED`. Run `git log -1 --oneline` to confirm. **34 commits ahead of main** (run `git rev-list --count main..HEAD`):
 - 13 cherry-picked Phase-1 commits (engine config observer for stream-side resilience, range ending at `2aa2f18`)
 - 1 mechanical-pivot cleanup (`ffd77c1`)
 - 1 task-folder scaffold (`a3c9aba`)
@@ -23,7 +23,9 @@
 - 1 Phase 1 implementation (`146a8b4`)
 - 1 Phase 1 todo update (`3c4f40c`)
 - 1 resume-prompt rewrite for Phase 2 pickup (`445a051`)
-- Plus subsequent self-updates (this verification fix + future) — `git log` is authoritative
+- 1 resume-prompt commit-count fix (`7a06a32`)
+- 1 Phase 2 initial scaffold (`ac7e0d5`)
+- 1 Phase 2 revision (`7d3367c`) — Option C + 7 Oracle review rounds → 9.0/10 APPROVED
 **`spike/avplayer-inplace-tap-dsp` HEAD (throwaway, retained locally):** `dd53d64` — Phase 0 spike. Kill-switch resolved: in-place tap DSP works on macOS 15+ with Swift 6.2 toolchain.
 **`feat/video-audio-engine-routing` HEAD (paused-as-reference):** `5af91eb`. 44 commits ahead of main, pushed to origin.
 **Tests:** 85/85 with TSan ON (72 baseline + 2 `VideoTapSendableContractTests` + 6 `VideoTapLifecycleTests` + 5 `VideoSeekStateMatrixTests`). Target by S3-2 close: 110+/110+ (Phase 3 BiquadNumericalMatch ~4 tests, Phase 7 additional lifecycle ~6 tests).
@@ -96,8 +98,9 @@ S3-1A mwvi  ✅ MERGED (PR #80, merge commit 7f3d76f, 2026-04-28)
      │       │
      │       ▼
      │    S3-2 avplayer-native-video-dsp         ←── PR #C   🔧 IMPLEMENTING
-     │       │                                                  Step 1+2+3 ✅; Phase 1 ✅;
-     │       │                                                  Phase 2 NEXT (8 phases remain)
+     │       │                                                  Step 1+2+3 ✅; Phase 1 ✅; Phase 2 ✅
+     │       │                                                  Phase 3 NEXT (gated on P-4 hand-off
+     │       │                                                  redesign); 7 phases remain
      │       │
      │       ▼
      │    S3-3 hls                               ←── PR #D
@@ -186,11 +189,13 @@ You are picking up `avplayer-native-video-dsp` mid-implementation. Steps 1+2+3 �
 
 2. **Read these files in order** (they describe the architecture, the contract, and the work):
    - `tasks/_context/s3-2-pivot.md` — strategic decision log (3 steps + phase ownership)
-   - `tasks/avplayer-native-video-dsp/state.md` — current status + dual-architecture topology
+   - `tasks/avplayer-native-video-dsp/state.md` — current status + dual-architecture topology + Phase 2 implementation findings (the 4 deviations forced by Swift 6 / Oracle review)
+   - `tasks/avplayer-native-video-dsp/phase2-walkthrough.md` — Phase 2 closure summary (code paths overview, new files, EQ rationale, test count, architecture extraction status, why Oracle scored 9.0 not 10.0). **Read this first if you skipped the Phase 2 conversation.**
+   - `tasks/avplayer-native-video-dsp/placeholder.md` — P-1/P-2/P-3/P-4. **P-4 is the GATING prerequisite for Phase 3.**
    - `tasks/avplayer-native-video-dsp/research.md` — full Step 2 synthesis (Oracle 10/10), Evidence Ledger, Architecture diagram, Reuse policy, Tap Lifecycle Contract, Concurrency Decision Record, Tooling Constraints
    - `tasks/avplayer-native-video-dsp/research-notes/spike-findings.md` — Phase 0 empirical confirmation + 6-item production-translation hazards checklist
-   - `tasks/avplayer-native-video-dsp/plan.md` — full 9-phase plan (Oracle 9.8/10), 11+1 ADRs, especially **ADR-3 + ADR-3a** (concurrency contract + `@unchecked Sendable` containment), ADR-4 (atomic-pointer double-buffer), ADR-7 (tap lifecycle), ADR-10 (release-on-fail), ADR-11 (ASBD format guard)
-   - `tasks/avplayer-native-video-dsp/todo.md` — Phase 2 work-item checklist (items 2.1 through 2.41, split into sub-phases 2a Marker Protocol → 2b Context → 2c VideoTap → 2d AudioPlayer facade → 2e Contract Test → 2f Verification)
+   - `tasks/avplayer-native-video-dsp/plan.md` — full 9-phase plan, 11+1 ADRs, especially **ADR-3 + ADR-3a** (concurrency contract + `@unchecked Sendable` containment), **ADR-4 + amendment** (original A/B-swap withdrawn; Phase 3 picks the redesign per P-4), **ADR-7 + amendment** (audioMix-on-construction pattern via `buildAudioMix` + `loadVideo`'s `audioMixBuilder` + `startVideoLoad` orchestrator), ADR-10 (release-on-fail), ADR-11 (ASBD format guard)
+   - `tasks/avplayer-native-video-dsp/todo.md` — Phase 3 work-item checklist (items 3.1 through 3.18). Phase 2 items (2.1-2.41) are all `[x]` or annotated as withdrawn per the revision.
    - `tasks/avplayer-native-video-dsp/research-notes/saved-branch-retrospective.md` — ALLOWLIST/DENYLIST scoping for what to study from the saved engine-routing branch (file:line citations)
 
 3. **Re-read at HEAD** the files Phase 3 will touch (line numbers may have shifted from plan.md authoring):
@@ -201,11 +206,10 @@ You are picking up `avplayer-native-video-dsp` mid-implementation. Steps 1+2+3 �
    - `MacAmpApp/Audio/EqualizerController.swift` — Phase 3 adds private nested `struct EqualizerState: Sendable, Equatable` (consumed by `BiquadCoefficientSet.compute(for:sampleRate:)`); Phase 5 adds the registry + fanout
    - `MacAmpApp/Audio/AudioPlayer.swift` — note the Phase 2 `startVideoLoad(track:)` orchestration pattern (with generation counter + isStillRelevant short-circuit); Phase 5 wires the registry registration into the `audioMixBuilder` closure inside `startVideoLoad` and into `pauseAndDetachVideoTapIfNeeded`/`invalidateInFlightVideoLoad`
 
-4. **Spike code reference** (kept locally, throwaway branch):
+4. **Spike code reference** (kept locally, throwaway branch — Phase 2 production tap is the spike's pattern HARDENED; do not regress to the spike's shortcuts):
    ```bash
    git show spike/avplayer-inplace-tap-dsp:spikes/avplayer-inplace-tap-dsp/Sources/InPlaceTapSpike/main.swift
    ```
-   Phase 2 production tap is the spike's pattern HARDENED per ADR-10 + ADR-11 + ADR-3a. The spike's specific shortcuts (per `spike-findings.md` Production-Translation Hazards section) MUST NOT carry forward.
 
 5. **Saved-branch reference** (paused-as-reference, NOT for cherry-picking):
    ```bash
@@ -241,15 +245,18 @@ You are picking up `avplayer-native-video-dsp` mid-implementation. Steps 1+2+3 �
 
 ### Critical reminders
 
-- **Engine path must remain byte-for-byte identical.** Phase 1 verified this for the visualizer extraction. Phase 2 introduces a NEW path (video tap) — do not modify the engine path.
-- **No `swift-atomics` `ManagedAtomic`.** Use `Synchronization.Atomic<T>` (Swift 6.0 stdlib, macOS 15+) per ADR-3 + saved-branch retrospective modernization gap.
-- **No `nonisolated(unsafe)` on Context fields.** ADR-3 settled this — `Atomic<T>` is `Sendable`, the class envelope's `@unchecked Sendable` is sufficient at the FFI boundary.
-- **Float not `AtomicRepresentable`.** Use `Atomic<UInt32>` storing `Float.bitPattern` (verified pattern in spike code).
-- **One tap per `AVPlayerItem`.** Per ADR-7. `audioMix` set ONCE before `play()`, never mutated during playback.
-- **`MTAudioProcessingTapCallbacks.init` parameter:** label is `init:` (no backticks). Compiler warns if escaped (verified in spike).
+- **Engine path must remain byte-for-byte identical.** Phase 1 verified this for the visualizer extraction. Phase 2 introduced the video tap path. Phase 3+ adds DSP to the existing video tap scaffold — do not modify the engine path.
+- **P-4 is the GATING prerequisite for Phase 3.** Original ADR-4 atomic-pointer A/B swap was withdrawn (race-unsafe). Choose triple-buffer + atomic in-use counter, RCU/epoch reclamation, or `Mutex<BiquadCoefficientSet>` with `withLockIfAvailable`. Update plan.md ADR-4 + re-run Oracle review BEFORE writing the install path or `BiquadCascade`.
+- **`audioMix` is configured during AVPlayerItem CONSTRUCTION** (per ADR-7 amendment). Never assign `audioMix` to an existing `AVPlayerItem` in production code paths — the construction-time pattern is what makes ADR-7 hold by construction. See `VideoPlaybackController.loadVideo` (audioMixBuilder + isStillRelevant parameters) + `AudioPlayer.startVideoLoad` (generation counter + in-flight Task handle) for the canonical pattern.
+- **No `swift-atomics` `ManagedAtomic`.** Use `Synchronization.Atomic<T>` (Swift 6.0 stdlib, macOS 15+) per ADR-3.
+- **`@unchecked Sendable` on Context is fine; per-field `nonisolated(unsafe)` is not needed.** `Atomic<T>` is itself `Sendable`. Header contract block on `VideoTapContext.swift` enumerates allowed/forbidden field shapes (Gate 1). Adding any new field requires extending the contract + adding a `RenderThreadSafe` conformance in `RenderThreadSafe.swift` (single-file audit surface).
+- **Float not `AtomicRepresentable`.** Use `Atomic<UInt32>` storing `Float.bitPattern` (verified pattern in spike + Phase 2 Context).
+- **One tap per `AVPlayerItem`.** Per ADR-7. AVPlayerItem replacement → new tap; never reuse.
+- **`MTAudioProcessingTapCallbacks.init` parameter:** label is `init:` (no backticks). Compiler warns if escaped.
 - **`MTAudioProcessingTapCreate` last parameter:** Swift bridges as `MTAudioProcessingTap?` (NOT `Unmanaged<MTAudioProcessingTap>?`).
 - **TSan after every phase boundary.** Per project convention.
-- **No `// TODO` in production code.** Anything stubbed goes in `tasks/avplayer-native-video-dsp/placeholder.md`.
+- **No `// TODO` in production code.** Anything stubbed goes in `placeholder.md` (P-1/P-2/P-3/P-4 currently).
+- **Manual smoke + Allocations Instruments** (todo 2.39 + 2.40) deferred from Phase 2 — see phase2-walkthrough.md "Manual testing — when?" section. Run before starting Phase 3 (recommended) or defer to Phase 8 verification matrix.
 
 ### After Phase 3
 
