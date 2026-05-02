@@ -56,7 +56,7 @@ This task is **architectural pivot + new module**, not pure decomposition. Gate 
 - [x] **3. Principles contract approved:**
   - **P1 Problem-First:** four concrete, user-visible failure modes on the saved branch. Architecture pivot is problem-driven, not cleanup-driven.
   - **P2 Cohesion > Line Count:** in-place tap DSP keeps EQ + balance + visualizer-feed-write all in one render-thread function. No fragmentation across actors / queues.
-  - **P3 State Ownership Sacred:** `EqualizerController` remains the single owner of user EQ + balance state. Tap Context is a *consumer* of that state via atomic-pointer hand-off (ADR-4) — not a parallel writer. Render-thread mutations are confined to the buffer pointer alone.
+  - **P3 State Ownership Sacred:** `EqualizerController` remains the single owner of user EQ state (`isEqOn`, `preampLinearGain`, 10 `bandGainsDB`); `AudioPlayer` remains the single owner of `balance`. Tap Context is a *consumer* of both via atomic-pointer hand-off (ADR-4 for EQ coefficients) and atomic Float bit-pattern (for balance) — not a parallel writer. Render-thread mutations are confined to the buffer pointer alone. Two existing single-sources-of-truth, parallel fanout pattern (ADR-5) — not a centralization.
   - **P4 Rule of Three (AHA):** EQ math lives twice (engine `AVAudioUnitEQ` + tap-side `BiquadCascade`). Accepted at first occurrence per the safety-invariant exception — the two implementations have different threading domains, different parameter-update mechanisms, different lifetimes. Sharing would require flag-driven divergence (rejected per AHA).
   - **P5 API Surface Minimization:** two private nested types in `VisualizerPipeline.swift` are promoted to module-internal (`VisualizerSharedBuffer` → `VisualizerFeed`, `VisualizerScratchBuffers`). Justified because dual-producer (engine + video tap) is a real new capability. No `internal → public` widening anywhere.
   - **P6 No Pass-Through Middlemen:** the new tap render function is a real worker (DSP execution, not forwarding). The `setVideoTapEnabled` facade on `AudioPlayer` (if introduced) follows the existing `setStreamSilenced` / `setVolume` pattern (also a facade, not a middleman).
@@ -263,9 +263,12 @@ These are small types declared as part of larger files; called out here so the i
 
 | Concern | Owner | Layer |
 |---|---|---|
-| User EQ + balance state | `EqualizerController` | Bridge |
+| User EQ state (`isEqOn`, `preampLinearGain`, 10 `bandGainsDB`) | `EqualizerController` | Bridge |
+| User balance state (`balance: Float`) | `AudioPlayer` (`balance` at `AudioPlayer.swift:86`, existing) | Bridge |
 | EQ → engine `AVAudioUnitEQ` parameter writes | `EqualizerController` | Bridge |
 | EQ → tap `BiquadCoefficientSet` computation + atomic-pointer swap | `EqualizerController` (computes) → `VideoTapContext` (holds) | Bridge → Mechanism |
+| Balance → engine balance node parameter | `AudioPlayer.balance.didSet` (existing) | Bridge |
+| Balance → tap `VideoTapContext.balance: Atomic<UInt32>` (Float bit-pattern) | `AudioPlayer.balance.didSet` fanout (Phase 5 addition) | Bridge → Mechanism |
 | Tap C-callbacks | `VideoTap.swift` (file-scope `private let` closures) | Mechanism |
 | Tap Context lifetime (`Unmanaged` retain/release) | `VideoTap.attach(to:)` (retain) + `tapFinalize` (release) | Mechanism |
 | Render-thread DSP execution | `BiquadCascade.process` + balance gain step + `videoTapVisualizerRender` | Mechanism |
@@ -547,7 +550,7 @@ Each phase is individually reviewable and individually testable. Each phase ends
 **Goal.** Ensure all video-window UI surfaces (EQ button, balance slider, visualizer mode toggle) are wired and behave end-to-end. Final smoke test on the unsigned debug build.
 
 **Files.**
-- Audit: `MacAmpApp/Views/Windows/WinampVideoWindowController.swift`, `MacAmpApp/Views/WinampVideoWindow.swift` — confirm EQ + balance + visualizer-mode UI surfaces exist for the video window context. Add menu items / wiring as needed (likely minimal; the existing video window already shares EQ + balance UI with the audio window via `AppSettings` / `EqualizerController`).
+- Audit: `MacAmpApp/Windows/WinampVideoWindowController.swift`, `MacAmpApp/Views/WinampVideoWindow.swift` (and the chrome view at `MacAmpApp/Views/Windows/VideoWindowChromeView.swift`) — confirm EQ + balance + visualizer-mode UI surfaces exist for the video window context. Add menu items / wiring as needed (likely minimal; the existing video window already shares EQ + balance UI with the audio window via `AppSettings` / `EqualizerController` / `AudioPlayer`).
 - Documentation: update `docs/VIDEO_WINDOW.md` with the new in-place tap DSP architecture (architecture section); update `docs/MACAMP_ARCHITECTURE_GUIDE.md` if the tap path adds cross-cutting concerns worth noting.
 
 **Verification.**
