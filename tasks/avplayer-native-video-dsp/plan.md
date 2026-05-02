@@ -886,9 +886,11 @@ These items are documented for resolution during the named phase. They are **not
 |---|---|---|---|---|
 | 2026-05-01 | 1 | 8.3/10 | 2 BLOCKER (EQ-state contract incomplete; balance ownership ambiguity), 6 ACTIONABLE (ADR decisiveness, `flagsOut` semantics, file-path error, §3 cross-refs, phase-table drift, undefined helper types), 2 NIT (R7 ABA wording, `project.yml` note) | Applied all in commit `dcb00d0` |
 | 2026-05-01 | 2 | 8.9/10 | 1 BLOCKER partial (ownership still in §3 P3 + §5.5), 1 ACTIONABLE partial (stale path in Phase 9) | Applied both in commit `a92d692` |
-| 2026-05-01 | 3 | **10/10** | None — "ready for implementation" | — |
+| 2026-05-01 | 3 | **10/10** | None — initial "ready for implementation" | — |
+| 2026-05-02 | 4 | 9.2/10 | User asked for hardened containment of `@unchecked Sendable` instead of trusting the contract. Added ADR-3a (three gates: header contract, `RenderThreadSafe` marker protocol, DEBUG Mirror test). Round 4 review found 1 BLOCKER (Mirror cannot distinguish `let` vs `var`; "var of primitive" forbidden case unenforced), 2 ACTIONABLE (retroactive conformance bypass; Mirror shallow + DEBUG-only), 1 NIT (research vs plan `@unchecked Sendable` tension) | Applied all in commit `ba5a64e` (Gate 3 split into 3a Mirror + 3b source-level regex; Gate 2 conformance-centralization rule; primitive blanket conformances removed; Phase 9 doc spec distinguishes implicit shortcut vs explicit-gated exception) |
+| 2026-05-02 | 5 | **9.8/10** | None — "ready for implementation" | — |
 
-> **Status:** APPROVED — awaiting user sign-off before todo.md derivation.
+> **Status:** APPROVED — awaiting user sign-off before todo.md derivation. Score dropped from 10/10 (round 3) to 9.8/10 (round 5) because the ADR-3a addition is materially more complex than the original concise ADR-3; the drop reflects added scope, not defects.
 
 ---
 
