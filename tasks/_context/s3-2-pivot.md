@@ -1,7 +1,7 @@
 # S3-2 Architectural Pivot Tracker
 
-> **Date:** 2026-05-01
-> **Status:** Step 1 ✅ DONE. Step 2 ⏭ NEXT.
+> **Date:** 2026-05-01 (created), 2026-05-02 (last update)
+> **Status:** Step 1 ✅, Step 2 ✅ (Oracle 10/10), Step 3 ✅ (Oracle 9.8/10). **Implementation (9 phases) NEXT.**
 > **Purpose:** Track the architectural pivot of S3-2 from engine-routing to AVPlayer-native DSP. Authoritative source for current S3-2 status — the existing `state.md` / `tasks_index.md` / `resume-prompt.md` files reflect the PRE-pivot state of the engine-routing branch (preserved for historical accuracy of that branch's work) and cross-reference this file for current status.
 
 ---
@@ -56,30 +56,32 @@ The saved branch is the canonical record of the engine-routing approach's most-d
 | Cross-reference from `_context/state.md`, `tasks_index.md`, `resume-prompt.md` | ✅ | All three updated |
 | Mark old branch + old task PAUSED | ✅ | `5af91eb` on saved branch |
 
-### Step 2 — Research phase ⏭ NEXT
+### Step 2 — Research phase ✅ DONE (2026-05-01)
 
-Goal: validate the architecture's load-bearing assumptions before writing `plan.md`. See `tasks/avplayer-native-video-dsp/research.md` for the full question list. Summary:
+Oracle 10/10 final after 5 rounds (7.8 → 8.9 → 9.1 → 9.5 → 10). Commits `4a80bf9` → `46bb6af`. See `tasks/avplayer-native-video-dsp/research.md` for the full synthesis + Evidence Ledger. Summary:
 
-| Activity | Status | Kill switch |
-|----------|--------|-------------|
-| Phase 0 spike — `MTAudioProcessingTap` in-place buffer modification feasibility | ⏭ | If in-place modification doesn't work, abandon architecture and replan from there |
-| Apple docs review — TN2249, `AVMutableAudioMix`, AU reference, WWDC archive | ⏭ | — |
-| Reference-branch retrospective — read `feat/video-audio-engine-routing` end-to-end | ⏭ | — |
-| `AVAudioUnitEQ` numerical-match research | ⏭ | — |
-| Render-thread CPU budget measurement (Apple Silicon + Intel) | ⏭ | If budget exceeded on Intel build target, scale down DSP complexity |
-| Channel-count / sample-rate handling | ⏭ | — |
-| `VisualizerFeed` extraction approach | ⏭ | — |
-| Findings written to `research.md`; Oracle research-pass review | ⏭ | — |
+| Activity | Status | Kill switch outcome |
+|----------|--------|---------------------|
+| Phase 0 spike — `MTAudioProcessingTap` in-place buffer modification feasibility | ✅ | ✅ EMPIRICALLY CONFIRMED — audible -20 dB attenuation A/B vs control on macOS 15+ Swift 6.2; programmatic write-verify (pre × gain == post). Architecture green. |
+| Apple docs review — TN2249, `AVMutableAudioMix`, AU reference, WWDC archive | ✅ | SDK header documents in-place modification verbatim. `_PreEffects` flag selected. |
+| Reference-branch retrospective — read `feat/video-audio-engine-routing` end-to-end | ✅ | 5-item ALLOWLIST + 11-item DENYLIST with file:line citations. 1 modernization gap (`ManagedAtomic` → `Synchronization.Atomic`). |
+| `AVAudioUnitEQ` numerical-match research | ✅ | HIGH confidence — Apple uses RBJ cookbook (Butterworth/octave-BW per `AudioUnitParameters.h`). Tolerance ≤0.5 dB / hard reject ≤1 dB. |
+| Render-thread CPU budget measurement | Estimated, NOT validated | Empirical benchmark gate landed in plan.md Phase 8 (AS + Intel × 44.1/48 × stereo/5.1). |
+| Channel-count / sample-rate handling | ✅ | Audible path leaves layout untouched; visualizer-feed downmixes surround → mono. |
+| `VisualizerFeed` extraction approach | ✅ | Rename + visibility-promotion of `VisualizerSharedBuffer` + `VisualizerScratchBuffers`; ~100-150 LOC; engine-path byte-for-byte identical. |
+| Findings written to `research.md`; Oracle research-pass review | ✅ | 17-row Evidence Ledger; 11-gate verification matrix; Concurrency Decision Record; Tap Lifecycle Contract; Tooling Constraints. |
 
-### Step 3 — Plan phase ⏭ AFTER STEP 2
+### Step 3 — Plan phase ✅ DONE (2026-05-02)
+
+Oracle 9.8/10 final after 5 rounds (8.3 → 8.9 → 10 → 9.2 → 9.8). Commits `1ae8e80` → `fdce0ed`. The 0.2 below 10 reflects added scope from ADR-3a (Containment of `@unchecked Sendable` drift), added at user request 2026-05-02 with 3 durable gates (header contract / `RenderThreadSafe` marker / DEBUG Mirror+source tests).
 
 | Activity | Status |
 |----------|--------|
-| Write `plan.md` from research | ⏭ |
-| Iterate with Oracle until ≥9/10 APPROVED (project convention for S3) | ⏭ |
-| Get user sign-off | ⏭ |
-| Derive concrete `todo.md` phases from plan | ⏭ |
-| Begin implementation phases | ⏭ |
+| Write `plan.md` from research | ✅ |
+| Iterate with Oracle until ≥9/10 APPROVED | ✅ (final 9.8/10 — exceeds bar) |
+| Get user sign-off | ✅ 2026-05-02 |
+| Derive concrete `todo.md` phases from plan | ✅ 2026-05-02 |
+| Begin implementation phases (9 phases per plan §6) | ⏭ Phase 1 NEXT |
 
 ---
 

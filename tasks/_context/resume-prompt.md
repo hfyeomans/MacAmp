@@ -9,13 +9,14 @@
 
 ## Current State (update after each PR merge)
 
-> ⚠️ **S3-2 ARCHITECTURAL PIVOT (2026-05-01)** — `feat/video-audio-engine-routing` is **PAUSED-AS-REFERENCE** (preserved at `5af91eb`, pushed to origin). S3-2 is being re-attempted as **`avplayer-native-video-dsp`** on branch `feat/avplayer-native-video-dsp`. **See `tasks/_context/s3-2-pivot.md` for the strategic decision and three-step plan — that file is authoritative.** The "Last update" line and Active Work Queue below are kept brief during the pivot; rich detail is in the pivot tracker.
+> ⚠️ **S3-2 ARCHITECTURAL PIVOT (2026-05-01 → 2026-05-02 implementation start)** — `feat/video-audio-engine-routing` is **PAUSED-AS-REFERENCE** (preserved at `5af91eb`, pushed to origin). S3-2 re-attempted as **`avplayer-native-video-dsp`** on branch `feat/avplayer-native-video-dsp`. **Steps 1 + 2 + 3 ✅ complete; Phase 1 implementation NEXT.** See `tasks/_context/s3-2-pivot.md` for the strategic decision log + step-by-step status — that file is authoritative.
 
-**Last update:** 2026-05-01 (S3-2 pivoted — engine-routing approach paused-as-reference; new branch `feat/avplayer-native-video-dsp` cut from main with Phase 1 cherry-picked, scaffold only; Step 2 research NEXT).
+**Last update:** 2026-05-02 (Step 2 research closed at Oracle 10/10; Step 3 plan closed at Oracle 9.8/10 including ADR-3a `@unchecked Sendable` containment cycle; implementation Phase 1 NEXT — VisualizerFeed + VisualizerScratchBuffers extraction).
 **Main HEAD:** `9cca40a` — `docs(_context): close out Phase 2; advance vaer to Phase 3-next`.
-**feat/avplayer-native-video-dsp HEAD:** `ffd77c1` — `chore(audio): drop wasVideoBridge field on AVPlayer-native branch` (Step 1 mechanical pivot, post-cherry-pick cleanup; subsequent commit will land the task scaffold).
+**feat/avplayer-native-video-dsp HEAD:** `fdce0ed` — `plan(s3-2): finalize plan.md after ADR-3a — Oracle 9.8/10`. 9 commits ahead of main (1 cleanup + 1 scaffold + 5 research + 5 plan).
+**spike/avplayer-inplace-tap-dsp HEAD (throwaway):** `dd53d64` — Phase 0 spike, retained locally for implementation reference.
 **feat/video-audio-engine-routing HEAD (paused):** `5af91eb` — `docs(vaer): mark branch paused for S3-2 architectural pivot`. 44 commits ahead of main, pushed to origin.
-**Tests:** 72/72 passing on the new branch (TSan ON, Phase-1-only surface). 110/110 on the paused branch (TSan ON, full Phase 7 surface).
+**Tests:** 72/72 passing on the new branch (TSan ON, Phase-1-only surface). New tests land Phase 2+ (target: ≥110/110 by S3-2 close).
 **PRs merged total:** 80. No PR opened on either S3-2 branch.
 
 **Most recent docs commits on main:**
@@ -32,34 +33,30 @@
 
 ## Active Work Queue (ordered — start at the top)
 
-### 1. SCAFFOLDED — `tasks/avplayer-native-video-dsp/` (S3-2 PIVOT)
+### 1. IMPLEMENTING — `tasks/avplayer-native-video-dsp/` (S3-2 PIVOT)
 
-**Status:** Step 1 (mechanical pivot) ✅ DONE 2026-05-01. **Step 2 (research phase) is NEXT** — see `tasks/_context/s3-2-pivot.md` for the canonical three-step tracker.
+**Status:** Steps 1 + 2 + 3 ✅ complete. **Phase 1 implementation NEXT** — see `tasks/avplayer-native-video-dsp/todo.md` for the per-phase work breakdown.
 
 **Why pivoted:** The original S3-2 (`feat/video-audio-engine-routing`) reached Phase 7 testing and revealed structural issues with the engine-routing approach: `AVAudioEngineConfigurationChange` unreliable for AirPlay/AirPods routes (proven by missing log line), master-clock-coupled video stalls, dual-clock-domain drift, and tinning artifacts from a second SRC stage. The contrarian solve: don't drag video audio out of AVPlayer — apply DSP in-place inside the same `MTAudioProcessingTap` so AVPlayer's native pipeline plays the modified buffer. No ring, no engine clock for video, no master-clock coupling. Full strategic decision in `tasks/_context/s3-2-pivot.md`.
 
-**Step 1 deliverables (all ✅ done):**
-- Saved branch `feat/video-audio-engine-routing` pushed to origin (44 commits, last `5af91eb`)
-- New branch `feat/avplayer-native-video-dsp` cut from main (`9cca40a`)
-- Phase 1 cherry-picked (13 commits — engine config observer for stream-side resilience)
-- `wasVideoBridge` field cleanly removed from `PreReconfigureSnapshot` (commit `ffd77c1`)
-- 72/72 tests with TSan
-- Task folder `tasks/avplayer-native-video-dsp/` scaffolded with 6 canonical files (skeletons)
-- `tasks/_context/s3-2-pivot.md` created
-- Cross-refs in `_context/state.md`, `tasks_index.md`, this file
+**Step 1 — Mechanical pivot ✅ DONE (2026-05-01).** Branch + cherry-pick + scaffold. 72/72 tests with TSan.
 
-**Step 2 (research phase) NEXT — kill-switches:**
-- **Phase 0 spike** — `MTAudioProcessingTap` in-place buffer modification feasibility (throwaway branch, ~1–2 days). If AVPlayer doesn't actually play modified buffers, the architecture pivots and we replan.
-- Apple docs review — TN2249, `AVMutableAudioMix`, `MTAudioProcessingTap` SDK header, `AVAudioUnitEQ` reference
-- Reference-branch retrospective — read `feat/video-audio-engine-routing` end-to-end, catalog reusable patterns
-- `AVAudioUnitEQ` numerical-match research
-- Render-thread CPU budget measurement (Apple Silicon + Intel)
-- Channel-count / sample-rate handling investigation
-- `VisualizerFeed` extraction approach
+**Step 2 — Research ✅ DONE (2026-05-01).** Oracle 10/10 final after 5 rounds (7.8 → 8.9 → 9.1 → 9.5 → 10). Commits `4a80bf9` → `46bb6af`. Phase 0 spike empirically confirmed in-place tap DSP works (audible -20 dB attenuation A/B vs control on macOS 15+ Swift 6.2). Apple SDK header documents the contract verbatim. Full research package: `research.md` + 5 `research-notes/*.md`.
 
-Findings written to `tasks/avplayer-native-video-dsp/research.md`; Oracle research-pass review.
+**Step 3 — Plan ✅ DONE (2026-05-02).** Oracle 9.8/10 final after 5 rounds (8.3 → 8.9 → 10 → 9.2 → 9.8). Commits `1ae8e80` → `fdce0ed`. The 0.2 below 10 reflects added scope from ADR-3a (Containment of `@unchecked Sendable` drift) added at user request 2026-05-02 with three durable gates: header contract block + `RenderThreadSafe` marker protocol + DEBUG Mirror+source-level reflection tests. User signed off 2026-05-02.
 
-**Step 3 (plan phase) — AFTER Step 2:** write `plan.md`, iterate with Oracle to ≥9/10, get user sign-off, derive `todo.md` phases, begin implementation.
+**Phase 1 (implementation) NEXT.** 9-phase plan per `plan.md` §6:
+- Phase 1: `VisualizerFeed` + `VisualizerScratchBuffers` extraction (engine path byte-for-byte identical)
+- Phase 2: production tap scaffold (Context + lifecycle + ASBD guard + ADR-3a containment, pass-through DSP)
+- Phase 3: `BiquadCascade` + balance + numerical match (≤0.5 dB tolerance vs `AVAudioUnitEQ`)
+- Phase 4: visualizer DSP integration (video-tap render path)
+- Phase 5: EQ + balance state fanout (parallel from `EqualizerController` + `AudioPlayer`)
+- Phase 6: production telemetry (deadline-miss instrumentation)
+- Phase 7: lifecycle + production tests (TSan, signed-bundle smoke)
+- Phase 8: verification matrix execution (15 gates: Static / Dynamic / Lifecycle)
+- Phase 9: UI integration polish + final smoke + docs (mandatory `docs/MACAMP_ARCHITECTURE_GUIDE.md` Audio Mechanism Concurrency Contract subsection)
+
+See `todo.md` for the full work-item checklist.
 
 ### 2. PAUSED-AS-REFERENCE — `tasks/video-audio-engine-routing/`
 

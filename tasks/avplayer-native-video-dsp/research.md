@@ -1,7 +1,7 @@
 # Research: AVPlayer-Native Video DSP
 
 > **Task:** `tasks/avplayer-native-video-dsp/`
-> **Status:** 📋 SKELETON — Step 2 of the three-step pivot. Awaiting Phase 0 spike + Apple docs review + reference-branch retrospective.
+> **Status:** ✅ COMPLETE — Step 2 closed 2026-05-01. Five-round Oracle review converged 7.8 → 8.9 → 9.1 → 9.5 → **10/10** (commit `46bb6af`). Phase 0 spike empirical kill-switch ✅; full research package + synthesis below.
 > **Reference:** `tasks/video-audio-engine-routing/research.md` (saved branch's research, kept as historical context — much of it remains relevant for surround-downmix and channel-mapping patterns).
 
 ---

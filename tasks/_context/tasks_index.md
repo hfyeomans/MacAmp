@@ -2,7 +2,7 @@
 
 > **Purpose:** Index of all currently open (non-done) tasks in `tasks/`. Each entry notes the task name, purpose, and current status.
 >
-> **Updated:** 2026-04-30 (post-PR-#82 merge — `stream-pause-tail` shipped; Wave S3-1 complete; S3-2 `video-audio-engine-routing` is NEXT)
+> **Updated:** 2026-05-02 (S3-2 pivot Step 2 ✅ + Step 3 ✅; `avplayer-native-video-dsp` implementation Phase 1 NEXT — research Oracle 10/10, plan Oracle 9.8/10 including ADR-3a containment cycle)
 > **Excludes:** `tasks/done/`, `tasks/stale/`, `tasks/depreciated/`
 
 ---
@@ -26,7 +26,7 @@
 | S3-1A | `done/mainwindow-visualizer-isolation` | Visualizer freeze fix (run-loop-mode mismatch in producer) | Small | ✅ **MERGED** PR #80 (2026-04-28) | 9.4/10 plan + 9.3/10 pre-PR |
 | S3-1B | `done/stream-pause-tail` | Fix 0.7s pause tail (silence gate + producer quiesce) + latent reconnect-during-pause bug | Small-Medium | ✅ **MERGED** PR #82 (2026-04-30, merge `b60fd57`) | 9.1/10 plan; 9/10 final impl |
 | ~~S3-2~~ | ~~`video-audio-engine-routing`~~ | ~~Route video audio through AVAudioEngine~~ | — | ⏸ **PAUSED-AS-REFERENCE** 2026-05-01 — see `_context/s3-2-pivot.md`. Branch `feat/video-audio-engine-routing` preserved at `5af91eb`, pushed to origin. | — |
-| S3-2 (pivot) | `avplayer-native-video-dsp` | Bring EQ + Balance + Milkdrop to video via AVPlayer-native in-place tap DSP (replaces S3-2 engine-routing approach) | Medium-High | 🔧 **SCAFFOLDED** 2026-05-01 — Step 1 (mechanical pivot) done; Step 2 (research + Phase 0 spike) NEXT. See `_context/s3-2-pivot.md`. | — (research phase) |
+| S3-2 (pivot) | `avplayer-native-video-dsp` | Bring EQ + Balance + Milkdrop to video via AVPlayer-native in-place tap DSP (replaces S3-2 engine-routing approach) | Medium-High | 🔧 **IMPLEMENTING** 2026-05-02 — Steps 1+2+3 ✅; Phase 1 (VisualizerFeed extraction) NEXT. See `_context/s3-2-pivot.md`. | research 10/10, plan **9.8/10** |
 | S3-3  | `hls-streaming-support` | Audio-only HLS (M3U8 + AAC ADTS, live + VOD) | Large | ✅ READY (gated on S3-2 pivot merge) | 9.0/10 |
 | S3-4  | `ogg-vorbis-support` | OGG Vorbis (libvorbis), local + Icecast streams; chained-format gap fix | Medium-Large | ✅ READY (Phase 0a/0b spikes first) | 9.3/10 |
 

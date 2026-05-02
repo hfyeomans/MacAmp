@@ -1,7 +1,8 @@
 # Plan: AVPlayer-Native Video DSP
 
-> **Status:** APPROVED (Oracle 10/10 after 3 rounds; awaiting user sign-off before todo.md derivation).
+> **Status:** APPROVED — Oracle **9.8/10** final after 5 rounds (round 3 hit 10/10; rounds 4-5 added ADR-3a containment per user request 2026-05-02 with 0.2 added-scope cost). User signed off 2026-05-02. Implementation NEXT.
 > **Created:** 2026-05-01
+> **Last revised:** 2026-05-02 (ADR-3a containment cycle, commit `fdce0ed`)
 > **Sprint:** S3, Wave **S3-2** (architectural pivot from `feat/video-audio-engine-routing`).
 > **Branch:** `feat/avplayer-native-video-dsp`
 > **PR target:** PR #C (replaces the previous S3-2 PR target).
