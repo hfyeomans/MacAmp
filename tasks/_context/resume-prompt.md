@@ -256,7 +256,8 @@ You are picking up `avplayer-native-video-dsp` mid-implementation. Steps 1+2+3 �
 - **`MTAudioProcessingTapCreate` last parameter:** Swift bridges as `MTAudioProcessingTap?` (NOT `Unmanaged<MTAudioProcessingTap>?`).
 - **TSan after every phase boundary.** Per project convention.
 - **No `// TODO` in production code.** Anything stubbed goes in `placeholder.md` (P-1/P-2/P-3/P-4 currently).
-- **Manual smoke + Allocations Instruments** (todo 2.39 + 2.40) deferred from Phase 2 — see phase2-walkthrough.md "Manual testing — when?" section. Run before starting Phase 3 (recommended) or defer to Phase 8 verification matrix.
+- **Manual smoke (todo 2.39) ✅ DONE 2026-05-02** — all 5 clapperboard clips played; uncovered + fixed P-5 video display regression (commit `c040e76`).
+- **Allocations Instruments leak check (todo 2.40) STILL OUTSTANDING** — verifies `Unmanaged.passRetained` ↔ `tapFinalize` retain balance. Recommended to run BEFORE starting any P-4 redesign work so any leak is unambiguously Phase 2 attribution. See phase2-walkthrough.md "Test 2 — Allocations Instruments leak check" for the step-by-step.
 
 ### After Phase 3
 
