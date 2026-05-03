@@ -15,8 +15,16 @@ import Observation
 final class VideoPlaybackController {
     // MARK: - AVPlayer State
 
-    /// The underlying AVPlayer instance for video playback
-    @ObservationIgnored private(set) var player: AVPlayer?
+    /// The underlying AVPlayer instance for video playback.
+    ///
+    /// **Observed (NOT `@ObservationIgnored`).** `WinampVideoWindow`
+    /// reads this via `audioPlayer.videoPlayer` to decide whether to
+    /// show the player or the "No video loaded" placeholder. Phase 2's
+    /// async `loadVideo` makes player assignment happen AFTER the
+    /// `currentMediaType` change that originally triggered the view
+    /// re-render — so the view must observe `player` directly to pick
+    /// up the new instance once construction completes inside the Task.
+    private(set) var player: AVPlayer?
 
     /// Formatted metadata string for display (codec, resolution, etc.)
     private(set) var metadataString: String = ""

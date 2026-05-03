@@ -37,6 +37,18 @@ Per project convention (`/Users/hank/.claude/CLAUDE.md` — "Placeholders" secti
 
 ---
 
+## P-5 — `VideoPlaybackController.player` observation regression (resolved)
+
+- **File:** `MacAmpApp/Audio/VideoPlaybackController.swift`
+- **Phase:** 2 (post-revision regression caught during user smoke testing 2026-05-02)
+- **Symptom:** Video playback produced audio but the video window stayed on "No video loaded" — view never re-rendered to reveal the new AVPlayer.
+- **Root cause:** `VideoPlaybackController.player` was annotated `@ObservationIgnored`. Pre-Phase-2 `loadVideo` was synchronous: by the time `currentMediaType` change triggered a view re-render, `player` was already non-nil and the view's single re-render picked it up. Phase 2's Option C refactor moved `loadVideo` into a `Task` so player assignment now happens AFTER the synchronous `currentMediaType` change. With `@ObservationIgnored`, no observable property changed when the Task assigned `player = newPlayer`, so the view never re-rendered to switch from the placeholder to the player.
+- **Fix:** dropped `@ObservationIgnored` from `player`. The other ignored fields on `VideoPlaybackController` (`endObserver`, `timeObserver`, `metadataTask`) remain ignored — they are real housekeeping that should NOT trigger view re-renders. `player` was conflating those housekeeping cases with a load-bearing view dependency.
+- **Status:** RESOLVED (commit pending). Field doc on `player` now explicitly notes it is observed.
+- **Test gap:** the existing `VideoTapLifecycleTests` exercise `VideoPlaybackController.loadVideo` directly and verify `controller.player` is/isn't assigned, but they cannot test "the SwiftUI view re-renders." That coverage stays in the manual smoke test (todo 2.39). If we ever automate it, the surface to assert against is `Mirror(reflecting: VideoPlaybackController()).children` — verify `player` shows up as a non-Void reflected child (`@ObservationIgnored` would hide it from observation tracking).
+
+---
+
 ## P-4 — ADR-4 double-buffer coefficient hand-off needs redesign before Phase 3 reads coefficients
 
 - **Files:** `MacAmpApp/Audio/VideoDSP/VideoTapContext.swift` (alloc/dealloc still in place; install method withdrawn for Phase 2); `tasks/avplayer-native-video-dsp/plan.md` ADR-4 needs amendment in Phase 3.
