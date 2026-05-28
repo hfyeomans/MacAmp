@@ -260,7 +260,7 @@ The combined gates (1 + 2 + 3a + 3b) close the documented forbidden-list cases. 
 - *`@_implements` annotations or other compiler tricks.* Not stable, not idiomatic.
 
 ### ADR-4: Coefficient hand-off — atomic-pointer double-buffer snapshot
-**Decision.** Two pre-allocated `BiquadCoefficientSet` blocks (one "active," one "inactive"). Main thread writes into the inactive block, then atomically swaps a pointer (`Atomic<UnsafePointer<BiquadCoefficientSet>>`). Render thread reads via atomic pointer load on each `tapProcess` entry.
+**Decision. [SUPERSEDED 2026-05-28 — see "ADR-4 amendment #2" below. Retained for history.]** Two pre-allocated `BiquadCoefficientSet` blocks (one "active," one "inactive"). Main thread writes into the inactive block, then atomically swaps a pointer (`Atomic<UnsafePointer<BiquadCoefficientSet>>`). Render thread reads via atomic pointer load on each `tapProcess` entry.
 **Drivers.** Lock-free; zero teardown risk (the entire 50-coefficient set swaps atomically); one indirect load per buffer (~1 ns on Apple Silicon, negligible vs ~10 ms render quantum).
 **Rejected alternatives:**
 - 100 individual `Atomic<UInt32>` (Float bit-pattern). Simpler but coefficient sets can tear (e.g., render thread reads 4-of-5 new + 1-of-5 old). Usually inaudible at user-EQ-update rate but theoretically possible.
@@ -278,6 +278,28 @@ Oracle review of Phase 2 (gpt-5.5, score 8/10 REVISE) flagged that the naive A/B
 3. `Synchronization.Mutex<BiquadCoefficientSet>` with `withLockIfAvailable` on the render thread (skip-update on contention; previously rejected per the table above — Phase 3 should re-evaluate now that the simpler double-buffer is off the table).
 
 The chosen scheme replaces this ADR's original "Decision" paragraph and re-runs Oracle review on the redesign before implementation. See `placeholder.md` P-4 for ongoing tracking.
+
+#### ADR-4 amendment #2 — race-safe hand-off chosen: `Mutex` + `withLockIfAvailable` (Phase 3 redesign, 2026-05-28)
+
+**Decision (supersedes the original "Decision" above; resolves the 2026-05-02 amendment's open choice — candidate 3 selected).** Store coefficients inline in the Context as a single `let coefficients: Mutex<BiquadCoefficientSet?>` (`Synchronization.Mutex`, already `RenderThreadSafe` per `RenderThreadSafe.swift:32`). No raw pointers, no double/triple buffer, no manual allocation.
+
+- **Main thread (EQ / sample-rate change):** `coefficients.withLock { $0 = newSet }` — a blocking lock is fine on main; held only for a ~200-byte value-type assignment.
+- **Render thread (`tapProcess`):** read with `coefficients.withLockIfAvailable { $0 }`, which returns a **double optional** `BiquadCoefficientSet??`. Distinguish three cases explicitly: **(a)** outer `nil` = trylock failed (main mid-write) → keep using the render-owned cache; **(b)** `.some(nil)` = lock acquired but no coefficients installed yet → bypass the cascade; **(c)** `.some(.some(set))` = copy `set` into the render-owned cache. The lock is held ONLY for that copy; the entire biquad pass then runs **lock-free** against the render-owned cache.
+- **Skip-on-contention:** case (a) above — the render thread reuses its last cached coefficients and processes normally; no stall. Before the first successful install the cache is empty → bypass (consistent with the `isEqOn=false` pass-through gate).
+
+**Why this is race-safe (the property the A/B swap lacked).** `withLockIfAvailable` is **non-blocking by construction** — it never waits, so the render thread never stalls regardless of contention frequency. There is no pointee-lifetime window: the value is copied out under the lock, so main can never overwrite storage the render thread is mid-read on. Because the render thread never *blocks* on the lock, the `os_unfair_lock` **priority-inversion hazard does not apply** (inversion requires a blocking wait on a lock held by a lower-priority thread; we have none). Safety rests on "never blocks," NOT on "contention is rare."
+
+**Reverses the original rejection.** The 2026-05-02 table rejected this option for "could miss coefficient updates indefinitely." The correct framing (per Oracle 2026-05-28): the load-bearing guarantee is that **no render-thread wait ever occurs** — that is what makes the scheme real-time-safe. Repeated trylock misses are *theoretically* possible but harmless: a miss leaves the last coefficients in place, so a human-paced slider change is deferred by a few inaudible ~10 ms quanta, never lost. In practice main holds the lock only for a sub-microsecond value assignment, so misses are vanishingly rare — but we do not rely on that for correctness, only for quality.
+
+**Code delta vs the Phase 2 scaffold (`VideoTapContext.swift`).**
+- REMOVE `coefficientSetPointer: Atomic<UnsafePointer<BiquadCoefficientSet>?>`, `coefficientBlockA` / `coefficientBlockB: UnsafeMutablePointer<…>`, and their `allocate`/`initialize` in `init` + `deinitialize`/`deallocate` in `deinit`.
+- ADD `let coefficients: Mutex<BiquadCoefficientSet?>`, initialized `Mutex(nil)`. `deinit` becomes trivial (no manual frees) — this also removes the raw-pointer leak surface verified in todo 2.40.
+- The render-owned state — `z1`/`z2` filter history AND the "last coefficients" cache — lives in `BiquadCascade`, render-thread-confined and created per tap, NOT as a `var` on the shared Context (preserves the Gate-1/Gate-2 contract: every Context stored property stays `Atomic`/`Mutex`/immutable).
+- **Render-state ownership/lifetime (per Oracle 2026-05-28):** the tap's render state needs an explicit owner. `tapInit` (`VideoTap.swift:23`) currently stores only the `VideoTapContext` via `tapStorageOut`. Phase 3 owns the `BiquadCascade` in one of two ways: **(i)** as an additional render-owned object reached through the tap-storage struct, or **(ii)** lazily created/reset in `tapPrepare` and torn down in `tapUnprepare`/`tapFinalize`. Whichever is chosen, if a render-state wrapper is introduced alongside the `Unmanaged<VideoTapContext>` retain, **re-verify the `passRetained`↔`tapFinalize` balance** — the todo 2.40 leak check covered only the `VideoTapContext` object, not a future wrapper.
+
+**Downstream references to reconcile during implementation (after Oracle approval), all still describing the atomic-pointer double-buffer:** ADR-3 §"Mutex-only state" caveat (~line 97), ADR-5 step 2 (~line 286), §5.2 Context field list (~line 514-515), §6 Phase 3 goal (~line 567).
+
+**Gate:** re-run Codex Oracle (gpt-5.5, reasoningEffort xhigh) on this amendment BEFORE any code lands. Target ≥9/10 APPROVED. Tracked in `placeholder.md` P-4.
 
 ### ADR-5: EQ and balance state fanout — two canonical owners, parallel fanout pattern
 **Decision.**
@@ -568,18 +590,18 @@ Each phase is individually reviewable and individually testable. Each phase ends
 
 **Files.**
 - New: `MacAmpApp/Audio/VideoDSP/BiquadCoefficientSet.swift`
-  - `struct BiquadCoefficientSet { let bands: (BiquadCoefs, BiquadCoefs, ..., BiquadCoefs) }` (10 bands, fixed-size for Sendable conformance and to enable raw-pointer storage).
+  - `struct BiquadCoefficientSet: Sendable { let bands: (BiquadCoefs, BiquadCoefs, ..., BiquadCoefs) }` (10 bands, fixed-size). **Per Oracle 2026-05-28:** must be a trivially-copyable value type — NO `Array`, class references, closures, or CoW storage (so the copy under the Mutex is a flat memcpy with zero ARC work). Explicit `Sendable`.
   - `static func compute(for state: EqualizerState, sampleRate: Double) -> BiquadCoefficientSet` — per-band RBJ formulas (ADR-8).
 - New: `MacAmpApp/Audio/VideoDSP/BiquadCascade.swift`
   - Stateful per-channel filter history (`z1`, `z2` per band per channel).
-  - `mutating func process(buffer: UnsafeMutableBufferPointer<Float>, channels: Int, frames: Int, coefficients: UnsafePointer<BiquadCoefficientSet>)` — in-place direct-form-II biquad, 10 bands cascaded, per channel.
+  - `mutating func process(buffer: UnsafeMutableBufferPointer<Float>, channels: Int, frames: Int)` — in-place direct-form-II biquad, 10 bands cascaded, per channel, reading from `BiquadCascade`'s own render-owned coefficient cache (refreshed via the Mutex per ADR-4 amendment #2 — no coefficient pointer parameter).
   - `mutating func reset()` — zero filter history (called on `kMTAudioProcessingTapFlag_StartOfStream` per ADR-9).
 - Modify: `VideoTap.swift` `tapProcess` body — implement the full 8-step render path from ADR-5 (format gate already in Phase 2; this phase adds steps 2 through 6):
   1. (Already done in Phase 2) `MTAudioProcessingTapGetSourceAudio(...)` writes the source's `kMTAudioProcessingTapFlag_StartOfStream` / `_EndOfStream` into `flagsOut.pointee`.
-  2. **Filter-state reset** (ADR-9): if `flagsOut.pointee.contains(.startOfStream)`, call `context.cascade.reset()`.
+  2. **Filter-state reset** (ADR-9): if `flagsOut.pointee.contains(.startOfStream)`, call `cascade.reset()` (the render-owned `BiquadCascade`, not a Context field — see ADR-4 amendment #2).
   3. **Preamp**: load `context.preampLinearGainBits.load(.relaxed)`, decode to Float; if not 1.0, multiply samples by preamp.
   4. **EQ on/off gate**: if `context.isEqOn.load(.relaxed) == false`, skip step 5.
-  5. **`BiquadCascade.process`**: load coefficient pointer atomically; if non-nil, run 10-band cascade in place.
+  5. **`BiquadCascade.process`**: refresh the cascade's render-owned coefficient cache via `context.coefficients.withLockIfAvailable { $0 }` with the double-optional handling from ADR-4 amendment #2 (trylock-fail → reuse cache; `.some(nil)` → bypass; `.some(.some)` → update cache); if the cache holds coefficients, run the 10-band cascade in place.
   6. **Balance**: load `context.balance.load(.relaxed)`, decode to Float; compute lGain/rGain (per-channel multiplies), apply if not center.
 - New: `Tests/MacAmpTests/BiquadNumericalMatchTests.swift`
   - **Test 1 — full EQ active.** For each of 5 EQ presets (flat, bass-boost, treble-boost, mid-scoop, full-tilt-boost), render a 0 dBFS log sine sweep (20 Hz – 20 kHz, 10 s) through:
