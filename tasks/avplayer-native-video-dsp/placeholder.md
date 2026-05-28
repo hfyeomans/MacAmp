@@ -56,3 +56,14 @@ Per project convention (`/Users/hank/.claude/CLAUDE.md` — "Placeholders" secti
 - **Purpose:** Oracle review of Phase 2 (gpt-5.5, 2026-05-02, score 8/10 REVISE) flagged that the naive A/B swap from ADR-4 is not race-safe in practice. Sequence: render thread loads pointer → P=A → starts processing using A. Main thread installs new coefficients into B and swaps pointer → P=B. Main thread installs again — picks A as the "inactive" block (since current is B) and writes to A while render thread is STILL reading A (its initial load happened before any of this). Result: render reads partially-overwritten A. Acquire/release ordering does not fix the pointee-lifetime race. Latent in Phase 2 because `tapProcess` does not yet read coefficients, but the scaffold encoded the unsafe invariant — `installCoefficientSet` was withdrawn before Phase 2 close to avoid making the racy contract reusable.
 - **Status:** Open architectural decision; must be resolved BEFORE `tapProcess` reads coefficients (Phase 3 gate).
 - **Action (Phase 3):** Pick one of: (1) triple-buffer + atomic "in-use" counter to mark which slot the render thread is currently reading; (2) RCU-style allocate-fresh-each-install + deferred free of retired buffers (e.g. Hazard Pointers, epoch-based reclamation); (3) `Synchronization.Mutex<BiquadCoefficientSet>` with `withLockIfAvailable` on the render thread (skip-update on contention). Update plan.md ADR-4 with the chosen scheme + rationale; re-run Oracle review on the redesign before implementation.
+
+---
+
+## P-6 — Video→audio transition does not auto-play (requires manual Next/forward)
+
+- **File:** `MacAmpApp/Audio/AudioPlayer.swift` — `playTrack` media-switch path (`.video → .audio`): cleanup at lines 490-494, then `loadAudioFile` (line 505) + `play()` (line ~516).
+- **Phase:** Phase 2 finding, discovered during the todo 2.40 leak check (2026-05-28).
+- **Symptom:** After playing a video, loading an audio track does NOT auto-play — the user must hit Next/forward to start audio. Audio-only → audio-only transitions auto-play normally.
+- **Suspected cause (unconfirmed):** the `.video → .audio` cleanup (`invalidateInFlightVideoLoad` + `pauseAndDetachVideoTapIfNeeded` + `videoPlaybackController.cleanup()`) likely leaves transport state such that the `play()` at line ~516 no-ops; or `loadAudioFile` is async and the immediate `play()` races ahead of the engine being ready. Needs end-to-end diagnosis (instrument both the media-switch decision and the engine-ready state, per the pipeline-diagnosis discipline).
+- **Status:** Open, NON-BLOCKING (user deprioritized 2026-05-28). Not a leak; does not affect Phase 3 gating. Logged so it is not lost.
+- **Action:** Diagnose during Phase 7 lifecycle/transition testing or a dedicated follow-up. Likely fix: sequence the audio `play()` to fire after the video→audio teardown + engine-ready completes.

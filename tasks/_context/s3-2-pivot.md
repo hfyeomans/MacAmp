@@ -1,7 +1,7 @@
 # S3-2 Architectural Pivot Tracker
 
-> **Date:** 2026-05-01 (created), 2026-05-02 (last update)
-> **Status:** Step 1 ✅, Step 2 ✅ (Oracle 10/10), Step 3 ✅ (Oracle 9.8/10). **Implementation (9 phases) NEXT.**
+> **Date:** 2026-05-01 (created), 2026-05-28 (last update)
+> **Status:** Steps 1-3 ✅. Implementation: **Phase 1 ✅, Phase 2 ✅ FULLY CLOSED** (85/85 TSan; todo 2.39 smoke ✅ + todo 2.40 leak check ✅ 2026-05-28 via Memory Graph Debugger — no leak). **Phase 3 NEXT, GATED on P-4** (race-safe coefficient hand-off redesign + plan.md ADR-4 amendment + Oracle re-review BEFORE any render-thread coefficient code). Phases 4-9 remain.
 > **Purpose:** Track the architectural pivot of S3-2 from engine-routing to AVPlayer-native DSP. Authoritative source for current S3-2 status — the existing `state.md` / `tasks_index.md` / `resume-prompt.md` files reflect the PRE-pivot state of the engine-routing branch (preserved for historical accuracy of that branch's work) and cross-reference this file for current status.
 
 ---
@@ -81,7 +81,7 @@ Oracle 9.8/10 final after 5 rounds (8.3 → 8.9 → 10 → 9.2 → 9.8). Commits
 | Iterate with Oracle until ≥9/10 APPROVED | ✅ (final 9.8/10 — exceeds bar) |
 | Get user sign-off | ✅ 2026-05-02 |
 | Derive concrete `todo.md` phases from plan | ✅ 2026-05-02 |
-| Begin implementation phases (9 phases per plan §6) | ⏭ Phase 1 NEXT |
+| Begin implementation phases (9 phases per plan §6) | 🔧 Phase 1 ✅ + Phase 2 ✅ (fully closed incl. todo 2.40 leak check 2026-05-28); **Phase 3 NEXT, gated on P-4** |
 
 ---
 
@@ -108,3 +108,5 @@ Oracle 9.8/10 final after 5 rounds (8.3 → 8.9 → 10 → 9.2 → 9.8). Commits
 - **2026-04-30** — Phase 7 watchdog gate v2 + HAL listener (Oracle 9.2/10). Real-hardware testing reproduced the route-change bug because `AVAudioEngineConfigurationChange` doesn't fire for AirPlay route changes — proven by missing log line.
 - **2026-05-01** — User raised the contrarian framing: instead of dragging video audio out of AVPlayer, apply processing in-place via the same tap. Architecture sketch laid out in conversation. User chose to pivot.
 - **2026-05-01** — Step 1 mechanical pivot executed.
+- **2026-05-02** — Phase 1 (VisualizerFeed extraction) ✅ + Phase 2 (production tap scaffold, Option C audioMix-on-construction, ADR-3a containment) ✅ landed; 7 Oracle rounds → 9.0/10 APPROVED; 85/85 TSan. ADR-4 A/B-swap install withdrawn as race-unsafe → P-4 gates Phase 3.
+- **2026-05-28** — Phase 2 fully closed: todo 2.40 leak check ✅ via Memory Graph Debugger on the real playback path (`VideoTapContext` + both coefficient blocks 1→0 across clip load→teardown, no leak). Found that Allocations Instruments can't show pure-Swift classes by name (→ `_context/instruments-allocations-workflow.md`). Non-blocking finding P-6 logged (video→audio no auto-play). Next real work: P-4 coefficient hand-off redesign.

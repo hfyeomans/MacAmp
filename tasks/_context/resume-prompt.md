@@ -11,7 +11,7 @@
 
 > ⚠️ **S3-2 ARCHITECTURAL PIVOT — IMPLEMENTATION IN PROGRESS (2026-05-02).** `feat/video-audio-engine-routing` is **PAUSED-AS-REFERENCE** (preserved at `5af91eb`, pushed to origin). S3-2 re-attempted as **`avplayer-native-video-dsp`** on branch `feat/avplayer-native-video-dsp`. **Steps 1+2+3 ✅ + Phase 1 ✅ + Phase 2 ✅ done. Phase 3 implementation NEXT.** See `tasks/_context/s3-2-pivot.md` for the strategic decision log + step-by-step status — that file is authoritative.
 
-**Last update:** 2026-05-02 (Phase 2 — production tap scaffold + ADR-3a containment + Oracle-driven Option C revision — landed; 7 Oracle review rounds (final 9.0/10 APPROVED). Final architecture: `audioMix` configured during `AVPlayerItem` CONSTRUCTION via `VideoTap.buildAudioMix(audioTrack:context:)` + `VideoPlaybackController.loadVideo`'s `audioMixBuilder`/`isStillRelevant` parameters + `AudioPlayer.startVideoLoad(track:)` orchestrator. NOT `attachVideoTap`/`detachVideoTap` facades — those were withdrawn during revision. Pass-through DSP only (no biquad math). 85/85 TSan green. Four plan deviations documented in `placeholder.md` P-1/P-2/P-3/P-4 + task `state.md`. Phase 3 (`BiquadCascade` + balance + numerical match) NEXT, gated on P-4 race-safe coefficient hand-off redesign.)
+**Last update:** 2026-05-28 (Phase 2 **FULLY CLOSED** — todo 2.40 leak check ✅ done via Xcode Memory Graph Debugger on the real playback path: `VideoTapContext` + `coefficientBlockA` + `coefficientBlockB` all go 1→0 across clip load→teardown, `Unmanaged.passRetained`↔`tapFinalize` balanced, no leak. Found Allocations Instruments can't show pure-Swift classes by name → reusable workflow doc at `tasks/_context/instruments-allocations-workflow.md`. Non-blocking finding P-6 logged: video→audio transition doesn't auto-play. **Phase 3 NEXT — immediate first action is P-4** (race-safe coefficient hand-off redesign). Prior Phase 2 context: production tap scaffold + ADR-3a containment + Option C audioMix-on-construction via `VideoTap.buildAudioMix` + `VideoPlaybackController.loadVideo`'s `audioMixBuilder`/`isStillRelevant` + `AudioPlayer.startVideoLoad` orchestrator; 7 Oracle rounds → 9.0/10 APPROVED; 85/85 TSan; deviations in `placeholder.md` P-1/P-2/P-3/P-4/P-6.)
 **Main HEAD:** `9cca40a` (main has not advanced during S3-2 work).
 **`feat/avplayer-native-video-dsp` HEAD:** `7d3367c` — `Phase 2 revision (s3-2): Option C structural fix + Oracle 9.0/10 APPROVED`. Run `git log -1 --oneline` to confirm. **34 commits ahead of main** (run `git rev-list --count main..HEAD`):
 - 13 cherry-picked Phase-1 commits (engine config observer for stream-side resilience, range ending at `2aa2f18`)
@@ -98,9 +98,11 @@ S3-1A mwvi  ✅ MERGED (PR #80, merge commit 7f3d76f, 2026-04-28)
      │       │
      │       ▼
      │    S3-2 avplayer-native-video-dsp         ←── PR #C   🔧 IMPLEMENTING
-     │       │                                                  Step 1+2+3 ✅; Phase 1 ✅; Phase 2 ✅
-     │       │                                                  Phase 3 NEXT (gated on P-4 hand-off
-     │       │                                                  redesign); 7 phases remain
+     │       │                                                  Step 1+2+3 ✅; Phase 1 ✅;
+     │       │                                                  Phase 2 ✅ FULLY CLOSED (2.39 smoke ✅
+     │       │                                                  + 2.40 leak check ✅ 2026-05-28, no leak)
+     │       │                                                  Phase 3 NEXT — first action = P-4 hand-off
+     │       │                                                  redesign (gate); 7 phases remain
      │       │
      │       ▼
      │    S3-3 hls                               ←── PR #D
@@ -257,7 +259,7 @@ You are picking up `avplayer-native-video-dsp` mid-implementation. Steps 1+2+3 �
 - **TSan after every phase boundary.** Per project convention.
 - **No `// TODO` in production code.** Anything stubbed goes in `placeholder.md` (P-1/P-2/P-3/P-4 currently).
 - **Manual smoke (todo 2.39) ✅ DONE 2026-05-02** — all 5 clapperboard clips played; uncovered + fixed P-5 video display regression (commit `c040e76`).
-- **Allocations Instruments leak check (todo 2.40) STILL OUTSTANDING** — verifies `Unmanaged.passRetained` ↔ `tapFinalize` retain balance. Recommended to run BEFORE starting any P-4 redesign work so any leak is unambiguously Phase 2 attribution. See phase2-walkthrough.md "Test 2 — Allocations Instruments leak check" for the step-by-step.
+- **Leak check (todo 2.40) ✅ DONE 2026-05-28** — verified `Unmanaged.passRetained` ↔ `tapFinalize` balance on the real playback path via **Xcode Memory Graph Debugger** (NOT Allocations Instruments — pure-Swift classes like `VideoTapContext` bucket under `malloc<size>` and never show by class name; MGD shows them by name). Clip loaded+paused → `VideoTapContext` + both coefficient blocks = 1; switch to an audio track → all = 0. No leak, Phase-2-attributable. Reusable workflow: `tasks/_context/instruments-allocations-workflow.md`. **Phase 2 is now fully closed; P-4 is the immediate next action.**
 
 ### After Phase 3
 

@@ -2,9 +2,9 @@
 
 > **Purpose:** Bring EQ + Balance + Milkdrop/Butterchurn to video playback by applying DSP in-place inside an `MTAudioProcessingTap` on AVPlayer's audio path — instead of routing video audio out of AVPlayer through `AVAudioEngine`. Replaces the engine-routing approach attempted on `feat/video-audio-engine-routing` (now PAUSED-AS-REFERENCE).
 > **Created:** 2026-05-01
-> **Last revised:** 2026-05-02
+> **Last revised:** 2026-05-28
 > **Sprint:** S3, Wave S3-2 (architectural pivot)
-> **Status:** 🔧 IMPLEMENTING — Phase 2 ✅ landed (production tap scaffold + ADR-3a containment, 85/85 TSan green); Phase 3 NEXT (`BiquadCascade` + balance + numerical match). Steps 1 + 2 + 3 ✅; Phases 1 + 2 ✅. Plan + research locked at Oracle ≥9.8/10.
+> **Status:** 🔧 IMPLEMENTING — Phase 2 ✅ **FULLY CLOSED** (production tap scaffold + ADR-3a containment, 85/85 TSan green; both manual items done: todo 2.39 smoke ✅ 2026-05-02, todo 2.40 leak check ✅ 2026-05-28 via Memory Graph Debugger — `VideoTapContext` + both coefficient blocks go 1→0 across clip load→teardown, no leak). **Phase 3 NEXT, gated on P-4** (`BiquadCascade` + balance + numerical match). Steps 1 + 2 + 3 ✅; Phases 1 + 2 ✅. Plan + research locked at Oracle ≥9.8/10. Open non-blocking finding: P-6 (video→audio no auto-play).
 
 ---
 
@@ -49,6 +49,8 @@ See `tasks/_context/s3-2-pivot.md` for the strategic decision log.
 | Phase 2 Oracle revisions 7-12 (Oracle BLOCKER follow-up: stale-load short-circuit) | Pending commit | Oracle re-review returned 8/10 REVISE again: BLOCKER on stale `loadVideo` continuation still constructing AVPlayer + observers after stale builder. Revisions 7-12 applied: added `isStillRelevant: () -> Bool` parameter to `loadVideo` short-circuit BEFORE AVPlayerItem/AVPlayer/observer mutation; gated final `play()` on `playbackState == .playing` (pause-during-load no longer auto-plays); added 2 stale-load race tests (`loadVideoBailsWhenStaleAfterAudioMixBuilder` + `loadVideoConstructsPlayerWhenRelevant`); cleaned up stale `installCoefficientSet` references in code + placeholder.md; amended plan.md ADR-4 + ADR-7 + §5.2 + §5.4 + §6 Phase 5 to reflect Option C reality. |
 
 **Tests:** 85/85 with TSan (72 baseline + 2 contract + 6 lifecycle + 5 seek-state-matrix). Engine path unchanged.
+
+**Leak check (todo 2.40) ✅ 2026-05-28** — verified on the real playback path via Xcode Memory Graph Debugger (Allocations Instruments can't show pure-Swift classes by name; MGD can). Clip loaded+paused → `VideoTapContext` + `coefficientBlockA` + `coefficientBlockB` all = 1; switch to an audio track (`.video→.audio` cleanup → `tapFinalize`) → all = 0. `Unmanaged.passRetained`↔`tapFinalize` balanced, no leak, Phase-2-attributable. Redundant with the 6 automated `VideoTapLifecycleTests`. Reusable workflow: `tasks/_context/instruments-allocations-workflow.md`.
 
 ## Phase 2 implementation findings (2026-05-02)
 

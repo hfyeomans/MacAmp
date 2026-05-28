@@ -365,6 +365,12 @@ All doc updates verified complete by sub-agent scan:
 |-------------|-------------|------|--------|---------|
 | `timer-scheduled-on-common-extension` | Extract `Timer.scheduledOnMainCommon(every:repeats:_:)` helper into `MacAmpApp/Utilities/Timer+CommonMode.swift`. Migrate all 7 timer-on-RunLoop callsites in `MacAmpApp/` (`VisualizerPipeline.pollTimer`, `AudioEngineController.progressTimer`, `StreamPlayer.elapsedTimer`, `VideoWindowChromeView.metadataScrollTimer`, `WinampMainWindowInteractionState.scrollTimer`, `ButterchurnPresetManager.cycleTimer`, `.trackTitleTimer`) to use it. Eliminates the 3-line + 1-comment ritual at every callsite and makes the `.common`-mode requirement impossible to forget on new code. | Small-Medium (~30 LOC helper + 7 callsite migrations + `project.yml` resource entry) | 🟡 **DEFERRED** — predecessor `timer-runloop-mode-audit` merged 2026-04-29 ✅; ready when scheduled. Codex Oracle endorsed deferring (Problem-First + API Surface Minimization). Concurrency-checker edge cases possible (`@Sendable` closure capture interactions with existing `[weak self]` and `MainActor.assumeIsolated` patterns) — warrant their own review. Task folder not yet created. | Discovered during `timer-runloop-mode-audit` (2026-04-29). With 7 Pattern-A callsites now in `MacAmpApp/`, AHA Rule-of-Three is exceeded by 4×. |
 
+### Post-S3-2 `avplayer-native-video-dsp` Findings (in-progress task)
+
+| Finding | Description | Size | Status |
+|---------|-------------|------|--------|
+| Video→audio no auto-play | After a video plays, loading an audio track does not auto-play (user must hit Next/forward). Audio→audio is fine. Discovered during todo 2.40 leak check (2026-05-28). Logged at task level as `tasks/avplayer-native-video-dsp/placeholder.md` P-6. Suspected: `.video→.audio` cleanup leaves transport state that no-ops the `play()`, or async `loadAudioFile` races the immediate `play()`. | Small | 🟡 NON-BLOCKING — diagnose in Phase 7 transition tests or a dedicated follow-up. |
+
 ### Post-S2 / Pre-S3 Architecture Follow-Ons: Hybrid Dedup + Decomposition (6 tasks)
 
 > **Phasing (Gemini + Oracle, 2026-03-24):**
