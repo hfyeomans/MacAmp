@@ -32,11 +32,15 @@
 // appropriate `RenderThreadSafe` conformance OR proving the field falls
 // under a permitted shape.
 //
-// Current fields (Phase 3):
+// Current fields (Phase 3-4):
 //   * `coefficients: Mutex<BiquadCoefficientSet?>` — main→render coefficient
 //     hand-off (render uses `withLockIfAvailable`; ADR-4 amendment #2).
 //   * `cascade: BiquadCascade` — render-confined DSP state; `RenderThreadSafe`
 //     by render-confinement (main never touches it after `init`).
+//   * `feed: VisualizerFeed` — shared (injected) single-slot hand-off;
+//     `RenderThreadSafe` (`@unchecked Sendable`, trylock publish).
+//   * `scratch: VisualizerScratchBuffers` — per-tap render-confined visualizer
+//     DSP scratch; `RenderThreadSafe` by render-confinement.
 //   * the `Atomic<…>` parameter/format/telemetry fields below.
 //
 // See plan.md ADR-3 + ADR-3a + ADR-4 amendment #2 for the design rationale.
@@ -70,6 +74,19 @@ final class VideoTapContext: @unchecked Sendable {
     /// Touched ONLY by the render thread (`tapProcess`); its `RenderThreadSafe`
     /// story is render-confinement (conformance in `RenderThreadSafe.swift`).
     let cascade: BiquadCascade
+
+    // MARK: Visualizer (Phase 4 — ADR-6 dual-producer)
+
+    /// Shared single-slot hand-off carrying pre-computed visualizer arrays to the
+    /// main thread. INJECTED (owned by `VisualizerPipeline`, shared with the engine
+    /// producer); only one producer is active at a time. `RenderThreadSafe`
+    /// (`@unchecked Sendable`, `trylock` publish).
+    let feed: VisualizerFeed
+
+    /// Per-tap render-confined scratch buffers for the visualizer DSP (mono / RMS /
+    /// Goertzel / FFT working set). OWNED by this Context (allocated in `init`, dies
+    /// with the Context). `RenderThreadSafe` (render-confined).
+    let scratch: VisualizerScratchBuffers
 
     // MARK: User-controlled DSP parameters
 
@@ -118,7 +135,9 @@ final class VideoTapContext: @unchecked Sendable {
     /// effectively does not exist in practice).
     static let maxDSPChannels = 16
 
-    init() {
+    init(feed: VisualizerFeed) {
+        self.feed = feed
+        self.scratch = VisualizerScratchBuffers()
         self.coefficients = Mutex<BiquadCoefficientSet?>(nil)
         self.cascade = BiquadCascade(maxChannels: VideoTapContext.maxDSPChannels)
         self.balance = Atomic<UInt32>(Float(0.0).bitPattern)
@@ -144,7 +163,7 @@ final class VideoTapContext: @unchecked Sendable {
     /// Context with no AVPlayer dependency so the contract tests can
     /// reflect the storage shape without spinning up audio infrastructure.
     static func _makeForContractTest() -> VideoTapContext {
-        VideoTapContext()
+        VideoTapContext(feed: VisualizerFeed())
     }
     #endif
 }

@@ -28,7 +28,7 @@ struct VideoTapLifecycleTests {
         weak var weakContext: VideoTapContext?
 
         try {
-            let context = VideoTapContext()
+            let context = VideoTapContext(feed: VisualizerFeed())
             weakContext = context
             let mix = try VideoTap.buildAudioMix(audioTrack: audioTrack, context: context)
             let item = AVPlayerItem(asset: asset)
@@ -56,14 +56,14 @@ struct VideoTapLifecycleTests {
         weak var weakB: VideoTapContext?
 
         try {
-            let contextA = VideoTapContext()
+            let contextA = VideoTapContext(feed: VisualizerFeed())
             weakA = contextA
             let mixA = try VideoTap.buildAudioMix(audioTrack: audioTrack, context: contextA)
             let itemA = AVPlayerItem(asset: asset)
             itemA.audioMix = mixA
             let playerA = AVPlayer(playerItem: itemA)
 
-            let contextB = VideoTapContext()
+            let contextB = VideoTapContext(feed: VisualizerFeed())
             weakB = contextB
             let mixB = try VideoTap.buildAudioMix(audioTrack: audioTrack, context: contextB)
             let itemB = AVPlayerItem(asset: asset)
@@ -128,7 +128,7 @@ struct VideoTapLifecycleTests {
             url: url,
             autoPlay: false,
             audioMixBuilder: { _ in
-                let context = VideoTapContext()
+                let context = VideoTapContext(feed: VisualizerFeed())
                 weakContext = context
                 let mix: AVMutableAudioMix
                 do {
@@ -182,7 +182,7 @@ struct VideoTapLifecycleTests {
         let player: AVPlayer
 
         do {
-            let context = VideoTapContext()
+            let context = VideoTapContext(feed: VisualizerFeed())
             weakContext = context
             let mix = try VideoTap.buildAudioMix(audioTrack: audioTrack, context: context)
             let item = AVPlayerItem(asset: asset)

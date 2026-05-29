@@ -47,6 +47,13 @@ final class VisualizerPipeline {
     @ObservationIgnored private let feed = VisualizerFeed()
     @ObservationIgnored private var pollTimer: Timer?
 
+    /// The shared visualizer feed. Exposed so the S3-2 video-tap producer
+    /// (`videoTapVisualizerRender`) can publish to the SAME single-slot feed the
+    /// engine producer uses — only one producer is active at a time (engine for
+    /// audio, video tap for video), so the single-slot last-write-wins hand-off is
+    /// correct without coordination.
+    var sharedFeed: VisualizerFeed { feed }
+
     // MARK: - Visualizer Data Storage
 
     @ObservationIgnored private var peaks: [Float] = Array(repeating: 0.0, count: 20)

@@ -142,6 +142,12 @@ private let tapProcess: MTAudioProcessingTapProcessCallback = { tap, framesToPro
         }
         globalChannel += channelsInBuffer
     }
+
+    // Step 7 — visualizer feed (ADR-6 dual-producer). Publish pre-computed arrays
+    // from the now-processed buffer to the shared feed (non-blocking trylock).
+    let sampleRate = Double(bitPattern: context.pendingSampleRate.load(ordering: .relaxed))
+    videoTapVisualizerRender(bufferList: bufferList, frames: frames, sampleRate: sampleRate,
+                             scratch: context.scratch, feed: context.feed)
 }
 
 // MARK: - Audio-mix builder + detach
