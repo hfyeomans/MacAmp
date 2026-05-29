@@ -259,7 +259,7 @@ struct OscilloscopeView: View {
         }
         .frame(width: VisualizerLayout.width, height: VisualizerLayout.height)
         .onReceive(updateTimer) { _ in
-            if audioPlayer.isEngineRendering {
+            if audioPlayer.isVisualizerRendering {
                 waveformData = audioPlayer.getWaveformSamples(count: VisualizerLayout.oscilloscopeSampleCount)
             } else {
                 waveformData = []

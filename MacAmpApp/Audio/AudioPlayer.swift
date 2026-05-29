@@ -933,6 +933,13 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
 
             self.isHandlingCompletion = true
             self.transition(to: .stopped(.completed))
+            // Video that just ended: stop the visualizer poll timer. If the next
+            // track is video, playTrack's `.video` branch restarts it; if audio, the
+            // video→audio switch stops it again (idempotent). Without this, terminal
+            // video completion (no next track) leaks the 30 Hz timer.
+            if self.currentMediaType == .video {
+                self.visualizerPipeline.stopVideoVisualization()
+            }
             self.engine.invalidateProgressTimer()
             self.playbackProgress = 1
             // Use engine file duration (authoritative for audio) to avoid jump if
