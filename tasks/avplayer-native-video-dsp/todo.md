@@ -166,16 +166,18 @@ Numbering: `<Phase>.<Item>`. `[x]` complete, `[~]` in-progress, `[!]` blocked.
    - [x] 3.9.2 Step 3: preamp — `Float(bitPattern: preampLinearGainBits)`; flat multiply over each buffer if !=1.0
    - [x] 3.9.3 Step 4: EQ gate — `if eqOn { … }`
    - [x] 3.9.4 Step 5: refresh cache via `coefficients.withLockIfAvailable { $0 }` with three-case double-optional handling; `cascade.process` per channel via `UnsafeMutableAudioBufferListPointer` iteration
-   - [x] 3.9.5 Step 6: balance — `Float(bitPattern: balance)`; standard [0,1]/0.5-center law, L/R gain multiplies, skip if center
-- [x] 3.10 Create `Tests/MacAmpTests/BiquadNumericalMatchTests.swift` ✅ (4 tests + steady-state-RMS gain helpers + offline `AVAudioUnitEQ` render via `manualRenderingMode`).
+   - [x] 3.9.5 Step 6: balance — `Float(bitPattern: balance)`; **[-1,1]/0.0-center law** (`VideoTap.balanceGains`, matches `AudioPlayer.balance`/`AVAudioNode.pan`; revised from [0,1]/0.5 per Oracle review), L/R gain multiplies, skip if center
+- [x] 3.10 Create `Tests/MacAmpTests/BiquadNumericalMatchTests.swift` ✅ (**7 tests** + steady-state-RMS gain helpers + offline `AVAudioUnitEQ` render via `manualRenderingMode` with throw-on-incomplete).
 - [x] 3.11 Test 1 — full-EQ magnitude match ✅ PASSED first try: 5 presets × 40 log-spaced freqs 20Hz–20kHz, worst-case ≤0.5 dB vs `AVAudioUnitEQ`. RBJ octave-BW peaking + S=1 shelves matched Apple with NO tuning.
 - [x] 3.12 Test 2 — bypass parity ✅: cascade with nil coefficients AND with flat (all-0 dB → all `.identity`) coefficients are both bit-identical pass-through.
 - [x] 3.13 Test 3 — preamp parity ✅: `EqualizerController.equalizerState.preampLinearGain` = `10^(dB/20)` for dB ∈ {-12,-6,0,+6,+12}; applied gain within 0.1 dB.
-- [x] 3.14 Test 4 — balance law ✅: `VideoTap.balanceGains` for balance ∈ {0,0.25,0.5,0.75,1.0} → center unity, full pan mutes far channel, quarter pans halve it. **Deviation from plan:** verifies the tap's [0,1] balance law for *correctness*, NOT bit-parity vs `AVAudioPlayerNode.pan` — the engine pan gain law is undocumented and the tap intentionally uses a different (Winamp-style [0,1]) convention. True engine↔tap balance parity, if needed, is a Phase 5 concern once the AudioPlayer.balance→Context.balance mapping is defined.
+- [x] 3.14 Test 4 — balance law ✅ (now [-1,1]/0.0-center + clamp checks): center unity, full pan mutes far channel, half pans halve it. **Deviation from plan:** verifies the tap's balance law for *correctness*, NOT bit-parity vs `AVAudioPlayerNode.pan` (engine pan gain law is undocumented). Convention now matches the app so Phase 5 writes through; exact curve parity, if needed, is a Phase 5 concern.
+- [x] 3.14b Added tests (Oracle review): `strideEquivalence` (interleaved stride-2 channel == non-interleaved stride-1), `resetClearsState` (post-reset == fresh cascade), `computeFailsClosed` (sampleRate≤0 / band≥Nyquist → `.flat`, else finite).
 - [x] 3.15 `xcodegen generate` ✅
-- [x] 3.16 Build + TSan green ✅ — **89/89 tests pass with TSan, no data races** (85 baseline + 4 new). `BiquadNumericalMatchTests` ≤0.5 dB.
-- [ ] 3.17 Manual smoke (audible EQ on video) — **DEFERRED to Phase 5.** Requires the EQ-state→tap fanout (`EqualizerController`/`AudioPlayer` → `Context.installCoefficients` + `isEqOn`/`preamp`/`balance` atomics) which Phase 5 builds; until then the tap's coefficients Mutex is never populated and EQ sliders don't reach the video tap. The DSP machinery itself is verified by the automated numerical-match tests (3.11–3.14). Audible smoke moves to Phase 5 acceptance.
-- [x] 3.18 Commit ✅ — Phase 3 landed across `24f8a12` (core) + the test/extraction commit.
+- [x] 3.16 Build + TSan green ✅ — **92/92 tests pass with TSan, no data races** (85 baseline + 7 numerical-match). `BiquadNumericalMatchTests` ≤0.5 dB.
+- [x] 3.16b Codex Oracle code review ✅ — round 1 7/10 REVISE → 6 items fixed (balance convention, EQ-off reset, compute guards, maxChannels 16, shared freq constant, withBands assertion; declined full >16ch all-or-none as over-engineering); re-review 8.5/10 → Nyquist fail-closed added. Commits `84b9964` + `e2eba05`.
+- [ ] 3.17 Manual smoke (audible EQ on video) — **DEFERRED to Phase 5.** Requires the EQ-state→tap fanout (`EqualizerController`/`AudioPlayer` → `Context.installCoefficients` + `isEqOn`/`preamp`/`balance` atomics) which Phase 5 builds; until then the tap's coefficients Mutex is never populated and EQ sliders don't reach the video tap. The DSP machinery itself is verified by the automated numerical-match tests. Audible smoke moves to Phase 5 acceptance.
+- [x] 3.18 Commit ✅ — Phase 3 landed across `24f8a12` (core) + `4feec43` (tests) + `84b9964`/`e2eba05` (review fixes) + `6b8d24c` (docs).
 
 ---
 

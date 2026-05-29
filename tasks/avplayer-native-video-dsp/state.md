@@ -4,7 +4,7 @@
 > **Created:** 2026-05-01
 > **Last revised:** 2026-05-28
 > **Sprint:** S3, Wave S3-2 (architectural pivot)
-> **Status:** 🔧 IMPLEMENTING — Phase 3 ✅ **DONE** (2026-05-28). P-4 resolved (ADR-4 amendment #2: `Mutex<BiquadCoefficientSet?>` + `withLockIfAvailable`, Oracle 9.0 APPROVED). `BiquadCoefficientSet`+`compute` (RBJ), `BiquadCascade` (DF2II, render-confined), Context Mutex refactor, `tapProcess` steps 2-6 all landed. **89/89 tests with TSan, no data races**; `BiquadNumericalMatchTests` confirms ≤0.5 dB vs `AVAudioUnitEQ` (matched with no tuning). **Phase 4 NEXT** (visualizer DSP on the video-tap render path). Steps 1-3 ✅; Phases 1+2+3 ✅. Plan + research locked at Oracle ≥9.8/10. Deferred: todo 3.17 audible smoke → Phase 5 (needs EQ-state→tap fanout). Open non-blocking finding: P-6 (video→audio no auto-play).
+> **Status:** 🔧 IMPLEMENTING — Phase 3 ✅ **DONE** (2026-05-28). P-4 resolved (ADR-4 amendment #2: `Mutex<BiquadCoefficientSet?>` + `withLockIfAvailable`, Oracle 9.0 APPROVED). `BiquadCoefficientSet`+`compute` (RBJ), `BiquadCascade` (DF2II, render-confined), Context Mutex refactor, `tapProcess` steps 2-6 all landed. **92/92 tests with TSan, no data races**; `BiquadNumericalMatchTests` confirms ≤0.5 dB vs `AVAudioUnitEQ` (matched with no tuning). **Phase 4 NEXT** (visualizer DSP on the video-tap render path). Steps 1-3 ✅; Phases 1+2+3 ✅. Plan + research locked at Oracle ≥9.8/10. Phase 3 code Oracle-reviewed: 7/10 → 6 fixes → 8.5/10 (balance convention aligned to [-1,1], EQ-off reset, compute Nyquist/sampleRate fail-closed, maxChannels 16, shared freq constant). Deferred: todo 3.17 audible smoke → Phase 5 (needs EQ-state→tap fanout). Open non-blocking finding: P-6 (video→audio no auto-play).
 
 ---
 
