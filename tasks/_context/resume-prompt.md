@@ -9,9 +9,9 @@
 
 ## Current State (update after each phase completion or PR merge)
 
-> ⚠️ **S3-2 ARCHITECTURAL PIVOT — IMPLEMENTATION IN PROGRESS (2026-05-02).** `feat/video-audio-engine-routing` is **PAUSED-AS-REFERENCE** (preserved at `5af91eb`, pushed to origin). S3-2 re-attempted as **`avplayer-native-video-dsp`** on branch `feat/avplayer-native-video-dsp`. **Steps 1+2+3 ✅ + Phase 1 ✅ + Phase 2 ✅ done. Phase 3 implementation NEXT.** See `tasks/_context/s3-2-pivot.md` for the strategic decision log + step-by-step status — that file is authoritative.
+> ⚠️ **S3-2 ARCHITECTURAL PIVOT — IMPLEMENTATION IN PROGRESS (2026-05-02).** `feat/video-audio-engine-routing` is **PAUSED-AS-REFERENCE** (preserved at `5af91eb`, pushed to origin). S3-2 re-attempted as **`avplayer-native-video-dsp`** on branch `feat/avplayer-native-video-dsp`. **Steps 1+2+3 ✅ + Phases 1 + 2 + 3 ✅ done. Phase 4 (visualizer DSP on the video-tap render path) NEXT.** See `tasks/_context/s3-2-pivot.md` for the strategic decision log + step-by-step status — that file is authoritative.
 
-**Last update:** 2026-05-28 (Phase 2 **FULLY CLOSED** — todo 2.40 leak check ✅ done via Xcode Memory Graph Debugger on the real playback path: `VideoTapContext` + `coefficientBlockA` + `coefficientBlockB` all go 1→0 across clip load→teardown, `Unmanaged.passRetained`↔`tapFinalize` balanced, no leak. Found Allocations Instruments can't show pure-Swift classes by name → reusable workflow doc at `tasks/_context/instruments-allocations-workflow.md`. Non-blocking finding P-6 logged: video→audio transition doesn't auto-play. **Phase 3 NEXT — immediate first action is P-4** (race-safe coefficient hand-off redesign). Prior Phase 2 context: production tap scaffold + ADR-3a containment + Option C audioMix-on-construction via `VideoTap.buildAudioMix` + `VideoPlaybackController.loadVideo`'s `audioMixBuilder`/`isStillRelevant` + `AudioPlayer.startVideoLoad` orchestrator; 7 Oracle rounds → 9.0/10 APPROVED; 85/85 TSan; deviations in `placeholder.md` P-1/P-2/P-3/P-4/P-6.)
+**Last update:** 2026-05-28 (Phase 3 ✅ **DONE**. P-4 resolved — ADR-4 amendment #2: `Mutex<BiquadCoefficientSet?>` + render `withLockIfAvailable` (copy-out into a render-owned `BiquadCascade` cache, lock-free processing, skip-on-contention); Oracle gpt-5.5 xhigh → 9.0/10 APPROVED, 4 actionable items folded in. Implemented: `BiquadCoefficientSet`+RBJ `compute` (octave-BW peaking + S=1 shelves), `BiquadCascade` (DF2II, render-confined `let` field on Context — no new Unmanaged, 2.40 leak balance preserved), Context Mutex refactor (removed the withdrawn raw-pointer blocks), `tapProcess` steps 2-6 (reset/preamp/EQ-gate/cascade/balance), `EqualizerState` snapshot + `VideoTap.balanceGains`. **89/89 tests with TSan, no data races**; `BiquadNumericalMatchTests` ≤0.5 dB vs `AVAudioUnitEQ` (matched with NO tuning). Commits `37f9edc`→`24f8a12`→`4feec43`. **Phase 4 NEXT** (visualizer DSP on the video-tap render path). Deferred: audible EQ smoke → Phase 5 (needs the EQ-state→tap fanout). Open non-blocking: P-6.)
 **Main HEAD:** `9cca40a` (main has not advanced during S3-2 work).
 **`feat/avplayer-native-video-dsp` HEAD:** `7d3367c` — `Phase 2 revision (s3-2): Option C structural fix + Oracle 9.0/10 APPROVED`. Run `git log -1 --oneline` to confirm. **34 commits ahead of main** (run `git rev-list --count main..HEAD`):
 - 13 cherry-picked Phase-1 commits (engine config observer for stream-side resilience, range ending at `2aa2f18`)
@@ -98,11 +98,10 @@ S3-1A mwvi  ✅ MERGED (PR #80, merge commit 7f3d76f, 2026-04-28)
      │       │
      │       ▼
      │    S3-2 avplayer-native-video-dsp         ←── PR #C   🔧 IMPLEMENTING
-     │       │                                                  Step 1+2+3 ✅; Phase 1 ✅;
-     │       │                                                  Phase 2 ✅ FULLY CLOSED (2.39 smoke ✅
-     │       │                                                  + 2.40 leak check ✅ 2026-05-28, no leak)
-     │       │                                                  Phase 3 NEXT — first action = P-4 hand-off
-     │       │                                                  redesign (gate); 7 phases remain
+     │       │                                                  Step 1+2+3 ✅; Phases 1 + 2 + 3 ✅
+     │       │                                                  (Phase 3: P-4 resolved, BiquadCascade +
+     │       │                                                  Mutex hand-off, 89/89 TSan, ≤0.5 dB match)
+     │       │                                                  Phase 4 NEXT (visualizer DSP); 6 phases remain
      │       │
      │       ▼
      │    S3-3 hls                               ←── PR #D
@@ -179,7 +178,9 @@ Index lives at `~/.claude/projects/-Users-hank-dev-src-MacAmp/memory/MEMORY.md`.
 
 ## First Action for the Resuming Agent
 
-You are picking up `avplayer-native-video-dsp` mid-implementation. Steps 1+2+3 ✅ + Phase 1 ✅ + Phase 2 ✅ are done. **Phase 3 (`BiquadCascade` + balance + numerical match) is the active work.**
+You are picking up `avplayer-native-video-dsp` mid-implementation. Steps 1+2+3 ✅ + Phases 1 + 2 + 3 ✅ are done. **Phase 4 (visualizer DSP on the video-tap render path, per plan.md §6 Phase 4 + ADR-6) is the active work** — see `tasks/avplayer-native-video-dsp/todo.md` Phase 4 items. The `videoTapVisualizerRender` function consumes the tap's `AudioBufferList` and feeds the existing `VisualizerFeed`/`VisualizerScratchBuffers` (extracted in Phase 1) so spectrum + Butterchurn animate from video audio.
+
+> **Phase 3 ✅ DONE (2026-05-28).** P-4 resolved (ADR-4 amendment #2, Oracle 9.0 APPROVED); `BiquadCascade` + RBJ `compute` + Context `Mutex<BiquadCoefficientSet?>` refactor + `tapProcess` steps 2-6; 89/89 TSan, ≤0.5 dB numerical match. The Phase 3 detail below is retained as historical reference. Audible EQ smoke deferred to Phase 5 (needs the EQ-state→tap fanout).
 
 ### Pickup checklist
 

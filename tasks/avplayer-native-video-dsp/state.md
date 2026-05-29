@@ -4,7 +4,7 @@
 > **Created:** 2026-05-01
 > **Last revised:** 2026-05-28
 > **Sprint:** S3, Wave S3-2 (architectural pivot)
-> **Status:** 🔧 IMPLEMENTING — Phase 2 ✅ **FULLY CLOSED** (production tap scaffold + ADR-3a containment, 85/85 TSan green; both manual items done: todo 2.39 smoke ✅ 2026-05-02, todo 2.40 leak check ✅ 2026-05-28 via Memory Graph Debugger — `VideoTapContext` + both coefficient blocks go 1→0 across clip load→teardown, no leak). **Phase 3 NEXT, gated on P-4** (`BiquadCascade` + balance + numerical match). Steps 1 + 2 + 3 ✅; Phases 1 + 2 ✅. Plan + research locked at Oracle ≥9.8/10. Open non-blocking finding: P-6 (video→audio no auto-play).
+> **Status:** 🔧 IMPLEMENTING — Phase 3 ✅ **DONE** (2026-05-28). P-4 resolved (ADR-4 amendment #2: `Mutex<BiquadCoefficientSet?>` + `withLockIfAvailable`, Oracle 9.0 APPROVED). `BiquadCoefficientSet`+`compute` (RBJ), `BiquadCascade` (DF2II, render-confined), Context Mutex refactor, `tapProcess` steps 2-6 all landed. **89/89 tests with TSan, no data races**; `BiquadNumericalMatchTests` confirms ≤0.5 dB vs `AVAudioUnitEQ` (matched with no tuning). **Phase 4 NEXT** (visualizer DSP on the video-tap render path). Steps 1-3 ✅; Phases 1+2+3 ✅. Plan + research locked at Oracle ≥9.8/10. Deferred: todo 3.17 audible smoke → Phase 5 (needs EQ-state→tap fanout). Open non-blocking finding: P-6 (video→audio no auto-play).
 
 ---
 
