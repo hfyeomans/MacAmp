@@ -216,24 +216,25 @@ Numbering: `<Phase>.<Item>`. `[x]` complete, `[~]` in-progress, `[!]` blocked.
 **Goal.** Wire two canonical owners' fanout: EQ from `EqualizerController`, balance from `AudioPlayer`. Both push to engine + tap.
 **Plan ref:** plan.md §6 Phase 5 + ADR-5.
 
-- [ ] 5.1 Add `private final class WeakBox<T: AnyObject>` to `EqualizerController.swift`
-- [ ] 5.2 Add `private var registeredVideoTapContexts: [WeakBox<VideoTapContext>] = []` to `EqualizerController`
-- [ ] 5.3 Implement `func registerVideoTapContext(_:sampleRate:)` — append weak ref; immediately compute + push `BiquadCoefficientSet`; push `isEqOn` and `preampLinearGain` atomics
-- [ ] 5.4 Implement `func unregisterVideoTapContext(_:)` — remove ref by identity
-- [ ] 5.5 Implement `func handleSampleRateChange(_:newSampleRate:)` — recompute coefficient set + push
-- [ ] 5.6 Modify existing EQ slider / preset / preamp change handlers — after writing to engine `AVAudioUnitEQ`, iterate `registeredVideoTapContexts` (skip nil), call the Phase-3-redesigned coefficient install entry point (per P-4) + atomic writes for `isEqOn` and `preampLinearGain`. (Phase 5 cannot land before Phase 3 closes P-4 — see plan.md Phase 5 amendment.)
-- [ ] 5.7 Add `private final class WeakBox<T: AnyObject>` to `AudioPlayer.swift` (or extract to shared file if extension surface justifies it)
-- [ ] 5.8 Add `private var registeredVideoTapContexts: [WeakBox<VideoTapContext>] = []` to `AudioPlayer`
-- [ ] 5.9 Modify `AudioPlayer.balance.didSet` — after writing to engine balance node, iterate registry, write Float bit-pattern to each Context's `balance` atomic
-- [ ] 5.10 Update `AudioPlayer.startVideoLoad(...)`'s `audioMixBuilder` closure — after `VideoTapContext()` construction (just before `VideoTap.buildAudioMix`), register the new Context with both `equalizerController.registerVideoTapContext(context, sampleRate: 0)` (sample rate 0; updated by `handleSampleRateChange` on first `tapPrepare`) and `self.registeredVideoTapContexts`. Also add unregister in `pauseAndDetachVideoTapIfNeeded` and `invalidateInFlightVideoLoad`.
-- [ ] 5.11 Update `AudioPlayer.detachVideoTap(...)` — unregister from both registries before letting Context go out of scope
-- [ ] 5.12 Implement polled-atomic sample-rate handling: piggyback on `VisualizerPipeline` 30 Hz `Timer`. Add small per-Context check: if `pendingSampleRate` differs from last-seen, call `equalizerController.handleSampleRateChange(...)`
-- [ ] 5.13 Unit test: register Context at 44.1 kHz; setBandGain → assert pointer changed AND coefficients match RBJ at 44.1 kHz
-- [ ] 5.14 Unit test: change `AudioPlayer.balance` → assert all registered Contexts' `balance` atomics updated
-- [ ] 5.15 Build + TSan green
-- [ ] 5.16 Manual smoke: drag EQ slider during video playback → audio changes real-time; drag balance → audio pans real-time
-- [ ] 5.17 Engine-path regression: drag EQ during AUDIO file playback — existing behavior unchanged
-- [ ] 5.18 Commit: `chore(s3-2): Phase 5 — EQ + balance state fanout`
+- [x] 5.1 ✅ `WeakBox<T: AnyObject>` — shared internal in `MacAmpApp/Utilities/WeakBox.swift` (not duplicated per-file; used by both registries).
+- [x] 5.2 ✅ `registeredVideoTapContexts: [WeakBox<VideoTapContext>]` on `EqualizerController` (`@ObservationIgnored`).
+- [x] 5.3 ✅ `registerVideoTapContext(_:)` — append weak ref + immediately `pushEQState` (isEqOn + preamp atomics + compute+`installCoefficients` at the Context's `pendingSampleRate`).
+- [x] 5.4 ✅ `unregisterVideoTapContext(_:)` — remove by identity + drop the last-rate record.
+- [x] 5.5 ✅ `handleSampleRateChange(_:newSampleRate:)` — recompute + reinstall at the new rate.
+- [x] 5.6 ✅ `fanOutToVideoTaps()` hooked into `preamp`/`eqBands`/`isEqOn` didSets (covers slider/preamp/toggle/preset). Now actually computes + installs coefficients via `installCoefficients` (P-4 closed in Phase 3). Fast-path no-op when no taps registered (engine/audio path unchanged).
+- [x] 5.7 ✅ `WeakBox` shared (see 5.1) — not duplicated in AudioPlayer.
+- [x] 5.8 ✅ `registeredVideoTapContexts` on `AudioPlayer` (`@ObservationIgnored`, separate balance registry).
+- [x] 5.9 ✅ `balance.didSet` → `fanOutBalanceToVideoTaps()` writes Float bit-pattern ([-1,1]) to each Context's `balance` atomic.
+- [x] 5.10 ✅ `startVideoLoad` audioMixBuilder registers the Context with BOTH owners (after `buildAudioMix`); `pauseAndDetachVideoTapIfNeeded` unregisters from both.
+- [x] 5.11 ✅ Unregister routed through `pauseAndDetachVideoTapIfNeeded` (the single detach path; reached by stop / video→audio / video→video / completion).
+- [x] 5.12 ✅ Sample-rate poll: `VisualizerPipeline.onPollTick` (decoupled hook) → `AudioPlayer` wires it to `equalizer.pollVideoTapSampleRates()`; recomputes when `pendingSampleRate` changes (catches EQ-on-at-video-start). last-rate dict avoids redundant recompute; poll compacts dead refs.
+- [x] 5.13 ✅ `VideoTapFanoutTests`: register pushes state; EQ change fans out new coefficients (== RBJ compute); sample-rate poll recomputes flat→real; unregister stops fanout.
+- [x] 5.14 ✅ `balanceFanout` test — `AudioPlayer.balance` updates a registered Context's atomic across {0.5,-1,0,1,-0.25}; stops after unregister. (register/unregister made `internal` as the test seam.)
+- [x] 5.15 Build + TSan green ✅ — **103/103, no data races** (incl. cascade-confinement gate).
+- [ ] 5.16 Manual smoke: drag EQ slider during VIDEO playback → audio changes real-time; drag balance → audio pans real-time — **READY FOR USER (this is the deferred audible-EQ-on-video — todo 3.17 — now live).**
+- [ ] 5.17 Engine-path regression: drag EQ during AUDIO file playback — existing behavior unchanged — **READY FOR USER.**
+- [x] 5.18 Commit ✅ — `e1f8a4e` (impl + tests + ADR-5 reconcile) + `252d3bc` (Oracle round-1 remediation).
+- [x] 5.19 Codex Oracle review ✅ — round 1 **9/10 APPROVED** (1 ACTIONABLE balance test + 3 NITs) → all fixed → round 2 **10/10 APPROVED, no findings** (duplicate-path sweep clean). Two canonical owners (state ownership per ADR-5); render-confinement preserved (writes only Mutex/atomics).
 
 ---
 
