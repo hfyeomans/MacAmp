@@ -100,6 +100,7 @@ final class EqualizerController {
     /// when video starts) without a user EQ change.
     func pollVideoTapSampleRates() {
         guard !registeredVideoTapContexts.isEmpty else { return }
+        registeredVideoTapContexts.removeAll { $0.value == nil }
         for box in registeredVideoTapContexts {
             guard let context = box.value else { continue }
             let current = Double(bitPattern: context.pendingSampleRate.load(ordering: .relaxed))

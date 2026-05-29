@@ -23,7 +23,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     // `AudioPlayer` owns balance state; on change it fans out to the engine balance
     // node (the didSet) and to any registered video-tap Context's `balance` atomic.
     // Separate registry from `EqualizerController`'s (two canonical owners).
-    private var registeredVideoTapContexts: [WeakBox<VideoTapContext>] = []
+    @ObservationIgnored private var registeredVideoTapContexts: [WeakBox<VideoTapContext>] = []
 
     /// Legacy toggle - derives from AppSettings.visualizerMode (forwarded to pipeline)
     var useSpectrumVisualizer: Bool {
@@ -105,14 +105,15 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     }
 
     /// Register a video-tap Context for balance fanout (separate registry from the
-    /// EQ controller's) and immediately push the current balance.
-    private func registerVideoTapContextForBalance(_ context: VideoTapContext) {
+    /// EQ controller's) and immediately push the current balance. `internal` for the
+    /// Phase 5 balance-fanout test seam (mirrors `EqualizerController.register…`).
+    func registerVideoTapContextForBalance(_ context: VideoTapContext) {
         registeredVideoTapContexts.removeAll { $0.value == nil || $0.value === context }
         registeredVideoTapContexts.append(WeakBox(context))
         context.balance.store(balance.bitPattern, ordering: .relaxed)
     }
 
-    private func unregisterVideoTapContextForBalance(_ context: VideoTapContext) {
+    func unregisterVideoTapContextForBalance(_ context: VideoTapContext) {
         registeredVideoTapContexts.removeAll { $0.value == nil || $0.value === context }
     }
 

@@ -319,8 +319,7 @@ Both Contexts (one per video AVPlayerItem) are registered with `EqualizerControl
 4. **EQ on/off gate**: if `context.isEqOn.load(.relaxed) == false`, skip step 5.
 5. **`BiquadCascade.process`**: refresh the render-owned coefficient cache via `context.coefficients.withLockIfAvailable` (three-case double-optional, ADR-4 amendment #2); if the cache holds coefficients, run the 10-band cascade in place.
 6. **Balance**: `let bal = Float(bitPattern: context.balance.load(.relaxed))`; `(left, right) = VideoTap.balanceGains(bal)` — `[-1, 1]` / 0.0-center law (unity near side, linear far-side attenuation); multiply L (ch 0) / R (ch 1), skip if center (`bal == 0`).
-7. **(Phase 4) Visualizer feed**: `videoTapVisualizerRender(...)` publishes the post-DSP buffer to the shared `VisualizerFeed` (ADR-6).
-7. **Visualizer DSP** (Phase 4): mono-mix + RMS + Goertzel + FFT into per-tap scratch; `feed.tryPublish`.
+7. **Visualizer DSP** (Phase 4, ADR-6): `videoTapVisualizerRender(...)` mono-mixes + RMS + Goertzel + FFT into the per-tap scratch and publishes the post-DSP buffer to the shared `VisualizerFeed` (`feed.tryPublish`).
 8. Return.
 
 **Bypass semantics summary** (CPU cost when each is "off"):
@@ -329,7 +328,7 @@ Both Contexts (one per video AVPlayerItem) are registered with `EqualizerControl
 |---|---|
 | `isEqOn = false` | Steps 4-5 skipped; preamp + balance still apply |
 | `preamp = 0 dB` (linear=1.0) | Step 3 single load + comparison; multiply skipped |
-| `balance = 0.5` (center) | Step 6 single load + comparison; multiplies skipped |
+| `balance = 0` (center) | Step 6 single load + comparison; multiplies skipped |
 | Format unsupported | Steps 2-7 all skipped (pass-through) |
 | Visualizer disabled (future toggle) | Step 7 skipped (TBD; Phase 4 detail) |
 

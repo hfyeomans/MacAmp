@@ -71,6 +71,23 @@ struct VideoTapFanoutTests {
         #expect(Self.installedCoefficients(ctx) == expected, "poll must recompute at the now-known rate")
     }
 
+    @Test("balance fanout: AudioPlayer.balance updates a registered Context's atomic")
+    func balanceFanout() {
+        let player = AudioPlayer()
+        let ctx = VideoTapContext(feed: VisualizerFeed())
+        func ctxBalance() -> Float { Float(bitPattern: ctx.balance.load(ordering: .relaxed)) }
+
+        player.registerVideoTapContextForBalance(ctx)
+        for value in [Float(0.5), -1.0, 0.0, 1.0, -0.25] {
+            player.balance = value
+            #expect(ctxBalance() == value, "Context balance atomic should track AudioPlayer.balance \(value)")
+        }
+
+        player.unregisterVideoTapContextForBalance(ctx)
+        player.balance = 0.9
+        #expect(ctxBalance() == -0.25, "unregistered Context must not receive balance fanout")
+    }
+
     @Test("unregister stops further fanout")
     func unregisterStopsFanout() {
         let eq = EqualizerController()
