@@ -207,6 +207,7 @@ Numbering: `<Phase>.<Item>`. `[x]` complete, `[~]` in-progress, `[!]` blocked.
 - [ ] 4.18 Engine-path regression: music file — spectrum + Butterchurn animate identically (engine path untouched) — **READY FOR USER**
 - [x] 4.19 Commit ✅ — `92d0079` (impl) + `2884033` (consumer blockers) + `d475374` (completion/oscilloscope) + `1634dbd` (repeat-one).
 - [x] 4.20 Codex Oracle review ✅ — arc 6 → 8 → 9.0 → **9.6/10 APPROVED** (2 blockers fixed: consumer poll-timer + UI ungating; lifecycle holes fixed: completion + repeat-one). Remaining 0.4 = diminishing-returns polish.
+- [x] 4.21 Dual-window verification ✅ (user-reported, 2026-05-28) — confirmed the playlist-window mini-visualizer (shown when the main window is shaded) reuses the SAME `VisualizerView()` + shared `@Environment(AudioPlayer.self)` as the main window (instantiated in both `MainWindowFullLayer` + `WinampPlaylistWindow`), so all `isVisualizerRendering` gating flows to both — no separate path. Audited ALL `isEngineRendering` consumers; fixed one stray (the min-bar-height visibility floor in `VisualizerView.updateBars`, `VisualizerView.swift:102`) → now `isVisualizerRendering`. Commit `ea95f10`. User smoke tests 1-6 pass.
 
 ---
 
