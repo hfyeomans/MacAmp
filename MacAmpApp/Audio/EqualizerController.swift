@@ -211,3 +211,30 @@ final class EqualizerController {
         eqNode.bypass = !isEqOn
     }
 }
+
+/// Immutable snapshot of equalizer state, produced on the main thread by
+/// `EqualizerController` and consumed by `BiquadCoefficientSet.compute` to build
+/// the video-tap biquad cascade. `EqualizerController` remains the single source
+/// of EQ truth (ADR-5); this is a read-only projection.
+///
+/// (Plan called for a `private nested` type; `internal` is required so
+/// `BiquadCoefficientSet.compute` can consume it across files.)
+struct EqualizerState: Sendable, Equatable {
+    let isEqOn: Bool
+    /// Preamp as a linear gain multiplier. Engine side stores dB in
+    /// `AVAudioUnitEQ.globalGain`; the tap applies this linear value directly.
+    /// `10^(preampDB/20)`.
+    let preampLinearGain: Float
+    /// 10 per-band gains in dB, indexed to `BiquadCoefficientSet.frequencies`.
+    let bandGainsDB: [Float]
+}
+
+extension EqualizerController {
+    /// Current EQ state as an immutable snapshot. Phase 5 fans this out to
+    /// registered video-tap contexts on each EQ change.
+    var equalizerState: EqualizerState {
+        EqualizerState(isEqOn: isEqOn,
+                       preampLinearGain: Float(pow(10.0, Double(preamp) / 20.0)),
+                       bandGainsDB: eqBands)
+    }
+}

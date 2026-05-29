@@ -32,7 +32,14 @@
 // appropriate `RenderThreadSafe` conformance OR proving the field falls
 // under a permitted shape.
 //
-// See plan.md ADR-3 + ADR-3a for the design rationale.
+// Current fields (Phase 3):
+//   * `coefficients: Mutex<BiquadCoefficientSet?>` — main→render coefficient
+//     hand-off (render uses `withLockIfAvailable`; ADR-4 amendment #2).
+//   * `cascade: BiquadCascade` — render-confined DSP state; `RenderThreadSafe`
+//     by render-confinement (main never touches it after `init`).
+//   * the `Atomic<…>` parameter/format/telemetry fields below.
+//
+// See plan.md ADR-3 + ADR-3a + ADR-4 amendment #2 for the design rationale.
 
 import Foundation
 import Synchronization
@@ -45,23 +52,24 @@ import Synchronization
 /// `Unmanaged.passRetained` at attach time and is released exactly once in
 /// `tapFinalize`.
 final class VideoTapContext: @unchecked Sendable {
-    // MARK: Coefficient hand-off (Phase 2 placeholder; Phase 3 redesigns per P-4)
+    // MARK: Coefficient hand-off (ADR-4 amendment #2 — Mutex + withLockIfAvailable)
 
-    /// Active coefficient block for the render thread. **Permanently
-    /// `nil` in Phase 2** — no install API exists, and `tapProcess`
-    /// does not read this pointer. Phase 3 will introduce an install
-    /// path under a race-safe scheme (per `placeholder.md` P-4); the
-    /// field is declared now so the surrounding lifecycle (alloc /
-    /// dealloc / nil-default) is exercised end-to-end.
-    let coefficientSetPointer: Atomic<UnsafePointer<BiquadCoefficientSet>?>
+    /// EQ biquad coefficients handed from the main thread to the render thread.
+    /// Main writes via `installCoefficients` (`withLock`); the render thread reads
+    /// via `withLockIfAvailable`, copying the value into its own render-confined
+    /// cache and never blocking. `nil` until the first install → the render thread
+    /// bypasses the cascade. Replaces the withdrawn atomic-pointer A/B double-buffer
+    /// (race-unsafe; see plan.md ADR-4 amendment #2).
+    let coefficients: Mutex<BiquadCoefficientSet?>
 
-    /// The two pre-allocated coefficient blocks. Phase 2 only exercises
-    /// their alloc/dealloc lifecycle (init / deinit below). Phase 3's
-    /// install path will repurpose them per the chosen P-4 scheme — or
-    /// replace them with a different storage layout if the scheme
-    /// requires (e.g. RCU allocates fresh per install).
-    private let coefficientBlockA: UnsafeMutablePointer<BiquadCoefficientSet>
-    private let coefficientBlockB: UnsafeMutablePointer<BiquadCoefficientSet>
+    // MARK: Render-owned DSP state
+
+    /// 10-band biquad cascade with per-(band, channel) filter history. Created
+    /// here so it shares the Context's lifetime — no separate `Unmanaged` retain,
+    /// so the todo 2.40 `passRetained`↔`tapFinalize` leak balance is unchanged.
+    /// Touched ONLY by the render thread (`tapProcess`); its `RenderThreadSafe`
+    /// story is render-confinement (conformance in `RenderThreadSafe.swift`).
+    let cascade: BiquadCascade
 
     // MARK: User-controlled DSP parameters
 
@@ -103,15 +111,12 @@ final class VideoTapContext: @unchecked Sendable {
 
     // MARK: Lifecycle
 
-    init() {
-        let blockA = UnsafeMutablePointer<BiquadCoefficientSet>.allocate(capacity: 1)
-        blockA.initialize(to: BiquadCoefficientSet())
-        let blockB = UnsafeMutablePointer<BiquadCoefficientSet>.allocate(capacity: 1)
-        blockB.initialize(to: BiquadCoefficientSet())
-        self.coefficientBlockA = blockA
-        self.coefficientBlockB = blockB
+    /// Max channels the render-side cascade is sized for (covers up to 7.1).
+    static let maxDSPChannels = 8
 
-        self.coefficientSetPointer = Atomic<UnsafePointer<BiquadCoefficientSet>?>(nil)
+    init() {
+        self.coefficients = Mutex<BiquadCoefficientSet?>(nil)
+        self.cascade = BiquadCascade(maxChannels: VideoTapContext.maxDSPChannels)
         self.balance = Atomic<UInt32>(Float(0.5).bitPattern)
         self.isEqOn = Atomic<Bool>(false)
         self.preampLinearGainBits = Atomic<UInt32>(Float(1.0).bitPattern)
@@ -122,30 +127,13 @@ final class VideoTapContext: @unchecked Sendable {
         self.isActive = Atomic<Bool>(false)
     }
 
-    deinit {
-        coefficientBlockA.deinitialize(count: 1).deallocate()
-        coefficientBlockB.deinitialize(count: 1).deallocate()
+    /// Install a fresh coefficient set from the main thread. Blocking `withLock`
+    /// is fine here — main can afford to wait, and the lock is held only for a
+    /// flat value-type assignment. The render thread reads the same `Mutex` with
+    /// `withLockIfAvailable` (never blocking). See plan.md ADR-4 amendment #2.
+    func installCoefficients(_ newSet: BiquadCoefficientSet) {
+        coefficients.withLock { $0 = newSet }
     }
-
-    // NOTE: NO coefficient-install API is exposed in Phase 2.
-    //
-    // ADR-4's original design (atomic-pointer A/B swap) was withdrawn
-    // because it is not race-safe in the multi-install case: a render
-    // thread holding a pointer to slot A from a prior load can have
-    // slot A overwritten by a subsequent main-thread swap A→B→A. No
-    // acquire/release ordering closes that pointee-lifetime window.
-    //
-    // Phase 2 leaves `coefficientSetPointer` as a permanently-nil
-    // `Atomic<UnsafePointer<BiquadCoefficientSet>?>` and `tapProcess`
-    // never reads it. The two pre-allocated coefficient blocks
-    // (`coefficientBlockA` / `coefficientBlockB` declared above)
-    // remain so the alloc/dealloc lifecycle is exercised end-to-end.
-    //
-    // Phase 3 GATING work (see `tasks/avplayer-native-video-dsp/placeholder.md`
-    // P-4): pick a race-safe hand-off scheme before exposing any
-    // install API or before `tapProcess` reads coefficients. Candidates:
-    // triple-buffer + atomic in-use counter, RCU/epoch reclamation,
-    // or `Mutex<BiquadCoefficientSet>` with `withLockIfAvailable`.
 
     #if DEBUG
     /// DEBUG-only factory for `VideoTapSendableContractTests`. Builds a

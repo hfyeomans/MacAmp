@@ -42,3 +42,7 @@ extension AudioStreamBasicDescription: RenderThreadSafe {}
 
 extension VisualizerFeed: RenderThreadSafe {}
 extension VisualizerScratchBuffers: RenderThreadSafe {}
+
+// Render-confined: created on the main thread in `VideoTapContext.init`, then
+// touched only by the render thread inside `tapProcess`. Main never accesses it.
+extension BiquadCascade: RenderThreadSafe {}

@@ -153,20 +153,20 @@ Numbering: `<Phase>.<Item>`. `[x]` complete, `[~]` in-progress, `[!]` blocked.
 **Goal.** Implement full audible DSP: 10-band biquad cascade (RBJ cookbook) + balance gain. Add numerical-equivalence test vs `AVAudioUnitEQ`.
 **Plan ref:** plan.md §6 Phase 3 + ADR-4, ADR-5, ADR-8, ADR-9.
 
-- [ ] 3.1 Create `MacAmpApp/Audio/VideoDSP/BiquadCoefficientSet.swift` — `struct BiquadCoefficientSet { let bands: (BiquadCoefs ×10) }` (fixed-size for `Sendable`)
-- [ ] 3.2 Implement `static func compute(for state: EqualizerState, sampleRate: Double) -> BiquadCoefficientSet` — RBJ peaking-EQ formulas for bands 1-8, low/high-shelf for bands 0+9 (ADR-8)
-- [ ] 3.3 Add `private nested struct EqualizerState: Sendable, Equatable` to `EqualizerController.swift`: `isEqOn: Bool`, `preampLinearGain: Float`, `bandGainsDB: (Float ×10)`
-- [ ] 3.4 Create `MacAmpApp/Audio/VideoDSP/BiquadCascade.swift` — stateful per-channel filter history (z1, z2 per band per channel)
-- [ ] 3.5 Implement `mutating func process(buffer:channels:frames:coefficients:)` — direct-form-II biquad, 10 bands cascaded per channel
-- [ ] 3.6 Implement `mutating func reset()` — zero filter history (ADR-9)
-- [ ] 3.7 Add `extension BiquadCascade: RenderThreadSafe` to `RenderThreadSafe.swift` (Phase 2a Gate 2)
-- [ ] 3.8 Update `VideoTapContext.swift` init/deinit to allocate two real `BiquadCoefficientSet` blocks via `UnsafeMutablePointer.allocate(capacity: 1)` (no longer placeholder)
-- [ ] 3.9 Update `VideoTap.swift` `tapProcess` body — implement render-path steps 2-6 from ADR-5:
-   - [ ] 3.9.1 Step 2: Filter-state reset on `flagsOut.pointee.contains(.startOfStream)` (ADR-9)
-   - [ ] 3.9.2 Step 3: Preamp gain — `let preamp = Float(bitPattern: context.preampLinearGainBits.load(.relaxed))`; multiply if !=1.0
-   - [ ] 3.9.3 Step 4: EQ on/off gate — `if !context.isEqOn.load(.relaxed) { skip step 5 }`
-   - [ ] 3.9.4 Step 5: BiquadCascade.process — load coefficient pointer atomically (`acquiring`), if non-nil run cascade in place
-   - [ ] 3.9.5 Step 6: Balance — `let bal = Float(bitPattern: context.balance.load(.relaxed))`; lGain/rGain multiplies, skip if center
+- [x] 3.1 Create `MacAmpApp/Audio/VideoDSP/BiquadCoefficientSet.swift` ✅ — `BiquadCoefs` + `struct BiquadCoefficientSet` with fixed-size 10-tuple (heap-free, `Sendable`; manual `Equatable` since tuples block synthesis) + `withBands` contiguous accessor + `.flat`/`.identity`.
+- [x] 3.2 Implement `static func compute(for:sampleRate:)` ✅ — RBJ octave-BW peaking (bands 1-8), RBJ low/high shelf S=1 (bands 0/9), `A=10^(dB/40)`; Double arithmetic, Float storage; band freqs coupled to `configureEQ` (drift guarded by 3.11).
+- [x] 3.3 Add `EqualizerState: Sendable, Equatable` ✅ — top-level internal in `EqualizerController.swift` (`internal`, not `private nested`: forced by cross-file `compute` consumption) `{ isEqOn, preampLinearGain (10^(dB/20)), bandGainsDB: [Float] }` + `EqualizerController.equalizerState` projection for Phase 5.
+- [x] 3.4 Create `BiquadCascade.swift` ✅ — `final class` (render-confined) with per-(band,channel) z1/z2 in manually-allocated buffers (no Array/CoW in the inner loop) + render-owned `currentCoefficients` cache.
+- [x] 3.5 Implement `process(_:frameCount:channel:stride:)` ✅ — Transposed Direct-Form-II, 10 bands cascaded; per-channel with `stride` (handles non-interleaved stride=1 + interleaved stride=channels); reads `currentCoefficients`; skips `.identity` bands (zeroing their state).
+- [x] 3.6 Implement `reset()` ✅ — zero z1/z2 (ADR-9).
+- [x] 3.7 `extension BiquadCascade: RenderThreadSafe` ✅ ADDED — decision: BiquadCascade is a `let cascade` field on `VideoTapContext` (reached through a RenderThreadSafe-gated field), render-confined story. (NOT tap-storage; keeps it inside the already-retained Context → no new Unmanaged.)
+- [x] 3.8 Refactor `VideoTapContext.swift` ✅ — removed `coefficientSetPointer` + `coefficientBlockA/B` + their alloc/dealloc (deinit now trivial); added `let coefficients: Mutex<BiquadCoefficientSet?>` (init `Mutex(nil)`) + `installCoefficients(_:)` (`withLock`); added `let cascade: BiquadCascade` (maxChannels 8); updated Gate-1 header contract field list. **BiquadCascade ownership = Context field (no separate retain) → 2.40 leak balance unchanged** (no re-verify trigger hit).
+- [x] 3.9 Update `VideoTap.swift` `tapProcess` body ✅ — steps 2-6 implemented:
+   - [x] 3.9.1 Step 2: reset on `kMTAudioProcessingTapFlag_StartOfStream` (bitwise — `MTAudioProcessingTapFlags` is a `UInt32` typealias, not an OptionSet) → `context.cascade.reset()`
+   - [x] 3.9.2 Step 3: preamp — `Float(bitPattern: preampLinearGainBits)`; flat multiply over each buffer if !=1.0
+   - [x] 3.9.3 Step 4: EQ gate — `if eqOn { … }`
+   - [x] 3.9.4 Step 5: refresh cache via `coefficients.withLockIfAvailable { $0 }` with three-case double-optional handling; `cascade.process` per channel via `UnsafeMutableAudioBufferListPointer` iteration
+   - [x] 3.9.5 Step 6: balance — `Float(bitPattern: balance)`; standard [0,1]/0.5-center law, L/R gain multiplies, skip if center
 - [ ] 3.10 Create `Tests/MacAmpTests/BiquadNumericalMatchTests.swift`
 - [ ] 3.11 Test 1 — full EQ active: 5 presets × log sweep 20 Hz – 20 kHz × ≤0.5 dB worst-case vs `AVAudioUnitEQ` (offline render via `AVAudioEngine.manualRenderingMode`)
 - [ ] 3.12 Test 2 — EQ-toggle bypass parity: `isEqOn=false` → BiquadCascade output bit-identical to input modulo preamp+balance

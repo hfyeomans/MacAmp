@@ -68,9 +68,76 @@ private let tapProcess: MTAudioProcessingTapProcessCallback = { tap, framesToPro
         return  // Pass-through: unsupported ASBD (ADR-11) or not yet prepared.
     }
 
-    // Phase 2 stops here. Phase 3 adds biquad + balance; Phase 4 adds
-    // visualizer DSP. Until then this tap is observably pass-through —
-    // AVPlayer's downstream pipeline plays the buffer unchanged.
+    // ===== Phase 3 render path (ADR-5 steps 2-6) =====
+
+    // Step 2 — flush filter state on a stream discontinuity (seek / new stream)
+    // so stale history does not bleed across the cut (ADR-9).
+    if (flagsOut.pointee & MTAudioProcessingTapFlags(kMTAudioProcessingTapFlag_StartOfStream)) != 0 {
+        context.cascade.reset()
+    }
+
+    let frames = Int(framesOut.pointee)
+    guard frames > 0 else { return }
+
+    let preamp = Float(bitPattern: context.preampLinearGainBits.load(ordering: .relaxed))
+    let eqOn = context.isEqOn.load(ordering: .relaxed)
+    let balance = Float(bitPattern: context.balance.load(ordering: .relaxed))
+
+    // Step 5 prep — refresh the render-owned coefficient cache via the Context's
+    // Mutex with a non-blocking trylock (ADR-4 amendment #2). Double-optional:
+    // outer nil = contended → reuse cache; .some(nil) = no install yet → bypass;
+    // .some(.some) = update cache.
+    if eqOn {
+        switch context.coefficients.withLockIfAvailable({ $0 }) {
+        case .some(.some(let set)): context.cascade.currentCoefficients = set
+        case .some(.none): context.cascade.currentCoefficients = nil
+        case .none: break
+        }
+    }
+
+    // Step 6 params — balance ∈ [0, 1], 0.5 = center. Standard balance law: unity
+    // on the near channel, linear attenuation of the far channel.
+    let applyBalance = balance != 0.5
+    let leftGain: Float = balance <= 0.5 ? 1.0 : (1.0 - balance) * 2.0
+    let rightGain: Float = balance >= 0.5 ? 1.0 : balance * 2.0
+    let applyPreamp = preamp != 1.0
+
+    let bufferPointer = UnsafeMutableAudioBufferListPointer(bufferList)
+    var globalChannel = 0
+    for buffer in bufferPointer {
+        guard let raw = buffer.mData else { continue }
+        let channelsInBuffer = Int(buffer.mNumberChannels)
+        guard channelsInBuffer > 0 else { continue }
+        let floatCount = Int(buffer.mDataByteSize) / MemoryLayout<Float>.size
+        let framesInBuffer = floatCount / channelsInBuffer
+        let samples = raw.assumingMemoryBound(to: Float.self)
+
+        // Step 3 — preamp over every sample in this buffer.
+        if applyPreamp {
+            for i in 0..<floatCount { samples[i] *= preamp }
+        }
+
+        let stride = channelsInBuffer
+        for c in 0..<channelsInBuffer {
+            let channelIndex = globalChannel + c
+            let base = samples + c
+
+            // Steps 4 + 5 — gated EQ cascade.
+            if eqOn {
+                context.cascade.process(base, frameCount: framesInBuffer, channel: channelIndex, stride: stride)
+            }
+
+            // Step 6 — balance trim on L (ch 0) / R (ch 1); higher channels untouched.
+            if applyBalance {
+                let gain: Float? = channelIndex == 0 ? leftGain : (channelIndex == 1 ? rightGain : nil)
+                if let gain, gain != 1.0 {
+                    var p = base
+                    for _ in 0..<framesInBuffer { p.pointee *= gain; p += stride }
+                }
+            }
+        }
+        globalChannel += channelsInBuffer
+    }
 }
 
 // MARK: - Audio-mix builder + detach
