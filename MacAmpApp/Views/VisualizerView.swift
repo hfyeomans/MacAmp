@@ -99,7 +99,7 @@ struct VisualizerView: View {
                 var targetHeight = CGFloat(frequencyData[i]) * maxHeight * amplificationFactor * frequencyBoost
                 
                 // Add minimum height when playing to ensure visibility
-                if audioPlayer.isEngineRendering && frequencyData[i] > 0.01 {
+                if audioPlayer.isVisualizerRendering && frequencyData[i] > 0.01 {
                     targetHeight = max(minBarHeight, targetHeight)
                 }
                 
