@@ -120,21 +120,20 @@ Split tracks who owns the clock — engine-managed transports get engine process
 
 ---
 
-## Next steps (Phase 3 — `BiquadCascade` + balance + numerical match)
+## Next steps (Phase 4 — visualizer DSP on the video-tap render path)
 
-Per `todo.md` and `plan.md` §6 Phase 3 + ADR-4 (amended), ADR-5, ADR-8, ADR-9:
+Phase 3 ✅ DONE (see status banner). **Phase 4 NEXT** per `todo.md` Phase 4 + `plan.md` §6 Phase 4 + **ADR-6** (dual-producer): add a `videoTapVisualizerRender` that consumes the tap's `AudioBufferList` and feeds the shared `VisualizerFeed`/`VisualizerScratchBuffers` (Phase 1 extraction), leaving the engine-side `makeTapHandler` untouched; multichannel downmixes to mono; drive it from `tapProcess` reading the post-DSP buffer. Then Phase 5 (EQ/balance fanout + the deferred audible smoke todo 3.17), 6 (telemetry), 7 (lifecycle tests), 8 (15-gate matrix), 9 (UI polish + mandatory docs).
 
-**Phase 3 GATING prerequisite (placeholder P-4):** ADR-4's original A/B-swap install scheme was withdrawn during Phase 2 because it is not race-safe. Before any code in Phase 3 reads coefficients from the render thread, **redesign the coefficient hand-off scheme**. Three candidates per `placeholder.md` P-4: (1) triple-buffer + atomic in-use counter, (2) RCU/epoch reclamation, (3) `Mutex<BiquadCoefficientSet>` with `withLockIfAvailable`. Update plan.md ADR-4 with the chosen scheme + rationale; re-run Oracle review on the redesign before implementation.
+---
 
-Phase 3 work items (after P-4 redesign lands):
+## Architecture / flow changes for a later docs/ update (Phase 9 mandatory-docs backlog)
 
-1. Replace the `BiquadCoefficientSet.swift` empty-struct stub with the real `struct BiquadCoefficientSet { let bands: (BiquadCoefs ×10) }` + `static func compute(for:sampleRate:)` factory using RBJ-cookbook formulas (closes P-1).
-2. Add private nested `struct EqualizerState: Sendable, Equatable` to `EqualizerController.swift`.
-3. Create `MacAmpApp/Audio/VideoDSP/BiquadCascade.swift` — direct-form-II biquad with per-channel filter history; `process(buffer:channels:frames:coefficients:)` + `reset()`.
-4. Add `extension BiquadCascade: RenderThreadSafe` to `RenderThreadSafe.swift`.
-5. Implement the chosen P-4 hand-off scheme on `VideoTapContext` (install method + render-thread read path). Update `VideoTapContext.swift` init/deinit to allocate against the real (non-empty) struct stride.
-6. Implement `tapProcess` render-path steps 2-6 from ADR-5 (filter reset on StartOfStream, preamp, EQ on/off gate, BiquadCascade.process via the new hand-off scheme, balance L/R multiplies).
-7. Create `Tests/MacAmpTests/BiquadNumericalMatchTests.swift` — 4 tests: full-EQ-active sweep ≤0.5 dB vs `AVAudioUnitEQ`; EQ-toggle bypass parity; preamp parity; balance parity.
-8. TSan-on build + test green.
-9. Manual smoke: video plays with EQ presets producing audible differences.
-10. Commit: `chore(s3-2): Phase 3 — BiquadCascade + balance + numerical match (incl. P-4 hand-off redesign)`.
+> Phase 9 mandates a `docs/MACAMP_ARCHITECTURE_GUIDE.md` "Audio Mechanism Concurrency Contract" subsection. The following Phase 2-3 deltas should be folded into `docs/` then (and likely `docs/VIDEO_WINDOW.md`). Captured here so they aren't lost.
+
+1. **Video-tap in-place DSP path (NEW signal flow).** `AVPlayer` → `AVMutableAudioMix` → `MTAudioProcessingTap` → `tapProcess` modifies the buffer **in place** (steps: StartOfStream filter reset → preamp → `isEqOn` gate → `BiquadCascade` → balance) → AVPlayer's native pipeline plays the modified buffer. No ring buffer, no engine clock for video, no master-clock coupling. *Needs a flow diagram in docs/* contrasting this with the engine path.
+2. **Dual-architecture topology** (already tabled above in this file): engine-managed transports (local audio, streams) use `AVAudioUnitEQ` + engine balance + engine tap visualizer; AVPlayer-managed transports (local video) use tap-side `BiquadCascade` + tap balance + (Phase 4) tap visualizer feed. EQ math lives twice by design (AHA — different threading/ownership).
+3. **Coefficient hand-off concurrency contract (ADR-4 amendment #2).** `VideoTapContext.coefficients: Mutex<BiquadCoefficientSet?>`; main writes via `installCoefficients` (`withLock`), render reads via `withLockIfAvailable` (non-blocking, three-case double-optional) into a render-owned `BiquadCascade` cache; skip-on-contention reuses the last cache. Replaces the withdrawn race-unsafe atomic-pointer A/B double-buffer.
+4. **`@unchecked Sendable` containment (ADR-3a) — final field set.** Gate-1 header contract; every field `Atomic`/`Mutex`/`RenderThreadSafe`. `cascade: BiquadCascade` is render-confined (RenderThreadSafe-by-confinement), enforced by Gate-3c source-scan test. Document the contract + the three gate tests.
+5. **RBJ coefficient model.** Octave-BW peaking (bands 1-8) + S=1 low/high shelf (bands 0/9) matches `AVAudioUnitEQ` ≤0.5 dB; `BiquadCoefficientSet.frequencies` is the single source of truth shared with `EqualizerController.configureEQ`. Fail-closed to `.flat` for non-finite/Nyquist inputs; denormal state flush in the cascade.
+6. **Balance convention.** Video tap uses `[-1, 1]`/0.0-center (matches `AudioPlayer.balance`/`AVAudioNode.pan`).
+7. **Open follow-ups to mention:** P-6 (video→audio no auto-play), P-2/P-3 (Swift-6/SDK-evolution gaps).
