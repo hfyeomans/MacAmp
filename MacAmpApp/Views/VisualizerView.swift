@@ -70,11 +70,11 @@ struct VisualizerView: View {
             }
         }
         .onReceive(updateTimer) { _ in
-            if audioPlayer.isEngineRendering && mode == .spectrum {
+            if audioPlayer.isVisualizerRendering && mode == .spectrum {
                 updateBars()
             }
         }
-        .onChange(of: audioPlayer.isEngineRendering) { _, isPlaying in
+        .onChange(of: audioPlayer.isVisualizerRendering) { _, isPlaying in
             if !isPlaying {
                 // Animate bars to zero when stopped
                 withAnimation(.easeOut(duration: 0.3)) {

@@ -151,6 +151,27 @@ final class VisualizerPipeline {
         tapInstalled
     }
 
+    // MARK: - Video Visualization (S3-2 — video-tap producer)
+
+    /// Start consuming the shared feed for VIDEO playback. During video the engine
+    /// mixer tap is NOT installed (audio flows through AVPlayer, not the engine), so
+    /// the 30 Hz poll timer that drives `feed.consume()` must be started independently.
+    /// The producer is `videoTapVisualizerRender` (the `MTAudioProcessingTap` render
+    /// path), which publishes to the same shared `feed`.
+    func startVideoVisualization() {
+        startPollTimer()
+        AppLog.debug(.audio, "VisualizerPipeline: video visualization started")
+    }
+
+    /// Stop video-driven consumption and clear stale bars. Call on video→audio
+    /// switch or when video playback stops.
+    func stopVideoVisualization() {
+        pollTimer?.invalidate()
+        pollTimer = nil
+        clearData()
+        AppLog.debug(.audio, "VisualizerPipeline: video visualization stopped")
+    }
+
     // MARK: - Poll Timer
 
     private func startPollTimer() {

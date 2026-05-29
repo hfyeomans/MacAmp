@@ -67,6 +67,14 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     /// True when the audio engine is running AND producing audio output.
     var isEngineRendering: Bool { engine.isEngineRunning && (isPlaying || isBridgeActive) }
 
+    /// Whether the visualizer should be live — true for engine-rendered audio AND
+    /// for video playback (the video-tap producer feeds the same `VisualizerFeed`).
+    /// Routes the UI consumers (`getFrequencyData`, `snapshotButterchurnFrame`,
+    /// `VisualizerView`) so spectrum + Butterchurn animate for video too (S3-2 Phase 4).
+    var isVisualizerRendering: Bool {
+        isEngineRendering || (currentMediaType == .video && videoPlaybackController.isPlaying)
+    }
+
     /// Audio volume (0.0-1.0 linear amplitude).
     ///
     /// Persistence is **call-site-driven** — call `commitVolumeToDefaults()`
@@ -491,6 +499,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
                 invalidateInFlightVideoLoad()
                 pauseAndDetachVideoTapIfNeeded()
                 videoPlaybackController.cleanup()
+                visualizerPipeline.stopVideoVisualization()
                 AppLog.debug(.audio, "Switching from video to audio - cleanup complete")
             } else if currentMediaType == .audio {
                 engine.removeVisualizerTapIfNeeded()
@@ -506,6 +515,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
         case .video:
             pauseAndDetachVideoTapIfNeeded()
             startVideoLoad(track: track)
+            visualizerPipeline.startVideoVisualization()
             transition(to: .playing)
         }
 
@@ -616,6 +626,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
             invalidateInFlightVideoLoad()
             pauseAndDetachVideoTapIfNeeded()
             videoPlaybackController.stop()
+            visualizerPipeline.stopVideoVisualization()
             currentMediaType = .audio
             AppLog.debug(.audio, "Stop (Video) - cleaned up AVPlayer")
         }
@@ -899,7 +910,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     // MARK: - Visualizer Forwarding (backed by VisualizerPipeline)
 
     func getFrequencyData(bands: Int) -> [Float] {
-        visualizerPipeline.getFrequencyData(bands: bands, isPlaying: isEngineRendering)
+        visualizerPipeline.getFrequencyData(bands: bands, isPlaying: isVisualizerRendering)
     }
 
     func getWaveformSamples(count: Int) -> [Float] {
@@ -907,7 +918,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     }
 
     func snapshotButterchurnFrame() -> ButterchurnFrame? {
-        guard currentMediaType == .audio && isEngineRendering else { return nil }
+        guard isVisualizerRendering else { return nil }
         return visualizerPipeline.snapshotButterchurnFrame()
     }
 

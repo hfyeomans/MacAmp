@@ -41,11 +41,16 @@ func videoTapVisualizerRender(
             guard let raw = buffer.mData else { continue }
             let chans = Int(buffer.mNumberChannels)
             guard chans > 0 else { continue }
+            // Cap reads by the buffer's actual byte size, not just `frames`, to
+            // never index past `mData` (matches the Phase 3 DSP path).
+            let bufFrames = Int(buffer.mDataByteSize) / (MemoryLayout<Float>.size * chans)
+            let n = min(cappedFrameCount, bufFrames)
+            guard n > 0 else { continue }
             let samples = raw.assumingMemoryBound(to: Float.self)
             if chans == 1 {
-                for f in 0..<cappedFrameCount { mono[f] += samples[f] }
+                for f in 0..<n { mono[f] += samples[f] }
             } else {
-                for f in 0..<cappedFrameCount {
+                for f in 0..<n {
                     var sum: Float = 0
                     for c in 0..<chans { sum += samples[f * chans + c] }
                     mono[f] += sum
