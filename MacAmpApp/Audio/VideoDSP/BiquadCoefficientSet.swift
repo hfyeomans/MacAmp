@@ -72,10 +72,15 @@ struct BiquadCoefficientSet: Sendable, Equatable {
     /// Computed on the main thread (off the render path); arithmetic in `Double`
     /// for precision, stored as `Float`.
     static func compute(for state: EqualizerState, sampleRate: Double) -> BiquadCoefficientSet {
-        // Defensive: a non-positive sample rate (e.g. queried before `tapPrepare`)
-        // would produce NaN coefficients; a mis-sized gain array would trap. Fall
-        // back to flat (pass-through) rather than corrupt the render thread.
-        guard sampleRate > 0, state.bandGainsDB.count == bandCount else { return .flat }
+        // Fail closed to flat (pass-through) rather than feed the render thread
+        // corrupt coefficients: a non-positive sample rate (queried before
+        // `tapPrepare`), a mis-sized gain array (would trap), or any band at/above
+        // Nyquist (sin(ω₀)→0 → NaN; e.g. the 12/14/16 kHz bands on a 24 kHz asset).
+        let nyquist = sampleRate / 2.0
+        guard sampleRate > 0,
+              state.bandGainsDB.count == bandCount,
+              frequencies.allSatisfy({ Double($0) < nyquist })
+        else { return .flat }
         var sections = [BiquadCoefs](repeating: .identity, count: bandCount)
         for i in 0..<bandCount {
             let f0 = Double(frequencies[i])

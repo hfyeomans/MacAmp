@@ -112,6 +112,23 @@ struct BiquadNumericalMatchTests {
         #expect(VideoTap.balanceGains(2.0) == (0.0, 1.0))
     }
 
+    @Test("compute fails closed to .flat for invalid sample rate / band-above-Nyquist")
+    func computeFailsClosed() {
+        let gains: [Float] = [6, 5, 4, 3, 2, 1, 0, -2, -4, -6]
+        let state = EqualizerState(isEqOn: true, preampLinearGain: 1.0, bandGainsDB: gains)
+        // 24 kHz → Nyquist 12 kHz; the 12/14/16 kHz bands are ≥ Nyquist → fail closed.
+        #expect(BiquadCoefficientSet.compute(for: state, sampleRate: 24_000) == .flat)
+        #expect(BiquadCoefficientSet.compute(for: state, sampleRate: 0) == .flat)
+        // 44.1 kHz → Nyquist 22.05 kHz; all bands valid → NOT flat, and no NaN.
+        let ok = BiquadCoefficientSet.compute(for: state, sampleRate: 44_100)
+        #expect(ok != .flat)
+        ok.withBands { bands in
+            for b in bands {
+                #expect(b.b0.isFinite && b.b1.isFinite && b.b2.isFinite && b.a1.isFinite && b.a2.isFinite)
+            }
+        }
+    }
+
     @Test("Stride correctness: interleaved channel matches non-interleaved")
     func strideEquivalence() {
         let frames = 4_096
