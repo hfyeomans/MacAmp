@@ -201,10 +201,10 @@ Numbering: `<Phase>.<Item>`. `[x]` complete, `[~]` in-progress, `[!]` blocked.
 - [x] **4.x CONSUMER WIRING (Oracle blockers, not in original plan):** the producer published but nothing consumed it for video. Added `VisualizerPipeline.start/stopVideoVisualization` (drive the 30 Hz poll timer for video, independent of the engine tap) + `AudioPlayer.isVisualizerRendering` (engine OR video) routing `getFrequencyData`, ungating `snapshotButterchurnFrame`, and `VisualizerView` spectrum + oscilloscope; hooked into playTrack .video / video→audio / stop / onPlaybackEnded / repeat-one `.restartCurrent`. ✅
 - [x] 4.13 `xcodegen generate` ✅
 - [x] 4.14 Build + TSan green — **98/98, no data races, no VisualizerFeed contention** ✅
-- [ ] 4.15 Manual smoke: video clip plays AND spectrum bars animate from video audio — **READY FOR USER**
-- [ ] 4.16 Manual smoke: Butterchurn mode — patterns react to video audio — **READY FOR USER**
-- [ ] 4.17 Manual smoke: 5.1 surround clip — visualizer animates (equal-weight downmix) — **READY FOR USER**
-- [ ] 4.18 Engine-path regression: music file — spectrum + Butterchurn animate identically (engine path untouched) — **READY FOR USER**
+- [x] 4.15 Manual smoke ✅ user-verified 2026-05-28 — video clip plays AND spectrum bars animate from video audio.
+- [x] 4.16 Manual smoke ✅ user-verified 2026-05-28 — Butterchurn mode patterns react to video audio.
+- [x] 4.17 Manual smoke ✅ user-verified 2026-05-28 — 5.1 surround clip: visualizer animates (equal-weight downmix).
+- [x] 4.18 Engine-path regression ✅ user-verified 2026-05-28 — music file: spectrum + Butterchurn animate identically (engine path untouched). Plus oscilloscope-for-video + shaded-main playlist-window visualizer confirmed (todo 4.21).
 - [x] 4.19 Commit ✅ — `92d0079` (impl) + `2884033` (consumer blockers) + `d475374` (completion/oscilloscope) + `1634dbd` (repeat-one).
 - [x] 4.20 Codex Oracle review ✅ — arc 6 → 8 → 9.0 → **9.6/10 APPROVED** (2 blockers fixed: consumer poll-timer + UI ungating; lifecycle holes fixed: completion + repeat-one). Remaining 0.4 = diminishing-returns polish.
 - [x] 4.21 Dual-window verification ✅ (user-reported, 2026-05-28) — confirmed the playlist-window mini-visualizer (shown when the main window is shaded) reuses the SAME `VisualizerView()` + shared `@Environment(AudioPlayer.self)` as the main window (instantiated in both `MainWindowFullLayer` + `WinampPlaylistWindow`), so all `isVisualizerRendering` gating flows to both — no separate path. Audited ALL `isEngineRendering` consumers; fixed one stray (the min-bar-height visibility floor in `VisualizerView.updateBars`, `VisualizerView.swift:102`) → now `isVisualizerRendering`. Commit `ea95f10`. User smoke tests 1-6 pass.
