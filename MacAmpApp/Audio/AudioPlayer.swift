@@ -19,6 +19,12 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     private let equalizer = EqualizerController()
     private let visualizerPipeline = VisualizerPipeline()
 
+    // MARK: - Video-tap balance fanout (S3-2 Phase 5, ADR-5)
+    // `AudioPlayer` owns balance state; on change it fans out to the engine balance
+    // node (the didSet) and to any registered video-tap Context's `balance` atomic.
+    // Separate registry from `EqualizerController`'s (two canonical owners).
+    private var registeredVideoTapContexts: [WeakBox<VideoTapContext>] = []
+
     /// Legacy toggle - derives from AppSettings.visualizerMode (forwarded to pipeline)
     var useSpectrumVisualizer: Bool {
         get { AppSettings.instance().visualizerMode == .spectrum }
@@ -94,6 +100,29 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     var balance: Float = 0.0 {
         didSet {
             engine?.setBalance(balance)
+            fanOutBalanceToVideoTaps()
+        }
+    }
+
+    /// Register a video-tap Context for balance fanout (separate registry from the
+    /// EQ controller's) and immediately push the current balance.
+    private func registerVideoTapContextForBalance(_ context: VideoTapContext) {
+        registeredVideoTapContexts.removeAll { $0.value == nil || $0.value === context }
+        registeredVideoTapContexts.append(WeakBox(context))
+        context.balance.store(balance.bitPattern, ordering: .relaxed)
+    }
+
+    private func unregisterVideoTapContextForBalance(_ context: VideoTapContext) {
+        registeredVideoTapContexts.removeAll { $0.value == nil || $0.value === context }
+    }
+
+    /// Fan the current balance out to every live registered Context's atomic.
+    private func fanOutBalanceToVideoTaps() {
+        guard !registeredVideoTapContexts.isEmpty else { return } // fast path: audio-only
+        registeredVideoTapContexts.removeAll { $0.value == nil }
+        let bits = balance.bitPattern
+        for box in registeredVideoTapContexts {
+            box.value?.balance.store(bits, ordering: .relaxed)
         }
     }
 
@@ -176,6 +205,8 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
             }
             VideoTap.detach(from: item)
         }
+        equalizer.unregisterVideoTapContext(context)
+        unregisterVideoTapContextForBalance(context)
         if videoTapContext === context {
             videoTapContext = nil
         }
@@ -229,6 +260,12 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
                         // succeeded — a thrown `createFailed` here would
                         // otherwise leave a phantom Context in the field.
                         self.videoTapContext = context
+                        // Phase 5 fanout: register with both canonical owners so the
+                        // tap receives current EQ + balance state (and future changes).
+                        // Sample rate is still unknown here (tapPrepare hasn't fired);
+                        // the EQ registry recomputes when `pendingSampleRate` lands.
+                        self.equalizer.registerVideoTapContext(context)
+                        self.registerVideoTapContextForBalance(context)
                         return mix
                     } catch {
                         AppLog.error(.audio, "Video tap audio mix build failed: \(error)")
@@ -301,6 +338,13 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
         }
 
         engine = AudioEngineController(eqNode: equalizer.eqNode, visualizerPipeline: visualizerPipeline)
+
+        // Phase 5: poll each registered video-tap Context's sample rate on the
+        // visualizer's 30 Hz tick, so EQ coefficients recompute once tapPrepare
+        // publishes the real rate (e.g. EQ already on when a video starts).
+        visualizerPipeline.onPollTick = { [weak self] in
+            self?.equalizer.pollVideoTapSampleRates()
+        }
 
         // Wire engine callbacks
         engine.onProgressUpdate = { [weak self] currentTime, progress in

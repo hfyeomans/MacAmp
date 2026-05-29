@@ -47,6 +47,12 @@ final class VisualizerPipeline {
     @ObservationIgnored private let feed = VisualizerFeed()
     @ObservationIgnored private var pollTimer: Timer?
 
+    /// Optional main-thread hook invoked on every 30 Hz poll tick (engine or video).
+    /// `AudioPlayer` uses it to poll each registered video-tap Context's sample rate
+    /// for the EQ fanout (S3-2 Phase 5) — keeps `VisualizerPipeline` decoupled from
+    /// `EqualizerController`. Fires regardless of whether new visualizer data arrived.
+    @ObservationIgnored var onPollTick: (@MainActor () -> Void)?
+
     /// The shared visualizer feed. Exposed so the S3-2 video-tap producer
     /// (`videoTapVisualizerRender`) can publish to the SAME single-slot feed the
     /// engine producer uses — only one producer is active at a time (engine for
@@ -196,6 +202,7 @@ final class VisualizerPipeline {
     }
 
     private func pollVisualizerData() {
+        onPollTick?()  // fire regardless of data availability (sample-rate poll)
         guard let data = feed.consume() else { return }
         updateLevels(with: data, useSpectrum: useSpectrum)
     }

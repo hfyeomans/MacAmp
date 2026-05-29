@@ -305,8 +305,8 @@ The chosen scheme replaces this ADR's original "Decision" paragraph and re-runs 
 **Decision.**
 - **EQ state** (`isEqOn: Bool`, `preampLinearGain: Float`, `bandGainsDB: (Float ×10)`) is owned by `EqualizerController` (current state). On any user-driven change, `EqualizerController` fans out to two consumers:
   1. Engine-side `AVAudioUnitEQ` parameter writes (existing path, unchanged).
-  2. Tap-side: recompute `BiquadCoefficientSet` for the current sample rate, write it into the inactive double-buffer block, atomic-swap the pointer (ADR-4). Also push `isEqOn` into the Context's atomic gate (used to bypass biquad processing in `tapProcess` when `isEqOn=false`). Also push `preampLinearGain` into the Context's atomic.
-- **Balance state** (`balance: Float`, range 0.0 = full L, 0.5 = center, 1.0 = full R) is owned by `AudioPlayer` (existing state at `AudioPlayer.swift:86`). On change, `AudioPlayer.balance.didSet` fans out to two consumers:
+  2. Tap-side: recompute `BiquadCoefficientSet` for the current sample rate and install it via `Context.installCoefficients` (the `Mutex<BiquadCoefficientSet?>` hand-off — ADR-4 amendment #2; NOT the withdrawn atomic-pointer double-buffer). Also push `isEqOn` into the Context's atomic gate (used to bypass biquad processing in `tapProcess` when `isEqOn=false`) and `preampLinearGain` into the Context's atomic. **(Phase 5 implementation, 2026-05-28):** the fanout lives in `EqualizerController` — `registerVideoTapContext`/`unregisterVideoTapContext` + a `fanOutToVideoTaps()` invoked from the `preamp`/`eqBands`/`isEqOn` didSets; sample-rate changes are caught by `pollVideoTapSampleRates()` driven off the visualizer's 30 Hz tick (`VisualizerPipeline.onPollTick`).
+- **Balance state** (`balance: Float`, range -1.0 = full L, 0.0 = center, 1.0 = full R — matches `AVAudioNode.pan`) is owned by `AudioPlayer` (existing state at `AudioPlayer.swift`). On change, `AudioPlayer.balance.didSet` fans out to two consumers:
   1. Engine-side balance node parameter (existing path, unchanged).
   2. Tap-side: write Float bit-pattern to `VideoTapContext.balance: Atomic<UInt32>`.
 
@@ -317,8 +317,9 @@ Both Contexts (one per video AVPlayerItem) are registered with `EqualizerControl
 2. **Filter-state reset gate** (ADR-9): if `flagsOut.pointee.contains(.startOfStream)`, call `context.cascade.reset()`.
 3. **Preamp gain**: `let preamp = Float(bitPattern: context.preampLinearGainBits.load(.relaxed))`. If `preamp != 1.0`, multiply every sample by `preamp` (single multiply per sample per channel).
 4. **EQ on/off gate**: if `context.isEqOn.load(.relaxed) == false`, skip step 5.
-5. **`BiquadCascade.process`**: load coefficient pointer atomically; if non-nil, run 10-band cascade in place.
-6. **Balance**: `let bal = Float(bitPattern: context.balance.load(.relaxed))`; compute `lGain = min(1, 2*(1-bal))`, `rGain = min(1, 2*bal)`; multiply L and R buffers (or skip if exactly center, `bal == 0.5`).
+5. **`BiquadCascade.process`**: refresh the render-owned coefficient cache via `context.coefficients.withLockIfAvailable` (three-case double-optional, ADR-4 amendment #2); if the cache holds coefficients, run the 10-band cascade in place.
+6. **Balance**: `let bal = Float(bitPattern: context.balance.load(.relaxed))`; `(left, right) = VideoTap.balanceGains(bal)` — `[-1, 1]` / 0.0-center law (unity near side, linear far-side attenuation); multiply L (ch 0) / R (ch 1), skip if center (`bal == 0`).
+7. **(Phase 4) Visualizer feed**: `videoTapVisualizerRender(...)` publishes the post-DSP buffer to the shared `VisualizerFeed` (ADR-6).
 7. **Visualizer DSP** (Phase 4): mono-mix + RMS + Goertzel + FFT into per-tap scratch; `feed.tryPublish`.
 8. Return.
 
