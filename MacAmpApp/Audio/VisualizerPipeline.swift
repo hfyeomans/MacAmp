@@ -158,6 +158,9 @@ final class VisualizerPipeline {
     /// the 30 Hz poll timer that drives `feed.consume()` must be started independently.
     /// The producer is `videoTapVisualizerRender` (the `MTAudioProcessingTap` render
     /// path), which publishes to the same shared `feed`.
+    /// Whether the 30 Hz feed poll timer is currently scheduled (engine OR video).
+    var isPollTimerActive: Bool { pollTimer != nil }
+
     func startVideoVisualization() {
         startPollTimer()
         AppLog.debug(.audio, "VisualizerPipeline: video visualization started")

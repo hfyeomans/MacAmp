@@ -91,6 +91,20 @@ struct VideoTapVisualizerRenderTests {
         }
     }
 
+    @Test("Video visualization poll timer starts and stops cleanly")
+    @MainActor
+    func videoVisualizationTimerLifecycle() {
+        let pipeline = VisualizerPipeline()
+        #expect(pipeline.isPollTimerActive == false)
+        pipeline.startVideoVisualization()
+        #expect(pipeline.isPollTimerActive == true, "startVideoVisualization must schedule the poll timer")
+        // Idempotent: a second start (e.g. repeat-one restart) does not leave a dangling timer.
+        pipeline.startVideoVisualization()
+        #expect(pipeline.isPollTimerActive == true)
+        pipeline.stopVideoVisualization()
+        #expect(pipeline.isPollTimerActive == false, "stopVideoVisualization must invalidate the poll timer")
+    }
+
     @Test("Stereo downmix averages channels (L+R)/2")
     func stereoDownmixAverages() throws {
         // Identical L/R → mono == that signal → same RMS as a single-channel render.

@@ -1016,6 +1016,11 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
             return .none
         case .restartCurrent:
             seek(to: 0, resume: true)
+            // Repeat-one restart bypasses `playTrack`, so it must re-arm the video
+            // visualizer poll timer that `onPlaybackEnded` stopped on completion.
+            if currentMediaType == .video {
+                visualizerPipeline.startVideoVisualization()
+            }
             return .restartCurrent
         case .playTrack(let track):
             playTrack(track: track)
