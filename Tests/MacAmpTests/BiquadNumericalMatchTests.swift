@@ -119,6 +119,14 @@ struct BiquadNumericalMatchTests {
         // 24 kHz → Nyquist 12 kHz; the 12/14/16 kHz bands are ≥ Nyquist → fail closed.
         #expect(BiquadCoefficientSet.compute(for: state, sampleRate: 24_000) == .flat)
         #expect(BiquadCoefficientSet.compute(for: state, sampleRate: 0) == .flat)
+        // Non-finite sample rate (.infinity passes `> 0`) → fail closed.
+        #expect(BiquadCoefficientSet.compute(for: state, sampleRate: .infinity) == .flat)
+        #expect(BiquadCoefficientSet.compute(for: state, sampleRate: .nan) == .flat)
+        // Non-finite band gains → fail closed.
+        var nanGains = Array(repeating: Float(0), count: 10); nanGains[3] = .nan
+        #expect(BiquadCoefficientSet.compute(for: EqualizerState(isEqOn: true, preampLinearGain: 1, bandGainsDB: nanGains), sampleRate: 48_000) == .flat)
+        var infGains = Array(repeating: Float(0), count: 10); infGains[5] = .infinity
+        #expect(BiquadCoefficientSet.compute(for: EqualizerState(isEqOn: true, preampLinearGain: 1, bandGainsDB: infGains), sampleRate: 48_000) == .flat)
         // 44.1 kHz → Nyquist 22.05 kHz; all bands valid → NOT flat, and no NaN.
         let ok = BiquadCoefficientSet.compute(for: state, sampleRate: 44_100)
         #expect(ok != .flat)

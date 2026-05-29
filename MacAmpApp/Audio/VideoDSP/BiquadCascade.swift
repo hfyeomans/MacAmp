@@ -88,8 +88,11 @@ final class BiquadCascade {
                     p.pointee = y
                     p += stride
                 }
-                z1[idx] = s1
-                z2[idx] = s2
+                // Flush denormal filter state to zero. On sustained near-silence the
+                // feedback path can decay into denormals, which stall the FPU (notably
+                // on Intel). One branch per band per callback — no per-sample cost.
+                z1[idx] = abs(s1) < 1e-20 ? 0 : s1
+                z2[idx] = abs(s2) < 1e-20 ? 0 : s2
             }
         }
     }

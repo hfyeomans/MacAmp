@@ -88,20 +88,52 @@ struct VideoTapContextSendableContractTests {
             """)
     }
 
-    /// Resolve `MacAmpApp/Audio/VideoDSP/VideoTapContext.swift` from
-    /// `SRCROOT` (set by xcodebuild) or from `#filePath` (works under SPM
-    /// `swift test`).
-    private static func videoTapContextSourceURL() throws -> URL {
-        let projectRoot: URL
-        if let env = ProcessInfo.processInfo.environment["SRCROOT"] {
-            projectRoot = URL(fileURLWithPath: env)
-        } else {
-            projectRoot = URL(fileURLWithPath: #filePath)
-                .deletingLastPathComponent()  // Tests/MacAmpTests/
-                .deletingLastPathComponent()  // Tests/
-                .deletingLastPathComponent()  // project root
+    /// Test 3c — render-confinement of `BiquadCascade`. The Context's `cascade`
+    /// is a non-`Sendable` class mutated ONLY by the render thread (`tapProcess`);
+    /// main must never touch it — that confinement is what keeps the
+    /// `@unchecked Sendable` containment valid (the `RenderThreadSafe` conformance
+    /// is by-confinement, not compiler-enforced). Enforce that `.cascade` member
+    /// access appears only in the declaration/init (`VideoTapContext.swift`) and
+    /// the render path (`VideoTap.swift`).
+    @Test("BiquadCascade is render-confined: `.cascade` referenced only in allowed files")
+    func cascadeIsRenderConfined() throws {
+        let audioDir = try Self.projectRoot().appendingPathComponent("MacAmpApp/Audio")
+        let allowed: Set<String> = ["VideoTapContext.swift", "VideoTap.swift"]
+        let pattern = #/\.cascade\b/#
+        var offenders: [String] = []
+        if let enumerator = FileManager.default.enumerator(at: audioDir, includingPropertiesForKeys: nil) {
+            for case let url as URL in enumerator where url.pathExtension == "swift" {
+                if allowed.contains(url.lastPathComponent) { continue }
+                let source = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+                if source.firstMatch(of: pattern) != nil {
+                    offenders.append(url.lastPathComponent)
+                }
+            }
         }
-        return projectRoot.appendingPathComponent("MacAmpApp/Audio/VideoDSP/VideoTapContext.swift")
+        #expect(offenders.isEmpty, """
+            `.cascade` is accessed outside the allowed files \(allowed.sorted()). The Context's
+            BiquadCascade is render-thread-confined (non-Sendable, mutated only in tapProcess);
+            touching it from any other context (e.g. the Phase 5 fanout) breaks the
+            @unchecked Sendable containment. Phase 5 must write coefficients via
+            `installCoefficients` (the Mutex), never via `.cascade`.
+            Offending files: \(offenders.joined(separator: ", "))
+            """)
+    }
+
+    /// Resolve the project root from `SRCROOT` (set by xcodebuild) or from
+    /// `#filePath` (works under SPM `swift test`).
+    private static func projectRoot() throws -> URL {
+        if let env = ProcessInfo.processInfo.environment["SRCROOT"] {
+            return URL(fileURLWithPath: env)
+        }
+        return URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()  // Tests/MacAmpTests/
+            .deletingLastPathComponent()  // Tests/
+            .deletingLastPathComponent()  // project root
+    }
+
+    private static func videoTapContextSourceURL() throws -> URL {
+        try projectRoot().appendingPathComponent("MacAmpApp/Audio/VideoDSP/VideoTapContext.swift")
     }
 }
 #endif

@@ -73,12 +73,14 @@ struct BiquadCoefficientSet: Sendable, Equatable {
     /// for precision, stored as `Float`.
     static func compute(for state: EqualizerState, sampleRate: Double) -> BiquadCoefficientSet {
         // Fail closed to flat (pass-through) rather than feed the render thread
-        // corrupt coefficients: a non-positive sample rate (queried before
-        // `tapPrepare`), a mis-sized gain array (would trap), or any band at/above
-        // Nyquist (sin(ω₀)→0 → NaN; e.g. the 12/14/16 kHz bands on a 24 kHz asset).
+        // corrupt coefficients. Reject, up front: a non-finite or non-positive
+        // sample rate (`.infinity` passes `> 0` but yields w0=0 → 0/0); a mis-sized
+        // or non-finite gain array; or any band at/above Nyquist (sin(ω₀)→0 → NaN,
+        // e.g. the 12/14/16 kHz bands on a 24 kHz asset).
         let nyquist = sampleRate / 2.0
-        guard sampleRate > 0,
+        guard sampleRate.isFinite, sampleRate > 0,
               state.bandGainsDB.count == bandCount,
+              state.bandGainsDB.allSatisfy({ $0.isFinite }),
               frequencies.allSatisfy({ Double($0) < nyquist })
         else { return .flat }
         var sections = [BiquadCoefs](repeating: .identity, count: bandCount)
@@ -95,8 +97,14 @@ struct BiquadCoefficientSet: Sendable, Equatable {
                 sections[i] = peaking(f0: f0, gainDB: gainDB, bandwidthOctaves: bandwidthOctaves, sampleRate: sampleRate)
             }
         }
-        return BiquadCoefficientSet(bands: (sections[0], sections[1], sections[2], sections[3], sections[4],
-                                            sections[5], sections[6], sections[7], sections[8], sections[9]))
+        let result = BiquadCoefficientSet(bands: (sections[0], sections[1], sections[2], sections[3], sections[4],
+                                                  sections[5], sections[6], sections[7], sections[8], sections[9]))
+        // Final safety net: never hand the render thread a non-finite coefficient,
+        // whatever pathological input slipped past the guards above.
+        let allFinite = result.withBands { bands in
+            bands.allSatisfy { $0.b0.isFinite && $0.b1.isFinite && $0.b2.isFinite && $0.a1.isFinite && $0.a2.isFinite }
+        }
+        return allFinite ? result : .flat
     }
 
     // MARK: - RBJ Audio EQ Cookbook coefficient derivations
