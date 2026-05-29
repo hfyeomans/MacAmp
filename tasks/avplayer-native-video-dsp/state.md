@@ -4,7 +4,7 @@
 > **Created:** 2026-05-01
 > **Last revised:** 2026-05-28
 > **Sprint:** S3, Wave S3-2 (architectural pivot)
-> **Status:** 🔧 IMPLEMENTING — Phase 3 ✅ **DONE** (2026-05-28). P-4 resolved (ADR-4 amendment #2: `Mutex<BiquadCoefficientSet?>` + `withLockIfAvailable`, Oracle 9.0 APPROVED). `BiquadCoefficientSet`+`compute` (RBJ), `BiquadCascade` (DF2II, render-confined), Context Mutex refactor, `tapProcess` steps 2-6 all landed. **92/92 tests with TSan, no data races**; `BiquadNumericalMatchTests` confirms ≤0.5 dB vs `AVAudioUnitEQ` (matched with no tuning). **Phase 4 NEXT** (visualizer DSP on the video-tap render path). Steps 1-3 ✅; Phases 1+2+3 ✅. Plan + research locked at Oracle ≥9.8/10. Phase 3 code Oracle-reviewed: 7/10 → 6 fixes → 8.5/10 (balance convention aligned to [-1,1], EQ-off reset, compute Nyquist/sampleRate fail-closed, maxChannels 16, shared freq constant). Deferred: todo 3.17 audible smoke → Phase 5 (needs EQ-state→tap fanout). Open non-blocking finding: P-6 (video→audio no auto-play).
+> **Status:** 🔧 IMPLEMENTING — Phases 1+2+3+4 ✅ **DONE**. **Phase 4 ✅ DONE (2026-05-28)**: video-tap visualizer (ADR-6 dual-producer) — `videoTapVisualizerRender` feeds the shared `VisualizerFeed`; consumer wired for video (poll timer + `isVisualizerRendering` ungating across spectrum/Butterchurn/oscilloscope). **98/98 tests with TSan, no races.** Oracle arc 6→8→9.0→**9.6 APPROVED** (2 blockers fixed: producer-published-but-not-consumed; lifecycle holes: completion + repeat-one). **Phase 5 NEXT** (EQ + balance state fanout — also delivers the deferred audible-EQ-on-video smoke, todo 3.17). Phase 3 (Oracle 9.6): P-4 resolved (ADR-4 amendment #2 Mutex hand-off), BiquadCascade + RBJ compute + tapProcess steps 2-6, ≤0.5 dB vs AVAudioUnitEQ. Steps 1-3 ✅. Plan + research locked at Oracle ≥9.8/10. Open non-blocking finding: P-6 (video→audio no auto-play).
 
 ---
 
@@ -120,9 +120,9 @@ Split tracks who owns the clock — engine-managed transports get engine process
 
 ---
 
-## Next steps (Phase 4 — visualizer DSP on the video-tap render path)
+## Next steps (Phase 5 — EQ + balance state fanout)
 
-Phase 3 ✅ DONE (see status banner). **Phase 4 NEXT** per `todo.md` Phase 4 + `plan.md` §6 Phase 4 + **ADR-6** (dual-producer): add a `videoTapVisualizerRender` that consumes the tap's `AudioBufferList` and feeds the shared `VisualizerFeed`/`VisualizerScratchBuffers` (Phase 1 extraction), leaving the engine-side `makeTapHandler` untouched; multichannel downmixes to mono; drive it from `tapProcess` reading the post-DSP buffer. Then Phase 5 (EQ/balance fanout + the deferred audible smoke todo 3.17), 6 (telemetry), 7 (lifecycle tests), 8 (15-gate matrix), 9 (UI polish + mandatory docs).
+Phases 1-4 ✅ DONE (see status banner). **Phase 5 NEXT** per `todo.md` Phase 5 + `plan.md` §6 Phase 5 + ADR-5: fan out `EqualizerController`/`AudioPlayer` state to the registered video-tap Context(s) — write coefficients via `Context.installCoefficients` (the Mutex, ADR-4 amendment #2) and the `isEqOn`/`preamp`/`balance` atomics, on each EQ/preamp/balance/preset change + sample-rate change. **NEVER touch `.cascade`** (render-confined; guarded by the `cascadeIsRenderConfined` test). `EqualizerController.equalizerState` projection is ready. **Phase 5 also delivers the deferred audible-EQ-on-video smoke (todo 3.17)** — the first phase where moving an EQ slider changes video audio. Then Phase 6 (telemetry), 7 (lifecycle tests), 8 (15-gate matrix), 9 (UI polish + mandatory docs).
 
 ---
 
@@ -136,4 +136,5 @@ Phase 3 ✅ DONE (see status banner). **Phase 4 NEXT** per `todo.md` Phase 4 + `
 4. **`@unchecked Sendable` containment (ADR-3a) — final field set.** Gate-1 header contract; every field `Atomic`/`Mutex`/`RenderThreadSafe`. `cascade: BiquadCascade` is render-confined (RenderThreadSafe-by-confinement), enforced by Gate-3c source-scan test. Document the contract + the three gate tests.
 5. **RBJ coefficient model.** Octave-BW peaking (bands 1-8) + S=1 low/high shelf (bands 0/9) matches `AVAudioUnitEQ` ≤0.5 dB; `BiquadCoefficientSet.frequencies` is the single source of truth shared with `EqualizerController.configureEQ`. Fail-closed to `.flat` for non-finite/Nyquist inputs; denormal state flush in the cascade.
 6. **Balance convention.** Video tap uses `[-1, 1]`/0.0-center (matches `AudioPlayer.balance`/`AVAudioNode.pan`).
-7. **Open follow-ups to mention:** P-6 (video→audio no auto-play), P-2/P-3 (Swift-6/SDK-evolution gaps).
+7. **Visualizer dual-producer (Phase 4, ADR-6).** Two parallel producers feed ONE shared `VisualizerFeed` (single-slot SPSC, trylock): the engine `makeTapHandler` (AVAudioPCMBuffer) and the video `videoTapVisualizerRender` (AudioBufferList, in `tapProcess` step 7, post-DSP). Only one is active at a time (audio vs video). Consumer side: `AudioPlayer.isVisualizerRendering` (engine OR video) gates `getFrequencyData`/`snapshotButterchurnFrame`/`VisualizerView`; the 30 Hz poll timer is driven for video via `VisualizerPipeline.start/stopVideoVisualization` (hooked into video start / video→audio / stop / completion / repeat-one). RMS+Goertzel duplicated per ADR-6 (FFT shared); a flow diagram should show both producers → feed → consumer.
+8. **Open follow-ups to mention:** P-6 (video→audio no auto-play), P-2/P-3 (Swift-6/SDK-evolution gaps).

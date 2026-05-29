@@ -186,27 +186,27 @@ Numbering: `<Phase>.<Item>`. `[x]` complete, `[~]` in-progress, `[!]` blocked.
 **Goal.** Add parallel `videoTapVisualizerRender` function consuming `AudioBufferList` (vs engine's `AVAudioPCMBuffer`); spectrum bars + Butterchurn animate from video audio.
 **Plan ref:** plan.md §6 Phase 4 + ADR-6.
 
-- [ ] 4.1 Create `MacAmpApp/Audio/VideoDSP/VideoTapVisualizerRender.swift`
-- [ ] 4.2 Implement `func videoTapVisualizerRender(bufferList:frames:sampleRate:scratch:feed:)`
-- [ ] 4.3 Mono mix N channels (1/2/5.1/7.1) — surround uses `inferredSurroundChannelLayoutTag` downmix coefficients (saved-branch allowlist pattern)
-- [ ] 4.4 20-bar RMS bucket (matches engine `VisualizerPipeline.swift:579-658` byte-for-byte)
-- [ ] 4.5 20-bar Goertzel spectrum on first 1024 mono frames
-- [ ] 4.6 2048-pt Hann-windowed vDSP FFT for Butterchurn spectrum + waveform
-- [ ] 4.7 Call `feed.tryPublish(from: scratch, oscilloscopeSamples: 76, validFrameCount: frames)` (drop on contention)
-- [ ] 4.8 Update `VideoTapContext.swift` to hold:
-   - [ ] 4.8.1 `feed: VisualizerFeed` (shared with engine path; injected at init)
-   - [ ] 4.8.2 `scratch: VisualizerScratchBuffers` (per-tap; allocated at init)
-- [ ] 4.9 Update `VideoTap.swift` `tapProcess` step 7 (after balance): call `videoTapVisualizerRender(...)`
-- [ ] 4.10 Update `VideoTap.attach(to:context:)` factory signature: accept `VisualizerFeed` parameter; allocate `VisualizerScratchBuffers` + pass into Context init
-- [ ] 4.11 Update `AudioPlayer.startVideoLoad(...)`'s `audioMixBuilder` closure to resolve `VisualizerFeed` (via `VisualizerPipeline`) and pass it (plus a freshly-allocated `VisualizerScratchBuffers`) to `VideoTap.buildAudioMix(...)` so the per-tap render path can publish to the shared feed.
-- [ ] 4.12 Update `RenderThreadSafe.swift` extensions if any new types appear (likely none)
-- [ ] 4.13 `xcodegen generate`
-- [ ] 4.14 Build + TSan green; no contention warning on `VisualizerFeed` lock
-- [ ] 4.15 Manual smoke: video clip plays AND spectrum bars animate from video audio
-- [ ] 4.16 Manual smoke: Butterchurn mode — patterns react to video audio
-- [ ] 4.17 Manual smoke: 5.1 surround clip — visualizer mono-downmix correct, no clipping; bars animate
-- [ ] 4.18 Engine-path regression: load music file, verify spectrum + Butterchurn animate identically (Phase 1 invariant)
-- [ ] 4.19 Commit: `chore(s3-2): Phase 4 — visualizer DSP integration (video-tap render)`
+- [x] 4.1 Create `VideoTapVisualizerRender.swift` ✅
+- [x] 4.2 Implement `videoTapVisualizerRender(bufferList:frames:sampleRate:scratch:feed:)` ✅
+- [x] 4.3 Mono downmix N channels (non-interleaved + interleaved), per-buffer capped by `mDataByteSize`. **Deviation:** equal-weight average (NOT layout-aware surround coefficients) — matches the engine producer; the visualizer isn't the audible path. Oracle accepted; layout-aware downmix noted as a future refinement.
+- [x] 4.4 20-bar RMS bucket — duplicated from `VisualizerPipeline.makeTapHandler` per ADR-6 (parallel producers; in-sync drift note in source). Oracle endorsed keeping the duplication (engine path untested; don't refactor it).
+- [x] 4.5 20-bar Goertzel spectrum (first 1024 mono frames) ✅
+- [x] 4.6 2048-pt Hann FFT via shared `scratch.processButterchurnFFT` ✅
+- [x] 4.7 `feed.tryPublish(...)` (drop on contention) ✅
+- [x] 4.8 `VideoTapContext` holds `feed: VisualizerFeed` (injected) + `scratch: VisualizerScratchBuffers` (owned per-tap); init → `init(feed:)`; Gate-1 contract updated; both `RenderThreadSafe`. Leak balance preserved (scratch Context-owned, no new Unmanaged). ✅
+- [x] 4.9 `VideoTap.tapProcess` step 7 (after balance) calls `videoTapVisualizerRender` on the post-DSP buffer ✅
+- [x] 4.10 ~~`VideoTap.attach` signature~~ — N/A (Phase 2 uses `buildAudioMix`, no `attach`); the feed reaches the tap via the Context (`init(feed:)`), not a builder param.
+- [x] 4.11 `AudioPlayer.startVideoLoad` audioMixBuilder builds `VideoTapContext(feed: visualizerPipeline.sharedFeed)`; exposed `VisualizerPipeline.sharedFeed` ✅
+- [x] 4.12 `RenderThreadSafe.swift` — no new types (feed/scratch already conform) ✅
+- [x] **4.x CONSUMER WIRING (Oracle blockers, not in original plan):** the producer published but nothing consumed it for video. Added `VisualizerPipeline.start/stopVideoVisualization` (drive the 30 Hz poll timer for video, independent of the engine tap) + `AudioPlayer.isVisualizerRendering` (engine OR video) routing `getFrequencyData`, ungating `snapshotButterchurnFrame`, and `VisualizerView` spectrum + oscilloscope; hooked into playTrack .video / video→audio / stop / onPlaybackEnded / repeat-one `.restartCurrent`. ✅
+- [x] 4.13 `xcodegen generate` ✅
+- [x] 4.14 Build + TSan green — **98/98, no data races, no VisualizerFeed contention** ✅
+- [ ] 4.15 Manual smoke: video clip plays AND spectrum bars animate from video audio — **READY FOR USER**
+- [ ] 4.16 Manual smoke: Butterchurn mode — patterns react to video audio — **READY FOR USER**
+- [ ] 4.17 Manual smoke: 5.1 surround clip — visualizer animates (equal-weight downmix) — **READY FOR USER**
+- [ ] 4.18 Engine-path regression: music file — spectrum + Butterchurn animate identically (engine path untouched) — **READY FOR USER**
+- [x] 4.19 Commit ✅ — `92d0079` (impl) + `2884033` (consumer blockers) + `d475374` (completion/oscilloscope) + `1634dbd` (repeat-one).
+- [x] 4.20 Codex Oracle review ✅ — arc 6 → 8 → 9.0 → **9.6/10 APPROVED** (2 blockers fixed: consumer poll-timer + UI ungating; lifecycle holes fixed: completion + repeat-one). Remaining 0.4 = diminishing-returns polish.
 
 ---
 
