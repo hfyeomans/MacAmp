@@ -74,7 +74,8 @@ final class VideoTapContext: @unchecked Sendable {
     // MARK: User-controlled DSP parameters
 
     /// Stereo balance as `Float` packed into the low 32 bits via
-    /// `Float.bitPattern`. Default 0.5 (center).
+    /// `Float.bitPattern`. Range [-1, 1], default 0.0 (center) — matches
+    /// `AudioPlayer.balance` / `AVAudioNode.pan` so Phase 5 writes through.
     let balance: Atomic<UInt32>
 
     /// EQ enabled gate. Render thread short-circuits the biquad cascade
@@ -111,13 +112,16 @@ final class VideoTapContext: @unchecked Sendable {
 
     // MARK: Lifecycle
 
-    /// Max channels the render-side cascade is sized for (covers up to 7.1).
-    static let maxDSPChannels = 8
+    /// Max channels the render-side cascade is sized for. 16 comfortably covers
+    /// every realistic PCM video layout (mono … 7.1 and beyond); channels past
+    /// this bound pass through un-EQ'd (graceful degradation for content that
+    /// effectively does not exist in practice).
+    static let maxDSPChannels = 16
 
     init() {
         self.coefficients = Mutex<BiquadCoefficientSet?>(nil)
         self.cascade = BiquadCascade(maxChannels: VideoTapContext.maxDSPChannels)
-        self.balance = Atomic<UInt32>(Float(0.5).bitPattern)
+        self.balance = Atomic<UInt32>(Float(0.0).bitPattern)
         self.isEqOn = Atomic<Bool>(false)
         self.preampLinearGainBits = Atomic<UInt32>(Float(1.0).bitPattern)
         self.processingFormatTag = Atomic<UInt32>(VideoTapContext.formatTagUnknown)

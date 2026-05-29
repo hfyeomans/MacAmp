@@ -26,17 +26,18 @@ struct BiquadCoefs: Sendable, Equatable {
 /// `compute(for:sampleRate:)` mirrors the engine-side `AVAudioUnitEQ`
 /// configuration in `EqualizerController.configureEQ` using the RBJ Audio EQ
 /// Cookbook formulas (ADR-8): octave-bandwidth peaking for bands 1-8, low/high
-/// shelf for bands 0/9. The band center frequencies below MUST stay in lockstep
-/// with `EqualizerController.configureEQ`'s `freqs` — divergence silently breaks
-/// the engine↔tap numerical match, which `BiquadNumericalMatchTests` guards.
+/// shelf for bands 0/9. The band center `frequencies` below are the single source
+/// of truth — `EqualizerController.configureEQ` reads them too — and
+/// `BiquadNumericalMatchTests` guards the engine↔tap numerical match.
 struct BiquadCoefficientSet: Sendable, Equatable {
     var bands: (BiquadCoefs, BiquadCoefs, BiquadCoefs, BiquadCoefs, BiquadCoefs,
                 BiquadCoefs, BiquadCoefs, BiquadCoefs, BiquadCoefs, BiquadCoefs)
 
     static let bandCount = 10
 
-    /// Winamp internal processing frequencies (Hz). Coupled to
-    /// `EqualizerController.configureEQ`'s `freqs`.
+    /// Winamp internal processing frequencies (Hz). **Single source of truth** —
+    /// `EqualizerController.configureEQ` reads this too, so the engine `AVAudioUnitEQ`
+    /// and the tap cascade can never drift apart.
     static let frequencies: [Float] = [70, 180, 320, 600, 1000, 3000, 6000, 12000, 14000, 16000]
 
     /// Octave bandwidth for the 8 parametric bands (matches `AVAudioUnitEQ.bandwidth = 1.0`).
@@ -49,7 +50,10 @@ struct BiquadCoefficientSet: Sendable, Equatable {
     /// Contiguous read access to the 10 bands. The homogeneous tuple is laid out
     /// contiguously, so binding its bytes to `BiquadCoefs` is well-defined.
     func withBands<R>(_ body: (UnsafeBufferPointer<BiquadCoefs>) -> R) -> R {
-        withUnsafeBytes(of: bands) { raw in
+        // Homogeneous tuples are contiguous in practice; assert no padding surprise.
+        assert(MemoryLayout.size(ofValue: bands) == Self.bandCount * MemoryLayout<BiquadCoefs>.stride,
+               "BiquadCoefficientSet.bands layout is not a contiguous \(Self.bandCount)-element array")
+        return withUnsafeBytes(of: bands) { raw in
             body(raw.bindMemory(to: BiquadCoefs.self))
         }
     }
@@ -68,6 +72,10 @@ struct BiquadCoefficientSet: Sendable, Equatable {
     /// Computed on the main thread (off the render path); arithmetic in `Double`
     /// for precision, stored as `Float`.
     static func compute(for state: EqualizerState, sampleRate: Double) -> BiquadCoefficientSet {
+        // Defensive: a non-positive sample rate (e.g. queried before `tapPrepare`)
+        // would produce NaN coefficients; a mis-sized gain array would trap. Fall
+        // back to flat (pass-through) rather than corrupt the render thread.
+        guard sampleRate > 0, state.bandGainsDB.count == bandCount else { return .flat }
         var sections = [BiquadCoefs](repeating: .identity, count: bandCount)
         for i in 0..<bandCount {
             let f0 = Double(frequencies[i])

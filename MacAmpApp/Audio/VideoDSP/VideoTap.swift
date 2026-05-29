@@ -88,15 +88,21 @@ private let tapProcess: MTAudioProcessingTapProcessCallback = { tap, framesToPro
     // outer nil = contended → reuse cache; .some(nil) = no install yet → bypass;
     // .some(.some) = update cache.
     if eqOn {
+        if !context.cascade.isEngaged {
+            context.cascade.reset()  // clean re-enable: flush stale filter history
+            context.cascade.isEngaged = true
+        }
         switch context.coefficients.withLockIfAvailable({ $0 }) {
         case .some(.some(let set)): context.cascade.currentCoefficients = set
         case .some(.none): context.cascade.currentCoefficients = nil
         case .none: break
         }
+    } else {
+        context.cascade.isEngaged = false
     }
 
-    // Step 6 params — balance ∈ [0, 1], 0.5 = center (see `VideoTap.balanceGains`).
-    let applyBalance = balance != 0.5
+    // Step 6 params — balance ∈ [-1, 1], 0.0 = center (see `VideoTap.balanceGains`).
+    let applyBalance = balance != 0.0
     let (leftGain, rightGain) = VideoTap.balanceGains(balance)
     let applyPreamp = preamp != 1.0
 
@@ -141,12 +147,16 @@ private let tapProcess: MTAudioProcessingTapProcessCallback = { tap, framesToPro
 // MARK: - Audio-mix builder + detach
 
 enum VideoTap {
-    /// Stereo balance gain law for `tapProcess` step 6. `balance` ∈ [0, 1] with
-    /// 0.5 = center: unity on the near channel, linear attenuation of the far
-    /// channel (full-left `0.0` → R muted; full-right `1.0` → L muted).
+    /// Stereo balance gain law for `tapProcess` step 6. `balance` ∈ [-1, 1] with
+    /// 0.0 = center — the SAME convention as `AudioPlayer.balance` /
+    /// `AVAudioNode.pan`, so the Phase 5 fanout can write the app's balance value
+    /// straight through. Unity on the near channel, linear attenuation of the far
+    /// channel (full-left `-1` → R muted; full-right `+1` → L muted). Input is
+    /// clamped to [-1, 1] defensively.
     static func balanceGains(_ balance: Float) -> (left: Float, right: Float) {
-        let left: Float = balance <= 0.5 ? 1.0 : (1.0 - balance) * 2.0
-        let right: Float = balance >= 0.5 ? 1.0 : balance * 2.0
+        let b = min(max(balance, -1.0), 1.0)
+        let left: Float = b <= 0 ? 1.0 : 1.0 - b
+        let right: Float = b >= 0 ? 1.0 : 1.0 + b
         return (left, right)
     }
 

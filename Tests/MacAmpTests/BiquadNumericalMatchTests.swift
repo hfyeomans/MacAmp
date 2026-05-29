@@ -8,6 +8,11 @@ import Testing
 /// parity. Magnitude is measured as steady-state RMS gain of a pure sine — which
 /// equals |H(f)| regardless of filter phase/latency, so no alignment is needed.
 struct BiquadNumericalMatchTests {
+    enum RenderError: Error {
+        case renderFailed(AVAudioEngineManualRenderingStatus)
+        case incomplete(rendered: Int, expected: Int)
+    }
+
     static let sampleRate = 48_000.0
     /// Band gains in dB for five EQ shapes (10 bands each).
     static let presets: [(name: String, gains: [Float])] = [
@@ -87,14 +92,14 @@ struct BiquadNumericalMatchTests {
         }
     }
 
-    @Test("Balance law: center unity; full pan mutes far channel; quarter pans halve it")
+    @Test("Balance law ([-1,1], 0 center): center unity; full pan mutes far channel; half pans halve it")
     func balanceLaw() {
         func approx(_ a: Float, _ b: Float) -> Bool { abs(a - b) < 1e-6 }
         let cases: [(bal: Float, left: Float, right: Float)] = [
-            (0.0, 1.0, 0.0),   // full left → right muted
-            (0.25, 1.0, 0.5),  // quarter left → right halved
-            (0.5, 1.0, 1.0),   // center → both unity
-            (0.75, 0.5, 1.0),  // quarter right → left halved
+            (-1.0, 1.0, 0.0),  // full left → right muted
+            (-0.5, 1.0, 0.5),  // half left → right halved
+            (0.0, 1.0, 1.0),   // center → both unity
+            (0.5, 0.5, 1.0),   // half right → left halved
             (1.0, 0.0, 1.0),   // full right → left muted
         ]
         for c in cases {
@@ -102,6 +107,70 @@ struct BiquadNumericalMatchTests {
             #expect(approx(l, c.left) && approx(r, c.right),
                     "balance \(c.bal) → (\(l), \(r)); expected (\(c.left), \(c.right))")
         }
+        // Out-of-range input is clamped, not extrapolated (no negative gain).
+        #expect(VideoTap.balanceGains(-2.0) == (1.0, 0.0))
+        #expect(VideoTap.balanceGains(2.0) == (0.0, 1.0))
+    }
+
+    @Test("Stride correctness: interleaved channel matches non-interleaved")
+    func strideEquivalence() {
+        let frames = 4_096
+        let gains: [Float] = [6, 0, -4, 0, 3, 0, -2, 0, 5, 0]
+        let coefs = BiquadCoefficientSet.compute(
+            for: EqualizerState(isEqOn: true, preampLinearGain: 1.0, bandGainsDB: gains),
+            sampleRate: Self.sampleRate)
+        let w = 2.0 * Double.pi * 1_000.0 / Self.sampleRate
+        let signal = (0..<frames).map { Float(sin(w * Double($0))) }
+
+        // Non-interleaved: contiguous, stride 1.
+        let mono = BiquadCascade(maxChannels: 2)
+        mono.currentCoefficients = coefs
+        var monoBuf = signal
+        monoBuf.withUnsafeMutableBufferPointer {
+            mono.process($0.baseAddress!, frameCount: frames, channel: 0, stride: 1)
+        }
+
+        // Interleaved stereo: same signal in channel 0 (even indices), stride 2.
+        let inter = BiquadCascade(maxChannels: 2)
+        inter.currentCoefficients = coefs
+        var interBuf = [Float](repeating: 0, count: frames * 2)
+        for i in 0..<frames { interBuf[i * 2] = signal[i] }
+        interBuf.withUnsafeMutableBufferPointer {
+            inter.process($0.baseAddress!, frameCount: frames, channel: 0, stride: 2)
+        }
+
+        var maxDiff: Float = 0
+        for i in 0..<frames { maxDiff = max(maxDiff, abs(monoBuf[i] - interBuf[i * 2])) }
+        #expect(maxDiff < 1e-6, "interleaved (stride 2) channel-0 output diverges from non-interleaved by \(maxDiff)")
+    }
+
+    @Test("reset() clears all filter state (re-engage starts clean)")
+    func resetClearsState() {
+        let gains: [Float] = [8, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        let coefs = BiquadCoefficientSet.compute(
+            for: EqualizerState(isEqOn: true, preampLinearGain: 1.0, bandGainsDB: gains),
+            sampleRate: Self.sampleRate)
+        let w = 2.0 * Double.pi * 70.0 / Self.sampleRate
+        let signal = (0..<2_048).map { Float(sin(w * Double($0))) }
+
+        // Dirty cascade: run signal (builds z1/z2), then reset, then run a probe.
+        let dirty = BiquadCascade(maxChannels: 1)
+        dirty.currentCoefficients = coefs
+        var warm = signal
+        warm.withUnsafeMutableBufferPointer { dirty.process($0.baseAddress!, frameCount: $0.count, channel: 0, stride: 1) }
+        dirty.reset()
+        var dirtyProbe = signal
+        dirtyProbe.withUnsafeMutableBufferPointer { dirty.process($0.baseAddress!, frameCount: $0.count, channel: 0, stride: 1) }
+
+        // Fresh cascade: same probe from zero state.
+        let fresh = BiquadCascade(maxChannels: 1)
+        fresh.currentCoefficients = coefs
+        var freshProbe = signal
+        freshProbe.withUnsafeMutableBufferPointer { fresh.process($0.baseAddress!, frameCount: $0.count, channel: 0, stride: 1) }
+
+        var maxDiff: Float = 0
+        for i in 0..<signal.count { maxDiff = max(maxDiff, abs(dirtyProbe[i] - freshProbe[i])) }
+        #expect(maxDiff < 1e-6, "post-reset output differs from fresh cascade by \(maxDiff) — reset left stale state")
     }
 
     // MARK: - Measurement helpers
@@ -164,12 +233,16 @@ struct BiquadNumericalMatchTests {
         while rendered < total {
             let frames = AVAudioFrameCount(min(Int(outBuf.frameCapacity), total - rendered))
             let status = try engine.renderOffline(frames, to: outBuf)
-            guard status == .success else { break }
+            guard status == .success else {
+                engine.stop()
+                throw RenderError.renderFailed(status)
+            }
             let ch = outBuf.floatChannelData![0]
             for i in 0..<Int(outBuf.frameLength) { output.append(ch[i]) }
             rendered += Int(outBuf.frameLength)
         }
         engine.stop()
+        guard rendered >= total else { throw RenderError.incomplete(rendered: rendered, expected: total) }
 
         let input = (0..<total).map { Float(sin(w * Double($0))) }
         return gainDB(input: input, output: Array(output.prefix(total)), skip: skip)

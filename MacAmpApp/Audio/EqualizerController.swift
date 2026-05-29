@@ -191,8 +191,10 @@ final class EqualizerController {
     /// at the endpoints better approximate Winamp's perceptual behavior (sub-bass and
     /// air control) than strict parametric everywhere.
     private func configureEQ() {
-        // Actual Winamp internal frequencies (NOT the skin label values 60/170/310)
-        let freqs: [Float] = [70, 180, 320, 600, 1000, 3000, 6000, 12000, 14000, 16000]
+        // Single source of truth shared with the video-tap cascade — keeps the
+        // engine↔tap numerical match from drifting (Winamp internal frequencies,
+        // NOT the skin labels 60/170/310).
+        let freqs = BiquadCoefficientSet.frequencies
         for i in 0..<min(eqNode.bands.count, freqs.count) {
             let band = eqNode.bands[i]
             if i == 0 {

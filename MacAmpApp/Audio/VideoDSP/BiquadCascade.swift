@@ -26,6 +26,11 @@ final class BiquadCascade {
     /// Render-owned coefficient cache. Refreshed by `tapProcess`; read here.
     var currentCoefficients: BiquadCoefficientSet?
 
+    /// Render-owned flag tracking whether EQ was engaged on the previous callback.
+    /// `tapProcess` resets the cascade on the false→true edge so a re-enable starts
+    /// from clean filter history instead of stale `z1`/`z2` (avoids a click).
+    var isEngaged = false
+
     private let z1: UnsafeMutablePointer<Float>
     private let z2: UnsafeMutablePointer<Float>
     private let stateCount: Int
