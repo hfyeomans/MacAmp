@@ -95,11 +95,9 @@ private let tapProcess: MTAudioProcessingTapProcessCallback = { tap, framesToPro
         }
     }
 
-    // Step 6 params — balance ∈ [0, 1], 0.5 = center. Standard balance law: unity
-    // on the near channel, linear attenuation of the far channel.
+    // Step 6 params — balance ∈ [0, 1], 0.5 = center (see `VideoTap.balanceGains`).
     let applyBalance = balance != 0.5
-    let leftGain: Float = balance <= 0.5 ? 1.0 : (1.0 - balance) * 2.0
-    let rightGain: Float = balance >= 0.5 ? 1.0 : balance * 2.0
+    let (leftGain, rightGain) = VideoTap.balanceGains(balance)
     let applyPreamp = preamp != 1.0
 
     let bufferPointer = UnsafeMutableAudioBufferListPointer(bufferList)
@@ -143,6 +141,15 @@ private let tapProcess: MTAudioProcessingTapProcessCallback = { tap, framesToPro
 // MARK: - Audio-mix builder + detach
 
 enum VideoTap {
+    /// Stereo balance gain law for `tapProcess` step 6. `balance` ∈ [0, 1] with
+    /// 0.5 = center: unity on the near channel, linear attenuation of the far
+    /// channel (full-left `0.0` → R muted; full-right `1.0` → L muted).
+    static func balanceGains(_ balance: Float) -> (left: Float, right: Float) {
+        let left: Float = balance <= 0.5 ? 1.0 : (1.0 - balance) * 2.0
+        let right: Float = balance >= 0.5 ? 1.0 : balance * 2.0
+        return (left, right)
+    }
+
     /// Build the `MTAudioProcessingTap` and wrap it in an
     /// `AVMutableAudioMix` for assignment to a not-yet-constructed
     /// `AVPlayerItem.audioMix`. Caller must subsequently set
