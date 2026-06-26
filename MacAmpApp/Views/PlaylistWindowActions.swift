@@ -63,10 +63,10 @@ final class PlaylistWindowActions: NSObject {
         openPanel.title = "Add Files to Playlist"
         openPanel.message = "Select audio files, video files, or playlists"
 
-        openPanel.begin { response in
+        openPanel.begin { [weak self] response in
             if response == .OK {
                 let urls = openPanel.urls
-                Task { @MainActor [weak self, urls, audioPlayer, playbackCoordinator] in
+                Task { @MainActor in
                     guard let self else { return }
                     let coordinator = playbackCoordinator ?? self.playbackCoordinator
                     let wasEmpty = audioPlayer.playlist.isEmpty
