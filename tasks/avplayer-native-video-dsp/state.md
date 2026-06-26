@@ -124,13 +124,13 @@ Split tracks who owns the clock — engine-managed transports get engine process
 
 Phases 1-5 ✅ DONE (see status banner). **Phase 6 NEXT** per `todo.md` Phase 6 + `plan.md` §6 Phase 6 + spike-findings hardening item 3: add tap-callback wall-clock sampling + budget-overrun/deadline-risk counters on `VideoTapContext` (Atomics), surfaced for the Phase 8 CPU-benchmark gate. Then Phase 7 (lifecycle tests + signed-bundle smoke), 8 (15-gate matrix), 9 (UI polish + mandatory docs).
 
-> **todo 3.17 (audible EQ-on-video smoke) is no longer "deferred"** — Phase 5 delivered the fanout, so it's now todo **5.16** (READY FOR USER): moving an EQ slider / balance during video changes the audio in real time.
+> **todo 3.17 (audible EQ-on-video smoke) is no longer "deferred"** — Phase 5 delivered the fanout, now todo **5.16 ✅ USER-VERIFIED 2026-05-28**: all 4 video scenarios pass (EQ slider, EQ toggle, balance, EQ-on-before-video). Engine regression **5.17 ✅ USER-VERIFIED** (EQ on a music file unchanged). **Phase 5 is fully verified.**
 
 ---
 
 ## Architecture / flow changes for a later docs/ update (Phase 9 mandatory-docs backlog)
 
-> Phase 9 mandates a `docs/MACAMP_ARCHITECTURE_GUIDE.md` "Audio Mechanism Concurrency Contract" subsection. The following Phase 2-3 deltas should be folded into `docs/` then (and likely `docs/VIDEO_WINDOW.md`). Captured here so they aren't lost.
+> Phase 9 mandates a `docs/MACAMP_ARCHITECTURE_GUIDE.md` "Audio Mechanism Concurrency Contract" subsection. The following Phase 2-5 deltas should be folded into `docs/` then. **→ The DETAILED, per-doc, line-referenced backlog is in `tasks/avplayer-native-video-dsp/docs-update-backlog.md`** (produced 2026-05-28 by a 5-agent team that read each `docs/` file in full). The list below is the high-level summary; the dedicated file is authoritative for the Phase 9 doc pass.
 
 1. **Video-tap in-place DSP path (NEW signal flow).** `AVPlayer` → `AVMutableAudioMix` → `MTAudioProcessingTap` → `tapProcess` modifies the buffer **in place** (steps: StartOfStream filter reset → preamp → `isEqOn` gate → `BiquadCascade` → balance) → AVPlayer's native pipeline plays the modified buffer. No ring buffer, no engine clock for video, no master-clock coupling. *Needs a flow diagram in docs/* contrasting this with the engine path.
 2. **Dual-architecture topology** (already tabled above in this file): engine-managed transports (local audio, streams) use `AVAudioUnitEQ` + engine balance + engine tap visualizer; AVPlayer-managed transports (local video) use tap-side `BiquadCascade` + tap balance + (Phase 4) tap visualizer feed. EQ math lives twice by design (AHA — different threading/ownership).

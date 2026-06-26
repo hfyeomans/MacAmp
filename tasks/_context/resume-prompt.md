@@ -235,7 +235,7 @@ You are picking up `avplayer-native-video-dsp` mid-implementation. Steps 1+2+3 �
 
 ### After Phase 6
 
-Phase 7 is the lifecycle test suite + signed-bundle smoke. Phase 8 executes the 15-gate verification matrix (reads the Phase 6 deadline-miss counters as the CPU gate). Phase 9 is UI integration polish + mandatory docs (`docs/MACAMP_ARCHITECTURE_GUIDE.md` "Audio Mechanism Concurrency Contract" subsection — the Phase 2-5 architecture deltas to fold in are catalogued in `tasks/avplayer-native-video-dsp/state.md` "Architecture / flow changes for a later docs/ update") + pre-PR Oracle review + `gh pr create`.
+Phase 7 is the lifecycle test suite + signed-bundle smoke. Phase 8 executes the 15-gate verification matrix (reads the Phase 6 deadline-miss counters as the CPU gate). Phase 9 is UI integration polish + mandatory docs (`docs/MACAMP_ARCHITECTURE_GUIDE.md` "Audio Mechanism Concurrency Contract" subsection — the Phase 2-5 architecture deltas to fold in are catalogued in `tasks/avplayer-native-video-dsp/docs-update-backlog.md` — detailed per-doc, line-referenced, from a 5-agent full-file audit 2026-05-28; high-level summary in `state.md`) + pre-PR Oracle review + `gh pr create`.
 
 ### Optional sub-track
 

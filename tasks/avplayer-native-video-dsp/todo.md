@@ -231,8 +231,8 @@ Numbering: `<Phase>.<Item>`. `[x]` complete, `[~]` in-progress, `[!]` blocked.
 - [x] 5.13 ✅ `VideoTapFanoutTests`: register pushes state; EQ change fans out new coefficients (== RBJ compute); sample-rate poll recomputes flat→real; unregister stops fanout.
 - [x] 5.14 ✅ `balanceFanout` test — `AudioPlayer.balance` updates a registered Context's atomic across {0.5,-1,0,1,-0.25}; stops after unregister. (register/unregister made `internal` as the test seam.)
 - [x] 5.15 Build + TSan green ✅ — **103/103, no data races** (incl. cascade-confinement gate).
-- [ ] 5.16 Manual smoke: drag EQ slider during VIDEO playback → audio changes real-time; drag balance → audio pans real-time — **READY FOR USER (this is the deferred audible-EQ-on-video — todo 3.17 — now live).**
-- [ ] 5.17 Engine-path regression: drag EQ during AUDIO file playback — existing behavior unchanged — **READY FOR USER.**
+- [x] 5.16 Manual smoke ✅ user-verified 2026-05-28 — all 4 video scenarios pass: (1) drag EQ slider during video → audio changes real-time; (2) toggle EQ on/off → processed↔flat; (3) drag balance → audio pans L/R; (4) EQ-on-before-video applies on playback start (sample-rate poll). This is the deferred audible-EQ-on-video (was todo 3.17) — now LIVE and confirmed.
+- [x] 5.17 Engine-path regression ✅ user-verified 2026-05-28 — EQ on a regular music file unchanged from before Phase 5 (the fanout fast-paths to no-op when no video tap is registered). Phase 5 fully verified.
 - [x] 5.18 Commit ✅ — `e1f8a4e` (impl + tests + ADR-5 reconcile) + `252d3bc` (Oracle round-1 remediation).
 - [x] 5.19 Codex Oracle review ✅ — round 1 **9/10 APPROVED** (1 ACTIONABLE balance test + 3 NITs) → all fixed → round 2 **10/10 APPROVED, no findings** (duplicate-path sweep clean). Two canonical owners (state ownership per ADR-5); render-confinement preserved (writes only Mutex/atomics).
 
