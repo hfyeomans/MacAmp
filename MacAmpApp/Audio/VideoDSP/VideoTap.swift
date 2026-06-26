@@ -27,6 +27,13 @@ private func videoTapHostTicksToNanos(_ ticks: UInt64) -> UInt64 {
     return tb.numer == tb.denom ? ticks : ticks &* UInt64(tb.numer) / UInt64(tb.denom)
 }
 
+/// Force the one-time initialization of `videoTapMachTimebase` (a file-scope `let`,
+/// lazily initialized via a once-token). Called from `buildAudioMix` on the main
+/// actor so the render thread never pays the once-token on its first sampled callback.
+private func prewarmVideoTapTimebase() {
+    _ = videoTapMachTimebase.numer
+}
+
 // MARK: - C-callback closures
 //
 // All five callbacks are file-scope `private let` constants typed to the
@@ -57,9 +64,14 @@ private let tapPrepare: MTAudioProcessingTapPrepareCallback = { tap, _, processi
     let tag = supported
         ? VideoTapContext.formatTagSupportedFloat32LPCM
         : VideoTapContext.formatTagUnsupported
-    context.processingFormatTag.store(tag, ordering: .releasing)
+    // Publish the sample rate (and isActive) BEFORE the release-store of the format
+    // tag: `tapProcess` acquire-loads the tag as the gate, so anything that must be
+    // visible alongside it (the budget math + visualizer both read `pendingSampleRate`)
+    // has to be stored first. Otherwise a render thread that sees the new tag could
+    // still read a stale/zero sample rate.
     context.pendingSampleRate.store(asbd.mSampleRate.bitPattern, ordering: .relaxed)
     context.isActive.store(true, ordering: .relaxed)
+    context.processingFormatTag.store(tag, ordering: .releasing)
 }
 
 private let tapUnprepare: MTAudioProcessingTapUnprepareCallback = { tap in
@@ -171,7 +183,10 @@ private let tapProcess: MTAudioProcessingTapProcessCallback = { tap, framesToPro
                              scratch: context.scratch, feed: context.feed)
 
     // Phase 6 — close the deadline-miss sample over the full DSP + visualizer work.
-    if sampleTiming, sampleRate > 0 {
+    // ADVISORY telemetry: 1/64 sampling gives production observability, NOT the dense
+    // per-callback coverage Phase 8's hard "99p ≤10% / no single >50%" CPU gate needs
+    // (Phase 8 adds an every-callback benchmark mode).
+    if sampleTiming, sampleRate.isFinite, sampleRate > 0 {
         let endTicks = mach_absolute_time()
         let elapsedNanos = videoTapHostTicksToNanos(endTicks &- startTicks)
         let budgetNanos = UInt64(Double(frames) / sampleRate * 1_000_000_000)
@@ -205,6 +220,7 @@ enum VideoTap {
     /// does not leak (ADR-10).
     @MainActor
     static func buildAudioMix(audioTrack: AVAssetTrack, context: VideoTapContext) throws -> AVMutableAudioMix {
+        prewarmVideoTapTimebase()  // init the Mach timebase off the render thread (Phase 6)
         let retained = Unmanaged.passRetained(context)
         var callbacks = MTAudioProcessingTapCallbacks(
             version: kMTAudioProcessingTapCallbacksVersion_0,

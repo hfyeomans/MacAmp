@@ -43,7 +43,7 @@
 //     DSP scratch; `RenderThreadSafe` by render-confinement.
 //   * the `Atomic<…>` parameter/format/telemetry fields below — including the
 //     Phase 6 deadline counters (`budgetOverrunCount`, `deadlineRiskCount`,
-//     `lastLoggedHostTime`), all `Atomic<UInt64>`.
+//     `lastDeadlineRiskHostTime`), all `Atomic<UInt64>`.
 //
 // See plan.md ADR-3 + ADR-3a + ADR-4 amendment #2 for the design rationale.
 
@@ -143,7 +143,7 @@ final class VideoTapContext: @unchecked Sendable {
     let deadlineRiskCount: Atomic<UInt64>
     /// Host time (`mach_absolute_time` ticks) of the most recent deadline-risk
     /// sample. Doubles as the rate-limit gate for any main-thread surfacing.
-    let lastLoggedHostTime: Atomic<UInt64>
+    let lastDeadlineRiskHostTime: Atomic<UInt64>
 
     // MARK: Format tag constants
 
@@ -174,7 +174,7 @@ final class VideoTapContext: @unchecked Sendable {
         self.isActive = Atomic<Bool>(false)
         self.budgetOverrunCount = Atomic<UInt64>(0)
         self.deadlineRiskCount = Atomic<UInt64>(0)
-        self.lastLoggedHostTime = Atomic<UInt64>(0)
+        self.lastDeadlineRiskHostTime = Atomic<UInt64>(0)
     }
 
     /// Evaluate one timed `tapProcess` callback against its wall-clock budget and
@@ -190,7 +190,7 @@ final class VideoTapContext: @unchecked Sendable {
         }
         if elapsedNanos * 2 > budgetNanos {           // > 50% of budget → deadline risk
             _ = deadlineRiskCount.add(1, ordering: .relaxed)
-            lastLoggedHostTime.store(nowHostTime, ordering: .relaxed)
+            lastDeadlineRiskHostTime.store(nowHostTime, ordering: .relaxed)
         }
     }
 
@@ -202,7 +202,7 @@ final class VideoTapContext: @unchecked Sendable {
             frameCount: frameCount.load(ordering: .relaxed),
             budgetOverrunCount: budgetOverrunCount.load(ordering: .relaxed),
             deadlineRiskCount: deadlineRiskCount.load(ordering: .relaxed),
-            lastDeadlineRiskHostTime: lastLoggedHostTime.load(ordering: .relaxed),
+            lastDeadlineRiskHostTime: lastDeadlineRiskHostTime.load(ordering: .relaxed),
             isActive: isActive.load(ordering: .relaxed)
         )
     }

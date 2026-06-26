@@ -55,6 +55,30 @@ struct VideoTapTelemetryTests {
         #expect(snap.lastDeadlineRiskHostTime == 1, "zero-budget call must not overwrite the last risk host time")
     }
 
+    @Test("exact boundaries: ==10% is not an overrun; ==50% overruns but is not a risk")
+    func exactBoundaries() {
+        let budget: UInt64 = 10_000_000
+        let atTen = Self.makeContext()
+        atTen.recordProcessingDeadline(elapsedNanos: 1_000_000, budgetNanos: budget, nowHostTime: 1) // exactly 10%
+        #expect(atTen.diagnosticSnapshot.budgetOverrunCount == 0, "exactly 10% is not > 10%")
+
+        let atFifty = Self.makeContext()
+        atFifty.recordProcessingDeadline(elapsedNanos: 5_000_000, budgetNanos: budget, nowHostTime: 2) // exactly 50%
+        let s = atFifty.diagnosticSnapshot
+        #expect(s.budgetOverrunCount == 1 && s.deadlineRiskCount == 0, "exactly 50% overruns but is not > 50%")
+    }
+
+    @Test("second risk sample updates the last deadline-risk host time")
+    func secondRiskUpdatesHostTime() {
+        let ctx = Self.makeContext()
+        let budget: UInt64 = 10_000_000
+        ctx.recordProcessingDeadline(elapsedNanos: 7_000_000, budgetNanos: budget, nowHostTime: 100)
+        ctx.recordProcessingDeadline(elapsedNanos: 9_000_000, budgetNanos: budget, nowHostTime: 200)
+        let s = ctx.diagnosticSnapshot
+        #expect(s.deadlineRiskCount == 2)
+        #expect(s.lastDeadlineRiskHostTime == 200, "last host time reflects the most recent risk")
+    }
+
     @Test("fresh context has zeroed telemetry")
     func freshIsZero() {
         let snap = Self.makeContext().diagnosticSnapshot
