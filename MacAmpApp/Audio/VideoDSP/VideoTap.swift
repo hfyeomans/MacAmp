@@ -12,6 +12,21 @@ enum VideoTapError: Error {
     case createFailed(OSStatus)
 }
 
+/// Cached Mach timebase, queried once at load so the render path does no syscall.
+private let videoTapMachTimebase: mach_timebase_info_data_t = {
+    var info = mach_timebase_info_data_t()
+    mach_timebase_info(&info)
+    return info
+}()
+
+/// Convert a `mach_absolute_time` tick delta to nanoseconds (render-thread-safe;
+/// fast-paths the 1:1 timebase common on Apple Silicon).
+@inline(__always)
+private func videoTapHostTicksToNanos(_ ticks: UInt64) -> UInt64 {
+    let tb = videoTapMachTimebase
+    return tb.numer == tb.denom ? ticks : ticks &* UInt64(tb.numer) / UInt64(tb.denom)
+}
+
 // MARK: - C-callback closures
 //
 // All five callbacks are file-scope `private let` constants typed to the
@@ -60,7 +75,7 @@ private let tapProcess: MTAudioProcessingTapProcessCallback = { tap, framesToPro
     let status = MTAudioProcessingTapGetSourceAudio(tap, framesToProcess, bufferList, flagsOut, nil, framesOut)
     guard status == noErr else { return }
 
-    _ = context.processCallCount.add(1, ordering: .relaxed)
+    let callIndex = context.processCallCount.add(1, ordering: .relaxed).oldValue  // pre-increment value
     _ = context.frameCount.add(UInt64(framesOut.pointee), ordering: .relaxed)
 
     let formatTag = context.processingFormatTag.load(ordering: .acquiring)
@@ -78,6 +93,12 @@ private let tapProcess: MTAudioProcessingTapProcessCallback = { tap, framesToPro
 
     let frames = Int(framesOut.pointee)
     guard frames > 0 else { return }
+
+    // Phase 6 — deadline-miss telemetry: time every 64th callback only (the timing
+    // itself runs solely on sampled callbacks). `callIndex` is the pre-increment
+    // counter, so this fires on callbacks 0, 64, 128, …
+    let sampleTiming = (callIndex & 63) == 0
+    let startTicks = sampleTiming ? mach_absolute_time() : 0
 
     let preamp = Float(bitPattern: context.preampLinearGainBits.load(ordering: .relaxed))
     let eqOn = context.isEqOn.load(ordering: .relaxed)
@@ -148,6 +169,14 @@ private let tapProcess: MTAudioProcessingTapProcessCallback = { tap, framesToPro
     let sampleRate = Double(bitPattern: context.pendingSampleRate.load(ordering: .relaxed))
     videoTapVisualizerRender(bufferList: bufferList, frames: frames, sampleRate: sampleRate,
                              scratch: context.scratch, feed: context.feed)
+
+    // Phase 6 — close the deadline-miss sample over the full DSP + visualizer work.
+    if sampleTiming, sampleRate > 0 {
+        let endTicks = mach_absolute_time()
+        let elapsedNanos = videoTapHostTicksToNanos(endTicks &- startTicks)
+        let budgetNanos = UInt64(Double(frames) / sampleRate * 1_000_000_000)
+        context.recordProcessingDeadline(elapsedNanos: elapsedNanos, budgetNanos: budgetNanos, nowHostTime: endTicks)
+    }
 }
 
 // MARK: - Audio-mix builder + detach

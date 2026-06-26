@@ -41,12 +41,27 @@
 //     `RenderThreadSafe` (`@unchecked Sendable`, trylock publish).
 //   * `scratch: VisualizerScratchBuffers` — per-tap render-confined visualizer
 //     DSP scratch; `RenderThreadSafe` by render-confinement.
-//   * the `Atomic<…>` parameter/format/telemetry fields below.
+//   * the `Atomic<…>` parameter/format/telemetry fields below — including the
+//     Phase 6 deadline counters (`budgetOverrunCount`, `deadlineRiskCount`,
+//     `lastLoggedHostTime`), all `Atomic<UInt64>`.
 //
 // See plan.md ADR-3 + ADR-3a + ADR-4 amendment #2 for the design rationale.
 
 import Foundation
 import Synchronization
+
+/// Immutable, `Sendable` snapshot of a `VideoTapContext`'s telemetry counters,
+/// produced on the main thread via `VideoTapContext.diagnosticSnapshot`. Consumed
+/// by the Phase 8 CPU-benchmark gate and production diagnostics.
+struct VideoTapDiagnostics: Sendable, Equatable {
+    let processCallCount: UInt64
+    let frameCount: UInt64
+    let budgetOverrunCount: UInt64
+    let deadlineRiskCount: UInt64
+    /// `mach_absolute_time` ticks of the most recent deadline-risk sample (0 = none).
+    let lastDeadlineRiskHostTime: UInt64
+    let isActive: Bool
+}
 
 /// Tap-side state shared across the C-callback boundary of an
 /// `MTAudioProcessingTap` attached to an `AVPlayerItem`'s `audioMix`.
@@ -115,11 +130,20 @@ final class VideoTapContext: @unchecked Sendable {
     /// trigger coefficient recompute on rate changes.
     let pendingSampleRate: Atomic<UInt64>
 
-    // MARK: Telemetry (Phase 6 expands)
+    // MARK: Telemetry (Phase 6 — deadline-miss instrumentation)
 
     let processCallCount: Atomic<UInt64>
     let frameCount: Atomic<UInt64>
     let isActive: Atomic<Bool>
+
+    /// Count of sampled `tapProcess` callbacks whose wall-clock exceeded 10% of the
+    /// buffer budget. Render thread increments (lock-free); main reads via snapshot.
+    let budgetOverrunCount: Atomic<UInt64>
+    /// Count of sampled callbacks exceeding 50% of budget (deadline risk).
+    let deadlineRiskCount: Atomic<UInt64>
+    /// Host time (`mach_absolute_time` ticks) of the most recent deadline-risk
+    /// sample. Doubles as the rate-limit gate for any main-thread surfacing.
+    let lastLoggedHostTime: Atomic<UInt64>
 
     // MARK: Format tag constants
 
@@ -148,6 +172,39 @@ final class VideoTapContext: @unchecked Sendable {
         self.processCallCount = Atomic<UInt64>(0)
         self.frameCount = Atomic<UInt64>(0)
         self.isActive = Atomic<Bool>(false)
+        self.budgetOverrunCount = Atomic<UInt64>(0)
+        self.deadlineRiskCount = Atomic<UInt64>(0)
+        self.lastLoggedHostTime = Atomic<UInt64>(0)
+    }
+
+    /// Evaluate one timed `tapProcess` callback against its wall-clock budget and
+    /// bump the deadline counters. **Render-thread-safe and allocation-free** — pure
+    /// atomic updates, no logging (counters are read on the main thread via
+    /// `diagnosticSnapshot`). This is also the unit-test seam: callable directly with
+    /// synthetic values, so tests need not inject a real render-thread delay.
+    /// Integer-ratio comparisons avoid floating point on the render path.
+    func recordProcessingDeadline(elapsedNanos: UInt64, budgetNanos: UInt64, nowHostTime: UInt64) {
+        guard budgetNanos > 0 else { return }
+        if elapsedNanos * 10 > budgetNanos {          // > 10% of budget → overrun
+            _ = budgetOverrunCount.add(1, ordering: .relaxed)
+        }
+        if elapsedNanos * 2 > budgetNanos {           // > 50% of budget → deadline risk
+            _ = deadlineRiskCount.add(1, ordering: .relaxed)
+            lastLoggedHostTime.store(nowHostTime, ordering: .relaxed)
+        }
+    }
+
+    /// Immutable main-thread snapshot of the telemetry counters (Phase 8 CPU gate +
+    /// production observability of "EQ doesn't work on this video" reports).
+    var diagnosticSnapshot: VideoTapDiagnostics {
+        VideoTapDiagnostics(
+            processCallCount: processCallCount.load(ordering: .relaxed),
+            frameCount: frameCount.load(ordering: .relaxed),
+            budgetOverrunCount: budgetOverrunCount.load(ordering: .relaxed),
+            deadlineRiskCount: deadlineRiskCount.load(ordering: .relaxed),
+            lastDeadlineRiskHostTime: lastLoggedHostTime.load(ordering: .relaxed),
+            isActive: isActive.load(ordering: .relaxed)
+        )
     }
 
     /// Install a fresh coefficient set from the main thread. Blocking `withLock`
