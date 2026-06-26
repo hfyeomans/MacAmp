@@ -73,6 +73,13 @@ Documented for Oracle pre-PR review and for Phase 3+ context:
 
 ---
 
+## Toolchain migration (Xcode 27 / Swift 6.4) — 2026-06-26
+
+Mid-branch the dev machine upgraded Xcode 26→27 (Swift 6.2→6.4). This surfaced pre-existing issues NOT caused by S3-2; fixed on this branch as hygiene:
+- **12 new compiler warnings** (`786b3c2`): 6 Combine implicit-import (`Timer.publish().autoconnect()` needs explicit `import Combine`) + 6 `#ImplicitStrongCapture` (`[weak self]` hoisted to the outer closure in `WindowSettingsObserver`/`WindowCoordinator+Layout`/`PlaylistWindowActions`). Codex-verified SAFE. Build now warning-clean.
+- **TSan crash at app launch** (`1561621`): Swift 6.4's stricter `load(as:)` alignment precondition trapped on ZIPFoundation 0.9.19's misaligned ZIP-struct read (`Data.scanValue`) when loading the default `.wsz` skin. Fixed by upgrading ZIPFoundation 0.9.19→0.9.20 (`scanValue` now uses `loadUnaligned`). TSan gate restored: 103/103 green. App was always fine in normal Debug (manual smokes passed) — TSan-only.
+- Note: `project.yml` `xcodeVersion: 26.0` left as-is (cosmetic; not blocking). Deployment target stays macOS 15.0.
+
 ## Branch + Wave
 
 - **Branch:** `feat/avplayer-native-video-dsp` (cut from `main` 2026-05-01)
