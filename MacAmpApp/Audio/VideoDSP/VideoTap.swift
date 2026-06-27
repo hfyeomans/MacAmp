@@ -200,7 +200,9 @@ enum VideoTap {
     #if DEBUG
     /// Test seam: when true, `buildAudioMix` takes the `MTAudioProcessingTapCreate`
     /// failure branch (ADR-10 release-on-fail). DEBUG-only; reset after each use.
-    nonisolated(unsafe) static var _testForceTapCreateFailure = false
+    /// `@MainActor` (not `nonisolated(unsafe)`) — both the test and `buildAudioMix`
+    /// are `@MainActor`, so no cross-actor mutable state is implied.
+    @MainActor static var _testForceTapCreateFailure = false
     #endif
 
     /// Stereo balance gain law for `tapProcess` step 6. `balance` ∈ [-1, 1] with

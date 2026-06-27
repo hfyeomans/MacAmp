@@ -237,20 +237,53 @@ struct VideoTapLifecycleTests {
         let audioTrack = try #require(try await asset.loadTracks(withMediaType: .audio).first)
 
         weak var weakContext: VideoTapContext?
-        VideoTap._testForceTapCreateFailure = true
-        defer { VideoTap._testForceTapCreateFailure = false }
-
         do {
             let context = VideoTapContext(feed: VisualizerFeed())
             weakContext = context
-            _ = try VideoTap.buildAudioMix(audioTrack: audioTrack, context: context)
-            Issue.record("buildAudioMix should have thrown on forced tap-create failure")
-        } catch VideoTapError.createFailed {
-            // expected
-        }
+            VideoTap._testForceTapCreateFailure = true
+            defer { VideoTap._testForceTapCreateFailure = false }  // reset BEFORE any await
+            do {
+                _ = try VideoTap.buildAudioMix(audioTrack: audioTrack, context: context)
+                Issue.record("buildAudioMix should have thrown on forced tap-create failure")
+            } catch VideoTapError.createFailed {
+                // expected
+            }
+        }  // context dropped + flag reset here, before the await below
 
         try await Self.waitUntilNil(weakContext)
         #expect(weakContext == nil, "forced create failure must release the retained Context (ADR-10), not leak it")
+    }
+
+    /// Pause + resume must NOT release the Context — the tap stays installed on the
+    /// item's audioMix across a transport pause/resume cycle. (todo 7.5)
+    @Test("Pause/resume preserves the Context (not released across the cycle)")
+    func pauseResumePreservesContext() async throws {
+        let url = try Self.clipURL("1_mp4_441_stereo.mp4")
+        let controller = VideoPlaybackController()
+        weak var weakContext: VideoTapContext?
+
+        await controller.loadVideo(
+            url: url,
+            autoPlay: false,
+            audioMixBuilder: { asset in
+                guard let track = try? await asset.loadTracks(withMediaType: .audio).first else { return nil }
+                let context = VideoTapContext(feed: VisualizerFeed())
+                weakContext = context
+                return try? VideoTap.buildAudioMix(audioTrack: track, context: context)
+            },
+            isStillRelevant: { true }
+        )
+
+        #expect(controller.player != nil, "loadVideo must construct the player")
+        #expect(weakContext != nil, "Context is alive while held by the item's audioMix")
+
+        controller.play()
+        controller.pause()
+        controller.play()  // resume
+
+        // The Context must survive the whole pause/resume cycle (still held by the tap).
+        #expect(weakContext != nil, "pause/resume must not release the Context")
+        #expect(controller.player?.currentItem?.audioMix != nil, "audioMix (with the tap) must remain installed")
     }
 
     /// Attach + immediate drop with NO playback (no `tapProcess` ever runs): the
@@ -276,8 +309,9 @@ struct VideoTapLifecycleTests {
     }
 
     /// `replaceCurrentItem(with: nil)` then drop — the outgoing item's tap must
-    /// finalize and release the Context, with no use-after-free (runs under TSan).
-    /// (todo 7.7)
+    /// finalize and release the Context. NOTE: this exercises the RELEASE path (no
+    /// playback / no active `tapProcess`); active-render replacement UAF is a TSan/ASan
+    /// manual concern, not proven here. (todo 7.7)
     @Test("replaceCurrentItem(nil) releases the outgoing Context")
     func replaceCurrentItemWithNilReleasesContext() async throws {
         let url = try Self.clipURL("2_mp4_480_stereo.mp4")
