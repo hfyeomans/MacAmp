@@ -243,20 +243,19 @@ Numbering: `<Phase>.<Item>`. `[x]` complete, `[~]` in-progress, `[!]` blocked.
 **Goal.** Sample-and-alarm tap-callback wall-clock time; budget-violation counters for Phase 8 CPU benchmark gate.
 **Plan ref:** plan.md §6 Phase 6 + spike-findings hardening item 3.
 
-- [ ] 6.1 Add to `VideoTapContext.swift`:
-   - [ ] 6.1.1 `let budgetOverrunCount: Atomic<UInt64>(0)`
-   - [ ] 6.1.2 `let deadlineRiskCount: Atomic<UInt64>(0)`
-   - [ ] 6.1.3 `let lastLoggedHostTime: Atomic<UInt64>(0)`
-- [ ] 6.2 Add `struct VideoTapDiagnostics: Sendable` (snapshot type with all telemetry counters)
-- [ ] 6.3 Add `var diagnosticSnapshot: VideoTapDiagnostics { ... }` computed property on `VideoTapContext` (main-thread accessor)
-- [ ] 6.4 Modify `VideoTap.swift` `tapProcess` — every Nth callback (N=64), capture `mach_absolute_time()` at entry/exit
-- [ ] 6.5 Compute delta in nanoseconds via `mach_timebase_info_data_t`
-- [ ] 6.6 Compare to buffer wall-clock budget (`framesToProcess / sampleRate * 1e9`)
-- [ ] 6.7 If delta > 10% of budget → atomically increment `budgetOverrunCount`
-- [ ] 6.8 If delta > 50% → increment `deadlineRiskCount` + log once-per-second (rate-limited via `lastLoggedHostTime` gate)
-- [ ] 6.9 Unit test: inject synthetic delay (debug-only `_test` seam) → assert `budgetOverrunCount` increments
-- [ ] 6.10 Manual stress test: all 10 EQ bands at +24 dB on Apple Silicon over 30 s playback — observe counts (expect 0 overruns)
-- [ ] 6.11 Commit: `chore(s3-2): Phase 6 — deadline-miss telemetry`
+- [x] 6.1 ✅ `VideoTapContext` telemetry atomics: `budgetOverrunCount`, `deadlineRiskCount`, `lastDeadlineRiskHostTime` (renamed from `lastLoggedHostTime` per Oracle — logging was deliberately removed). All `Atomic<UInt64>`; Gate-1 header contract updated.
+- [x] 6.2 ✅ `struct VideoTapDiagnostics: Sendable, Equatable` (snapshot of all counters).
+- [x] 6.3 ✅ `var diagnosticSnapshot: VideoTapDiagnostics` (main-thread accessor, independent `.relaxed` loads — advisory snapshot).
+- [x] 6.4 ✅ `tapProcess` samples every 64th callback (`callIndex & 63 == 0`, callIndex = pre-increment `processCallCount`); `mach_absolute_time` entry/exit over the full DSP+visualizer work — timing runs ONLY on sampled callbacks.
+- [x] 6.5 ✅ ticks→nanos via cached `mach_timebase` (`videoTapMachTimebase` static let, prewarmed off the render thread in `buildAudioMix` per Oracle A1; 1:1 fast-path).
+- [x] 6.6 ✅ budget = `frames / sampleRate * 1e9` (`sampleRate.isFinite && > 0` guarded).
+- [x] 6.7 ✅ `recordProcessingDeadline` bumps `budgetOverrunCount` when `elapsed*10 > budget` (integer ratio, no float on render path).
+- [x] 6.8 ✅ bumps `deadlineRiskCount` + stores host time when `elapsed*2 > budget`. **Deviation:** NO render-thread `os_log` (RT-safety) — counters surface via `diagnosticSnapshot` on the main thread instead. Oracle-endorsed.
+- [x] 6.9 ✅ `VideoTapTelemetryTests` (7) — calls the pure `recordProcessingDeadline` seam with synthetic timings (cleaner than injecting a render-thread delay): under-budget, overrun-only, risk, accumulation+zero-budget, exact 10%/50% boundaries, second-risk host-time, fresh-zero.
+- [x] 6.x **Oracle A2 (real ordering bug fixed):** `tapPrepare` now stores `pendingSampleRate`/`isActive` BEFORE the `.releasing` store of `processingFormatTag` (the render acquire-loads the tag as the gate; the rate read by the budget AND the Phase 4 visualizer must publish first).
+- [ ] 6.10 Manual stress test: all 10 EQ bands at +24 dB over 30 s video playback → observe counts (expect 0 overruns) — **READY FOR USER** (the `diagnosticSnapshot` counters are the readout; can also defer to Phase 8's CPU benchmark).
+- [x] 6.11 Commit ✅ — `82365c7` (impl) + `3fd157c` (Oracle remediation).
+- [x] 6.12 Codex Oracle review ✅ — round 1 8/10 REVISE (A1 timebase prewarm, A2 store ordering, A3 advisory-sampling doc + NITs) → all fixed → round 2 **9/10 APPROVED, no must-fix**. 110/110 TSan.
 
 ---
 

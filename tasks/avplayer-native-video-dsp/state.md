@@ -4,7 +4,7 @@
 > **Created:** 2026-05-01
 > **Last revised:** 2026-05-28
 > **Sprint:** S3, Wave S3-2 (architectural pivot)
-> **Status:** 🔧 IMPLEMENTING — Phases 1+2+3+4+5 ✅ **DONE**. **Phase 5 ✅ DONE (2026-05-28)**: EQ + balance state fanout (ADR-5, two canonical owners) — `EqualizerController` fans EQ (compute+`installCoefficients` + isEqOn/preamp atomics) and `AudioPlayer` fans balance to registered video-tap Contexts; sample-rate poll via `VisualizerPipeline.onPollTick`. **The audible-EQ-on-video path is now LIVE** (the deferred todo 3.17 — moving an EQ slider / balance changes video audio in real time). **103/103 TSan, no races.** Oracle 9→**10/10 APPROVED**. **Phase 6 NEXT** (deadline-miss telemetry). Phase 4 (Oracle 9.6): video-tap visualizer (ADR-6). Phase 3 (Oracle 9.6): P-4 resolved (ADR-4 amendment #2 Mutex hand-off) + BiquadCascade + RBJ compute + tapProcess; ≤0.5 dB vs AVAudioUnitEQ. Steps 1-3 ✅. Plan + research locked at Oracle ≥9.8/10. Open non-blocking finding: P-6 (video→audio no auto-play).
+> **Status:** 🔧 IMPLEMENTING — Phases 1+2+3+4+5+6 ✅ **DONE**. **Phase 6 ✅ DONE (2026-06-26)**: deadline-miss telemetry on the video tap (RT-safe atomic counters sampled every 64th `tapProcess` callback via cached Mach timebase; `VideoTapDiagnostics` main-thread snapshot; NO render-thread logging). Also fixed a real `tapPrepare` store-ordering bug (sample rate must publish before the format-tag release-store). **110/110 TSan, no races.** Oracle 8→**9/10 APPROVED**. **Phase 7 NEXT** (lifecycle + production tests). **Phase 5 ✅ DONE (2026-05-28)**: EQ + balance state fanout (ADR-5, two canonical owners) — `EqualizerController` fans EQ (compute+`installCoefficients` + isEqOn/preamp atomics) and `AudioPlayer` fans balance to registered video-tap Contexts; sample-rate poll via `VisualizerPipeline.onPollTick`. **The audible-EQ-on-video path is now LIVE** (the deferred todo 3.17 — moving an EQ slider / balance changes video audio in real time). **103/103 TSan, no races.** Oracle 9→**10/10 APPROVED**. **Phase 6 NEXT** (deadline-miss telemetry). Phase 4 (Oracle 9.6): video-tap visualizer (ADR-6). Phase 3 (Oracle 9.6): P-4 resolved (ADR-4 amendment #2 Mutex hand-off) + BiquadCascade + RBJ compute + tapProcess; ≤0.5 dB vs AVAudioUnitEQ. Steps 1-3 ✅. Plan + research locked at Oracle ≥9.8/10. Open non-blocking finding: P-6 (video→audio no auto-play).
 
 ---
 
@@ -127,9 +127,9 @@ Split tracks who owns the clock — engine-managed transports get engine process
 
 ---
 
-## Next steps (Phase 6 — production telemetry: deadline-miss instrumentation)
+## Next steps (Phase 7 — lifecycle + production tests)
 
-Phases 1-5 ✅ DONE (see status banner). **Phase 6 NEXT** per `todo.md` Phase 6 + `plan.md` §6 Phase 6 + spike-findings hardening item 3: add tap-callback wall-clock sampling + budget-overrun/deadline-risk counters on `VideoTapContext` (Atomics), surfaced for the Phase 8 CPU-benchmark gate. Then Phase 7 (lifecycle tests + signed-bundle smoke), 8 (15-gate matrix), 9 (UI polish + mandatory docs).
+Phases 1-6 ✅ DONE (see status banner). **Phase 7 NEXT** per `todo.md` Phase 7 + `plan.md` §6 Phase 7: tap create/attach/detach stress cycles, `Unmanaged.passRetained`↔`tapFinalize` balance accounting (via `_test` seams), injected tap-create-failure path, signed-bundle video smoke. Then Phase 8 (15-gate verification matrix — uses the Phase 6 counters as the CPU gate; note Phase 8 needs DENSE per-callback sampling, not the advisory 1/64), Phase 9 (UI polish + mandatory docs per `docs-update-backlog.md` + PR).
 
 > **todo 3.17 (audible EQ-on-video smoke) is no longer "deferred"** — Phase 5 delivered the fanout, now todo **5.16 ✅ USER-VERIFIED 2026-05-28**: all 4 video scenarios pass (EQ slider, EQ toggle, balance, EQ-on-before-video). Engine regression **5.17 ✅ USER-VERIFIED** (EQ on a music file unchanged). **Phase 5 is fully verified.**
 
