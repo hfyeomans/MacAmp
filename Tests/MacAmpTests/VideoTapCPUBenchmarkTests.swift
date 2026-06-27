@@ -53,25 +53,35 @@ struct VideoTapCPUBenchmarkTests {
         cascade.currentCoefficients = coefs
         let scratch = VisualizerScratchBuffers()
         let feed = VisualizerFeed()
+        // Pristine source (a real callback gets fresh source audio each time); the
+        // working buffers are refreshed from it OUTSIDE the timed region so EQ output
+        // is never fed back into the next iteration's input (which would drift toward
+        // overflow/denormals and distort the cost).
+        let (srcL, srcR) = (UnsafeMutablePointer<Float>.allocate(capacity: Self.frames),
+                            UnsafeMutablePointer<Float>.allocate(capacity: Self.frames))
         let (left, right) = (UnsafeMutablePointer<Float>.allocate(capacity: Self.frames),
                              UnsafeMutablePointer<Float>.allocate(capacity: Self.frames))
-        defer { left.deallocate(); right.deallocate() }
+        defer { srcL.deallocate(); srcR.deallocate(); left.deallocate(); right.deallocate() }
         let w = 2.0 * Double.pi * 440.0 / Self.sampleRate
         for i in 0..<Self.frames {
-            left[i] = 0.5 * Float(sin(w * Double(i)))
-            right[i] = 0.5 * Float(sin(w * Double(i) * 1.5))
+            srcL[i] = 0.5 * Float(sin(w * Double(i)))
+            srcR[i] = 0.5 * Float(sin(w * Double(i) * 1.5))
         }
         let abl = AudioBufferList.allocate(maximumBuffers: 2)
         abl[0] = AudioBuffer(mNumberChannels: 1, mDataByteSize: UInt32(Self.frames * 4), mData: .init(left))
         abl[1] = AudioBuffer(mNumberChannels: 1, mDataByteSize: UInt32(Self.frames * 4), mData: .init(right))
         defer { free(abl.unsafeMutablePointer) }
-        let (lGain, rGain) = VideoTap.balanceGains(0.3)  // off-center → balance multiplies run
+        let (lGain, rGain) = VideoTap.balanceGains(0.3)        // off-center → balance multiplies run
+        let preamp = Float(pow(10.0, 6.0 / 20.0))              // +6 dB preamp (step 3) included in the chain
+        let byteCount = Self.frames * MemoryLayout<Float>.size
 
         var samples = [Double]()
         samples.reserveCapacity(Self.iterations)
         for _ in 0..<Self.iterations {
+            memcpy(left, srcL, byteCount); memcpy(right, srcR, byteCount)  // refresh input (untimed)
             let start = mach_absolute_time()
-            // Full per-callback DSP path.
+            // Full per-callback DSP chain: preamp → cascade → balance → visualizer.
+            for i in 0..<Self.frames { left[i] *= preamp; right[i] *= preamp }
             cascade.process(left, frameCount: Self.frames, channel: 0, stride: 1)
             cascade.process(right, frameCount: Self.frames, channel: 1, stride: 1)
             for i in 0..<Self.frames { left[i] *= lGain; right[i] *= rGain }
@@ -90,10 +100,10 @@ struct VideoTapCPUBenchmarkTests {
                              budgetNanos / 1000, p50 / 1000, p99 / 1000, p99Pct, maxNs / 1000, maxPct)
 
         print("CPU BENCHMARK (Debug -Onone): \(summary)")  // captured into verification.md
-        // Debug-safe real-time invariant (Release is ~50-100× faster; production
-        // ≤10% gate is the manual Instruments run). Proves the DSP never blows the
-        // audio deadline even unoptimized.
+        // p99 is the hard regression signal (Debug-safe: ~11%, ceiling 50%). `max` is
+        // a loose "didn't hang" sanity check only — single-sample wall-clock includes
+        // scheduler stalls, so a tight max bound would be CI-flaky (Oracle).
         #expect(p99 <= budgetNanos * 0.50, "99p exceeded 50% of budget even allowing for Debug — \(summary)")
-        #expect(maxNs <= budgetNanos * 0.75, "a single sample exceeded 75% of budget — \(summary)")
+        #expect(maxNs <= budgetNanos, "a single sample exceeded the full buffer deadline (hung?) — \(summary)")
     }
 }

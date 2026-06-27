@@ -10,8 +10,8 @@
 
 | # | Gate | Result | Evidence (date / commit) |
 |---|---|---|---|
-| 8.1 | CPU benchmark — Apple Silicon, worst-case (all 10 EQ bands + balance + visualizer), 1024-frame stereo @ 48 kHz | ✅ **PASS (automated Debug guard)** + ⏳ **Release gate = MANUAL** | `VideoTapCPUBenchmarkTests` (2026-06-27). **Debug (`-Onone`):** budget 21,333 µs, p50 2,237 µs, **p99 2,432 µs (11.4%)**, max 2,764 µs (13.0%). The DSP fits the audio deadline ~9× over **even unoptimized** (well under the 50% hard-reject). Production Release is ~50-100× faster (≈0.2%); the plan's "99p ≤10%" is a Release target → **manual Instruments Time Profiler run (see 8.1b below).** |
-| 8.1b | CPU benchmark — Release / Instruments Time Profiler on the signed `.app` | ⏳ **MANUAL — user to run** | See manual checklist. Expected: `tapProcess` 99p ≤10% of buffer budget (trivially met given the Debug number). |
+| 8.1 | CPU benchmark — Apple Silicon, worst-case DSP core (preamp + all 10 EQ bands + balance + visualizer), 1024-frame stereo @ 48 kHz | ✅ **PASS (automated Debug regression guard only)** | `VideoTapCPUBenchmarkTests` (2026-06-27). **Debug (`-Onone`):** budget 21,333 µs, **p99 ≈ 11% / max ≈ 13%** of the deadline. Proves the DSP **fits the audio deadline with margin even unoptimized** (p99 ≤ 50% hard gate). **Scope/caveats (Oracle):** this is a synthetic dense microbenchmark of the DSP CORE — it does NOT replicate the plan's full gate (no real playback, no baseline-vs-full-chain delta, no 44.1/48/5.1 corpus, no `MTAudioProcessingTapGetSourceAudio`, omits the Mutex refresh; the test build is Debug not Release). It is a regression guard, NOT proof of the production figure. |
+| 8.1b | CPU benchmark — **production `tapProcess` 99p ≤10%** via Instruments Time Profiler on the **Release** signed `.app` | ⏳ **MANUAL — required for the real gate** | The Debug guard does NOT prove the Release ≤10% figure (Release is faster, but by an unmeasured factor on this code). Run Time Profiler on the Release build over the 44.1/48/5.1 corpus and record actual `tapProcess` 99p here. Until then the production CPU gate is UNVERIFIED. |
 | 8.2 | CPU benchmark — Intel build target | ⏳ **MANUAL / N/A on this hardware** | Build targets `arm64` + `x86_64`; Intel perf can't be measured without an Intel Mac. Defer to an Intel Mac run or accept the Apple-Silicon result as the primary gate (DSP is identical, scalar). |
 | 8.3 | Numerical EQ match — `BiquadCascade` vs `AVAudioUnitEQ` ≤0.5 dB | ✅ **PASS** | `BiquadNumericalMatchTests` (7 tests) green, 2026-06-27, HEAD post-`11bcd8a`. 5 presets × 40 log freqs 20 Hz–20 kHz, worst-case ≤0.5 dB. |
 | 8.4 | TSan — full `MacAmpApp` suite with `-enableThreadSanitizer YES` | ✅ **PASS** | **116/116 green, no data races**, 2026-06-27. |
@@ -44,6 +44,10 @@
 | 8.12 | Mid-playback format re-prepare | Multi-track item / track swap (advanced — skip if not easily reproducible) | `tapPrepare` re-fires, coefficients recompute (EQ stays correct) | ☐ | optional |
 | 8.13 | **5.1 surround** | Play `clapperboard-videos/5_mp4_480_surround.mp4` with EQ on | Plays (native downmix), visualizer animates (no clipping), EQ audible across channels | ☐ | (visualizer side already user-verified in Phase 4 todo 4.17) |
 | 8.14 | **Item replacement** (video → audio and back) | Play video, then load a music track (and reverse) | No leak, no crash, audio gap ≤~200 ms. **Known issue: video→audio doesn't auto-play (P-6) — hit Next; that's the tracked finding, not a new failure.** | ☐ | |
+| 8.5b | **Live EQ/preamp/balance change during video** | While a video plays, drag EQ bands, preamp, and balance | Audio changes in real time, no glitch/dropout on each change (user already verified the *function* in todo 5.16; this is the no-glitch-under-stress confirmation) | ☐ | |
+| 8.5c | **Seek/scrub with EQ active** | Seek/scrub repeatedly while EQ is on | No stale-filter artifact (clean audio right after each seek — `StartOfStream` reset), no crash | ☐ | |
+| 8.5d | **Visualizer mode switch during video** | Cycle spectrum → oscilloscope → Butterchurn while video plays | All modes animate from the video audio; no glitch on switch (covers Phase 4 in stress) | ☐ | |
+| 8.5e | **Telemetry counters** | After ~1 min of heavy-EQ video, check `VideoTapContext.diagnosticSnapshot` (debugger/Console) | `budgetOverrunCount` and `deadlineRiskCount` are 0 (or near-0) on Apple Silicon | ☐ | (Phase 6 counters; needs a debug readout) |
 
 ### Signed-bundle smoke (Phase 7 gates 7.9 / 7.10, also part of Phase 8 manual)
 
@@ -55,6 +59,7 @@
 
 ## Summary
 
-- **Automated gates (8.1 Debug guard, 8.3, 8.4, 8.15): ✅ ALL PASS.** The DSP is numerically correct (≤0.5 dB), thread-safe (TSan-clean), lifecycle-bulletproof, and fits the real-time deadline ~9× over even unoptimized.
-- **Manual gates (8.1b, 8.2, 8.5–8.14, 7.9/7.10): ⏳ pending user / hardware.** Fill in the Result columns above.
+- **Automated gates ✅ PASS:** 8.3 (EQ ≤0.5 dB), 8.4 (TSan 116/116, no races), 8.15 (lifecycle), and 8.1's **Debug regression guard** (DSP fits the deadline with margin even unoptimized). The DSP is numerically correct, thread-safe, and lifecycle-bulletproof.
+- **The production CPU gate (8.1b) is NOT yet verified** — it requires a Release/Instruments `tapProcess` measurement. The Debug guard is a regression net, not the production figure.
+- **Manual / hardware gates ⏳ pending user:** 8.1b (Release Instruments), 8.2 (Intel), 8.5–8.14 + 8.5b–8.5e (route changes, live EQ stress, seek, surround, replacement, telemetry), 7.9/7.10 (signed-bundle). Fill in the Result columns.
 - Any FAILURE → record it, then ADR amendment + targeted retry (todo 8.17). Do NOT soft-skip.

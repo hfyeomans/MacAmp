@@ -286,7 +286,7 @@ Numbering: `<Phase>.<Item>`. `[x]` complete, `[~]` in-progress, `[!]` blocked.
 
 ### Static gates (one-time)
 
-- [x] 8.1 CPU benchmark — Apple Silicon ✅ **automated Debug guard PASS** (`VideoTapCPUBenchmarkTests`): worst-case (all 10 EQ bands + balance + visualizer), 1024-frame stereo @ 48 kHz, dense per-iteration. Debug `-Onone`: p99 **11.4%** / max 13.0% of the 21 ms deadline — fits ~9× over **even unoptimized**. The ≤10% production figure is a Release target → **8.1b manual Instruments** (Release is ~50-100× faster, ≈0.2%). Results in `verification.md`.
+- [x] 8.1 CPU benchmark — Apple Silicon ✅ **automated Debug REGRESSION GUARD PASS** (`VideoTapCPUBenchmarkTests`): worst-case DSP core (preamp + all 10 EQ bands + balance + visualizer), 1024-frame stereo @ 48 kHz, dense per-iteration with pristine-input refresh. Debug `-Onone`: p99 ~11% / max ~13% of the 21 ms deadline — fits with margin **even unoptimized** (p99 ≤ 50% hard gate). **NOT the production gate** (synthetic DSP-core microbenchmark, not full `tapProcess`, Debug not Release) → **8.1b manual Instruments on Release is required for the real ≤10% figure.** `verification.md` (Oracle-reviewed methodology: pristine input each iter, preamp included, p99 hard / max loose).
 - [ ] 8.2 CPU benchmark — Intel build target — **MANUAL / N/A on this hardware** (needs an Intel Mac; DSP is identical scalar code). `verification.md`.
 - [x] 8.3 Numerical EQ match ✅ **PASS** — `BiquadNumericalMatchTests` (7) green, ≤0.5 dB.
 - [x] 8.4 TSan ✅ **PASS** — **116/116** with `-enableThreadSanitizer YES`, no data races.
