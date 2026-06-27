@@ -197,6 +197,108 @@ struct VideoTapLifecycleTests {
         _ = player  // keep player alive past the wait so the test exercises detach-not-player-drop
     }
 
+    // MARK: - Phase 7 — stress, failure-injection, and replacement lifecycle
+
+    /// 10 build/attach/replace cycles in quick succession — every Context must be
+    /// released. Stresses the `passRetained`↔`tapFinalize` balance under rapid churn
+    /// (the production rapid-skip path). (todo 7.2)
+    @Test("Ten rapid build/attach cycles: all Contexts released")
+    func tenRapidCyclesNoLeak() async throws {
+        let url = try Self.clipURL("1_mp4_441_stereo.mp4")
+        let asset = AVURLAsset(url: url)
+        let audioTrack = try #require(try await asset.loadTracks(withMediaType: .audio).first)
+
+        var weakRefs: [() -> Bool] = []  // each returns true while its Context is alive
+        try {
+            for _ in 0..<10 {
+                let context = VideoTapContext(feed: VisualizerFeed())
+                weak var weakContext: VideoTapContext? = context
+                weakRefs.append { weakContext != nil }
+                let mix = try VideoTap.buildAudioMix(audioTrack: audioTrack, context: context)
+                let item = AVPlayerItem(asset: asset)
+                item.audioMix = mix
+                _ = AVPlayer(playerItem: item)  // dropped at end of each iteration
+            }
+        }()
+
+        // Allow the teardown chain (tapFinalize) to drain.
+        for _ in 0..<50 where weakRefs.contains(where: { $0() }) {
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+        #expect(weakRefs.allSatisfy { $0() == false }, "all 10 Contexts must be released after their players drop")
+    }
+
+    /// Injected `MTAudioProcessingTapCreate` failure (ADR-10): `buildAudioMix` must
+    /// release the `passRetained` Context and throw — NOT leak. (todo 7.3)
+    @Test("Tap-create failure releases the Context (no leak)")
+    func tapCreateFailureReleasesContext() async throws {
+        let url = try Self.clipURL("1_mp4_441_stereo.mp4")
+        let asset = AVURLAsset(url: url)
+        let audioTrack = try #require(try await asset.loadTracks(withMediaType: .audio).first)
+
+        weak var weakContext: VideoTapContext?
+        VideoTap._testForceTapCreateFailure = true
+        defer { VideoTap._testForceTapCreateFailure = false }
+
+        do {
+            let context = VideoTapContext(feed: VisualizerFeed())
+            weakContext = context
+            _ = try VideoTap.buildAudioMix(audioTrack: audioTrack, context: context)
+            Issue.record("buildAudioMix should have thrown on forced tap-create failure")
+        } catch VideoTapError.createFailed {
+            // expected
+        }
+
+        try await Self.waitUntilNil(weakContext)
+        #expect(weakContext == nil, "forced create failure must release the retained Context (ADR-10), not leak it")
+    }
+
+    /// Attach + immediate drop with NO playback (no `tapProcess` ever runs): the
+    /// `tapFinalize` chain must still release the Context. (todo 7.4)
+    @Test("Attach then immediate drop (no playback) still finalizes")
+    func attachThenImmediateDropFinalizes() async throws {
+        let url = try Self.clipURL("4_m4v_441_stereo.m4v")
+        let asset = AVURLAsset(url: url)
+        let audioTrack = try #require(try await asset.loadTracks(withMediaType: .audio).first)
+
+        weak var weakContext: VideoTapContext?
+        try {
+            let context = VideoTapContext(feed: VisualizerFeed())
+            weakContext = context
+            let mix = try VideoTap.buildAudioMix(audioTrack: audioTrack, context: context)
+            let item = AVPlayerItem(asset: asset)
+            item.audioMix = mix
+            _ = AVPlayer(playerItem: item)  // never played; dropped immediately
+        }()
+
+        try await Self.waitUntilNil(weakContext)
+        #expect(weakContext == nil, "Context must finalize even if tapProcess never ran")
+    }
+
+    /// `replaceCurrentItem(with: nil)` then drop — the outgoing item's tap must
+    /// finalize and release the Context, with no use-after-free (runs under TSan).
+    /// (todo 7.7)
+    @Test("replaceCurrentItem(nil) releases the outgoing Context")
+    func replaceCurrentItemWithNilReleasesContext() async throws {
+        let url = try Self.clipURL("2_mp4_480_stereo.mp4")
+        let asset = AVURLAsset(url: url)
+        let audioTrack = try #require(try await asset.loadTracks(withMediaType: .audio).first)
+
+        weak var weakContext: VideoTapContext?
+        try {
+            let context = VideoTapContext(feed: VisualizerFeed())
+            weakContext = context
+            let mix = try VideoTap.buildAudioMix(audioTrack: audioTrack, context: context)
+            let item = AVPlayerItem(asset: asset)
+            item.audioMix = mix
+            let player = AVPlayer(playerItem: item)
+            player.replaceCurrentItem(with: nil)  // drop the tapped item
+        }()
+
+        try await Self.waitUntilNil(weakContext)
+        #expect(weakContext == nil, "replaceCurrentItem(nil) must finalize the outgoing tap's Context")
+    }
+
     // MARK: - Helpers
 
     private static func clipURL(_ filename: String) throws -> URL {

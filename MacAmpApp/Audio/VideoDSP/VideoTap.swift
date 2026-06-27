@@ -197,6 +197,12 @@ private let tapProcess: MTAudioProcessingTapProcessCallback = { tap, framesToPro
 // MARK: - Audio-mix builder + detach
 
 enum VideoTap {
+    #if DEBUG
+    /// Test seam: when true, `buildAudioMix` takes the `MTAudioProcessingTapCreate`
+    /// failure branch (ADR-10 release-on-fail). DEBUG-only; reset after each use.
+    nonisolated(unsafe) static var _testForceTapCreateFailure = false
+    #endif
+
     /// Stereo balance gain law for `tapProcess` step 6. `balance` ∈ [-1, 1] with
     /// 0.0 = center — the SAME convention as `AudioPlayer.balance` /
     /// `AVAudioNode.pan`, so the Phase 5 fanout can write the app's balance value
@@ -233,12 +239,22 @@ enum VideoTap {
         )
 
         var tapOut: MTAudioProcessingTap?
-        let status = MTAudioProcessingTapCreate(
-            kCFAllocatorDefault,
-            &callbacks,
-            kMTAudioProcessingTapCreationFlag_PreEffects,
-            &tapOut
-        )
+        let status: OSStatus
+        #if DEBUG
+        // Test seam (ADR-10): SKIP the real create and force the failure branch so
+        // lifecycle tests can assert the +1 `passRetained` is released, not leaked.
+        // Must short-circuit BEFORE the real create — otherwise a real tap would be
+        // built and its `tapFinalize` would also release the Context (double release).
+        if VideoTap._testForceTapCreateFailure {
+            status = OSStatus(-1)
+        } else {
+            status = MTAudioProcessingTapCreate(
+                kCFAllocatorDefault, &callbacks, kMTAudioProcessingTapCreationFlag_PreEffects, &tapOut)
+        }
+        #else
+        status = MTAudioProcessingTapCreate(
+            kCFAllocatorDefault, &callbacks, kMTAudioProcessingTapCreationFlag_PreEffects, &tapOut)
+        #endif
         guard status == noErr, let tap = tapOut else {
             retained.release()
             throw VideoTapError.createFailed(status)
