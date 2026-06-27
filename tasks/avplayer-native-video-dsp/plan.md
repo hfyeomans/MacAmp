@@ -730,7 +730,7 @@ Each phase is individually reviewable and individually testable. Each phase ends
   - Test: tap-create injected failure path — Context is released, no leak (uses `_testForceTapCreateFailure` seam).
   - Test: attach + immediate stop before any `tapProcess` invocation — `tapFinalize` still fires.
   - Test: pause + resume cycle — Context state preserved (atomic counters increment monotonically).
-  - Test: seek mid-playback — `BiquadCascade.reset()` invoked (verified via `_testFilterStateZero` seam).
+  - Test: seek mid-playback → `BiquadCascade.reset()`. **(Phase 7 reality, 2026-06-26):** no `_testFilterStateZero` seam was built — reset CORRECTNESS is proven by `resetClearsState` (BiquadNumericalMatchTests) and the seek→`StartOfStream`→`cascade.reset()` wiring is verified by code review + manual seek smoke (a true seek-to-render-callback test needs invasive seams / real rendering timing — diminishing returns).
   - Test: `replaceCurrentItem(with: nil)` during active `tapProcess` — no UAF (verified via TSan + asan if available; baseline = no crash).
 - Manual: build + sign a Debug `.app` (per `docs/RELEASE_BUILD_GUIDE.md` minus notarization for Debug); play video → confirm tap behavior matches the unsigned CLI spike (tap fires, EQ audible).
 

@@ -264,17 +264,18 @@ Numbering: `<Phase>.<Item>`. `[x]` complete, `[~]` in-progress, `[!]` blocked.
 **Goal.** Exhaustive lifecycle test coverage per Tap Lifecycle Contract. Catches rapid skip / create-failure / pause-resume / seek / item-replacement edge cases.
 **Plan ref:** plan.md §6 Phase 7 + ADR-7 + spike-findings hardening items 1+4.
 
-- [ ] 7.1 Create `Tests/MacAmpTests/VideoTapLifecycleTests.swift`
-- [ ] 7.2 Test: 10 tap create/attach/play/replace cycles in 1 s → no leak (assert via `_test*` Unmanaged-balance accounting seam)
-- [ ] 7.3 Test: tap-create injected failure path (via `_testForceTapCreateFailure` seam) → Context released, no leak
-- [ ] 7.4 Test: attach + immediate stop before any `tapProcess` invocation → `tapFinalize` still fires
-- [ ] 7.5 Test: pause + resume cycle → Context state preserved (atomic counters increment monotonically)
-- [ ] 7.6 Test: seek mid-playback → `BiquadCascade.reset()` invoked (verified via `_testFilterStateZero` seam)
-- [ ] 7.7 Test: `replaceCurrentItem(with: nil)` during active `tapProcess` → no UAF (TSan + asan)
-- [ ] 7.8 Build + TSan green
-- [ ] 7.9 Build + sign Debug `.app` per `docs/RELEASE_BUILD_GUIDE.md` (no notarization for Debug)
-- [ ] 7.10 Manual: launch signed `.app`, play video, verify EQ audible, no leak in Allocations Instruments over 1-min playback
-- [ ] 7.11 Commit: `chore(s3-2): Phase 7 — lifecycle + production tests`
+- [x] 7.1 ✅ `VideoTapLifecycleTests.swift` already existed (Phase 2, 6 tests); Phase 7 extended it to 11.
+- [x] 7.2 ✅ `tenRapidCyclesNoLeak` — 10 build/attach/drop cycles, all Contexts released (weak-ref + `waitUntilNil`).
+- [x] 7.3 ✅ `tapCreateFailureReleasesContext` — injected failure via the new `@MainActor static var VideoTap._testForceTapCreateFailure` seam (SKIPS the real create, else a real tap's `tapFinalize` would double-release) → Context released, not leaked (ADR-10).
+- [x] 7.4 ✅ `attachThenImmediateDropFinalizes` — attach + drop, no playback → `tapFinalize` still fires.
+- [x] 7.5 ✅ `pauseResumePreservesContext` — load tapped item via `VideoPlaybackController`, play/pause/play → Context survives + audioMix stays installed. **Narrowed claim (Oracle):** proves Context-survival across pause/resume, NOT counter monotonicity (that needs real render timing).
+- [x] 7.6 ✅ (covered, not as a new render-driven test) — `BiquadCascade.reset()` CORRECTNESS proven by `resetClearsState` (in `BiquadNumericalMatchTests`); the seek→`StartOfStream`→`cascade.reset()` wiring is a one-liner verified by code review (`VideoTap.swift`) + the manual seek smoke. No `_testFilterStateZero` seam built — a true seek-to-render-callback test needs invasive seams / real rendering timing (Oracle: diminishing returns).
+- [x] 7.7 ✅ `replaceCurrentItemWithNilReleasesContext` — `replaceCurrentItem(nil)` → outgoing tap finalizes, Context released. **Narrowed claim (Oracle):** RELEASE path only (no playback); active-render UAF is a TSan/ASan manual concern.
+- [x] 7.8 Build + TSan green ✅ — **115/115, no data races**, lifecycle suite stable across re-runs.
+- [ ] 7.9 Build + sign Debug `.app` per `docs/RELEASE_BUILD_GUIDE.md` — **READY FOR USER** (or fold into Phase 9 final smoke).
+- [ ] 7.10 Manual: launch signed `.app`, play video, EQ audible, no leak over 1-min — **READY FOR USER** (the 2.40 MGD leak check + automated lifecycle tests already cover the leak balance; this is the signed-bundle confirmation).
+- [x] 7.11 Commit ✅ — `b443369` (tests) + `7f50c2c` (Oracle remediation).
+- [x] 7.12 Codex Oracle review ✅ — round 1 8/10 REVISE (overstated coverage: 7.5/7.6 + UAF overclaim) → fixed (added 7.5, reframed 7.7, flag scoping, honest 7.6) → round 2 **9/10 APPROVED, no new issue**.
 
 ---
 
