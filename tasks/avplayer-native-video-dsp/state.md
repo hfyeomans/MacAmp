@@ -2,9 +2,9 @@
 
 > **Purpose:** Bring EQ + Balance + Milkdrop/Butterchurn to video playback by applying DSP in-place inside an `MTAudioProcessingTap` on AVPlayer's audio path — instead of routing video audio out of AVPlayer through `AVAudioEngine`. Replaces the engine-routing approach attempted on `feat/video-audio-engine-routing` (now PAUSED-AS-REFERENCE).
 > **Created:** 2026-05-01
-> **Last revised:** 2026-05-28
+> **Last revised:** 2026-09-05 (status sweep: Phase 8 automated ✅ / manual pending; Phase 9 next)
 > **Sprint:** S3, Wave S3-2 (architectural pivot)
-> **Status:** 🔧 IMPLEMENTING — Phases 1-7 ✅ DONE; **Phase 8 AUTOMATED gates ✅ (2026-06-27), manual/hardware gates ⏳ pending user.** Automated: 8.3 EQ ≤0.5 dB, 8.4 TSan **116/116**, 8.15 lifecycle (Phase 7), 8.1 CPU **Debug regression guard** (`VideoTapCPUBenchmarkTests` — DSP fits the deadline ~9× over even unoptimized; the production ≤10% figure is 8.1b MANUAL/Release-Instruments, UNVERIFIED). Oracle 7→fixes (benchmark methodology + honesty). Hardware-manual checklist (8.5-8.14 route changes/surround/replacement + 8.5b-e live-EQ/seek/visualizer/telemetry) written to **`verification.md`** — USER runs + records. **Phase 9 (docs + PR) can start in parallel; PR #C should follow manual verification.** Phase 7 (Oracle 9): lifecycle tests. Phase 6 (Oracle 9): telemetry. **Phase 5 ✅ DONE (2026-05-28)**: EQ + balance state fanout (ADR-5, two canonical owners) — `EqualizerController` fans EQ (compute+`installCoefficients` + isEqOn/preamp atomics) and `AudioPlayer` fans balance to registered video-tap Contexts; sample-rate poll via `VisualizerPipeline.onPollTick`. **The audible-EQ-on-video path is now LIVE** (the deferred todo 3.17 — moving an EQ slider / balance changes video audio in real time). **103/103 TSan, no races.** Oracle 9→**10/10 APPROVED**. **Phase 6 NEXT** (deadline-miss telemetry). Phase 4 (Oracle 9.6): video-tap visualizer (ADR-6). Phase 3 (Oracle 9.6): P-4 resolved (ADR-4 amendment #2 Mutex hand-off) + BiquadCascade + RBJ compute + tapProcess; ≤0.5 dB vs AVAudioUnitEQ. Steps 1-3 ✅. Plan + research locked at Oracle ≥9.8/10. Open non-blocking finding: P-6 (video→audio no auto-play).
+> **Status:** 🔧 IMPLEMENTING — Phases 1-7 ✅ DONE; **Phase 8 AUTOMATED gates ✅ (2026-06-27), manual/hardware gates ⏳ pending user.** Automated: 8.3 EQ ≤0.5 dB, 8.4 TSan **116/116**, 8.15 lifecycle (Phase 7), 8.1 CPU **Debug regression guard** (`VideoTapCPUBenchmarkTests` — DSP fits the deadline ~9× over even unoptimized; the production ≤10% figure is 8.1b MANUAL/Release-Instruments, UNVERIFIED). Oracle 7→fixes (benchmark methodology + honesty). Hardware-manual checklist (8.5-8.14 route changes/surround/replacement + 8.5b-e live-EQ/seek/visualizer/telemetry) written to **`verification.md`** — USER runs + records. **Phase 9 (docs + PR) can start in parallel; PR #C should follow manual verification.** Phase 7 (Oracle 9): lifecycle tests. Phase 6 (Oracle 9): telemetry. **Phase 5 ✅ DONE (2026-05-28)**: EQ + balance state fanout (ADR-5, two canonical owners) — `EqualizerController` fans EQ (compute+`installCoefficients` + isEqOn/preamp atomics) and `AudioPlayer` fans balance to registered video-tap Contexts; sample-rate poll via `VisualizerPipeline.onPollTick`. **The audible-EQ-on-video path is now LIVE** (the deferred todo 3.17 — moving an EQ slider / balance changes video audio in real time). Oracle 9→**10/10 APPROVED**. Phase 4 (Oracle 9.6): video-tap visualizer (ADR-6). Phase 3 (Oracle 9.6): P-4 resolved (ADR-4 amendment #2 Mutex hand-off) + BiquadCascade + RBJ compute + tapProcess; ≤0.5 dB vs AVAudioUnitEQ. Steps 1-3 ✅. Plan + research locked at Oracle ≥9.8/10. Open non-blocking finding: P-6 (video→audio no auto-play).
 
 ---
 
@@ -28,7 +28,7 @@ The contrarian framing: **don't drag video audio out of AVPlayer. Apply processi
 | 1 | Mechanical pivot — branch + cherry-pick Phase 1 + scaffold task + `_context/` cross-refs | ✅ DONE | 2026-05-01 |
 | 2 | Research phase — Phase 0 spike (empirical kill-switch ✅), Apple docs (verbatim contract from SDK header), saved-branch retrospective, EQ numerical-match research, VisualizerFeed extraction analysis | ✅ DONE | 2026-05-01 (Oracle 10/10 final after 5 rounds) |
 | 3 | Plan phase — write `plan.md`, iterate with Oracle, ADR-3a containment cycle (user-requested), user sign-off | ✅ DONE | 2026-05-02 (Oracle 9.8/10 final after 5 rounds) |
-| 4 | Implementation — 9 phases per `plan.md` §6 | 🔧 IN PROGRESS | Phase 1 + 2 done; Phase 3 NEXT |
+| 4 | Implementation — 9 phases per `plan.md` §6 | 🔧 IN PROGRESS | Phases 1-7 ✅; Phase 8 automated ✅ (2026-06-27), manual/hardware gates pending user; Phase 9 NEXT |
 
 See `tasks/_context/s3-2-pivot.md` for the strategic decision log.
 
@@ -45,10 +45,10 @@ See `tasks/_context/s3-2-pivot.md` for the strategic decision log.
 | Spike artifact | `spike/avplayer-inplace-tap-dsp` (throwaway, retained locally) | ~210 LOC Swift 6.2 CLI tool. Phase 0 kill-switch empirical confirmation. |
 | Phase 1 (`VisualizerFeed` + `VisualizerScratchBuffers` extraction) | Commit `146a8b4` | 2 nested types promoted to module-internal across new files. Engine path byte-for-byte identical. |
 | Phase 2 initial scaffold (commit `ac7e0d5`) | Landed | New `RenderThreadSafe.swift` (Gate 2 marker protocol, `~Copyable`) + `VideoDSP/VideoTapContext.swift` (Gate 1 header contract, all 9 atomic fields, double-buffer alloc/dealloc, **initial** install method) + `VideoDSP/VideoTap.swift` (5 C-callbacks, ADR-10 release-on-fail, `@MainActor` `attach`/`detach`) + `VideoDSP/BiquadCoefficientSet.swift` (empty struct stub) + `Tests/VideoTapSendableContractTests.swift` (Gate 3a Mirror + 3b regex). `AudioPlayer.swift` modified: `videoTapContext` field + initial `attachVideoTap`/`detachVideoTap` facades wired into `playTrack`/`stop`/media-switch. |
-| Phase 2 Oracle revisions 1-6 (Option C structural fix + ADR-4 A1) | Pending commit (amend or new) | Oracle review (gpt-5.5, 2026-05-02) returned 8/10 REVISE: BLOCKER on ADR-7 (audioMix mutated during playback by post-construction install) + ACTIONABLE on ADR-4 (double-buffer race) + ACTIONABLE on missing race tests. Revisions 1-6 applied: refactored `VideoTap.attach` → `buildAudioMix(audioTrack:context:)` (sync, returns mix); refactored `VideoPlaybackController.loadVideo` to be `async` with `audioMixBuilder` parameter so audioMix is set during AVPlayerItem construction (before AVPlayer adopts the item); refactored `AudioPlayer` to use private `startVideoLoad(track:)` + generation counter + in-flight task handle; removed `installCoefficientSet` per ADR-4 A1 (P-4 placeholder added); added 3 lifecycle tests (`VideoTapLifecycleTests`). |
-| Phase 2 Oracle revisions 7-12 (Oracle BLOCKER follow-up: stale-load short-circuit) | Pending commit | Oracle re-review returned 8/10 REVISE again: BLOCKER on stale `loadVideo` continuation still constructing AVPlayer + observers after stale builder. Revisions 7-12 applied: added `isStillRelevant: () -> Bool` parameter to `loadVideo` short-circuit BEFORE AVPlayerItem/AVPlayer/observer mutation; gated final `play()` on `playbackState == .playing` (pause-during-load no longer auto-plays); added 2 stale-load race tests (`loadVideoBailsWhenStaleAfterAudioMixBuilder` + `loadVideoConstructsPlayerWhenRelevant`); cleaned up stale `installCoefficientSet` references in code + placeholder.md; amended plan.md ADR-4 + ADR-7 + §5.2 + §5.4 + §6 Phase 5 to reflect Option C reality. |
+| Phase 2 Oracle revisions 1-6 (Option C structural fix + ADR-4 A1) | Landed in 7d3367c (2026-05-02) | Oracle review (gpt-5.5, 2026-05-02) returned 8/10 REVISE: BLOCKER on ADR-7 (audioMix mutated during playback by post-construction install) + ACTIONABLE on ADR-4 (double-buffer race) + ACTIONABLE on missing race tests. Revisions 1-6 applied: refactored `VideoTap.attach` → `buildAudioMix(audioTrack:context:)` (sync, returns mix); refactored `VideoPlaybackController.loadVideo` to be `async` with `audioMixBuilder` parameter so audioMix is set during AVPlayerItem construction (before AVPlayer adopts the item); refactored `AudioPlayer` to use private `startVideoLoad(track:)` + generation counter + in-flight task handle; removed `installCoefficientSet` per ADR-4 A1 (P-4 placeholder added); added 3 lifecycle tests (`VideoTapLifecycleTests`). |
+| Phase 2 Oracle revisions 7-12 (Oracle BLOCKER follow-up: stale-load short-circuit) | Landed in 7d3367c (2026-05-02) | Oracle re-review returned 8/10 REVISE again: BLOCKER on stale `loadVideo` continuation still constructing AVPlayer + observers after stale builder. Revisions 7-12 applied: added `isStillRelevant: () -> Bool` parameter to `loadVideo` short-circuit BEFORE AVPlayerItem/AVPlayer/observer mutation; gated final `play()` on `playbackState == .playing` (pause-during-load no longer auto-plays); added 2 stale-load race tests (`loadVideoBailsWhenStaleAfterAudioMixBuilder` + `loadVideoConstructsPlayerWhenRelevant`); cleaned up stale `installCoefficientSet` references in code + placeholder.md; amended plan.md ADR-4 + ADR-7 + §5.2 + §5.4 + §6 Phase 5 to reflect Option C reality. |
 
-**Tests:** 85/85 with TSan (72 baseline + 2 contract + 6 lifecycle + 5 seek-state-matrix). Engine path unchanged.
+**Tests:** 116/116 with TSan at HEAD (85/85 at the Phase 2 close — 72 baseline + 2 contract + 6 lifecycle + 5 seek-state-matrix). Engine path unchanged. *(74/74 vs 85/85 discrepancy — `todo.md` 2.37 records 74/74 for the same Phase 2 close; open item for Phase 9 pre-PR Oracle.)*
 
 **Leak check (todo 2.40) ✅ 2026-05-28** — verified on the real playback path via Xcode Memory Graph Debugger (Allocations Instruments can't show pure-Swift classes by name; MGD can). Clip loaded+paused → `VideoTapContext` + `coefficientBlockA` + `coefficientBlockB` all = 1; switch to an audio track (`.video→.audio` cleanup → `tapFinalize`) → all = 0. `Unmanaged.passRetained`↔`tapFinalize` balanced, no leak, Phase-2-attributable. Redundant with the 6 automated `VideoTapLifecycleTests`. Reusable workflow: `tasks/_context/instruments-allocations-workflow.md`.
 
@@ -69,7 +69,7 @@ Documented for Oracle pre-PR review and for Phase 3+ context:
 6. **`pauseAndDetachVideoTapIfNeeded` enforces pause-before-detach** — `audioMix = nil` is a mutation that ADR-7 forbids during playback. Detach paths (`stop`, video→audio media switch) now call `pauseAndDetachVideoTapIfNeeded()` which pauses the player first if it is currently playing.
 7. **Final `play()` gated on `playbackState`** — User pause/stop while a video load is in flight no longer triggers an unwanted auto-play after the load completes. `startVideoLoad`'s Task checks `playbackState == .playing` before calling `videoPlaybackController.play()`.
 
-`placeholder.md` items P-1 through P-4 are the persistent tracking records. P-1 + P-4 MUST be addressed in Phase 3; P-2 + P-3 are open until external conditions change (Apple SDK Sendable, stricter language reflection).
+`placeholder.md` items P-1 through P-4 are the persistent tracking records. P-1 + P-4 were required in Phase 3 and both closed there (2026-05-28 / commit `24f8a12`); P-2 + P-3 remain open until external conditions change (Apple SDK Sendable, stricter language reflection). P-5 (closed, `c040e76`) and P-6 (open, non-blocking) were added later.
 
 ---
 
@@ -77,7 +77,7 @@ Documented for Oracle pre-PR review and for Phase 3+ context:
 
 Mid-branch the dev machine upgraded Xcode 26→27 (Swift 6.2→6.4). This surfaced pre-existing issues NOT caused by S3-2; fixed on this branch as hygiene:
 - **12 new compiler warnings** (`786b3c2`): 6 Combine implicit-import (`Timer.publish().autoconnect()` needs explicit `import Combine`) + 6 `#ImplicitStrongCapture` (`[weak self]` hoisted to the outer closure in `WindowSettingsObserver`/`WindowCoordinator+Layout`/`PlaylistWindowActions`). Codex-verified SAFE. Build now warning-clean.
-- **TSan crash at app launch** (`1561621`): Swift 6.4's stricter `load(as:)` alignment precondition trapped on ZIPFoundation 0.9.19's misaligned ZIP-struct read (`Data.scanValue`) when loading the default `.wsz` skin. Fixed by upgrading ZIPFoundation 0.9.19→0.9.20 (`scanValue` now uses `loadUnaligned`). TSan gate restored: 103/103 green. App was always fine in normal Debug (manual smokes passed) — TSan-only.
+- **TSan crash at app launch** (`1561621`): Swift 6.4's stricter `load(as:)` alignment precondition trapped on ZIPFoundation 0.9.19's misaligned ZIP-struct read (`Data.scanValue`) when loading the default `.wsz` skin. Fixed by upgrading ZIPFoundation 0.9.19→0.9.20 (`scanValue` now uses `loadUnaligned`). TSan gate restored: 103/103 green at that point (116/116 at HEAD). App was always fine in normal Debug (manual smokes passed) — TSan-only.
 - Note: `project.yml` `xcodeVersion: 26.0` left as-is (cosmetic; not blocking). Deployment target stays macOS 15.0.
 
 ## Branch + Wave
@@ -104,8 +104,10 @@ Mid-branch the dev machine upgraded Xcode 26→27 (Swift 6.2→6.4). This surfac
 | `plan.md` | ✅ APPROVED — Oracle 9.8/10 final, user signed off |
 | `todo.md` | ✅ ACTIVE — derived from plan.md §6 phases (2026-05-02) |
 | `state.md` | ✅ This file |
-| `placeholder.md` | Empty (populated during implementation) |
-| `depreciated.md` | Empty (populated during implementation) |
+| `placeholder.md` | P-1..P-6 recorded; P-2/P-3/P-6 open, P-1/P-4/P-5 resolved |
+| `depreciated.md` | ✅ POPULATED — code removed during Phases 1-8 (withdrawn ADR-4 A/B swap, Phase-2 attach/detach facades, `wasVideoBridge`) |
+| `verification.md` | ✅ ACTIVE — Phase 8 gate matrix + hardware-manual checklist (2026-06-27) |
+| `phase2-walkthrough.md` | ✅ COMPLETE — Phase 2 manual walkthrough (2026-05-02) |
 
 ---
 
@@ -127,9 +129,15 @@ Split tracks who owns the clock — engine-managed transports get engine process
 
 ---
 
-## Next steps (Phase 8 — verification matrix execution)
+## Next steps (Phase 8 manual gates ⏳ user · Phase 9 NEXT)
 
-Phases 1-7 ✅ DONE (see status banner). **Phase 8 NEXT** per `todo.md` Phase 8 + `plan.md` §6 Phase 8: the 15-gate verification matrix. Static gates (CPU benchmark — **needs DENSE per-callback sampling, not the advisory 1/64 from Phase 6**; numerical EQ ≤0.5 dB re-run; TSan) + Dynamic gates (AirPods/AirPlay route changes during video, system output switch, BT codec switch, long-playback A/V drift, surround, item replacement). Many Dynamic gates are HARDWARE-MANUAL (route changes). Document each gate's pass/fail + commit SHA. Then Phase 9 (UI polish + mandatory docs per `docs-update-backlog.md` + pre-PR Oracle + PR #C).
+Phases 1-7 ✅ DONE (see status banner). **Phase 8 AUTOMATED gates executed 2026-06-27** (commits `2c410a0` → `944795a` → `056c69a`): the dense-sampling CPU benchmark landed as `VideoTapCPUBenchmarkTests` — a **Debug `-Onone` DSP-core regression guard only** (p99 ≈11% / max ≈13% of the 21,333 µs deadline), plus 8.3 numerical EQ ≤0.5 dB, 8.4 TSan 116/116, and 8.15 lifecycle. **8.1b — the production CPU gate (`tapProcess` 99p ≤10% on a Release build under Instruments) — remains UNVERIFIED**, and cannot literally yield a 99p on this machine (Time Profiler reports an aggregate share; `VideoTap.swift:112` samples 1-in-64 into two bucket counters), so expect a PARTIAL result. Phase 8 Oracle round 1 scored 7/10; the benchmark-methodology + honesty fixes landed in `944795a` with no post-fix re-score recorded.
+
+The remaining **manual/hardware checklist is in `verification.md`** and is ⏳ pending the user: 8.5-8.14 (long-playback drift, AirPods/AirPlay/system-output/BT-codec route changes, surround, item replacement), 8.5b-8.5e (live EQ / seek / visualizer / telemetry), and 7.9/7.10 (signed-bundle smoke). 8.2 is N/A (no Intel hardware).
+
+**Phase 9 is NEXT** and may run in parallel with the user's manual gates: UI audit (9.1-9.3), the mandatory docs pass per `docs-update-backlog.md` (9.4-9.6), final smoke + TSan + pre-PR Oracle (9.7-9.10), then commit/re-push/PR #C (9.11-9.14) — **PR #C must follow manual verification.**
+
+Phase 9 docs scope must ALSO cover `CLAUDE.md` (lines ~61, 81, 82) and `.ai-shared/macamp/project.md` (lines ~18, 38, 39), which repeat the "all audio through one unified AVAudioEngine" framing and omit `VideoDSP/` — these are agent instructions and outrank `docs/` for correction priority.
 
 > **todo 3.17 (audible EQ-on-video smoke) is no longer "deferred"** — Phase 5 delivered the fanout, now todo **5.16 ✅ USER-VERIFIED 2026-05-28**: all 4 video scenarios pass (EQ slider, EQ toggle, balance, EQ-on-before-video). Engine regression **5.17 ✅ USER-VERIFIED** (EQ on a music file unchanged). **Phase 5 is fully verified.**
 

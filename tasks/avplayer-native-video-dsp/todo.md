@@ -2,8 +2,8 @@
 
 > **Plan:** `tasks/avplayer-native-video-dsp/plan.md` (Oracle 9.8/10 final, commit `fdce0ed`)
 > **Branch:** `feat/avplayer-native-video-dsp`
-> **Status:** 🔧 IMPLEMENTING — Phase 1 ✅, Phase 2 ✅, Phase 3 NEXT.
-> **Updated:** 2026-05-02
+> **Status:** 🔧 IMPLEMENTING — Phases 1-7 ✅; Phase 8 automated gates ✅ (2026-06-27), manual/hardware gates ⏳ user (`verification.md`); Phase 9 NEXT.
+> **Updated:** 2026-09-05
 
 Numbering: `<Phase>.<Item>`. `[x]` complete, `[~]` in-progress, `[!]` blocked.
 
@@ -144,7 +144,7 @@ Numbering: `<Phase>.<Item>`. `[x]` complete, `[~]` in-progress, `[!]` blocked.
 - [ ] 2.38 Unit test: `VideoTap.attach` with synthetic `AVPlayerItem` succeeds; `detach` releases. Inject create-failure (corrupted callbacks struct) — assert `Unmanaged` is released. **DEFERRED to Phase 7 lifecycle tests** per plan §6 Phase 7 §7.3 (more cohesive with the rest of the lifecycle suite; Phase 2's pass-through tap doesn't add lifecycle-specific risk beyond what Phase 7 covers)
 - [x] 2.39 Manual smoke on all 5 clapperboard clips ✅ DONE 2026-05-02. All 5 clips (mp4 44.1/48 stereo + mov 48 stereo + m4v 44.1 stereo + mp4 48 5.1 surround) played with audio + video. New orchestration logs (`Cleanup complete` → `Time observer setup` → `Loading video file` → `Play` → metadata) fired in correct order on each. No `Video tap audio mix build failed` errors → tap attached successfully on all 5. Caught and fixed mid-test: P-5 video display regression (`@ObservationIgnored` on `VideoPlaybackController.player` masking async player assignment from view re-render — fix commit `c040e76`).
 - [x] 2.40 Leak check ✅ DONE 2026-05-28 via Xcode Memory Graph Debugger (NOT Allocations Instruments — pure Swift classes like `VideoTapContext` bucket under `malloc<size>` in Allocations and never appear by class name; MGD shows them by name). Real-playback path: clip loaded+paused → `VideoTapContext` (1) + `VideoTapContext.coefficientBlockA` (1) + `VideoTapContext.coefficientBlockB` (1); then switch to an audio track (forces `.video→.audio` at AudioPlayer.swift:490 → `pauseAndDetachVideoTapIfNeeded` + `cleanup()` → AVPlayerItem drop → `tapFinalize`) → all three = 0. `Unmanaged.passRetained` (+1) balanced by `tapFinalize` (release); Context's owned coefficient buffers die with it. No leak, Phase-2-attributable (no Phase 3 code yet). Redundant with the 6 automated `VideoTapLifecycleTests` (synthetic path, green under TSan). Workflow doc: `tasks/_context/instruments-allocations-workflow.md`.
-- [x] 2.41 Commit: `chore(s3-2): Phase 2 — production tap scaffold + ADR-3a containment` — pending
+- [x] 2.41 Commit: `chore(s3-2): Phase 2 — production tap scaffold + ADR-3a containment` — landed as `ac7e0d5` + `7d3367c` (2026-05-02)
 
 ---
 
@@ -281,7 +281,7 @@ Numbering: `<Phase>.<Item>`. `[x]` complete, `[~]` in-progress, `[!]` blocked.
 
 ## Phase 8 — Verification matrix execution
 
-**Goal.** Execute every gate from research.md "Verification gate matrix." 15 gates tiered Static / Dynamic / Lifecycle. Document pass/fail in state.md.
+**Goal.** Execute every gate from research.md "Verification gate matrix." 15 gates tiered Static / Dynamic / Lifecycle. Document pass/fail in `verification.md` (created by 8.16).
 **Plan ref:** plan.md §6 Phase 8 + §7 (matrix).
 
 ### Static gates (one-time)
@@ -316,7 +316,10 @@ Numbering: `<Phase>.<Item>`. `[x]` complete, `[~]` in-progress, `[!]` blocked.
 
 - [x] 8.16 ✅ — created `tasks/avplayer-native-video-dsp/verification.md`: every gate's result + the hardware-manual checklist + commit/date evidence.
 - [ ] 8.17 (standing) Any gate failure → ADR amendment + targeted retry, NOT a soft-skip.
-- [x] 8.18 Commit ✅ — benchmark + verification.md committed (see below).
+
+- [x] 8.18 Commit ✅ — benchmark + verification.md committed (`2c410a0` gates + checklist; `944795a` methodology/honesty fixes).
+
+> **Known not-executable-as-written on this machine:** 8.1b literal 99p (PARTIAL — Time Profiler gives an aggregate share, and `VideoTap.swift:112` samples 1-in-64 into two bucket counters), 8.11 (NOT RUN unless a device substitution is made), 8.12 optional, 8.2 no Intel hardware, 8.5 needs a user-supplied ≥10-min video — see `verification.md` Summary.
 
 ---
 
@@ -341,6 +344,8 @@ Numbering: `<Phase>.<Item>`. `[x]` complete, `[~]` in-progress, `[!]` blocked.
    - Follow-up retrofit candidate: `StreamDecodePipeline.DecodeContext`
 - [ ] 9.5 Update existing scattered `@unchecked Sendable` guidance in `docs/MACAMP_ARCHITECTURE_GUIDE.md` (lines around 826, 1354 from current state) to **point at** the new canonical subsection rather than restate rationale
 - [ ] 9.6 Add **"Audio DSP Architecture"** section to `docs/VIDEO_WINDOW.md` describing the in-place tap DSP topology (replaces any prior engine-routing description); reference research.md and ADRs 1-11
+- [ ] 9.6b Update `CLAUDE.md` lines ~61/81/82: Audio/ tree gains `VideoDSP/`, `RenderThreadSafe.swift`, `VisualizerFeed.swift`, `VisualizerScratchBuffers.swift`; **Audio** bullet becomes dual-architecture (engine path for local audio + streams; AVPlayer-native `MTAudioProcessingTap` in-place DSP for local video; HLS/streaming video out of scope); **Visualization** bullet: works for local audio, streaming, AND video (dual-producer, ADR-6)
+- [ ] 9.6c Apply the identical fixes to `.ai-shared/macamp/project.md` lines ~18/38/39 (byte-identical claims, `@`-imported by `CLAUDE.md` — fixing only `CLAUDE.md` leaves the falsehood live)
 
 ### Final verification + PR
 
@@ -349,7 +354,7 @@ Numbering: `<Phase>.<Item>`. `[x]` complete, `[~]` in-progress, `[!]` blocked.
 - [ ] 9.9 Pre-PR Codex Oracle review (per `feedback_sprint_workflow.md` memory)
 - [ ] 9.10 Apply Oracle feedback if any
 - [ ] 9.11 Commit if any final fixes: `chore(s3-2): Phase 9 — UI polish + docs`
-- [ ] 9.12 Push branch: `git push -u origin feat/avplayer-native-video-dsp`
+- [ ] 9.12 Push branch: `git push -u origin feat/avplayer-native-video-dsp` (branch already pushed at `056c69a`; re-push after Phase 9 commits)
 - [ ] 9.13 `gh pr create` with PR description summarizing the 5-round research + 5-round plan + 9-phase implementation
 - [ ] 9.14 Wait for human review
 

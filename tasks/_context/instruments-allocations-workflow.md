@@ -1,6 +1,6 @@
 # Instruments Allocations Workflow (macOS 26 / Xcode 16+)
 
-> **Source of truth for in-repo Instruments leak checks.** Captured 2026-05-19 from Apple's "Analyze heap memory" WWDC 2024 session + Xcode 16 / Instruments docs. Modern UI differs from pre-macOS-15 walkthroughs (no post-recording "Statistics" tab; pre-recording config view is new).
+> **Source of truth for in-repo Instruments leak checks.** Captured 2026-05-19 from Apple's "Analyze heap memory" WWDC 2024 session + Xcode 16 / Instruments docs. **Updated 2026-09-05** (Recorded-Types module name corrected to `MacAmp`; added the `xcrun heap` census gotcha). Modern UI differs from pre-macOS-15 walkthroughs (no post-recording "Statistics" tab; pre-recording config view is new).
 >
 > **Use cases:**
 > - S3-2 `avplayer-native-video-dsp` Phase 2 todo 2.40 (`VideoTapContext` retain/release balance after `passRetained` ↔ `tapFinalize`)
@@ -56,9 +56,11 @@ There is **no separate "Statistics" tab** anymore. Equivalent information now li
 
   Rules evaluate top-to-bottom; later rules override earlier ones. For a class-specific test:
   - **Option 1 (simpler):** leave defaults. Filter to your class post-hoc using the detail panel's search field.
-  - **Option 2 (smaller trace):** disable the wildcard `*` row, add a row `MacAmpApp.VideoTapContext` (Swift class name — your app prefix + class) → Has prefix → Record. Records *only* allocations of that class. Lighter trace, faster analysis.
+  - **Option 2 (smaller trace):** disable the wildcard `*` row, add a row `MacAmp.VideoTapContext` (Swift class name — your app prefix + class) → Has prefix → Record. Records *only* allocations of that class. Lighter trace, faster analysis.
 
-  **For Swift classes, the type string is `<ModuleName>.<ClassName>`** — e.g. `MacAmpApp.VideoTapContext`. Foundation/ObjC classes don't get the prefix.
+    (Swift module name is the PRODUCT_NAME `MacAmp`, not the scheme name `MacAmpApp`; mangled symbols read `_$s6MacAmp…` — a `MacAmpApp.` filter matches nothing and yields a false PASS.)
+
+  **For Swift classes, the type string is `<ModuleName>.<ClassName>`** — e.g. `MacAmp.VideoTapContext`. Foundation/ObjC classes don't get the prefix.
 
 ### A4. VM Tracker config
 
@@ -129,7 +131,7 @@ For `Unmanaged.passRetained` audits: enabling `Record reference counts` gives yo
 1. Recording Mode: **Immediate**
 2. Heap Allocations → **check "Record reference counts"**
 3. Recorded Types — add row:
-   - Type String: `MacAmpApp.VideoTapContext`
+   - Type String: `MacAmp.VideoTapContext`
    - Match: `Contains` (or `Has prefix`)
    - Action: `Record`
    - (Leave the wildcard row enabled too — we want all allocations as background context; the `VideoTapContext` row is for emphasis.)
@@ -170,11 +172,12 @@ For `Unmanaged.passRetained` audits: enabling `Record reference counts` gives yo
 
 1. **Modern recording mode is Deferred by default.** Change it to **Immediate** for interactive tests. (Apple's default optimizes for perf trace overhead; we don't care for a 5-clip run.)
 2. **"Statistics" view is gone.** Same data lives in the default Allocations List + the Lifespan filter dropdown.
-3. **Swift class type strings are `<ModuleName>.<ClassName>`.** Don't search for `VideoTapContext` alone in Recorded Types — `MacAmpApp.VideoTapContext` works better, or use Contains match.
+3. **Swift class type strings are `<ModuleName>.<ClassName>`.** Don't search for `VideoTapContext` alone in Recorded Types — `MacAmp.VideoTapContext` works better, or use Contains match. The module is `MacAmp` (PRODUCT_NAME), **not** `MacAmpApp` (the scheme) — a `MacAmpApp.` filter matches nothing and reads as a false PASS.
 4. **TSan-linked binaries work fine for leak checks** — TSan changes performance, not allocation count semantics. Don't rebuild without TSan just for this test.
 5. **The .app bundle name is `MacAmp.app`, not `MacAmpApp.app`** (product name vs scheme name divergence).
 6. **`Record reference counts` is expensive** — only enable when investigating retain/release imbalance specifically. For pure "did it leak Y/N" checks, leave it off.
 7. **Foundation classes don't show your app prefix.** `NSString`, `__NSCFConstantString`, `CFArray` — these are pre-filtered out by the default `NS`/`CF` Ignore rules. Only your own Swift/ObjC types show with the app-prefix convention.
+8. **`xcrun heap $(pgrep -x MacAmp) | grep -i VideoTapContext`** is a fast live-instance census that needs no Instruments (Debug build; may need sudo).
 
 ---
 

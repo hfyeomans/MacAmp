@@ -2,7 +2,9 @@
 
 > **Purpose:** Precise, file-by-file list of what the `docs/` set needs to reflect the S3-2 "AVPlayer-native video DSP" feature (Phases 2–5). Produced 2026-05-28 by a 5-agent team that each read its assigned `docs/` file IN FULL (not excerpts). This is a planning artifact — **no `docs/` edits have been made yet.** Phase 9 (UI polish + mandatory docs) executes this.
 >
-> **Constraint reminder:** project is macOS 26.x+ / Swift 6.2. Doc language must say `Synchronization.Atomic`/`Mutex` (Swift 6 stdlib), NOT swift-atomics, for the video DSP subsystem.
+> **Constraint reminder:** project deploys to macOS 15.0+ and is built with Xcode 27 / Swift 6.4 toolchain in Swift 6.2 language mode (migrated 2026-06-26). Doc language must say `Synchronization.Atomic`/`Mutex` (Swift 6 stdlib), NOT swift-atomics, for the video DSP subsystem.
+>
+> **Scope gap:** this backlog covers `docs/` only. It omits `CLAUDE.md` and `.ai-shared/macamp/project.md`, which carry the same "all audio through one unified AVAudioEngine" framing and omit `VideoDSP/` — now tracked as todo **9.6b / 9.6c** (agent instructions; higher correction priority than `docs/`).
 
 ---
 
@@ -120,4 +122,4 @@ New patterns to add (map to existing sections or new ones):
 
 ## Execution note for Phase 9
 
-Suggested sequencing (per the architecture-guide agent): (1) metrics/file-structure/line-count sweep; (2) add the "Recent Change" entries; (3) write the new Video DSP section + mandated Concurrency Contract subsection + the two key new diagrams; (4) retrofit the "all audio" framing + kill the false "no PCM tap / EQ unavailable" claims across ARCHITECTURE_GUIDE + VIDEO_WINDOW; (5) fanout/balance/visualizer diagram updates; (6) version footers. Run Codex Oracle on the doc diffs before the PR (per project convention). Verify all cited symbols/line numbers against code at edit time (the agents captured them at HEAD `9bce090`; they drift).
+Suggested sequencing (per the architecture-guide agent): (1) metrics/file-structure/line-count sweep; (2) add the "Recent Change" entries; (3) write the new Video DSP section + mandated Concurrency Contract subsection + the two key new diagrams; (4) retrofit the "all audio" framing + kill the false "no PCM tap / EQ unavailable" claims across ARCHITECTURE_GUIDE + VIDEO_WINDOW; (5) fanout/balance/visualizer diagram updates; (6) version footers. Run Codex Oracle on the doc diffs before the PR (per project convention). Verify all cited symbols/line numbers against code at edit time (the agents captured them at HEAD `9bce090` on 2026-05-28; branch HEAD is now `056c69a` — they drift).

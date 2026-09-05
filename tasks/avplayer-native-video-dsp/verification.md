@@ -2,7 +2,7 @@
 
 > **Purpose:** Record the pass/fail of every gate in the research.md "Verification gate matrix" (15 gates, tiered Static / Dynamic / Lifecycle). Automated gates are run by Claude; **Dynamic gates are HARDWARE-MANUAL — the user runs them and records the result here.** Per todo 8.17, any gate FAILURE → ADR amendment + retry, NOT a soft-skip.
 >
-> **Branch:** `feat/avplayer-native-video-dsp` · **Toolchain:** Xcode 27 / Swift 6.4 · **Hardware:** Apple Silicon (M-series)
+> **Branch:** `feat/avplayer-native-video-dsp` (pushed to origin at `056c69a`; unmerged, PR #C not yet opened) · **Toolchain:** Xcode 27 / Swift 6.4 · **Hardware:** Apple Silicon (M-series) · *(checklist corrected 2026-09-05)*
 
 ---
 
@@ -34,7 +34,7 @@
 
 | # | Gate | How to test | Pass criteria | Result | Notes |
 |---|---|---|---|---|---|
-| 8.5 | Long-playback A/V drift | Play a video (loop a short clip) for **≥10 min** continuous | A/V stays in sync within ~±40 ms (lips match); no growing drift | ☐ | |
+| 8.5 | Long-playback A/V drift | Play ONE user-supplied video ≥10 min long with visible lip-sync content (no in-repo clip qualifies — all five clapperboard clips are 3.000 s). Do NOT loop a short clip: each loop restarts the AVPlayerItem, re-fires tapPrepare/StartOfStream and resets accumulated drift. | A/V stays in sync within ~±40 ms (lips match); no growing drift (judged perceptually — no drift harness exists for the in-place tap) | ☐ | |
 | 8.6 | Route change — **AirPods (1st gen)** | Mid-video: connect AirPods, then disconnect | Resumes ≤500 ms, EQ still applied, no silence | ☐ | |
 | 8.7 | Route change — **AirPods Pro** | Same | Same | ☐ | |
 | 8.8 | Route change — **AirPlay receiver (v1)** | Mid-video: select an AirPlay-1 target, then back | Same | ☐ | |
@@ -47,13 +47,14 @@
 | 8.5b | **Live EQ/preamp/balance change during video** | While a video plays, drag EQ bands, preamp, and balance | Audio changes in real time, no glitch/dropout on each change (user already verified the *function* in todo 5.16; this is the no-glitch-under-stress confirmation) | ☐ | |
 | 8.5c | **Seek/scrub with EQ active** | Seek/scrub repeatedly while EQ is on | No stale-filter artifact (clean audio right after each seek — `StartOfStream` reset), no crash | ☐ | |
 | 8.5d | **Visualizer mode switch during video** | Cycle spectrum → oscilloscope → Butterchurn while video plays | All modes animate from the video audio; no glitch on switch (covers Phase 4 in stress) | ☐ | |
-| 8.5e | **Telemetry counters** | After ~1 min of heavy-EQ video, check `VideoTapContext.diagnosticSnapshot` (debugger/Console) | `budgetOverrunCount` and `deadlineRiskCount` are 0 (or near-0) on Apple Silicon | ☐ | (Phase 6 counters; needs a debug readout) |
+| 8.5e | **Telemetry counters** | After ~1 min of heavy-EQ video, check `VideoTapContext.diagnosticSnapshot` (LLDB only — no Console/log path exists; attach to the Debug app, `breakpoint set --file EqualizerController.swift --line 106 --one-shot true`, continue, `po context.diagnosticSnapshot`; counters are 1-in-64 sampled and read on a Debug build) | `budgetOverrunCount` and `deadlineRiskCount` are 0 (or near-0) on Apple Silicon | ☐ | (Phase 6 counters; needs a debug readout) |
 
 ### Signed-bundle smoke (Phase 7 gates 7.9 / 7.10, also part of Phase 8 manual)
 
 | # | Gate | How | Pass criteria | Result |
 |---|---|---|---|---|
-| 7.9/7.10 + 8.1b | Signed `.app` smoke + Instruments | Build + sign Debug `.app` (per `docs/RELEASE_BUILD_GUIDE.md`, no notarization needed); play video; run Instruments **Time Profiler** (8.1b) + **Memory Graph** (leak) over ~1 min | EQ audible on video; `VideoTapContext` count returns to 0 after stop (no leak); `tapProcess` 99p ≤10% in Release | ☐ |
+| 7.9 + 8.1b | Signed **Release** .app + Time Profiler | Build Release with CONFIGURATION_BUILD_DIR redirected (see runbook) so dist/ is not clobbered; codesign --verify --strict; play video; xcrun xctrace record --template 'Time Profiler' --attach MacAmp --time-limit 60s per corpus file (44.1 stereo / 48 stereo / 5.1) | EQ audible on video; tapProcess self time ≤10% of the render thread (AGGREGATE share — Time Profiler cannot give a per-callback 99p; record PARTIAL unless an every-callback timing mode is added) | ☐ |
+| 7.10 (leak) | **Debug** .app + Memory Graph / Allocations (or `xcrun heap` census) | Debug build carries get-task-allow; the Developer-ID Release app does not and MacAmp.entitlements blocks dyld env vars, so Allocations cannot attach to it. Filter Recorded Types on `MacAmp.VideoTapContext` (module is MacAmp) | VideoTapContext live count returns to 0 after stop; Created & Destroyed == clips played | ☐ |
 
 ---
 
@@ -62,4 +63,5 @@
 - **Automated gates ✅ PASS:** 8.3 (EQ ≤0.5 dB), 8.4 (TSan 116/116, no races), 8.15 (lifecycle), and 8.1's **Debug regression guard** (DSP fits the deadline with margin even unoptimized). The DSP is numerically correct, thread-safe, and lifecycle-bulletproof.
 - **The production CPU gate (8.1b) is NOT yet verified** — it requires a Release/Instruments `tapProcess` measurement. The Debug guard is a regression net, not the production figure.
 - **Manual / hardware gates ⏳ pending user:** 8.1b (Release Instruments), 8.2 (Intel), 8.5–8.14 + 8.5b–8.5e (route changes, live EQ stress, seek, surround, replacement, telemetry), 7.9/7.10 (signed-bundle). Fill in the Result columns.
+- **Gates known NOT executable as written on this machine:** 8.1b literal 99p (record PARTIAL), 8.11 AAC↔SBC (no supported forcing path; Bluetooth Explorer not shipped — record NOT RUN unless a device substitution is done), 8.12 (optional, no in-app trigger), 8.2 (no Intel Mac), 8.5 (needs a user-supplied ≥10-min video), 8.6–8.9 (hardware-dependent). Per 8.17: NOT RUN with a stated reason is acceptable; a silent soft-skip is not.
 - Any FAILURE → record it, then ADR amendment + targeted retry (todo 8.17). Do NOT soft-skip.
