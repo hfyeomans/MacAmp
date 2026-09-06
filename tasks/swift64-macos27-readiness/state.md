@@ -3,7 +3,8 @@
 > **Purpose:** Prepare MacAmp for the Swift 6.4 language mode and macOS 27 — inventory what changes, decide what to adopt vs defer, and settle the deployment-target question with an ADR.
 > **Created:** 2026-09-05
 > **Sprint:** S4-1 (Post-Structure-Sprint)
-> **Status:** 📋 **QUEUED** — blocked on the Post-S3 Structure Sprint. Research not started.
+> **Status:** 📋 **QUEUED** — blocked on the Post-S3 Structure Sprint. Runs **before** S4-2 `github-issues-triage` (ordering confirmed by user 2026-09-05). Research not started.
+> **Updated:** 2026-09-05 (S4-1-before-S4-2 ordering confirmed by user; S3-2 predecessor status refreshed — branch pushed to origin at `5fe8c3c`, manual runbook in progress)
 
 ---
 
@@ -11,14 +12,14 @@
 
 | Predecessor | Why | Status |
 |-------------|-----|--------|
-| S3-2 `avplayer-native-video-dsp` → PR #C merged | The branch that introduced `Audio/VideoDSP/` (ADR-3a `@unchecked Sendable` containment, `Synchronization.Atomic`/`Mutex`) must land before its concurrency surface can be re-evaluated under a new language mode | 🔧 in progress |
+| S3-2 `avplayer-native-video-dsp` → PR #C merged | The branch that introduced `Audio/VideoDSP/` (ADR-3a `@unchecked Sendable` containment, `Synchronization.Atomic`/`Mutex`) must land before its concurrency surface can be re-evaluated under a new language mode | 🔧 in progress — Phase 8 manual gates being run by the user from 2026-09-05; branch pushed to origin at `5fe8c3c` (2026-09-05 docs sync; code unchanged since `944795a`), unmerged, PR #C not yet opened |
 | S3-3 `hls-streaming-support` → merged | S3 must close before the Structure Sprint starts | queued |
 | S3-4 `ogg-vorbis-support` → merged | Adds vendored C deps + `Package.swift` / `project.yml` changes that a tools-version bump would touch | queued |
 | Post-S3 Structure Sprint | File-move consolidation is a stop-the-world pass; a language-mode bump on top of moving files doubles the conflict surface | not started |
 
 > **Allowance:** the **research half** of this task touches no code and may run opportunistically earlier (during S3 or the Structure Sprint). Only the implementation half is gated on the Structure Sprint landing.
 >
-> **Ordering vs S4-2 `github-issues-triage` is an ASSUMPTION pending user confirmation.** The user mandated only that the GitHub-issue fixes come after the `.swift` rearrangement. S4-1 is placed first because its deprecation findings may change how the S4-2 issues are fixed. See `_context/state.md` decision D-S4.
+> **Ordering vs S4-2 `github-issues-triage` is CONFIRMED BY THE USER (2026-09-05): S4-1 runs first.** The user mandated that the GitHub-issue fixes come after the `.swift` rearrangement, and confirmed that S4-1 precedes S4-2 because its deprecation findings may change how the S4-2 issues are fixed. See `_context/state.md` decision D-S4.
 
 ---
 
@@ -76,3 +77,4 @@ Secondary ADRs likely needed: language-mode bump (`SWIFT_VERSION` + swift-tools-
 | Date | Entry |
 |------|-------|
 | 2026-09-05 | Folder scaffolded. Queued as S4-1. No research started. |
+| 2026-09-05 | Ordering **confirmed by user**: S4-1 runs before S4-2 `github-issues-triage`. Predecessor S3-2 status refreshed — branch pushed to origin at `5fe8c3c` (docs sync; code unchanged since `944795a`), Phase 8 manual gates in progress with the user. |

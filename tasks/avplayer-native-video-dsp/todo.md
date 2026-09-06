@@ -2,8 +2,8 @@
 
 > **Plan:** `tasks/avplayer-native-video-dsp/plan.md` (Oracle 9.8/10 final, commit `fdce0ed`)
 > **Branch:** `feat/avplayer-native-video-dsp`
-> **Status:** 🔧 IMPLEMENTING — Phases 1-7 ✅; Phase 8 automated gates ✅ (2026-06-27), manual/hardware gates ⏳ user (`verification.md`); Phase 9 NEXT.
-> **Updated:** 2026-09-05
+> **Status:** 🔧 IMPLEMENTING — Phases 1-7 ✅; Phase 8 automated gates ✅ (2026-06-27), manual/hardware gates ⏳ IN PROGRESS (user, from 2026-09-05; `verification.md` + runbook artifact); Phase 9 NEXT.
+> **Updated:** 2026-09-05 (manual runbook started; 8.2/8.12 NOT ABLE, 8.11 NOT ABLE as written; 7.9/8.1b Release-first then re-sign for 8.5e; push stamp → `5fe8c3c`)
 
 Numbering: `<Phase>.<Item>`. `[x]` complete, `[~]` in-progress, `[!]` blocked.
 
@@ -272,8 +272,8 @@ Numbering: `<Phase>.<Item>`. `[x]` complete, `[~]` in-progress, `[!]` blocked.
 - [x] 7.6 ✅ (covered, not as a new render-driven test) — `BiquadCascade.reset()` CORRECTNESS proven by `resetClearsState` (in `BiquadNumericalMatchTests`); the seek→`StartOfStream`→`cascade.reset()` wiring is a one-liner verified by code review (`VideoTap.swift`) + the manual seek smoke. No `_testFilterStateZero` seam built — a true seek-to-render-callback test needs invasive seams / real rendering timing (Oracle: diminishing returns).
 - [x] 7.7 ✅ `replaceCurrentItemWithNilReleasesContext` — `replaceCurrentItem(nil)` → outgoing tap finalizes, Context released. **Narrowed claim (Oracle):** RELEASE path only (no playback); active-render UAF is a TSan/ASan manual concern.
 - [x] 7.8 Build + TSan green ✅ — **115/115, no data races**, lifecycle suite stable across re-runs.
-- [ ] 7.9 Build + sign Debug `.app` per `docs/RELEASE_BUILD_GUIDE.md` — **READY FOR USER** (or fold into Phase 9 final smoke).
-- [ ] 7.10 Manual: launch signed `.app`, play video, EQ audible, no leak over 1-min — **READY FOR USER** (the 2.40 MGD leak check + automated lifecycle tests already cover the leak balance; this is the signed-bundle confirmation).
+- [ ] 7.9 Build + sign the **Developer-ID Release** `.app` per `docs/RELEASE_BUILD_GUIDE.md` — ⏳ **IN PROGRESS (user, from 2026-09-05)** via the runbook artifact. **RELEASE FIRST** (2026-09-05): 7.9 + 8.1b run on the Release build; that same app is then re-signed with `get-task-allow` (Apple Development identity `A5V7U473GS`) for the 8.5e LLDB telemetry read, with a Debug build as the fallback — see `verification.md`.
+- [ ] 7.10 Manual: launch the signed `.app`, play video, EQ audible, no leak over 1-min — ⏳ **IN PROGRESS (user, from 2026-09-05)** (the 2.40 MGD leak check + automated lifecycle tests already cover the leak balance; this is the signed-bundle confirmation). Instruments **Allocations is Debug-only** (dylib injection is blocked on every hardened build); `xcrun heap` works on any `get-task-allow` build.
 - [x] 7.11 Commit ✅ — `b443369` (tests) + `7f50c2c` (Oracle remediation).
 - [x] 7.12 Codex Oracle review ✅ — round 1 8/10 REVISE (overstated coverage: 7.5/7.6 + UAF overclaim) → fixed (added 7.5, reframed 7.7, flag scoping, honest 7.6) → round 2 **9/10 APPROVED, no new issue**.
 
@@ -287,20 +287,20 @@ Numbering: `<Phase>.<Item>`. `[x]` complete, `[~]` in-progress, `[!]` blocked.
 ### Static gates (one-time)
 
 - [x] 8.1 CPU benchmark — Apple Silicon ✅ **automated Debug REGRESSION GUARD PASS** (`VideoTapCPUBenchmarkTests`): worst-case DSP core (preamp + all 10 EQ bands + balance + visualizer), 1024-frame stereo @ 48 kHz, dense per-iteration with pristine-input refresh. Debug `-Onone`: p99 ~11% / max ~13% of the 21 ms deadline — fits with margin **even unoptimized** (p99 ≤ 50% hard gate). **NOT the production gate** (synthetic DSP-core microbenchmark, not full `tapProcess`, Debug not Release) → **8.1b manual Instruments on Release is required for the real ≤10% figure.** `verification.md` (Oracle-reviewed methodology: pristine input each iter, preamp included, p99 hard / max loose).
-- [ ] 8.2 CPU benchmark — Intel build target — **MANUAL / N/A on this hardware** (needs an Intel Mac; DSP is identical scalar code). `verification.md`.
+- [x] 8.2 CPU benchmark — Intel build target — ⛔ **NOT ABLE TO COMPLETE (2026-09-05): no Intel Mac; disposition recorded in `verification.md`** (DSP is identical scalar code; the Apple Silicon result is the primary gate).
 - [x] 8.3 Numerical EQ match ✅ **PASS** — `BiquadNumericalMatchTests` (7) green, ≤0.5 dB.
 - [x] 8.4 TSan ✅ **PASS** — **116/116** with `-enableThreadSanitizer YES`, no data races.
 
 ### Dynamic transition gates
 
-- [ ] 8.5 Long-playback drift — ≥10 min continuous video playback (loop short clip if needed); A/V sync within ±40 ms
+- [ ] 8.5 Long-playback drift — ≥10 min continuous playback of ONE user-supplied lip-sync video; A/V sync within ±40 ms. **Do NOT loop a short clip** (each loop restarts the AVPlayerItem and resets accumulated drift) — CONDITIONAL on the user's video (2026-09-05)
 - [ ] 8.6 Route-change AirPods 1st-gen — connect mid-playback / disconnect mid-playback. Tap callbacks resume within 500 ms; no DSP-state loss; no silent output
 - [ ] 8.7 Route-change AirPods Pro — same gate
 - [ ] 8.8 Route-change AirPlay-1 receiver — same gate
 - [ ] 8.9 Route-change AirPlay-2 receiver — same gate
 - [ ] 8.10 System default-output change — Settings → Sound → switch internal speakers ↔ HDMI display speakers. Same gate
-- [ ] 8.11 Bluetooth codec switch — AAC ↔ SBC (forced via `Bluetooth Explorer` or CLI). Tap callback continuity, no audio drop > 200 ms
-- [ ] 8.12 Mid-playback format re-prepare — AVPlayerItem audio-track swap (constructed multi-track item). `tapPrepare` re-fires; coefficient recompute fires
+- [ ] 8.11 Bluetooth codec switch — AAC ↔ SBC (forced via `Bluetooth Explorer` or CLI). Tap callback continuity, no audio drop > 200 ms — ⛔ **NOT ABLE AS WRITTEN (2026-09-05); optional device-substitution → PARTIAL, user decides**
+- [x] 8.12 Mid-playback format re-prepare — AVPlayerItem audio-track swap (constructed multi-track item). `tapPrepare` re-fires; coefficient recompute fires — ⛔ **NOT ABLE TO COMPLETE (2026-09-05): no in-app trigger; optional**
 - [ ] 8.13 Surround handling — 5.1 clip plays through native AVPlayer downmix; visualizer mono-downmix non-clipping; EQ uniform across 6 channels
 - [ ] 8.14 Item replacement during playback — `player.replaceCurrentItem(with: nextItem)` for video → audio file (and reverse). Outgoing item's `tapFinalize` fires; no leak; ≤200 ms audio gap
 
@@ -310,7 +310,7 @@ Numbering: `<Phase>.<Item>`. `[x]` complete, `[~]` in-progress, `[!]` blocked.
 
 ### Dynamic transition gates (8.5–8.14) — HARDWARE-MANUAL
 
-- [ ] 8.5–8.14 ⏳ **READY FOR USER** — hardware-manual checklist with pass/fail criteria written to `verification.md` (long-playback drift, AirPods/AirPlay/system-output/BT-codec route changes, surround, item replacement). User runs + records results.
+- [ ] 8.5–8.14 ⏳ **IN PROGRESS (user, from 2026-09-05) via runbook artifact https://claude.ai/code/artifact/1b5d48d1-5b5c-49ff-bff0-eb23beb8caf8** — hardware-manual checklist with pass/fail criteria written to `verification.md` (long-playback drift, AirPods/AirPlay/system-output/BT-codec route changes, surround, item replacement). User runs + records results in the runbook; `verification.md` remains the record of truth and is transcribed at the end.
 
 ### Documentation
 
@@ -319,7 +319,7 @@ Numbering: `<Phase>.<Item>`. `[x]` complete, `[~]` in-progress, `[!]` blocked.
 
 - [x] 8.18 Commit ✅ — benchmark + verification.md committed (`2c410a0` gates + checklist; `944795a` methodology/honesty fixes).
 
-> **Known not-executable-as-written on this machine:** 8.1b literal 99p (PARTIAL — Time Profiler gives an aggregate share, and `VideoTap.swift:112` samples 1-in-64 into two bucket counters), 8.11 (NOT RUN unless a device substitution is made), 8.12 optional, 8.2 no Intel hardware, 8.5 needs a user-supplied ≥10-min video — see `verification.md` Summary.
+> **Gate dispositions (2026-09-05):** 8.2 ⛔ NOT ABLE TO COMPLETE (no Intel Mac; DSP identical scalar, Apple Silicon is the primary gate); 8.12 ⛔ NOT ABLE TO COMPLETE (no in-app trigger — no track picker, `audioMix` set once per item per ADR-7; optional, skip sanctioned); 8.11 ⛔ NOT ABLE AS WRITTEN (no supported AAC↔SBC forcing path on macOS 15/27 — Bluetooth Explorer not installed/shipped, debug menu removed macOS 12+; optional device-substitution fallback → PARTIAL, user decides); 8.1b best outcome PARTIAL (aggregate `tapProcess` share + telemetry counters — a literal per-callback 99p is not producible: Time Profiler gives an aggregate share, `VideoTap.swift:112` samples 1-in-64 into two bucket counters, and the every-callback mode was never built); 8.5 CONDITIONAL on a user-supplied ≥10-min lip-sync video; 8.6–8.9 hardware-dependent (any device the user cannot source → NOT ABLE with reason) — see `verification.md` Summary.
 
 ---
 
@@ -354,7 +354,7 @@ Numbering: `<Phase>.<Item>`. `[x]` complete, `[~]` in-progress, `[!]` blocked.
 - [ ] 9.9 Pre-PR Codex Oracle review (per `feedback_sprint_workflow.md` memory)
 - [ ] 9.10 Apply Oracle feedback if any
 - [ ] 9.11 Commit if any final fixes: `chore(s3-2): Phase 9 — UI polish + docs`
-- [ ] 9.12 Push branch: `git push -u origin feat/avplayer-native-video-dsp` (branch already pushed at `056c69a`; re-push after Phase 9 commits)
+- [ ] 9.12 Push branch: `git push -u origin feat/avplayer-native-video-dsp` (branch pushed at `5fe8c3c` on 2026-09-05; re-push after Phase 9 commits)
 - [ ] 9.13 `gh pr create` with PR description summarizing the 5-round research + 5-round plan + 9-phase implementation
 - [ ] 9.14 Wait for human review
 
