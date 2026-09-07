@@ -2,8 +2,8 @@
 
 > **Plan:** `tasks/avplayer-native-video-dsp/plan.md` (Oracle 9.8/10 final, commit `fdce0ed`)
 > **Branch:** `feat/avplayer-native-video-dsp`
-> **Status:** 🔧 IMPLEMENTING — Phases 1-7 ✅; Phase 8 automated gates ✅ (2026-06-27), manual/hardware gates ⏳ IN PROGRESS (user, from 2026-09-05; `verification.md` + runbook artifact); Phase 9 NEXT.
-> **Updated:** 2026-09-05 (manual runbook started; 8.2/8.12 NOT ABLE, 8.11 NOT ABLE as written; 7.9/8.1b Release-first then re-sign for 8.5e; push stamp → `5fe8c3c`)
+> **Status:** 🔧 IMPLEMENTING — Phases 1-7 ✅; Phase 8 automated gates ✅ (2026-06-27); **Phase 8 Phase A (Claude objective gates) ✅ DONE (2026-09-07)** — 7.9/8.1b/8.5e/7.10 + mechanical axis of 8.5b/8.5c/8.5d/8.13/8.14 measured via Xcode MCP LLDB on the signed Release build; **Phase B (user ears + hardware) + Phase C (≥10-min video) ⏳ REMAIN**; Phase 9 NEXT.
+> **Updated:** 2026-09-07 (Phase A executed via PATH A — no re-sign; 8.5e PASS, 7.10 PASS, 8.1b proxy PASS ≈0.4–1.0% of budget, 8.5b/c/d/8.13/8.14 mechanical PARTIAL; 8.2/8.11/8.12 NOT ABLE; push stamp → `3759389`)
 
 Numbering: `<Phase>.<Item>`. `[x]` complete, `[~]` in-progress, `[!]` blocked.
 
@@ -272,8 +272,8 @@ Numbering: `<Phase>.<Item>`. `[x]` complete, `[~]` in-progress, `[!]` blocked.
 - [x] 7.6 ✅ (covered, not as a new render-driven test) — `BiquadCascade.reset()` CORRECTNESS proven by `resetClearsState` (in `BiquadNumericalMatchTests`); the seek→`StartOfStream`→`cascade.reset()` wiring is a one-liner verified by code review (`VideoTap.swift`) + the manual seek smoke. No `_testFilterStateZero` seam built — a true seek-to-render-callback test needs invasive seams / real rendering timing (Oracle: diminishing returns).
 - [x] 7.7 ✅ `replaceCurrentItemWithNilReleasesContext` — `replaceCurrentItem(nil)` → outgoing tap finalizes, Context released. **Narrowed claim (Oracle):** RELEASE path only (no playback); active-render UAF is a TSan/ASan manual concern.
 - [x] 7.8 Build + TSan green ✅ — **115/115, no data races**, lifecycle suite stable across re-runs.
-- [ ] 7.9 Build + sign the **Developer-ID Release** `.app` per `docs/RELEASE_BUILD_GUIDE.md` — ⏳ **IN PROGRESS (user, from 2026-09-05)** via the runbook artifact. **RELEASE FIRST** (2026-09-05): 7.9 + 8.1b run on the Release build; that same app is then re-signed with `get-task-allow` (Apple Development identity `A5V7U473GS`) for the 8.5e LLDB telemetry read, with a Debug build as the fallback — see `verification.md`.
-- [ ] 7.10 Manual: launch the signed `.app`, play video, EQ audible, no leak over 1-min — ⏳ **IN PROGRESS (user, from 2026-09-05)** (the 2.40 MGD leak check + automated lifecycle tests already cover the leak balance; this is the signed-bundle confirmation). Instruments **Allocations is Debug-only** (dylib injection is blocked on every hardened build); `xcrun heap` works on any `get-task-allow` build.
+- [~] 7.9 Build + sign the **Developer-ID Release** `.app` per `docs/RELEASE_BUILD_GUIDE.md` — **objective half ✅ (Claude, 2026-09-07):** built into `build/ReleaseProfile` (arm64, `-O`), `codesign --verify --strict` exit 0, Developer-ID authority chain, **`get-task-allow` absent** (`CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO`), entitlements byte-identical to notarized `dist/`, launches. **EQ-audible-on-video = user ear, Phase B.** Note: the 8.5e/7.10 reads used the **Xcode Run** (get-task-allow injected) so no re-sign was needed; the PATH B re-sign path stays documented as a fallback.
+- [x] 7.10 Leak — no leak over multi-clip playback — ✅ **PASS (Claude, 2026-09-07):** `xcrun heap` census on the get-task-allow Release run: 1 live `VideoTapContext` while playing after ~7 videos (no accumulation), 0 after `stop()`+`clear()`. `passRetained`↔`tapFinalize` balanced. Instruments **Allocations is Debug-only** (dylib injection blocked on hardened builds) and remains an optional generation-by-generation cross-check; `xcrun heap` works on any `get-task-allow` build.
 - [x] 7.11 Commit ✅ — `b443369` (tests) + `7f50c2c` (Oracle remediation).
 - [x] 7.12 Codex Oracle review ✅ — round 1 8/10 REVISE (overstated coverage: 7.5/7.6 + UAF overclaim) → fixed (added 7.5, reframed 7.7, flag scoping, honest 7.6) → round 2 **9/10 APPROVED, no new issue**.
 
@@ -310,7 +310,7 @@ Numbering: `<Phase>.<Item>`. `[x]` complete, `[~]` in-progress, `[!]` blocked.
 
 ### Dynamic transition gates (8.5–8.14) — HARDWARE-MANUAL
 
-- [ ] 8.5–8.14 ⏳ **IN PROGRESS (user, from 2026-09-05) via runbook artifact https://claude.ai/code/artifact/1b5d48d1-5b5c-49ff-bff0-eb23beb8caf8** — hardware-manual checklist with pass/fail criteria written to `verification.md` (long-playback drift, AirPods/AirPlay/system-output/BT-codec route changes, surround, item replacement). User runs + records results in the runbook; `verification.md` remains the record of truth and is transcribed at the end.
+- [~] 8.5–8.14 — **objective/mechanical axis ✅ (Claude Phase A, 2026-09-07):** 8.5e PASS (telemetry 0/0 counters, two reads); 8.5b/8.5c/8.5d/8.13/8.14 mechanical PARTIAL (no crash, tap active, counters 0/0, 0 live `VideoTapContext` after stop — leak-free item replacement). **User halves ⏳ Phase B/C** via runbook artifact https://claude.ai/code/artifact/1b5d48d1-5b5c-49ff-bff0-eb23beb8caf8 — audible/eye judgments for 8.5b/c/d/8.13/8.14, hardware route changes 8.6–8.10 (Claude drives + measures on cue), and 8.5 long-drift (user's ≥10-min lip-sync video). `verification.md` remains the record of truth.
 
 ### Documentation
 
