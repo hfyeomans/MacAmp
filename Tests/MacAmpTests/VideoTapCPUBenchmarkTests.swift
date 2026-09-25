@@ -37,7 +37,12 @@ struct VideoTapCPUBenchmarkTests {
         tb.numer == tb.denom ? Double(ticks) : Double(ticks) * Double(tb.numer) / Double(tb.denom)
     }
 
-    @Test("per-callback DSP fits the deadline even in Debug (99p ≤ 50%, max ≤ 75%)")
+    static let threadSanitizerActive = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "__tsan_init") != nil  // -2 = RTLD_DEFAULT
+
+    @Test(
+        "per-callback DSP fits the deadline even in Debug (99p ≤ 50%, max ≤ 75%)",
+        .disabled(if: threadSanitizerActive, "wall-clock timing is meaningless under TSan instrumentation; runs in non-TSan test runs")
+    )
     func dspWithinBudget() {
         let tb = Self.timebase()
         let budgetNanos = Double(Self.frames) / Self.sampleRate * 1_000_000_000  // ≈ 21,333,333 ns

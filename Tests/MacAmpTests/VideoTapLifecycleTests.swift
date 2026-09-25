@@ -221,8 +221,8 @@ struct VideoTapLifecycleTests {
             }
         }()
 
-        // Allow the teardown chain (tapFinalize) to drain.
-        for _ in 0..<50 where weakRefs.contains(where: { $0() }) {
+        // Allow the teardown chain (tapFinalize) to drain — same 5 s budget as waitUntilNil.
+        for _ in 0..<250 where weakRefs.contains(where: { $0() }) {
             try await Task.sleep(nanoseconds: 20_000_000)
         }
         #expect(weakRefs.allSatisfy { $0() == false }, "all 10 Contexts must be released after their players drop")
