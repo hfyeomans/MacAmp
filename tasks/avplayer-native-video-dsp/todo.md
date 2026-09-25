@@ -333,27 +333,27 @@ Numbering: `<Phase>.<Item>`. `[x]` complete, `[~]` in-progress, `[!]` blocked.
 
 ### UI audit
 
-- [ ] 9.1 Audit `MacAmpApp/Windows/WinampVideoWindowController.swift` for EQ + balance + visualizer-mode UI surface wiring
-- [ ] 9.2 Audit `MacAmpApp/Views/WinampVideoWindow.swift` and `MacAmpApp/Views/Windows/VideoWindowChromeView.swift`
-- [ ] 9.3 Add menu items / wiring as needed (likely minimal — video window already shares EQ + balance UI with audio window via `AppSettings` / `EqualizerController` / `AudioPlayer`)
+- [x] 9.1 Audit `MacAmpApp/Windows/WinampVideoWindowController.swift` for EQ + balance + visualizer-mode UI surface wiring — ✅ 2026-09-25: no change needed; video uses the shared EQ window / main-window balance / visualizer; `supportsAudioProcessing` only dims during stream prebuffer/error, never for video
+- [x] 9.2 Audit `MacAmpApp/Views/WinampVideoWindow.swift` and `MacAmpApp/Views/Windows/VideoWindowChromeView.swift` — ✅ 2026-09-25: no change needed; video chrome has no EQ/balance controls (Winamp parity); 1x/2x buttons interactive
+- [x] 9.3 Add menu items / wiring as needed (likely minimal — video window already shares EQ + balance UI with audio window via `AppSettings` / `EqualizerController` / `AudioPlayer`) — ✅ 2026-09-25: no menu items needed
 
 ### Mandatory documentation updates
 
-- [ ] 9.4 Add **"Audio Mechanism Concurrency Contract"** subsection to `docs/MACAMP_ARCHITECTURE_GUIDE.md` distinguishing:
+- [x] 9.4 Add **"Audio Mechanism Concurrency Contract"** subsection to `docs/MACAMP_ARCHITECTURE_GUIDE.md` distinguishing: — ✅ 2026-09-25: `docs/MACAMP_ARCHITECTURE_GUIDE.md` "Audio Mechanism Concurrency Contract" incl. avoid-vs-gated rule, enumerated types, DecodeContext retrofit candidate
    - `@unchecked Sendable` as **implicit shortcut (AVOID)** — bare annotation without atomic discipline + contract gating
    - `@unchecked Sendable` as **explicitly-gated exception (ACCEPTABLE)** — when boundary is necessary AND gated by ADR-3a's three gates
    - Pattern reference: `RenderThreadSafe.swift` + header contract on `VideoTapContext.swift` + DEBUG Mirror+source-level tests
    - Enumerated types: `VideoTapContext`, `VisualizerFeed`, `VisualizerScratchBuffers`, `BiquadCascade`
    - Follow-up retrofit candidate: `StreamDecodePipeline.DecodeContext`
-- [ ] 9.5 Update existing scattered `@unchecked Sendable` guidance in `docs/MACAMP_ARCHITECTURE_GUIDE.md` (lines around 826, 1354 from current state) to **point at** the new canonical subsection rather than restate rationale
-- [ ] 9.6 Add **"Audio DSP Architecture"** section to `docs/VIDEO_WINDOW.md` describing the in-place tap DSP topology (replaces any prior engine-routing description); reference research.md and ADRs 1-11
-- [ ] 9.6b Update `CLAUDE.md` lines ~61/81/82: Audio/ tree gains `VideoDSP/`, `RenderThreadSafe.swift`, `VisualizerFeed.swift`, `VisualizerScratchBuffers.swift`; **Audio** bullet becomes dual-architecture (engine path for local audio + streams; AVPlayer-native `MTAudioProcessingTap` in-place DSP for local video; HLS/streaming video out of scope); **Visualization** bullet: works for local audio, streaming, AND video (dual-producer, ADR-6)
-- [ ] 9.6c Apply the identical fixes to `.ai-shared/macamp/project.md` lines ~18/38/39 (byte-identical claims, `@`-imported by `CLAUDE.md` — fixing only `CLAUDE.md` leaves the falsehood live)
+- [x] 9.5 Update existing scattered `@unchecked Sendable` guidance in `docs/MACAMP_ARCHITECTURE_GUIDE.md` (lines around 826, 1354 from current state) to **point at** the new canonical subsection rather than restate rationale — ✅ 2026-09-25: compliance table + VisualizerScratchBuffers link to the canonical section
+- [x] 9.6 Add **"Audio DSP Architecture"** section to `docs/VIDEO_WINDOW.md` describing the in-place tap DSP topology (replaces any prior engine-routing description); reference research.md and ADRs 1-11 — ✅ 2026-09-25: `docs/VIDEO_WINDOW.md` "Video Audio DSP Pipeline" (summary, links to the guide)
+- [x] 9.6b Update `CLAUDE.md` lines ~61/81/82: Audio/ tree gains `VideoDSP/`, `RenderThreadSafe.swift`, `VisualizerFeed.swift`, `VisualizerScratchBuffers.swift`; **Audio** bullet becomes dual-architecture (engine path for local audio + streams; AVPlayer-native `MTAudioProcessingTap` in-place DSP for local video; HLS/streaming video out of scope); **Visualization** bullet: works for local audio, streaming, AND video (dual-producer, ADR-6) — ✅ 2026-09-25: local CLAUDE.md (gitignored) updated
+- [x] 9.6c Apply the identical fixes to `.ai-shared/macamp/project.md` lines ~18/38/39 (byte-identical claims, `@`-imported by `CLAUDE.md` — fixing only `CLAUDE.md` leaves the falsehood live) — ✅ 2026-09-25: dotfiles `ai/standards/macamp/project.md` updated (outside this repo; macOS 27 min + video audio path)
 
 ### Final verification + PR
 
-- [ ] 9.7 End-to-end: launch app, open video window, load video, toggle EQ, drag bands, drag balance, switch visualizer mode (spectrum ↔ Butterchurn) — all work
-- [ ] 9.8 Full TSan-on test suite green (including `VideoTapSendableContractTests` + `VideoTapLifecycleTests` + `BiquadNumericalMatchTests`)
+- [x] 9.7 End-to-end: launch app, open video window, load video, toggle EQ, drag bands, drag balance, switch visualizer mode (spectrum ↔ Butterchurn) — all work — ✅ 2026-09-25: covered by the user-run Phase B checks on this build lineage (8.5b/c/d, 8.13, 8.14, 7.9) plus the reconfigure-fix live verification
+- [x] 9.8 Full TSan-on test suite green (including `VideoTapSendableContractTests` + `VideoTapLifecycleTests` + `BiquadNumericalMatchTests`) — ✅ 2026-09-25: 119 tests under TSan, only pre-existing #86 fails, no sanitizer warnings
 - [ ] 9.9 Pre-PR Codex Oracle review (per `feedback_sprint_workflow.md` memory)
 - [ ] 9.10 Apply Oracle feedback if any
 - [ ] 9.11 Commit if any final fixes: `chore(s3-2): Phase 9 — UI polish + docs`

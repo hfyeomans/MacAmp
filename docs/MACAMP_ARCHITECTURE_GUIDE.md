@@ -762,7 +762,7 @@ struct VisualizerData: Sendable { let rms: [Float]; let spectrum: [Float]; let w
 
 ### Swift 6 Concurrency Compliance
 
-Types that cross isolation boundaries:
+Types that cross isolation boundaries. The `@unchecked Sendable` rows follow the [Audio Mechanism Concurrency Contract](#audio-mechanism-concurrency-contract):
 
 | Type | Conformance | Notes |
 |------|-------------|-------|
@@ -1280,7 +1280,7 @@ Visualizer tap processing lives in `VisualizerPipeline.swift` (engine tap) and `
 
 ### VisualizerScratchBuffers - Pre-allocated FFT Buffers
 
-To avoid allocations on the realtime audio thread, `VisualizerScratchBuffers` pre-allocates all FFT working buffers. Each producer owns one instance: the engine tap creates one in `installTap`, and every `VideoTapContext` creates its own. Instances are never shared across taps.
+To avoid allocations on the realtime audio thread, `VisualizerScratchBuffers` pre-allocates all FFT working buffers (its `@unchecked Sendable` follows the [Audio Mechanism Concurrency Contract](#audio-mechanism-concurrency-contract)). Each producer owns one instance: the engine tap creates one in `installTap`, and every `VideoTapContext` creates its own. Instances are never shared across taps.
 
 ```swift
 // VisualizerScratchBuffers.swift
@@ -1510,6 +1510,8 @@ EQ and balance keep their existing owners; each fans out to the engine and to re
 ### Audio Mechanism Concurrency Contract
 
 The tap's render thread belongs to MediaToolbox, not to Swift concurrency. It cannot hop to an actor or to `@MainActor`, and it must never block. The contract that follows from this:
+
+- **When `@unchecked Sendable` is acceptable.** A bare `@unchecked Sendable` used to silence the compiler is a shortcut to avoid. It is acceptable only as a gated exception: the boundary genuinely needs it (a C callback, a real-time thread), the contract is written at the top of the type, every stored field is restricted as below, and tests enforce it. Types under this contract: `VideoTapContext`, `VisualizerFeed`, `VisualizerScratchBuffers`, with `BiquadCascade` render-confined via `RenderThreadSafe`. `StreamDecodePipeline`'s `DecodeContext` (queue-confined, `@unchecked Sendable`) predates the contract and is the next retrofit candidate.
 
 - **Non-actor context.** `VideoTapContext` is a `final class … : @unchecked Sendable`. The `@unchecked` exists only for the C-callback boundary; the storage rules below keep the unsafety contained.
 - **Permitted stored fields:** `Synchronization.Atomic<T>`; `Synchronization.Mutex<T>` (only for rarely changed, non-trivial state, and the render thread may only use `withLockIfAvailable`); `let` constants of immutable values; unsafe pointers whose lifetime the class manages; and types conforming to `RenderThreadSafe`. **Forbidden:** actor- or `@MainActor`-isolated types, non-`Sendable` references, closures that capture state, and any plain `var`.
