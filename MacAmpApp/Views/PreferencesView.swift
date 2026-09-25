@@ -92,11 +92,7 @@ private extension View {
     @ViewBuilder
     func conditionalGroupBoxBackground(enabled: Bool) -> some View {
         if enabled {
-            if #available(macOS 26.0, *) {
-                self.background(.thickMaterial)
-            } else {
-                self
-            }
+            self.background(.thickMaterial)
         } else {
             self
         }
@@ -105,11 +101,7 @@ private extension View {
     @ViewBuilder
     func conditionalPreferencesBackground(enabled: Bool) -> some View {
         if enabled {
-            if #available(macOS 26.0, *) {
-                self.containerBackground(.regularMaterial, for: .window)
-            } else {
-                self.background(.regularMaterial)
-            }
+            self.containerBackground(.regularMaterial, for: .window)
         } else {
             self.background(.regularMaterial)
         }

@@ -1,6 +1,6 @@
 # MacAmp
 
-![Platform](https://img.shields.io/badge/platform-macOS%2015.0+-blue?logo=apple)
+![Platform](https://img.shields.io/badge/platform-macOS%2027.0+-blue?logo=apple)
 ![Swift](https://img.shields.io/badge/Swift-6.2-orange?logo=swift)
 ![Version](https://img.shields.io/badge/version-1.3-brightgreen)
 ![Notarized](https://img.shields.io/badge/Notarized-Apple%20Approved-brightgreen?logo=apple)
@@ -12,7 +12,7 @@ A pixel-perfect, native macOS audio player that brings the classic desktop audio
 
 ## Overview
 
-MacAmp is a SwiftUI-based audio player for macOS that recreates the iconic desktop audio player interface with modern enhancements. Built specifically for **macOS Sequoia (15.0+)** and **macOS Tahoe (26.0+)**, it leverages the latest SwiftUI features while maintaining pixel-perfect fidelity to classic skins.
+MacAmp is a SwiftUI-based audio player for macOS that recreates the iconic desktop audio player interface with modern enhancements. Built for **macOS 27.0+**, it leverages the latest SwiftUI features while maintaining pixel-perfect fidelity to classic skins.
 
 ### Key Features
 
@@ -59,7 +59,7 @@ MacAmp is a SwiftUI-based audio player for macOS that recreates the iconic deskt
 
 ## Requirements
 
-- **macOS Sequoia 15.0+** or **macOS Tahoe 26.0+**
+- **macOS 27.0+** (macOS 15 and 26 are supported by earlier releases)
 - **Apple Silicon** (M1/M2/M3/M4) or Intel Mac
 - **Xcode 26.0+** (for building from source)
 
@@ -817,7 +817,7 @@ MacAmp draws inspiration from the classic desktop audio player that defined a ge
 
 - **Webamp** - Browser-based implementation for architectural patterns
 - **Skin Format Specification** - Classic skin `.wsz` format documentation
-- **Apple Documentation** - SwiftUI and Swift 6.2 for macOS 15+/26+
+- **Apple Documentation** - SwiftUI and Swift 6.2 for macOS 27+
 
 ## License
 
