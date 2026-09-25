@@ -3,7 +3,7 @@
 > **Plan:** `tasks/avplayer-native-video-dsp/plan.md` (Oracle 9.8/10 final, commit `fdce0ed`)
 > **Branch:** `feat/avplayer-native-video-dsp`
 > **Status:** 🔧 IMPLEMENTING — Phases 1-7 ✅; Phase 8 automated gates ✅ (2026-06-27); **Phase 8 Phase A (Claude objective gates) ✅ DONE (2026-09-07)** — 7.9/8.1b/8.5e/7.10 + mechanical axis of 8.5b/8.5c/8.5d/8.13/8.14 measured via Xcode MCP LLDB on the signed Release build; **Phase B (user ears + hardware) + Phase C (≥10-min video) ⏳ REMAIN**; Phase 9 NEXT.
-> **Updated:** 2026-09-07 (Phase A executed via PATH A — no re-sign; 8.5e PASS, 7.10 PASS, 8.1b proxy PASS ≈0.4–1.0% of budget, 8.5b/c/d/8.13/8.14 mechanical PARTIAL; 8.2/8.11/8.12 NOT ABLE; push stamp → `3759389`)
+> **Updated:** 2026-09-25 (Phase 8 manual gates complete: Phase B + C PASS after the AVKit remote-command fix and the ADR-12 preferred-format tap; multichannel deferred to #88; PR #87 merged in; **Phase 9 next**)
 
 Numbering: `<Phase>.<Item>`. `[x]` complete, `[~]` in-progress, `[!]` blocked.
 
@@ -272,7 +272,7 @@ Numbering: `<Phase>.<Item>`. `[x]` complete, `[~]` in-progress, `[!]` blocked.
 - [x] 7.6 ✅ (covered, not as a new render-driven test) — `BiquadCascade.reset()` CORRECTNESS proven by `resetClearsState` (in `BiquadNumericalMatchTests`); the seek→`StartOfStream`→`cascade.reset()` wiring is a one-liner verified by code review (`VideoTap.swift`) + the manual seek smoke. No `_testFilterStateZero` seam built — a true seek-to-render-callback test needs invasive seams / real rendering timing (Oracle: diminishing returns).
 - [x] 7.7 ✅ `replaceCurrentItemWithNilReleasesContext` — `replaceCurrentItem(nil)` → outgoing tap finalizes, Context released. **Narrowed claim (Oracle):** RELEASE path only (no playback); active-render UAF is a TSan/ASan manual concern.
 - [x] 7.8 Build + TSan green ✅ — **115/115, no data races**, lifecycle suite stable across re-runs.
-- [~] 7.9 Build + sign the **Developer-ID Release** `.app` per `docs/RELEASE_BUILD_GUIDE.md` — **objective half ✅ (Claude, 2026-09-07):** built into `build/ReleaseProfile` (arm64, `-O`), `codesign --verify --strict` exit 0, Developer-ID authority chain, **`get-task-allow` absent** (`CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO`), entitlements byte-identical to notarized `dist/`, launches. **EQ-audible-on-video = user ear, Phase B.** Note: the 8.5e/7.10 reads used the **Xcode Run** (get-task-allow injected) so no re-sign was needed; the PATH B re-sign path stays documented as a fallback.
+- [x] 7.9 Build + sign the **Developer-ID Release** `.app` — ✅ PASS (2026-09-25): rebuilt on `00d5a03`, `codesign --verify --strict` 0, Developer-ID chain, no `get-task-allow`; user heard EQ on video in the Release build
 - [x] 7.10 Leak — no leak over multi-clip playback — ✅ **PASS (Claude, 2026-09-07):** `xcrun heap` census on the get-task-allow Release run: 1 live `VideoTapContext` while playing after ~7 videos (no accumulation), 0 after `stop()`+`clear()`. `passRetained`↔`tapFinalize` balanced. Instruments **Allocations is Debug-only** (dylib injection blocked on hardened builds) and remains an optional generation-by-generation cross-check; `xcrun heap` works on any `get-task-allow` build.
 - [x] 7.11 Commit ✅ — `b443369` (tests) + `7f50c2c` (Oracle remediation).
 - [x] 7.12 Codex Oracle review ✅ — round 1 8/10 REVISE (overstated coverage: 7.5/7.6 + UAF overclaim) → fixed (added 7.5, reframed 7.7, flag scoping, honest 7.6) → round 2 **9/10 APPROVED, no new issue**.
@@ -304,7 +304,7 @@ Numbering: `<Phase>.<Item>`. `[x]` complete, `[~]` in-progress, `[!]` blocked.
 - [ ] 8.11 Bluetooth codec switch — AAC ↔ SBC (forced via `Bluetooth Explorer` or CLI). Tap callback continuity, no audio drop > 200 ms — ⛔ **NOT ABLE AS WRITTEN (2026-09-05); optional device-substitution → PARTIAL, user decides**
 - [x] 8.12 Mid-playback format re-prepare — AVPlayerItem audio-track swap (constructed multi-track item). `tapPrepare` re-fires; coefficient recompute fires — ⛔ **NOT ABLE TO COMPLETE (2026-09-05): no in-app trigger; optional**
 - [x] 8.13 Surround handling — ✅ PASS (2026-09-25): 5.1 downmixed to stereo before the tap (ADR-12 stereo pin); balance L/R/centre correct and EQ audible (user). Multichannel output deferred → #88
-- [ ] 8.14 Item replacement during playback — `player.replaceCurrentItem(with: nextItem)` for video → audio file (and reverse). Outgoing item's `tapFinalize` fires; no leak; ≤200 ms audio gap
+- [x] 8.14 Item replacement during playback — ✅ PASS (2026-09-25, user): video ↔ music ×2, no crash, ≈blink gap, EQ carried over; mechanical half (0 live contexts) 2026-09-07
 
 ### Lifecycle gates (covered by Phase 7 tests)
 
@@ -312,7 +312,7 @@ Numbering: `<Phase>.<Item>`. `[x]` complete, `[~]` in-progress, `[!]` blocked.
 
 ### Dynamic transition gates (8.5–8.14) — HARDWARE-MANUAL
 
-- [~] 8.5–8.14 — **objective/mechanical axis ✅ (Claude Phase A, 2026-09-07):** 8.5e PASS (telemetry 0/0 counters, two reads); 8.5b/8.5c/8.5d/8.13/8.14 mechanical PARTIAL (no crash, tap active, counters 0/0, 0 live `VideoTapContext` after stop — leak-free item replacement). **User halves ⏳ Phase B/C** via runbook artifact https://claude.ai/code/artifact/1b5d48d1-5b5c-49ff-bff0-eb23beb8caf8 — audible/eye judgments for 8.5b/c/d/8.13/8.14, hardware route changes 8.6–8.10 (Claude drives + measures on cue), and 8.5 long-drift (user's ≥10-min lip-sync video). `verification.md` remains the record of truth.
+- [x] 8.5–8.14 — ✅ all run (2026-09-25): 8.5/8.5b/8.5c/8.5d/8.5e/8.6/8.7/8.9/8.10/8.13/8.14 PASS; 8.8 N/A; 8.11/8.12 NOT ABLE (dispositioned). See verification.md
 
 ### Documentation
 

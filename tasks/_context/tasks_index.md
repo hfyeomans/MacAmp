@@ -25,6 +25,8 @@
 
 > **Status (2026-04-27):** All 5 tasks Oracle-validated through plan + todo phases (≥ 9/10). Implementation-ready. Locked execution order in `_context/state.md`.
 >
+> **Status (2026-09-25):** S3-2 **Phase 8 ✅ complete** (all manual gates run with the user; AirPlay 2 fix ADR-12; multichannel → S4-4 #88; PR #87 merged in). **Phase 9 next**, then PR #C.
+>
 > **Status (2026-09-05):** S3-1A ✅ + S3-1B ✅ merged. S3-2 (pivot) is at Phase 8 — automated gates ✅, manual/hardware gates **being executed by the user from 2026-09-05**, Phase 9 next — on branch `feat/avplayer-native-video-dsp`, 74 commits ahead of `main`, **pushed to origin at `5fe8c3c` (2026-09-05 docs sync; code unchanged since `944795a`); unmerged; PR #C not yet opened**. S3-3 is blocked behind it; S3-4 is blocked behind S3-3. Code idle since 2026-06-27 (`5fe8c3c` and `056c69a` are docs-only).
 
 | Step | Task | Purpose | Size | Status | Oracle Score |
