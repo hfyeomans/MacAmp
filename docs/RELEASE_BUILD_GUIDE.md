@@ -135,7 +135,7 @@ Create `ExportOptions.plist`:
 
 ## Notarization
 
-**Required for macOS 15+**. Users cannot run your app without notarization.
+**Required** on every supported macOS (27+). Users cannot run your app without notarization.
 
 ### Step 1: Create App-Specific Password
 
@@ -300,7 +300,7 @@ Should show:
 codesign -d --entitlements - MacAmp.app
 ```
 
-Should show your entitlements from `MacAmp.entitlements`.
+Should show your entitlements from `MacAmp.entitlements` and no `com.apple.security.get-task-allow` (see the `get-task-allow` trap under [Testing a Release Build](#testing-a-release-build)).
 
 ### 3. Check Notarization
 
@@ -398,18 +398,19 @@ Create `scripts/release.sh`:
 set -e
 
 VERSION="0.1.0"
-APP_NAME="MacAmpApp"
+SCHEME="MacAmpApp"
+APP_NAME="MacAmp"            # product: MacAmp.app
 BUNDLE_ID="com.hankyeomans.MacAmp"
-TEAM_ID="YOUR_TEAM_ID"
-NOTARY_PROFILE="MacAmp-Notary"
+TEAM_ID="AC3LGVEJJ8"
+NOTARY_PROFILE="notarytool-password"
 
 echo "Building MacAmp v${VERSION}..."
 
 # Clean and build
-xcodebuild clean -project MacAmpApp.xcodeproj -scheme ${APP_NAME}
+xcodebuild clean -project MacAmpApp.xcodeproj -scheme ${SCHEME}
 xcodebuild archive \
   -project MacAmpApp.xcodeproj \
-  -scheme ${APP_NAME} \
+  -scheme ${SCHEME} \
   -configuration Release \
   -archivePath ./build/${APP_NAME}.xcarchive
 
@@ -642,8 +643,9 @@ dist/MacAmp.app
 ### Testing a Release Build
 
 ```bash
-# Build Release
-xcodebuild -project MacAmpApp.xcodeproj -scheme MacAmpApp -configuration Release build
+# Build Release (CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO keeps get-task-allow out)
+xcodebuild -project MacAmpApp.xcodeproj -scheme MacAmpApp -configuration Release build \
+  CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO
 
 # Verify signature
 codesign --verify --deep --strict --verbose=2 dist/MacAmp.app
@@ -651,9 +653,14 @@ codesign --verify --deep --strict --verbose=2 dist/MacAmp.app
 # Display signature details
 codesign -dvvv dist/MacAmp.app
 
+# Confirm get-task-allow is absent
+codesign -d --entitlements - dist/MacAmp.app | grep get-task-allow || echo "no get-task-allow"
+
 # Run standalone verification
 ./scripts/verify-dist-signature.sh
 ```
+
+**`get-task-allow` trap:** a plain `xcodebuild build` injects the `com.apple.security.get-task-allow` (debugger-attach) entitlement even for the Release configuration, and an Xcode Run does the same. Notarization rejects apps carrying it. Pass `CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO` to any locally built Release app meant for distribution or release-equivalent testing; with it, `codesign -d --entitlements -` shows no `get-task-allow` and `codesign --verify --strict` passes with `Developer ID Application: Hank Yeomans (AC3LGVEJJ8)` (verified 2026-09-07 and 2026-09-25).
 
 ### Performance Impact
 

@@ -1,5 +1,7 @@
 # S3-2 Documentation Update Backlog (for Phase 9 mandatory docs pass)
 
+> **Status: ✅ EXECUTED 2026-09-25 (Phase 9 docs pass).** All `docs/` files were re-read end to end against the code at `5125bb3`+ and updated (ARCHITECTURE_GUIDE v3.2.0 incl. new §"AVPlayer-Native Video DSP", IMPLEMENTATION_PATTERNS v2.2.0, VIDEO_WINDOW v3.0.0 incl. "Video Audio DSP Pipeline", MILKDROP_WINDOW v2.3.0, README v3.12.0, plus RELEASE_BUILD_GUIDE / MULTI_WINDOW / PLAYLIST / SPRITE fixes). Kept as the historical checklist; the "macOS 15.0+" constraint below is superseded by the macOS 27 minimum (D-TARGET27). `.ai-shared/macamp/project.md` lives in the dotfiles repo and is not updated here.
+
 > **Purpose:** Precise, file-by-file list of what the `docs/` set needs to reflect the S3-2 "AVPlayer-native video DSP" feature (Phases 2–5). Produced 2026-05-28 by a 5-agent team that each read its assigned `docs/` file IN FULL (not excerpts). This is a planning artifact — **no `docs/` edits have been made yet.** Phase 9 (UI polish + mandatory docs) executes this.
 >
 > **Constraint reminder:** project deploys to macOS 15.0+ and is built with Xcode 27 / Swift 6.4 toolchain in Swift 6.2 language mode (migrated 2026-06-26). Doc language must say `Synchronization.Atomic`/`Mutex` (Swift 6 stdlib), NOT swift-atomics, for the video DSP subsystem.

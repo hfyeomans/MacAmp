@@ -990,14 +990,14 @@ After refactoring, `WindowCoordinator.swift` is 223 lines (an 84% reduction) and
 ```
 MacAmpApp/ViewModels/
     WindowCoordinator.swift           (223 lines) -- Facade + composition root
-    WindowCoordinator+Layout.swift    (153 lines) -- Layout, presentation, debug logging
+    WindowCoordinator+Layout.swift    (129 lines) -- Layout, presentation, debug logging
 
 MacAmpApp/Windows/
     WindowRegistry.swift              ( 83 lines) -- Window ownership + lookup
     WindowFramePersistence.swift      (147 lines) -- Frame persistence + suppression
     WindowVisibilityController.swift  (161 lines) -- Show/hide/toggle + @Observable state
     WindowResizeController.swift      (312 lines) -- Resize + docking-aware layout
-    WindowSettingsObserver.swift      (114 lines) -- Settings observation lifecycle
+    WindowSettingsObserver.swift      (113 lines) -- Settings observation lifecycle
     WindowDelegateWiring.swift        ( 54 lines) -- Delegate setup static factory
     WindowDockingTypes.swift          ( 50 lines) -- Value types (Sendable)
     WindowDockingGeometry.swift       (109 lines) -- Pure geometry (nonisolated)
@@ -1009,12 +1009,12 @@ MacAmpApp/Windows/
 | Type | SRP Responsibility | @MainActor | @Observable | Lines |
 |------|-------------------|:----------:|:-----------:|------:|
 | `WindowCoordinator` | Composition root, API forwarding | Yes | Yes | 223 |
-| `WindowCoordinator+Layout` | Init-time layout, presentation, debug | Yes (inherited) | -- | 153 |
+| `WindowCoordinator+Layout` | Init-time layout, presentation, debug | Yes (inherited) | -- | 129 |
 | `WindowRegistry` | Owns 5 NSWindowController instances, kind mapping | Yes | No | 83 |
 | `WindowFramePersistence` | Save/load/suppress frame positions | Yes | No | 147 |
 | `WindowVisibilityController` | Show/hide/toggle for all windows | Yes | Yes | 161 |
 | `WindowResizeController` | Double-size resize, docking context, move | Yes | No | 312 |
-| `WindowSettingsObserver` | Observe 4 AppSettings properties | Yes | No | 114 |
+| `WindowSettingsObserver` | Observe 4 AppSettings properties | Yes | No | 113 |
 | `WindowDelegateWiring` | Static factory for delegate setup | Yes (struct) | No | 54 |
 | `WindowDockingTypes` | Value types for docking context | No (Sendable) | No | 50 |
 | `WindowDockingGeometry` | Pure geometry calculations | nonisolated | No | 109 |
@@ -1084,15 +1084,15 @@ The `WindowCoordinator+Layout.swift` extension inherits `@MainActor` from the ba
 `WindowSettingsObserver` uses the standard one-shot observation pattern required for `@Observable` objects outside of SwiftUI View bodies:
 
 ```swift
-// WindowSettingsObserver.swift:51-64
+// WindowSettingsObserver.swift:50-64
 private func observeAlwaysOnTop() {
     tasks["alwaysOnTop"]?.cancel()  // Cancel existing before creating new
     tasks["alwaysOnTop"] = Task { @MainActor [weak self] in
         guard let self else { return }
         withObservationTracking {
             _ = self.settings.isAlwaysOnTop  // Register property access
-        } onChange: {
-            Task { @MainActor [weak self] in  // Nested Task for @Sendable boundary
+        } onChange: { [weak self] in  // Weak capture on the @Sendable onChange closure
+            Task { @MainActor in  // Nested Task for @Sendable boundary
                 guard let self, self.handlers != nil else { return }
                 self.handlers?.onAlwaysOnTopChanged(self.settings.isAlwaysOnTop)
                 self.observeAlwaysOnTop()  // Re-establish (recursive)
@@ -1103,14 +1103,14 @@ private func observeAlwaysOnTop() {
 ```
 
 Key design decisions:
-- **`[weak self]` on both Tasks**: Prevents retain cycles; when WindowCoordinator deallocates, observers terminate naturally
+- **`[weak self]` on the outer Task and on the `onChange` closure**: Prevents retain cycles; when WindowCoordinator deallocates, observers terminate naturally. The weak capture sits on `onChange` (not the nested Task's capture list) so the closure never holds `self` strongly; the same shape is used by `WindowCoordinator+Layout.observeSkinReadiness()`
 - **`self.handlers != nil` guard**: Prevents re-registration after `stop()` has been called
 - **Explicit `@MainActor` on inner Task**: Defensive isolation annotation despite being in @MainActor context
 - **Explicit `start()`/`stop()` lifecycle**: Oracle review required this instead of relying on `deinit` (which is `nonisolated` in Swift 6.2)
 
-**Future migration path (macOS 26+)**:
+**Migration path (`Observations` requires macOS 26+, so it is available at the macOS 27 minimum; not yet adopted)**:
 ```swift
-// When minimum target is macOS 26, replace with:
+// Possible replacement:
 for await _ in Observations(\.isAlwaysOnTop, on: settings) {
     handlers?.onAlwaysOnTopChanged(settings.isAlwaysOnTop)
 }
@@ -1177,8 +1177,8 @@ The refactoring was executed in 4 phases, each independently buildable and verif
 
 **Build verification after each phase**:
 ```bash
-xcodebuild -scheme MacAmp -configuration Debug -enableThreadSanitizer YES build
-xcodebuild test -scheme MacAmp -enableThreadSanitizer YES
+xcodebuild -scheme MacAmpApp -configuration Debug -enableThreadSanitizer YES build
+xcodebuild test -scheme MacAmpApp -enableThreadSanitizer YES
 ```
 
 All 4 phases passed build + Thread Sanitizer + full test suite.
@@ -1302,12 +1302,12 @@ The Swift patterns review (conducted by swift-concurrency-expert skill) graded t
 
 4. **WindowCoordinator Refactoring (2026-02)**
    - See `MacAmpApp/ViewModels/WindowCoordinator.swift` (223 lines, Facade)
-   - See `MacAmpApp/ViewModels/WindowCoordinator+Layout.swift` (153 lines, layout extension)
+   - See `MacAmpApp/ViewModels/WindowCoordinator+Layout.swift` (129 lines, layout extension)
    - See `MacAmpApp/Windows/WindowRegistry.swift` (83 lines, window ownership)
    - See `MacAmpApp/Windows/WindowFramePersistence.swift` (147 lines, frame persistence)
    - See `MacAmpApp/Windows/WindowVisibilityController.swift` (161 lines, visibility)
    - See `MacAmpApp/Windows/WindowResizeController.swift` (312 lines, resize + docking)
-   - See `MacAmpApp/Windows/WindowSettingsObserver.swift` (114 lines, observation)
+   - See `MacAmpApp/Windows/WindowSettingsObserver.swift` (113 lines, observation)
    - See `MacAmpApp/Windows/WindowDelegateWiring.swift` (54 lines, delegate setup)
    - See `MacAmpApp/Windows/WindowDockingTypes.swift` (50 lines, value types)
    - See `MacAmpApp/Windows/WindowDockingGeometry.swift` (109 lines, pure geometry)

@@ -1,8 +1,8 @@
 # MacAmp Video Window Documentation
 
-**Version:** 2.0.0
-**Last Updated:** November 2025
-**Status:** Production Ready (TASK 2 + Part 21)
+**Version:** 3.0.0
+**Last Updated:** 2026-09-25
+**Status:** Production Ready (TASK 2 + Part 21 + AVPlayer-native video audio DSP)
 **Author:** MacAmp Development Team
 
 ---
@@ -14,14 +14,15 @@
 3. [Architecture Overview](#architecture-overview)
 4. [Chrome Components](#chrome-components)
 5. [Video Playback System](#video-playback-system)
-6. [Window Focus Integration](#window-focus-integration)
-7. [Window Resizing (1x/2x)](#window-resizing-1x2x)
-8. [Persistence & Window Docking](#persistence--window-docking)
-9. [Fallback Chrome System](#fallback-chrome-system)
-10. [Implementation Patterns](#implementation-patterns)
-11. [Testing Guidelines](#testing-guidelines)
-12. [Future Enhancements](#future-enhancements)
-13. [Appendix: Sprite Definitions](#appendix-sprite-definitions)
+6. [Video Audio DSP Pipeline](#video-audio-dsp-pipeline)
+7. [Window Focus Integration](#window-focus-integration)
+8. [Window Resizing (1x/2x)](#window-resizing-1x2x)
+9. [Persistence & Window Docking](#persistence--window-docking)
+10. [Fallback Chrome System](#fallback-chrome-system)
+11. [Implementation Patterns](#implementation-patterns)
+12. [Testing Guidelines](#testing-guidelines)
+13. [Future Enhancements](#future-enhancements)
+14. [Appendix: Sprite Definitions](#appendix-sprite-definitions)
 
 ---
 
@@ -32,6 +33,7 @@ The Video Window is a core component of MacAmp's media playback system, providin
 ### Purpose
 
 - **Video Playback:** Native macOS video rendering via AVPlayer
+- **Winamp Audio Controls on Video:** 10-band EQ, preamp, balance, spectrum/oscilloscope and Milkdrop all apply to the video's audio (in-place processing tap, see [Video Audio DSP Pipeline](#video-audio-dsp-pipeline))
 - **Skinned Chrome:** Pixel-perfect VIDEO.bmp sprite rendering
 - **Seamless Integration:** Works with MacAmp's 5-window system
 - **Format Support:** MP4, MOV, M4V, and other QuickTime-compatible formats
@@ -41,7 +43,7 @@ The Video Window is a core component of MacAmp's media playback system, providin
 1. **V Button:** Click the "V" button on the main window (toggles visibility)
 2. **Keyboard:** Press `Ctrl+V` to toggle window visibility
 3. **Menu:** Windows → Show/Hide Video Window
-4. **Automatic:** Opens when playing video files
+4. **Playlist:** Playing a video file does not open the window automatically (open it with V / Ctrl+V); while open with no video loaded it shows "No video loaded"
 
 ### Historical Context
 
@@ -161,8 +163,8 @@ Each window:
 
 Following MacAmp's three-layer pattern:
 
-1. **Mechanism Layer:** AVPlayer, AVPlayerView (AVKit framework)
-2. **Bridge Layer:** AVPlayerViewRepresentable, AudioPlayer
+1. **Mechanism Layer:** AVPlayer, AVPlayerView (AVKit framework), `VideoPlaybackController` (AVPlayer lifecycle, observers, seek), `VideoTap` + `VideoTapContext` + `BiquadCascade` (in-place audio DSP on the render thread)
+2. **Bridge Layer:** AVPlayerViewRepresentable, AudioPlayer (media-type routing, `startVideoLoad`, balance fanout), EqualizerController (EQ fanout)
 3. **Presentation Layer:** VideoWindowChromeView, WinampVideoWindow
 
 ---
@@ -296,6 +298,7 @@ struct AVPlayerViewRepresentable: NSViewRepresentable {
         view.showsFullScreenToggleButton = false
         view.showsSharingServiceButton = false
         view.allowsPictureInPicturePlayback = false
+        view.updatesNowPlayingInfoCenter = false  // PlaybackCoordinator owns remote commands
         return view
     }
 
@@ -307,6 +310,16 @@ struct AVPlayerViewRepresentable: NSViewRepresentable {
 }
 ```
 
+**Remote commands are MacAmp's, not AVKit's.** A default `AVPlayerView` registers its own
+Now Playing / `MPRemoteCommandCenter` handler. System pause commands (AirPods removed, case
+closed, route loss) would then pause the `AVPlayer` directly, behind `VideoPlaybackController`:
+the UI stays "playing", audio goes silent, and the next Play press pauses. With
+`updatesNowPlayingInfoCenter = false`, media keys, AirPods and other remote commands all go
+through `PlaybackCoordinator.setupRemoteCommands()` → `AudioPlayer` →
+`VideoPlaybackController`, so transport state stays truthful. `VideoPlaybackController`
+does not observe `AVPlayer.timeControlStatus`, so any other pause path that bypasses
+MacAmp would desync the same way.
+
 ### Format Support
 
 **Supported Video Formats:**
@@ -317,9 +330,10 @@ struct AVPlayerViewRepresentable: NSViewRepresentable {
 - Any format supported by AVFoundation
 
 **Audio Track Handling:**
-- Embedded audio plays through standard audio pipeline
-- Volume control synchronized with main window
-- EQ not available for video playback (AVPlayer limitation)
+- Video audio stays on AVPlayer (it is not routed through `AVAudioEngine`)
+- 10-band EQ, preamp, balance and the visualizers apply via an in-place processing tap on the first audio track (see [Video Audio DSP Pipeline](#video-audio-dsp-pipeline))
+- Volume control synchronized with main window (`AVPlayer.volume`)
+- The tap is pinned to stereo, so mono is upmixed and 5.1+ downmixed before processing; multichannel output is not yet supported (issue #88)
 
 ### Media Type Switching
 
@@ -328,140 +342,292 @@ struct AVPlayerViewRepresentable: NSViewRepresentable {
 enum MediaType {
     case audio
     case video
-    case internetRadio
 }
 
-// Automatic detection on file load
-private func detectMediaType(for url: URL) -> MediaType {
+// Detection by extension in playTrack(track:)
+private func detectMediaType(url: URL) -> MediaType {
     let videoExtensions = ["mp4", "mov", "m4v", "avi"]
-    if videoExtensions.contains(url.pathExtension.lowercased()) {
-        return .video
-    }
-    return .audio
-}
-
-// Window visibility management
-if audioPlayer.currentMediaType == .video {
-    settings.showVideoWindow = true  // Auto-show for video
+    return videoExtensions.contains(url.pathExtension.lowercased()) ? .video : .audio
 }
 ```
 
+`playTrack(track:)` tears down the outgoing media type before loading the new one:
+
+| Transition | Teardown |
+|------------|----------|
+| audio → video | `engine.removeVisualizerTapIfNeeded()` |
+| video → audio | `invalidateInFlightVideoLoad()`, `pauseAndDetachVideoTapIfNeeded()`, `videoPlaybackController.cleanup()`, `visualizerPipeline.stopVideoVisualization()` |
+| video → video | `pauseAndDetachVideoTapIfNeeded()` (then a fresh tap is built for the new item) |
+
+For video it then calls `startVideoLoad(track:)` (async) and
+`visualizerPipeline.startVideoVisualization()`, and transitions to `.playing`; the AVPlayer
+starts once the asynchronous load finishes (see [Tap Lifecycle](#tap-lifecycle)). For audio
+it calls `loadAudioFile(url:)` + `play()`.
+
 ### Part 21: Unified Video Controls
+
+`AudioPlayer` is the façade the UI talks to; for video it forwards to
+`VideoPlaybackController` (`MacAmpApp/Audio/VideoPlaybackController.swift`), which owns the
+`AVPlayer`, its observers and seek handling.
 
 **Volume Synchronization:**
 
 ```swift
-// AudioPlayer.swift - volume didSet (Line ~160)
-var volume: Float = 1.0 {
+// AudioPlayer.swift — volume fans out to both backends
+var volume: Float = 0.75 {
     didSet {
-        audioEngine.mainMixerNode.outputVolume = volume
-        videoPlayer?.volume = volume  // ← Sync to video
-        UserDefaults.standard.set(volume, forKey: "playerVolume")
+        engine?.setVolume(volume)
+        videoPlaybackController.volume = volume
     }
 }
 
-// loadVideoFile() - apply initial volume (Line ~382)
-videoPlayer = AVPlayer(url: url)
-videoPlayer?.volume = volume  // ← Apply saved volume immediately
+// VideoPlaybackController.swift
+var volume: Float = 1.0 {
+    didSet { player?.volume = volume }
+}
+// loadVideo(...) applies it to each new player: `player?.volume = volume`
 ```
+
+Persistence is call-site-driven (`commitVolumeToDefaults()` at gesture end), not in the setter.
 
 **Time Observer Pattern:**
 
 ```swift
-// AudioPlayer.swift - setupVideoTimeObserver() (Lines 480-505)
-private func setupVideoTimeObserver() {
-    guard let player = videoPlayer else { return }
-
-    let interval = CMTime(seconds: 0.1, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
-
-    videoTimeObserver = player.addPeriodicTimeObserver(
-        forInterval: interval,
-        queue: .main
-    ) { [weak self] time in
-        // CRITICAL: Use Task { @MainActor in } for proper isolation
-        Task { @MainActor in
-            guard let self else { return }
-            let seconds = time.seconds
-
-            // CRITICAL: Must assign ALL THREE values (playbackProgress is STORED, not computed)
-            self.currentTime = seconds
-            if let duration = player.currentItem?.duration.seconds, duration.isFinite {
-                self.currentDuration = duration
-                self.playbackProgress = duration > 0 ? seconds / duration : 0
-            }
+// VideoPlaybackController.swift — setupTimeObserver()
+timeObserver = player.addPeriodicTimeObserver(
+    forInterval: CMTime(seconds: 0.1, preferredTimescale: 600),
+    queue: .main
+) { [weak self, weak player] time in
+    Task { @MainActor in
+        guard let self, let player else { return }
+        guard self.player === player else { return }  // ignore ticks from a replaced player
+        let seconds = time.seconds
+        self.currentTime = seconds
+        if let item = player.currentItem, item.duration.seconds.isFinite {
+            let dur = item.duration.seconds
+            self.duration = dur
+            self.progress = dur > 0 ? seconds / dur : 0
+            self.onTimeUpdate?(seconds, dur, self.progress)
         }
     }
 }
-```
 
-**Shared Cleanup Function:**
-
-```swift
-// AudioPlayer.swift - cleanupVideoPlayer() (Line ~686)
-private func cleanupVideoPlayer() {
-    tearDownVideoTimeObserver()
-    if let observer = videoEndObserver {
-        NotificationCenter.default.removeObserver(observer)
-        videoEndObserver = nil
-    }
-    videoPlayer?.pause()
-    videoPlayer = nil
+// AudioPlayer.init — mirror into the UI-bound properties (all three are stored)
+videoPlaybackController.onTimeUpdate = { [weak self] time, duration, progress in
+    guard let self else { return }
+    self.currentTime = time
+    self.currentDuration = duration
+    self.playbackProgress = progress
 }
 ```
+
+**Cleanup:**
+
+`VideoPlaybackController.cleanup()` cancels the metadata task, removes the time and
+end-of-item observers, pauses and releases the player, and resets all playback state.
+`AudioPlayer` wraps it with the tap teardown (`invalidateInFlightVideoLoad()` +
+`pauseAndDetachVideoTapIfNeeded()`) and `visualizerPipeline.stopVideoVisualization()` on
+`stop()` and on a video → audio switch.
 
 **Seeking Support:**
 
 ```swift
-// AudioPlayer.swift - seek(to:resume:) video branch (Line ~1179)
-func seek(to time: TimeInterval, resume: Bool = true) {
-    if currentMediaType == .video, let player = videoPlayer {
-        let cmTime = CMTime(seconds: time, preferredTimescale: 1000)
-        player.seek(to: cmTime) { [weak self] _ in
-            Task { @MainActor in
-                guard let self else { return }
-                // Update ALL THREE values on completion
-                self.currentTime = time
-                if let duration = player.currentItem?.duration.seconds, duration.isFinite {
-                    self.currentDuration = duration
-                    self.playbackProgress = duration > 0 ? time / duration : 0
-                }
-                if resume && self.isPlaying {
-                    player.play()
-                }
-            }
-        }
-        return  // Early return for video path
-    }
-    // ... audio path continues
-}
-
-// AudioPlayer.swift - seekToPercent() video branch (Line ~1245)
-func seekToPercent(_ percent: Double) {
-    if currentMediaType == .video, let player = videoPlayer {
-        guard let duration = player.currentItem?.duration.seconds,
-              duration.isFinite else { return }
-        let targetTime = duration * percent
-        seek(to: targetTime, resume: true)
+// AudioPlayer.swift
+func seek(to time: Double, resume: Bool? = nil) {
+    if currentMediaType == .video {
+        videoPlaybackController.seek(to: time, resume: resume, completion: videoSeekCompletion)
         return
     }
-    // ... audio path continues
+    // ... audio path
+}
+
+func seekToPercent(_ percent: Double, resume: Bool? = nil) {
+    if currentMediaType == .video {
+        videoPlaybackController.seekToPercent(percent, resume: resume, completion: videoSeekCompletion)
+        return
+    }
+    // ... audio path
 }
 ```
 
-**Critical Bug Fix (currentSeekID invalidation):**
+`VideoPlaybackController.seek` seeks with default tolerance (nearest keyframe; fast, avoids
+-12860 decode errors). In the completion it ignores a stale player (identity guard), records
+the actual position, and applies `resume`:
 
-```swift
-// AudioPlayer.swift - loadAudioFile() (Line ~215)
-func loadAudioFile(url: URL) {
-    // CRITICAL: Invalidate seek ID BEFORE stopping playerNode
-    // Prevents completion handler from re-scheduling audio
-    currentSeekID = UUID()
+| `resume` | After seek |
+|----------|------------|
+| `true` | play (`isPlaying = true`, `isPaused = false`) |
+| `false` | pause (`isPlaying = false`, `isPaused = true`) |
+| `nil` | keep the current intent, re-read at completion time: play if `isPlaying`, else stay paused or loaded-idle (`isPaused` untouched) |
 
-    playerNode.stop()
-    cleanupVideoPlayer()
-    // ... rest of audio loading
-}
+`videoSeekCompletion` then syncs `currentTime`, `playbackProgress`, `currentDuration` and the
+`.playing` / `.paused` transport state back onto `AudioPlayer`. A seek also flushes the
+tap's EQ filter history (see [Seek and Filter State](#seek-and-filter-state)).
+
+**Stale-callback guards:** the end-of-item notification, periodic time observer and seek
+completion all check that the player (or item) they captured is still the current one, so a
+superseding `loadVideo` can't have old callbacks mutate transport state.
+
+---
+
+## Video Audio DSP Pipeline
+
+Video audio stays on `AVPlayer`; it is never routed through `AVAudioEngine`. Winamp's audio
+controls reach it through an in-place `MTAudioProcessingTap` attached to the
+`AVPlayerItem`'s `audioMix`. The tap processes the decoded samples before AVPlayer renders
+them to whatever output is current (speakers, HDMI, AirPods, AirPlay 2), so route changes
+are handled by AVFoundation, not by MacAmp. Design rationale and the full decision record
+(ADR-1…12): `tasks/avplayer-native-video-dsp/plan.md`.
+
+### Signal Path
+
 ```
+AVURLAsset ──▶ AVPlayerItem ──▶ AVPlayer ──▶ current output route
+                   │ .audioMix (set once, before the AVPlayer exists)
+                   ▼
+   MTAudioProcessingTap on audioTracks.first
+   (PreEffects; stereo Float32 non-interleaved at the source sample rate)
+                   │
+   tapProcess, per render slice (AVFoundation's tap thread):
+     1. MTAudioProcessingTapGetSourceAudio
+     2. format gate — process only 32-bit Float LPCM, otherwise pass through
+     3. StartOfStream flag (seek / new stream) → reset EQ filter history
+     4. preamp          (linear gain)
+     5. 10-band EQ      (biquad cascade, only while EQ is on)
+     6. balance         (gain on channel 0 = L, channel 1 = R)
+     7. videoTapVisualizerRender → shared VisualizerFeed
+     8. deadline telemetry on every 64th callback
+```
+
+The visualizer step runs on the already-processed buffer, so the spectrum, oscilloscope and
+Milkdrop react to the EQ'd sound (see `docs/MILKDROP_WINDOW.md` §9.4 for the feed and
+consumer side).
+
+### Files
+
+| File | Role |
+|------|------|
+| `MacAmpApp/Audio/VideoDSP/VideoTap.swift` | C tap callbacks (`init`/`prepare`/`process`/`unprepare`/`finalize`), `buildAudioMix`, `preferredProcessingFormat(for:)`, `detach(from:)`, `balanceGains` |
+| `MacAmpApp/Audio/VideoDSP/VideoTapContext.swift` | Per-tap state shared between main and render threads: `Atomic` fields (balance, `isEqOn`, preamp, format tag, `pendingSampleRate`, telemetry), `Mutex<BiquadCoefficientSet?>`, render-confined cascade and scratch buffers |
+| `MacAmpApp/Audio/VideoDSP/BiquadCascade.swift` | Render-confined 10-band Transposed Direct Form II cascade with per-channel history; `reset()` |
+| `MacAmpApp/Audio/VideoDSP/BiquadCoefficientSet.swift` | RBJ cookbook coefficients; `frequencies` shared with `EqualizerController.configureEQ` |
+| `MacAmpApp/Audio/VideoDSP/VideoTapVisualizerRender.swift` | Visualizer producer for video (mono mix → RMS, Goertzel, Butterchurn FFT → feed) |
+| `MacAmpApp/Audio/RenderThreadSafe.swift` | Marker protocol listing which field types may be stored in the `@unchecked Sendable` context |
+| `MacAmpApp/Audio/VisualizerFeed.swift`, `VisualizerScratchBuffers.swift` | Shared single-slot feed and per-tap scratch (also used by the engine tap) |
+| `MacAmpApp/Audio/AudioPlayer.swift` | `startVideoLoad`, `pauseAndDetachVideoTapIfNeeded`, `invalidateInFlightVideoLoad`, balance fanout, `isVisualizerRendering` |
+| `MacAmpApp/Audio/EqualizerController.swift` | EQ fanout to registered taps (`registerVideoTapContext`, `pollVideoTapSampleRates`) |
+| `MacAmpApp/Audio/VideoPlaybackController.swift` | `loadVideo(url:autoPlay:audioMixBuilder:isStillRelevant:)` |
+
+### Tap Lifecycle
+
+One tap per `AVPlayerItem`, and the item's `audioMix` is never changed while it plays.
+
+```
+playTrack(.video)
+  └─ startVideoLoad(track:)                     // bumps videoLoadGeneration
+       └─ Task: videoPlaybackController.loadVideo(url:, autoPlay: false,
+                  audioMixBuilder:, isStillRelevant:)
+            1. cleanup() the previous player
+            2. asset = AVURLAsset(url:)
+            3. audioMixBuilder(asset):
+                 loadTracks(.audio) → first track (none → nil, player built without a tap)
+                 preferredProcessingFormat(for:) → stereo @ source rate
+                 VideoTapContext(feed: visualizerPipeline.sharedFeed)
+                 VideoTap.buildAudioMix(...)   // passRetained(context) → tap → AVMutableAudioMix
+                 register context with EqualizerController + AudioPlayer balance registry
+            4. isStillRelevant()? else abort — nothing constructed or mutated
+            5. AVPlayerItem(asset:); item.audioMix = mix   // once
+            6. AVPlayer(playerItem:), observers, time observer
+       └─ if still current and playbackState == .playing → videoPlaybackController.play()
+```
+
+- **Staleness.** `videoLoadGeneration` is rechecked after every `await`; a superseded load
+  returns before building a player. Task cancellation is advisory only (`loadTracks` does
+  not honor it).
+- **Context lifetime.** `buildAudioMix` retains the context (`Unmanaged.passRetained`);
+  the tap's `finalize` callback releases it when AVFoundation drops the tap. If tap
+  creation fails, the retain is released before throwing, and the video plays without DSP.
+- **Teardown** (`pauseAndDetachVideoTapIfNeeded`): pause the player if playing, then
+  `VideoTap.detach(from:)` (`audioMix = nil`), unregister from both fanout registries. The
+  pause comes first so the mix is never mutated during playback.
+- **Pass-through.** If the negotiated format isn't 32-bit Float LPCM, `tapProcess` returns
+  the source audio untouched.
+
+### Processing Format (Stereo Pin)
+
+The tap is created with `MTAudioProcessingTapCreateWithPreferredFormat`, requesting stereo
+Float32 non-interleaved at the source track's sample rate (`VideoTap.preferredProcessingFormat(for:)`).
+If the source format can't be read it falls back to `MTAudioProcessingTapCreate`
+(system-chosen format).
+
+- A tap format that follows the output device caused audible volume pumping and cut-outs
+  over AirPlay 2; pinning to the source rate removes it.
+- Stereo means mono sources are upmixed and 5.1+ sources downmixed before the tap, so
+  channels 0/1 are always L/R and balance moves between the left and right speakers.
+- The format gate in `tapPrepare` still validates whatever format is actually negotiated.
+
+### EQ, Preamp and Balance Fanout
+
+State keeps its existing owners; each tap context is a read-only consumer.
+
+| State | Owner | Path to the tap |
+|-------|-------|-----------------|
+| `isEqOn`, preamp, 10 band gains | `EqualizerController` | `didSet` → `fanOutToVideoTaps()` → `isEqOn` / preamp atomics + `BiquadCoefficientSet.compute(for:sampleRate:)` → `installCoefficients` (Mutex) |
+| balance | `AudioPlayer` | `didSet` → `fanOutBalanceToVideoTaps()` → `balance` atomic |
+
+- Registries hold `WeakBox<VideoTapContext>` and are pruned on each fanout; registration
+  pushes current state immediately.
+- Coefficients depend on the sample rate, which only `tapPrepare` knows. It publishes
+  `pendingSampleRate`; `EqualizerController.pollVideoTapSampleRates()` runs on the
+  visualizer's 30 Hz tick (`VisualizerPipeline.onPollTick`) and recomputes when the rate
+  changes (first prepare, or a re-prepare after a route change).
+- On the render thread, coefficients are read with a non-blocking `withLockIfAvailable`; on
+  contention the previous coefficients are reused for that slice. The filter itself runs
+  lock-free.
+- The engine `AVAudioUnitEQ` and the tap cascade use the same band frequencies and gain
+  law; `BiquadNumericalMatchTests` holds them within 0.5 dB.
+- Turning EQ back on resets filter history first, so re-enabling does not click.
+
+### Seek and Filter State
+
+AVFoundation sets `kMTAudioProcessingTapFlag_StartOfStream` on the first slice after a seek
+or a new stream. `tapProcess` then resets the cascade's filter history, so no ringing from
+before the seek leaks into the new position.
+
+### Route Changes
+
+AirPods connect/disconnect, AirPlay 2, and system output switches keep the same tap and
+context; AVFoundation may re-prepare the tap on the new route, and the sample-rate poll
+recomputes coefficients. EQ, balance and the visualizer carry across the switch. Remote
+pause/resume from AirPods (one bud out, case closed) arrives through `PlaybackCoordinator`
+(see [AVPlayerViewRepresentable](#avplayerviewrepresentable)).
+
+### Visualizer During Video
+
+- `VideoTapContext` is created with `visualizerPipeline.sharedFeed`; the tap is the only
+  producer during video (the engine mixer tap is removed on the audio → video switch).
+- `startVideoVisualization()` / `stopVideoVisualization()` run the 30 Hz feed poll, because
+  no engine tap is installed to start it.
+- `AudioPlayer.isVisualizerRendering` (`isEngineRendering || (currentMediaType == .video && videoPlaybackController.isPlaying)`)
+  gates `getFrequencyData`, `snapshotButterchurnFrame` and `VisualizerView`, so pausing the
+  video freezes the visualizers.
+
+### Telemetry
+
+Every 64th callback times the full DSP + visualizer work against the slice's deadline
+(frames ÷ sample rate). More than 10% of the deadline increments `budgetOverrunCount`; more
+than 50% also increments `deadlineRiskCount` and records the host time. There is no log output;
+read `VideoTapContext.diagnosticSnapshot` from LLDB.
+
+### Known Limitations
+
+- **Video → audio does not auto-play.** After a video, starting an audio track may need a
+  manual Next/Play. Open; tracked as P-6 in `tasks/avplayer-native-video-dsp/placeholder.md`.
+- **Stereo only.** 5.1+ video is downmixed to stereo, including on multichannel or spatial
+  outputs. Multichannel output: issue #88.
+- **First audio track only.** No audio-track picker; the tap attaches to `audioTracks.first`.
+- **Pauses that bypass MacAmp desync the UI.** `VideoPlaybackController` does not observe
+  `AVPlayer.timeControlStatus`.
 
 ---
 
@@ -921,6 +1087,15 @@ private func setupSizeObserver() {
 - [ ] Volume control affects video audio
 - [ ] Play/pause/stop controls work
 
+**Video Audio DSP:**
+- [ ] EQ on/off, band drags and preamp change video audio in real time, without clicks
+- [ ] Balance full left / full right / centre hits the left / right / both speakers (stereo and 5.1 sources)
+- [ ] Repeated seeks/scrubs with EQ boosted: clean audio right after each seek
+- [ ] Spectrum, oscilloscope and Milkdrop animate from the video's audio; pausing freezes them
+- [ ] Route changes mid-video (AirPods connect/disconnect, AirPlay 2, system output switch): audio resumes, EQ still applied, lip sync intact
+- [ ] AirPods one-bud-out / case close pauses through MacAmp (UI shows paused); one Play press resumes
+- [ ] Video ↔ audio switches: no crash, EQ carries over (video → audio may need Next: known P-6)
+
 **Skinning:**
 - [ ] VIDEO.bmp chrome renders correctly
 - [ ] Fallback chrome appears when VIDEO.bmp missing
@@ -942,29 +1117,43 @@ private func setupSizeObserver() {
 ### Automated Testing
 
 ```swift
-// Example test structure
-func testVideoWindowCreation() {
+// Example test structure (Swift Testing)
+@Test("Video window is created and shown")
+@MainActor
+func videoWindowCreation() throws {
     let coordinator = WindowCoordinator(...)
 
     // Show video window
     coordinator.settings.showVideoWindow = true
 
     // Verify window exists
-    XCTAssertNotNil(coordinator.videoWindow)
-    XCTAssertTrue(coordinator.videoWindow!.isVisible)
+    let window = try #require(coordinator.videoWindow)
+    #expect(window.isVisible)
 }
 
-func testVideoSizeMode() {
+@Test("Video size mode persists")
+@MainActor
+func videoSizeMode() {
     let settings = AppSettings()
 
     // Test persistence
     settings.videoWindowSizeMode = .twoX
-    XCTAssertEqual(
-        UserDefaults.standard.string(forKey: "videoWindowSizeMode"),
-        "2x"
-    )
+    #expect(UserDefaults.standard.string(forKey: "videoWindowSizeMode") == "2x")
 }
 ```
+
+**Video audio DSP suites** (`Tests/MacAmpTests/`, Swift Testing; run with Thread Sanitizer):
+
+| Suite | Covers |
+|-------|--------|
+| `VideoTapLifecycleTests` | Context retain/release balance, tap-create failure, rapid build/attach cycles, item replacement |
+| `VideoTapFanoutTests` | EQ and balance fanout to registered contexts, sample-rate poll |
+| `BiquadNumericalMatchTests` | Tap cascade vs `AVAudioUnitEQ` within 0.5 dB |
+| `VideoTapVisualizerRenderTests` | Video visualizer producer output |
+| `VideoTapTelemetryTests` | Deadline telemetry counters |
+| `VideoTapCPUBenchmarkTests` | Debug-build regression guard on DSP cost per callback |
+| `VideoSeekStateMatrixTests` | `resume: true/false/nil` seek outcomes |
+| `VideoTapSendableContractTests` | `VideoTapContext` stored fields stay render-thread-safe |
 
 ### Performance Testing
 
@@ -980,6 +1169,10 @@ func testVideoSizeMode() {
 - 60 FPS window animations
 - < 50MB memory for chrome sprites
 
+**Measured — video audio tap (Apple Silicon, Release):** `tapProcess` costs about 0.4–1.0% of
+one core across 44.1 kHz stereo, 48 kHz stereo and 5.1 sources, with zero budget overruns or
+deadline risks in the telemetry counters.
+
 ---
 
 ## Future Enhancements
@@ -993,12 +1186,15 @@ func testVideoSizeMode() {
 
 **Interactive Buttons (Priority: Medium)**
 - Wire up fullscreen button to AVPlayerView
-- Implement 1x/2x buttons in chrome
 - Add context menu for video options
+
+**Video Audio (Priority: Medium)**
+- Fix video → audio auto-play (P-6)
+- Multichannel (5.1+) output through the tap instead of the stereo downmix (issue #88)
 
 **Advanced Playback (Priority: Low)**
 - Subtitle support (.srt, .vtt)
-- Audio track selection
+- Audio track selection (the DSP tap currently attaches to the first audio track only)
 - Playback speed controls
 - Frame-by-frame stepping
 
@@ -1006,7 +1202,7 @@ func testVideoSizeMode() {
 
 **Current Issues:**
 - Chrome remains 1x in 2x mode
-- Buttons are visual-only (not interactive)
+- Chrome buttons other than 1x/2x are visual-only (1x/2x are clickable overlays, Part 21)
 - No fullscreen mode implementation
 - Limited codec support (QuickTime only)
 
@@ -1131,15 +1327,24 @@ Key achievements:
 - ✅ **Time display integration** (elapsed/remaining) - Part 21
 - ✅ **Metadata ticker** (auto-scrolling filename, codec, resolution)
 - ✅ **AppKit preview overlay** (resize visualization)
-- ✅ Oracle Grade A validated architecture
+- ✅ **EQ, preamp and balance on video audio** (in-place `MTAudioProcessingTap`, AVPlayer kept)
+- ✅ **Visualizers and Milkdrop driven by video audio** (shared `VisualizerFeed`)
+- ✅ **Route-change safe** (AirPods, AirPlay 2, output switches keep the same tap)
+- ✅ **MacAmp-owned remote commands** during video (AVKit Now Playing disabled)
 
-Part 21 additions complete the video window as a fully functional media player with unified controls matching audio playback behavior. The Size2D quantized resize model enables any-to-any window sizing while maintaining pixel-perfect chrome rendering.
+Part 21 additions complete the video window as a fully functional media player with unified controls matching audio playback behavior. The Size2D quantized resize model enables any-to-any window sizing while maintaining pixel-perfect chrome rendering. The video audio DSP pipeline brings the Winamp EQ, balance and visualizers to video without leaving AVPlayer.
 
 Future work focuses on fullscreen mode, subtitle support, and additional codec support. The architecture is designed for extensibility while maintaining the authentic Winamp experience that defines MacAmp.
 
 ---
 
 **Document Version History:**
+- v3.0.0 (2026-09-25): AVPlayer-native video audio DSP
+  - Added Video Audio DSP Pipeline section (tap lifecycle, stereo pin, EQ/balance fanout, seek reset, route changes, visualizer, telemetry, known limitations)
+  - Removed "EQ not available for video" limitation
+  - Updated playback snippets to `VideoPlaybackController` and async `loadVideo`
+  - Documented `updatesNowPlayingInfoCenter = false` and remote-command ownership
+  - Corrected activation methods (no automatic window open)
 - v2.0.0 (2025-11-15): Part 21 Video Control Unification
   - Added Size2D quantized resize documentation
   - Added volume/seek/time integration patterns

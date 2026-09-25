@@ -1,8 +1,8 @@
 # MacAmp Complete Architecture Guide
 
-**Version:** 3.1.0
-**Date:** 2026-03-25
-**Project State:** Production-Ready (5-Window System, WindowCoordinator Refactoring, MainWindow Layer Decomposition (T3), Internet Radio N1-N6 Fixes, Unified Audio Pipeline (T5), AudioPlayer Decomposition Phase 4 (AudioEngineController), Auto-Reconnect, PlaylistWindow Decomposition, Swift Testing Migration, Swift 6.2, macOS 15+/26+, S2 Decomposition + Dead Code Cleanup)
+**Version:** 3.2.0
+**Date:** 2026-09-25
+**Project State:** Production-Ready (5-Window System, WindowCoordinator Refactoring, MainWindow Layer Decomposition (T3), Internet Radio N1-N6 Fixes, Unified Audio Pipeline (T5), AudioPlayer Decomposition Phase 4 (AudioEngineController), Auto-Reconnect, PlaylistWindow Decomposition, Swift Testing Migration, Swift 6.2, macOS 27+, S2 Decomposition + Dead Code Cleanup, AVPlayer-Native Video DSP (S3-2))
 **Purpose:** Deep technical reference for developers joining or maintaining MacAmp
 
 ---
@@ -18,6 +18,7 @@
 6. [State Management Evolution](#state-management-evolution)
 7. [SwiftUI Rendering Techniques](#swiftui-rendering-techniques)
 8. [Audio Processing Pipeline](#audio-processing-pipeline)
+8a. [AVPlayer-Native Video DSP](#avplayer-native-video-dsp)
 9. [Internet Radio Streaming](#internet-radio-streaming)
 10. [Modern Swift 6.2 Patterns](#modern-swift-62-patterns)
 11. [Component Integration Maps](#component-integration-maps)
@@ -33,7 +34,7 @@ MacAmp is a pixel-perfect recreation of Winamp 2.x for macOS, built entirely wit
 
 ### What Makes MacAmp Unique
 
-1. **Unified Audio Pipeline**: Custom stream decode pipeline feeds all audio (local files and internet radio) through AVAudioEngine -- EQ, visualization, and balance work for all sources
+1. **Two DSP Paths, One Set of Controls**: A custom stream decode pipeline feeds local audio files and internet radio through AVAudioEngine; local video stays on AVPlayer and gets the same EQ, preamp, balance and visualizer through an in-place `MTAudioProcessingTap`. The EQ and balance controls drive both paths
 2. **Semantic Sprite System**: Decouples UI components from skin-specific graphics through semantic identifiers
 3. **Three-Layer Pattern**: Clean separation inspired by web frameworks (mechanism → bridge → presentation)
 4. **Swift 6 Migration**: Full adoption of `@Observable` macro pattern with strict concurrency
@@ -51,11 +52,11 @@ This principle drives every architectural decision. MacAmp's core functionality 
 
 ## Project Metrics & Current State
 
-### Codebase Statistics (March 2026)
+### Codebase Statistics (September 2026)
 
 ```
-Total Swift Files:        111
-Lines of Code:            18,475
+Total Swift Files:        122 (MacAmpApp/)
+Lines of Code:            ~20,400
 Test Coverage:            42% (focused on critical paths)
 Supported Formats:        MP3, M4A, FLAC, WAV, AAC, HTTP/HTTPS streams
 Skin Compatibility:       100% (Winamp 2.x .wsz files)
@@ -70,18 +71,28 @@ Deployment:               Developer ID signed, notarization-ready
 ┌────────────────────────────────────────────────────────┐
 │ Component               │ Files │ LoC   │ Status       │
 ├────────────────────────┼───────┼───────┼──────────────┤
-│ Audio Engine           │  15   │ 5,400 │ Production   │
-│   - AudioPlayer.swift  │   1   │   705 │ Mechanism    │
-│   - AudioEngineCtrl    │   1   │   413 │ Mechanism    │
-│   - EqualizerController│   1   │   198 │ Mechanism    │
+│ Audio Engine           │  25   │ 7,829 │ Production   │
+│   - AudioPlayer.swift  │   1   │ 1,082 │ Mechanism    │
+│   - AudioEngineCtrl    │   1   │   579 │ Mechanism    │
+│   - EngineConfigObsrvr │   1   │    93 │ Mechanism    │
+│   - EqualizerController│   1   │   319 │ Mechanism    │
 │   - LockFreeRingBuffer │   1   │   212 │ Mechanism    │
 │   - EQPresetStore      │   1   │   197 │ Mechanism    │
 │   - MetadataLoader     │   1   │   171 │ Mechanism    │
 │   - PlaylistController │   1   │   297 │ Mechanism    │
-│   - VideoPlaybackCtrl  │   1   │   282 │ Mechanism    │
-│   - VisualizerPipeline │   1   │   699 │ Mechanism    │
+│   - VideoPlaybackCtrl  │   1   │   362 │ Mechanism    │
+│   - VisualizerPipeline │   1   │   416 │ Mechanism    │
+│   - VisualizerFeed     │   1   │   112 │ Mechanism    │
+│   - VisualizerScratch  │   1   │   195 │ Mechanism    │
+│   - RenderThreadSafe   │   1   │    48 │ Mechanism    │
 │   - StreamPlayer       │   1   │   334 │ Mechanism    │
-│   - PlaybackCoord.     │   1   │   426 │ Mechanism    │
+│   - PlaybackCoord.     │   1   │   588 │ Mechanism    │
+│   - VideoDSP/          │   5   │   929 │ Mechanism    │
+│     VideoTap           │   1   │   307 │   C callbacks│
+│     VideoTapContext    │   1   │   226 │   Atomic/Mtx │
+│     BiquadCoeffSet     │   1   │   168 │   Sendable   │
+│     BiquadCascade      │   1   │    99 │   Render-conf│
+│     VideoTapVisRender  │   1   │   129 │   Render-conf│
 │   - Streaming/         │   4   │ 1,318 │ Mechanism    │
 │     ICYFramer          │   1   │   200 │   Sendable   │
 │     AudioFileStreamPrs │   1   │   194 │   Queue-conf │
@@ -106,7 +117,8 @@ Deployment:               Developer ID signed, notarization-ready
 │ State Management       │   4   │   987 │ Production   │
 │ Models                 │  22   │ 3,142 │ Production   │
 │   - Track.swift        │   1   │    42 │ Extracted    │
-│ Utilities              │   9   │   823 │ Production   │
+│ Utilities              │  10   │   834 │ Production   │
+│   - WeakBox            │   1   │    11 │ Extracted    │
 └────────────────────────────────────────────────────────┘
 ```
 
@@ -215,6 +227,14 @@ Deployment:               Developer ID signed, notarization-ready
    - StreamPlayer grew from 189 to 334 lines; StreamDecodePipeline grew from 631 to 666 lines
    - 13 new tests added for reconnect logic and error classification
 
+14. **AVPlayer-Native Video DSP (S3-2, September 2026)**: EQ, preamp, balance and the visualizer now work for local video
+   - Video audio stays on AVPlayer; an in-place `MTAudioProcessingTap` (PreEffects) attached through `AVPlayerItem.audioMix` runs the DSP on AVPlayer's own buffers. Nothing is routed through AVAudioEngine
+   - New `Audio/VideoDSP/` cluster: `VideoTap` (C callbacks + audio-mix builder), `VideoTapContext` (render-thread state), `BiquadCoefficientSet` + `BiquadCascade` (10-band RBJ EQ matching `AVAudioUnitEQ` within 0.5 dB), `VideoTapVisualizerRender` (second visualizer producer)
+   - `VisualizerPipeline` split: the SPSC hand-off became `VisualizerFeed.swift` (renamed from `VisualizerSharedBuffer`) and the scratch buffers moved to `VisualizerScratchBuffers.swift`; `VisualizerPipeline` shrank from 661 to 416 lines
+   - `EqualizerController` (EQ) and `AudioPlayer` (balance) fan state out to registered video-tap contexts through `WeakBox` registries
+   - `AudioEngineConfigurationObserver` added: debounced handling of output-route changes for the engine path
+   - See [AVPlayer-Native Video DSP](#avplayer-native-video-dsp) and `tasks/avplayer-native-video-dsp/plan.md` (ADR-1…ADR-12)
+
 ---
 
 ## Three-Layer Architecture Deep Dive
@@ -247,13 +267,15 @@ MacAmp's architecture follows a strict three-layer separation, inspired by web f
 │                  "What the app does"                         │
 │                                                               │
 │  • PlaybackCoordinator (playback orchestration)             │
-│  • AudioPlayer (facade for local files + engine)            │
+│  • AudioPlayer (facade for local files + engine + video)    │
 │  • AudioEngineController (AVAudioEngine graph lifecycle)    │
+│  • EqualizerController (EQ state, engine + video-tap fanout)│
 │  • EQPresetStore (preset persistence)                       │
 │  • MetadataLoader (async metadata extraction)               │
 │  • PlaylistController (playlist state/navigation)           │
-│  • VideoPlaybackController (AVPlayer lifecycle)             │
-│  • VisualizerPipeline (audio tap/FFT processing)            │
+│  • VideoPlaybackController (AVPlayer + audioMix lifecycle)  │
+│  • VideoDSP/ (MTAudioProcessingTap in-place video DSP)      │
+│  • VisualizerPipeline (engine tap, VisualizerFeed consumer) │
 │  • StreamPlayer (stream decode pipeline for internet radio)  │
 │  • PlaylistController (playlist state/navigation)           │
 │  • SkinManager (skin loading/hot-swap)                      │
@@ -340,7 +362,9 @@ final class AudioPlayer {
 
 ## Unified Audio Pipeline Architecture
 
-MacAmp routes all audio -- local files and internet radio streams -- through a single AVAudioEngine graph. This unified pipeline provides EQ, visualization, and balance for every audio source.
+MacAmp routes all audio-only sources -- local files and internet radio streams -- through a single AVAudioEngine graph. This unified pipeline provides EQ, visualization, and balance for every audio source.
+
+Local **video** is the one exception: its audio stays on AVPlayer and is processed in place by an `MTAudioProcessingTap`, with the same EQ/preamp/balance state and the same visualizer feed. See [AVPlayer-Native Video DSP](#avplayer-native-video-dsp).
 
 ### Background: The Original Dual Backend (Pre-March 2026)
 
@@ -379,9 +403,15 @@ HTTP URL ──► URLSession ──► ICYFramer ──► AudioFileStreamParse
                                                             mainMixerNode ──► [visualizer tap]
                                                                    │
                                                               outputNode ──► Speakers
+
+LOCAL VIDEO (AVPlayer-native path -- does NOT enter the engine):
+AVURLAsset ──► AVPlayerItem(audioMix) ──► AVPlayer ──► Speakers
+                        │
+                 MTAudioProcessingTap (PreEffects, in place)
+                 preamp → 10-band biquad EQ → balance → VisualizerFeed
 ```
 
-**Key insight:** Both paths converge at AVAudioEngine. The engine does not know or care whether PCM came from a local file or a decoded stream. EQ, visualizer tap, and balance all apply uniformly.
+**Key insight:** Both audio-only paths converge at AVAudioEngine. The engine does not know or care whether PCM came from a local file or a decoded stream. EQ, visualizer tap, and balance all apply uniformly. The video path reaches the same user-facing result without the engine: `EqualizerController` and `AudioPlayer.balance` push their state into the tap, and the tap publishes to the same `VisualizerFeed`.
 
 ### Stream Decode Pipeline Components
 
@@ -419,6 +449,8 @@ Main Thread (@MainActor)       Decode Queue (serial)        Audio IO Thread (RT)
 - **MainActor**: lifecycle, state, UI updates
 - **Decode queue** (serial `DispatchQueue`): all data processing -- can allocate, not real-time
 - **Audio IO thread**: render block only -- zero allocations, real-time-safe
+
+Video playback adds a separate real-time domain, the `MTAudioProcessingTap` render thread owned by MediaToolbox (see [Audio Mechanism Concurrency Contract](#audio-mechanism-concurrency-contract)).
 
 ### The Orchestrator Pattern
 
@@ -517,28 +549,20 @@ final class PlaybackCoordinator {
         }
     }
 
-    // MARK: - Volume & Balance Routing (T5 Phase 1 → Unified Pipeline)
+    // MARK: - Volume & Balance Routing
     //
-    // Volume and balance changes propagate to ALL backends unconditionally.
-    // This is simpler and more robust than checking which backend is active —
-    // idle players accept the value as a no-op. AudioPlayer persists to
-    // UserDefaults and applies to both playerNode and streamSourceNode;
-    // StreamPlayer stores the value for state tracking; coordinator also
-    // propagates to VideoPlaybackController.
+    // Both route through AudioPlayer, whose didSet fans out to every backend.
+    // Same-value writes short-circuit (slider drag tick choke point).
+    // Persistence is call-site-driven: commitVolume()/commitBalance() on drag end.
 
-    /// Propagate volume to all backends. Called by UI volume slider binding.
     func setVolume(_ vol: Float) {
-        audioPlayer.volume = vol        // Persists + sets playerNode.volume + streamSourceNode.volume
-        streamPlayer.volume = vol       // Stored for state tracking
-        audioPlayer.videoPlaybackController.volume = vol
+        guard audioPlayer.volume != vol else { return }
+        audioPlayer.volume = vol        // playerNode + streamSourceNode + videoPlaybackController.volume
     }
 
-    /// Propagate balance to all backends. Called by UI balance slider binding.
-    /// With the unified pipeline, balance applies to streamSourceNode.pan
-    /// via AudioPlayer.balance didSet.
     func setBalance(_ bal: Float) {
-        audioPlayer.balance = bal       // Persists + sets playerNode.pan + streamSourceNode.pan
-        streamPlayer.balance = bal      // Stored for state tracking
+        guard audioPlayer.balance != bal else { return }
+        audioPlayer.balance = bal       // playerNode.pan + streamSourceNode.pan + registered video taps
     }
 
     // MARK: - Context-Aware Navigation (PR #49 - N4 fix)
@@ -639,9 +663,9 @@ final class PlaybackCoordinator {
 
 **Key architectural changes (T5 Phase 1, February 2026 / Unified Pipeline, March 2026):**
 
-4. **Centralized volume/balance routing**: `setVolume()` and `setBalance()` on PlaybackCoordinator propagate to all backends (AudioPlayer, StreamPlayer, VideoPlaybackController) unconditionally. AudioPlayer applies volume/balance to both `playerNode` and `streamSourceNode` via `didSet`.
+4. **Centralized volume/balance routing**: `setVolume()` and `setBalance()` on PlaybackCoordinator write through to `AudioPlayer`, whose `didSet` handlers do the fan-out. Volume reaches `playerNode`, `streamSourceNode` and `VideoPlaybackController.volume` (AVPlayer volume). Balance reaches `playerNode.pan`, `streamSourceNode.pan` and every registered `VideoTapContext.balance` atomic (applied inside the video tap).
 
-5. **Capability flag**: `supportsAudioProcessing` is a unified computed property on PlaybackCoordinator that returns `true` when either (a) the stream backend is not active, or (b) the AudioPlayer bridge is active (`audioPlayer.isBridgeActive`). With the unified pipeline, this flag returns `true` during stream playback once the bridge activates. The UI dims controls only during the brief prebuffering window and on error state.
+5. **Capability flag**: `supportsAudioProcessing` is a unified computed property on PlaybackCoordinator that returns `true` when either (a) the stream backend is not active, or (b) the AudioPlayer bridge is active (`audioPlayer.isBridgeActive`). With the unified pipeline, this flag returns `true` during stream playback once the bridge activates. The UI dims controls only during the brief prebuffering window and on error state. Video playback is not a stream source, so the flag is `true` and the EQ/balance controls act on the video tap.
 
 6. **StreamPlayer rewrite**: StreamPlayer no longer uses AVPlayer or NSObject. It owns a `StreamDecodePipeline` that decodes streams to PCM. Volume and balance are applied via AVAudioEngine (through AudioPlayer's `streamSourceNode`). StreamPlayer stores these values for state tracking only. Uses `isolated deinit` (Swift 6.2).
 
@@ -734,6 +758,26 @@ eqSliders
    await streamPlayer.play(url: url)  // Wait for buffering
    ```
 
+### Output Route Changes (Engine Reconfiguration)
+
+Switching the output device (Control Center, AirPlay, HDMI hot-plug, sleep/wake) stops AVAudioEngine and posts `AVAudioEngineConfigurationChange`, often 2-3 times within 100 ms. `AudioEngineConfigurationObserver` (`@MainActor`, owned by `AudioEngineController`) collapses each burst into one will/did pair:
+
+```
+notification burst ──► onWillReconfigure (first notification)
+                          AudioEngineController → PreReconfigureSnapshot → AudioPlayer
+                          AudioPlayer: record isPlaying/currentTime, bump currentSeekID, arm seek guards
+                   ──► 150 ms quiet window
+                   ──► onDidReconfigure
+                          AudioEngineController: reconnect stream bridge at the new output rate,
+                            verify mixer → output, prepare + restart engine
+                          AudioPlayer: re-apply volume/balance, reschedule the local file from the
+                            saved time (resume only if it was playing), release guards (100/200 ms)
+                          PlaybackCoordinator (onEngineReconfigured): re-share the audio IO
+                            workgroup with the stream decode thread if the bridge is active
+```
+
+`AudioPlayer` overrides the engine's `wasPlaying`/`currentTime` with its own state because the engine has already stopped when the notification arrives. `did` is not guaranteed after `will` if the observer is stopped mid-burst, so every user-intent entry point (`play`, `pause`, `stop`, `seek`, `playTrack`) calls `cancelPendingReconfigure()` to drop the snapshot and clear the guards. The handlers have no video branch; AVPlayer handles its own route changes, and the video tap's pinned processing format keeps its DSP independent of the output device (ADR-12).
+
 ---
 
 ## AudioPlayer Decomposition Architecture
@@ -812,10 +856,10 @@ The AudioPlayer class was refactored in January 2026 following the Option C incr
 │  │  • playlist[]         │  │  • player: AVPlayer?   │                  │
 │  │  • currentIndex       │  │  • endObserver         │                  │
 │  │  • shuffleEnabled     │  │  • timeObserver        │                  │
-│  │  • repeatMode         │  │  • loadVideo()         │                  │
+│  │  • repeatMode         │  │  • loadVideo() async   │                  │
 │  │  • nextTrack() → Action│ │  • cleanup()           │                  │
 │  │  • previousTrack()    │  │  • onPlaybackEnded     │                  │
-│  │  ~297 lines           │  │  ~282 lines            │                  │
+│  │  ~297 lines           │  │  ~362 lines            │                  │
 │  └───────────────────────┘  └───────────────────────┘                   │
 │                                                                          │
 │  ┌───────────────────────────────────────────────────────────────────┐  │
@@ -823,35 +867,36 @@ The AudioPlayer class was refactored in January 2026 following the Option C incr
 │  │                      ──────────────────                            │  │
 │  │                      @MainActor @Observable                        │  │
 │  ├───────────────────────────────────────────────────────────────────┤  │
-│  │  • VisualizerSharedBuffer (class, @unchecked Sendable, SPSC)      │  │
-│  │  • VisualizerScratchBuffers (class, @unchecked Sendable)          │  │
+│  │  • feed: VisualizerFeed (VisualizerFeed.swift, SPSC, 2 producers) │  │
+│  │  • VisualizerScratchBuffers (own file, one instance per producer) │  │
 │  │  • ButterchurnFrame (struct, Sendable)                            │  │
-│  │  • installTap() - configures audio tap on mixer                   │  │
-│  │  • removeTap() - nonisolated for deinit safety                    │  │
-│  │  • makeTapHandler() - static, Sendable closure (SPSC publish)     │  │
-│  │  • pollTimer (30 Hz) - consumes shared buffer on main thread      │  │
+│  │  • installTap() / removeTap() - engine mixer tap                  │  │
+│  │  • start/stopVideoVisualization() - poll timer for video          │  │
+│  │  • makeTapHandler() - static, Sendable closure (feed publish)     │  │
+│  │  • pollTimer (30 Hz, .common) - consumes feed, fires onPollTick   │  │
 │  │  • getRMSData() / getWaveformSamples() / snapshotButterchurnFrame │  │
-│  │  ~699 lines                                                        │  │
+│  │  ~416 lines                                                        │  │
 │  └───────────────────────────────────────────────────────────────────┘  │
 │                                                                          │
 │  ┌───────────────────────────────────────────────────────────────────┐  │
 │  │                  AudioEngineController (Engine Graph)              │  │
 │  │                  ──────────────────────────────────                │  │
 │  │                  @MainActor @Observable                            │  │
-│  │                  424 lines (Phase 4 extraction)                    │  │
+│  │                  579 lines (Phase 4 extraction + route changes)    │  │
 │  ├───────────────────────────────────────────────────────────────────┤  │
 │  │  • audioEngine, playerNode, eqNode, streamSourceNode              │  │
 │  │  • setupEngine(), configureEQ(), rewireForCurrentFile()           │  │
 │  │  • activateBridge() / deactivateBridge() (stream path)            │  │
 │  │  • startEngineIfNeeded(), scheduleFrom()                          │  │
 │  │  • isBridgeActive flag for capability checks                      │  │
+│  │  • configObserver: AudioEngineConfigurationObserver (route chg)   │  │
 │  └───────────────────────────────────────────────────────────────────┘  │
 │                                                                          │
 │  ┌───────────────────────────────────────────────────────────────────┐  │
 │  │                    AudioPlayer (Facade)                            │  │
 │  │                    ───────────────────                             │  │
 │  │                    @MainActor @Observable                          │  │
-│  │                    734 lines after Phase 4 extraction              │  │
+│  │                    1,082 lines (video-tap orchestration added)     │  │
 │  ├───────────────────────────────────────────────────────────────────┤  │
 │  │                                                                    │  │
 │  │  Playback Control:                                                 │  │
@@ -861,6 +906,14 @@ The AudioPlayer class was refactored in January 2026 following the Option C incr
 │  │  • playbackState, isPlaying, isPaused                              │  │
 │  │  • currentSeekID, seekGuardActive, isHandlingCompletion            │  │
 │  │  • audioFile, progressTimer                                        │  │
+│  │                                                                    │  │
+│  │  Video Tap Orchestration:                                          │  │
+│  │  ─────────────────────────────────────────────                     │  │
+│  │  • startVideoLoad() + videoLoadGeneration (stale-load guard)       │  │
+│  │  • audioMixBuilder closure → VideoTap.buildAudioMix()              │  │
+│  │  • pauseAndDetachVideoTapIfNeeded()                                │  │
+│  │  • balance registry: [WeakBox<VideoTapContext>]                    │  │
+│  │  • isVisualizerRendering (engine OR playing video)                 │  │
 │  │                                                                    │  │
 │  │  Component References:                                             │  │
 │  │  ─────────────────────                                             │  │
@@ -1016,15 +1069,16 @@ final class PlaylistController {
 #### VideoPlaybackController (`MacAmpApp/Audio/VideoPlaybackController.swift`)
 
 **Layer:** Mechanism
-**Lines:** 297
-**Purpose:** AVPlayer lifecycle and observer management for video playback
+**Lines:** 362
+**Purpose:** AVPlayer lifecycle, audio-mix installation and observer management for video playback
 
 ```swift
 @MainActor
 @Observable
 final class VideoPlaybackController {
-    // AVPlayer State
-    @ObservationIgnored private(set) var player: AVPlayer?
+    // AVPlayer State — observed: WinampVideoWindow swaps the placeholder for the
+    // player when the async load assigns it
+    private(set) var player: AVPlayer?
     private(set) var metadataString: String = ""
 
     // Observer Management
@@ -1036,7 +1090,12 @@ final class VideoPlaybackController {
     var onTimeUpdate: ((Double, Double, Double) -> Void)?
 
     // Lifecycle
-    func loadVideo(url: URL, autoPlay: Bool = true)
+    func loadVideo(
+        url: URL,
+        autoPlay: Bool = true,
+        audioMixBuilder: ((AVURLAsset) async -> AVMutableAudioMix?)? = nil,
+        isStillRelevant: (() -> Bool)? = nil
+    ) async
     func cleanup()  // State reset and observer cleanup
 
     isolated deinit {
@@ -1054,6 +1113,9 @@ final class VideoPlaybackController {
 ```
 
 **Key Patterns:**
+- **audioMix at item construction:** `cleanup()` → `AVURLAsset` → `await audioMixBuilder(asset)` → `isStillRelevant()` check → `AVPlayerItem(asset:)` → `playerItem.audioMix = mix` → `AVPlayer(playerItem:)`. The player never sees an item without its mix, and a superseded load returns before any player, observer or state is touched (the built mix is dropped, which finalizes its tap)
+- Identity guards: the end-of-item, periodic-time and seek completions ignore callbacks from a player/item that a newer load has replaced
+- `seek(to:resume:)` with `resume: nil` preserves current intent: a loaded-but-never-started video stays idle rather than becoming "paused"
 - `isolated deinit` (Swift 6.2) runs on @MainActor, eliminating need for `nonisolated(unsafe)` properties
 - Callback pattern for AudioPlayer synchronization (`onTimeUpdate` for UI sync)
 - `metadataTask` cancelled in both cleanup() and isolated deinit to prevent race conditions
@@ -1063,8 +1125,8 @@ final class VideoPlaybackController {
 #### VisualizerPipeline (`MacAmpApp/Audio/VisualizerPipeline.swift`)
 
 **Layer:** Mechanism
-**Lines:** 699
-**Purpose:** Audio visualization tap, FFT processing, SPSC shared buffer, and Butterchurn data generation
+**Lines:** 416 (plus `VisualizerFeed.swift` 112 and `VisualizerScratchBuffers.swift` 195)
+**Purpose:** Engine visualizer tap, consumption of the shared visualizer feed, and Butterchurn data
 
 ```swift
 @MainActor
@@ -1073,43 +1135,52 @@ final class VisualizerPipeline {
     // Tap State
     @ObservationIgnored private var tapInstalled = false
     @ObservationIgnored private weak var mixerNode: AVAudioMixerNode?
-    @ObservationIgnored private let sharedBuffer = VisualizerSharedBuffer()
+    @ObservationIgnored private let feed = VisualizerFeed()
     @ObservationIgnored private var pollTimer: Timer?
+
+    /// Fired on every 30 Hz poll tick; AudioPlayer uses it to poll video-tap sample rates
+    @ObservationIgnored var onPollTick: (@MainActor () -> Void)?
+    /// Handed to each VideoTapContext so the video tap publishes to the same feed
+    var sharedFeed: VisualizerFeed { feed }
 
     // Cached AppSettings flag to avoid per-frame lookup
     var useSpectrum: Bool = true
 
-    // Tap Management
+    // Engine tap (local files + streams)
     func installTap(on mixer: AVAudioMixerNode)
-    nonisolated func removeTap()  // Safe for deinit
-    nonisolated var isTapInstalled: Bool { tapInstalled }
+    func removeTap()
+    // Video: no engine tap, so the poll timer is started/stopped explicitly
+    func startVideoVisualization()
+    func stopVideoVisualization()   // also clears stale data
 
-    // Static Tap Handler Factory (publishes via SPSC shared buffer)
+    // Static Tap Handler Factory (publishes to the feed)
     private nonisolated static func makeTapHandler(
-        sharedBuffer: VisualizerSharedBuffer,
+        feed: VisualizerFeed,
         scratch: VisualizerScratchBuffers
     ) -> @Sendable (AVAudioPCMBuffer, AVAudioTime?) -> Void
 }
 
-// SPSC Shared Buffer (lock-free audio-to-main transfer)
-private final class VisualizerSharedBuffer: @unchecked Sendable {
-    func tryPublish(from: VisualizerScratchBuffers, ...) -> Bool  // Audio thread (non-blocking trylock)
+// VisualizerFeed.swift — single-slot SPSC hand-off, two producers (engine tap, video tap)
+final class VisualizerFeed: @unchecked Sendable {
+    func tryPublish(from: VisualizerScratchBuffers, ...) -> Bool  // Render thread (non-blocking trylock)
     func consume() -> VisualizerData?                              // Main thread (blocking lock)
 }
+
+// VisualizerScratchBuffers.swift — one instance per producer, render-confined
+final class VisualizerScratchBuffers: @unchecked Sendable { ... }
 
 // Supporting Types (all Sendable)
 struct ButterchurnFrame: Sendable { let spectrum: [Float]; let waveform: [Float]; let timestamp: TimeInterval }
 struct VisualizerData: Sendable { let rms: [Float]; let spectrum: [Float]; let waveform: [Float]; ... }
-private final class VisualizerScratchBuffers: @unchecked Sendable { ... }
 ```
 
 **Key Patterns:**
-- **SPSC shared buffer** replaces `Task { @MainActor }` for audio-to-main data transfer (zero allocations on audio thread). Uses `os_unfair_lock` with `trylock` on the audio thread (non-blocking, drops frame on contention) and regular lock on the main thread. A generation counter avoids redundant consumption. See `IMPLEMENTATION_PATTERNS.md` SPSC pattern section.
-- **30 Hz poll timer** on main thread calls `sharedBuffer.consume()` to pull latest data
-- Pre-allocated FFT buffers in `VisualizerScratchBuffers.init()` (no audio-thread allocations)
+- **`VisualizerFeed`** (renamed from `VisualizerSharedBuffer` and moved to its own file) replaces `Task { @MainActor }` for audio-to-main data transfer (zero allocations on the render thread). Uses `os_unfair_lock` with `trylock` on the producer side (non-blocking, drops frame on contention) and a regular lock on the main thread. A generation counter avoids redundant consumption. Last write wins; only one producer is active at a time (engine tap for audio, video tap for video). See `IMPLEMENTATION_PATTERNS.md` SPSC pattern section.
+- **30 Hz poll timer** (`.common` run-loop mode) on the main thread calls `feed.consume()`; it runs while the engine tap is installed or between `startVideoVisualization()` and `stopVideoVisualization()`
+- Pre-allocated FFT buffers in `VisualizerScratchBuffers.init()` (no render-thread allocations)
 - Pre-computed Goertzel coefficients (recomputed only on sample rate change, not per-callback)
 - `useSpectrum` cached to avoid per-frame AppSettings lookup
-- `removeTap()` is `nonisolated` for safe cleanup from AudioPlayer.deinit
+- `isolated deinit` invalidates the poll timer as a backstop; normal teardown goes through `removeTap()`
 - **20-bar RMS** (not 19) per time bucket for spectrum visualization
 
 ### Data Flow Diagram
@@ -1168,7 +1239,7 @@ private final class VisualizerScratchBuffers: @unchecked Sendable { ... }
           ▼                               │              ▼
 ┌─────────────────────────────┐           │ ┌─────────────────────────────┐
 │       App Support Dir       │           │ │         AVPlayer            │
-│   • perTrackPresets.json    │           │ │   (Video Playback)          │
+│   • perTrackPresets.json    │           │ │   (Video + in-place tap)    │
 │   • UserDefaults            │           │ │                             │
 └─────────────────────────────┘           │ └─────────────────────────────┘
                                           │
@@ -1184,20 +1255,30 @@ private final class VisualizerScratchBuffers: @unchecked Sendable { ... }
 ```
 MacAmpApp/
 ├── Audio/
-│   ├── AudioPlayer.swift              (734 lines) - Playback Facade
-│   ├── AudioEngineController.swift    (424 lines) - Engine graph lifecycle (Phase 4)
-│   ├── EqualizerController.swift      (205 lines) - EQ facade (extracted from AudioPlayer)
+│   ├── AudioPlayer.swift              (1,082 lines) - Playback Facade + video-tap orchestration
+│   ├── AudioEngineController.swift    (579 lines) - Engine graph lifecycle (Phase 4) + route changes
+│   ├── AudioEngineConfigurationObserver.swift (93 lines) - Debounced engine config-change observer
+│   ├── EqualizerController.swift      (319 lines) - EQ state, engine EQ + video-tap fanout
 │   ├── LockFreeRingBuffer.swift       (180 lines) - SPSC ring buffer for stream audio
 │   ├── EQPresetStore.swift            (191 lines) - Preset persistence
 │   ├── MetadataLoader.swift           (169 lines) - Track metadata
 │   ├── PlaylistController.swift       (286 lines) - Playlist logic
-│   ├── VideoPlaybackController.swift  (282 lines) - AVPlayer wrapper
-│   ├── VisualizerPipeline.swift       (645 lines) - Audio tap + SPSC + FFT
+│   ├── VideoPlaybackController.swift  (362 lines) - AVPlayer wrapper, audioMix at item construction
+│   ├── VisualizerPipeline.swift       (416 lines) - Engine tap + feed consumer + Butterchurn data
+│   ├── VisualizerFeed.swift           (112 lines) - SPSC visualizer hand-off (engine + video producers)
+│   ├── VisualizerScratchBuffers.swift (195 lines) - Per-producer DSP scratch (RMS/Goertzel/FFT)
+│   ├── RenderThreadSafe.swift         (48 lines) - Marker protocol for render-thread-safe storage
 │   ├── StreamPlayer.swift             (414 lines) - Internet radio + auto-reconnect
-│   ├── PlaybackCoordinator.swift      (562 lines) - Backend orchestration
+│   ├── PlaybackCoordinator.swift      (588 lines) - Backend orchestration
 │   ├── ObjCBridge/
 │   │   ├── AUAudioUnitWorkgroupShim.h  (17 lines) - ObjC bridge for os_workgroup
 │   │   └── AUAudioUnitWorkgroupShim.m  (23 lines) - ObjC bridge implementation
+│   ├── VideoDSP/                      (S3-2 AVPlayer-native video DSP)
+│   │   ├── VideoTap.swift                 (307 lines) - Tap C callbacks, audio-mix builder, detach
+│   │   ├── VideoTapContext.swift          (226 lines) - Render-thread state (Atomic/Mutex fields)
+│   │   ├── BiquadCoefficientSet.swift     (168 lines) - RBJ coefficient math, band frequencies
+│   │   ├── BiquadCascade.swift            (99 lines) - Render-confined 10-band TDF-II filter
+│   │   └── VideoTapVisualizerRender.swift (129 lines) - Video-side visualizer producer
 │   └── Streaming/
 │       ├── QueueConfined.swift            (19 lines) - Queue confinement protocol
 │       ├── ICYFramer.swift                (200 lines) - ICY metadata protocol parser
@@ -1291,6 +1372,7 @@ MacAmpApp/
 │
 ├── Utilities/
 │   ├── TimeFormatting.swift           (12 lines) - Duration formatting
+│   ├── WeakBox.swift                  (11 lines) - Weak reference wrapper (video-tap registries)
 │   ├── MenuActionTarget.swift         (39 lines) - NSMenu closure bridge
 │   ├── WinampAlertHelper.swift        (50 lines) - Alert presentation helpers
 │   ├── AppLogger.swift                (43 lines) - Unified logging
@@ -1351,8 +1433,14 @@ All extracted components follow strict Swift 6 concurrency patterns:
 | `EqfPreset` | `Sendable` | Value type |
 | `ButterchurnFrame` | `Sendable` | Value type with [Float] arrays |
 | `VisualizerData` | `Sendable` | Container struct |
-| `VisualizerScratchBuffers` | `@unchecked Sendable` | Confined to audio tap queue |
-| `VisualizerSharedBuffer` | `@unchecked Sendable` | SPSC lock-free buffer (os_unfair_lock) |
+| `VisualizerScratchBuffers` | `@unchecked Sendable` | One instance per producer, confined to that producer's render thread |
+| `VisualizerFeed` | `@unchecked Sendable` | SPSC single-slot hand-off (os_unfair_lock, trylock on producer side) |
+| `VideoTapContext` | `@unchecked Sendable` | FFI boundary; every stored field is `Atomic`, `Mutex`, `let` or `RenderThreadSafe` |
+| `BiquadCoefs` / `BiquadCoefficientSet` | `Sendable` | Flat value types, copied under `withLockIfAvailable` |
+| `BiquadCascade` | `RenderThreadSafe` (not `Sendable`) | Render-confined: created on main, then touched only in `tapProcess` |
+| `EqualizerState` | `Sendable` | Main-thread snapshot fed to `BiquadCoefficientSet.compute` |
+| `VideoTapDiagnostics` | `Sendable` | Telemetry snapshot read on main |
+| `PreReconfigureSnapshot` | `Sendable` | Engine route-change snapshot |
 
 **Background I/O Pattern:**
 ```swift
@@ -1378,13 +1466,12 @@ func savePerTrackPresets() {
 
 ### Risk Mitigation
 
-**VisualizerPipeline - SPSC Shared Buffer Safety:**
-- `removeTap()` is `nonisolated` and safe to call from deinit
-- AudioPlayer.deinit calls `visualizerPipeline.removeTap()` before deallocation
-- Audio thread uses `os_unfair_lock_trylock` (non-blocking; drops frame on contention)
+**VisualizerPipeline - VisualizerFeed Safety:**
+- `AudioEngineController.shutdown()` (from AudioPlayer's `isolated deinit`) calls `visualizerPipeline.removeTap()`
+- Producers (engine tap, video tap) use `os_unfair_lock_trylock` (non-blocking; drop frame on contention)
 - Main thread uses `os_unfair_lock_lock` (safe to block briefly on 30 Hz timer)
 - Generation counter prevents redundant consumption of unchanged data
-- Poll timer invalidated in `removeTap()` to prevent stale callbacks
+- Poll timer invalidated in `removeTap()` / `stopVideoVisualization()` to prevent stale callbacks; video completion, stop and video→audio switches all stop it
 
 **VideoPlaybackController - Observer Cleanup:**
 - `cleanup()` removes observers and resets state (called during stop/eject)
@@ -2535,7 +2622,7 @@ struct SimpleSpriteImage: View {
 
 ## Audio Processing Pipeline
 
-MacAmp's audio processing uses AVAudioEngine for sophisticated real-time audio manipulation, with visualization processing extracted to the VisualizerPipeline component.
+MacAmp's audio processing uses AVAudioEngine for sophisticated real-time audio manipulation, with visualization processing extracted to the VisualizerPipeline component. This section covers the engine path (local audio files and streams); video audio is processed by the tap described in [AVPlayer-Native Video DSP](#avplayer-native-video-dsp), which feeds the same visualizer consumer.
 
 ### AVAudioEngine Graph (Unified Pipeline)
 
@@ -2611,16 +2698,19 @@ The visualizer tap processing was extracted to `VisualizerPipeline.swift` for si
 │  │     └─ Pre-computed Hann window                                      │  │
 │  │     └─ vDSP_DFT_Execute for FFT                                      │  │
 │  │                                                                      │  │
-│  │  6. Publish to SPSC shared buffer (non-blocking)                     │  │
-│  │     └─ sharedBuffer.tryPublish() — drops frame on contention          │  │
+│  │  6. Publish to VisualizerFeed (non-blocking)                         │  │
+│  │     └─ feed.tryPublish() — drops frame on contention                  │  │
 │  │     └─ Zero allocations on audio thread                               │  │
 │  │                                                                      │  │
+│  │  (Video: videoTapVisualizerRender runs steps 1-6 on the              │  │
+│  │   MTAudioProcessingTap render thread and publishes to the same feed) │  │
 │  └─────────────────────────────────────────────────────────────────────┘  │
 │                                                                            │
 │  ┌─────────────────────────────────────────────────────────────────────┐  │
 │  │              30 Hz Poll Timer (Main Thread)                          │  │
 │  ├─────────────────────────────────────────────────────────────────────┤  │
-│  │  sharedBuffer.consume() → VisualizerData?                           │  │
+│  │  onPollTick?() → video-tap sample-rate poll (EQ fanout)             │  │
+│  │  feed.consume() → VisualizerData?                                   │  │
 │  │  └─ Returns nil if no new data (generation counter check)           │  │
 │  └─────────────────────────────────────────────────────────────────────┘  │
 │       │                                                                    │
@@ -2644,13 +2734,15 @@ The visualizer tap processing was extracted to `VisualizerPipeline.swift` for si
 │                     BUTTERCHURN AUDIO DATA FLOW                           │
 ├──────────────────────────────────────────────────────────────────────────┤
 │                                                                           │
-│   Audio File (.mp3/flac)                                                  │
-│        │                                                                  │
-│        ▼                                                                  │
-│   AVAudioEngine (sample rate from file format)                            │
-│        │                                                                  │
-│        ▼                                                                  │
-│   installTap(2048 samples) ─────▶ Mono downsample + vDSP FFT              │
+│   Audio File / Stream                 Video File (AVPlayer)               │
+│        │                                   │                              │
+│        ▼                                   ▼                              │
+│   AVAudioEngine mixer tap          MTAudioProcessingTap (post-EQ)         │
+│   makeTapHandler                   videoTapVisualizerRender               │
+│        │   Mono downmix + RMS + Goertzel + 2048-pt vDSP FFT               │
+│        └──────────────┬────────────────────┘                              │
+│                       ▼                                                   │
+│   VisualizerFeed (one producer active at a time) ─▶ 30 Hz feed.consume()  │
 │        │                                                                  │
 │        ▼                                                                  │
 │   VisualizerPipeline.swift                                                │
@@ -2660,7 +2752,7 @@ The visualizer tap processing was extracted to `VisualizerPipeline.swift` for si
 │        │                                                                  │
 │        ▼ (called by AudioPlayer)                                          │
 │   AudioPlayer.snapshotButterchurnFrame()                                  │
-│   └── returns nil during video playback (no PCM tap available)             │
+│   └── nil unless isVisualizerRendering (engine rendering OR video playing)│
 │        │                                                                  │
 │        ▼ (30 FPS Timer)                                                   │
 │   ButterchurnBridge.swift                                                 │
@@ -2679,11 +2771,11 @@ The visualizer tap processing was extracted to `VisualizerPipeline.swift` for si
 
 ### VisualizerScratchBuffers - Pre-allocated FFT Buffers
 
-To avoid allocations on the realtime audio thread, `VisualizerScratchBuffers` pre-allocates all FFT working buffers:
+To avoid allocations on the realtime audio thread, `VisualizerScratchBuffers` pre-allocates all FFT working buffers. Each producer owns one instance: the engine tap creates one in `installTap`, and every `VideoTapContext` creates its own. Instances are never shared across taps.
 
 ```swift
-// VisualizerPipeline.swift (VisualizerScratchBuffers)
-private final class VisualizerScratchBuffers: @unchecked Sendable {
+// VisualizerScratchBuffers.swift
+final class VisualizerScratchBuffers: @unchecked Sendable {
     // Pre-allocated FFT working buffers
     private var hannWindow: [Float] = Array(repeating: 0, count: 2048)
     private var fftInputReal: [Float] = Array(repeating: 0, count: 1024)
@@ -2713,7 +2805,9 @@ The 10-band parametric EQ has been extracted from AudioPlayer into `EqualizerCon
 private func configureEQ() {
     // Actual Winamp internal frequencies (skin labels show 60/170/310 but processing uses 70/180/320)
     // Tight 12k/14k/16k clustering is intentional — designed for MP3 artifact tuning
-    let freqs: [Float] = [70, 180, 320, 600, 1000, 3000, 6000, 12000, 14000, 16000]
+    // Shared with the video-tap cascade so the two EQ implementations cannot drift:
+    // [70, 180, 320, 600, 1000, 3000, 6000, 12000, 14000, 16000]
+    let freqs = BiquadCoefficientSet.frequencies
     for i in 0..<min(eqNode.bands.count, freqs.count) {
         let band = eqNode.bands[i]
         if i == 0 {
@@ -2732,6 +2826,8 @@ private func configureEQ() {
     eqNode.bypass = !isEqOn
 }
 ```
+
+`EqualizerController` stays the single owner of EQ state for both playback paths. The `preamp`, `eqBands` and `isEqOn` `didSet` handlers write the engine `AVAudioUnitEQ` and then fan the same state out to any registered video taps, where a software `BiquadCascade` reproduces this configuration (see [EQ and Balance Fanout](#eq-and-balance-fanout)).
 
 ### EQ Preset Persistence (Extracted to EQPresetStore)
 
@@ -2829,10 +2925,12 @@ private func handlePlaylistAction(_ action: PlaylistController.AdvanceAction) ->
 // File: MacAmpApp/Audio/VisualizerPipeline.swift
 // Purpose: Real-time spectrum analysis using Goertzel-like single-bin DFT
 // Context: More efficient than FFT for specific frequency detection
-// Data transfer: SPSC shared buffer (replaces Task { @MainActor })
+// Data transfer: VisualizerFeed (replaces Task { @MainActor })
+// The video producer (VideoTapVisualizerRender.swift) duplicates the RMS and
+// Goertzel math on purpose; change both producers together.
 
 private nonisolated static func makeTapHandler(
-    sharedBuffer: VisualizerSharedBuffer,
+    feed: VisualizerFeed,
     scratch: VisualizerScratchBuffers
 ) -> @Sendable (AVAudioPCMBuffer, AVAudioTime?) -> Void {
     { buffer, _ in
@@ -2874,12 +2972,138 @@ private nonisolated static func makeTapHandler(
             scratch.processButterchurnFFT(samples: mono, validCount: cappedFrameCount)
         }
 
-        // Publish to SPSC shared buffer (non-blocking: drops frame on contention)
-        _ = sharedBuffer.tryPublish(from: scratch, oscilloscopeSamples: 76,
-                                     validFrameCount: cappedFrameCount)
+        // Publish to the feed (non-blocking: drops frame on contention)
+        _ = feed.tryPublish(from: scratch, oscilloscopeSamples: 76,
+                            validFrameCount: cappedFrameCount)
     }
 }
 ```
+
+---
+
+## AVPlayer-Native Video DSP
+
+Local video plays through AVPlayer, and its audio stays there. Instead of bridging video audio into AVAudioEngine, MacAmp attaches an `MTAudioProcessingTap` to the `AVPlayerItem` and applies preamp, EQ and balance to AVPlayer's own buffers in place, then feeds the processed signal to the shared visualizer. There is no ring buffer, no second clock domain and no extra sample-rate conversion stage. The decision record is `tasks/avplayer-native-video-dsp/plan.md` (ADR-1…ADR-12); background research is in `research.md` in the same folder.
+
+### Topology
+
+| Source | Routing | EQ + preamp | Balance | Visualizer producer |
+|---|---|---|---|---|
+| Local audio file | `AVAudioPlayerNode` → AVAudioEngine | `AVAudioUnitEQ` | `playerNode.pan` | Engine mixer tap (`makeTapHandler`) |
+| Internet radio | `AVAudioSourceNode` → AVAudioEngine | `AVAudioUnitEQ` | `streamSourceNode.pan` | Engine mixer tap (`makeTapHandler`) |
+| Local video | AVPlayer, tap on `AVPlayerItem.audioMix` | Tap: linear preamp + `BiquadCascade` | Tap: L/R gains | `videoTapVisualizerRender` |
+
+Video volume is `AVPlayer.volume`, set by `AudioPlayer.volume`'s `didSet`; it is not applied in the tap. Streaming (HLS) video is not a target of this design: `MTAudioProcessingTap` does not fire reliably for streaming items (plan.md §2).
+
+```
+Video file
+   │
+   ▼
+AVURLAsset ──► AVPlayerItem ──► AVPlayer ──► output device
+                    │
+               audioMix (set once, before the AVPlayer exists)
+                    │
+               MTAudioProcessingTap (PreEffects, stereo Float32 at source rate)
+                    │  tapProcess, MediaToolbox render thread:
+                    │  format gate → StartOfStream flush → preamp → biquad EQ
+                    │  → balance → visualizer render → sampled deadline timing
+                    ▼
+               VideoTapContext ◄── EqualizerController (EQ state, coefficients)
+                    │          ◄── AudioPlayer.balance
+                    ▼
+               VisualizerFeed ──► VisualizerPipeline (30 Hz consume)
+```
+
+### Tap Lifecycle
+
+`AudioPlayer.playTrack` on a video calls `pauseAndDetachVideoTapIfNeeded()`, `startVideoLoad(track:)` and `visualizerPipeline.startVideoVisualization()`. `startVideoLoad` bumps `videoLoadGeneration` and runs a `@MainActor` task that calls `VideoPlaybackController.loadVideo(url:autoPlay: false, audioMixBuilder:isStillRelevant:)`. The `audioMixBuilder` closure:
+
+1. awaits `asset.loadTracks(withMediaType: .audio)` and takes the first audio track (none → returns `nil`, and the player is built without a tap)
+2. awaits `VideoTap.preferredProcessingFormat(for:)`
+3. creates `VideoTapContext(feed: visualizerPipeline.sharedFeed)` and calls `VideoTap.buildAudioMix(audioTrack:context:preferredFormat:)`
+4. only after a successful build, stores the Context and registers it with `EqualizerController` and the `AudioPlayer` balance registry
+
+The generation is rechecked after every `await`, and `isStillRelevant` is checked again before `loadVideo` touches the item or player, so a superseded load never installs a tap or builds a player. Auto-play after the load happens only if the generation is still current and `playbackState` is `.playing`.
+
+**Invariants:**
+- One tap and one `VideoTapContext` per `AVPlayerItem`. `audioMix` is assigned to the item before `AVPlayer(playerItem:)` is constructed and is not mutated while playing.
+- `buildAudioMix` retains the Context once (`Unmanaged.passRetained`) as the tap's client info; `tapFinalize` releases it exactly once. If tap creation fails, the retain is released before `VideoTapError.createFailed` is thrown.
+- Teardown (stop, video→audio switch, next video) runs `pauseAndDetachVideoTapIfNeeded()`: pause the player if it is playing, set `audioMix = nil` (`VideoTap.detach(from:)`), and unregister the Context from both registries. `tapFinalize` may run later, asynchronously, when AVFoundation drops the tap; teardown does not wait for it.
+- The registries hold `WeakBox<VideoTapContext>`, so they never extend a Context's lifetime.
+
+### Processing Format
+
+The tap is created with `MTAudioProcessingTapCreateWithPreferredFormat` (macOS 27), requesting the format from `VideoTap.preferredProcessingFormat(for:)`: **stereo Float32 non-interleaved at the source track's sample rate**. Without a preferred format the tap runs in a format chosen for the current output device, so its format changed with the route; over AirPlay 2 that produced audible volume pumping. If the source format cannot be read, the builder falls back to `MTAudioProcessingTapCreate`. Both use `kMTAudioProcessingTapCreationFlag_PreEffects`.
+
+Consequence of the stereo pin: 5.1 and wider sources are downmixed, and mono is upmixed, before the tap, so channels 0 and 1 are always left and right for balance. Multichannel video currently plays as stereo on every output; true multichannel output is tracked as issue #88 (S4-4 `video-multichannel-output`).
+
+### Render Path (`tapProcess`)
+
+All five tap callbacks are file-scope closures that capture no Swift state; they reach the Context through `MTAudioProcessingTapGetStorage` and `Unmanaged`. `tapPrepare` validates the negotiated format and publishes the sample rate; `tapUnprepare` clears `isActive`. Each `tapProcess` call:
+
+1. Pulls source audio with `MTAudioProcessingTapGetSourceAudio` (returns on error) and bumps the call/frame counters.
+2. **Format gate:** DSP runs only on 32-bit float linear PCM (as validated in `tapPrepare`). Any other format, or a tap not yet prepared, passes through untouched.
+3. **Discontinuity flush:** on `kMTAudioProcessingTapFlag_StartOfStream` (seek, new stream) the cascade's filter history is zeroed.
+4. **Parameter load:** preamp, EQ-on and balance are read from atomics once per callback.
+5. **Coefficient refresh (EQ on):** on an off→on edge the cascade is reset first. The render-owned coefficient cache is refreshed with `coefficients.withLockIfAvailable`: contended → keep the cached set; nothing installed yet → bypass; otherwise copy the new set.
+6. **Per buffer / channel:** preamp multiply (skipped at unity gain), then the 10-band cascade when EQ is on, then the balance gain on channel 0 (L) and channel 1 (R), skipped at center. `VideoTap.balanceGains` keeps the near side at unity and attenuates the far side linearly (−1 mutes R, +1 mutes L), matching `AVAudioNode.pan`'s range.
+7. **Visualizer:** `videoTapVisualizerRender` downmixes the processed buffer to mono, computes 20-bar RMS, 20-bar Goertzel spectrum and the 2048-point Butterchurn FFT into the Context's own `VisualizerScratchBuffers`, then calls `feed.tryPublish` (drops the frame on contention). The visualizer therefore shows the post-EQ, post-balance signal.
+8. **Deadline telemetry:** every 64th callback times steps 4-7 against the buffer's duration and calls `recordProcessingDeadline`: over 10% of the budget increments `budgetOverrunCount`; over 50% increments `deadlineRiskCount` and stamps `lastDeadlineRiskHostTime`. The main thread reads these through `diagnosticSnapshot` (`VideoTapDiagnostics`). Nothing is logged from the render thread, and the Mach timebase is initialized in `buildAudioMix` so the render thread never pays for it.
+
+### EQ Filter (`BiquadCoefficientSet` + `BiquadCascade`)
+
+- `BiquadCoefficientSet.compute(for: EqualizerState, sampleRate:)` runs on the main thread using the RBJ Audio EQ Cookbook: low shelf at 70 Hz (band 0), eight peaking bands with 1-octave bandwidth, high shelf at 16 kHz (band 9), shelves at slope S = 1. Arithmetic is `Double`, storage `Float`. A 0 dB band becomes an exact identity section and is skipped at render time.
+- `compute` fails closed to `.flat` for a non-finite or non-positive sample rate, a wrong-sized or non-finite gain array, any band at or above Nyquist, or any non-finite coefficient.
+- `BiquadCoefficientSet.frequencies` is the single source of truth for band centers; `EqualizerController.configureEQ` reads the same array.
+- `BiquadCascade` is Transposed Direct Form II with per-(band, channel) state in manually allocated buffers (no `Array` bounds, CoW or ARC in the inner loop), sized for 16 channels (`VideoTapContext.maxDSPChannels`). Filter state is flushed to zero below 1e-20 once per band per callback to avoid denormal stalls.
+- Preamp is applied as a linear gain, `10^(dB/20)`, from `EqualizerState.preampLinearGain`.
+- `BiquadNumericalMatchTests` holds the cascade to within 0.5 dB of `AVAudioUnitEQ` over 20 Hz–20 kHz.
+
+### EQ and Balance Fanout
+
+EQ and balance keep their existing owners; each fans out to the engine and to registered video taps:
+
+| State | Owner | Engine write | Video-tap write |
+|---|---|---|---|
+| `isEqOn`, `preamp`, `eqBands` | `EqualizerController` | `AVAudioUnitEQ` in the `didSet`s | `fanOutToVideoTaps()` → `pushEQState`: `isEqOn` + preamp atomics, `installCoefficients(compute(...))` |
+| `balance` | `AudioPlayer` | `engine.setBalance` in the `didSet` | `fanOutBalanceToVideoTaps()` → `balance` atomic |
+
+- Registration pushes the current state immediately (`registerVideoTapContext`, `registerVideoTapContextForBalance`).
+- Coefficients depend on the sample rate, which only becomes known when `tapPrepare` publishes `pendingSampleRate`. Until then `compute` returns `.flat`. `EqualizerController.pollVideoTapSampleRates()` runs on every 30 Hz `VisualizerPipeline.onPollTick` and recomputes for any Context whose published rate differs from the rate it last used.
+- Both registries are `[WeakBox<VideoTapContext>]`, pruned of dead entries on each fan-out, with an early return when empty (audio-only playback pays nothing).
+- The main thread writes only atomics and the coefficient `Mutex`; it never touches the cascade.
+
+### Audio Mechanism Concurrency Contract
+
+The tap's render thread belongs to MediaToolbox, not to Swift concurrency. It cannot hop to an actor or to `@MainActor`, and it must never block. The contract that follows from this:
+
+- **Non-actor context.** `VideoTapContext` is a `final class … : @unchecked Sendable`. The `@unchecked` exists only for the C-callback boundary; the storage rules below keep the unsafety contained.
+- **Permitted stored fields:** `Synchronization.Atomic<T>`; `Synchronization.Mutex<T>` (only for rarely changed, non-trivial state, and the render thread may only use `withLockIfAvailable`); `let` constants of immutable values; unsafe pointers whose lifetime the class manages; and types conforming to `RenderThreadSafe`. **Forbidden:** actor- or `@MainActor`-isolated types, non-`Sendable` references, closures that capture state, and any plain `var`.
+- **`RenderThreadSafe`** (`Audio/RenderThreadSafe.swift`) is a `~Copyable` marker protocol. All conformances live in that one file: `Atomic`, `Mutex`, `Optional` (conditional), the unsafe pointer types, `AudioStreamBasicDescription`, `VisualizerFeed`, `VisualizerScratchBuffers` and `BiquadCascade` (safe by render-confinement: created on main in `VideoTapContext.init`, then touched only by `tapProcess`).
+- **Encoding:** `Float` parameters are stored as `Atomic<UInt32>` bit patterns; the `Double` sample rate as `Atomic<UInt64>`.
+- **Memory ordering:** parameters and telemetry use `.relaxed`. The format gate is a release/acquire pair: `tapPrepare` stores the sample rate and `isActive`, then release-stores the format tag; `tapProcess` acquire-loads the tag, so any render callback that sees the new tag also sees its sample rate.
+- **Coefficient hand-off:** `Mutex<BiquadCoefficientSet?>`. Main installs with `withLock`; the render thread copies the value out with `withLockIfAvailable` and filters lock-free from its own cache. `BiquadCoefficientSet` is a flat tuple of `BiquadCoefs`, so the copy involves no heap, CoW or reference counting.
+- **Visualizer hand-off:** `VisualizerFeed.tryPublish` takes a trylock and drops the frame on contention.
+- **Render thread rules:** no allocation, no logging, no blocking lock, no Swift concurrency.
+- **Library:** the video path uses the standard library's `Synchronization` module. The engine and stream paths still use the `swift-atomics` package (`ManagedAtomic` in `AudioEngineController` and `LockFreeRingBuffer`).
+- **Enforcement:** the contract is written at the top of `VideoTapContext.swift`, and `VideoTapSendableContractTests` checks that every stored field conforms to `RenderThreadSafe`, that every stored `var` is `Atomic` or `Mutex`, and that `.cascade` is referenced only from the allowed files.
+
+### Visualizer and UI Gating
+
+During video no engine tap is installed, so `startVideoVisualization()` starts the 30 Hz poll timer on its own and `videoTapVisualizerRender` is the only producer. `AudioPlayer.isVisualizerRendering` (`isEngineRendering || (currentMediaType == .video && videoPlaybackController.isPlaying)`) gates `getFrequencyData`, `snapshotButterchurnFrame` (Milkdrop) and the `VisualizerView` / `OscilloscopeView` update timers. `stopVideoVisualization()` stops the timer and clears stale data on stop, on a video→audio switch and on video completion; a repeat-one restart starts it again.
+
+### Remote Commands
+
+`PlaybackCoordinator` owns media keys and AirPods commands (`MPRemoteCommandCenter`) for every source. `AVPlayerViewRepresentable` sets `updatesNowPlayingInfoCenter = false` on the `AVPlayerView`; left at its default, AVKit's own remote-command handling could pause the AVPlayer without the coordinator knowing.
+
+### Known Limitations
+
+- **Multichannel output:** 5.1+ video is downmixed to stereo in the tap (see Processing Format); issue #88, S4-4 `video-multichannel-output`.
+- **P-6:** after a video, loading an audio track does not auto-play; the user has to press Next. Open and non-blocking (`tasks/avplayer-native-video-dsp/placeholder.md`).
+- **Streaming video:** HLS video is not a supported target; `MTAudioProcessingTap` is unreliable for streaming items (plan.md §2).
+- **macOS 27 deprecations:** the build carries 16 deprecated-API warnings (14 app, 2 test), including `AVPlayerItemDidPlayToEndTime` in `VideoPlaybackController` and `installTap(onBus:)` in `VisualizerPipeline`; S4-1 `swift64-macos27-readiness` replaces them.
+
+**Tests:** `VideoTapLifecycleTests`, `VideoTapFanoutTests`, `VideoTapSendableContractTests`, `BiquadNumericalMatchTests`, `VideoTapVisualizerRenderTests`, `VideoTapTelemetryTests`, `VideoTapCPUBenchmarkTests`, `VideoSeekStateMatrixTests`, `EngineConfigObserverTests`.
 
 ---
 
@@ -3149,7 +3373,7 @@ import PackageDescription
 let package = Package(
     name: "MacAmp",
     platforms: [
-        .macOS("26.0")
+        .macOS("27.0")
     ],
     products: [
         .executable(name: "MacAmp", targets: ["MacAmp"])
@@ -3166,6 +3390,8 @@ let package = Package(
     ]
 )
 ```
+
+`swift-atomics` (`ManagedAtomic`) serves the engine and stream paths. The video DSP path uses the standard library's `Synchronization` module (`Atomic`, `Mutex`) instead; see [Audio Mechanism Concurrency Contract](#audio-mechanism-concurrency-contract).
 
 ### `isolated deinit` (Swift 6.2)
 
@@ -3207,9 +3433,11 @@ final class VideoPlaybackController {
 }
 ```
 
-**Codebase usage (5 classes):**
-- `AudioPlayer.isolated deinit` -- invalidates timer, deactivates bridge, removes tap
+**Codebase usage (7 classes):**
+- `AudioPlayer.isolated deinit` -- calls `engine.shutdown()` (stops the config observer, invalidates timer, deactivates bridge, removes tap)
 - `VideoPlaybackController.isolated deinit` -- cancels tasks, removes observers, pauses player
+- `VisualizerPipeline.isolated deinit` -- invalidates the poll timer (backstop)
+- `AudioEngineConfigurationObserver.isolated deinit` -- cancels the watch and debounce tasks
 - `StreamPlayer.isolated deinit` -- stops decode pipeline
 - `StreamDecodePipeline.isolated deinit` -- tears down decode resources
 - `WindowCoordinator.isolated deinit` -- stops settings observer
@@ -3784,36 +4012,21 @@ struct VideoWindowChromeView: View {
 
 ### AVPlayer Integration
 
-The video window uses AVPlayer for maximum format compatibility:
+The video window uses AVPlayer for maximum format compatibility. `VideoPlaybackController` (owned by `AudioPlayer`) builds a fresh `AVPlayer` per video, with the audio tap already on the item:
 
 ```swift
-// Video playback management
-@Observable
-final class VideoPlayerManager {
-    private(set) var player: AVPlayer = AVPlayer()
-    private var timeObserver: Any?
-
-    func loadVideo(url: URL) {
-        let item = AVPlayerItem(url: url)
-        player.replaceCurrentItem(with: item)
-
-        // Add time observer for progress updates
-        timeObserver = player.addPeriodicTimeObserver(
-            forInterval: CMTime(seconds: 0.1, preferredTimescale: 600),
-            queue: .main
-        ) { [weak self] time in
-            self?.updatePlaybackTime(time)
-        }
-    }
-
-    func play() { player.play() }
-    func pause() { player.pause() }
-    func stop() {
-        player.pause()
-        player.seek(to: .zero)
-    }
-}
+// VideoPlaybackController.loadVideo (simplified)
+cleanup()
+let asset = AVURLAsset(url: url)
+let audioMix = await audioMixBuilder?(asset)        // VideoTap.buildAudioMix via AudioPlayer
+if let isStillRelevant, !isStillRelevant() { return }  // superseded load: touch nothing
+let playerItem = AVPlayerItem(asset: asset)
+playerItem.audioMix = audioMix                        // set once, before the AVPlayer exists
+player = AVPlayer(playerItem: playerItem)
+// end-of-item + periodic time observers (identity-guarded), metadata task
 ```
+
+`WinampVideoWindow` shows the player through `AVPlayerViewRepresentable` (an `AVPlayerView` with controls hidden and `updatesNowPlayingInfoCenter = false`). Video audio gets EQ, preamp, balance and visualizer data from the tap; see [AVPlayer-Native Video DSP](#avplayer-native-video-dsp).
 
 ### Focus State Integration
 
@@ -3889,7 +4102,7 @@ func generateFallbackVideoChrome() -> NSImage {
 3. **Chrome Rendering**: VIDEO.bmp sprites with focus state variants
 4. **Position Persistence**: Window frame saved to UserDefaults
 5. **Docking Support**: Magnetic snapping via WindowSnapManager
-6. **Audio Routing**: Shares audio session with main playback engine
+6. **Audio Routing**: Audio stays on AVPlayer (not AVAudioEngine); an in-place `MTAudioProcessingTap` applies EQ, preamp and balance and feeds the visualizer
 
 For complete documentation, see: `docs/VIDEO_WINDOW.md`
 
@@ -4137,7 +4350,7 @@ func generateFallbackGenChrome() -> GenChromeSet {
 
 ### Butterchurn Audio Data Flow
 
-See **§8 Audio Processing Pipeline → Butterchurn Data Flow** for the complete diagram (Audio File → AVAudioEngine → VisualizerPipeline → ButterchurnBridge → WebGL). The same pipeline serves both local file and internet radio streams via the unified audio engine.
+See **§8 Audio Processing Pipeline → Butterchurn Data Flow** for the complete diagram (engine tap or video tap → VisualizerFeed → VisualizerPipeline → ButterchurnBridge → WebGL). Local files and internet radio feed it through the engine mixer tap; local video feeds it through the `MTAudioProcessingTap` producer (see §8a).
 
 ### Key Implementation Details
 
@@ -4422,10 +4635,14 @@ M3UParser ──────► [Track] ──────► PlaylistController
 ### Visualization Pipeline
 
 ```
-Audio Buffer (PCM from AVAudioEngine)
-        │
-        ▼
-  [Audio Tap - AVAudioEngine installTap]
+PCM from AVAudioEngine            PCM from AVPlayer (video)
+        │                                 │
+        ▼                                 ▼
+[Engine mixer tap]              [MTAudioProcessingTap]
+        │                                 │
+        └────────► VisualizerFeed ◄───────┘
+                        │   (30 Hz consume)
+        ┌───────────────┘
         │
    ┌────┴────┐
    ▼         ▼
@@ -4596,17 +4813,18 @@ enum TimeDisplayMode: String, Codable {
 
 **Implementation** (v1.0.6, updated T5 Phase 1):
 
-**Signal Flow (T5 Phase 1 Coordinator Routing, updated for Unified Pipeline):**
+**Signal Flow:**
 ```
-UI Slider → PlaybackCoordinator.setVolume() → AudioPlayer.volume (persists + playerNode + streamSourceNode)
-                                             → StreamPlayer.volume (stored for state tracking)
-                                             → VideoPlaybackController.volume
+UI Slider → PlaybackCoordinator.setVolume() → AudioPlayer.volume didSet → engine.setVolume (playerNode + streamSourceNode)
+                                                                        → VideoPlaybackController.volume (AVPlayer.volume)
 
-UI Slider → PlaybackCoordinator.setBalance() → AudioPlayer.balance (persists + playerNode.pan + streamSourceNode.pan)
-                                              → StreamPlayer.balance (stored for state tracking)
+UI Slider → PlaybackCoordinator.setBalance() → AudioPlayer.balance didSet → engine.setBalance (playerNode.pan + streamSourceNode.pan)
+                                                                          → registered VideoTapContext.balance atomics
+
+Drag end  → PlaybackCoordinator.commitVolume() / commitBalance() → UserDefaults
 ```
 
-The UI uses asymmetric `Binding<Float>` -- reads from AudioPlayer (source of truth for persistence), writes through PlaybackCoordinator for fan-out to all backends. This replaced direct `$audioPlayer.volume` bindings that bypassed StreamPlayer and VideoPlaybackController.
+The UI uses asymmetric `Binding<Float>` -- reads from AudioPlayer (source of truth), writes through PlaybackCoordinator. Same-value writes short-circuit in the coordinator, and persistence happens once at drag end rather than on every gesture tick.
 
 **State & Persistence** (AudioPlayer mechanism layer):
 ```swift
@@ -4616,21 +4834,22 @@ private enum Keys {
     static let balance = "balance"
 }
 
-// IMPORTANT: All external volume changes must go through PlaybackCoordinator.setVolume()
-// AudioPlayer.volume didSet only handles local concerns (playerNode + persistence).
 var volume: Float = 0.75 {  // 0.0 to 1.0, default 0.75 (audible)
     didSet {
-        playerNode.volume = volume
-        UserDefaults.standard.set(volume, forKey: Keys.volume)
+        engine?.setVolume(volume)
+        videoPlaybackController.volume = volume
     }
 }
 
 var balance: Float = 0.0 {  // -1.0 (left) to 1.0 (right)
     didSet {
-        playerNode.pan = balance
-        UserDefaults.standard.set(balance, forKey: Keys.balance)
+        engine?.setBalance(balance)
+        fanOutBalanceToVideoTaps()   // registered VideoTapContexts (WeakBox registry)
     }
 }
+
+internal func commitVolumeToDefaults() { UserDefaults.standard.set(volume, forKey: Keys.volume) }
+internal func commitBalanceToDefaults() { UserDefaults.standard.set(balance, forKey: Keys.balance) }
 
 // Restoration in init()
 init() {
@@ -4645,17 +4864,19 @@ init() {
 
 **Coordinator Routing** (PlaybackCoordinator):
 ```swift
-// PlaybackCoordinator.swift - Fan-out to all backends
+// PlaybackCoordinator.swift - AudioPlayer's didSets do the fan-out
 func setVolume(_ vol: Float) {
-    audioPlayer.volume = vol                      // Persists + playerNode + streamSourceNode
-    streamPlayer.volume = vol                     // Stored for state tracking
-    audioPlayer.videoPlaybackController.volume = vol
+    guard audioPlayer.volume != vol else { return }
+    audioPlayer.volume = vol
 }
 
 func setBalance(_ bal: Float) {
-    audioPlayer.balance = bal                     // Persists + playerNode.pan + streamSourceNode.pan
-    streamPlayer.balance = bal                    // Stored for state tracking
+    guard audioPlayer.balance != bal else { return }
+    audioPlayer.balance = bal
 }
+
+func commitVolume() { audioPlayer.commitVolumeToDefaults() }
+func commitBalance() { audioPlayer.commitBalanceToDefaults() }
 ```
 
 **UI Binding Pattern** (MainWindow/MainWindowSlidersLayer.swift):
@@ -4682,6 +4903,7 @@ WinampBalanceSlider(balance: balanceBinding)
 - Balance slider dims (50% opacity, hit testing disabled) only during stream prebuffering (before bridge activates) or error state
 - EQ sliders dim via `playbackCoordinator.supportsAudioProcessing` in WinampEqualizerWindow
 - Once the stream bridge is active, all controls are fully enabled (EQ, balance, visualizer all work via unified pipeline)
+- During video the flag is `true`; EQ and balance act on the video tap
 - Controls re-enable when stream enters error state (user not stuck with dimmed UI)
 - Tooltip changes to "Balance unavailable during streaming" when dimmed (prebuffering only)
 
@@ -4948,20 +5170,30 @@ struct MainWindowSlidersLayer: View {
 ```
 MacAmpApp/
 ├── Audio/
-│   ├── AudioPlayer.swift           # Playback facade, volume/balance, seek control (734 lines)
-│   ├── AudioEngineController.swift # AVAudioEngine graph lifecycle, node wiring, bridge (424 lines)
-│   ├── EqualizerController.swift   # EQ facade (extracted from AudioPlayer, 205 lines)
+│   ├── AudioPlayer.swift           # Playback facade, volume/balance, seek, video-tap orchestration (1,082 lines)
+│   ├── AudioEngineController.swift # AVAudioEngine graph lifecycle, node wiring, bridge, route changes (579 lines)
+│   ├── AudioEngineConfigurationObserver.swift # Debounced AVAudioEngineConfigurationChange observer (93 lines)
+│   ├── EqualizerController.swift   # EQ state; engine EQ + video-tap fanout (319 lines)
 │   ├── LockFreeRingBuffer.swift    # SPSC ring buffer for stream audio (180 lines)
 │   ├── EQPresetStore.swift         # EQ preset persistence (191 lines)
 │   ├── MetadataLoader.swift        # Async track/video metadata (169 lines)
 │   ├── PlaylistController.swift    # Playlist state and navigation (286 lines)
-│   ├── VideoPlaybackController.swift # AVPlayer lifecycle (282 lines)
-│   ├── VisualizerPipeline.swift    # Audio tap, FFT, SPSC buffer, Butterchurn (645 lines)
+│   ├── VideoPlaybackController.swift # AVPlayer lifecycle, audioMix at item construction (362 lines)
+│   ├── VisualizerPipeline.swift    # Engine tap, feed consumer, Butterchurn data (416 lines)
+│   ├── VisualizerFeed.swift        # SPSC visualizer hand-off, engine + video producers (112 lines)
+│   ├── VisualizerScratchBuffers.swift # Per-producer RMS/Goertzel/FFT scratch (195 lines)
+│   ├── RenderThreadSafe.swift      # Marker protocol + all conformances for render-thread storage (48 lines)
 │   ├── StreamPlayer.swift          # Stream playback, auto-reconnect, owns StreamDecodePipeline (414 lines)
-│   ├── PlaybackCoordinator.swift   # Orchestrates both backends, bridge lifecycle, capability flag (562 lines)
+│   ├── PlaybackCoordinator.swift   # Orchestrates both backends, bridge lifecycle, capability flag (588 lines)
 │   ├── ObjCBridge/
 │   │   ├── AUAudioUnitWorkgroupShim.h  # ObjC bridge for os_workgroup (17 lines)
 │   │   └── AUAudioUnitWorkgroupShim.m  # ObjC bridge implementation (23 lines)
+│   ├── VideoDSP/
+│   │   ├── VideoTap.swift              # MTAudioProcessingTap callbacks, audio-mix builder, detach (307 lines)
+│   │   ├── VideoTapContext.swift       # Render-thread state, Atomic/Mutex fields, telemetry (226 lines)
+│   │   ├── BiquadCoefficientSet.swift  # RBJ coefficients + shared band frequencies (168 lines)
+│   │   ├── BiquadCascade.swift         # Render-confined 10-band TDF-II filter (99 lines)
+│   │   └── VideoTapVisualizerRender.swift # Video-side visualizer producer (129 lines)
 │   └── Streaming/
 │       ├── QueueConfined.swift         # Queue confinement protocol (19 lines)
 │       ├── ICYFramer.swift             # ICY metadata protocol parser, Sendable struct (200 lines)
@@ -5014,7 +5246,7 @@ MacAmpApp/
 │   │   └── WinampTitlebarDragHandle.swift    # Titlebar drag handle
 │   │
 │   ├── Windows/
-│   │   ├── AVPlayerViewRepresentable.swift   # AVPlayerView bridge
+│   │   ├── AVPlayerViewRepresentable.swift   # AVPlayerView bridge (Now Playing updates off)
 │   │   ├── ButterchurnWebView.swift          # WKWebView for Butterchurn
 │   │   ├── MilkdropWindowChromeView.swift    # Milkdrop GEN.BMP chrome
 │   │   └── VideoWindowChromeView.swift       # Video VIDEO.BMP chrome
@@ -5049,6 +5281,7 @@ MacAmpApp/
 │
 ├── Utilities/
 │   ├── TimeFormatting.swift                  # Duration formatting (12 lines)
+│   ├── WeakBox.swift                         # Weak reference wrapper for video-tap registries (11 lines)
 │   ├── MenuActionTarget.swift                # NSMenu closure bridge (39 lines)
 │   ├── WinampAlertHelper.swift               # Alert presentation helpers (50 lines)
 │   ├── AppLogger.swift                       # Unified logging (43 lines)
@@ -5197,7 +5430,7 @@ GEN_TOP_LEFT_SELECTED  # Index 1: Selected/focused state
 
 ## Conclusion
 
-MacAmp demonstrates that retro UI aesthetics and modern development practices are not mutually exclusive. By building a unified audio pipeline (custom stream decode feeding AVAudioEngine), leveraging modern language features (Swift 6.2 concurrency), and maintaining strict architectural boundaries (three-layer pattern), we've created a maintainable, performant, and pixel-perfect recreation of a beloved classic.
+MacAmp demonstrates that retro UI aesthetics and modern development practices are not mutually exclusive. By building a unified audio pipeline (custom stream decode feeding AVAudioEngine) plus an in-place DSP tap for AVPlayer video, leveraging modern language features (Swift 6.2 concurrency), and maintaining strict architectural boundaries (three-layer pattern), we've created a maintainable, performant, and pixel-perfect recreation of a beloved classic.
 
 The key insight: **The skin is not the app**. This separation enables MacAmp to be simultaneously a faithful Winamp clone and a modern macOS application built with 2025's best practices.
 
@@ -5207,9 +5440,17 @@ Welcome to MacAmp. May your audio be crisp and your skins be pixel-perfect.
 
 ---
 
-*Document Version: 3.1.0 | Last Updated: 2026-03-25 | Lines: ~5,249*
+*Document Version: 3.2.0 | Last Updated: 2026-09-25 | Lines: ~5,500*
 
-**Recent Updates (v3.0.0 - 2026-03-22):**
+**Recent Updates (v3.2.0 - 2026-09-25, S3-2 AVPlayer-Native Video DSP):**
+- Added §8a "AVPlayer-Native Video DSP": topology, tap lifecycle, preferred processing format (stereo pin), `tapProcess` render path, biquad EQ, EQ/balance fanout, Audio Mechanism Concurrency Contract, visualizer gating, remote commands, known limitations
+- Added Recent Architectural Changes #14 and the "Output Route Changes (Engine Reconfiguration)" subsection in §4
+- Corrected statements that video audio has no EQ/visualizer or shares the engine; `snapshotButterchurnFrame` is now gated on `isVisualizerRendering`
+- Renamed `VisualizerSharedBuffer` → `VisualizerFeed` throughout; `VisualizerScratchBuffers` now lives in its own file
+- Updated volume/balance routing to the current AudioPlayer `didSet` fan-out (balance now reaches video taps) and call-site persistence
+- Updated metrics, component table, file structure and Quick Reference for the new/changed files; Package.swift snippet to macOS 27
+
+**Previous Updates (v3.0.0 - 2026-03-22):**
 - Added AudioEngineController (413->424 lines) to Component Breakdown table, Three-Layer diagram, Section 4a decomposition architecture, Data Flow diagram, File Structure, and Quick Reference
 - Updated AudioPlayer line count from 1,143 to 734 throughout (Phase 4 extraction + subsequent growth)
 - Updated StreamPlayer line count from 189 to 334 (auto-reconnect growth)

@@ -638,6 +638,8 @@ The playlist window displays a mini visualizer in the bottom bar when:
 
 This matches Winamp 5.x behavior where the visualizer appears in the playlist when the main window's visualizer is hidden.
 
+The mini visualizer is the same `VisualizerView` as the main window, gated on `audioPlayer.isVisualizerRendering`, so it animates for video playback as well as audio (video audio feeds the visualizer through the `MTAudioProcessingTap` in `MacAmpApp/Audio/VideoDSP/`).
+
 ### Implementation
 
 ```swift

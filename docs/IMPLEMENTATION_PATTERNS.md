@@ -1,7 +1,7 @@
 # MacAmp Implementation Patterns
 
-**Version:** 2.1.0
-**Date:** 2026-03-25
+**Version:** 2.2.0
+**Date:** 2026-09-25
 **Purpose:** Practical code patterns and best practices for MacAmp development
 
 ---
@@ -30,17 +30,23 @@
    - [Multi-State Slider](#pattern-multi-state-slider)
    - [VIDEO.bmp Chrome Composition](#pattern-videobmp-chrome-composition)
    - [GEN.bmp Chrome & Two-Piece Sprites](#pattern-genbmp-chrome--two-piece-sprites)
-   - [Video Playback Embedding](#pattern-video-playback-embedding)
+   - [Video Playback Embedding](#pattern-video-playback-embedding) **(Updated - S3-2)**
    - [View Layer Decomposition (MainWindow)](#pattern-view-layer-decomposition-mainwindow) **(New - T3 Decomposition)**
 4. [Audio Processing Patterns](#audio-processing-patterns)
    - [Safe Audio Buffer Processing](#pattern-safe-audio-buffer-processing)
    - [Thread-Safe Audio State](#pattern-thread-safe-audio-state)
    - [nonisolated(unsafe) Deinit Safety](#pattern-nonisolatedunsafe-deinit-safety-swift-6) **(New - Swift 6)**
-   - [SPSC Shared Buffer for Audio-to-Main Thread Transfer](#pattern-spsc-shared-buffer-for-audio-to-main-thread-transfer) **(Updated - Swift 6)**
+   - [SPSC Shared Buffer for Audio-to-Main Thread Transfer](#pattern-spsc-shared-buffer-for-audio-to-main-thread-transfer) **(Updated - S3-2)**
    - [Stream Decode Pipeline (Unified Audio)](#pattern-stream-decode-pipeline-unified-audio) **(New - Unified Pipeline)**
    - [AudioConverter Input Buffer Lifecycle](#pattern-audioconverter-input-buffer-lifecycle) **(New - Unified Pipeline)**
    - [Engine Graph Explicit Format](#pattern-engine-graph-explicit-format) **(New - Unified Pipeline)**
    - [Engine File Duration as Authoritative Source](#pattern-engine-file-duration-as-authoritative-source-vbr-lesson-s1) **(New - S1)**
+   - [MTAudioProcessingTap with Unmanaged Context](#pattern-mtaudioprocessingtap-with-unmanaged-context) **(New - S3-2)**
+   - [Render-Thread-Safe Shared State](#pattern-render-thread-safe-shared-state) **(New - S3-2)**
+   - [Pinned Tap Format and Build-Time audioMix](#pattern-pinned-tap-format-and-build-time-audiomix) **(New - S3-2)**
+   - [Parallel DSP Fan-Out via WeakBox Registries](#pattern-parallel-dsp-fan-out-via-weakbox-registries) **(New - S3-2)**
+   - [Dual-Producer Visualizer Feed](#pattern-dual-producer-visualizer-feed) **(New - S3-2)**
+   - [Sampled Deadline Telemetry](#pattern-sampled-deadline-telemetry) **(New - S3-2)**
 5. [Async/Await Patterns](#asyncawait-patterns)
    - [Async Stream Events](#pattern-async-stream-events)
    - [Cancellable Tasks](#pattern-cancellable-tasks)
@@ -48,9 +54,14 @@
    - [Callback Synchronization for Cross-Component Communication](#pattern-callback-synchronization-for-cross-component-communication) **(New - Swift 6, Updated - S1)**
    - [Stream Bridge Lifecycle Callbacks](#pattern-stream-bridge-lifecycle-callbacks) **(New - Unified Pipeline)**
    - [Exponential Backoff Reconnect with Bridge Tear-Down](#pattern-exponential-backoff-reconnect-with-bridge-tear-down-s1) **(New - S1)**
+   - [Generation Token Guards Across await](#pattern-generation-token-guards-across-await) **(New - S3-2)**
+   - [Debounced Will/Did Notification Bursts](#pattern-debounced-willdid-notification-bursts) **(New - S3-2)**
 6. [Error Handling Patterns](#error-handling-patterns)
    - [Typed Stream Termination Reasons](#pattern-typed-stream-termination-reasons-s1) **(New - S1)**
 7. [Testing Patterns](#testing-patterns)
+   - [Polling for Asynchronous Release](#pattern-polling-for-asynchronous-release) **(New - S3-2)**
+   - [Wall-Clock Benchmarks Disabled Under TSan](#pattern-wall-clock-benchmarks-disabled-under-tsan) **(New - S3-2)**
+   - [Numerical Match Against the Apple Reference Unit](#pattern-numerical-match-against-the-apple-reference-unit) **(New - S3-2)**
 8. [Migration Guides](#migration-guides)
 9. [Anti-Patterns to Avoid](#anti-patterns-to-avoid)
 10. [Quick Reference](#quick-reference)
@@ -347,10 +358,9 @@ var repeatMode: AppSettings.RepeatMode {
 ```swift
 // File: MacAmpApp/Audio/AudioPlayer.swift
 // Purpose: Persist volume and balance settings across launches
-// Context: Keys enum centralizes string literals, didSet auto-saves
-// NOTE (T5 Phase 1): didSet only updates local playerNode + persists.
-//   Cross-backend propagation is handled by PlaybackCoordinator.setVolume()/setBalance().
-//   See "Coordinator Volume Routing" pattern below.
+// Context: Keys enum centralizes string literals. didSet applies the value to every
+//   backend; persistence is call-site-driven (drag end), keeping UserDefaults writes
+//   off the slider's per-tick path. See "Coordinator Volume Routing" below.
 
 @Observable
 @MainActor
@@ -360,23 +370,26 @@ final class AudioPlayer {
         static let balance = "balance"
     }
 
-    /// IMPORTANT: All external volume changes must go through
-    /// PlaybackCoordinator.setVolume() to ensure all backends stay in sync.
-    /// Direct assignment only updates playerNode and persists.
     var volume: Float = 0.75 {  // Default 0.75 when no saved preference
         didSet {
-            playerNode.volume = volume
-            streamSourceNode?.volume = volume
-            UserDefaults.standard.set(volume, forKey: Keys.volume)
+            engine?.setVolume(volume)                  // playerNode + streamSourceNode
+            videoPlaybackController.volume = volume    // AVPlayer volume
         }
     }
 
     var balance: Float = 0.0 {  // -1.0 (left) to 1.0 (right)
         didSet {
-            playerNode.pan = balance
-            streamSourceNode?.pan = balance
-            UserDefaults.standard.set(balance, forKey: Keys.balance)
+            engine?.setBalance(balance)                // playerNode.pan + streamSourceNode.pan
+            fanOutBalanceToVideoTaps()                 // video MTAudioProcessingTap contexts
         }
+    }
+
+    // Persistence is call-site-driven (slider drag end via PlaybackCoordinator).
+    internal func commitVolumeToDefaults() {
+        UserDefaults.standard.set(volume, forKey: Keys.volume)
+    }
+    internal func commitBalanceToDefaults() {
+        UserDefaults.standard.set(balance, forKey: Keys.balance)
     }
 
     init() {
@@ -399,7 +412,7 @@ final class AudioPlayer {
 - Keep the `Keys` enum `private` to prevent external key access
 - The default property value (e.g., 0.75) acts as the first-launch default
 - Place persistence in the mechanism layer (AudioPlayer) not the settings layer (AppSettings) when the value drives hardware state directly
-- **(T5 Phase 1)**: The `didSet` must NOT propagate to other backends (e.g., `videoPlaybackController.volume`). Cross-backend fan-out is the coordinator's job. See "Coordinator Volume Routing" pattern
+- Don't write UserDefaults from `didSet` for values driven by a slider: every drag tick would hit disk. Commit on drag end (`commitVolumeToDefaults()` / `commitBalanceToDefaults()`)
 
 ### Pattern: Window Focus State Tracking
 
@@ -580,57 +593,45 @@ final class AudioPlayer {
 
 ### Pattern: Coordinator Volume Routing
 
-**When to use**: Routing volume/balance changes through a central coordinator that fans out to ALL playback backends unconditionally
-
-**T5 Phase 1**: Introduced to solve the problem where UI volume/balance sliders only updated AudioPlayer, leaving StreamPlayer and VideoPlaybackController out of sync during internet radio playback.
+**When to use**: Routing volume/balance changes from the UI through one coordinator entry point that is idempotent, while the owning mechanism class applies the value to every backend
 
 **Implementation**:
 ```swift
-// File: MacAmpApp/Audio/PlaybackCoordinator.swift:122-137
+// File: MacAmpApp/Audio/PlaybackCoordinator.swift
 // Purpose: Single entry point for volume/balance changes from UI
-// Context: Replaces direct AudioPlayer.volume binding from sliders
 
-@Observable
-@MainActor
-final class PlaybackCoordinator {
-    let audioPlayer: AudioPlayer
-    let streamPlayer: StreamPlayer
-
-    // MARK: - Volume & Balance Routing
-
-    /// Propagate volume to ALL backends unconditionally.
-    /// Simpler than checking which is active, zero cost on idle players (no-op).
     func setVolume(_ vol: Float) {
-        audioPlayer.volume = vol           // Updates playerNode + persists to UserDefaults
-        streamPlayer.volume = vol          // Stored; applied via AVAudioEngine bridge
-        audioPlayer.videoPlaybackController.volume = vol  // Updates video layer volume
+        guard audioPlayer.volume != vol else { return }
+        audioPlayer.volume = vol
     }
 
-    /// Propagate balance to ALL backends unconditionally.
-    /// With the unified pipeline, balance is applied via AVAudioEngine's streamSourceNode.pan.
     func setBalance(_ bal: Float) {
-        audioPlayer.balance = bal          // Updates playerNode.pan + streamSourceNode.pan + persists
-        streamPlayer.balance = bal         // Applied via AVAudioEngine bridge (streamSourceNode.pan)
+        guard audioPlayer.balance != bal else { return }
+        audioPlayer.balance = bal
     }
-}
+
+    /// Drag-end forwarders — persistence stays off the gesture-tick path.
+    func commitVolume() { audioPlayer.commitVolumeToDefaults() }
+    func commitBalance() { audioPlayer.commitBalanceToDefaults() }
 ```
 
-**Why unconditional fan-out**: Checking which backend is active adds complexity for zero benefit. Setting volume on an idle playerNode is a no-op that costs nothing. The coordinator always keeps all backends in sync so that switching between local file and internet radio playback has correct volume from the first sample.
+**Why route through AudioPlayer**: `AudioPlayer` owns the canonical value, and its `didSet` reaches every backend: the AVAudioEngine graph (local files and streams share it, so `playerNode` and `streamSourceNode` both update) and video (`videoPlaybackController.volume` for volume; the registered video-tap contexts for balance). The coordinator only adds the same-value short-circuit, which keeps a slider drag from re-applying identical values on every tick.
 
 **Data flow**:
 ```
-UI Slider → PlaybackCoordinator.setVolume() → AudioPlayer.volume (didSet: playerNode/streamSourceNode + UserDefaults)
-                                             → StreamPlayer.volume (stored for coordinator sync)
-                                             → VideoPlaybackController.volume (didSet: playerLayer)
+UI Slider → PlaybackCoordinator.setVolume() → AudioPlayer.volume didSet → engine.setVolume (playerNode + streamSourceNode)
+                                                                        → VideoPlaybackController.volume (AVPlayer)
+UI Slider → PlaybackCoordinator.setBalance() → AudioPlayer.balance didSet → engine.setBalance (pan)
+                                                                          → video tap contexts (in-tap L/R balance)
+Drag end  → PlaybackCoordinator.commitVolume()/commitBalance() → UserDefaults
 ```
 
-**Real usage**: `PlaybackCoordinator.swift` setVolume/setBalance, called from asymmetric bindings in `MainWindowSlidersLayer.swift`
+**Real usage**: `PlaybackCoordinator.swift` setVolume/setBalance/commitVolume/commitBalance, called from asymmetric bindings in `MainWindowSlidersLayer.swift`
 
 **Pitfalls**:
-- AudioPlayer.volume `didSet` must NOT propagate to other backends (that is the coordinator's job)
-- Persistence (UserDefaults) stays in AudioPlayer's `didSet` since AudioPlayer owns the canonical volume value
-- During `init()`, AudioPlayer directly sets `videoPlaybackController.volume` before PlaybackCoordinator exists -- this is correct for initialization
-- StreamPlayer.balance is stored and applied via AVAudioEngine's streamSourceNode.pan when the bridge is active
+- Keep the idempotent guard: SwiftUI sliders emit many same-value writes during a drag
+- Persist on drag end, not in `didSet`
+- `StreamPlayer` does not need its own volume/balance: streams play through the same AVAudioEngine graph as local files
 
 ### Pattern: Asymmetric Binding for Coordinator Routing
 
@@ -658,7 +659,7 @@ private func buildVolumeSlider() -> some View {
 // It also applies capability-flag dimming -- see "Capability Flag Pattern" below.
 ```
 
-**Why asymmetric**: The `get` path reads from `audioPlayer.volume` because AudioPlayer is the single source of truth for volume state (it persists to UserDefaults, drives playerNode). The `set` path goes through `playbackCoordinator.setVolume()` which fans out to AudioPlayer + StreamPlayer + VideoPlaybackController. A symmetric `@Bindable` binding would only update AudioPlayer, leaving other backends unsynchronized.
+**Why asymmetric**: The `get` path reads from `audioPlayer.volume` because AudioPlayer is the single source of truth for volume state (it persists to UserDefaults, drives playerNode). The `set` path goes through `playbackCoordinator.setVolume()`, which short-circuits same-value writes before `AudioPlayer.volume`'s `didSet` applies the value to the engine and video. A symmetric `@Bindable` binding would bypass that guard and the coordinator's drag-end persistence.
 
 **Replaced pattern** (deprecated T5 Phase 1):
 ```swift
@@ -1486,135 +1487,65 @@ let spriteName = "GEN_TOP_LEFT\(suffix)"
 
 ### Pattern: Video Playback Embedding
 
-**When to use**: Embedding video playback in SwiftUI views with proper lifecycle
+**When to use**: Embedding an `AVPlayer` in a SwiftUI view when the app, not AVKit, owns transport and remote commands
 
 **Implementation**:
 ```swift
-// File: MacAmpApp/Views/Components/AVPlayerViewRepresentable.swift
-// Purpose: Bridge AVPlayerView (AppKit) into SwiftUI with proper cleanup
-// Context: Used by VideoWindow for video file playback
+// File: MacAmpApp/Views/Windows/AVPlayerViewRepresentable.swift
+// Purpose: Bridge AVPlayerView (AppKit) into SwiftUI with all AVKit chrome and system integration off
+// Context: Rendered inside VideoWindowChromeView; transport comes from VIDEO.bmp controls
 
 struct AVPlayerViewRepresentable: NSViewRepresentable {
-    @Environment(PlaybackCoordinator.self) private var playbackCoordinator
+    let player: AVPlayer
 
     func makeNSView(context: Context) -> AVPlayerView {
-        let playerView = AVPlayerView()
-        playerView.player = nil  // Start with no player
-        playerView.controlsStyle = .floating
-        playerView.videoGravity = .resizeAspect
-        playerView.showsFullScreenToggleButton = true
-        playerView.showsSharingServiceButton = false
-
-        return playerView
+        let view = AVPlayerView()
+        view.player = player
+        view.controlsStyle = .none  // Use our VIDEO.bmp controls instead
+        view.videoGravity = .resizeAspect  // Maintain aspect ratio
+        view.showsFullScreenToggleButton = false  // No native fullscreen button
+        view.showsSharingServiceButton = false  // No sharing button
+        view.allowsPictureInPicturePlayback = false  // No PiP for now
+        view.updatesNowPlayingInfoCenter = false  // PlaybackCoordinator owns remote commands; AVKit's would pause the player behind it
+        return view
     }
 
-    func updateNSView(_ playerView: AVPlayerView, context: Context) {
-        // Media type switching logic
-        switch playbackCoordinator.currentMediaType {
-        case .video:
-            // Attach video player if not already attached
-            if playerView.player !== playbackCoordinator.videoPlayer {
-                playerView.player = playbackCoordinator.videoPlayer
-            }
-        case .audio, .none:
-            // Detach player for audio files
-            if playerView.player != nil {
-                playerView.player = nil
-            }
+    func updateNSView(_ nsView: AVPlayerView, context: Context) {
+        // Update player if it changes
+        if nsView.player !== player {
+            nsView.player = player
         }
-
-        // Update control visibility based on playback state
-        playerView.controlsStyle = playbackCoordinator.isPlaying ? .floating : .inline
-    }
-
-    static func dismantleNSView(_ playerView: AVPlayerView, coordinator: ()) {
-        // CRITICAL: Clean up player reference to prevent retain cycles
-        playerView.player = nil
     }
 }
 
-// Usage in VideoWindow
-struct VideoContentView: View {
-    @Environment(PlaybackCoordinator.self) private var playbackCoordinator
-
-    var body: some View {
-        Group {
-            if playbackCoordinator.currentMediaType == .video {
-                // Video playback
-                AVPlayerViewRepresentable()
-                    .background(Color.black)
-            } else {
-                // Audio visualization or placeholder
-                VisualizerView()
-                    .background(backgroundGradient)
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-}
-
-// Media type detection
-extension PlaybackCoordinator {
-    enum MediaType {
-        case audio
-        case video
-        case none
-    }
-
-    var currentMediaType: MediaType {
-        guard let url = currentTrack?.url else { return .none }
-
-        let videoExtensions = ["mp4", "mov", "m4v", "avi", "mkv"]
-        let audioExtensions = ["mp3", "flac", "wav", "m4a", "ogg"]
-
-        let ext = url.pathExtension.lowercased()
-
-        if videoExtensions.contains(ext) {
-            return .video
-        } else if audioExtensions.contains(ext) {
-            return .audio
-        } else {
-            // Try to detect from AVAsset tracks
-            let asset = AVAsset(url: url)
-            let hasVideo = asset.tracks(withMediaType: .video).count > 0
-            return hasVideo ? .video : .audio
-        }
-    }
-
-    // Separate players for audio and video
-    var videoPlayer: AVPlayer? {
-        // Only return player if playing video
-        currentMediaType == .video ? avPlayer : nil
+// File: MacAmpApp/Views/WinampVideoWindow.swift
+// Show the player only when a video is current AND its AVPlayer exists
+if audioPlayer.currentMediaType == .video,
+   let player = audioPlayer.videoPlayer {
+    AVPlayerViewRepresentable(player: player)
+} else {
+    ZStack {
+        Color.black
+        Text("No video loaded")
+            .font(.system(size: 10))
+            .foregroundColor(.gray)
     }
 }
 ```
 
-**Real usage**: `VideoWindow.swift`, `AVPlayerViewRepresentable.swift`
+**Player ownership**: `AudioPlayer.videoPlayer` forwards `VideoPlaybackController.player`. That property is **observed** (not `@ObservationIgnored`) because `loadVideo` is `async`: the `AVPlayer` is assigned after the tap's `audioMix` is built, which is after the `currentMediaType` change that re-rendered the window. The view must observe `player` directly to pick up the instance once it exists.
 
-**Lifecycle management**:
-1. **makeNSView**: Create player view without player attached
-2. **updateNSView**: Attach/detach player based on media type
-3. **dismantleNSView**: MUST clear player reference to prevent leaks
+**Media type detection** is by extension only (`AudioPlayer.detectMediaType`: `mp4`, `mov`, `m4v`, `avi` → `.video`, everything else → `.audio`).
 
-**Format support**:
-```swift
-// Video formats (use AVPlayer)
-let videoFormats = ["mp4", "mov", "m4v", "avi", "mkv", "webm"]
+**Why `updatesNowPlayingInfoCenter = false`**: with the default `true`, AVKit registers its own Now Playing / remote-command handler alongside `PlaybackCoordinator`'s. System pause commands (AirPods removed, Bluetooth route loss, media keys) then pause `AVPlayer` directly, and `VideoPlaybackController` keeps reporting "playing" — the UI desyncs and the next Play press pauses instead of resuming. With it off, every remote command arrives as an `MPRemoteCommandEvent` at `PlaybackCoordinator`.
 
-// Audio formats (use AVAudioEngine for local + streams via unified pipeline)
-let audioFormats = ["mp3", "flac", "wav", "m4a", "ogg", "aac"]
-
-// Stream detection
-let isStream = url.scheme?.hasPrefix("http") == true
-```
+**Real usage**: `AVPlayerViewRepresentable.swift`, `WinampVideoWindow.swift`
 
 **Pitfalls**:
-- Must clear player reference in dismantleNSView to prevent memory leaks
-- Don't create new AVPlayer instances on every update
-- Check media type before attaching player
-- AVPlayer (video only) doesn't support audio features (EQ, visualization); streams route through AVAudioEngine via the unified pipeline and have full feature parity with local files
-- Some video files may only have audio tracks - detect properly
-- Controls visibility should reflect playback state
+- Any `AVPlayerView` in an app that registers its own `MPRemoteCommandCenter` handlers must set `updatesNowPlayingInfoCenter = false`
+- Don't create new `AVPlayer` instances in `updateNSView`; only swap when the identity changes
+- Don't mark an async-assigned `player` property `@ObservationIgnored` — the view will show the placeholder forever
+- Video audio does get EQ, balance and visualization: an `MTAudioProcessingTap` on the `AVPlayerItem` runs the DSP in place (see [MTAudioProcessingTap with Unmanaged Context](#pattern-mtaudioprocessingtap-with-unmanaged-context)); the audio never enters `AVAudioEngine`
 
 ### Pattern: View Layer Decomposition (MainWindow)
 
@@ -1742,7 +1673,7 @@ struct AudioProcessor {
 }
 ```
 
-**Real usage**: `AudioPlayer.swift` visualization processing
+**Real usage**: Mono downmix in the two visualizer producers — `VisualizerPipeline.makeTapHandler` (`AVAudioPCMBuffer.floatChannelData`) and `videoTapVisualizerRender` (`AudioBufferList`, interleaved or not). Both write into pre-allocated `VisualizerScratchBuffers` instead of returning a new `[Float]`, because they run on a real-time thread.
 
 ### Pattern: Thread-Safe Audio State
 
@@ -1784,7 +1715,7 @@ Task { @MainActor in
 }
 ```
 
-**Real usage**: Visualization data flow in `AudioPlayer.swift`
+**Real usage**: Suitable for non-real-time producers only. Audio render threads cannot `await`, so visualization data does NOT use an actor — it goes through `VisualizerFeed` (see [SPSC Shared Buffer](#pattern-spsc-shared-buffer-for-audio-to-main-thread-transfer)) and tap parameters through atomics (see [Render-Thread-Safe Shared State](#pattern-render-thread-safe-shared-state)).
 
 ### Pattern: nonisolated(unsafe) Deinit Safety (Swift 6)
 
@@ -1883,6 +1814,8 @@ final class VideoPlaybackController {
 
 **Why this pattern exists**: Audio engine tap callbacks run on a real-time thread where heap allocations (Array creation, ARC reference counting, Task dispatch) can cause lock contention and buffer underruns (audible skips). This SPSC (Single Producer, Single Consumer) shared buffer eliminates all allocations from the audio thread by using pre-allocated storage and `os_unfair_lock_trylock` for non-blocking publishing.
 
+**S3-2**: The buffer (formerly a private `VisualizerSharedBuffer` inside `VisualizerPipeline.swift`) is now `VisualizerFeed` in `MacAmpApp/Audio/VisualizerFeed.swift`, and the scratch buffers moved to `MacAmpApp/Audio/VisualizerScratchBuffers.swift`. The feed now has two producers (the engine tap and the video tap), only one active at a time — see [Dual-Producer Visualizer Feed](#pattern-dual-producer-visualizer-feed). It is still single-producer at any instant, so the SPSC reasoning below holds.
+
 **Architecture Evolution (BEFORE → AFTER)**:
 
 #### Previous Architecture (Task Dispatch Pattern)
@@ -1933,7 +1866,7 @@ final class VideoPlaybackController {
 │  ┌────────────────────────────────────────────────────────┐  │
 │  │ 1. scratch.prepare(buffer)          ← no alloc         │  │
 │  │ 2. FFT + Goertzel computation       ← no alloc         │  │
-│  │ 3. sharedBuffer.tryPublish(scratch) ← no alloc         │  │
+│  │ 3. feed.tryPublish(scratch)         ← no alloc         │  │
 │  │    ├─ os_unfair_lock_trylock()   (non-blocking)        │  │
 │  │    ├─ if locked: memcpy into pre-allocated arrays      │  │
 │  │    ├─ waveform: direct stride copy (no map/iterator)   │  │
@@ -1945,7 +1878,7 @@ final class VideoPlaybackController {
 │         ZERO heap allocations per callback                   │
 │         trylock = non-blocking (never stalls audio thread)   │
 └───────────────────┼──────────────────────────────────────────┘
-                    │ Shared memory (VisualizerSharedBuffer)
+                    │ Shared memory (VisualizerFeed)
                     │ Pre-allocated arrays, atomic generation
                     ▼
 ┌──────────────────────────────────────────────────────────────┐
@@ -1953,7 +1886,7 @@ final class VideoPlaybackController {
 │                                                              │
 │  pollVisualizerData() ← Timer @ 30 Hz on RunLoop.main .common│
 │  ┌────────────────────────────────────────────────────────┐  │
-│  │ 1. sharedBuffer.consume()                              │  │
+│  │ 1. feed.consume()                                      │  │
 │  │    ├─ os_unfair_lock_lock()    (OK to block here)      │  │
 │  │    ├─ check generation > lastConsumed                   │  │
 │  │    ├─ create VisualizerData from pre-allocated storage  │  │
@@ -1972,9 +1905,9 @@ final class VideoPlaybackController {
 ```
 Audio Thread (21.5 Hz)              Main Thread (30 Hz poll timer)
 ─────────────────────               ──────────────────────────────
-1. scratch.prepare(buffer)          1. sharedBuffer.consume()
+1. scratch.prepare(buffer)          1. feed.consume()
 2. FFT + Goertzel computation          ├─ os_unfair_lock_lock()
-3. sharedBuffer.tryPublish(scratch)    ├─ check generation > lastConsumed
+3. feed.tryPublish(scratch)            ├─ check generation > lastConsumed
    ├─ os_unfair_lock_trylock()         ├─ copy data (Array creation OK here)
    ├─ memcpy into pre-allocated arrays └─ unlock, return VisualizerData
    ├─ generation += 1              2. pipeline.visualizerData = data
@@ -1985,11 +1918,11 @@ Audio Thread (21.5 Hz)              Main Thread (30 Hz poll timer)
 
 **Implementation (shared buffer)**:
 ```swift
-// File: MacAmpApp/Audio/VisualizerPipeline.swift:36-146
-// Purpose: Lock-protected shared storage for audio-to-main thread data transfer
+// File: MacAmpApp/Audio/VisualizerFeed.swift
+// Purpose: Lock-protected single-slot storage for audio-to-main thread data transfer
 // Context: Audio thread writes via tryPublish(), main thread reads via consume()
 
-private final class VisualizerSharedBuffer: @unchecked Sendable {
+final class VisualizerFeed: @unchecked Sendable {
     // Pre-allocated arrays - sizes match visualization requirements
     private var rms = [Float](repeating: 0, count: 20)
     private var spectrum = [Float](repeating: 0, count: 20)
@@ -2001,37 +1934,39 @@ private final class VisualizerSharedBuffer: @unchecked Sendable {
     private var spectrumCount: Int = 0
 
     private var lock = os_unfair_lock()
-    private var generation: UInt64 = 0     // Incremented by producer
-    private var lastConsumed: UInt64 = 0   // Tracks consumer position
+    private var generation: UInt64 = 0
+    private var lastConsumed: UInt64 = 0
+
+    /// Copy Float elements via memcpy. Audio-thread safe (no allocation).
+    private func copyFloatBuffer(from source: [Float], to destination: inout [Float], count: Int? = nil) {
+        let limit = min(source.count, destination.count)
+        let n = min(count ?? limit, limit)
+        guard n > 0 else { return }
+        source.withUnsafeBufferPointer { src in
+            destination.withUnsafeMutableBufferPointer { dst in
+                guard let s = src.baseAddress, let d = dst.baseAddress else { return }
+                memcpy(d, s, n * MemoryLayout<Float>.stride)
+            }
+        }
+    }
 
     /// Audio thread: try to publish data (non-blocking).
-    /// Returns false if lock is contended (frame is dropped — imperceptible).
-    func tryPublish(from scratch: VisualizerScratchBuffers,
-                    oscilloscopeSamples: Int, validFrameCount: Int) -> Bool {
+    /// Returns false if lock is contended (frame is dropped).
+    func tryPublish(from scratch: VisualizerScratchBuffers, oscilloscopeSamples: Int, validFrameCount: Int) -> Bool {
         guard os_unfair_lock_trylock(&lock) else { return false }
         defer { os_unfair_lock_unlock(&lock) }
 
-        // memcpy from scratch buffers into pre-allocated storage
-        // (using withUnsafeBufferPointer for zero-overhead access)
-        let scratchRms = scratch.rms
-        let rCount = min(scratchRms.count, rms.count)
-        scratchRms.withUnsafeBufferPointer { src in
-            rms.withUnsafeMutableBufferPointer { dst in
-                if rCount > 0, let s = src.baseAddress, let d = dst.baseAddress {
-                    memcpy(d, s, rCount * MemoryLayout<Float>.stride)
-                }
-            }
-        }
+        let rCount = min(scratch.rms.count, rms.count)
+        copyFloatBuffer(from: scratch.rms, to: &rms, count: rCount)
         rmsCount = rCount
 
-        // ... same pattern for spectrum, waveform, bcSpectrum, bcWaveform ...
+        // ... spectrum, downsampled waveform, bcSpectrum, bcWaveform the same way ...
 
         generation &+= 1
         return true
     }
 
     /// Main thread: consume latest data (blocking lock, safe for main thread).
-    /// Returns nil if no new data since last consume (generation unchanged).
     func consume() -> VisualizerData? {
         os_unfair_lock_lock(&lock)
 
@@ -2041,7 +1976,7 @@ private final class VisualizerSharedBuffer: @unchecked Sendable {
         }
         lastConsumed = generation
 
-        // Array creation happens HERE on main thread (safe to allocate)
+        // Copy raw data under lock (memcpy only, no construction)
         let localRms = Array(rms.prefix(rmsCount))
         let localSpec = Array(spectrum.prefix(spectrumCount))
         let localWave = Array(waveform.prefix(waveformCount))
@@ -2050,9 +1985,13 @@ private final class VisualizerSharedBuffer: @unchecked Sendable {
 
         os_unfair_lock_unlock(&lock)
 
+        // Construct VisualizerData after releasing lock
         return VisualizerData(
-            rms: localRms, spectrum: localSpec, waveform: localWave,
-            butterchurnSpectrum: localBcSpec, butterchurnWaveform: localBcWave
+            rms: localRms,
+            spectrum: localSpec,
+            waveform: localWave,
+            butterchurnSpectrum: localBcSpec,
+            butterchurnWaveform: localBcWave
         )
     }
 }
@@ -2060,14 +1999,20 @@ private final class VisualizerSharedBuffer: @unchecked Sendable {
 
 **Implementation (poll timer and tap handler)**:
 ```swift
-// File: MacAmpApp/Audio/VisualizerPipeline.swift:350-677
-// Purpose: Connect the shared buffer to the audio tap and UI
+// File: MacAmpApp/Audio/VisualizerPipeline.swift
+// Purpose: Connect the feed to the engine tap and the UI
 
 @MainActor
 @Observable
 final class VisualizerPipeline {
-    @ObservationIgnored private let sharedBuffer = VisualizerSharedBuffer()
-    @ObservationIgnored nonisolated(unsafe) private var pollTimer: Timer?
+    @ObservationIgnored private var tapInstalled = false
+    @ObservationIgnored private weak var mixerNode: AVAudioMixerNode?
+    @ObservationIgnored private let feed = VisualizerFeed()
+    @ObservationIgnored private var pollTimer: Timer?
+
+    isolated deinit {
+        pollTimer?.invalidate()
+    }
 
     func installTap(on mixer: AVAudioMixerNode) {
         guard !tapInstalled else { return }
@@ -2075,25 +2020,35 @@ final class VisualizerPipeline {
         mixer.removeTap(onBus: 0)
 
         let scratch = VisualizerScratchBuffers()
-        let handler = Self.makeTapHandler(sharedBuffer: sharedBuffer, scratch: scratch)
+        let handler = Self.makeTapHandler(feed: feed, scratch: scratch)
 
+        // Buffer size 2048 for Butterchurn FFT - provides 1024 frequency bins
         mixer.installTap(onBus: 0, bufferSize: 2048, format: nil, block: handler)
         tapInstalled = true
-        startPollTimer()  // Start 30 Hz consumer
+        startPollTimer()
     }
 
-    // 30 Hz timer polls shared buffer on main thread.
-    //
-    // CRITICAL: Use Timer(...) + RunLoop.main.add(timer, forMode: .common), NOT
-    // Timer.scheduledTimer(...). The convenience scheduledTimer schedules on the
-    // run loop in .default mode, which is paused during .eventTracking (any
-    // active DragGesture, window-move, scroll). A producer-side timer paused
-    // during gestures stalls feeding pipelines and causes consumer-side
-    // freezes (see mwvi PR #A — spectrum analyzer froze during slider drag
-    // because this exact callsite was using the wrong run-loop mode).
+    func removeTap() {
+        guard tapInstalled else { return }
+        pollTimer?.invalidate()
+        pollTimer = nil
+        if let mixer = mixerNode {
+            mixer.removeTap(onBus: 0)
+        }
+        tapInstalled = false
+        mixerNode = nil
+    }
+
     private func startPollTimer() {
         pollTimer?.invalidate()
+        // Add to .common run-loop mode so polling continues during user
+        // gestures. Timer.scheduledTimer defaults to .default mode, which
+        // pauses while the main run loop is in .eventTracking (active
+        // DragGesture). That stalled the data pipeline and made the
+        // visualizer appear frozen during slider interaction even though
+        // VisualizerView's own .common-mode display timer kept firing.
         let timer = Timer(timeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
+            dispatchPrecondition(condition: .onQueue(.main))
             MainActor.assumeIsolated {
                 self?.pollVisualizerData()
             }
@@ -2103,37 +2058,22 @@ final class VisualizerPipeline {
     }
 
     private func pollVisualizerData() {
-        guard let data = sharedBuffer.consume() else { return }
+        onPollTick?()  // fire regardless of data availability (sample-rate poll)
+        guard let data = feed.consume() else { return }
         updateLevels(with: data, useSpectrum: useSpectrum)
     }
 
     // Tap handler: runs on audio thread, zero allocations
     private nonisolated static func makeTapHandler(
-        sharedBuffer: VisualizerSharedBuffer,
+        feed: VisualizerFeed,
         scratch: VisualizerScratchBuffers
     ) -> @Sendable (AVAudioPCMBuffer, AVAudioTime?) -> Void {
         { buffer, _ in
             // ... mix to mono, compute RMS/spectrum/FFT in scratch buffers ...
 
-            // Publish to shared buffer (non-blocking)
-            _ = sharedBuffer.tryPublish(
-                from: scratch,
-                oscilloscopeSamples: 76,
-                validFrameCount: cappedFrameCount
-            )
+            // Publish to feed (non-blocking: drops frame on contention)
+            _ = feed.tryPublish(from: scratch, oscilloscopeSamples: 76, validFrameCount: cappedFrameCount)
         }
-    }
-
-    nonisolated func removeTap() {
-        guard tapInstalled else { return }
-        dispatchPrecondition(condition: .onQueue(.main))
-        pollTimer?.invalidate()
-        pollTimer = nil
-        if let mixer = mixerNode {
-            mixer.removeTap(onBus: 0)
-        }
-        tapInstalled = false
-        mixerNode = nil
     }
 }
 ```
@@ -2142,7 +2082,7 @@ final class VisualizerPipeline {
 1. **`os_unfair_lock_trylock`** on audio thread: Non-blocking. If the main thread holds the lock, the audio thread drops that frame (imperceptible at 21.5 Hz producer rate with 30 Hz consumer rate).
 2. **`os_unfair_lock_lock`** on main thread: Blocking is safe here. Lock hold time is bounded (5 small memcpy operations).
 3. **Generation counter**: Consumer skips `consume()` when no new data has been published, avoiding unnecessary Array allocation.
-4. **Pre-allocated arrays**: All storage in `VisualizerSharedBuffer` is allocated once at init. `tryPublish()` only performs `memcpy` into existing buffers.
+4. **Pre-allocated arrays**: All storage in `VisualizerFeed` is allocated once at init. `tryPublish()` only performs `memcpy` into existing buffers.
 5. **30 Hz poll timer**: Decouples UI update rate from audio callback rate. Timer runs on main run loop, so `MainActor.assumeIsolated` is safe (with `dispatchPrecondition` safety net).
 
 **Supersedes**: The previous `Unmanaged` pointer + `Task { @MainActor }` pattern, which had two problems:
@@ -2158,10 +2098,10 @@ pause() -> removeTap()  (includes timer cleanup)
 stop()  -> removeTap()  (includes timer cleanup)
 ```
 
-**Real usage**: `VisualizerPipeline.swift` for audio visualization data transport
+**Real usage**: `VisualizerFeed.swift` (transport), `VisualizerScratchBuffers.swift` (per-producer DSP working set), `VisualizerPipeline.swift` (engine producer + 30 Hz consumer), `VideoTapVisualizerRender.swift` (video producer)
 
 **Pitfalls**:
-- `VisualizerSharedBuffer` is `@unchecked Sendable` — safety relies on the `os_unfair_lock` discipline
+- `VisualizerFeed` is `@unchecked Sendable` — safety relies on the `os_unfair_lock` discipline (it is listed in `RenderThreadSafe.swift` so it can be stored in `VideoTapContext`)
 - `removeTap()` must clean up the poll timer (runs on main run loop, must invalidate from main thread)
 - `tryPublish()` must never allocate — use only `memcpy` / `withUnsafeBufferPointer` patterns
 - `consume()` creates Arrays under lock — keep lock hold time minimal by copying raw data only
@@ -2513,6 +2453,432 @@ if self.currentMediaType == .audio, self.engine.currentFileDuration > 0 {
 - When the engine file is swapped (track change), `currentFileDuration` changes immediately — update `currentDuration` at the same point
 - For video files, `engine.currentFileDuration` may return 0 (no audio file loaded) — always fall back to metadata duration in that case
 
+### Pattern: MTAudioProcessingTap with Unmanaged Context
+
+**When to use**: Carrying Swift state into a C-callback API that runs on a real-time thread and hands back an opaque `void *` — here, an `MTAudioProcessingTap` on a video `AVPlayerItem` that runs EQ, preamp, balance and the visualizer in place.
+
+**S3-2**: Introduced so video audio (played by `AVPlayer`, never routed through `AVAudioEngine`) gets the same DSP as local files. Design rationale: `tasks/avplayer-native-video-dsp/plan.md` ADR-1, ADR-3, ADR-7, ADR-10.
+
+**Implementation**:
+```swift
+// File: MacAmpApp/Audio/VideoDSP/VideoTap.swift
+// Purpose: Balanced +1/-1 retain of the Context across the C boundary
+// Context: Callbacks are file-scope `let` constants typed to the C typealias — nothing captured
+
+private let tapInit: MTAudioProcessingTapInitCallback = { _, clientInfo, tapStorageOut in
+    tapStorageOut.pointee = clientInfo
+}
+
+private let tapFinalize: MTAudioProcessingTapFinalizeCallback = { tap in
+    let storage = MTAudioProcessingTapGetStorage(tap)
+    Unmanaged<VideoTapContext>.fromOpaque(storage).release()        // -1, exactly once
+}
+
+private let tapProcess: MTAudioProcessingTapProcessCallback = { tap, framesToProcess, _, bufferList, framesOut, flagsOut in
+    let storage = MTAudioProcessingTapGetStorage(tap)
+    let context = Unmanaged<VideoTapContext>.fromOpaque(storage).takeUnretainedValue()  // borrow: no ARC on the render thread
+
+    let status = MTAudioProcessingTapGetSourceAudio(tap, framesToProcess, bufferList, flagsOut, nil, framesOut)
+    guard status == noErr else { return }
+    // ... atomics + non-blocking trylock only; DSP in place on bufferList ...
+}
+
+enum VideoTap {
+    @MainActor
+    static func buildAudioMix(
+        audioTrack: AVAssetTrack,
+        context: VideoTapContext,
+        preferredFormat: CMAudioFormatDescription? = nil
+    ) throws -> AVMutableAudioMix {
+        prewarmVideoTapTimebase()  // init the Mach timebase off the render thread
+        let retained = Unmanaged.passRetained(context)               // +1 for the tap's lifetime
+        var callbacks = MTAudioProcessingTapCallbacks(
+            version: kMTAudioProcessingTapCallbacksVersion_0,
+            clientInfo: UnsafeMutableRawPointer(retained.toOpaque()),
+            init: tapInit,
+            finalize: tapFinalize,
+            prepare: tapPrepare,
+            unprepare: tapUnprepare,
+            process: tapProcess
+        )
+
+        var tapOut: MTAudioProcessingTap?
+        let status: OSStatus
+        // (DEBUG builds route through a failure-injection seam here)
+        status = createTap(&callbacks, preferredFormat: preferredFormat, tapOut: &tapOut)
+        guard status == noErr, let tap = tapOut else {
+            retained.release()                                        // tapInit never ran → finalize never will
+            throw VideoTapError.createFailed(status)
+        }
+
+        let inputParams = AVMutableAudioMixInputParameters(track: audioTrack)
+        inputParams.audioTapProcessor = tap
+
+        let audioMix = AVMutableAudioMix()
+        audioMix.inputParameters = [inputParams]
+        return audioMix
+    }
+}
+```
+
+**Retain accounting**:
+
+| Event | Count | Where |
+|---|---|---|
+| `Unmanaged.passRetained(context)` | +1 | `buildAudioMix`, before create |
+| `MTAudioProcessingTapCreate…` fails | -1 | `retained.release()` on the failure branch |
+| Last reference to the tap drops (item/player/mix deallocated, or `audioMix = nil`) | -1 | `tapFinalize` |
+| `tapPrepare` / `tapProcess` / `tapUnprepare` | 0 | `takeUnretainedValue()` only |
+
+**Real usage**: `VideoTap.swift` (callbacks + builder), `VideoTapContext.swift` (the state), called from `AudioPlayer.startVideoLoad(track:)`. Lifecycle coverage: `Tests/MacAmpTests/VideoTapLifecycleTests.swift`.
+
+**Pitfalls**:
+- The render callbacks must not allocate, block on a lock, log, touch `@MainActor` state, or retain/release — read atomics and use `withLockIfAvailable` only (see [Render-Thread-Safe Shared State](#pattern-render-thread-safe-shared-state))
+- `tapFinalize` may run asynchronously on a background queue after the last reference drops. Teardown must not wait for it; tests poll for release (see [Polling for Asynchronous Release](#pattern-polling-for-asynchronous-release))
+- Keep all render-owned state (`BiquadCascade`, `VisualizerScratchBuffers`) as fields of the one retained Context. A second retained wrapper would need its own balance proof
+- `tapUnprepare` only flips `isActive`; releasing there would double-release when `tapFinalize` runs
+- The DEBUG seam `VideoTap._testForceTapCreateFailure` must skip the real create entirely — a real tap that is also "failed" would release twice (once on the failure branch, once in `tapFinalize`)
+- Detach by pausing first, then `VideoTap.detach(from:)` (`playerItem.audioMix = nil`) — see `AudioPlayer.pauseAndDetachVideoTapIfNeeded()`
+
+### Pattern: Render-Thread-Safe Shared State
+
+**When to use**: State written by `@MainActor` code and read by an audio render thread, where an actor is not an option (the render thread cannot `await` or hop executors).
+
+**S3-2**: The `VideoTapContext` envelope is `@unchecked Sendable` to cross the C boundary. The unsafety is contained by restricting every stored property to a thread-safe storage shape and enforcing that with tests. Rationale: plan ADR-3, ADR-3a, ADR-4 amendment #2.
+
+**Implementation (storage shape)**:
+```swift
+// File: MacAmpApp/Audio/VideoDSP/VideoTapContext.swift
+// Purpose: Every stored property is Atomic, Mutex, immutable, or RenderThreadSafe
+
+final class VideoTapContext: @unchecked Sendable {
+    let coefficients: Mutex<BiquadCoefficientSet?>   // main → render hand-off (rare, non-trivial)
+    let cascade: BiquadCascade                        // render-confined filter state
+    let feed: VisualizerFeed                          // shared SPSC visualizer feed
+    let scratch: VisualizerScratchBuffers             // render-confined visualizer working set
+    let balance: Atomic<UInt32>                       // Float.bitPattern, [-1, 1]
+    let isEqOn: Atomic<Bool>
+    let preampLinearGainBits: Atomic<UInt32>          // Float.bitPattern
+    let processingFormatTag: Atomic<UInt32>           // ASBD gate set by tapPrepare
+    let pendingSampleRate: Atomic<UInt64>             // Double.bitPattern
+    // ... Atomic<UInt64> telemetry counters ...
+
+    func installCoefficients(_ newSet: BiquadCoefficientSet) {
+        coefficients.withLock { $0 = newSet }         // main thread may block briefly
+    }
+}
+```
+
+**Implementation (render-side non-blocking read)**:
+```swift
+// File: MacAmpApp/Audio/VideoDSP/VideoTap.swift (tapProcess)
+// Double optional: outer nil = contended, .some(nil) = nothing installed yet
+switch context.coefficients.withLockIfAvailable({ $0 }) {
+case .some(.some(let set)): context.cascade.currentCoefficients = set   // copy into render-owned cache
+case .some(.none): context.cascade.currentCoefficients = nil            // bypass the cascade
+case .none: break                                                       // reuse the last cache
+}
+```
+
+**Implementation (publish order for a gate)**:
+```swift
+// File: MacAmpApp/Audio/VideoDSP/VideoTap.swift (tapPrepare)
+// Everything the render path reads alongside the gate is stored BEFORE the releasing store
+context.pendingSampleRate.store(asbd.mSampleRate.bitPattern, ordering: .relaxed)
+context.isActive.store(true, ordering: .relaxed)
+context.processingFormatTag.store(tag, ordering: .releasing)
+
+// tapProcess pairs it with an acquiring load before trusting pendingSampleRate
+let formatTag = context.processingFormatTag.load(ordering: .acquiring)
+```
+
+**Implementation (containment marker)**:
+```swift
+// File: MacAmpApp/Audio/RenderThreadSafe.swift
+// All conformances live in this one file so the audit surface is one file.
+internal protocol RenderThreadSafe: ~Copyable {}
+
+extension Atomic: RenderThreadSafe {}
+extension Mutex: RenderThreadSafe {}
+extension VisualizerFeed: RenderThreadSafe {}
+extension VisualizerScratchBuffers: RenderThreadSafe {}
+
+// Render-confined: created on the main thread in `VideoTapContext.init`, then
+// touched only by the render thread inside `tapProcess`. Main never accesses it.
+extension BiquadCascade: RenderThreadSafe {}
+```
+
+**Storage rules** (from the `VideoTapContext.swift` header contract):
+
+| Permitted | Forbidden |
+|---|---|
+| `Synchronization.Atomic<T>` | `@MainActor`- or actor-isolated types |
+| `Synchronization.Mutex<T>` — render side uses `withLockIfAvailable` only | Non-`Sendable` reference types (unless render-confined and marked) |
+| `let` of an immutable value type | Swift closures that capture state |
+| Unsafe pointers owned by the class's `init`/`deinit` | Any `var` that is not `Atomic`/`Mutex` |
+| Types conforming to `RenderThreadSafe` | |
+
+**Contract tests** (`Tests/MacAmpTests/VideoTapSendableContractTests.swift`):
+1. `Mirror` over the Context's stored fields — every Copyable field must be `RenderThreadSafe` (`~Copyable` `Atomic`/`Mutex` reflect as `Void` and are skipped)
+2. Source regex over `VideoTapContext.swift` — every stored `var` must be `Atomic<…>` or `Mutex<…>`
+3. Render confinement — `.cascade` may appear only in `VideoTapContext.swift` and `VideoTap.swift`
+
+**Real usage**: `VideoTapContext.swift`, `RenderThreadSafe.swift`, `VideoTap.swift` (`tapPrepare`, `tapProcess`)
+
+**Pitfalls**:
+- Don't collapse the `withLockIfAvailable` result with `??` or `if let` — "contended" (keep the cache) and "nothing installed" (bypass) need different handling
+- Hold the Mutex only to copy the value out; run the DSP lock-free against the render-owned copy
+- Store `Float`/`Double` through atomics as `bitPattern` (`Atomic<UInt32>` / `Atomic<UInt64>`)
+- Main-thread writers (fan-out) write only the Mutex and atomics, never a render-confined field — contract test 3 catches `.cascade`
+- `Mirror` cannot see `~Copyable` fields; a future non-atomic `~Copyable` `let` is caught only by review against the header contract
+- Adding a field means updating the header contract comment and, if needed, adding a conformance in `RenderThreadSafe.swift`
+
+### Pattern: Pinned Tap Format and Build-Time audioMix
+
+**When to use**: Installing an `MTAudioProcessingTap` on an `AVPlayerItem` so its processing format is stable and it is never added to an item that is already playing.
+
+**S3-2**: Rationale in plan ADR-7 (+ amendment) and ADR-12.
+
+**Implementation (pin the format)**:
+```swift
+// File: MacAmpApp/Audio/VideoDSP/VideoTap.swift
+// Stereo Float32 non-interleaved at the source rate; nil → fall back to the default create
+
+@MainActor
+static func preferredProcessingFormat(for audioTrack: AVAssetTrack) async -> CMAudioFormatDescription? {
+    guard let source = try? await audioTrack.load(.formatDescriptions).first,
+          let sampleRate = AVAudioFormat(formatDescription: source)?.sampleRate else { return nil }
+    return AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 2)?.formatDescription
+}
+
+private static func createTap(
+    _ callbacks: inout MTAudioProcessingTapCallbacks,
+    preferredFormat: CMAudioFormatDescription?,
+    tapOut: inout MTAudioProcessingTap?
+) -> OSStatus {
+    if let preferredFormat {
+        return MTAudioProcessingTapCreateWithPreferredFormat(
+            kCFAllocatorDefault, &callbacks, kMTAudioProcessingTapCreationFlag_PreEffects, preferredFormat, &tapOut)
+    }
+    return MTAudioProcessingTapCreate(
+        kCFAllocatorDefault, &callbacks, kMTAudioProcessingTapCreationFlag_PreEffects, &tapOut)
+}
+```
+
+**Implementation (audioMix set once, before the AVPlayer exists)**:
+```swift
+// File: MacAmpApp/Audio/VideoPlaybackController.swift (loadVideo)
+let asset = AVURLAsset(url: url)
+
+let audioMix: AVMutableAudioMix?
+if let audioMixBuilder {
+    audioMix = await audioMixBuilder(asset)
+} else {
+    audioMix = nil
+}
+
+if let isStillRelevant, !isStillRelevant() {
+    AppLog.debug(.audio, "VideoPlaybackController: load aborted (stale)")
+    return
+}
+
+let playerItem = AVPlayerItem(asset: asset)
+if let audioMix {
+    playerItem.audioMix = audioMix
+}
+
+let newPlayer = AVPlayer(playerItem: playerItem)
+```
+
+**Why pin**: without a preferred format the tap runs in a format optimized for the current output device, so it changes with the route. On system-output AirPlay 2 that produced audible pumping and cut-outs; pinning to the source rate removed it. Pinning to **stereo** (not the source layout) keeps channels 0/1 as L/R for the balance stage — mono is upmixed and 5.1 downmixed by the system before the tap.
+
+**Real usage**: `VideoTap.preferredProcessingFormat(for:)` / `createTap`, `VideoPlaybackController.loadVideo(url:autoPlay:audioMixBuilder:isStillRelevant:)`, orchestrated by `AudioPlayer.startVideoLoad(track:)`
+
+**Pitfalls**:
+- Never assign `audioMix` to an item an `AVPlayer` already owns, or while playing; to detach, pause first
+- One tap + one Context per `AVPlayerItem`; a new item gets a freshly built pair
+- `tapPrepare` still validates the negotiated format (Float32 LPCM gate) — the preferred format is a request, not a guarantee
+- 5.1+ sources play as stereo while the pin is in place, including on multichannel outputs
+
+### Pattern: Parallel DSP Fan-Out via WeakBox Registries
+
+**When to use**: One `@MainActor` owner of a setting must drive several DSP sinks with independent lifetimes (the engine node plus zero or more per-video-item taps), without the owner keeping the sinks alive.
+
+**S3-2**: EQ is owned by `EqualizerController`, balance by `AudioPlayer`. Each fans out to its engine node and to registered `VideoTapContext`s through its own registry. Rationale: plan ADR-5. (Contrast [Coordinator Volume Routing](#pattern-coordinator-volume-routing), where a coordinator fans one value out to whole playback backends.)
+
+**Implementation**:
+```swift
+// File: MacAmpApp/Utilities/WeakBox.swift
+final class WeakBox<T: AnyObject> {
+    weak var value: T?
+    init(_ value: T) { self.value = value }
+}
+
+// File: MacAmpApp/Audio/EqualizerController.swift
+var isEqOn: Bool = false {
+    didSet {
+        eqNode.bypass = !isEqOn                              // sink 1: engine AVAudioUnitEQ
+        UserDefaults.standard.set(isEqOn, forKey: "isEqOn")
+        fanOutToVideoTaps()                                  // sinks 2…n: registered video taps
+    }
+}
+
+@ObservationIgnored private var registeredVideoTapContexts: [WeakBox<VideoTapContext>] = []
+@ObservationIgnored private var lastFannedSampleRate: [ObjectIdentifier: Double] = [:]
+
+func registerVideoTapContext(_ context: VideoTapContext) {
+    registeredVideoTapContexts.removeAll { $0.value == nil || $0.value === context }
+    registeredVideoTapContexts.append(WeakBox(context))
+    pushEQState(to: context)                                 // current before its first render
+}
+
+func unregisterVideoTapContext(_ context: VideoTapContext) {
+    registeredVideoTapContexts.removeAll { $0.value == nil || $0.value === context }
+    lastFannedSampleRate.removeValue(forKey: ObjectIdentifier(context))
+}
+
+private func fanOutToVideoTaps() {
+    guard !registeredVideoTapContexts.isEmpty else { return } // fast path: audio-only
+    registeredVideoTapContexts.removeAll { $0.value == nil }
+    for box in registeredVideoTapContexts {
+        guard let context = box.value else { continue }
+        pushEQState(to: context)
+    }
+}
+
+private func pushEQState(to context: VideoTapContext, sampleRate: Double? = nil) {
+    let state = equalizerState
+    let rate = sampleRate ?? Double(bitPattern: context.pendingSampleRate.load(ordering: .relaxed))
+    context.isEqOn.store(state.isEqOn, ordering: .relaxed)
+    context.preampLinearGainBits.store(state.preampLinearGain.bitPattern, ordering: .relaxed)
+    context.installCoefficients(BiquadCoefficientSet.compute(for: state, sampleRate: rate))
+    lastFannedSampleRate[ObjectIdentifier(context)] = rate
+}
+```
+
+**Balance uses the same shape with its own registry**:
+```swift
+// File: MacAmpApp/Audio/AudioPlayer.swift
+var balance: Float = 0.0 {
+    didSet {
+        engine?.setBalance(balance)
+        fanOutBalanceToVideoTaps()
+    }
+}
+```
+
+**Input that arrives after registration**: coefficients depend on the sample rate, which only the render thread learns (`tapPrepare` → `pendingSampleRate`). The owner polls it on the visualizer's 30 Hz main-thread tick and recomputes only when it changes:
+```swift
+// File: MacAmpApp/Audio/AudioPlayer.swift (init)
+visualizerPipeline.onPollTick = { [weak self] in
+    self?.equalizer.pollVideoTapSampleRates()
+}
+```
+
+**Real usage**: `EqualizerController.swift` (EQ + preamp), `AudioPlayer.swift` (balance), registration in `AudioPlayer.startVideoLoad(track:)`, unregistration in `pauseAndDetachVideoTapIfNeeded()`. Tests: `Tests/MacAmpTests/VideoTapFanoutTests.swift`.
+
+**Pitfalls**:
+- Registries hold `WeakBox`, never the Context — the tap owns the Context's lifetime; prune `nil` boxes on each pass
+- Register pushes current state immediately; otherwise the first buffers render with defaults
+- Dedupe by identity (`===`) on register; drop `ObjectIdentifier`-keyed bookkeeping on unregister, since identifiers can be reused after deallocation
+- Keep one owner per setting and one registry per owner; don't route balance through the EQ controller or vice versa
+- Engine and tap must share constants so they can't drift: `BiquadCoefficientSet.frequencies` is read by both `EqualizerController.configureEQ()` and the cascade
+
+### Pattern: Dual-Producer Visualizer Feed
+
+**When to use**: Two mutually exclusive real-time sources (engine tap for audio, `MTAudioProcessingTap` for video) must drive the same visualizer UI.
+
+**S3-2**: Rationale: plan ADR-6.
+
+**Implementation (producers share the feed, each owns its scratch)**:
+```swift
+// File: MacAmpApp/Audio/VisualizerPipeline.swift
+// The feed is exposed so the video producer publishes to the same single slot
+var sharedFeed: VisualizerFeed { feed }
+
+// Engine producer (AVAudioEngine tap block, AVAudioPCMBuffer input)
+_ = feed.tryPublish(from: scratch, oscilloscopeSamples: 76, validFrameCount: cappedFrameCount)
+
+// File: MacAmpApp/Audio/AudioPlayer.swift (startVideoLoad)
+let context = VideoTapContext(feed: self.visualizerPipeline.sharedFeed)
+
+// File: MacAmpApp/Audio/VideoDSP/VideoTap.swift (tapProcess, after EQ/balance)
+let sampleRate = Double(bitPattern: context.pendingSampleRate.load(ordering: .relaxed))
+videoTapVisualizerRender(bufferList: bufferList, frames: frames, sampleRate: sampleRate,
+                         scratch: context.scratch, feed: context.feed)
+```
+
+**Implementation (consumer lifecycle for video)**: the engine tap normally starts the 30 Hz poll timer; during video the engine tap is not installed, so `AudioPlayer` starts and stops it explicitly.
+```swift
+// File: MacAmpApp/Audio/AudioPlayer.swift (playTrack)
+case .video:
+    pauseAndDetachVideoTapIfNeeded()
+    startVideoLoad(track: track)
+    visualizerPipeline.startVideoVisualization()
+    transition(to: .playing)
+
+// UI consumers gate on this instead of isEngineRendering
+var isVisualizerRendering: Bool {
+    isEngineRendering || (currentMediaType == .video && videoPlaybackController.isPlaying)
+}
+```
+
+**No flag-driven generalization**: the two producers take different buffer types (`AVAudioPCMBuffer` vs `AudioBufferList`) under different threading contracts, so they stay two parallel functions rather than one function with a mode flag. The Butterchurn FFT is already shared (`VisualizerScratchBuffers.processButterchurnFFT`); the RMS and Goertzel loops are duplicated with a "MUST match" comment in both.
+
+**Real usage**: `VisualizerPipeline.swift` (`makeTapHandler`, `sharedFeed`, `startVideoVisualization`/`stopVideoVisualization`, `onPollTick`), `VideoTapVisualizerRender.swift`, `AudioPlayer.swift` (`isVisualizerRendering`), `VisualizerView.swift`. Tests: `Tests/MacAmpTests/VideoTapVisualizerRenderTests.swift`.
+
+**Pitfalls**:
+- Changing the RMS or Goertzel math in one producer means changing it in the other
+- The single slot is last-write-wins and correct only because one producer is active at a time; a design that runs both concurrently needs per-producer feeds
+- Stop the video poll timer on every exit path — video→audio switch, `stop()`, and natural completion in `onPlaybackEnded` (otherwise the 30 Hz timer leaks); repeat-one restart bypasses `playTrack` and must re-arm it
+- `stopVideoVisualization()` also clears cached data so bars don't freeze on the last frame
+- Visualizer views and Butterchurn snapshots must check `isVisualizerRendering`; `isEngineRendering` is false for all of video
+
+### Pattern: Sampled Deadline Telemetry
+
+**When to use**: Production visibility into whether a real-time callback fits its buffer deadline, without logging or timing every callback on the render thread.
+
+**S3-2**: Added to `tapProcess`. Rationale: plan Phase 6.
+
+**Implementation**:
+```swift
+// File: MacAmpApp/Audio/VideoDSP/VideoTap.swift (tapProcess)
+let callIndex = context.processCallCount.add(1, ordering: .relaxed).oldValue  // pre-increment value
+// ...
+let sampleTiming = (callIndex & 63) == 0                                      // callbacks 0, 64, 128, …
+let startTicks = sampleTiming ? mach_absolute_time() : 0
+// ... full DSP + visualizer work ...
+if sampleTiming, sampleRate.isFinite, sampleRate > 0 {
+    let endTicks = mach_absolute_time()
+    let elapsedNanos = videoTapHostTicksToNanos(endTicks &- startTicks)
+    let budgetNanos = UInt64(Double(frames) / sampleRate * 1_000_000_000)
+    context.recordProcessingDeadline(elapsedNanos: elapsedNanos, budgetNanos: budgetNanos, nowHostTime: endTicks)
+}
+
+// File: MacAmpApp/Audio/VideoDSP/VideoTapContext.swift
+// Render-thread-safe and allocation-free: atomics only, integer-ratio comparisons
+func recordProcessingDeadline(elapsedNanos: UInt64, budgetNanos: UInt64, nowHostTime: UInt64) {
+    guard budgetNanos > 0 else { return }
+    if elapsedNanos * 10 > budgetNanos {          // > 10% of budget → overrun
+        _ = budgetOverrunCount.add(1, ordering: .relaxed)
+    }
+    if elapsedNanos * 2 > budgetNanos {           // > 50% of budget → deadline risk
+        _ = deadlineRiskCount.add(1, ordering: .relaxed)
+        lastDeadlineRiskHostTime.store(nowHostTime, ordering: .relaxed)
+    }
+}
+```
+
+**Readout**: there is no log path — counters are read on the main thread via `VideoTapContext.diagnosticSnapshot` (an immutable `Sendable` `VideoTapDiagnostics`). In practice they are read from LLDB with a breakpoint in `EqualizerController.pollVideoTapSampleRates()`, which fires at 30 Hz during video. In optimized builds the computed `diagnosticSnapshot` getter is stripped; load the atomics directly instead (`expr -l swift -- import Synchronization`, then `….registeredVideoTapContexts[0].value!.budgetOverrunCount.load(ordering: .relaxed)`). Procedure: `tasks/avplayer-native-video-dsp/verification.md` gate 8.5e.
+
+**Real usage**: `VideoTap.swift` (`tapProcess`, cached `videoTapMachTimebase`, `prewarmVideoTapTimebase()`), `VideoTapContext.swift` (`recordProcessingDeadline`, `diagnosticSnapshot`). Tests: `Tests/MacAmpTests/VideoTapTelemetryTests.swift` call `recordProcessingDeadline` directly with synthetic values.
+
+**Pitfalls**:
+- 1-in-64 sampling is advisory observability, not a CPU gate — use the dense benchmark (see [Wall-Clock Benchmarks Disabled Under TSan](#pattern-wall-clock-benchmarks-disabled-under-tsan)) for pass/fail
+- Query `mach_timebase_info` once and prewarm it from the main thread, so the first sampled callback doesn't pay the lazy-init once-token
+- No `os_log`/`print` on the render thread, even on the sampled path
+- `diagnosticSnapshot` does independent relaxed loads; fields may be from slightly different instants
+
 ---
 
 ## Async/Await Patterns
@@ -2685,7 +3051,7 @@ final class EQPresetStore {
 
 **Implementation**:
 ```swift
-// File: MacAmpApp/Audio/VideoPlaybackController.swift:52-59
+// File: MacAmpApp/Audio/VideoPlaybackController.swift
 // Purpose: Notify AudioPlayer of video events without direct reference
 // Context: VideoPlaybackController extracted but needs to sync UI state
 
@@ -2704,13 +3070,20 @@ final class VideoPlaybackController {
     // ... playback methods set up time observer ...
 
     private func setupTimeObserver() {
+        tearDownTimeObserver()  // Clean first
+        guard let player else { return }
+
         let interval = CMTime(seconds: 0.1, preferredTimescale: 600)
-        timeObserver = player?.addPeriodicTimeObserver(
+        timeObserver = player.addPeriodicTimeObserver(
             forInterval: interval,
             queue: .main
-        ) { [weak self] time in
+        ) { [weak self, weak player] time in
             Task { @MainActor in
-                guard let self else { return }
+                guard let self, let player else { return }
+                // Identity guard: a superseding loadVideo may have
+                // replaced `self.player` while this periodic tick was
+                // queued. Ignore the stale callback.
+                guard self.player === player else { return }
                 // ... compute time values ...
 
                 // Notify AudioPlayer to sync its UI-bound properties
@@ -2999,6 +3372,160 @@ Stream playing → network error → handleTermination()
 - The stable-playback timer must be cancelled when stopping or reconnecting to prevent false resets
 - `wasActivelyPlaying` guard prevents reconnect attempts for streams that never successfully played (avoids infinite retry on initial connection failure)
 
+### Pattern: Generation Token Guards Across await
+
+**When to use**: An async builder on the main actor (load, then construct) can be superseded while it is suspended — the user skips to the next video, switches to audio, or stops — and the stale run must not install anything.
+
+**S3-2**: `AudioPlayer.startVideoLoad(track:)` awaits track loading and format loading before building the tap and the `AVPlayer`. Main-actor code is reentrant across `await`, so every suspension point is a place where the world may have changed. Rationale: plan ADR-7 amendment.
+
+**Implementation**:
+```swift
+// File: MacAmpApp/Audio/AudioPlayer.swift
+@ObservationIgnored private var videoLoadGeneration: UInt64 = 0
+@ObservationIgnored private var inFlightVideoLoadTask: Task<Void, Never>?
+
+/// Bumped on every new video load, video→audio switch, and stop.
+private func invalidateInFlightVideoLoad() {
+    inFlightVideoLoadTask?.cancel()
+    inFlightVideoLoadTask = nil
+    videoLoadGeneration &+= 1
+}
+
+private func startVideoLoad(track: Track) {
+    invalidateInFlightVideoLoad()
+    let gen = videoLoadGeneration
+    let url = track.url
+
+    inFlightVideoLoadTask = Task { @MainActor [weak self] in
+        guard let self, gen == self.videoLoadGeneration else { return }
+
+        await self.videoPlaybackController.loadVideo(
+            url: url,
+            autoPlay: false,
+            audioMixBuilder: { [weak self] asset in
+                guard let self, gen == self.videoLoadGeneration else { return nil }
+                do {
+                    let audioTracks = try await asset.loadTracks(withMediaType: .audio)
+                    guard gen == self.videoLoadGeneration else { return nil }
+                    guard let audioTrack = audioTracks.first else { return nil }
+                    let preferredFormat = await VideoTap.preferredProcessingFormat(for: audioTrack)
+                    guard gen == self.videoLoadGeneration else { return nil }
+                    // ... build Context + audioMix, register fan-out, return mix ...
+                } catch {
+                    AppLog.error(.audio, "Video tap audio mix build failed: \(error)")
+                    return nil
+                }
+            },
+            isStillRelevant: { [weak self] in
+                guard let self else { return false }
+                return gen == self.videoLoadGeneration
+            }
+        )
+
+        guard gen == self.videoLoadGeneration else { return }
+        guard case .playing = self.playbackState else { return }
+        self.videoPlaybackController.play()
+    }
+}
+```
+
+**Companion: identity guards on callbacks from a replaceable object**. `AVPlayer` time-observer, seek-completion and end-of-item callbacks can arrive after a newer `loadVideo` replaced the player. Capture the source weakly and compare identity before mutating state:
+```swift
+// File: MacAmpApp/Audio/VideoPlaybackController.swift (seek)
+player.seek(to: targetTime) { [weak self, weak player] finished in
+    Task { @MainActor in
+        guard let self, let player, finished else { return }
+        guard self.player === player else { return }   // superseded — ignore
+        // ... update transport state ...
+    }
+}
+```
+
+**Key elements**:
+1. **Capture the token before the first `await`** (`let gen = videoLoadGeneration`) and re-check it after **every** `await`, not just at the end
+2. **Bump on every supersession path** — new load, media-type switch, stop — via one helper
+3. **Separate "stale" from "nothing to build"**: the builder returns `nil` for "no audio track, build a player without a tap"; `isStillRelevant` returning `false` aborts the whole load before any player, item or observer is created
+4. **Re-check intent before side effects**: auto-play only if `playbackState` is still `.playing`
+5. **`Task.cancel()` is advisory**: `AVURLAsset.loadTracks` ignores cancellation, so the token is the load-bearing signal
+
+**Real usage**: `AudioPlayer.startVideoLoad(track:)` / `invalidateInFlightVideoLoad()`, `VideoPlaybackController.loadVideo` (`isStillRelevant`), identity guards in `VideoPlaybackController` seek completion, time observer and end-of-item observer. Same idea as the `currentSeekID` UUID used to filter stale `playerNode` completions. Tests: `VideoTapLifecycleTests` ("loadVideo bails when isStillRelevant returns false…", "Stale loadVideo drops the built audioMix without leaking the Context"), `VideoSeekStateMatrixTests`.
+
+**Pitfalls**:
+- A check only after the last `await` still lets a stale run do work (and retain resources) in between
+- `resume: nil` on seek means "keep the user's current intent" — evaluate it inside the completion, not when the seek is issued, or a pause during the seek is lost (`VideoSeekStateMatrixTests` covers the matrix)
+- An abandoned build may already have created a Context; it is released through the tap's normal finalize chain when the unused `audioMix` is dropped, not by the stale path
+
+### Pattern: Debounced Will/Did Notification Bursts
+
+**When to use**: A system notification arrives in bursts (2–3 within ~100 ms) and consumers need one "about to change" signal at the start and one "settled" signal at the end.
+
+**S3-2**: Added for output-route changes (Control Center, AirPlay, HDMI, sleep/wake) that fire several `AVAudioEngineConfigurationChange` notifications.
+
+**Implementation**:
+```swift
+// File: MacAmpApp/Audio/AudioEngineConfigurationObserver.swift
+@MainActor
+final class AudioEngineConfigurationObserver {
+    private var watchTask: Task<Void, Never>?
+    private var debounceTask: Task<Void, Never>?
+    private static let debounceWindow: Duration = .milliseconds(150)
+
+    var onWillReconfigure: (@MainActor () -> Void)?
+    var onDidReconfigure: (@MainActor () -> Void)?
+
+    func start() {
+        guard watchTask == nil else { return }
+        let stream = NotificationCenter.default.notifications(
+            named: .AVAudioEngineConfigurationChange,
+            object: engine
+        )
+        watchTask = Task { @MainActor [weak self] in
+            for await _ in stream {
+                self?.handleConfigurationChange()
+            }
+        }
+    }
+
+    private func handleConfigurationChange() {
+        if debounceTask == nil {
+            onWillReconfigure?()                       // first notification of a burst
+        }
+        guard watchTask != nil else { return }         // `will` handler may have called stop()
+        debounceTask?.cancel()                         // each arrival restarts the quiet window
+        debounceTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: Self.debounceWindow)
+            guard let self, !Task.isCancelled else { return }
+            self.debounceTask = nil
+            self.onDidReconfigure?()
+        }
+    }
+}
+```
+
+**Consumer side — user intent cancels a pending `did`**:
+```swift
+// File: MacAmpApp/Audio/AudioPlayer.swift
+// Called from play/pause/stop/seek/playTrack
+private func cancelPendingReconfigure() {
+    pendingReconfigureSnapshot = nil
+    seekGuardActive = false
+    isHandlingCompletion = false
+}
+```
+
+**Key elements**:
+1. `NotificationCenter.notifications(named:object:)` consumed in a `@MainActor` task — no manual `Task { @MainActor in }` hop per notification
+2. `will` fires immediately so guards are armed before the engine restart fires a stale completion; `did` fires once after 150 ms of quiet
+3. `did` is **not** guaranteed after `will` if `stop()`/`deinit` interrupts the window — consumers clear what `will` armed in their own teardown and user-intent paths
+4. The `did` handler early-returns when the snapshot is `nil`, so user intent during the window wins over the automatic resume
+
+**Real usage**: `AudioEngineConfigurationObserver.swift`, owned by `AudioEngineController` (forwards `onEngineWillReconfigure(PreReconfigureSnapshot)` / `onEngineDidReconfigure`), consumed by `AudioPlayer.handleEngineWillReconfigure` / `handleEngineDidReconfigure`, and `PlaybackCoordinator` (`onEngineReconfigured` refreshes the stream-decode audio workgroup). Tests: `Tests/MacAmpTests/EngineConfigObserverTests.swift` post synthetic notifications against a real `AVAudioEngine`.
+
+**Pitfalls**:
+- The snapshot the engine captures at notification time is unreliable (the system has already stopped the engine); `AudioPlayer` overrides `wasPlaying`/`currentTime` with its own transition-managed state
+- Anything armed in `will` needs a release path that doesn't depend on `did` running
+- Keep `start()`/`stop()` idempotent; tests cycle them
+
 ---
 
 ## Error Handling Patterns
@@ -3188,6 +3715,10 @@ xcodegen generate  # if xcodeproj is stale or missing
 xcodebuild test -scheme MacAmpApp -destination 'platform=macOS'
 ```
 
+**Thread Sanitizer run** (required before committing): add `-enableThreadSanitizer YES`. Wall-clock benchmarks skip themselves under TSan (see [Wall-Clock Benchmarks Disabled Under TSan](#pattern-wall-clock-benchmarks-disabled-under-tsan)), so run the suite once without TSan as well.
+
+**Video fixtures**: `VideoTapLifecycleTests` and `VideoSeekStateMatrixTests` load clips from `clapperboard-videos/` at the project root (resolved via `SRCROOT`, falling back to `#filePath`).
+
 ### Pattern: Mock Injection for Testing
 
 **When to use**: Unit testing components with dependencies
@@ -3304,6 +3835,164 @@ func testStreamLoading() async throws {
     }
 }
 ```
+
+### Pattern: Polling for Asynchronous Release
+
+**When to use**: Asserting that an object is deallocated when the release happens on another queue at an unspecified time — e.g. `tapFinalize` releasing a `VideoTapContext` after the last `AVPlayer`/`AVPlayerItem` reference drops.
+
+**Implementation**:
+```swift
+// File: Tests/MacAmpTests/VideoTapLifecycleTests.swift
+
+@Test("Single attach lifecycle: Context released after AVPlayer drop")
+func singleAttachLifecycle() async throws {
+    let url = try Self.clipURL("1_mp4_441_stereo.mp4")
+    let asset = AVURLAsset(url: url)
+    let tracks = try await asset.loadTracks(withMediaType: .audio)
+    let audioTrack = try #require(tracks.first)
+
+    weak var weakContext: VideoTapContext?
+
+    try {
+        let context = VideoTapContext(feed: VisualizerFeed())
+        weakContext = context
+        let mix = try VideoTap.buildAudioMix(audioTrack: audioTrack, context: context)
+        let item = AVPlayerItem(asset: asset)
+        item.audioMix = mix
+        let player = AVPlayer(playerItem: item)
+        _ = player  // strong refs alive only inside this scope
+    }()
+
+    try await Self.waitUntilNil(weakContext)
+    #expect(weakContext == nil, "VideoTapContext should be released after the surrounding AVPlayer is dropped")
+}
+
+/// Poll a weak reference until it goes nil or the deadline expires.
+/// `tapFinalize` may fire on a background queue, so a fixed sleep
+/// would be flaky.
+private static func waitUntilNil<T: AnyObject>(
+    _ ref: @autoclosure () -> T?,
+    timeoutMs: UInt64 = 5_000,
+    pollMs: UInt64 = 50
+) async throws {
+    let pollNs = pollMs * 1_000_000
+    let maxIterations = timeoutMs / pollMs
+    for _ in 0..<maxIterations {
+        if ref() == nil { return }
+        try await Task.sleep(nanoseconds: pollNs)
+    }
+}
+```
+
+**Key elements**:
+1. Create the strong references inside an immediately-invoked closure so they provably go out of scope before the wait
+2. Poll with a generous deadline (returns as soon as the condition holds) instead of a fixed sleep
+3. `waitUntilNil` returns silently on timeout — the `#expect` after it is the assertion. `VideoSeekStateMatrixTests.waitUntil(_:)` is the variant that throws on timeout for arbitrary conditions
+4. Reset DEBUG test seams (e.g. `VideoTap._testForceTapCreateFailure`) with `defer` **before** the first `await`, so no other test observes them
+
+**Real usage**: `VideoTapLifecycleTests.swift` (single/rapid-double attach, detach, create failure, `replaceCurrentItem(nil)`, stale load), `VideoSeekStateMatrixTests.swift`
+
+**Pitfalls**:
+- A fixed `Task.sleep` passes locally and flakes under load or TSan
+- Holding the object in a test-scope `let` keeps it alive and makes the test meaningless
+- Proving release is not proving the absence of a render-time use-after-free; that still needs a TSan/ASan run with playback
+
+### Pattern: Wall-Clock Benchmarks Disabled Under TSan
+
+**When to use**: A test asserts a timing budget (real-time deadline, p99 latency) and the suite is also run with Thread Sanitizer, whose instrumentation makes wall-clock numbers meaningless.
+
+**Implementation**:
+```swift
+// File: Tests/MacAmpTests/VideoTapCPUBenchmarkTests.swift
+
+static let threadSanitizerActive = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "__tsan_init") != nil  // -2 = RTLD_DEFAULT
+
+@Test(
+    "per-callback DSP fits the deadline even in Debug (99p ≤ 50%, max ≤ 75%)",
+    .disabled(if: threadSanitizerActive, "wall-clock timing is meaningless under TSan instrumentation; runs in non-TSan test runs")
+)
+func dspWithinBudget() {
+    let tb = Self.timebase()
+    let budgetNanos = Double(Self.frames) / Self.sampleRate * 1_000_000_000
+    // ...
+    for _ in 0..<Self.iterations {
+        memcpy(left, srcL, byteCount); memcpy(right, srcR, byteCount)  // refresh input (untimed)
+        let start = mach_absolute_time()
+        // ... full per-callback DSP chain ...
+        samples.append(Self.nanos(mach_absolute_time() &- start, tb))
+    }
+    // ...
+    #expect(p99 <= budgetNanos * 0.50, "99p exceeded 50% of budget even allowing for Debug — \(summary)")
+    #expect(maxNs <= budgetNanos, "a single sample exceeded the full buffer deadline (hung?) — \(summary)")
+}
+```
+
+**Key elements**:
+1. Detect TSan at runtime by looking up the `__tsan_init` symbol, and use `.disabled(if:)` so the test reports as skipped (not passed) in TSan runs
+2. Time every iteration and assert a percentile against the real buffer budget; keep the `max` bound loose (single samples include scheduler stalls)
+3. Restore the input buffers **outside** the timed region so processed output never feeds the next iteration
+4. Thresholds are set for the Debug (`-Onone`) test build; the tighter Release target is verified separately with Instruments
+
+**Real usage**: `VideoTapCPUBenchmarkTests.swift`. Runs in a plain `xcodebuild test -scheme MacAmpApp -destination 'platform=macOS'`; skipped in the TSan run.
+
+**Pitfalls**:
+- Don't gate on `#if DEBUG` or a build setting — TSan is enabled per invocation (`-enableThreadSanitizer YES`), not per configuration
+- Printing the summary in the test output makes regressions diagnosable without re-running
+
+### Pattern: Numerical Match Against the Apple Reference Unit
+
+**When to use**: Re-implementing an Apple DSP unit (here the 10-band `AVAudioUnitEQ`) and needing proof the re-implementation sounds the same.
+
+**Implementation**:
+```swift
+// File: Tests/MacAmpTests/BiquadNumericalMatchTests.swift
+
+@Test("Full-EQ magnitude match: BiquadCascade vs AVAudioUnitEQ ≤0.5 dB over 20Hz–20kHz")
+func fullEqMagnitudeMatch() throws {
+    var worst = 0.0
+    var worstInfo = ""
+    for (name, gains) in Self.presets {
+        for f in Self.probeFrequencies {
+            let eqDB = try Self.eqMagnitudeDB(frequency: f, gains: gains)
+            let cascadeDB = Self.cascadeMagnitudeDB(frequency: f, gains: gains)
+            let err = abs(eqDB - cascadeDB)
+            if err > worst {
+                worst = err
+                worstInfo = "preset=\(name) f=\(Int(f))Hz eq=\(String(format: "%.3f", eqDB))dB cascade=\(String(format: "%.3f", cascadeDB))dB"
+            }
+        }
+    }
+    #expect(worst <= 0.5, "Worst-case magnitude error \(String(format: "%.3f", worst)) dB > 0.5 dB at \(worstInfo)")
+}
+
+// Reference side: render a sine through a real AVAudioUnitEQ offline
+let source = AVAudioSourceNode(format: format) { _, _, frameCount, ablPtr in /* sine */ }
+engine.attach(source)
+engine.connect(source, to: eq, format: format)
+engine.connect(eq, to: engine.mainMixerNode, format: format)
+try engine.enableManualRenderingMode(.offline, format: format, maximumFrameCount: 4_096)
+try engine.start()
+// ... renderOffline until `total` frames, then steady-state RMS gain in dB ...
+
+/// Configure an `AVAudioUnitEQ` identically to `EqualizerController.configureEQ`.
+static func configure(_ eq: AVAudioUnitEQ, gains: [Float]) {
+    let freqs = BiquadCoefficientSet.frequencies
+    // ...
+}
+```
+
+**Key elements**:
+1. Compare **magnitude** as steady-state RMS gain of a pure sine (skip the first 8,192 samples); this equals |H(f)| regardless of filter phase or latency, so no alignment is needed
+2. Sweep log-spaced probes (40 from 20 Hz to 20 kHz) × several EQ shapes and report the worst case with its location
+3. Configure the reference from the same shared constants as production (`BiquadCoefficientSet.frequencies`) so the test can't drift from `EqualizerController`
+4. `AVAudioEngine` manual rendering (`.offline`) makes the reference deterministic and hardware-independent
+5. Separate tests cover bypass (exact pass-through), preamp dB→linear, the balance law, fail-closed coefficients (invalid rate, band above Nyquist), interleaved-vs-planar stride, and `reset()`
+
+**Real usage**: `BiquadNumericalMatchTests.swift` (acceptance criterion from plan ADR-8)
+
+**Pitfalls**:
+- Comparing sample-by-sample output fails on phase differences even when the response matches
+- Measuring during the filter's transient overstates the error — skip it
 
 ---
 
@@ -3677,31 +4366,28 @@ struct PlaylistHeaderView: View {
 See Lesson #25 in BUILDING_RETRO_MACOS_APPS_SKILL.md for the complete architecture pattern.
 See [View Layer Decomposition (MainWindow)](#pattern-view-layer-decomposition-mainwindow) in the UI Component Patterns section for the MainWindow-specific implementation.
 
-### Anti-Pattern: Direct Backend Volume/Balance Binding (T5 Phase 1)
+### Anti-Pattern: Direct Backend Volume/Balance Binding
 
-**Context**: Before T5 Phase 1, volume and balance sliders bound directly to `audioPlayer.volume` via `@Bindable`. This only updated AudioPlayer's `playerNode` and missed StreamPlayer and VideoPlaybackController entirely.
+**Context**: Binding sliders straight to `audioPlayer.volume` via `@Bindable` skips the coordinator's same-value guard and its drag-end persistence.
 
 **Wrong**:
 ```swift
-// DEPRECATED (T5 Phase 1): Direct binding bypasses coordinator
 @Bindable var player = audioPlayer
-WinampVolumeSlider(volume: $player.volume)      // Only updates AudioPlayer!
-WinampBalanceSlider(balance: $player.balance)    // StreamPlayer stays out of sync!
+WinampVolumeSlider(volume: $player.volume)      // No idempotent guard, no drag-end commit
+WinampBalanceSlider(balance: $player.balance)
 ```
 
-Also wrong -- propagating to other backends from AudioPlayer's `didSet`:
+Also wrong -- writing UserDefaults from the `didSet` of a slider-driven value (a disk write on every drag tick):
 ```swift
-// DEPRECATED (T5 Phase 1): AudioPlayer should not know about other backends
 var volume: Float = 0.75 {
     didSet {
-        playerNode.volume = volume
-        videoPlaybackController.volume = volume  // Cross-backend coupling!
-        UserDefaults.standard.set(volume, forKey: Keys.volume)
+        engine?.setVolume(volume)
+        UserDefaults.standard.set(volume, forKey: Keys.volume)  // Per-tick persistence!
     }
 }
 ```
 
-**Correct**: Use asymmetric bindings through `PlaybackCoordinator`. See [Coordinator Volume Routing](#pattern-coordinator-volume-routing) and [Asymmetric Binding for Coordinator Routing](#pattern-asymmetric-binding-for-coordinator-routing) in State Management Patterns.
+**Correct**: Use asymmetric bindings through `PlaybackCoordinator` and commit on drag end. See [Coordinator Volume Routing](#pattern-coordinator-volume-routing) and [Asymmetric Binding for Coordinator Routing](#pattern-asymmetric-binding-for-coordinator-routing) in State Management Patterns.
 
 ---
 
@@ -3796,4 +4482,4 @@ When implementing new features, prefer these established patterns. When you disc
 
 ---
 
-*Document Version: 2.1.0 | Last Updated: 2026-03-25*
+*Document Version: 2.2.0 | Last Updated: 2026-09-25*

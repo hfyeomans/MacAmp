@@ -1,9 +1,9 @@
 # MacAmp Documentation Guide
 
-**Version:** 3.11.0
-**Date:** 2026-03-25
+**Version:** 3.12.0
+**Date:** 2026-09-25
 **Purpose:** Master index and navigation guide for all MacAmp documentation
-**Total Documentation:** 18,080 active lines across 12 current docs + 26 archived docs
+**Total Documentation:** 19,340 active lines across 12 current docs + 26 archived docs
 
 ---
 
@@ -26,7 +26,7 @@
 
 ## Executive Summary
 
-The MacAmp documentation system consists of **12 active technical documents** (18,080 lines) providing comprehensive coverage of a pixel-perfect Winamp 2.x recreation for macOS. Documentation spans from high-level architecture to implementation details, window management systems, video playback, visualization windows, build processes, and skin system specifications.
+The MacAmp documentation system consists of **12 active technical documents** (19,340 lines) providing comprehensive coverage of a pixel-perfect Winamp 2.x recreation for macOS 27+. Documentation spans from high-level architecture to implementation details, window management systems, video playback, visualization windows, build processes, and skin system specifications.
 
 ### Documentation Purpose
 
@@ -112,16 +112,16 @@ xcodebuild test -scheme MacAmpApp -destination 'platform=macOS'
 
 ## Complete Documentation Inventory
 
-### 🏗️ Architecture & Design (9 documents, 15,789 lines)
+### 🏗️ Architecture & Design (9 documents, 16,931 lines)
 
 #### **[MACAMP_ARCHITECTURE_GUIDE.md](MACAMP_ARCHITECTURE_GUIDE.md)** ⭐
-- **Size**: 168KB, 5,249 lines
+- **Size**: 258KB, 5,493 lines
 - **Last Updated**: 2026-03-25
 - **Status**: ✅ AUTHORITATIVE
 - **Purpose**: Complete architectural reference for MacAmp
 - **Key Sections**:
   - Three-layer architecture (mechanism → bridge → presentation)
-  - Unified audio pipeline (all audio through AVAudioEngine)
+  - Unified audio pipeline (local files and streams through AVAudioEngine; video audio through AVPlayer with an `MTAudioProcessingTap` applying EQ/preamp/balance and feeding the visualizer)
   - State management with Swift 6 @Observable
   - Internet radio streaming implementation
   - Component integration maps
@@ -133,7 +133,7 @@ xcodebuild test -scheme MacAmpApp -destination 'platform=macOS'
 - **Quality**: ⭐⭐⭐⭐⭐ Authoritative (post-corrections)
 
 #### **[IMPLEMENTATION_PATTERNS.md](IMPLEMENTATION_PATTERNS.md)** ⭐
-- **Size**: 115KB, 3,789 lines
+- **Size**: 189KB, 4,485 lines
 - **Last Updated**: 2026-03-25
 - **Status**: ✅ AUTHORITATIVE
 - **Purpose**: Practical code patterns and best practices
@@ -151,7 +151,7 @@ xcodebuild test -scheme MacAmpApp -destination 'platform=macOS'
 - **Quality**: ⭐⭐⭐⭐⭐ Authoritative
 
 #### **[SPRITE_SYSTEM_COMPLETE.md](SPRITE_SYSTEM_COMPLETE.md)** ⭐
-- **Size**: 25KB, 728 lines
+- **Size**: 26KB, 732 lines
 - **Last Updated**: 2025-11-01
 - **Status**: ✅ AUTHORITATIVE
 - **Purpose**: Complete reference for semantic sprite resolution system
@@ -167,7 +167,7 @@ xcodebuild test -scheme MacAmpApp -destination 'platform=macOS'
 - **Quality**: ⭐⭐⭐⭐⭐ Authoritative
 
 #### **[MULTI_WINDOW_ARCHITECTURE.md](MULTI_WINDOW_ARCHITECTURE.md)** ⭐
-- **Size**: 43KB, 1,382 lines
+- **Size**: 53KB, 1,375 lines
 - **Last Updated**: 2026-02-09
 - **Status**: ✅ PRODUCTION
 - **Purpose**: Complete multi-window system design and implementation
@@ -189,14 +189,15 @@ xcodebuild test -scheme MacAmpApp -destination 'platform=macOS'
 - **Quality**: ⭐⭐⭐⭐⭐ Authoritative
 
 #### **[VIDEO_WINDOW.md](VIDEO_WINDOW.md)** ⭐
-- **Size**: 38KB, 1,151 lines
+- **Size**: 48KB, 1,357 lines
 - **Last Updated**: 2025-11-14
 - **Status**: ✅ PRODUCTION
 - **Purpose**: Complete video window documentation with chrome system and playback architecture
 - **Key Sections**:
   - Window specifications and coordinate system
   - VIDEO.bmp sprite definitions and extraction
-  - AVPlayerViewRepresentable integration
+  - AVPlayerViewRepresentable integration (`updatesNowPlayingInfoCenter = false`; PlaybackCoordinator owns Now Playing and remote commands)
+  - Video audio DSP: EQ/preamp/balance/visualizer via an in-place `MTAudioProcessingTap` on `AVPlayerItem.audioMix` (stereo at the source rate; multichannel downmixed)
   - Chrome components (titlebar, borders, metadata)
   - 1x/2x window resizing implementation
   - Fallback chrome for missing VIDEO.bmp
@@ -206,7 +207,7 @@ xcodebuild test -scheme MacAmpApp -destination 'platform=macOS'
 - **Quality**: ⭐⭐⭐⭐⭐ Authoritative
 
 #### **[PLAYLIST_WINDOW.md](PLAYLIST_WINDOW.md)** ⭐
-- **Size**: 28KB, 882 lines
+- **Size**: 32KB, 897 lines
 - **Last Updated**: 2026-03-25
 - **Status**: ✅ PRODUCTION
 - **Purpose**: Complete playlist window documentation with segment-based resize system
@@ -226,7 +227,7 @@ xcodebuild test -scheme MacAmpApp -destination 'platform=macOS'
 - **Quality**: ⭐⭐⭐⭐⭐ Authoritative (Oracle Grade A-)
 
 #### **[MILKDROP_WINDOW.md](MILKDROP_WINDOW.md)** ⭐
-- **Size**: 54KB, 1,660 lines
+- **Size**: 66KB, 1,738 lines
 - **Last Updated**: 2026-03-22
 - **Status**: ✅ PRODUCTION - Complete with Butterchurn visualization and resize
 - **Purpose**: Milkdrop visualization window with Butterchurn.js integration
@@ -251,7 +252,7 @@ xcodebuild test -scheme MacAmpApp -destination 'platform=macOS'
 - **Quality**: ⭐⭐⭐⭐⭐ Authoritative
 
 #### **[WINDOW_FOCUS_ARCHITECTURE.md](WINDOW_FOCUS_ARCHITECTURE.md)** ⭐
-- **Size**: 18KB, 599 lines
+- **Size**: 17KB, 600 lines
 - **Last Updated**: 2025-11-14
 - **Status**: ✅ PRODUCTION
 - **Purpose**: Window focus state tracking for active/inactive titlebar rendering
@@ -267,23 +268,23 @@ xcodebuild test -scheme MacAmpApp -destination 'platform=macOS'
 - **Quality**: ⭐⭐⭐⭐⭐ Authoritative
 
 #### **[CUSTOM_DRAG_FIX.md](CUSTOM_DRAG_FIX.md)**
-- **Size**: 8KB, 254 lines
+- **Size**: 9KB, 254 lines
 - **Last Updated**: 2025-11-14
 - **Status**: ✅ CURRENT
-- **Purpose**: Solution for custom window dragging issues in SwiftUI
+- **Purpose**: Fix for windows repelling each other and clusters breaking during fast custom drags
 - **Key Sections**:
-  - Problem analysis with WindowDragGesture
-  - Solution using NSWindow.performDrag
-  - Implementation patterns
-  - Edge cases and considerations
+  - Root causes: incremental deltas on current positions, dynamic cluster recalculation, missing base boxes
+  - Webamp's working pattern (apply the total delta to base boxes captured at drag start)
+  - The fix: `DragContext`, `beginCustomDrag`, `updateCustomDrag`
+  - Verification
 - **When to Read**: Implementing custom window dragging, debugging drag issues
 - **Related Docs**: MULTI_WINDOW_ARCHITECTURE.md
 - **Quality**: ⭐⭐⭐⭐ Reference
 
-### 🔨 Build & Distribution (1 document, 648 lines)
+### 🔨 Build & Distribution (1 document, 692 lines)
 
 #### **[RELEASE_BUILD_GUIDE.md](RELEASE_BUILD_GUIDE.md)**
-- **Size**: ~20KB, 648 lines
+- **Size**: 22KB, 692 lines
 - **Last Updated**: 2026-03-25
 - **Status**: ✅ AUTHORITATIVE
 - **Purpose**: Complete guide for building, signing, notarizing, and troubleshooting
@@ -328,6 +329,7 @@ xcodebuild test -scheme MacAmpApp -destination 'platform=macOS'
 **Audio System:**
 - MACAMP_ARCHITECTURE_GUIDE.md §4 - Unified audio pipeline (AVAudioEngine for both local and streaming)
 - MACAMP_ARCHITECTURE_GUIDE.md §8 - Audio processing pipeline
+- VIDEO_WINDOW.md + MACAMP_ARCHITECTURE_GUIDE.md - Video audio DSP (`MTAudioProcessingTap` in `MacAmpApp/Audio/VideoDSP/`)
 - MACAMP_ARCHITECTURE_GUIDE.md §9 - Internet radio streaming (custom decode pipeline: ICYFramer, AudioFileStreamParser, AudioConverterDecoder, StreamDecodePipeline)
 - IMPLEMENTATION_PATTERNS.md §4 - Audio processing patterns
 - BUILDING_RETRO_MACOS_APPS_SKILL.md Lesson #27 - Sine wave diagnostic for audio debugging
@@ -714,13 +716,17 @@ Includes:
 | **WinampAlertHelper** | `MacAmpApp/Utilities/WinampAlertHelper.swift` | (code file; no dedicated doc section yet) |
 | **PlaylistStyle.winampDefault** | IMPLEMENTATION_PATTERNS.md | §2 State Patterns |
 | **supportsAudioProcessing** | IMPLEMENTATION_PATTERNS.md | §2 Capability Flag Pattern |
+| **Video audio DSP / MTAudioProcessingTap** | VIDEO_WINDOW.md, MACAMP_ARCHITECTURE_GUIDE.md | [Video Audio DSP Pipeline](VIDEO_WINDOW.md#video-audio-dsp-pipeline); [AVPlayer-Native Video DSP](MACAMP_ARCHITECTURE_GUIDE.md#avplayer-native-video-dsp); code in `MacAmpApp/Audio/VideoDSP/` |
+| **isVisualizerRendering** | PLAYLIST_WINDOW.md | §Mini Visualizer (visualizer runs for audio and video) |
+| **get-task-allow / CODE_SIGN_INJECT_BASE_ENTITLEMENTS** | RELEASE_BUILD_GUIDE.md | §Testing a Release Build |
 
 ### Common Questions → Answer Location
 
 | Question | Answer |
 |----------|--------|
 | "How do I add a new UI component?" | SPRITE_SYSTEM_COMPLETE.md §8 + IMPLEMENTATION_PATTERNS.md §3 |
-| "Why are there two audio players?" | There is now ONE unified engine path. Both local files and streams route through AVAudioEngine. See MACAMP_ARCHITECTURE_GUIDE.md §4 |
+| "Why are there two audio players?" | There is now ONE unified engine path. Both local files and streams route through AVAudioEngine. Video audio plays through AVPlayer, with EQ/preamp/balance and the visualizer applied by an `MTAudioProcessingTap` (`MacAmpApp/Audio/VideoDSP/`). See MACAMP_ARCHITECTURE_GUIDE.md §4 |
+| "Does the EQ/visualizer work for video?" | Yes, via the video `MTAudioProcessingTap` (`MacAmpApp/Audio/VideoDSP/`). See VIDEO_WINDOW.md and MACAMP_ARCHITECTURE_GUIDE.md |
 | "How does internet radio streaming work now?" | MACAMP_ARCHITECTURE_GUIDE.md §9 (custom decode pipeline: ICYFramer → AudioFileStreamParser → AudioConverterDecoder → AVAudioSourceNode) |
 | "How to debug audio corruption?" | BUILDING_RETRO_MACOS_APPS_SKILL.md Lesson #27 (sine wave diagnostic test) |
 | "How does skin loading work?" | SPRITE_SYSTEM_COMPLETE.md + WINAMP_SKIN_VARIATIONS.md |
@@ -798,8 +804,8 @@ Includes:
 ```
 Total Active Docs:        12
 Total Archived Docs:      27 (local only)
-Total Lines:             18,080
-Average Doc Size:        1,507 lines
+Total Lines:             19,340
+Average Doc Size:        1,612 lines
 Last Full Review:        2026-03-25
 Documentation Version:   3.11.0
 Recent Update:           Multi-window docs consolidation: merged QUICK_START + README into MULTI_WINDOW_ARCHITECTURE.md, archived RESEARCH_SUMMARY (v3.11.0)
@@ -946,28 +952,28 @@ The following documents have been **archived to docs/archive/** (local only, not
 ```
 12 Core Technical Documents
 ─────────────────────────────
-MACAMP_ARCHITECTURE_GUIDE.md         5,249 lines  (29%) ⭐ UPDATED
-IMPLEMENTATION_PATTERNS.md           3,790 lines  (21%) ⭐ UPDATED
-MILKDROP_WINDOW.md                   1,647 lines  (9%)  ⭐ UPDATED
-MULTI_WINDOW_ARCHITECTURE.md         1,375 lines  (8%)  ⭐ UPDATED
-VIDEO_WINDOW.md                      1,151 lines  (6%)
-README.md (this file)                1,092 lines  (6%)
-PLAYLIST_WINDOW.md                     895 lines  (5%)
-SPRITE_SYSTEM_COMPLETE.md              728 lines  (4%)
-WINAMP_SKIN_VARIATIONS.md              652 lines  (4%)
-RELEASE_BUILD_GUIDE.md                 648 lines  (4%)  ⭐ CONSOLIDATED
-WINDOW_FOCUS_ARCHITECTURE.md           599 lines  (3%)
+MACAMP_ARCHITECTURE_GUIDE.md         5,493 lines  (28%)  ⭐ UPDATED
+IMPLEMENTATION_PATTERNS.md           4,485 lines  (23%)  ⭐ UPDATED
+MILKDROP_WINDOW.md                   1,738 lines  (9%)   ⭐ UPDATED
+MULTI_WINDOW_ARCHITECTURE.md         1,375 lines  (7%)   ⭐ UPDATED
+VIDEO_WINDOW.md                      1,357 lines  (7%)   ⭐ UPDATED
+README.md (this file)                1,065 lines  (6%)
+PLAYLIST_WINDOW.md                     897 lines  (5%)
+SPRITE_SYSTEM_COMPLETE.md              732 lines  (4%)
+RELEASE_BUILD_GUIDE.md                 692 lines  (4%)   ⭐ CONSOLIDATED
+WINAMP_SKIN_VARIATIONS.md              652 lines  (3%)
+WINDOW_FOCUS_ARCHITECTURE.md           600 lines  (3%)
 CUSTOM_DRAG_FIX.md                     254 lines  (1%)
 ─────────────────────────────
-TOTAL:                              18,080 lines
+TOTAL:                              19,340 lines
 ```
 
 ### Documentation by Category
 
-- **Architecture & Design**: 87% (15,789 lines)
-- **Build & Distribution**: 4% (648 lines)
-- **Skin System**: 4% (652 lines)
-- **Navigation & Index**: 6% (1,092 lines)
+- **Architecture & Design**: 88% (16,931 lines)
+- **Build & Distribution**: 4% (692 lines)
+- **Skin System**: 3% (652 lines)
+- **Navigation & Index**: 6% (1,065 lines)
 
 ---
 

@@ -593,36 +593,39 @@ Generator creates:
 ### Unit Tests
 
 ```swift
-// Tests/SpriteResolverTests.swift
-func testDigitResolution() {
+// Tests/MacAmpTests/SpriteResolverTests.swift (Swift Testing)
+@Test("Digits resolve to standard or extended sprites")
+func digitResolution() {
     let skin = loadTestSkin("standard.wsz")
     let resolver = SpriteResolver(skin: skin)
 
     // Test standard digit -- returns sprite name string or nil
     let digit5 = resolver.resolve(.digit(5))
-    XCTAssertEqual(digit5, "DIGIT_5")
+    #expect(digit5 == "DIGIT_5")
 
     // Test extended digit skin (has NUMS_EX.BMP)
     let extendedSkin = loadTestSkin("extended.wsz")
     let extResolver = SpriteResolver(skin: extendedSkin)
     let extDigit5 = extResolver.resolve(.digit(5))
-    XCTAssertEqual(extDigit5, "DIGIT_5_EX")
+    #expect(extDigit5 == "DIGIT_5_EX")
 }
 
-func testMissingSpriteReturnsNil() {
+@Test("Missing sprite resolves to nil")
+func missingSpriteReturnsNil() {
     let emptySkin = Skin(images: [:])
     let resolver = SpriteResolver(skin: emptySkin)
 
     let playButton = resolver.resolve(.playButton)
-    XCTAssertNil(playButton)
+    #expect(playButton == nil)
 }
 
-func testImageConvenience() {
+@Test("image(for:) returns an image for a present sprite")
+func imageConvenience() {
     let skin = loadTestSkin("standard.wsz")
     let resolver = SpriteResolver(skin: skin)
 
     let image = resolver.image(for: .volumeThumb)
-    XCTAssertNotNil(image)
+    #expect(image != nil)
 }
 ```
 
@@ -689,7 +692,7 @@ resolver.resolve(.positionSliderThumb)
 // Window backgrounds
 resolver.resolve(.mainWindowBackground)
 resolver.resolve(.eqWindowBackground)
-resolver.resolve(.playlistBackground)
+resolver.resolve(.playlistTopTile)
 
 // Indicators
 resolver.resolve(.stereoIndicator)

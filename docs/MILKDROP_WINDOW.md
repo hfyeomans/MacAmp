@@ -1,8 +1,8 @@
 # Milkdrop Window Implementation Guide
 
-**Document Version**: 2.2.0
-**Last Updated**: 2026-03-22
-**Implementation**: Days 7-8 of TASK 2 (milk-drop-video-support) + Butterchurn Integration + Window Resize
+**Document Version**: 2.3.0
+**Last Updated**: 2026-09-25
+**Implementation**: Days 7-8 of TASK 2 (milk-drop-video-support) + Butterchurn Integration + Window Resize + video-audio visualization (`avplayer-native-video-dsp`)
 **Status**: ✅ PRODUCTION - Complete with Butterchurn visualization and resizable window
 
 ---
@@ -13,7 +13,7 @@ The Milkdrop window provides audio visualization capabilities in MacAmp, faithfu
 
 ### 1.1 Purpose
 
-- **Primary**: Display Butterchurn audio visualizations synchronized with music playback
+- **Primary**: Display Butterchurn audio visualizations synchronized with playback — local files, internet radio, and the audio track of video files
 - **Secondary**: Preset cycling, randomization, and history navigation (matches Winamp behavior)
 - **Tertiary**: Track title overlay display with configurable intervals
 - **Current State**: ✅ Complete with Butterchurn.js integration (7 phases)
@@ -218,7 +218,7 @@ class WinampMilkdropWindowController: NSWindowController {
 All dependencies are injected via SwiftUI environment:
 
 - `SkinManager`: Provides GEN.bmp sprites
-- `AudioPlayer`: Future audio data for visualization
+- `AudioPlayer`: Source of Butterchurn audio frames (`snapshotButterchurnFrame()`, see §9.4)
 - `DockingController`: Magnetic window snapping
 - `AppSettings`: Window position persistence
 - `WindowFocusState`: Focus tracking for chrome state
@@ -550,7 +550,7 @@ The Butterchurn integration uses WKUserScript injection to load JavaScript libra
 │    • Audio data receiver (from Swift)                       │
 └─────────────────────────────────────────────────────────────┘
           │                              ▲
-          │ postMessage("ready")         │ audioData[1024]
+          │ postMessage("ready")         │ setAudioData(spectrum, waveform)
           │ postMessage("presetsLoaded") │ loadPreset(index)
           ▼                              │ showTrackTitle(text)
 ┌─────────────────────────────────────────────────────────────┐
@@ -559,17 +559,19 @@ The Butterchurn integration uses WKUserScript injection to load JavaScript libra
 │    • isReady: Bool                                           │
 │    • errorMessage: String?                                   │
 │    • onPresetsLoaded: ([String]) -> Void                    │
-│    • Timer: 30 FPS audio updates to JS                      │
+│    • 30 FPS Task loop: audio frames to JS                   │
 │    • callAsyncJavaScript for reliable execution             │
 └─────────────────────────────────────────────────────────────┘
-          │                              ▲
-          │ audioSamples[1024]           │ loadPreset()
-          │ (Accelerate vDSP FFT)        │ showTrackTitle()
-          ▼                              │
+          ▲
+          │ AudioPlayer.snapshotButterchurnFrame()
+          │ (1024 FFT bins + 1024 waveform samples; nil when idle)
+          │
 ┌─────────────────────────────────────────────────────────────┐
-│                    AVAudioEngine                             │
-│    • installTap(2048 samples, 48kHz)                        │
-│    • Goertzel-like 20-band spectrum analysis                │
+│          VisualizerPipeline + VisualizerFeed                 │
+│    • Single-slot feed, polled at 30 Hz on the main thread   │
+│    • Two producers, one active at a time (see §9.4):        │
+│        AVAudioEngine mixer tap  (local files, streams)      │
+│        MTAudioProcessingTap     (video, via AVPlayer)       │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -642,116 +644,168 @@ private func createUserScripts() -> [WKUserScript] {
 
 ### 9.4 Audio Data Pipeline
 
-**End-to-End Audio Flow (Local Playback Only):**
+**End-to-End Audio Flow (local files, streams and video):**
+
+Butterchurn has one consumer path and two producers. Whichever producer is live
+publishes pre-computed arrays into the shared `VisualizerFeed`; everything from the
+feed onward is identical for audio and video.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │                        BUTTERCHURN AUDIO DATA FLOW                            │
 ├──────────────────────────────────────────────────────────────────────────────┤
 │                                                                               │
-│  ┌─────────────┐    ┌─────────────────┐    ┌─────────────────────────────┐   │
-│  │ Audio File  │───▶│ AVAudioEngine   │───▶│ installTap(2048 samples)   │   │
-│  │ (.mp3/flac) │    │ (48kHz stereo)  │    │ Mono downsample + FFT      │   │
-│  └─────────────┘    └─────────────────┘    └─────────────────────────────┘   │
-│                                                       │                       │
-│                                                       ▼                       │
-│                           ┌───────────────────────────────────────────────┐   │
-│                           │        AudioPlayer.swift                       │   │
-│                           │  @ObservationIgnored butterchurnSpectrum[1024] │   │
-│                           │  @ObservationIgnored butterchurnWaveform[1024] │   │
-│                           │  snapshotButterchurnFrame() → ButterchurnFrame │   │
-│                           └───────────────────────────────────────────────┘   │
-│                                                       │                       │
-│                                                       ▼ (30 FPS Timer)        │
-│                           ┌───────────────────────────────────────────────┐   │
-│                           │        ButterchurnBridge.swift                 │   │
-│                           │  sendAudioData() → callAsyncJavaScript         │   │
-│                           │  "window.receiveAudioData([...samples])"       │   │
-│                           └───────────────────────────────────────────────┘   │
-│                                                       │                       │
-│                                                       ▼ (WKWebView)           │
-│                           ┌───────────────────────────────────────────────┐   │
-│                           │        bridge.js (JavaScript)                  │   │
-│                           │  receiveAudioData(data) → audioBuffer.set()    │   │
-│                           │  ScriptProcessorNode → Butterchurn analyser    │   │
-│                           └───────────────────────────────────────────────┘   │
-│                                                       │                       │
-│                                                       ▼ (60 FPS RAF)          │
-│                           ┌───────────────────────────────────────────────┐   │
-│                           │        butterchurn.min.js                      │   │
-│                           │  visualizer.render() → WebGL Canvas            │   │
-│                           │  100+ presets with audio-reactive shaders      │   │
-│                           └───────────────────────────────────────────────┘   │
+│  PRODUCER A — local files + streams        PRODUCER B — video files          │
+│  ┌───────────────────────────────┐         ┌───────────────────────────────┐ │
+│  │ AVAudioEngine (EQ → mixer)    │         │ AVPlayer + AVPlayerItem       │ │
+│  │ mainMixerNode.installTap      │         │ .audioMix MTAudioProcessingTap│ │
+│  │ (2048-frame buffers)          │         │ (after EQ / preamp / balance) │ │
+│  │ VisualizerPipeline            │         │ videoTapVisualizerRender()    │ │
+│  │   .makeTapHandler             │         │                               │ │
+│  └───────────────┬───────────────┘         └───────────────┬───────────────┘ │
+│                  │  render thread: mono mix → 20× RMS, 20× Goertzel,         │
+│                  │  2048-pt FFT (1024 bins) + 1024 waveform, per-tap scratch  │
+│                  └──────────────┬──────────────────────────┘                  │
+│                                 ▼ tryPublish() (trylock; drop on contention)  │
+│                  ┌───────────────────────────────────────────────┐            │
+│                  │        VisualizerFeed (single slot, SPSC)      │            │
+│                  └───────────────────────────────────────────────┘            │
+│                                 │ consume() — 30 Hz main-thread poll          │
+│                                 ▼                                             │
+│                  ┌───────────────────────────────────────────────┐            │
+│                  │        VisualizerPipeline.swift                │            │
+│                  │  butterchurnSpectrum[1024] / Waveform[1024]    │            │
+│                  │  snapshotButterchurnFrame() → ButterchurnFrame │            │
+│                  └───────────────────────────────────────────────┘            │
+│                                 │                                             │
+│                                 ▼                                             │
+│                  ┌───────────────────────────────────────────────┐            │
+│                  │        AudioPlayer.snapshotButterchurnFrame()  │            │
+│                  │  nil unless isVisualizerRendering              │            │
+│                  └───────────────────────────────────────────────┘            │
+│                                 │ (30 FPS Task loop)                          │
+│                                 ▼                                             │
+│                  ┌───────────────────────────────────────────────┐            │
+│                  │        ButterchurnBridge.swift                 │            │
+│                  │  sendAudioFrame() → callAsyncJavaScript        │            │
+│                  │  macampButterchurn.setAudioData(spec, wave)    │            │
+│                  └───────────────────────────────────────────────┘            │
+│                                 │ (WKWebView)                                 │
+│                                 ▼                                             │
+│                  ┌───────────────────────────────────────────────┐            │
+│                  │        bridge.js (JavaScript)                  │            │
+│                  │  latestWaveform ← waveform                     │            │
+│                  │  ScriptProcessorNode → Butterchurn analyser    │            │
+│                  └───────────────────────────────────────────────┘            │
+│                                 │ (60 FPS RAF)                                │
+│                                 ▼                                             │
+│                  ┌───────────────────────────────────────────────┐            │
+│                  │        butterchurn.min.js                      │            │
+│                  │  visualizer.render() → WebGL Canvas            │            │
+│                  └───────────────────────────────────────────────┘            │
 │                                                                               │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Note (S1 update):** The visualizer tap install/remove lifecycle is now managed by
-`AudioEngineController` (see `MacAmpApp/Audio/AudioEngineController.swift`).
-`AudioPlayer` delegates to `AudioEngineController.installVisualizerTapIfNeeded()` and
-`AudioEngineController.removeVisualizerTapIfNeeded()`, which in turn call through to
-`VisualizerPipeline`. The diagram above shows the logical data flow; the ownership chain
-is `AudioPlayer` -> `AudioEngineController` -> `VisualizerPipeline`.
+**Producer A (engine tap).** The tap install/remove lifecycle is managed by
+`AudioEngineController` (`installVisualizerTapIfNeeded()` / `removeVisualizerTapIfNeeded()`),
+which calls through to `VisualizerPipeline.installTap(on:)` / `removeTap()`. The ownership
+chain is `AudioPlayer` → `AudioEngineController` → `VisualizerPipeline`. Installing the tap
+also starts the 30 Hz feed poll.
+
+**Producer B (video tap).** Video audio never enters `AVAudioEngine`; it stays on
+`AVPlayer`, and the engine mixer tap is removed when playback switches to video. The
+video's `MTAudioProcessingTap` (built per `AVPlayerItem` by `AudioPlayer.startVideoLoad`)
+runs `videoTapVisualizerRender(...)` at the end of each render callback, on the buffer it
+has just processed, and publishes to the same feed via `VisualizerPipeline.sharedFeed`.
+Because no engine tap is installed, the poll timer is driven separately:
+
+| Event | Call |
+|-------|------|
+| Video track starts (`playTrack` `.video` branch) | `visualizerPipeline.startVideoVisualization()` |
+| Repeat-one restart of a video | `startVideoVisualization()` (restart bypasses `playTrack`) |
+| Video reaches end | `stopVideoVisualization()` |
+| `stop()` during video, or video → audio switch | `stopVideoVisualization()` (also clears stale bars) |
+
+See `docs/VIDEO_WINDOW.md` → *Video Audio DSP Pipeline* for the tap itself, and
+`tasks/avplayer-native-video-dsp/plan.md` (ADR-6) for why the two producers are parallel
+functions rather than one generalized handler.
+
+**Invariants:**
+- Only one producer is live at a time, so the single-slot last-write-wins feed needs no
+  producer coordination.
+- Both producers see the post-EQ signal (engine tap on `mainMixerNode`, video tap after its
+  in-place EQ/preamp/balance), so Milkdrop reacts to what the user hears.
+- The RMS and Goertzel math in `videoTapVisualizerRender` must stay numerically identical
+  to `VisualizerPipeline.makeTapHandler`; the Butterchurn FFT is shared
+  (`VisualizerScratchBuffers.processButterchurnFFT`).
+- `AudioPlayer.isVisualizerRendering` (`isEngineRendering`, or video with
+  `videoPlaybackController.isPlaying`) gates every UI consumer: `snapshotButterchurnFrame()`,
+  `getFrequencyData(bands:)` and the main-window `VisualizerView`. Pausing a video therefore
+  freezes Butterchurn exactly as pausing a music track does.
 
 **Frame Rates:**
-- **AVAudioEngine tap:** 48kHz continuous (2048 samples per buffer)
-- **Swift→JS updates:** 30 FPS (33ms interval)
+- **Producer callbacks:** engine tap at 2048-frame buffers; the video tap at whatever slice
+  size the route delivers (≈4096 frames wired, ≈1920 on Bluetooth). The FFT always runs on
+  2048 points.
+- **Feed poll:** 30 Hz (`Timer` in `.common` run-loop mode, so it keeps firing during drags)
+- **Swift→JS updates:** 30 FPS (async `Task` loop, ~33 ms sleep)
 - **WebGL rendering:** 60 FPS (requestAnimationFrame)
 
 **30 FPS Swift→JS Audio Updates:**
 
 ```swift
-// ButterchurnBridge.swift - Timer-based audio streaming.
-//
-// IMPORTANT: Timer must be added to RunLoop.main in .common mode so it keeps
-// firing during user gestures. Timer.scheduledTimer(withTimeInterval:repeats:block:)
-// defaults to .default mode and pauses during .eventTracking (any active
-// DragGesture / window-move / scroll). A paused producer-side timer stalls
-// the visualizer pipeline and freezes the rendered output. See mwvi PR #A.
-private func startAudioTimer() {
-    let timer = Timer(timeInterval: 1.0/30.0, repeats: true) { [weak self] _ in
-        Task { @MainActor in
-            self?.sendAudioData()
+// ButterchurnBridge.swift
+private func startAudioUpdates() {
+    guard audioUpdateTask == nil else { return }
+    audioUpdateTask = Task { @MainActor [weak self] in
+        while !Task.isCancelled {
+            self?.sendAudioFrame()
+            try? await Task.sleep(nanoseconds: 33_333_333) // ~30 FPS
         }
     }
-    RunLoop.main.add(timer, forMode: .common)
-    audioTimer = timer
 }
 
-private func sendAudioData() {
-    guard isReady, let audioPlayer = audioPlayer else { return }
+private func sendAudioFrame() {
+    guard isReady, let webView = webView else { return }
 
-    // Get FFT samples from AVAudioEngine tap
-    let samples = audioPlayer.getVisualizationSamples(count: 1024)
+    // nil when nothing is rendering (idle, paused, stopped) — freeze the canvas
+    guard let frame = audioPlayer?.snapshotButterchurnFrame() else {
+        if isVisualizationActive {
+            isVisualizationActive = false
+            webView.evaluateJavaScript("window.macampButterchurn?.stop();", completionHandler: nil)
+        }
+        return
+    }
+    if !isVisualizationActive {
+        isVisualizationActive = true
+        webView.evaluateJavaScript("window.macampButterchurn?.start();", completionHandler: nil)
+    }
 
-    // Convert to JSON array for JS
-    let jsArray = samples.map { String(format: "%.4f", $0) }.joined(separator: ",")
-
-    // Use callAsyncJavaScript for reliable delivery
-    webView?.callAsyncJavaScript(
-        "if (window.receiveAudioData) window.receiveAudioData([\(jsArray)]);",
-        in: nil, in: .page
-    ) { _ in }
+    let spectrumInts = frame.spectrum.map { Int(min(255, max(0, $0 * 255))) }
+    webView.callAsyncJavaScript(
+        "window.macampButterchurn?.setAudioData(spectrum, waveform);",
+        arguments: ["spectrum": spectrumInts, "waveform": frame.waveform],
+        in: nil, in: .page, completionHandler: nil
+    )
 }
 ```
 
-**60 FPS JS Render Loop:**
+**JS side (bridge.js):** `setAudioData` copies the waveform into `latestWaveform`. A muted
+`ScriptProcessorNode` replays that buffer into Butterchurn's internal analyser, which derives
+its own spectrum (the Swift spectrum argument is currently unused). `start()` / `stop()`
+toggle the 60 FPS `requestAnimationFrame` render loop.
 
 ```javascript
-// bridge.js - Render loop with audio data
-let audioData = new Float32Array(1024);
-
-window.receiveAudioData = function(data) {
-    audioData.set(data);
-};
-
-function render() {
-    if (visualizer && isPlaying) {
-        visualizer.render(audioData);
+// bridge.js
+scriptProcessor.onaudioprocess = function(e) {
+    var output = e.outputBuffer.getChannelData(0);
+    for (var i = 0; i < output.length; i++) {
+        output[i] = latestWaveform[waveformWriteIndex];
+        waveformWriteIndex = (waveformWriteIndex + 1) % latestWaveform.length;
     }
-    requestAnimationFrame(render);
-}
-requestAnimationFrame(render);
+};
+// scriptProcessor → muteGain(0) → destination; visualizer.connectAudio(scriptProcessor)
 ```
 
 ### 9.5 ButterchurnPresetManager
@@ -1133,6 +1187,20 @@ services queries, and Metal shader compilation that do not occur on macOS 15 (Se
 **Recommendation:** These errors can be safely ignored. They appear in Xcode's console output
 and `Console.app` but do not affect Butterchurn's WebGL rendering pipeline or audio data
 reception. No code changes are needed.
+
+### 11.6 Audio Source Testing
+
+```bash
+# With the Milkdrop window open (Ctrl+K)
+- Local file: visuals react to the music; pause freezes the canvas, play resumes it
+- Internet radio: visuals react to the stream
+- Video file: visuals react to the video's audio; pause freezes, seek keeps animating
+- Change EQ bands while a video plays: visuals follow the EQ'd sound
+- Video → audio and audio → video switches: no stale frame, no stuck canvas
+- Toggle Milkdrop and cycle main-window visualizer modes during video: no glitch
+```
+
+Automated coverage for the video producer lives in `Tests/MacAmpTests/VideoTapVisualizerRenderTests.swift`.
 
 ---
 
@@ -1527,7 +1595,7 @@ With ceil (Int(ceil(62.5/25)) = 3):
 
 ### 12.4 Advanced Audio Analysis
 
-Current: 1024-sample FFT via AVAudioEngine tap
+Current: 2048-point FFT (1024 bins) + 1024-sample waveform, computed on the render thread by the AVAudioEngine mixer tap (audio) or the video `MTAudioProcessingTap` (video) — see §9.4
 Future: Enhanced visualization features
 - Beat detection (BPM)
 - Multi-band frequency analysis
@@ -1568,8 +1636,15 @@ MacAmpApp/Models/AppSettings.swift
 // Window Coordination (updateMilkdropWindowSize)
 MacAmpApp/ViewModels/WindowCoordinator.swift
 
-// Butterchurn Canvas Resize (setSize)
+// Butterchurn Canvas Resize (setSize) + 30 FPS audio frames to JS
 MacAmpApp/ViewModels/ButterchurnBridge.swift
+
+// Audio feed (both producers → one consumer)
+MacAmpApp/Audio/VisualizerPipeline.swift             // engine tap producer, 30 Hz poll, snapshotButterchurnFrame()
+MacAmpApp/Audio/VisualizerFeed.swift                 // single-slot SPSC hand-off
+MacAmpApp/Audio/VisualizerScratchBuffers.swift       // per-tap scratch + shared 2048-pt FFT
+MacAmpApp/Audio/VideoDSP/VideoTapVisualizerRender.swift  // video tap producer
+MacAmpApp/Audio/AudioPlayer.swift                    // isVisualizerRendering gate
 ```
 
 ### Research & Documentation
@@ -1601,6 +1676,10 @@ docs/SPRITE_SYSTEM_COMPLETE.md
 
 // Window patterns
 docs/IMPLEMENTATION_PATTERNS.md
+
+// Video audio tap (Producer B)
+docs/VIDEO_WINDOW.md
+tasks/avplayer-native-video-dsp/plan.md   // ADR-6 dual-producer rationale
 ```
 
 ---
@@ -1622,6 +1701,7 @@ The Milkdrop window implementation demonstrates several key MacAmp patterns:
 11. **WASM rendering mode** - Hybrid mode with security option (`onlyUseWASM: true`)
 12. **Segment-based resizing** with Size2D quantized model
 13. **ceil() pattern** for titlebar tile coverage (Pattern 9)
+14. **Dual-producer audio feed** — AVAudioEngine tap for audio, `MTAudioProcessingTap` for video, one shared `VisualizerFeed`
 
 The Milkdrop window is complete with Butterchurn.js visualization and full resize support, providing real-time audio-reactive psychedelic visuals. The implementation follows MacAmp's three-layer architecture, maintains Winamp compatibility, and integrates seamlessly with the existing window management system.
 
@@ -1642,6 +1722,8 @@ The Milkdrop window is complete with Butterchurn.js visualization and full resiz
 | File | Purpose |
 |------|---------|
 | `ButterchurnBridge.swift` | Swift→JS communication bridge + canvas resize |
+| `VisualizerPipeline.swift` / `VisualizerFeed.swift` | Shared audio feed consumed by Butterchurn (engine + video producers) |
+| `VideoTapVisualizerRender.swift` | Video-audio producer for the shared feed |
 | `ButterchurnPresetManager.swift` | Preset cycling, history, persistence |
 | `ButterchurnWebView.swift` | WKWebView wrapper with script injection |
 | `WinampMilkdropWindow.swift` | Main view with context menu |
