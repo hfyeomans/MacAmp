@@ -2,7 +2,7 @@ import AudioToolbox
 import CoreAudioTypes
 import Foundation
 
-/// Video-tap parallel of the engine-side visualizer producer (ADR-6 dual-producer).
+/// Video-tap parallel of the engine-side visualizer producer.
 ///
 /// Consumes the tap's `AudioBufferList` (already EQ/balance-processed by `tapProcess`),
 /// computes the same pre-computed visualizer arrays the engine `makeTapHandler`
@@ -14,9 +14,9 @@ import Foundation
 /// `scratch` is render-confined (one per tap); the `feed` is the shared single-slot
 /// SPSC hand-off whose `tryPublish` uses a `trylock`.
 ///
-/// **Drift note (ADR-6).** The RMS-bar and Goertzel-spectrum math below MUST stay
-/// numerically identical to `VisualizerPipeline.makeTapHandler`. ADR-6 keeps the two
-/// producers parallel (different input buffer types) rather than extracting a shared
+/// **Drift note.** The RMS-bar and Goertzel-spectrum math below MUST stay
+/// numerically identical to `VisualizerPipeline.makeTapHandler`. The two producers are
+/// kept parallel (different input buffer types) rather than extracting a shared
 /// helper; the Butterchurn FFT is already shared via `processButterchurnFFT`. If you
 /// change the RMS or Goertzel formula in one producer, change both.
 func videoTapVisualizerRender(
@@ -42,7 +42,7 @@ func videoTapVisualizerRender(
             let chans = Int(buffer.mNumberChannels)
             guard chans > 0 else { continue }
             // Cap reads by the buffer's actual byte size, not just `frames`, to
-            // never index past `mData` (matches the Phase 3 DSP path).
+            // never index past `mData` (matches the `tapProcess` DSP path).
             let bufFrames = Int(buffer.mDataByteSize) / (MemoryLayout<Float>.size * chans)
             let n = min(cappedFrameCount, bufFrames)
             guard n > 0 else { continue }

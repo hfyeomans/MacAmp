@@ -1,4 +1,4 @@
-// MARK: - `VideoTapContext` storage contract (ADR-3a Gate 1)
+// MARK: - `VideoTapContext` storage contract
 //
 // `VideoTapContext` carries state across the C-callback boundary of an
 // `MTAudioProcessingTap`. The render thread reads it via
@@ -32,9 +32,9 @@
 // appropriate `RenderThreadSafe` conformance OR proving the field falls
 // under a permitted shape.
 //
-// Current fields (Phase 3-4):
+// Current fields:
 //   * `coefficients: Mutex<BiquadCoefficientSet?>` — main→render coefficient
-//     hand-off (render uses `withLockIfAvailable`; ADR-4 amendment #2).
+//     hand-off (render uses `withLockIfAvailable`, never blocks).
 //   * `cascade: BiquadCascade` — render-confined DSP state; `RenderThreadSafe`
 //     by render-confinement (main never touches it after `init`).
 //   * `feed: VisualizerFeed` — shared (injected) single-slot hand-off;
@@ -42,17 +42,17 @@
 //   * `scratch: VisualizerScratchBuffers` — per-tap render-confined visualizer
 //     DSP scratch; `RenderThreadSafe` by render-confinement.
 //   * the `Atomic<…>` parameter/format/telemetry fields below — including the
-//     Phase 6 deadline counters (`budgetOverrunCount`, `deadlineRiskCount`,
+//     deadline counters (`budgetOverrunCount`, `deadlineRiskCount`,
 //     `lastDeadlineRiskHostTime`), all `Atomic<UInt64>`.
 //
-// See plan.md ADR-3 + ADR-3a + ADR-4 amendment #2 for the design rationale.
+// Design rationale: tasks/avplayer-native-video-dsp/plan.md.
 
 import Foundation
 import Synchronization
 
 /// Immutable, `Sendable` snapshot of a `VideoTapContext`'s telemetry counters,
 /// produced on the main thread via `VideoTapContext.diagnosticSnapshot`. Consumed
-/// by the Phase 8 CPU-benchmark gate and production diagnostics.
+/// by the CPU benchmark and production diagnostics.
 struct VideoTapDiagnostics: Sendable, Equatable {
     let processCallCount: UInt64
     let frameCount: UInt64
@@ -66,31 +66,29 @@ struct VideoTapDiagnostics: Sendable, Equatable {
 /// Tap-side state shared across the C-callback boundary of an
 /// `MTAudioProcessingTap` attached to an `AVPlayerItem`'s `audioMix`.
 ///
-/// One Context per `MTAudioProcessingTap` per `AVPlayerItem` (ADR-7
-/// "one-tap-per-item invariant"). The Context outlives `init` via
+/// One Context per `MTAudioProcessingTap` per `AVPlayerItem`. The Context outlives `init` via
 /// `Unmanaged.passRetained` at attach time and is released exactly once in
 /// `tapFinalize`.
 final class VideoTapContext: @unchecked Sendable {
-    // MARK: Coefficient hand-off (ADR-4 amendment #2 — Mutex + withLockIfAvailable)
+    // MARK: Coefficient hand-off (Mutex + withLockIfAvailable)
 
     /// EQ biquad coefficients handed from the main thread to the render thread.
     /// Main writes via `installCoefficients` (`withLock`); the render thread reads
     /// via `withLockIfAvailable`, copying the value into its own render-confined
     /// cache and never blocking. `nil` until the first install → the render thread
-    /// bypasses the cascade. Replaces the withdrawn atomic-pointer A/B double-buffer
-    /// (race-unsafe; see plan.md ADR-4 amendment #2).
+    /// bypasses the cascade.
     let coefficients: Mutex<BiquadCoefficientSet?>
 
     // MARK: Render-owned DSP state
 
     /// 10-band biquad cascade with per-(band, channel) filter history. Created
     /// here so it shares the Context's lifetime — no separate `Unmanaged` retain,
-    /// so the todo 2.40 `passRetained`↔`tapFinalize` leak balance is unchanged.
+    /// so the `passRetained`↔`tapFinalize` retain balance is unchanged.
     /// Touched ONLY by the render thread (`tapProcess`); its `RenderThreadSafe`
     /// story is render-confinement (conformance in `RenderThreadSafe.swift`).
     let cascade: BiquadCascade
 
-    // MARK: Visualizer (Phase 4 — ADR-6 dual-producer)
+    // MARK: Visualizer (video-side producer)
 
     /// Shared single-slot hand-off carrying pre-computed visualizer arrays to the
     /// main thread. INJECTED (owned by `VisualizerPipeline`, shared with the engine
@@ -107,18 +105,18 @@ final class VideoTapContext: @unchecked Sendable {
 
     /// Stereo balance as `Float` packed into the low 32 bits via
     /// `Float.bitPattern`. Range [-1, 1], default 0.0 (center) — matches
-    /// `AudioPlayer.balance` / `AVAudioNode.pan` so Phase 5 writes through.
+    /// `AudioPlayer.balance` / `AVAudioNode.pan` so the balance fanout writes through.
     let balance: Atomic<UInt32>
 
     /// EQ enabled gate. Render thread short-circuits the biquad cascade
-    /// when false. Default false until Phase 5 wires the real EQ state.
+    /// when false. Default false until the EQ fanout pushes the app's state.
     let isEqOn: Atomic<Bool>
 
     /// Preamp linear gain as `Float` packed into the low 32 bits. Default
     /// 1.0 (no gain).
     let preampLinearGainBits: Atomic<UInt32>
 
-    // MARK: Format gate (ADR-11)
+    // MARK: Format gate
 
     /// Encoded ASBD-validity tag set by `tapPrepare`. Render thread
     /// pass-throughs when this is anything other than
@@ -126,11 +124,11 @@ final class VideoTapContext: @unchecked Sendable {
     let processingFormatTag: Atomic<UInt32>
 
     /// Sample rate observed by the most recent `tapPrepare`, packed as
-    /// `Double.bitPattern`. Phase 5 polls this from the main thread to
+    /// `Double.bitPattern`. The EQ fanout polls this from the main thread to
     /// trigger coefficient recompute on rate changes.
     let pendingSampleRate: Atomic<UInt64>
 
-    // MARK: Telemetry (Phase 6 — deadline-miss instrumentation)
+    // MARK: Telemetry (deadline-miss instrumentation)
 
     let processCallCount: Atomic<UInt64>
     let frameCount: Atomic<UInt64>
@@ -194,7 +192,7 @@ final class VideoTapContext: @unchecked Sendable {
         }
     }
 
-    /// Immutable main-thread snapshot of the telemetry counters (Phase 8 CPU gate +
+    /// Immutable main-thread snapshot of the telemetry counters (CPU benchmark +
     /// production observability of "EQ doesn't work on this video" reports).
     var diagnosticSnapshot: VideoTapDiagnostics {
         VideoTapDiagnostics(
@@ -210,7 +208,7 @@ final class VideoTapContext: @unchecked Sendable {
     /// Install a fresh coefficient set from the main thread. Blocking `withLock`
     /// is fine here — main can afford to wait, and the lock is held only for a
     /// flat value-type assignment. The render thread reads the same `Mutex` with
-    /// `withLockIfAvailable` (never blocking). See plan.md ADR-4 amendment #2.
+    /// `withLockIfAvailable` (never blocking).
     func installCoefficients(_ newSet: BiquadCoefficientSet) {
         coefficients.withLock { $0 = newSet }
     }

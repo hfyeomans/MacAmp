@@ -48,7 +48,7 @@ struct GoertzelCoefficients {
 /// then publishes the results via `VisualizerFeed.tryPublish(from:)`.
 ///
 /// **Producers:** the engine-side `mainMixerNode` tap (existing) and the
-/// video-side `MTAudioProcessingTap` render path (S3-2 `avplayer-native-video-dsp`).
+/// video-side `MTAudioProcessingTap` render path.
 /// Each tap allocates its own instance at attach time and reuses it for the
 /// lifetime of the tap — never shared across taps.
 final class VisualizerScratchBuffers: @unchecked Sendable {

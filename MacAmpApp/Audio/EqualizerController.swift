@@ -59,13 +59,13 @@ final class EqualizerController {
     @ObservationIgnored private var autoPresetClearTask: Task<Void, Never>?
     @ObservationIgnored private var appliedAutoPresetURL: String?
 
-    // MARK: - Video-tap EQ fanout (S3-2 Phase 5, ADR-5)
+    // MARK: - Video-tap EQ fanout
     //
     // `EqualizerController` is the single owner of EQ state. On any change it fans
     // out to two consumers: the engine `AVAudioUnitEQ` (the didSet handlers above)
     // and any registered video-tap `VideoTapContext`s (here). Each video tap gets
     // the recomputed `BiquadCoefficientSet` (via `installCoefficients` — the Mutex
-    // hand-off, ADR-4 amendment #2) plus the `isEqOn` / preamp atomics. Coefficients
+    // hand-off) plus the `isEqOn` / preamp atomics. Coefficients
     // depend on sample rate, which the render thread publishes per tap in
     // `pendingSampleRate`; `pollVideoTapSampleRates()` catches the rate becoming
     // known after registration. Writes ONLY the Mutex (coefficients) + atomics —
@@ -294,10 +294,7 @@ final class EqualizerController {
 /// Immutable snapshot of equalizer state, produced on the main thread by
 /// `EqualizerController` and consumed by `BiquadCoefficientSet.compute` to build
 /// the video-tap biquad cascade. `EqualizerController` remains the single source
-/// of EQ truth (ADR-5); this is a read-only projection.
-///
-/// (Plan called for a `private nested` type; `internal` is required so
-/// `BiquadCoefficientSet.compute` can consume it across files.)
+/// of EQ truth; this is a read-only projection.
 struct EqualizerState: Sendable, Equatable {
     let isEqOn: Bool
     /// Preamp as a linear gain multiplier. Engine side stores dB in
@@ -309,7 +306,7 @@ struct EqualizerState: Sendable, Equatable {
 }
 
 extension EqualizerController {
-    /// Current EQ state as an immutable snapshot. Phase 5 fans this out to
+    /// Current EQ state as an immutable snapshot. The EQ fanout pushes this to
     /// registered video-tap contexts on each EQ change.
     var equalizerState: EqualizerState {
         EqualizerState(isEqOn: isEqOn,

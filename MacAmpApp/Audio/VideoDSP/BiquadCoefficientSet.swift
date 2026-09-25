@@ -4,8 +4,7 @@ import Foundation
 ///
 /// Trivially-copyable value type — no heap, no CoW, no ARC traffic — so a
 /// `BiquadCoefficientSet` can be copied on the render thread under a
-/// `withLockIfAvailable` trylock without allocator or reference-counting work
-/// (ADR-4 amendment #2).
+/// `withLockIfAvailable` trylock without allocator or reference-counting work.
 struct BiquadCoefs: Sendable, Equatable {
     var b0: Float
     var b1: Float
@@ -25,7 +24,7 @@ struct BiquadCoefs: Sendable, Equatable {
 ///
 /// `compute(for:sampleRate:)` mirrors the engine-side `AVAudioUnitEQ`
 /// configuration in `EqualizerController.configureEQ` using the RBJ Audio EQ
-/// Cookbook formulas (ADR-8): octave-bandwidth peaking for bands 1-8, low/high
+/// Cookbook formulas: octave-bandwidth peaking for bands 1-8, low/high
 /// shelf for bands 0/9. The band center `frequencies` below are the single source
 /// of truth — `EqualizerController.configureEQ` reads them too — and
 /// `BiquadNumericalMatchTests` guards the engine↔tap numerical match.

@@ -49,11 +49,11 @@ final class VisualizerPipeline {
 
     /// Optional main-thread hook invoked on every 30 Hz poll tick (engine or video).
     /// `AudioPlayer` uses it to poll each registered video-tap Context's sample rate
-    /// for the EQ fanout (S3-2 Phase 5) — keeps `VisualizerPipeline` decoupled from
+    /// for the EQ fanout — keeps `VisualizerPipeline` decoupled from
     /// `EqualizerController`. Fires regardless of whether new visualizer data arrived.
     @ObservationIgnored var onPollTick: (@MainActor () -> Void)?
 
-    /// The shared visualizer feed. Exposed so the S3-2 video-tap producer
+    /// The shared visualizer feed. Exposed so the video-tap producer
     /// (`videoTapVisualizerRender`) can publish to the SAME single-slot feed the
     /// engine producer uses — only one producer is active at a time (engine for
     /// audio, video tap for video), so the single-slot last-write-wins hand-off is
@@ -157,16 +157,16 @@ final class VisualizerPipeline {
         tapInstalled
     }
 
-    // MARK: - Video Visualization (S3-2 — video-tap producer)
+    // MARK: - Video Visualization (video-tap producer)
+
+    /// Whether the 30 Hz feed poll timer is currently scheduled (engine OR video).
+    var isPollTimerActive: Bool { pollTimer != nil }
 
     /// Start consuming the shared feed for VIDEO playback. During video the engine
     /// mixer tap is NOT installed (audio flows through AVPlayer, not the engine), so
     /// the 30 Hz poll timer that drives `feed.consume()` must be started independently.
     /// The producer is `videoTapVisualizerRender` (the `MTAudioProcessingTap` render
     /// path), which publishes to the same shared `feed`.
-    /// Whether the 30 Hz feed poll timer is currently scheduled (engine OR video).
-    var isPollTimerActive: Bool { pollTimer != nil }
-
     func startVideoVisualization() {
         startPollTimer()
         AppLog.debug(.audio, "VisualizerPipeline: video visualization started")

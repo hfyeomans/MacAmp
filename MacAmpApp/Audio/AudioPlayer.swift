@@ -19,7 +19,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     private let equalizer = EqualizerController()
     private let visualizerPipeline = VisualizerPipeline()
 
-    // MARK: - Video-tap balance fanout (S3-2 Phase 5, ADR-5)
+    // MARK: - Video-tap balance fanout
     // `AudioPlayer` owns balance state; on change it fans out to the engine balance
     // node (the didSet) and to any registered video-tap Context's `balance` atomic.
     // Separate registry from `EqualizerController`'s (two canonical owners).
@@ -76,7 +76,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     /// Whether the visualizer should be live — true for engine-rendered audio AND
     /// for video playback (the video-tap producer feeds the same `VisualizerFeed`).
     /// Routes the UI consumers (`getFrequencyData`, `snapshotButterchurnFrame`,
-    /// `VisualizerView`) so spectrum + Butterchurn animate for video too (S3-2 Phase 4).
+    /// `VisualizerView`) so spectrum + Butterchurn animate for video too.
     var isVisualizerRendering: Bool {
         isEngineRendering || (currentMediaType == .video && videoPlaybackController.isPlaying)
     }
@@ -86,7 +86,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     /// Persistence is **call-site-driven** — call `commitVolumeToDefaults()`
     /// (or `PlaybackCoordinator.commitVolume()`) at gesture-end. The setter
     /// only propagates to audio backends; writing `UserDefaults` per gesture
-    /// tick was shown to starve the main thread (mwvi Phase 0, Mechanism B).
+    /// tick was shown to starve the main thread.
     var volume: Float = 0.75 {
         didSet {
             engine?.setVolume(volume)
@@ -106,7 +106,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
 
     /// Register a video-tap Context for balance fanout (separate registry from the
     /// EQ controller's) and immediately push the current balance. `internal` for the
-    /// Phase 5 balance-fanout test seam (mirrors `EqualizerController.register…`).
+    /// balance-fanout test seam (mirrors `EqualizerController.register…`).
     func registerVideoTapContextForBalance(_ context: VideoTapContext) {
         registeredVideoTapContexts.removeAll { $0.value == nil || $0.value === context }
         registeredVideoTapContexts.append(WeakBox(context))
@@ -128,13 +128,13 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     }
 
     /// Commit the current `volume` to `UserDefaults`.
-    /// Approved callers (plan §6.1): `PlaybackCoordinator.commitVolume()`.
+    /// Approved callers: `PlaybackCoordinator.commitVolume()`.
     internal func commitVolumeToDefaults() {
         UserDefaults.standard.set(volume, forKey: Keys.volume)
     }
 
     /// Commit the current `balance` to `UserDefaults`.
-    /// Approved callers (plan §6.1, mirrored per todo 1B.9):
+    /// Approved callers:
     /// `PlaybackCoordinator.commitBalance()`.
     internal func commitBalanceToDefaults() {
         UserDefaults.standard.set(balance, forKey: Keys.balance)
@@ -173,12 +173,12 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
         case video
     }
 
-    // MARK: - Video Tap (S3-2 in-place DSP on AVPlayer audio path)
+    // MARK: - Video Tap (in-place DSP on AVPlayer audio path)
 
-    /// One-tap-per-AVPlayerItem (ADR-7). Owned by the `AVPlayerItem`'s
+    /// One-tap-per-AVPlayerItem. Owned by the `AVPlayerItem`'s
     /// `audioMix`, which is set ONCE during item construction (see
     /// `startVideoLoad` + `VideoPlaybackController.loadVideo`). The
-    /// reference held here exists for diagnostics + Phase 5 fanout
+    /// reference held here exists for diagnostics + EQ/balance fanout
     /// registration; it does not control the tap's lifetime.
     @ObservationIgnored private var videoTapContext: VideoTapContext?
 
@@ -195,7 +195,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     @ObservationIgnored private var inFlightVideoLoadTask: Task<Void, Never>?
 
     /// Pause the video player (if currently playing) and detach the tap
-    /// from the current item. Pause-before-detach honours ADR-7's
+    /// from the current item. Pause-before-detach honours the
     /// "`audioMix` not mutated during playback" — `audioMix = nil` is a
     /// mutation, so the player must be quiesced first.
     private func pauseAndDetachVideoTapIfNeeded() {
@@ -224,7 +224,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     /// Begin loading a video URL. The actual asset load + AVPlayer
     /// construction happens inside an async Task so the tap's
     /// `MTAudioProcessingTap` can be installed on the `AVPlayerItem`
-    /// at construction time (per ADR-7), not after `play()` has
+    /// at construction time, not after `play()` has
     /// already started.
     ///
     /// Concurrency contract:
@@ -264,7 +264,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
                         // succeeded — a thrown `createFailed` here would
                         // otherwise leave a phantom Context in the field.
                         self.videoTapContext = context
-                        // Phase 5 fanout: register with both canonical owners so the
+                        // Fanout: register with both canonical owners so the
                         // tap receives current EQ + balance state (and future changes).
                         // Sample rate is still unknown here (tapPrepare hasn't fired);
                         // the EQ registry recomputes when `pendingSampleRate` lands.
@@ -343,7 +343,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
 
         engine = AudioEngineController(eqNode: equalizer.eqNode, visualizerPipeline: visualizerPipeline)
 
-        // Phase 5: poll each registered video-tap Context's sample rate on the
+        // Poll each registered video-tap Context's sample rate on the
         // visualizer's 30 Hz tick, so EQ coefficients recompute once tapPrepare
         // publishes the real rate (e.g. EQ already on when a video starts).
         visualizerPipeline.onPollTick = { [weak self] in
@@ -919,10 +919,9 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
             }
         }
         // 3. Stream-bridge path: AVAudioSourceNode + ring buffer survived; the
-        //    workgroup refresh is delegated to PlaybackCoordinator (Phase 1.1.7).
-        // 4. Video-bridge path: AVPlayer manages its own clock — paused stays
-        //    paused. Phase 3 (plan §8.1) wires the actual videoSourceNode
-        //    refresh in handleEngineDidReconfigure on the engine side.
+        //    workgroup refresh is delegated to PlaybackCoordinator.
+        // 4. Video path: AVPlayer and its audioMix tap live outside the engine,
+        //    so there is nothing to refresh here — paused stays paused.
 
         // 5. Release seek guards on the same cadence as seek() / onPlaybackEnded.
         //    Modern Duration API (Swift 5.7+) — matches the pattern introduced

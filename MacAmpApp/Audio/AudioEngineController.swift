@@ -382,11 +382,11 @@ final class AudioEngineController {
     /// Activate the stream bridge: wire AVAudioSourceNode into the engine graph.
     /// Replaces the playerNode path with streamSourceNode → EQ → mixer → output.
     ///
-    /// **Critical lessons (from T5 Phase 2):**
+    /// **Critical constraints:**
     /// - Source node format MUST be interleaved (matches ring buffer layout)
     /// - Graph connection format MUST be non-interleaved (engine internal)
-    /// - MUST stop/reset engine before rewiring (lesson #3, avoids -10868)
-    /// - MUST verify mixer→output after reset (lesson #4)
+    /// - MUST stop/reset engine before rewiring (avoids -10868)
+    /// - MUST verify mixer→output after reset
     func activateStreamBridge(ringBuffer: LockFreeRingBuffer, sampleRate: Float64) {
         guard !isBridgeActive else { return }
 
@@ -545,8 +545,7 @@ final class AudioEngineController {
             audioEngine.connect(eqNode, to: audioEngine.mainMixerNode, format: graphFormat)
         }
 
-        // 2. TODO Phase 3 (video-audio-engine-routing §8.1): refresh video bridge
-        //    graph format here when isVideoBridgeActive becomes a real flag.
+        // 2. Video audio plays through AVPlayer outside this graph; nothing to refresh.
 
         // 3. Verify mixer → output connection survived the reconfigure.
         if audioEngine.outputConnectionPoints(for: audioEngine.mainMixerNode, outputBus: 0).isEmpty {

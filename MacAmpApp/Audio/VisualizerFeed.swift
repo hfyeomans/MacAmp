@@ -9,7 +9,7 @@ import os
 /// blocking lock on the main thread (safe to block briefly at 30 Hz poll).
 ///
 /// **Producers:** the engine-side mainMixerNode tap (existing) and the video-side
-/// `MTAudioProcessingTap` render path (S3-2 `avplayer-native-video-dsp`). Both
+/// `MTAudioProcessingTap` render path. Both
 /// publish pre-computed arrays — RMS×20, Goertzel spectrum×20, oscilloscope
 /// waveform×76, Butterchurn FFT spectrum×1024, Butterchurn FFT waveform×1024 —
 /// not raw PCM. Each producer runs the DSP into its own per-tap

@@ -19,11 +19,11 @@ final class VideoPlaybackController {
     ///
     /// **Observed (NOT `@ObservationIgnored`).** `WinampVideoWindow`
     /// reads this via `audioPlayer.videoPlayer` to decide whether to
-    /// show the player or the "No video loaded" placeholder. Phase 2's
-    /// async `loadVideo` makes player assignment happen AFTER the
-    /// `currentMediaType` change that originally triggered the view
-    /// re-render — so the view must observe `player` directly to pick
-    /// up the new instance once construction completes inside the Task.
+    /// show the player or the "No video loaded" placeholder. `loadVideo`
+    /// is async, so player assignment happens AFTER the
+    /// `currentMediaType` change that triggered the view re-render —
+    /// the view must observe `player` directly to pick up the new
+    /// instance once construction completes inside the Task.
     private(set) var player: AVPlayer?
 
     /// Formatted metadata string for display (codec, resolution, etc.)
@@ -85,7 +85,7 @@ final class VideoPlaybackController {
     ///
     /// `audioMixBuilder`, when supplied, is invoked AFTER the asset is
     /// constructed but BEFORE the `AVPlayerItem` is. This is the only
-    /// way to satisfy ADR-7's "`audioMix` is set once before `play()`"
+    /// way to satisfy the "`audioMix` is set once before `play()`"
     /// invariant — assigning `audioMix` to an already-constructed
     /// `AVPlayerItem` (or while the surrounding `AVPlayer` is playing)
     /// counts as mid-playback mutation. Builder returns the configured
@@ -134,7 +134,7 @@ final class VideoPlaybackController {
 
         let playerItem = AVPlayerItem(asset: asset)
         if let audioMix {
-            playerItem.audioMix = audioMix  // ADR-7: set ONCE, before AVPlayer exists.
+            playerItem.audioMix = audioMix  // Set once, before the AVPlayer exists; never changed during playback.
         }
 
         let newPlayer = AVPlayer(playerItem: playerItem)

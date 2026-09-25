@@ -12,7 +12,7 @@ import Foundation
 ///
 /// **Coefficients.** `currentCoefficients` is the render-owned cache the cascade
 /// filters with. `tapProcess` refreshes it from the Context's
-/// `Mutex<BiquadCoefficientSet?>` via `withLockIfAvailable` (ADR-4 amendment #2);
+/// `Mutex<BiquadCoefficientSet?>` via `withLockIfAvailable` (never blocks);
 /// the filter then runs lock-free. `nil` → bypass (pre-install or EQ-off).
 ///
 /// Filter state (`z1`/`z2`) uses manually-allocated buffers (not `Array`) so the
@@ -53,7 +53,7 @@ final class BiquadCascade {
     }
 
     /// Zero all filter history. Called on `kMTAudioProcessingTapFlag_StartOfStream`
-    /// (seek / new stream) so stale state does not bleed across a discontinuity (ADR-9).
+    /// (seek / new stream) so stale state does not bleed across a discontinuity.
     func reset() {
         z1.update(repeating: 0, count: stateCount)
         z2.update(repeating: 0, count: stateCount)

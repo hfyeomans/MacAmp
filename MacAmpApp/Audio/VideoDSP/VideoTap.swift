@@ -39,7 +39,7 @@ private func prewarmVideoTapTimebase() {
 // All five callbacks are file-scope `private let` constants typed to the
 // matching `MTAudioProcessingTap*Callback` typealias. They are invoked on
 // the render thread (`MTAudioProcessingTap`-owned, not Swift-concurrency
-// managed). Per ADR-3 the closures use only `Unmanaged` lookup +
+// managed). The closures use only `Unmanaged` lookup +
 // atomic-disciplined Context fields; nothing inside captures Swift state.
 
 private let tapInit: MTAudioProcessingTapInitCallback = { _, clientInfo, tapStorageOut in
@@ -92,13 +92,13 @@ private let tapProcess: MTAudioProcessingTapProcessCallback = { tap, framesToPro
 
     let formatTag = context.processingFormatTag.load(ordering: .acquiring)
     guard formatTag == VideoTapContext.formatTagSupportedFloat32LPCM else {
-        return  // Pass-through: unsupported ASBD (ADR-11) or not yet prepared.
+        return  // Pass-through: unsupported ASBD or not yet prepared.
     }
 
-    // ===== Phase 3 render path (ADR-5 steps 2-6) =====
+    // ===== Render path (steps 2-6) =====
 
     // Step 2 — flush filter state on a stream discontinuity (seek / new stream)
-    // so stale history does not bleed across the cut (ADR-9).
+    // so stale history does not bleed across the cut.
     if (flagsOut.pointee & MTAudioProcessingTapFlags(kMTAudioProcessingTapFlag_StartOfStream)) != 0 {
         context.cascade.reset()
     }
@@ -106,7 +106,7 @@ private let tapProcess: MTAudioProcessingTapProcessCallback = { tap, framesToPro
     let frames = Int(framesOut.pointee)
     guard frames > 0 else { return }
 
-    // Phase 6 — deadline-miss telemetry: time every 64th callback only (the timing
+    // Deadline-miss telemetry: time every 64th callback only (the timing
     // itself runs solely on sampled callbacks). `callIndex` is the pre-increment
     // counter, so this fires on callbacks 0, 64, 128, …
     let sampleTiming = (callIndex & 63) == 0
@@ -117,7 +117,7 @@ private let tapProcess: MTAudioProcessingTapProcessCallback = { tap, framesToPro
     let balance = Float(bitPattern: context.balance.load(ordering: .relaxed))
 
     // Step 5 prep — refresh the render-owned coefficient cache via the Context's
-    // Mutex with a non-blocking trylock (ADR-4 amendment #2). Double-optional:
+    // Mutex with a non-blocking trylock. Double-optional:
     // outer nil = contended → reuse cache; .some(nil) = no install yet → bypass;
     // .some(.some) = update cache.
     if eqOn {
@@ -176,16 +176,15 @@ private let tapProcess: MTAudioProcessingTapProcessCallback = { tap, framesToPro
         globalChannel += channelsInBuffer
     }
 
-    // Step 7 — visualizer feed (ADR-6 dual-producer). Publish pre-computed arrays
+    // Step 7 — visualizer feed. Publish pre-computed arrays
     // from the now-processed buffer to the shared feed (non-blocking trylock).
     let sampleRate = Double(bitPattern: context.pendingSampleRate.load(ordering: .relaxed))
     videoTapVisualizerRender(bufferList: bufferList, frames: frames, sampleRate: sampleRate,
                              scratch: context.scratch, feed: context.feed)
 
-    // Phase 6 — close the deadline-miss sample over the full DSP + visualizer work.
+    // Close the deadline-miss sample over the full DSP + visualizer work.
     // ADVISORY telemetry: 1/64 sampling gives production observability, NOT the dense
-    // per-callback coverage Phase 8's hard "99p ≤10% / no single >50%" CPU gate needs
-    // (Phase 8 adds an every-callback benchmark mode).
+    // per-callback coverage the CPU gate needs (that lives in `VideoTapCPUBenchmarkTests`).
     if sampleTiming, sampleRate.isFinite, sampleRate > 0 {
         let endTicks = mach_absolute_time()
         let elapsedNanos = videoTapHostTicksToNanos(endTicks &- startTicks)
@@ -199,7 +198,7 @@ private let tapProcess: MTAudioProcessingTapProcessCallback = { tap, framesToPro
 enum VideoTap {
     #if DEBUG
     /// Test seam: when true, `buildAudioMix` takes the `MTAudioProcessingTapCreate`
-    /// failure branch (ADR-10 release-on-fail). DEBUG-only; reset after each use.
+    /// failure branch (release-on-fail). DEBUG-only; reset after each use.
     /// `@MainActor` (not `nonisolated(unsafe)`) — both the test and `buildAudioMix`
     /// are `@MainActor`, so no cross-actor mutable state is implied.
     @MainActor static var _testForceTapCreateFailure = false
@@ -207,7 +206,7 @@ enum VideoTap {
 
     /// Stereo balance gain law for `tapProcess` step 6. `balance` ∈ [-1, 1] with
     /// 0.0 = center — the SAME convention as `AudioPlayer.balance` /
-    /// `AVAudioNode.pan`, so the Phase 5 fanout can write the app's balance value
+    /// `AVAudioNode.pan`, so the balance fanout can write the app's balance value
     /// straight through. Unity on the near channel, linear attenuation of the far
     /// channel (full-left `-1` → R muted; full-right `+1` → L muted). Input is
     /// clamped to [-1, 1] defensively.
@@ -231,17 +230,17 @@ enum VideoTap {
     /// `AVMutableAudioMix` for assignment to a not-yet-constructed
     /// `AVPlayerItem.audioMix`. Caller must subsequently set
     /// `playerItem.audioMix = <returned mix>` BEFORE constructing the
-    /// `AVPlayer` (per ADR-7 — `audioMix` is set once and not mutated
+    /// `AVPlayer` (`audioMix` is set once and not mutated
     /// during playback). On `MTAudioProcessingTapCreate` failure the
     /// retained Context is released before throwing so the +1 retain
-    /// does not leak (ADR-10).
+    /// does not leak.
     @MainActor
     static func buildAudioMix(
         audioTrack: AVAssetTrack,
         context: VideoTapContext,
         preferredFormat: CMAudioFormatDescription? = nil
     ) throws -> AVMutableAudioMix {
-        prewarmVideoTapTimebase()  // init the Mach timebase off the render thread (Phase 6)
+        prewarmVideoTapTimebase()  // init the Mach timebase off the render thread
         let retained = Unmanaged.passRetained(context)
         var callbacks = MTAudioProcessingTapCallbacks(
             version: kMTAudioProcessingTapCallbacksVersion_0,
@@ -256,7 +255,7 @@ enum VideoTap {
         var tapOut: MTAudioProcessingTap?
         let status: OSStatus
         #if DEBUG
-        // Test seam (ADR-10): SKIP the real create and force the failure branch so
+        // Test seam: SKIP the real create and force the failure branch so
         // lifecycle tests can assert the +1 `passRetained` is released, not leaked.
         // Must short-circuit BEFORE the real create — otherwise a real tap would be
         // built and its `tapFinalize` would also release the Context (double release).
@@ -299,7 +298,7 @@ enum VideoTap {
     /// deallocation chain fires `tapFinalize` (possibly asynchronously)
     /// once the last reference to the tap drops, releasing the Context.
     /// Caller is expected to pause the player before calling detach to
-    /// honor ADR-7's "audioMix not mutated during playback".
+    /// honor "audioMix not mutated during playback".
     @MainActor
     static func detach(from playerItem: AVPlayerItem) {
         playerItem.audioMix = nil
