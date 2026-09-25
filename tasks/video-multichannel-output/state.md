@@ -12,7 +12,7 @@
 | Predecessor | Why | Status |
 |-------------|-----|--------|
 | S3-2 `avplayer-native-video-dsp` → PR #C merged | Introduces the preferred-format tap (ADR-12) this task extends | 🔧 in progress |
-| D-TARGET27 / PR #87 merged | `MTAudioProcessingTapCreateWithPreferredFormat` is macOS 27 | awaiting merge |
+| D-TARGET27 / PR #87 merged | `MTAudioProcessingTapCreateWithPreferredFormat` is macOS 27 | ✅ merged 2026-09-25 (`c79c2ca`) |
 
 ## Starting point
 

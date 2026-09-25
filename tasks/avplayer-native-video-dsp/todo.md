@@ -293,7 +293,7 @@ Numbering: `<Phase>.<Item>`. `[x]` complete, `[~]` in-progress, `[!]` blocked.
 
 ### Dynamic transition gates
 
-- [ ] 8.5 Long-playback drift — ≥10 min continuous playback of ONE user-supplied lip-sync video; A/V sync within ±40 ms. **Do NOT loop a short clip** (each loop restarts the AVPlayerItem and resets accumulated drift) — CONDITIONAL on the user's video (2026-09-05)
+- [x] 8.5 Long-playback drift — ✅ PASS (2026-09-25, user): 22-min video played continuously on local + AirPlay 2 outputs, lips in sync, no drift
 - [x] 8.6 ✅ PASS 2026-09-25 (non-Pro AirPods substitute; after the AVKit remote-command fix) — Route-change AirPods 1st-gen — connect mid-playback / disconnect mid-playback. Tap callbacks resume within 500 ms; no DSP-state loss; no silent output
 - [x] 8.7 ✅ PASS 2026-09-25 (after the AVKit remote-command fix) — Route-change AirPods Pro — same gate
 - [x] 8.8 Route-change AirPlay-1 receiver — ➖ N/A (2026-09-25, user: AirPlay 1 out of scope)
