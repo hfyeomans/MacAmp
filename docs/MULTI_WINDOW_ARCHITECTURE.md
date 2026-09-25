@@ -1,4 +1,4 @@
-# Modern SwiftUI Multi-Window Architecture for MacAmp (macOS 15+/26+)
+# Modern SwiftUI Multi-Window Architecture for MacAmp (macOS 27+)
 
 ## Executive Summary
 
@@ -28,7 +28,7 @@ This document provides comprehensive research and implementation guidance for cr
 
 ### Current MacAmp Architecture
 
-MacAmp is a pure SwiftUI application for macOS 15+/26+ with the following characteristics:
+MacAmp is a pure SwiftUI application for macOS 27+ with the following characteristics:
 
 - **App Entry Point**: `MacAmpApp.swift` - Single `@main` struct with one default `WindowGroup`
 - **Scene-Level State**: Long-lived singletons (`SkinManager`, `AudioPlayer`, `DockingController`, `AppSettings`, `PlaybackCoordinator`, `StreamPlayer`) stored as `@State` in the App struct

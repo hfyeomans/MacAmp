@@ -333,7 +333,7 @@ Before releasing:
 - [ ] Notarization ticket stapled
 - [ ] DMG created and notarized
 - [ ] DMG stapled
-- [ ] Tested on clean macOS 15+ system
+- [ ] Tested on clean macOS 27+ system
 - [ ] Release notes written
 - [ ] README.md updated with download link
 
