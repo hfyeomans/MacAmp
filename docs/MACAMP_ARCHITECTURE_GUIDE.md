@@ -59,7 +59,7 @@ Lines of Code:            18,475
 Test Coverage:            42% (focused on critical paths)
 Supported Formats:        MP3, M4A, FLAC, WAV, AAC, HTTP/HTTPS streams
 Skin Compatibility:       100% (Winamp 2.x .wsz files)
-macOS Support:            15.0+ (Sequoia), 26.0+ (Tahoe)
+macOS Support:            27.0+ (macOS 15/26 supported by earlier releases)
 Architecture:             SwiftUI + AVFoundation
 Deployment:               Developer ID signed, notarization-ready
 ```

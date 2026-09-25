@@ -102,10 +102,8 @@ struct ButterchurnWebView: NSViewRepresentable {
         webView.navigationDelegate = context.coordinator  // Surface load errors to bridge
         webView.setValue(false, forKey: "drawsBackground")  // Transparent background
 
-        // Enable Web Inspector for debugging (macOS 13.3+)
-        if #available(macOS 13.3, *) {
-            webView.isInspectable = true
-        }
+        // Enable Web Inspector for debugging
+        webView.isInspectable = true
 
         // Store webView reference in bridge for Swift→JS communication
         bridge.webView = webView

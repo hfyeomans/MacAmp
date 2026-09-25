@@ -27,9 +27,7 @@ struct WinampWindowConfigurator {
         window.tabbingMode = .disallowed
 
         // Ensure no separator line between title bar and content
-        if #available(macOS 11.0, *) {
-            window.toolbar = nil
-        }
+        window.toolbar = nil
 
         // Allow window to be in front of other windows (baseline)
         window.level = .normal
