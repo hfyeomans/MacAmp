@@ -770,13 +770,14 @@ notification burst ──► onWillReconfigure (first notification)
                    ──► onDidReconfigure
                           AudioEngineController: reconnect stream bridge at the new output rate,
                             verify mixer → output, prepare + restart engine
-                          AudioPlayer: re-apply volume/balance, reschedule the local file from the
-                            saved time (resume only if it was playing), release guards (100/200 ms)
+                          AudioPlayer: re-apply volume/balance; when audio is the current media,
+                            reschedule the local file from the saved time (resume only if it was
+                            playing); release guards (100/200 ms)
                           PlaybackCoordinator (onEngineReconfigured): re-share the audio IO
                             workgroup with the stream decode thread if the bridge is active
 ```
 
-`AudioPlayer` overrides the engine's `wasPlaying`/`currentTime` with its own state because the engine has already stopped when the notification arrives. `did` is not guaranteed after `will` if the observer is stopped mid-burst, so every user-intent entry point (`play`, `pause`, `stop`, `seek`, `playTrack`) calls `cancelPendingReconfigure()` to drop the snapshot and clear the guards. The handlers have no video branch; AVPlayer handles its own route changes, and the video tap's pinned processing format keeps its DSP independent of the output device (ADR-12).
+`AudioPlayer` overrides the engine's `wasPlaying`/`currentTime` with its own state because the engine has already stopped when the notification arrives. `did` is not guaranteed after `will` if the observer is stopped mid-burst, so every user-intent entry point (`play`, `pause`, `stop`, `seek`, `playTrack`) calls `cancelPendingReconfigure()` to drop the snapshot and clear the guards. The reschedule is limited to audio media: after audio → video the previous track's file stays loaded and `isPlaying` is true, so without that check a format change during video would resume the old track under the video. AVPlayer handles its own route changes, and the video tap's pinned processing format keeps its DSP independent of the output device. Only output **format** changes (sample rate / channel count) post the configuration notification; switching between two outputs with the same format does not.
 
 ---
 
