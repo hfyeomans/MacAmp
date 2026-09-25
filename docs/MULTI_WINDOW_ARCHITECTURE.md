@@ -1,26 +1,19 @@
-# Modern SwiftUI Multi-Window Architecture for MacAmp (macOS 27+)
+# MacAmp Multi-Window Architecture (macOS 27+)
 
 ## Executive Summary
 
-This document provides comprehensive research and implementation guidance for creating truly independent auxiliary windows (Video and Milkdrop visualizers) in MacAmp while maintaining shared state across windows, persistent positioning, and proper Swift 6 concurrency patterns.
+MacAmp's five Winamp windows (Main, Equalizer, Playlist, Video, Milkdrop) are borderless `NSWindow`s, each owned by an `NSWindowController` subclass and hosting SwiftUI through `NSHostingController`. `WindowCoordinator` creates and coordinates them; it is a thin Facade over focused controllers (registry, persistence, visibility, resize/docking, settings observation, delegate wiring). The SwiftUI scene graph holds only a hidden placeholder `WindowGroup` and the Preferences window.
 
-**Recommended Approach**: Multiple `WindowGroup` instances with unique IDs in the App scene, combined with dedicated per-window `@Observable` state models and a centralized `WindowStateStore` for persistence.
+An earlier research proposal to give Video and Milkdrop their own SwiftUI `WindowGroup(id:)` scenes with per-window state models (`VideoVisualizerState`, `WindowStateStore`, `VisualizerCommands`) was not adopted; none of those types exist. Window-specific details live in [VIDEO_WINDOW.md](VIDEO_WINDOW.md), [MILKDROP_WINDOW.md](MILKDROP_WINDOW.md) and [PLAYLIST_WINDOW.md](PLAYLIST_WINDOW.md).
 
 ---
 
 ## Table of Contents
 
 1. [Architecture Overview](#architecture-overview)
-2. [Window Scene Patterns](#window-scene-patterns)
-3. [State Management Strategy](#state-management-strategy)
-4. [Code Patterns & Examples](#code-patterns--examples)
-5. [Window Positioning & Persistence](#window-positioning--persistence)
-6. [Lifecycle Management](#lifecycle-management)
-7. [Integration with Existing Infrastructure](#integration-with-existing-infrastructure)
-8. [Swift 6 Concurrency Patterns](#swift-6-concurrency-patterns)
-9. [Common Pitfalls & Solutions](#common-pitfalls--solutions)
-10. [WindowCoordinator Refactoring (2026-02)](#windowcoordinator-refactoring-2026-02)
-11. [Quick Reference](#quick-reference)
+2. [WindowCoordinator Architecture](#windowcoordinator-architecture)
+3. [Common Pitfalls & Solutions](#common-pitfalls--solutions)
+4. [Quick Reference](#quick-reference)
 
 ---
 
@@ -28,955 +21,53 @@ This document provides comprehensive research and implementation guidance for cr
 
 ### Current MacAmp Architecture
 
-MacAmp is a pure SwiftUI application for macOS 27+ with the following characteristics:
+- **App Entry Point**: `MacAmpApp.swift`. `init()` creates the long-lived models, loads the initial skin, creates `WindowFocusState`, then creates `WindowCoordinator` (assigned to `WindowCoordinator.shared` and `dockingController.windowCoordinator`).
+- **Scene-Level State**: `SkinManager`, `AudioPlayer`, `DockingController`, `AppSettings` (`AppSettings.instance()`), `RadioStationLibrary`, `StreamPlayer`, `PlaybackCoordinator` and `WindowFocusState`, stored as `@State` in the App struct.
+- **Scenes**: a `WindowGroup(id: "main-placeholder")` with a hidden `EmptyView` (launch suppressed, restoration disabled) to satisfy SwiftUI's main-scene requirement, an empty `Settings` scene, and `WindowGroup("Preferences", id: "preferences")`. `.commands` installs `AppCommands` and `SkinsCommands`.
+- **Environment Injection**: each window controller injects the shared models into its root view with `.environment(...)` (see the window docs for each window's list).
+- **Window infrastructure**:
+  - `MacAmpApp/Utilities/WinampWindowConfigurator.swift` – shared NSWindow configuration (`apply(to:)`, `installHitSurface(on:)`)
+  - `MacAmpApp/Windows/BorderlessWindow.swift` – borderless window subclass used by every controller
+  - `MacAmpApp/Utilities/WindowSnapManager.swift` – magnetic snapping and clusters
+  - `MacAmpApp/Utilities/WindowDelegateMultiplexer.swift` – fans `NSWindowDelegate` callbacks out to snap, persistence and focus delegates
+  - `MacAmpApp/ViewModels/DockingController.swift` – pane visibility (Main, Playlist, Equalizer) for the menu commands
 
-- **App Entry Point**: `MacAmpApp.swift` - Single `@main` struct with one default `WindowGroup`
-- **Scene-Level State**: Long-lived singletons (`SkinManager`, `AudioPlayer`, `DockingController`, `AppSettings`, `PlaybackCoordinator`, `StreamPlayer`) stored as `@State` in the App struct
-- **Environment Injection**: All state models injected via `.environment()` modifier for access across all windows
-- **Window Management**: 
-  - `WinampWindowConfigurator.swift` - Centralized NSWindow configuration for all Winamp windows
-  - `WindowSnapManager.swift` - Handles magnetic snapping between docked windows
-  - `DockingController.swift` - Manages visibility and layout of panes (Main, Playlist, Equalizer)
+Shared-state rules (singleton `@Observable @MainActor` models with `didSet` persistence, three-layer split) are covered in the [Architecture Guide](MACAMP_ARCHITECTURE_GUIDE.md#three-layer-architecture-deep-dive) and the [Five-Window NSWindowController Stack](MACAMP_ARCHITECTURE_GUIDE.md#five-window-nswindowcontroller-stack) section.
 
-### Key Existing Patterns to Leverage
+### Instant Double-Size Docking Pipeline
 
-1. **Singleton Pattern for Shared State**
-   ```swift
-   // In MacAmpApp init()
-   let settings = AppSettings.instance()
-   _settings = State(initialValue: settings)
-   ```
-   - AppSettings uses `@Observable @MainActor` with `didSet` UserDefaults persistence
-   - Single instance shared across entire app
-
-2. **Window Accessor Pattern**
-   - Captures `NSWindow` references for direct manipulation
-   - Allows registration with WindowSnapManager
-   - Used in UnifiedDockView for window-level configuration
-
-3. **Docking System**
-   - `DockingController` tracks visible panes with state persistence
-   - WindowSnapManager registers windows and handles snapping
-   - 2025-11 update: `WindowCoordinator` asks `WindowSnapManager.clusterKinds(containing:)` for the playlist's cluster before every double-size toggle. The helper builds a `PlaylistDockingContext` (anchor + attachment) so the playlist can follow either the Equalizer or Main window instantly. Magnetic snapping is disabled via `beginProgrammaticAdjustment()` during the frame update and re-enabled afterwards.
-   - **2026-02 refactoring**: `WindowCoordinator` was decomposed from a 1,357-line god object into a 223-line Facade + 10 focused types using Composition pattern. Docking-aware resize logic now lives in `WindowResizeController`, pure geometry in `WindowDockingGeometry`, and value types in `WindowDockingTypes`. See [WindowCoordinator Refactoring (2026-02)](#windowcoordinator-refactoring-2026-02) for complete details. Source files: `MacAmpApp/ViewModels/WindowCoordinator.swift`, `MacAmpApp/Windows/WindowResizeController.swift`, `MacAmpApp/Windows/WindowDockingGeometry.swift`.
-
-#### Instant Double-Size Docking Pipeline
-
-1. `AppSettings.isDoubleSizeMode` toggles via CTRL+D / "D" button.
+1. `AppSettings.isDoubleSizeMode` toggles via Ctrl+D / "D" button.
 2. `WindowSettingsObserver` detects the change via recursive `withObservationTracking` and fires the `onDoubleSizeChanged` callback.
-3. `WindowCoordinator` forwards to `WindowResizeController.resizeMainAndEQWindows()`, which captures the live frames for Main, EQ, and Playlist.
-4. `WindowResizeController.makePlaylistDockingContext()` queries `WindowSnapManager.clusterKinds(containing: .playlist)` to discover the current magnetic cluster. If the playlist is touching the EQ or Main window, it derives an attachment enum (`below`, `above`, `left`, `right`) plus a saved anchor using `WindowDockingGeometry` pure functions.
-5. Main and EQ windows resize synchronously (no NSAnimation). While `WindowSnapManager` is in programmatic adjustment mode and `WindowFramePersistence` has suppressed writes, the playlist is re-aligned relative to the anchor frame, preserving the Winamp stack.
-6. DEBUG logging prints `[DOCKING] source: ...` so QA can immediately see which anchor drove the adjustment.
+3. `WindowCoordinator` forwards to `WindowResizeController.resizeMainAndEQWindows()`, which captures the live frames for Main, EQ, Playlist and Video.
+4. `makePlaylistDockingContext()` queries `WindowSnapManager.clusterKinds(containing: .playlist)` to discover the current magnetic cluster. If the playlist is touching the EQ (checked first) or Main window, it derives an attachment (`below`, `above`, `left`, `right` with an offset) plus the anchor using `WindowDockingGeometry` pure functions; otherwise it falls back to a heuristic or the last remembered attachment. `makeVideoDockingContext()` does the same for the Video window.
+5. Main and EQ resize synchronously (no animation). While `WindowSnapManager` is in programmatic adjustment mode and `WindowFramePersistence` has suppressed writes, the playlist and video windows are re-aligned to their anchor frames, preserving the Winamp stack. Playlist and Video keep their own size.
+6. DEBUG logging prints `[DOCKING] source: ...` so QA can see which anchor drove the adjustment.
 
-**Why this matters**: Visualizer windows (or other auxiliary panes) can plug into the same mechanism -- once they register with `WindowSnapManager` via `WindowDelegateWiring`, the resize controller can ask for their cluster membership and keep them glued to whichever window they are attached to. This architecture keeps the classic Winamp feel (instant 100% to 200% snap) while honoring macOS snapping semantics.
-
-**File responsibilities in the docking pipeline** (post-refactoring):
+Any window registered with `WindowSnapManager` (via `WindowDelegateWiring`) can take part: the resize controller asks for its cluster membership and keeps it attached to its anchor.
 
 | File | Role |
 |------|------|
 | `WindowSettingsObserver.swift` | Detects `isDoubleSizeMode` change |
 | `WindowResizeController.swift` | Orchestrates resize + docking context |
 | `WindowDockingGeometry.swift` | Pure geometry (attachment detection, origin calculation) |
-| `WindowDockingTypes.swift` | Value types (`PlaylistDockingContext`, `PlaylistAttachmentSnapshot`) |
+| `WindowDockingTypes.swift` | Value types (`PlaylistDockingContext`, `PlaylistAttachmentSnapshot`, `VideoAttachmentSnapshot`) |
 | `WindowFramePersistence.swift` | Suppresses persistence during programmatic moves |
 
 ---
 
-## Window Scene Patterns
-
-### Pattern 1: Multiple WindowGroup with ID (Recommended for MacAmp)
-
-**When to use**: Independent windows that can exist in multiple instances but you only need one per type (e.g., one Video window, one Milkdrop window at a time).
-
-```swift
-@main
-struct MacAmpApp: App {
-    // Shared state (singletons)
-    @State private var skinManager: SkinManager
-    @State private var audioPlayer: AudioPlayer
-    @State private var settings: AppSettings
-    
-    // Per-window state models
-    @State private var videoVisualizerState = VideoVisualizerState()
-    @State private var milkdropVisualizerState = MilkdropVisualizerState()
-    @State private var windowStateStore = WindowStateStore()
-
-    var body: some Scene {
-        // Main window (default)
-        WindowGroup {
-            UnifiedDockView()
-                .environment(skinManager)
-                .environment(audioPlayer)
-                .environment(settings)
-                .environment(videoVisualizerState)
-                .environment(milkdropVisualizerState)
-                .environment(windowStateStore)
-        }
-        .windowStyle(.hiddenTitleBar)
-        .windowResizability(.contentSize)
-
-        // Video Visualizer Window
-        WindowGroup(id: "videoVisualizer") {
-            VideoVisualizerView()
-                .environment(audioPlayer)
-                .environment(settings)
-                .environment(videoVisualizerState)
-                .environment(windowStateStore)
-        }
-        .windowStyle(.hiddenTitleBar)
-        .windowResizability(.contentSize)
-        .defaultWindowPlacement { geometry in
-            let screenFrame = NSScreen.main?.visibleFrame ?? .zero
-            return WindowPlacement(
-                size: CGSize(width: 512, height: 512),
-                normalizedPosition: CGPoint(x: 0.65, y: 0.2)
-            )
-        }
-
-        // Milkdrop Visualizer Window
-        WindowGroup(id: "milkdropVisualizer") {
-            MilkdropVisualizerView()
-                .environment(audioPlayer)
-                .environment(settings)
-                .environment(milkdropVisualizerState)
-                .environment(windowStateStore)
-        }
-        .windowStyle(.hiddenTitleBar)
-        .windowResizability(.contentSize)
-        .defaultWindowPlacement { geometry in
-            let screenFrame = NSScreen.main?.visibleFrame ?? .zero
-            return WindowPlacement(
-                size: CGSize(width: 512, height: 512),
-                normalizedPosition: CGPoint(x: 0.65, y: 0.6)
-            )
-        }
-
-        // Preferences Window (already exists)
-        WindowGroup("Preferences", id: "preferences") {
-            PreferencesView()
-                .environment(settings)
-        }
-        .windowStyle(.hiddenTitleBar)
-        .windowResizability(.contentSize)
-        .defaultPosition(.center)
-
-        // Global Commands
-        .commands {
-            AppCommands(...)
-            SkinsCommands(...)
-            VisualizerCommands() // New: Add visualizer window controls
-        }
-    }
-}
-```
-
-**Advantages**:
-- Pure SwiftUI - no NSWindowController overhead
-- Automatic scene lifecycle management
-- Environment injection works seamlessly
-- Global commands apply to all windows
-- State isolation prevents bugs
-
-**Disadvantages**:
-- Maximum one window per ID (but could be extended with value-based WindowGroup)
-- Less direct NSAppKit control (but `NSWindowController` subclasses provide direct configuration)
-
-### Pattern 2: Window vs WindowGroup Comparison
-
-| Feature | Window | WindowGroup | WindowGroup(id:) |
-|---------|--------|-------------|------------------|
-| Single instance | Yes | No | Yes (one per ID) |
-| Multiple identical windows | No | Yes | No |
-| Dynamic content | No | Yes with values | Only one at a time |
-| State isolation | N/A | Per instance | Single shared |
-| Use case | Main/unique window | Document/editor windows | Fixed auxiliary windows |
-
-For MacAmp: **Use WindowGroup(id:)** for auxiliary windows.
-
----
-
-## State Management Strategy
-
-### The Three Levels of State
-
-```
-┌─────────────────────────────────────────────────────────┐
-│  Level 1: Shared Global State (SingletonStyle)          │
-│  ├─ AudioPlayer (playback status)                       │
-│  ├─ AppSettings (user preferences)                      │
-│  ├─ SkinManager (current skin, sprite cache)            │
-│  └─ PlaybackCoordinator (synchronized playback)         │
-│  Persistence: UserDefaults, file system                 │
-│  Access: @Environment injection to all windows          │
-└─────────────────────────────────────────────────────────┘
-                          ↓
-┌─────────────────────────────────────────────────────────┐
-│  Level 2: Per-Window Shared State (@Observable models)  │
-│  ├─ VideoVisualizerState (color mode, refresh rate)    │
-│  ├─ MilkdropVisualizerState (shader params, presets)   │
-│  └─ WindowStateStore (frame positions, sizes)          │
-│  Persistence: UserDefaults with window kind suffix      │
-│  Access: @Environment injection per window              │
-└─────────────────────────────────────────────────────────┘
-                          ↓
-┌─────────────────────────────────────────────────────────┐
-│  Level 3: View-Local State                              │
-│  ├─ Transient UI state (animations, selections)         │
-│  └─ Temporary calculations                              │
-│  Persistence: None (ephemeral)                          │
-│  Access: @State within view                             │
-└─────────────────────────────────────────────────────────┘
-```
-
-### Critical: Shared Audio State Pattern
-
-**Problem**: AudioPlayer publishes changes → all views observing it re-evaluate their body → expensive computations run repeatedly in all windows.
-
-**Solution**: Level 2 state models extract **what to display**, not **how to display it**:
-
-```swift
-// Level 1: Global Audio State (shared across all windows)
-@Observable
-@MainActor
-final class AudioPlayer {
-    var isPlaying: Bool = false
-    var currentTime: Double = 0.0
-    var currentFrequencies: [Float] = [] // Updated at 60Hz
-}
-
-// Level 2: Per-Window Display State (visualizer-specific)
-@Observable
-@MainActor
-final class VideoVisualizerState {
-    var colorMode: ColorMode = .spectrum
-    var refreshRate: Double = 60.0
-    var smoothing: Double = 0.8
-    
-    // Computed from AudioPlayer's data, cached per-frame
-    var cachedWaveform: [Float]?
-    var lastUpdateTime: Double = 0
-}
-
-// In VideoVisualizerView:
-struct VideoVisualizerView: View {
-    @Environment(AudioPlayer.self) var audioPlayer
-    @Environment(VideoVisualizerState.self) var visState
-    
-    var body: some View {
-        MetalCanvasView(
-            frequencies: audioPlayer.currentFrequencies,
-            colorMode: visState.colorMode
-        )
-        // Body only invalidates when visState.colorMode changes
-        // NOT when audioPlayer publishes every 16ms
-        .onChange(of: audioPlayer.currentFrequencies) { _, newFreqs in
-            visState.cachedWaveform = newFreqs
-        }
-    }
-}
-```
-
----
-
-## Code Patterns & Examples
-
-### Pattern A: Per-Window State Model (VideoVisualizerState)
-
-```swift
-import Foundation
-import SwiftUI
-import Observation
-
-@Observable
-@MainActor
-final class VideoVisualizerState: Sendable {
-    enum ColorMode: String, Codable {
-        case spectrum = "spectrum"
-        case fire = "fire"
-        case ice = "ice"
-        case rainbow = "rainbow"
-    }
-
-    var colorMode: ColorMode = .spectrum {
-        didSet {
-            UserDefaults.standard.set(
-                colorMode.rawValue,
-                forKey: "videoVisualizer.colorMode"
-            )
-        }
-    }
-
-    var refreshRate: Double = 60.0 {
-        didSet {
-            UserDefaults.standard.set(
-                refreshRate,
-                forKey: "videoVisualizer.refreshRate"
-            )
-        }
-    }
-
-    var smoothing: Double = 0.8 {
-        didSet {
-            UserDefaults.standard.set(
-                smoothing,
-                forKey: "videoVisualizer.smoothing"
-            )
-        }
-    }
-
-    var isFullscreen: Bool = false
-
-    init() {
-        // Load persisted settings
-        if let savedMode = UserDefaults.standard.string(forKey: "videoVisualizer.colorMode"),
-           let mode = ColorMode(rawValue: savedMode) {
-            self.colorMode = mode
-        }
-        
-        let rate = UserDefaults.standard.double(forKey: "videoVisualizer.refreshRate")
-        if rate > 0 {
-            self.refreshRate = rate
-        }
-        
-        let smooth = UserDefaults.standard.double(forKey: "videoVisualizer.smoothing")
-        if smooth > 0 {
-            self.smoothing = smooth
-        }
-    }
-}
-```
-
-### Pattern B: Window State Store (Persistence & Registration)
-
-```swift
-import Foundation
-import SwiftUI
-import AppKit
-import Observation
-
-enum WindowKind: String, Codable {
-    case main = "main"
-    case videoVisualizer = "visualizer.video"
-    case milkdropVisualizer = "visualizer.milkdrop"
-    case playlist = "playlist"
-    case equalizer = "equalizer"
-}
-
-struct WindowFrame: Codable {
-    var x: Double
-    var y: Double
-    var width: Double
-    var height: Double
-    
-    init(from nsFrame: NSRect) {
-        self.x = nsFrame.origin.x
-        self.y = nsFrame.origin.y
-        self.width = nsFrame.size.width
-        self.height = nsFrame.size.height
-    }
-    
-    func toNSRect() -> NSRect {
-        NSRect(x: x, y: y, width: width, height: height)
-    }
-}
-
-@Observable
-@MainActor
-final class WindowStateStore {
-    private let defaults = UserDefaults.standard
-    private var trackedWindows: [WindowKind: WeakBox<NSWindow>] = [:]
-    private var frameRestoration: [WindowKind: WindowFrame] = [:]
-    
-    init() {
-        loadSavedFrames()
-    }
-    
-    // MARK: - Frame Persistence
-    
-    func restoreFrame(for window: NSWindow, kind: WindowKind) {
-        guard let saved = frameRestoration[kind] else {
-            // No saved frame - use defaults
-            return
-        }
-        
-        // Set frame on main thread (@MainActor)
-        let rect = saved.toNSRect()
-        window.setFrame(rect, display: true)
-    }
-    
-    func persistFrame(_ frame: NSRect, for kind: WindowKind) {
-        let windowFrame = WindowFrame(from: frame)
-        frameRestoration[kind] = windowFrame
-        
-        // Persist to disk (debounced)
-        Task {
-            try? await Task.sleep(nanoseconds: 500_000_000) // 500ms debounce
-            do {
-                let data = try JSONEncoder().encode(windowFrame)
-                self.defaults.set(data, forKey: "windowFrame.\(kind.rawValue)")
-            } catch {
-                console.error("Failed to persist window frame: \(error)")
-            }
-        }
-    }
-    
-    private func loadSavedFrames() {
-        for kind in [WindowKind.videoVisualizer, .milkdropVisualizer] {
-            guard let data = defaults.data(forKey: "windowFrame.\(kind.rawValue)") else {
-                continue
-            }
-            do {
-                let frame = try JSONDecoder().decode(WindowFrame.self, from: data)
-                frameRestoration[kind] = frame
-            } catch {
-                console.error("Failed to load frame for \(kind): \(error)")
-            }
-        }
-    }
-    
-    // MARK: - Window Registration
-    
-    func register(window: NSWindow, kind: WindowKind) {
-        trackedWindows[kind] = WeakBox(window)
-        restoreFrame(for: window, kind: kind)
-    }
-    
-    func window(for kind: WindowKind) -> NSWindow? {
-        trackedWindows[kind]?.value
-    }
-}
-
-// Weak reference wrapper for storing NSWindow without circular refs
-private class WeakBox<T: AnyObject> {
-    weak var value: T?
-    
-    init(_ value: T) {
-        self.value = value
-    }
-}
-```
-
-### Pattern C: VideoVisualizerView with Window Management
-
-```swift
-import SwiftUI
-import AppKit
-
-struct VideoVisualizerView: View {
-    @Environment(AudioPlayer.self) var audioPlayer
-    @Environment(AppSettings.self) var settings
-    @Environment(VideoVisualizerState.self) var visState
-    @Environment(WindowStateStore.self) var windowStore
-    @Environment(DockingController.self) var docking
-    @Environment(\.openWindow) var openWindow
-    
-    @State private var windowID = UUID()
-    
-    var body: some View {
-        ZStack {
-            // Metal/Canvas-based visualization
-            MetalVisualizerCanvas(
-                frequencies: audioPlayer.currentFrequencies,
-                colorMode: visState.colorMode,
-                smoothing: visState.smoothing
-            )
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color.black)
-            
-            // Overlay controls
-            VStack(alignment: .trailing, spacing: 12) {
-                HStack {
-                    // Color mode picker
-                    Menu {
-                        ForEach(VideoVisualizerState.ColorMode.allCases, id: \.rawValue) { mode in
-                            Button(mode.rawValue.capitalized) {
-                                visState.colorMode = mode
-                            }
-                        }
-                    } label: {
-                        Label("Color", systemImage: "paintpalette")
-                    }
-                    .menuStyle(.button)
-                    
-                    // Fullscreen toggle
-                    Button(action: { visState.isFullscreen.toggle() }) {
-                        Image(systemName: visState.isFullscreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
-                    }
-                    .help("Toggle fullscreen")
-                }
-                .padding(12)
-                .background(Color.black.opacity(0.6))
-                .cornerRadius(8)
-                
-                Spacer()
-            }
-            .padding(16)
-        }
-        // > **Note (2026-03):** `WindowAccessor` was replaced by `NSWindowController` subclasses
-        // > (e.g., `WinampMainWindowController`) that configure `NSWindow` properties directly
-        // > in their initializer. Window configuration is centralized in `WinampWindowConfigurator`.
-        // > Registration, snapping, and frame persistence are handled in the controller's init.
-        .onAppear {
-            // Ensure docking controller knows about this window type
-            if !docking.hasVisualizers {
-                docking.addVisualizerSupport()
-            }
-        }
-    }
-    
-    @State private var subscriptions: Set<AnyCancellable> = []
-}
-```
-
-### Pattern D: Opening Windows (Commands/Shortcuts)
-
-```swift
-struct VisualizerCommands: Commands {
-    @Environment(AudioPlayer.self) var audioPlayer
-    @Environment(\.openWindow) var openWindow
-    
-    var body: some Commands {
-        CommandMenu("Visualizers") {
-            Button("Show Video Visualizer") {
-                openWindow(id: "videoVisualizer")
-            }
-            .keyboardShortcut("v", modifiers: [.command, .shift])
-            .disabled(audioPlayer.currentTrack == nil)
-            
-            Button("Show Milkdrop Visualizer") {
-                openWindow(id: "milkdropVisualizer")
-            }
-            .keyboardShortcut("m", modifiers: [.command, .shift])
-            .disabled(audioPlayer.currentTrack == nil)
-        }
-    }
-}
-```
-
----
-
-## Window Positioning & Persistence
-
-### Default Positioning Strategy
-
-```swift
-WindowGroup(id: "videoVisualizer") {
-    VideoVisualizerView()
-        // ... environment injection ...
-}
-.defaultWindowPlacement { geometry in
-    // geometry.defaultDisplay - the main or focused screen
-    let screens = NSScreen.screens
-    let mainScreen = screens.first(where: { $0.frame.contains(NSCursor.mouseLocation) })
-        ?? screens.first
-        ?? NSScreen.main!
-    
-    let screenFrame = mainScreen.visibleFrame
-    let windowSize = CGSize(width: 512, height: 512)
-    
-    // Position offset from main window or centered on secondary display
-    let origin = CGPoint(
-        x: screenFrame.midX - windowSize.width / 2,
-        y: screenFrame.midY - windowSize.height / 2
-    )
-    
-    return WindowPlacement(size: windowSize)
-}
-```
-
-### Multi-Monitor Support
-
-```swift
-extension WindowStateStore {
-    /// Validate saved frame is on an active screen, adjust if needed
-    func validateFrame(_ frame: WindowFrame, for kind: WindowKind) -> NSRect {
-        let rect = frame.toNSRect()
-        let screens = NSScreen.screens
-        
-        // Check if frame overlaps any screen
-        if screens.contains(where: { $0.frame.intersects(rect) }) {
-            return rect // Frame is valid
-        }
-        
-        // Frame is off-screen - reset to primary screen
-        guard let primaryScreen = screens.first else {
-            return NSRect(x: 100, y: 100, width: 512, height: 512)
-        }
-        
-        let screenFrame = primaryScreen.visibleFrame
-        return NSRect(
-            x: screenFrame.midX - 256,
-            y: screenFrame.midY - 256,
-            width: 512,
-            height: 512
-        )
-    }
-}
-```
-
----
-
-## Lifecycle Management
-
-### Window Open/Close Events
-
-```swift
-@Observable
-@MainActor
-final class WindowLifecycleManager {
-    var openWindows: Set<WindowKind> = []
-    
-    @ObservationIgnored
-    private var subscribers: [NSObjectProtocol] = []
-    
-    func observe(window: NSWindow, for kind: WindowKind) {
-        openWindows.insert(kind)
-        
-        // Track window close
-        let closeObserver = NotificationCenter.default.addObserver(
-            forName: NSWindow.willCloseNotification,
-            object: window,
-            queue: .main
-        ) { [weak self] _ in
-            self?.openWindows.remove(kind)
-            // Perform cleanup if needed
-        }
-        
-        subscribers.append(closeObserver)
-    }
-    
-    deinit {
-        for observer in subscribers {
-            NotificationCenter.default.removeObserver(observer)
-        }
-    }
-}
-```
-
-### Cleanup on Window Close
-
-```swift
-struct VideoVisualizerView: View {
-    @Environment(AudioPlayer.self) var audioPlayer
-    @Environment(VideoVisualizerState.self) var visState
-    @Environment(WindowStateStore.self) var windowStore
-    
-    @State private var displayLink: CVDisplayLink?
-    
-    var body: some View {
-        // ... visualization content ...
-            .onAppear {
-                setupDisplayLink()
-            }
-            .onDisappear {
-                cleanupDisplayLink()
-                // Metal resources cleaned up automatically
-            }
-    }
-    
-    private func setupDisplayLink() {
-        // Set up high-frequency rendering
-        var displayLink: CVDisplayLink?
-        CVDisplayLinkCreateWithActiveCGDisplay(0, &displayLink)
-        self.displayLink = displayLink
-        
-        CVDisplayLinkSetOutputCallback(displayLink, { _, _, _, _, _, context in
-            // Render callback
-            return kCVReturnSuccess
-        }, UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque()))
-        
-        CVDisplayLinkStart(displayLink!)
-    }
-    
-    private func cleanupDisplayLink() {
-        guard let link = displayLink else { return }
-        CVDisplayLinkStop(link)
-        self.displayLink = nil
-    }
-}
-```
-
----
-
-## Integration with Existing Infrastructure
-
-### Extending DockingController
-
-MacAmp's `DockingController` currently tracks main/playlist/equalizer panes. Extend it for visualizers:
-
-```swift
-// In DockingController.swift
-
-enum WindowKind: Hashable {
-    case main
-    case playlist
-    case equalizer
-    case videoVisualizer
-    case milkdropVisualizer
-}
-
-@MainActor
-final class DockingController {
-    private var trackedWindows: [WindowKind: WeakReference<NSWindow>] = [:]
-    
-    var windowSnapManager: WindowSnapManager = WindowSnapManager.shared
-    
-    func register(window: NSWindow, kind: WindowKind) {
-        trackedWindows[kind] = WeakReference(window)
-        windowSnapManager.register(window: window, kind: kind)
-    }
-    
-    var hasVisualizerWindows: Bool {
-        trackedWindows[.videoVisualizer] != nil || 
-        trackedWindows[.milkdropVisualizer] != nil
-    }
-}
-```
-
-### WindowSnapManager Enhancement
-
-```swift
-extension WindowSnapManager {
-    func register(window: NSWindow, kind: WindowKind) {
-        window.tabbingMode = .disallowed
-        window.titleVisibility = .hidden
-        window.titlebarAppearsTransparent = true
-        
-        windows[kind] = TrackedWindow(window: window, kind: kind)
-        window.delegate = self
-    }
-}
-```
-
----
-
-## Swift 6 Concurrency Patterns
-
-### Safe State Updates from Async Contexts
-
-```swift
-// Pattern: Use Task { @MainActor in ... } for state mutations
-struct VideoVisualizerView: View {
-    @Environment(WindowStateStore.self) var windowStore
-    @Environment(VideoVisualizerState.self) var visState
-    
-    var body: some View {
-        Canvas { context, size in
-            // Rendering code
-        }
-        .onChange(of: someAsyncValue) { _, newValue in
-            // Method 1: Direct update (within View body context)
-            visState.cachedValue = newValue
-            
-            // Method 2: From async context
-            Task {
-                let result = await computeExpensiveValue(newValue)
-                await MainActor.run {
-                    visState.cachedValue = result
-                }
-            }
-        }
-    }
-}
-
-// Pattern: @Observable models are @MainActor
-@Observable
-@MainActor
-final class VideoVisualizerState {
-    var cachedValue: SomeType = .default {
-        didSet {
-            // All property observers run on main thread
-            persistToUserDefaults()
-        }
-    }
-    
-    func updateFromBackground(newValue: SomeType) {
-        // This method is @MainActor by inheritance
-        self.cachedValue = newValue
-    }
-}
-```
-
-### Safe Concurrent Access to Shared State
-
-```swift
-// AudioPlayer is @Observable @MainActor
-// Multiple windows reading audioPlayer.currentFrequencies
-// All reads/writes are automatically serialized to main thread
-
-struct VideoVisualizerView: View {
-    @Environment(AudioPlayer.self) var audioPlayer
-    
-    var body: some View {
-        Canvas { context, size in
-            // Safe to read audioPlayer properties here
-            // SwiftUI automatically tracks changes
-            let freqs = audioPlayer.currentFrequencies
-            renderVisualization(freqs, in: context)
-        }
-        .onChange(of: audioPlayer.currentFrequencies) { _, newFreqs in
-            // Also safe - running on main thread
-            updateVisualization(newFreqs)
-        }
-    }
-}
-```
-
----
-
-## Common Pitfalls & Solutions
-
-### Pitfall 1: State Shared Between Windows When It Shouldn't Be
-
-**Problem**: Using WindowGroup with @State @Observable models that create new instances per window, but instance sharing causing state sync:
-
-```swift
-// WRONG - @Observable instance created once, shared across all windows
-@main
-struct MacAmpApp: App {
-    @State private var videoVisState = VideoVisualizerState() // ❌ Created once
-    
-    var body: some Scene {
-        WindowGroup(id: "videoVisualizer") {
-            VideoVisualizerView()
-                .environment(videoVisState) // Both windows get same instance
-        }
-    }
-}
-```
-
-**Solution**: Each WindowGroup gets its own @State instance:
-
-```swift
-// CORRECT - Each WindowGroup has independent @State
-@main
-struct MacAmpApp: App {
-    @State private var videoVisState = VideoVisualizerState()
-    @State private var milkdropVisState = MilkdropVisualizerState()
-    
-    var body: some Scene {
-        WindowGroup(id: "videoVisualizer") {
-            VideoVisualizerView()
-                .environment(videoVisState)
-        }
-        
-        WindowGroup(id: "milkdropVisualizer") {
-            MilkdropVisualizerView()
-                .environment(milkdropVisState)
-        }
-    }
-}
-```
-
-### Pitfall 2: Window Reference Cycles
-
-> **Note (2026-03):** `WindowAccessor` was replaced by `NSWindowController` subclasses
-> (e.g., `WinampMainWindowController`) that configure `NSWindow` properties directly
-> in their initializer. Window configuration is centralized in `WinampWindowConfigurator`.
-
-**Problem**: NSWindow references captured in closures cause memory leaks.
-
-**Solution**: The `NSWindowController` pattern avoids this by managing the window lifecycle
-directly. Controllers hold a strong reference to their window, and notification observers
-are removed in `deinit`. Use `[weak self]` in closures within controllers to avoid retain cycles.
-
-### Pitfall 3: Excessive Body Re-evaluations
-
-**Problem**: Per-frame audio data changes trigger visualizer body re-evaluation:
-
-```swift
-// WRONG - Body recalculates every 16ms as frequencies change
-struct VideoVisualizerView: View {
-    @Environment(AudioPlayer.self) var audioPlayer
-    
-    var body: some View {
-        Canvas { context, size in
-            let freqs = audioPlayer.currentFrequencies
-            // ❌ Canvas recreated every 16ms
-            renderVisualization(freqs, context)
-        }
-    }
-}
-```
-
-**Solution**: Use Canvas with @Binding or use Metal directly:
-
-```swift
-// CORRECT - Metal rendering independent of SwiftUI body
-struct VideoVisualizerView: View {
-    @Environment(AudioPlayer.self) var audioPlayer
-    @State private var metalView: MTKView?
-    
-    var body: some View {
-        MetalVisualizerView(frequencies: audioPlayer.currentFrequencies)
-            .onChange(of: audioPlayer.currentFrequencies) { _, freqs in
-                // Update Metal texture, not SwiftUI view
-                updateMetalRendering(freqs)
-            }
-    }
-}
-```
-
-### Pitfall 4: Not Respecting @MainActor
-
-**Problem**: Trying to update @Observable models from background threads:
-
-```swift
-// WRONG - Crashes in Swift 6 strict mode
-let frequencies = await audioEngine.getFrequencies()
-videoVisState.cachedFrequencies = frequencies // ❌ Not on main thread
-```
-
-**Solution**: Explicitly hop to main thread:
-
-```swift
-// CORRECT
-let frequencies = await audioEngine.getFrequencies()
-await MainActor.run {
-    videoVisState.cachedFrequencies = frequencies
-}
-
-// Or use Task with @MainActor
-Task { @MainActor in
-    videoVisState.cachedFrequencies = frequencies
-}
-```
-
----
-
-## WindowCoordinator Refactoring (2026-02)
+## WindowCoordinator Architecture
 
 ### Rationale
 
-`WindowCoordinator` had grown to 1,357 lines with 10 orthogonal responsibilities crammed into a single file:
-
-1. Window controller ownership (5 NSWindowController instances)
-2. Window-to-kind mapping
-3. Frame persistence (save/load/suppress)
-4. Show/hide/toggle visibility for all 5 window types
-5. Double-size resize with docking-aware playlist/video repositioning
-6. Settings observation (always-on-top, double-size, show video, show milkdrop)
-7. Delegate multiplexer + focus delegate wiring
-8. Pure docking geometry calculations
-9. Value types for docking context
-10. Layout defaults, initial positioning, and presentation
-
-This "god object" exceeded the SwiftLint `file_length` threshold, made changes risky (any modification could touch unrelated behavior), and was impossible to unit test in isolation. The Oracle (gpt-5.3-codex) pre-review confirmed the decomposition direction and provided critical architectural feedback.
+`WindowCoordinator` used to be a 1,357-line object with ten unrelated responsibilities (controller ownership, kind mapping, frame persistence, visibility for five windows, double-size resize with docking, settings observation, delegate wiring, docking geometry, docking value types, layout/presentation). It was decomposed so each concern can change and be tested on its own.
 
 ### Architecture Decision: Facade + Composition
 
 **Why Facade + Composition (chosen)**:
-- Zero breaking changes: all callers continue using `WindowCoordinator.shared.method()` unchanged
-- Incremental migration: each extraction phase is independently verifiable
-- No protocol overhead: controllers are concrete types, no unnecessary abstraction
+- Callers keep using `WindowCoordinator.shared.method()`; the Facade forwards to the controllers
+- No protocol overhead: controllers are concrete types (one implementation each)
 - Acyclic dependency graph: no controller-to-controller dependencies
 - @Observable observation chaining: computed property forwarding preserves SwiftUI reactivity
-
-**Why not Protocol-based Abstraction**:
-- Oracle explicitly recommended against "broad protocol abstractions" for internal types
-- Protocols add indirection cost without benefit when there is exactly one implementation
-- The Facade pattern already provides a clean public API surface
 
 **Why not Actor-based isolation**:
 - All window operations must run on the main thread (AppKit requirement)
@@ -985,18 +76,16 @@ This "god object" exceeded the SwiftLint `file_length` threshold, made changes r
 
 ### File Structure and Responsibilities
 
-After refactoring, `WindowCoordinator.swift` is 223 lines (an 84% reduction) and serves as a pure Facade/Composition root. The 10 extracted types total 1,470 lines across 11 files.
-
 ```
 MacAmpApp/ViewModels/
-    WindowCoordinator.swift           (223 lines) -- Facade + composition root
+    WindowCoordinator.swift           (218 lines) -- Facade + composition root
     WindowCoordinator+Layout.swift    (129 lines) -- Layout, presentation, debug logging
 
 MacAmpApp/Windows/
     WindowRegistry.swift              ( 83 lines) -- Window ownership + lookup
     WindowFramePersistence.swift      (147 lines) -- Frame persistence + suppression
-    WindowVisibilityController.swift  (161 lines) -- Show/hide/toggle + @Observable state
-    WindowResizeController.swift      (312 lines) -- Resize + docking-aware layout
+    WindowVisibilityController.swift  (145 lines) -- Show/hide/toggle + @Observable state
+    WindowResizeController.swift      (305 lines) -- Resize + docking-aware layout
     WindowSettingsObserver.swift      (113 lines) -- Settings observation lifecycle
     WindowDelegateWiring.swift        ( 54 lines) -- Delegate setup static factory
     WindowDockingTypes.swift          ( 50 lines) -- Value types (Sendable)
@@ -1004,21 +93,19 @@ MacAmpApp/Windows/
     WindowFrameStore.swift            ( 65 lines) -- UserDefaults wrapper (injectable)
 ```
 
-### Responsibility Breakdown
-
-| Type | SRP Responsibility | @MainActor | @Observable | Lines |
-|------|-------------------|:----------:|:-----------:|------:|
-| `WindowCoordinator` | Composition root, API forwarding | Yes | Yes | 223 |
-| `WindowCoordinator+Layout` | Init-time layout, presentation, debug | Yes (inherited) | -- | 129 |
-| `WindowRegistry` | Owns 5 NSWindowController instances, kind mapping | Yes | No | 83 |
-| `WindowFramePersistence` | Save/load/suppress frame positions | Yes | No | 147 |
-| `WindowVisibilityController` | Show/hide/toggle for all windows | Yes | Yes | 161 |
-| `WindowResizeController` | Double-size resize, docking context, move | Yes | No | 312 |
-| `WindowSettingsObserver` | Observe 4 AppSettings properties | Yes | No | 113 |
-| `WindowDelegateWiring` | Static factory for delegate setup | Yes (struct) | No | 54 |
-| `WindowDockingTypes` | Value types for docking context | No (Sendable) | No | 50 |
-| `WindowDockingGeometry` | Pure geometry calculations | nonisolated | No | 109 |
-| `WindowFrameStore` | UserDefaults encode/decode | No (value type) | No | 65 |
+| Type | Responsibility | @MainActor | @Observable |
+|------|----------------|:----------:|:-----------:|
+| `WindowCoordinator` | Composition root, API forwarding | Yes | Yes |
+| `WindowCoordinator+Layout` | Init-time layout, skin-ready presentation, debug | Yes (inherited) | -- |
+| `WindowRegistry` | Owns the 5 NSWindowControllers, window↔kind mapping, `liveAnchorFrame` | Yes | No |
+| `WindowFramePersistence` | Save/restore/suppress frames; Video and Milkdrop restore origin only | Yes | No |
+| `WindowVisibilityController` | Show/hide/toggle for all windows | Yes | Yes |
+| `WindowResizeController` | Double-size resize, docking context, playlist/video/milkdrop size updates, resize previews | Yes | No |
+| `WindowSettingsObserver` | Observes `isAlwaysOnTop`, `isDoubleSizeMode`, `showVideoWindow`, `showMilkdropWindow` | Yes | No |
+| `WindowDelegateWiring` | Static factory: per window, registers with `WindowSnapManager` and installs a `WindowDelegateMultiplexer` (snap manager, persistence delegate, `WindowFocusDelegate`) | Yes (struct) | No |
+| `WindowDockingTypes` | Value types for docking context | No (Sendable) | No |
+| `WindowDockingGeometry` | Pure geometry calculations | nonisolated | No |
+| `WindowFrameStore` | JSON-encoded frames in UserDefaults, key `WindowFrame.<kind>` | No | No |
 
 ### Dependency Graph (Acyclic)
 
@@ -1044,47 +131,25 @@ NO controller-to-controller dependencies.
 All cross-cutting coordination goes through WindowCoordinator facade.
 ```
 
-The dependency graph is strictly acyclic: controllers at the same level never reference each other. When coordination is required (for example, suppressing persistence during resize), the Facade orchestrates the interaction by calling methods on the appropriate controllers in sequence.
+When coordination is required (for example, suppressing persistence during resize), the Facade orchestrates it by calling the controllers in sequence.
 
 ### @MainActor Isolation Boundaries
 
-All types that manipulate `NSWindow` or AppKit objects are annotated `@MainActor`:
+Every type that touches `NSWindow` or other AppKit objects is `@MainActor` (`WindowCoordinator` and `WindowVisibilityController` are also `@Observable`). Two are intentionally not:
 
-```swift
-// WindowCoordinator.swift:4-6
-@MainActor
-@Observable
-final class WindowCoordinator { ... }
+- **`WindowDockingGeometry`**: `nonisolated struct` with static methods taking `NSRect` and returning `NSRect`/`NSPoint`. No side effects; callable from any isolation domain.
+- **`WindowDockingTypes`**: `Sendable` value types (`PlaylistAttachmentSnapshot`, `VideoAttachmentSnapshot`, `PlaylistDockingContext`).
 
-// WindowRegistry.swift:4-5
-@MainActor
-final class WindowRegistry { ... }
-
-// WindowFramePersistence.swift:4-5
-@MainActor
-final class WindowFramePersistence { ... }
-
-// WindowVisibilityController.swift:5-7
-@MainActor
-@Observable
-final class WindowVisibilityController { ... }
-```
-
-Two types are intentionally **not** `@MainActor`:
-
-- **`WindowDockingGeometry`**: Declared `nonisolated struct` with all-static methods. Takes `NSRect` inputs and returns `NSRect`/`NSPoint` outputs. No side effects, no mutable state. Can be called from any isolation domain.
-- **`WindowDockingTypes`**: Pure value types (`PlaylistAttachmentSnapshot`, `VideoAttachmentSnapshot`, `PlaylistDockingContext`) marked `Sendable`. Thread-safe by construction.
-
-The `WindowCoordinator+Layout.swift` extension inherits `@MainActor` from the base type declaration -- no explicit annotation is needed on the extension.
+`WindowCoordinator+Layout.swift` inherits `@MainActor` from the base type.
 
 ### Swift 6.2 Concurrency Patterns
 
 #### Recursive withObservationTracking
 
-`WindowSettingsObserver` uses the standard one-shot observation pattern required for `@Observable` objects outside of SwiftUI View bodies:
+`WindowSettingsObserver` uses the one-shot observation pattern for `@Observable` objects outside SwiftUI view bodies:
 
 ```swift
-// WindowSettingsObserver.swift:50-64
+// WindowSettingsObserver.swift
 private func observeAlwaysOnTop() {
     tasks["alwaysOnTop"]?.cancel()  // Cancel existing before creating new
     tasks["alwaysOnTop"] = Task { @MainActor [weak self] in
@@ -1102,274 +167,98 @@ private func observeAlwaysOnTop() {
 }
 ```
 
-Key design decisions:
-- **`[weak self]` on the outer Task and on the `onChange` closure**: Prevents retain cycles; when WindowCoordinator deallocates, observers terminate naturally. The weak capture sits on `onChange` (not the nested Task's capture list) so the closure never holds `self` strongly; the same shape is used by `WindowCoordinator+Layout.observeSkinReadiness()`
-- **`self.handlers != nil` guard**: Prevents re-registration after `stop()` has been called
-- **Explicit `@MainActor` on inner Task**: Defensive isolation annotation despite being in @MainActor context
-- **Explicit `start()`/`stop()` lifecycle**: Oracle review required this instead of relying on `deinit` (which is `nonisolated` in Swift 6.2)
+- **`[weak self]` on the outer Task and on `onChange`** (not the nested Task's capture list), so the closure never holds `self` strongly; `WindowCoordinator+Layout.observeSkinReadiness()` uses the same shape.
+- **`self.handlers != nil` guard**: no re-registration after `stop()`.
+- **Explicit `start(...)` / `stop()` lifecycle**: `start` installs the four handlers and observers; `stop` cancels all tasks and clears the handlers.
 
-**Migration path (`Observations` requires macOS 26+, so it is available at the macOS 27 minimum; not yet adopted)**:
+`Observations` (macOS 26+, so available at the macOS 27 minimum) could replace this pattern; it is not adopted yet:
+
 ```swift
-// Possible replacement:
 for await _ in Observations(\.isAlwaysOnTop, on: settings) {
     handlers?.onAlwaysOnTopChanged(settings.isAlwaysOnTop)
 }
 ```
 
-#### nonisolated deinit Awareness
+#### Isolated deinit
 
 ```swift
-// WindowCoordinator.swift deinit
-deinit {
-    // settingsObserver.stop() is not callable from nonisolated deinit;
-    // tasks hold [weak self] references so they will naturally terminate.
+// WindowCoordinator.swift
+isolated deinit {
+    settingsObserver.stop()
 }
 ```
 
-In Swift 6.2, `deinit` is `nonisolated` -- it cannot call `@MainActor`-isolated methods. The design deliberately avoids this problem by ensuring all Tasks use `[weak self]`, so they terminate via `guard let self else { return }` when the coordinator is deallocated. Skin readiness observation uses `withObservationTracking` (synchronous, event-driven) rather than a cancellable polling Task.
+`WindowCoordinator` uses an `isolated deinit`, so it can call the `@MainActor` `stop()` directly. The `[weak self]` captures above still let any in-flight observer task end via `guard let self`.
 
 #### @Observable Observation Chaining
 
-`WindowCoordinator` is `@Observable` and forwards visibility state from `WindowVisibilityController` (also `@Observable`) via computed properties:
+`WindowCoordinator` forwards visibility state from `WindowVisibilityController` through computed properties:
 
 ```swift
-// WindowCoordinator.swift:188-196
 var isEQWindowVisible: Bool {
     get { visibility.isEQWindowVisible }
     set { visibility.isEQWindowVisible = newValue }
 }
-
-var isPlaylistWindowVisible: Bool {
-    get { visibility.isPlaylistWindowVisible }
-    set { visibility.isPlaylistWindowVisible = newValue }
-}
 ```
 
-This pattern is necessary because SwiftUI views observe `WindowCoordinator` -- the `@Observable` macro tracks the computed property access and chains the observation through to `WindowVisibilityController`. Without this forwarding, SwiftUI would not detect changes to the visibility state.
+SwiftUI views observe `WindowCoordinator`; the `@Observable` macro tracks the computed property access and chains it through to `WindowVisibilityController`. Without the forwarding, SwiftUI would not see visibility changes.
 
 #### Debounced Persistence with Cancellation
 
 ```swift
-// WindowFramePersistence.swift:45-53
+// WindowFramePersistence.swift
 func schedulePersistenceFlush() {
     guard persistenceSuppressionCount == 0 else { return }
     persistenceTask?.cancel()
     persistenceTask = Task { @MainActor [weak self] in
         try? await Task.sleep(for: .milliseconds(150))
-        guard !Task.isCancelled else { return }  // Oracle fix: check after sleep
+        guard !Task.isCancelled else { return }
         self?.persistAllWindowFrames()
     }
 }
 ```
 
-The `guard !Task.isCancelled` check after `Task.sleep` was added based on Oracle review -- without it, a cancelled task could still execute `persistAllWindowFrames()` because `Task.sleep` throws on cancellation only if the caller checks.
-
-### Phased Migration Strategy
-
-The refactoring was executed in 4 phases, each independently buildable and verifiable:
-
-| Phase | Extractions | Risk | Lines Removed |
-|-------|------------|------|:-------------:|
-| Phase 1 | `WindowDockingTypes`, `WindowDockingGeometry`, `WindowFrameStore` | Zero (pure types) | ~325 |
-| Phase 2 | `WindowRegistry`, `WindowFramePersistence`, `WindowVisibilityController`, `WindowResizeController` | Low-Medium (controllers) | ~500 |
-| Phase 3 | `WindowSettingsObserver`, `WindowDelegateWiring` | Low (observation + wiring) | ~200 |
-| Phase 4 | `WindowCoordinator+Layout` (extension) | Cosmetic | ~130 |
-
-**Build verification after each phase**:
-```bash
-xcodebuild -scheme MacAmpApp -configuration Debug -enableThreadSanitizer YES build
-xcodebuild test -scheme MacAmpApp -enableThreadSanitizer YES
-```
-
-All 4 phases passed build + Thread Sanitizer + full test suite.
-
-### Oracle Review Results
-
-Five Oracle reviews (gpt-5.3-codex, reasoning effort: xhigh) were conducted across the refactoring:
-
-| Review | Scope | Verdict | Key Findings |
-|--------|-------|---------|-------------|
-| Pre-implementation | Plan review | REVISE then proceed | Split pure/stateful geometry; fix deinit lifecycle |
-| Post-Phase 1 | 3 new files + tests | 1 finding (P2) | Test build phase ordering; fixed |
-| Post-Phase 2 | 4 controllers | No concrete defects | Clean architecture verified |
-| Post-Phase 3 | Observer + wiring | No functional regressions | Lifecycle pattern approved |
-| Post-Phase 4 (Final) | All 11 files | No blocking issues | 2 HIGH fixes applied (debounce cancellation, observer stop guard) |
-
-**Critical fixes from Oracle review**:
-
-1. **Debounce cancellation bug** (HIGH): Added `guard !Task.isCancelled` after `Task.sleep` in `WindowFramePersistence.schedulePersistenceFlush()` to prevent persistence writes after task cancellation.
-
-2. **Observer stop guard** (MEDIUM): Added `self.handlers != nil` guard in all 4 `onChange` callbacks in `WindowSettingsObserver` to prevent re-registration after `stop()` is called.
-
-### Swift 6.2 Compliance Summary
-
-The Swift patterns review (conducted by swift-concurrency-expert skill) graded the refactoring **A+ (95/100)**.
-
-| Check | Status |
-|-------|--------|
-| No implicit @MainActor capture warnings | Pass |
-| No Sendable conformance violations | Pass |
-| No nonisolated deinit violations | Pass |
-| No data race warnings (Thread Sanitizer) | Pass |
-| No @unchecked Sendable usage | Pass |
-| No global mutable state (except managed) | Pass |
-| No Task detachment without isolation | Pass |
-| No unstructured concurrency leaks | Pass |
-
-**Patterns demonstrated**:
-- `@Observable` macro (Swift 5.9+) with fine-grained change tracking
-- Composition over inheritance (zero class hierarchies)
-- Constructor dependency injection throughout
-- Value types where appropriate (`WindowDelegateWiring` struct, docking types)
-- Actor isolation first (all UI types @MainActor)
-- Structured concurrency (all Tasks stored and managed)
+`try? await Task.sleep` swallows the cancellation error, so the `Task.isCancelled` check after the sleep is what stops a superseded flush from writing.
 
 ### File Organization Principles
 
-1. **Facade stays in `ViewModels/`**: `WindowCoordinator.swift` and its layout extension remain in `MacAmpApp/ViewModels/` because they are consumed by SwiftUI views as an `@Observable` model.
+1. **Facade stays in `ViewModels/`**: `WindowCoordinator` and its layout extension are consumed by SwiftUI views as an `@Observable` model.
+2. **Controllers live in `Windows/`**, next to the window controllers and `BorderlessWindow`.
+3. **Pure types are nonisolated**: `WindowDockingGeometry` and `WindowDockingTypes` can be called from any context and unit-tested directly (`WindowDockingGeometryTests`).
+4. **Static factories for complex construction**: `WindowDelegateWiring.wire(registry:persistenceDelegate:windowFocusState:)` returns an immutable struct holding strong references to the multiplexers and focus delegates (`NSWindow.delegate` is weak).
+5. **Injectable dependencies**: `WindowFrameStore(defaults:)` takes a `UserDefaults`, so tests use isolated suites (`WindowFrameStoreTests`).
 
-2. **Controllers move to `Windows/`**: All extracted types that deal with `NSWindow` manipulation live in `MacAmpApp/Windows/`, colocated with other window infrastructure (`WindowSnapManager`, `WindowDelegateMultiplexer`, etc.).
-
-3. **Pure types are nonisolated**: `WindowDockingGeometry` and `WindowDockingTypes` have no actor isolation. They are pure value computations that can be called from any context and unit-tested trivially.
-
-4. **Static factories for complex construction**: `WindowDelegateWiring.wire()` encapsulates the 60+ lines of multiplexer/delegate setup into a single call that returns an immutable struct holding strong references.
-
-5. **Injectable dependencies**: `WindowFrameStore` accepts `UserDefaults` via `init(defaults:)`, enabling unit tests with isolated UserDefaults instances.
+Refactor plan and final state: `tasks/done/window-coordinator-refactor/`.
 
 ---
 
-## Implementation Roadmap
+## Common Pitfalls & Solutions
 
-### Phase 1: Foundation (Week 1)
-- [ ] Create `VideoVisualizerState` and `MilkdropVisualizerState` models
-- [ ] Create `WindowStateStore` for frame persistence
-- [ ] Add new `WindowGroup` declarations to `MacAmpApp`
-- [ ] Update `DockingController` to support visualizer windows
-
-### Phase 2: Views (Week 2)
-- [ ] Build `VideoVisualizerView` with basic rendering
-- [ ] Build `MilkdropVisualizerView` with basic rendering
-- [ ] Configure `NSWindowController` subclasses for frame capture
-- [ ] Add window controls (color mode, fullscreen)
-
-### Phase 3: Integration (Week 3)
-- [ ] Add `VisualizerCommands` for menu items and keyboard shortcuts
-- [ ] Integrate with `WindowSnapManager` for magnetic snapping
-- [ ] Test multi-window window positioning
-- [ ] Implement frame persistence and restoration
-
-### Phase 4: Polish (Week 4)
-- [ ] Add window lifecycle management
-- [ ] Verify Swift 6 concurrency compliance
-- [ ] Test multi-monitor scenarios
-- [ ] Performance testing and optimization
-
----
-
-## Testing Checklist
-
-- [ ] Open both visualizer windows simultaneously
-- [ ] Verify independent state (one in spectrum mode, other in fire mode)
-- [ ] Close one window, verify other still functional
-- [ ] Reopen closed window, verify settings restored
-- [ ] Move window off-screen, quit app, reopen (should restore valid position)
-- [ ] Test on multi-monitor setup (windows restore to correct screen)
-- [ ] Verify window snapping between main window and visualizers
-- [ ] Test keyboard shortcuts (Cmd+Shift+V, Cmd+Shift+M)
-- [ ] Verify no memory leaks with Instruments
-- [ ] Test with thread sanitizer enabled
-
----
-
-## References
-
-1. **Apple Developer Documentation**
-   - [Bringing Multiple Windows to Your SwiftUI App](https://developer.apple.com/documentation/swiftui/bringing-multiple-windows-to-your-swiftui-app)
-   - [WindowGroup Documentation](https://developer.apple.com/documentation/swiftui/windowgroup)
-   - [WWDC 2024: Work with Windows in SwiftUI](https://developer.apple.com/videos/play/wwdc2024/10149/)
-   - [WWDC 2022: Bring Multiple Windows to Your SwiftUI App](https://developer.apple.com/videos/play/wwdc2022/10061/)
-
-2. **Community Resources**
-   - [Swift with Majid: Window Management in SwiftUI](https://swiftwithmajid.com/2022/11/02/window-management-in-swiftui/)
-   - [Swift with Majid: Customizing Windows in SwiftUI](https://swiftwithmajid.com/2024/08/06/customizing-windows-in-swiftui/)
-   - [FatBobman: The @State Specter - Multi-Window SwiftUI Bug Analysis](https://fatbobman.com/en/posts/the-state-specter-analyzing-a-bug-in-multi-window-swiftui-applications/)
-
-3. **MacAmp-Specific**
-   - See `MacAmpApp/Windows/WinampWindowConfigurator.swift` for centralized NSWindow configuration
-   - See `MacAmpApp/Utilities/WindowSnapManager.swift` for magnetic snapping
-   - See `MacAmpApp/ViewModels/DockingController.swift` for pane management
-   - See `MacAmpApp/Models/AppSettings.swift` for @Observable singleton pattern
-
-4. **WindowCoordinator Refactoring (2026-02)**
-   - See `MacAmpApp/ViewModels/WindowCoordinator.swift` (223 lines, Facade)
-   - See `MacAmpApp/ViewModels/WindowCoordinator+Layout.swift` (129 lines, layout extension)
-   - See `MacAmpApp/Windows/WindowRegistry.swift` (83 lines, window ownership)
-   - See `MacAmpApp/Windows/WindowFramePersistence.swift` (147 lines, frame persistence)
-   - See `MacAmpApp/Windows/WindowVisibilityController.swift` (161 lines, visibility)
-   - See `MacAmpApp/Windows/WindowResizeController.swift` (312 lines, resize + docking)
-   - See `MacAmpApp/Windows/WindowSettingsObserver.swift` (113 lines, observation)
-   - See `MacAmpApp/Windows/WindowDelegateWiring.swift` (54 lines, delegate setup)
-   - See `MacAmpApp/Windows/WindowDockingTypes.swift` (50 lines, value types)
-   - See `MacAmpApp/Windows/WindowDockingGeometry.swift` (109 lines, pure geometry)
-   - See `MacAmpApp/Windows/WindowFrameStore.swift` (65 lines, UserDefaults persistence)
-   - See `tasks/window-coordinator-refactor/plan.md` for refactoring plan
-   - See `tasks/window-coordinator-refactor/state.md` for final state
-   - See `tasks/window-coordinator-refactor/swift-patterns-review.md` for Swift 6.2 review
+- **Set `contentViewController`, never `contentView`,** on the hosting window; setting `contentView` releases the `NSHostingController` and breaks the SwiftUI lifecycle.
+- **Keep delegates alive.** `NSWindow.delegate` is weak, so `WindowDelegateWiring` (and `WindowFramePersistence.persistenceDelegate`) hold the multiplexers and delegates strongly.
+- **Bracket programmatic frame changes** with `WindowSnapManager.shared.beginProgrammaticAdjustment()` / `endProgrammaticAdjustment()` and persistence suppression, or the snap manager and frame store react to your own moves.
+- **Stay on the main actor.** Window and model types are `@MainActor`; hop with `Task { @MainActor in … }` or `MainActor.run` from background work, and use `[weak self]` in long-lived closures and tasks.
+- **Retain `NSMenu`s** you pop up (e.g. in `@State` or an instance variable) until they close.
+- **Don't drive SwiftUI bodies from per-frame audio data.** Visualizers pull from `VisualizerPipeline` on timers instead of observing values that change every buffer.
 
 ---
 
 ## Quick Reference
 
+### Adding a New Window
+
+1. Add a `WindowKind` case (`WindowSnapManager.swift`) and its `persistenceKey` (`WindowFrameStore.swift`).
+2. Write an `NSWindowController` subclass: `BorderlessWindow`, `WinampWindowConfigurator.apply(to:)`, root view with `.environment(...)` injection, `contentViewController = NSHostingController(...)`, `installHitSurface(on:)`.
+3. Own it in `WindowRegistry` (controller, window accessor, kind mapping, `forEachWindow`).
+4. `WindowDelegateWiring` then registers it with `WindowSnapManager` and installs the delegate multiplexer (snap, persistence, focus).
+5. Add an `is<Name>Key` flag to `WindowFocusState` and a case in `WindowFocusDelegate`.
+6. Add show/hide to `WindowVisibilityController` (forwarded by `WindowCoordinator`), an `AppSettings.show<Name>Window` flag observed by `WindowSettingsObserver`, and a command in `AppCommands`.
+7. Decide how `WindowFramePersistence.applyPersistedWindowPositions()` restores it and whether `WindowResizeController` should keep it docked on double-size.
+
 ### Key Principles
 
-1. **One @State per WindowGroup**: Each window gets its own state instance
-2. **@Observable @MainActor Everything**: Automatic concurrency safety
-3. **Use NSWindowController subclasses**: Configure windows in controller initializers via `WinampWindowConfigurator`
-4. **Debounce UserDefaults**: 500ms delay to avoid disk thrashing
-5. **Weak References**: Prevent NSWindow retention cycles
-
-### Common Mistakes
-
-| Mistake | Fix |
-|---------|-----|
-| Single `VideoVisualizerState()` shared across windows | Create separate `@State` for each `WindowGroup` |
-| Strong reference to `NSWindow` in closures | Use weak references or `WeakBox` |
-| `AudioPlayer.currentFrequencies` triggers body re-evaluation | Use `onChange` callbacks, not body dependence |
-| Mutating `@Observable` from background thread | Use `Task { @MainActor in }` |
-| Configuring `NSWindow` from SwiftUI view layer | Use `NSWindowController` subclasses with `WinampWindowConfigurator` |
-
-### Performance Tips
-
-1. Use **Metal rendering** not SwiftUI Canvas for audio visualization
-2. **Don't trigger body** on every audio update (use `onChange`)
-3. **Cache waveforms** in per-window state
-4. **Clean up DisplayLink** in `onDisappear`
-5. Use **CVDisplayLink** for 60+ FPS smooth rendering
-
-### Verification Test
-
-Independent state is working correctly when this holds:
-
-```swift
-// In VideoVisualizerView
-@Environment(VideoVisualizerState.self) var visState
-Button("Switch to Fire") { visState.colorMode = .fire }
-
-// In MilkdropVisualizerView
-@Environment(MilkdropVisualizerState.self) var visState
-Button("Switch to Fire") { visState.colorMode = .fire }
-
-// Clicking in one visualizer must NOT affect the other.
-// If it does, state is shared incorrectly.
-```
-
----
-
-## Appendix: Complete WindowStateStore Implementation
-
-See the "Window State Store" section above for full implementation including:
-- Frame persistence with JSON encoding
-- Window registration and tracking
-- Multi-monitor validation
-- Debounced UserDefaults writes
-- Weak reference management
+1. **One NSWindowController per Winamp window**, configured in its initializer via `WinampWindowConfigurator`
+2. **@Observable @MainActor** for window and model types
+3. **WindowCoordinator is a Facade**: add behaviour to the focused controller, forward from the Facade
+4. **Debounce frame persistence** (150 ms) and suppress it during programmatic moves
+5. **Weak references** for delegates/targets and in long-lived closures

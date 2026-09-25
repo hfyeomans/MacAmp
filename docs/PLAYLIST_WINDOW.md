@@ -1,10 +1,8 @@
 # MacAmp Playlist Window Documentation
 
-**Version:** 1.2.0
-**Last Updated:** 2026-03-25
-**Status:** Production Ready
-**Author:** MacAmp Development Team
-**Oracle Grade:** A- (Architecture Aligned)
+**Version:** 1.3.0
+**Last Updated:** 2026-09-25
+**Status:** Production
 
 ---
 
@@ -19,15 +17,14 @@
 7. [Mini Visualizer](#mini-visualizer)
 8. [Window Focus Integration](#window-focus-integration)
 9. [Persistence & Window Docking](#persistence--window-docking)
-10. [Implementation Patterns](#implementation-patterns)
-11. [Testing Guidelines](#testing-guidelines)
-12. [Appendix: Sprite Definitions](#appendix-sprite-definitions)
+10. [Testing Guidelines](#testing-guidelines)
+11. [Appendix: Sprite Definitions](#appendix-sprite-definitions)
 
 ---
 
 ## Introduction
 
-The Playlist Window is a core component of MacAmp's multi-window system, providing track management with authentic Winamp skinning. It features a **segment-based resize system** matching Winamp's quantized resizing behavior (25×29px increments).
+The Playlist Window provides track management with PLEDIT.bmp skinning and Winamp's quantized **segment-based resizing** (25×29px increments).
 
 ### Purpose
 
@@ -48,9 +45,8 @@ The Playlist Window is a core component of MacAmp's multi-window system, providi
 
 ### Activation Methods
 
-1. **PL Button:** Click the "PL" button on main window
-2. **Keyboard:** Press `Ctrl+P` to toggle visibility
-3. **Menu:** Windows → Show/Hide Playlist
+1. **PL Button:** Click the "PL" button on the main window (`WindowCoordinator.togglePlaylistWindowVisibility()`)
+2. **Menu / Keyboard:** Options → Show/Hide Playlist (`⌘⇧2`, `DockingController.togglePlaylist()`)
 
 ---
 
@@ -58,22 +54,18 @@ The Playlist Window is a core component of MacAmp's multi-window system, providi
 
 ### Dimensions
 
-```swift
-// Layout Constants (PlaylistWindowSizeState.swift:19-37)
-static let segmentWidth: CGFloat = 25    // Horizontal resize unit
-static let segmentHeight: CGFloat = 29   // Vertical resize unit
-static let baseWidth: CGFloat = 275      // Minimum width (0 width segments)
-static let baseHeight: CGFloat = 116     // Minimum height (0 height segments)
+Layout constants are `static let`s on `PlaylistWindowSizeState` (`MacAmpApp/Models/PlaylistWindowSizeState.swift`):
 
-// Chrome dimensions
-static let topBarHeight: CGFloat = 20    // Titlebar
-static let bottomBarHeight: CGFloat = 38 // Control bar
-static let leftBorderWidth: CGFloat = 12 // Left chrome
-static let rightBorderWidth: CGFloat = 20 // Right chrome (includes scroll)
+| Constant | Value |
+|----------|-------|
+| `segmentWidth` / `segmentHeight` | 25 / 29 |
+| `baseWidth` / `baseHeight` | 275 / 116 (size [0,0]) |
+| `topBarHeight` / `bottomBarHeight` | 20 / 38 |
+| `leftBorderWidth` / `rightBorderWidth` | 12 / 20 (right includes the scroll track) |
+| `bottomLeftWidth` / `bottomRightWidth` | 125 / 150 |
+| `trackRowHeight` | 13 |
 
-// Default size: 275×232 (0 width segments, 4 height segments)
-static let playlistDefault = Size2D(width: 0, height: 4)
-```
+Default size is `Size2D.playlistDefault` = [0,4] = 275×232.
 
 ### Coordinate System
 
@@ -106,36 +98,18 @@ Window Layout (Default 275×232):
 
 ### Size Calculation Formulas
 
-```swift
-// Pixel dimensions from segment counts
-func toPixels() -> CGSize {
-    CGSize(
-        width: 275 + CGFloat(width) * 25,   // Base + segments
-        height: 116 + CGFloat(height) * 29  // Base + segments
-    )
-}
-
-// Content area (track list)
-var contentSize: CGSize {
-    CGSize(
-        width: windowWidth - 12 - 20,      // Minus borders
-        height: windowHeight - 20 - 38     // Minus bars
-    )
-}
-
-// Visible tracks
-var visibleTrackCount: Int {
-    Int(floor(contentSize.height / 13))    // 13px per track row
-}
-```
+- Pixels: `Size2D.toPixels()` = `275 + width*25`, `116 + height*29`
+- Content: `contentSize` = (window width − 12 − 20, window height − 20 − 38)
+- Visible tracks: `visibleTrackCount = floor(contentHeight / 13)`
+- Scroll range: `scrollTrackHeight = max(0, contentHeight − 20)`
 
 ---
 
 ## Architecture Overview
 
-### File Structure (Post-Decomposition)
+### File Structure
 
-The playlist window was decomposed from a monolithic view + extension into focused child view structs (Wave 1, Feb 2026). `WinampPlaylistWindow.swift` is now ~220 lines (root composer only), down from ~530 lines. The menu extension `WinampPlaylistWindow+Menus.swift` was **deleted** -- its code moved to child views and `PlaylistMenuPresenter`.
+`WinampPlaylistWindow.swift` (220 lines) is the root composer: background chrome, content overlay and shade switch. Child views live in `MacAmpApp/Views/PlaylistWindow/`:
 
 ```
 MacAmpApp/Views/PlaylistWindow/
@@ -149,145 +123,41 @@ MacAmpApp/Views/PlaylistWindow/
 
 MacAmpApp/Views/
   PlaylistWindowActions.swift           (318 lines, playlist operations: NEW/LOAD/SAVE LIST, sort, remove, crop)
+  Components/PlaylistScrollSlider.swift (105 lines)
 ```
 
 ### Three-Layer Pattern
 
-Following MacAmp's documented architecture (MACAMP_ARCHITECTURE_GUIDE.md §3):
+Following the [three-layer architecture](MACAMP_ARCHITECTURE_GUIDE.md#three-layer-architecture-deep-dive):
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    PRESENTATION LAYER                        │
-│  WinampPlaylistWindow.swift (~230 lines, root composer)     │
-│  + PlaylistWindow/ child views (7 files, see above)         │
-│  - Renders chrome sprites                                    │
-│  - Handles resize gesture (PlaylistResizeHandle)             │
-│  - Displays track list (PlaylistTrackListView)               │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                      BRIDGE LAYER                            │
-│  PlaylistWindowSizeState.swift (@Observable)                │
-│  - Segment-to-pixel calculations                            │
-│  - UserDefaults persistence                                  │
-│  - Computed layout properties                                │
-│                                                              │
-│  WindowCoordinator.swift (AppKit Bridge)                    │
-│  - updatePlaylistWindowSize(to:)                            │
-│  - showPlaylistResizePreview(_:previewSize:)                │
-│  - hidePlaylistResizePreview(_:)                            │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    MECHANISM LAYER                           │
-│  AudioPlayer.swift                                          │
-│  - playlist: [Track]                                         │
-│  - currentTrackIndex: Int                                    │
-│                                                              │
-│  WindowSnapManager.swift                                     │
-│  - Magnetic docking during resize                            │
-└─────────────────────────────────────────────────────────────┘
-```
+- **Presentation:** `WinampPlaylistWindow` + the `PlaylistWindow/` child views (chrome sprites, resize gesture, track list)
+- **Bridge:** `PlaylistWindowSizeState` (`@MainActor @Observable`: segment→pixel math, persistence, layout properties); `WindowCoordinator` (`updatePlaylistWindowSize(to:)`, `showPlaylistResizePreview(_:previewSize:)`, `hidePlaylistResizePreview(_:)`, forwarding to `WindowResizeController`)
+- **Mechanism:** `AudioPlayer` (`playlist`, current track), `WindowSnapManager` (docking)
 
 ### Window Controller Pattern
 
-```swift
-// WinampPlaylistWindowController.swift
-class WinampPlaylistWindowController: NSWindowController {
-    convenience init(...) {
-        let window = BorderlessWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 275, height: 232),
-            styleMask: [.borderless, .resizable],  // Resizable!
-            backing: .buffered,
-            defer: false
-        )
-
-        // CRITICAL: Segment-based constraints
-        window.minSize = NSSize(
-            width: PlaylistWindowSizeState.baseWidth,   // 275
-            height: PlaylistWindowSizeState.baseHeight  // 116
-        )
-        window.maxSize = NSSize(width: 2000, height: 900)
-
-        WinampWindowConfigurator.apply(to: window)
-
-        let rootView = WinampPlaylistWindow()
-            .environment(skinManager)
-            .environment(audioPlayer)
-            // ... inject all dependencies
-
-        let hostingController = NSHostingController(rootView: rootView)
-        window.contentViewController = hostingController
-
-        self.init(window: window)
-    }
-}
-```
-
-### Five-Window System Integration
-
-```
-WindowCoordinator
-├── Main Window (always visible)
-├── Equalizer Window
-├── Playlist Window    ← Our focus (resizable)
-├── Video Window       (resizable - 25×29 segments)
-└── Milkdrop Window
-```
+`WinampPlaylistWindowController` creates a 275×232 `BorderlessWindow` with `styleMask: [.borderless, .resizable]`, `minSize` = (`baseWidth`, `baseHeight`) and `maxSize` = 2000×900, applies `WinampWindowConfigurator`, and hosts `WinampPlaylistWindow` with `SkinManager`, `AudioPlayer`, `DockingController`, `AppSettings`, `RadioStationLibrary`, `PlaybackCoordinator` and `WindowFocusState` injected. It is one of the five windows owned by `WindowCoordinator`; see [Five-Window NSWindowController Stack](MACAMP_ARCHITECTURE_GUIDE.md#five-window-nswindowcontroller-stack).
 
 ---
 
 ## Chrome Components
 
+All chrome is drawn by `WinampPlaylistWindow.buildCompleteBackground()` with absolute `.position()`; `suffix` is `_SELECTED` when focused.
+
 ### Top Bar (Titlebar)
 
-The titlebar consists of dynamic sprite sections based on window width:
+| Piece | Sprite | Placement |
+|-------|--------|-----------|
+| Left corner | `PLAYLIST_TOP_LEFT_SELECTED` (active) / `PLAYLIST_TOP_LEFT_CORNER` (inactive), 25×20 | x = 12.5 |
+| Background tiles | `PLAYLIST_TOP_TILE<suffix>`, 25×20 × `topBarTileCount` = `ceil((width − 25) / 25)` | from x = 37.5, under the title |
+| Title | `PLAYLIST_TITLE_BAR<suffix>`, 100×20, wrapped in `WinampTitlebarDragHandle(windowKind: .playlist, …)` | centred at width / 2 |
+| Right corner | `PLAYLIST_TOP_RIGHT_CORNER<suffix>`, 25×20 | x = width − 12.5 |
 
-```swift
-// WinampPlaylistWindow.swift
-let suffix = isWindowActive ? "_SELECTED" : ""
-
-// Left corner (25×20)
-SimpleSpriteImage("PLAYLIST_TOP_LEFT\(suffix)", width: 25, height: 20)
-    .position(x: 12.5, y: 10)
-
-// Background tiles (fill width)
-ForEach(0..<sizeState.topBarTileCount, id: \.self) { i in
-    SimpleSpriteImage("PLAYLIST_TOP_TILE\(suffix)", width: 25, height: 20)
-        .position(x: 25 + 12.5 + CGFloat(i) * 25, y: 10)
-}
-
-// Title bar overlay (centered, 100×20)
-WinampTitlebarDragHandle(windowKind: .playlist, size: CGSize(width: 100, height: 20)) {
-    SimpleSpriteImage("PLAYLIST_TITLE_BAR\(suffix)", width: 100, height: 20)
-}
-.position(x: windowWidth / 2, y: 10)
-
-// Right corner (25×20)
-SimpleSpriteImage("PLAYLIST_TOP_RIGHT_CORNER\(suffix)", width: 25, height: 20)
-    .position(x: windowWidth - 12.5, y: 10)
-```
+`showTitlebarSpacers` (even width segment count, Webamp parity) is exposed by the size state.
 
 ### Side Borders
 
-Dynamic vertical tiling based on content height:
-
-```swift
-// Left border tiles (12×29 each)
-let borderTileCount = sizeState.verticalBorderTileCount
-ForEach(0..<borderTileCount, id: \.self) { i in
-    SimpleSpriteImage("PLAYLIST_LEFT_TILE", width: 12, height: 29)
-        .position(x: 6, y: 20 + 14.5 + CGFloat(i) * 29)
-}
-
-// Right border tiles (20×29 each) - includes scroll track
-ForEach(0..<borderTileCount, id: \.self) { i in
-    SimpleSpriteImage("PLAYLIST_RIGHT_TILE", width: 20, height: 29)
-        .position(x: windowWidth - 10, y: 20 + 14.5 + CGFloat(i) * 29)
-}
-```
+`PLAYLIST_LEFT_TILE` (12×29) at x = 6 and `PLAYLIST_RIGHT_TILE` (20×29, includes the scroll track) at x = width − 10, tiled from y = 34.5 in 29px steps; count = `verticalBorderTileCount` = `ceil(sideHeight / 29)`.
 
 ### Bottom Bar (Three Sections)
 
@@ -298,47 +168,14 @@ ForEach(0..<borderTileCount, id: \.self) { i in
 └───────────────────────────────────────────────────────────────┘
 ```
 
-**Visualizer Visibility:** Appears when `sizeState.size.width >= 3` (350px+ width)
+All at y = height − 19:
 
-```swift
-// WinampPlaylistWindow.swift
-let showVisualizer = sizeState.size.width >= 3  // 275 + 75 = 350px minimum
+- `PLAYLIST_BOTTOM_LEFT_CORNER` (125×38) at x = 62.5
+- `PLAYLIST_BOTTOM_TILE` (25×38) tiles from x = 125 up to `centerEndX` = width − 225 with the visualizer, else width − 150
+- `PLAYLIST_VISUALIZER_BACKGROUND` (75×38) at x = width − 187.5, only when `sizeState.size.width >= 3` (350px+)
+- `PLAYLIST_BOTTOM_RIGHT_CORNER` (150×38) at x = width − 75
 
-// LEFT section (fixed 125px)
-SimpleSpriteImage("PLAYLIST_BOTTOM_LEFT_CORNER", width: 125, height: 38)
-    .position(x: 62.5, y: windowHeight - 19)
-
-// CENTER tiles (dynamic)
-let centerEndX: CGFloat = showVisualizer ? (windowWidth - 225) : (windowWidth - 150)
-let centerAvailableWidth = max(0, centerEndX - 125)
-let centerTileCount = Int(centerAvailableWidth / 25)
-
-if centerTileCount > 0 {
-    ForEach(0..<centerTileCount, id: \.self) { i in
-        SimpleSpriteImage("PLAYLIST_BOTTOM_TILE", width: 25, height: 38)
-            .position(x: 125 + 12.5 + CGFloat(i) * 25, y: windowHeight - 19)
-    }
-}
-
-// VISUALIZER section (75px, only when wide enough)
-if showVisualizer {
-    SimpleSpriteImage("PLAYLIST_VISUALIZER_BACKGROUND", width: 75, height: 38)
-        .position(x: windowWidth - 187.5, y: windowHeight - 19)
-
-    // Mini visualizer when main window shaded
-    if settings.isMainWindowShaded {
-        VisualizerView()
-            .frame(width: 76, height: 16)
-            .frame(width: 72, alignment: .leading)
-            .clipped()
-            .position(x: windowWidth - 187, y: windowHeight - 18)
-    }
-}
-
-// RIGHT section (fixed 150px)
-SimpleSpriteImage("PLAYLIST_BOTTOM_RIGHT_CORNER", width: 150, height: 38)
-    .position(x: windowWidth - 75, y: windowHeight - 19)
-```
+Controls are overlaid by `PlaylistBottomControlsView`, `PlaylistTitleBarButtons` and menus from `PlaylistMenuPresenter`.
 
 ### List Operations (NEW LIST / LOAD LIST / SAVE LIST)
 
@@ -346,9 +183,11 @@ The bottom bar's LEFT section contains buttons for playlist list operations, imp
 
 - **NEW LIST**: Clears the playlist immediately with no confirmation dialog (matches Winamp behavior). Calls `audioPlayer.clearPlaylist()`.
 
-- **LOAD LIST**: Opens `NSOpenPanel` filtered to `.m3u`/`.m3u8` files. Parses the selected file off the main actor. On success, clears the current playlist then adds parsed entries (replaces, not appends). Uses a `playlistGeneration` token to guard against stale metadata tasks from a previous playlist.
+- **LOAD LIST**: Opens `NSOpenPanel` filtered to `.m3u`/`.m3u8` files and parses off the main actor. A `loadListGeneration` token rejects the result if another load started meanwhile. On success it clears the current playlist, adds the parsed entries (replaces, not appends) and auto-plays the first track. `AudioPlayer`'s `playlistGeneration` token guards against stale metadata tasks from the previous playlist.
 
-- **SAVE LIST**: Opens `NSSavePanel` with `.m3u` default extension. Writes `#EXTM3U` format via `M3UWriter.write()` off the main actor. All file I/O is performed in the background.
+- **SAVE LIST**: Opens `NSSavePanel` with `.m3u` default extension. Writes `#EXTM3U` format via `M3UWriter.write()` off the main actor.
+
+Sort List, File Info, Misc Options and Remove Misc currently show a "Not supported yet" alert.
 
 ### Track Position Display
 
@@ -360,271 +199,50 @@ The bottom bar's LEFT section contains buttons for playlist list operations, imp
 
 ### Overview
 
-The playlist window uses **quantized segment-based resizing** matching Winamp's behavior:
-
 ```
-Segment Grid:
-┌─────┬─────┬─────┬─────┬─────┐
-│ 25  │ 25  │ 25  │ 25  │ 25  │  ← Width segments (25px each)
-├─────┼─────┼─────┼─────┼─────┤
-│     │     │     │     │     │  29px
-├─────┼─────┼─────┼─────┼─────┤
-│     │     │     │     │     │  29px  ← Height segments
-├─────┼─────┼─────┼─────┼─────┤
-│     │     │     │     │     │  29px
-└─────┴─────┴─────┴─────┴─────┘
-
 Example Sizes:
 [0,0] = 275×116  (minimum)
 [0,4] = 275×232  (default - matches Winamp)
 [4,4] = 375×232  (wider)
-[11,4] = 550×232 (2x width)
+[11,4] = 550×232 (2x width, Size2D.playlist2xWidth)
 ```
 
 ### PlaylistWindowSizeState
 
-```swift
-// MacAmpApp/Models/PlaylistWindowSizeState.swift
-@MainActor
-@Observable
-final class PlaylistWindowSizeState {
-    // MARK: - Constants
-    static let segmentWidth: CGFloat = 25
-    static let segmentHeight: CGFloat = 29
-    static let baseWidth: CGFloat = 275
-    static let baseHeight: CGFloat = 116
-
-    // MARK: - Size State (persisted)
-    var size: Size2D = .playlistDefault {
-        didSet { saveSize() }
-    }
-
-    // MARK: - Computed Properties
-    var pixelSize: CGSize { size.toPixels() }
-    var windowWidth: CGFloat { pixelSize.width }
-    var windowHeight: CGFloat { pixelSize.height }
-
-    var centerWidth: CGFloat {
-        max(0, windowWidth - Self.bottomLeftWidth - Self.bottomRightWidth)
-    }
-
-    var centerTileCount: Int { Int(centerWidth / Self.segmentWidth) }
-    var verticalBorderTileCount: Int { Int(ceil(sideHeight / Self.segmentHeight)) }
-    var visibleTrackCount: Int { Int(floor(contentHeight / Self.trackRowHeight)) }
-
-    // MARK: - Persistence
-    private func saveSize() {
-        let data = ["width": size.width, "height": size.height]
-        UserDefaults.standard.set(data, forKey: "playlistWindowSize")
-    }
-}
-```
+`@MainActor @Observable`, owned as `@State` by `WinampPlaylistWindow`. `size: Size2D` (default `.playlistDefault`) persists in `didSet`; everything else is computed from it: `pixelSize`, `windowWidth`/`windowHeight`, `centerWidth` (width − 275) and `centerTileCount`, `topBarTileCount`, `showTitlebarSpacers`, `sideHeight`, `verticalBorderTileCount`, `contentSize`/`contentWidth`/`contentHeight`, `visibleTrackCount`, `scrollTrackHeight`.
 
 ### Resize Handle Implementation
 
-```swift
-// WinampPlaylistWindow.swift
-@ViewBuilder
-private func buildResizeHandle() -> some View {
-    Rectangle()
-        .fill(Color.clear)
-        .frame(width: 20, height: 20)
-        .contentShape(Rectangle())
-        .gesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { value in
-                    if dragStartSize == nil {
-                        dragStartSize = sizeState.size
-                        isDragging = true
-                        // CRITICAL: Prevent magnetic snapping during resize
-                        WindowSnapManager.shared.beginProgrammaticAdjustment()
-                    }
+`PlaylistResizeHandle` is a 20×20 clear area at (width − 10, height − 10) with `DragGesture(minimumDistance: 0)`:
 
-                    guard let baseSize = dragStartSize else { return }
-
-                    // Quantize to 25×29px segments
-                    let widthDelta = Int(round(value.translation.width / 25))
-                    let heightDelta = Int(round(value.translation.height / 29))
-
-                    let candidate = Size2D(
-                        width: max(0, baseSize.width + widthDelta),
-                        height: max(0, baseSize.height + heightDelta)
-                    )
-
-                    // Show AppKit preview overlay
-                    if let coordinator = WindowCoordinator.shared {
-                        let previewPixels = candidate.toPixels()
-                        coordinator.showPlaylistResizePreview(resizePreview, previewSize: previewPixels)
-                    }
-                }
-                .onEnded { value in
-                    // Commit final size
-                    sizeState.size = finalSize
-
-                    // Update NSWindow frame
-                    WindowCoordinator.shared?.updatePlaylistWindowSize(to: sizeState.pixelSize)
-                    WindowCoordinator.shared?.hidePlaylistResizePreview(resizePreview)
-
-                    // Re-enable magnetic snapping
-                    WindowSnapManager.shared.endProgrammaticAdjustment()
-                }
-        )
-        .position(x: windowWidth - 10, y: windowHeight - 10)
-}
-```
+- **First tick:** store `dragStartSize`, set `isDragging`, `WindowSnapManager.shared.beginProgrammaticAdjustment()` (no magnetic snapping during resize).
+- **onChanged:** candidate = start + `round(dx/25)`, `round(dy/29)` segments (clamped at 0); only the AppKit preview is updated via `coordinator.showPlaylistResizePreview(resizePreview, previewSize:)`.
+- **onEnded:** recompute the final size from the total translation, commit `sizeState.size`, `updatePlaylistWindowSize(to:)`, `hidePlaylistResizePreview`, clear drag state, `endProgrammaticAdjustment()`.
 
 ### WindowCoordinator Bridge Methods
 
-```swift
-// WindowCoordinator.swift
-func updatePlaylistWindowSize(to pixelSize: CGSize) {
-    guard let window = playlistWindow else { return }
-    var frame = window.frame
-    let oldHeight = frame.height
-
-    // Note: Playlist window does NOT use double-size mode
-    frame.size = pixelSize
-    frame.origin.y += oldHeight - pixelSize.height  // Anchor top-left
-    window.setFrame(frame, display: true)
-}
-
-func showPlaylistResizePreview(_ overlay: WindowResizePreviewOverlay, previewSize: CGSize) {
-    guard let window = playlistWindow else { return }
-    overlay.show(in: window, previewSize: previewSize)
-}
-
-func hidePlaylistResizePreview(_ overlay: WindowResizePreviewOverlay) {
-    overlay.hide()
-}
-```
+`WindowResizeController.updatePlaylistWindowSize(to:)` returns early if the size is unchanged, otherwise sets a top-left-anchored frame (`topLeftAnchoredFrame(from:newSize:)`). The playlist is not scaled by double-size mode. `showPlaylistResizePreview` shows the shared `WindowResizePreviewOverlay` over the playlist window; `hidePlaylistResizePreview` hides it.
 
 ### NSWindow Synchronization
 
-Critical for ensuring SwiftUI state and AppKit window stay in sync:
-
-```swift
-// WinampPlaylistWindow.swift
-.onAppear {
-    // Sync NSWindow size from persisted PlaylistWindowSizeState on launch
-    WindowCoordinator.shared?.updatePlaylistWindowSize(to: sizeState.pixelSize)
-}
-.onChange(of: sizeState.size) { _, newSize in
-    // Sync NSWindow when sizeState.size changes programmatically
-    let pixelSize = newSize.toPixels()
-    WindowCoordinator.shared?.updatePlaylistWindowSize(to: pixelSize)
-}
-```
+`WinampPlaylistWindow` calls `updatePlaylistWindowSize(to: sizeState.pixelSize)` in `onAppear` (applies the persisted size at launch) and in `onChange(of: sizeState.size)` (programmatic size changes).
 
 ---
 
 ## Scroll Slider
 
-### Overview
-
-The scroll slider provides track navigation with a proportional thumb:
-
-```
-Scroll Slider Layout:
-┌───┐
-│ ▲ │ ← Track scroll position
-│   │
-│ █ │ ← Thumb (proportional to visible/total)
-│   │
-│   │
-│ ▼ │
-└───┘
-```
-
 ### PlaylistScrollSlider Component
 
-```swift
-// MacAmpApp/Views/Components/PlaylistScrollSlider.swift
-struct PlaylistScrollSlider: View {
-    @Binding var scrollOffset: Int  // First visible track index
-    let totalTracks: Int
-    let visibleTracks: Int
+`PlaylistScrollSlider` (`MacAmpApp/Views/Components/PlaylistScrollSlider.swift`) takes `@Binding scrollOffset: Int` (first visible track index, owned by `PlaylistWindowInteractionState`), `totalTracks` and `visibleTracks`. It is placed at x = width − 15, with height `contentHeight − 4`.
 
-    private let handleWidth: CGFloat = 8
-    private let handleHeight: CGFloat = 18
-
-    @State private var isDragging = false
-
-    private var maxScrollOffset: Int {
-        max(0, totalTracks - visibleTracks)
-    }
-
-    private var scrollPosition: CGFloat {
-        guard maxScrollOffset > 0 else { return 0 }
-        return CGFloat(scrollOffset) / CGFloat(maxScrollOffset)
-    }
-
-    private var isDisabled: Bool {
-        totalTracks <= visibleTracks
-    }
-
-    var body: some View {
-        GeometryReader { geometry in
-            let availableHeight = geometry.size.height - handleHeight
-            let handleOffset = scrollPosition * availableHeight
-
-            ZStack(alignment: .top) {
-                Color.clear  // Track (transparent)
-
-                SimpleSpriteImage(
-                    isDragging ? "PLAYLIST_SCROLL_HANDLE_SELECTED" : "PLAYLIST_SCROLL_HANDLE",
-                    width: handleWidth,
-                    height: handleHeight
-                )
-                .offset(y: handleOffset)
-            }
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { value in
-                        isDragging = true
-                        guard !isDisabled else { return }
-
-                        let newPosition = value.location.y / geometry.size.height
-                        let clampedPosition = min(1, max(0, newPosition))
-                        scrollOffset = Int(round(clampedPosition * CGFloat(maxScrollOffset)))
-                    }
-                    .onEnded { _ in isDragging = false }
-            )
-            .disabled(isDisabled)
-            .opacity(isDisabled ? 0.5 : 1.0)
-        }
-        .frame(width: handleWidth)
-    }
-}
-```
+- `maxScrollOffset = max(0, totalTracks − visibleTracks)`; thumb offset = `scrollOffset / maxScrollOffset × (height − 18)`.
+- The track is transparent (drawn by `PLAYLIST_RIGHT_TILE`); the 8×18 thumb is `PLAYLIST_SCROLL_HANDLE`, or `PLAYLIST_SCROLL_HANDLE_SELECTED` while dragging.
+- A `DragGesture(minimumDistance: 0)` maps `location.y / height` (clamped 0…1) to `scrollOffset = round(position × maxScrollOffset)`.
+- Disabled at 50% opacity when all tracks fit.
 
 ### ScrollView Integration
 
-```swift
-// WinampPlaylistWindow.swift
-ScrollViewReader { proxy in
-    ScrollView(.vertical, showsIndicators: false) {
-        VStack(spacing: 0) {
-            ForEach(Array(audioPlayer.playlist.enumerated()), id: \.element.id) { index, track in
-                trackRow(track: track, index: index)
-                    .id(index)  // Enable scroll-to by index
-            }
-        }
-    }
-    .onChange(of: scrollOffset) { _, newOffset in
-        // Sync: scroll slider → scroll view
-        withAnimation(.easeOut(duration: 0.1)) {
-            proxy.scrollTo(newOffset, anchor: .top)
-        }
-    }
-}
-
-// Clamp scrollOffset when playlist size changes
-.onChange(of: audioPlayer.playlist.count) { _, _ in
-    if scrollOffset > maxScrollOffset {
-        scrollOffset = maxScrollOffset
-    }
-}
-```
+`PlaylistTrackListView` renders rows in a `ScrollViewReader` + `ScrollView(.vertical, showsIndicators: false)`, each row `.id(index)`. `onChange(of: scrollOffset)` calls `proxy.scrollTo(newOffset, anchor: .top)` with a 0.1 s ease-out. `WinampPlaylistWindow` clamps the offset (`ui.clampScrollOffset(maxOffset:)`) when the playlist count or `visibleTrackCount` changes. Double-click a row plays it; single click selects.
 
 ---
 
@@ -638,7 +256,7 @@ The playlist window displays a mini visualizer in the bottom bar when:
 
 This matches Winamp 5.x behavior where the visualizer appears in the playlist when the main window's visualizer is hidden.
 
-The mini visualizer is the same `VisualizerView` as the main window, gated on `audioPlayer.isVisualizerRendering`, so it animates for video playback as well as audio (video audio feeds the visualizer through the `MTAudioProcessingTap` in `MacAmpApp/Audio/VideoDSP/`).
+It is the same `VisualizerView` as the main window, gated on `audioPlayer.isVisualizerRendering`, so it animates for video playback as well as audio (see [AVPlayer-Native Video DSP](MACAMP_ARCHITECTURE_GUIDE.md#avplayer-native-video-dsp)).
 
 ### Implementation
 
@@ -648,58 +266,22 @@ if showVisualizer {
     SimpleSpriteImage("PLAYLIST_VISUALIZER_BACKGROUND", width: 75, height: 38)
         .position(x: windowWidth - 187.5, y: windowHeight - 19)
 
-    // Mini visualizer: Only active when main window is SHADED
     if settings.isMainWindowShaded {
+        // Render at 76px native width, clip to 72px to match Winamp's visualizer inset
         VisualizerView()
-            .frame(width: 76, height: 16)           // Render at full size
-            .frame(width: 72, alignment: .leading)  // Clip to 72px (4px hidden)
+            .frame(width: 76, height: 16)
+            .frame(width: 72, alignment: .leading)
             .clipped()
-            // Position within the 75×38 visualizer container
             .position(x: windowWidth - 187, y: windowHeight - 18)
     }
 }
-```
-
-### Dimensions
-
-```
-Visualizer Container: 75×38px
-┌───────────────────────────────────┐
-│                                   │ 12px padding top
-│  ┌─────────────────────────────┐  │
-│  │ 72×16px spectrum display    │  │ ← VisualizerView clipped
-│  └─────────────────────────────┘  │
-│                                   │
-└───────────────────────────────────┘
 ```
 
 ---
 
 ## Window Focus Integration
 
-### WindowFocusState Integration
-
-```swift
-// WinampPlaylistWindow.swift
-@Environment(WindowFocusState.self) var windowFocusState
-
-private var isWindowActive: Bool {
-    windowFocusState.isPlaylistKey
-}
-```
-
-### Active/Inactive Titlebar
-
-```swift
-// Chrome suffix based on focus state
-let suffix = isWindowActive ? "_SELECTED" : ""
-
-// Top bar sprites change based on focus
-SimpleSpriteImage("PLAYLIST_TOP_LEFT\(suffix)", ...)
-SimpleSpriteImage("PLAYLIST_TOP_TILE\(suffix)", ...)
-SimpleSpriteImage("PLAYLIST_TITLE_BAR\(suffix)", ...)
-SimpleSpriteImage("PLAYLIST_TOP_RIGHT_CORNER\(suffix)", ...)
-```
+`WinampPlaylistWindow` reads `windowFocusState.isPlaylistKey` (set by `WindowFocusDelegate`) as `isWindowActive`. Focused, the titlebar uses the `_SELECTED` sprites (left corner `PLAYLIST_TOP_LEFT_SELECTED`); unfocused, the plain sprites (left corner `PLAYLIST_TOP_LEFT_CORNER`). Shade mode (`PlaylistShadeView`) receives the same flag.
 
 ---
 
@@ -707,107 +289,21 @@ SimpleSpriteImage("PLAYLIST_TOP_RIGHT_CORNER\(suffix)", ...)
 
 ### Size Persistence
 
-```swift
-// PlaylistWindowSizeState.swift
-private static let sizeKey = "playlistWindowSize"
-
-private func saveSize() {
-    let data = ["width": size.width, "height": size.height]
-    UserDefaults.standard.set(data, forKey: Self.sizeKey)
-}
-
-private func loadSize() {
-    guard let data = UserDefaults.standard.dictionary(forKey: Self.sizeKey),
-          let width = data["width"] as? Int,
-          let height = data["height"] as? Int else {
-        size = .playlistDefault
-        return
-    }
-    size = Size2D(width: width, height: height).clamped(min: .playlistMinimum)
-}
-```
+`PlaylistWindowSizeState` saves `["width": Int, "height": Int]` under UserDefaults key `playlistWindowSize` in `size.didSet`; `init` → `loadSize()` restores it clamped to `playlistMinimum`, defaulting to `playlistDefault`.
 
 ### Window Position Restoration
 
-```swift
-// WindowCoordinator.swift
-if let playlist = playlistWindow,
-   var storedPlaylist = windowFrameStore.frame(for: .playlist) {
-    // Preserve stored width (segment-based sizing allows expansion)
-    let clampedWidth = max(PlaylistWindowSizeState.baseWidth, storedPlaylist.size.width)
-    let clampedHeight = max(
-        PlaylistWindowSizeState.baseHeight,
-        min(LayoutDefaults.playlistMaxHeight, storedPlaylist.size.height)
-    )
-    storedPlaylist.size = CGSize(width: clampedWidth, height: clampedHeight)
-    playlist.setFrame(storedPlaylist, display: true)
-}
-```
+`WindowFramePersistence.restorePlaylistWindow()` reads the stored frame (`WindowFrameStore`, key `WindowFrame.playlist`), keeps the stored width (at least `baseWidth`), clamps height to `baseHeight`…`LayoutDefaults.playlistMaxHeight` (900), and applies it. Frames are saved by the shared debounced persistence path.
 
 ### Magnetic Docking During Resize
 
-```swift
-// During drag: Disable snapping
-WindowSnapManager.shared.beginProgrammaticAdjustment()
-
-// After drag: Re-enable snapping
-WindowSnapManager.shared.endProgrammaticAdjustment()
-```
-
----
-
-## Implementation Patterns
-
-### @Observable State Pattern
-
-```swift
-@MainActor
-@Observable
-final class PlaylistWindowSizeState {
-    var size: Size2D = .playlistDefault {
-        didSet { saveSize() }  // Persist on change
-    }
-
-    // Computed properties derive from size
-    var pixelSize: CGSize { size.toPixels() }
-    var visibleTrackCount: Int { ... }
-}
-```
-
-### Environment Injection
-
-```swift
-// Window controller injects dependencies
-WinampPlaylistWindow()
-    .environment(skinManager)
-    .environment(audioPlayer)
-    .environment(windowFocusState)
-    .environment(playbackCoordinator)
-```
-
-### Sprite String Pattern
-
-Legacy string sprite names are used for chrome (consistent with Video/Milkdrop):
-
-```swift
-// Chrome tiling: Legacy strings (no state variation)
-SimpleSpriteImage("PLAYLIST_BOTTOM_TILE", width: 25, height: 38)
-SimpleSpriteImage("PLAYLIST_LEFT_TILE", width: 12, height: 29)
-
-// Stateful elements: Semantic sprites (if applicable)
-SimpleSpriteImage(.playButton, width: 23, height: 18)
-```
+The resize gesture brackets the drag with `WindowSnapManager.shared.beginProgrammaticAdjustment()` / `endProgrammaticAdjustment()` so the window does not snap mid-resize. In double-size mode the playlist keeps its size and moves to stay docked to the EQ (`WindowResizeController`). See [Window Snap Manager](MACAMP_ARCHITECTURE_GUIDE.md#window-snap-manager).
 
 ---
 
 ## Testing Guidelines
 
-### Build Verification
-
-```bash
-# Build with Thread Sanitizer
-xcodebuild -scheme MacAmpApp -configuration Debug -enableThreadSanitizer YES build
-```
+Build and test with Thread Sanitizer (see the project `CLAUDE.md`).
 
 ### Size Testing Matrix
 
@@ -819,38 +315,24 @@ xcodebuild -scheme MacAmpApp -configuration Debug -enableThreadSanitizer YES bui
 | [4,4] | 375×232 | Center tiles visible |
 | [11,4] | 550×232 | 2x width |
 
-### Resize Behavior Checklist
+### Checklist
 
-- [ ] Drag handle appears at bottom-right corner
-- [ ] Resize quantizes to 25×29px segments
-- [ ] Preview overlay shows during drag
-- [ ] NSWindow frame updates on drag end
-- [ ] Size persists across app restart
-- [ ] Center tiles appear/disappear correctly
-- [ ] Visualizer appears at 350px+ width
-
-### Scroll Slider Checklist
-
-- [ ] Thumb proportional to visible/total tracks
-- [ ] Dragging thumb scrolls track list
-- [ ] Disabled (opacity 0.5) when all tracks visible
-- [ ] Offset clamps when playlist shrinks
-
-### Focus State Checklist
-
-- [ ] Titlebar shows active (bright) when focused
-- [ ] Titlebar shows inactive (dim) when unfocused
-- [ ] All `*_SELECTED` sprites render correctly
+- [ ] Drag handle at bottom-right; resize quantizes to 25×29px with the preview overlay; NSWindow frame updates on drag end
+- [ ] Size persists across app restart; center tiles and the visualizer (350px+) appear correctly
+- [ ] Scroll thumb proportional to visible/total; dragging scrolls the list; disabled (opacity 0.5) when all tracks visible; offset clamps when the playlist shrinks
+- [ ] Titlebar active (bright) when focused, inactive (dim) when not; all `*_SELECTED` sprites render
 
 ---
 
 ## Appendix: Sprite Definitions
 
+Defined in `MacAmpApp/Models/SkinSprites.swift` (PLEDIT sheet).
+
 ### Titlebar Sprites (20px height)
 
 | Sprite Name | Size | Description |
 |-------------|------|-------------|
-| `PLAYLIST_TOP_LEFT` | 25×20 | Left corner (inactive) |
+| `PLAYLIST_TOP_LEFT_CORNER` | 25×20 | Left corner (inactive) |
 | `PLAYLIST_TOP_LEFT_SELECTED` | 25×20 | Left corner (active) |
 | `PLAYLIST_TOP_TILE` | 25×20 | Background tile (inactive) |
 | `PLAYLIST_TOP_TILE_SELECTED` | 25×20 | Background tile (active) |
@@ -888,10 +370,7 @@ xcodebuild -scheme MacAmpApp -configuration Debug -enableThreadSanitizer YES bui
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 1.2.0 | 2026-03-25 | Added list operations (NEW/LOAD/SAVE), PlaylistWindowActions.swift, track position display, updated line counts |
-| 1.1.0 | February 2026 | Wave 1 decomposition: child view structs, deleted Menus extension, staleness note |
+| 1.3.0 | 2026-09-25 | Pruned; snippets replaced with current code; activation and sprite names corrected |
+| 1.2.0 | 2026-03-25 | List operations (NEW/LOAD/SAVE), PlaylistWindowActions.swift, track position display |
+| 1.1.0 | February 2026 | Decomposition into child view structs |
 | 1.0.0 | December 2025 | Initial release with full resize system |
-
----
-
-**MacAmp Playlist Window Documentation v1.2.0 | Status: Production Ready | Oracle Grade: A-**

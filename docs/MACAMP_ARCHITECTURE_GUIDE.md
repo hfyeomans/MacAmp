@@ -1,9 +1,9 @@
 # MacAmp Complete Architecture Guide
 
-**Version:** 3.2.0
+**Version:** 3.3.0
 **Date:** 2026-09-25
-**Project State:** Production-Ready (5-Window System, WindowCoordinator Refactoring, MainWindow Layer Decomposition (T3), Internet Radio N1-N6 Fixes, Unified Audio Pipeline (T5), AudioPlayer Decomposition Phase 4 (AudioEngineController), Auto-Reconnect, PlaylistWindow Decomposition, Swift Testing Migration, Swift 6.2, macOS 27+, S2 Decomposition + Dead Code Cleanup, AVPlayer-Native Video DSP (S3-2))
-**Purpose:** Deep technical reference for developers joining or maintaining MacAmp
+**Scope:** Current architecture (macOS 27+, Swift 6.2): five-window system, unified audio pipeline, AVPlayer-native video DSP
+**Purpose:** Deep technical reference for developers joining or maintaining MacAmp: what the system is and why. Code-level patterns (snippet, when to use, pitfalls) live in [IMPLEMENTATION_PATTERNS.md](IMPLEMENTATION_PATTERNS.md).
 
 ---
 
@@ -16,12 +16,20 @@
 4a. [AudioPlayer Decomposition Architecture](#audioplayer-decomposition-architecture)
 5. [Skin System Complete Architecture](#skin-system-complete-architecture)
 6. [State Management Evolution](#state-management-evolution)
+6a. [Window Focus State Management](#window-focus-state-management)
+6b. [Five-Window NSWindowController Stack](#five-window-nswindowcontroller-stack)
 7. [SwiftUI Rendering Techniques](#swiftui-rendering-techniques)
 8. [Audio Processing Pipeline](#audio-processing-pipeline)
 8a. [AVPlayer-Native Video DSP](#avplayer-native-video-dsp)
 9. [Internet Radio Streaming](#internet-radio-streaming)
 10. [Modern Swift 6.2 Patterns](#modern-swift-62-patterns)
+10a. [Window Snap Manager](#window-snap-manager)
+10b. [Sprite-Based Menu System](#sprite-based-menu-system)
+10c. [Video Window Architecture](#video-window-architecture)
+10d. [Milkdrop Window Architecture](#milkdrop-window-architecture)
+10e. [M3U Playlist Parser](#m3u-playlist-parser)
 11. [Component Integration Maps](#component-integration-maps)
+11a. [UI Controls & Features](#ui-controls--features)
 12. [Testing Strategies](#testing-strategies)
 13. [Common Pitfalls & Solutions](#common-pitfalls--solutions)
 14. [Quick Reference](#quick-reference)
@@ -57,183 +65,69 @@ This principle drives every architectural decision. MacAmp's core functionality 
 ```
 Total Swift Files:        122 (MacAmpApp/)
 Lines of Code:            ~20,400
-Test Coverage:            42% (focused on critical paths)
-Supported Formats:        MP3, M4A, FLAC, WAV, AAC, HTTP/HTTPS streams
-Skin Compatibility:       100% (Winamp 2.x .wsz files)
-macOS Support:            27.0+ (macOS 15/26 supported by earlier releases)
+Tests:                    119 (Swift Testing, run under Thread Sanitizer)
+Supported Formats:        MP3, M4A, FLAC, WAV, AAC, HTTP/HTTPS streams; MP4/MOV/M4V/AVI video
+Skins:                    Winamp 2.x .wsz
+macOS Support:            27.0+ (minimum raised 2026-09-25; macOS 15/26 supported by earlier releases)
 Architecture:             SwiftUI + AVFoundation
 Deployment:               Developer ID signed, notarization-ready
 ```
 
-### Component Breakdown (March 2026 - Post Swift 6.2 Cleanup)
+### Component Breakdown
 
-```
-┌────────────────────────────────────────────────────────┐
-│ Component               │ Files │ LoC   │ Status       │
-├────────────────────────┼───────┼───────┼──────────────┤
-│ Audio Engine           │  25   │ 7,829 │ Production   │
-│   - AudioPlayer.swift  │   1   │ 1,082 │ Mechanism    │
-│   - AudioEngineCtrl    │   1   │   579 │ Mechanism    │
-│   - EngineConfigObsrvr │   1   │    93 │ Mechanism    │
-│   - EqualizerController│   1   │   319 │ Mechanism    │
-│   - LockFreeRingBuffer │   1   │   212 │ Mechanism    │
-│   - EQPresetStore      │   1   │   197 │ Mechanism    │
-│   - MetadataLoader     │   1   │   171 │ Mechanism    │
-│   - PlaylistController │   1   │   297 │ Mechanism    │
-│   - VideoPlaybackCtrl  │   1   │   362 │ Mechanism    │
-│   - VisualizerPipeline │   1   │   416 │ Mechanism    │
-│   - VisualizerFeed     │   1   │   112 │ Mechanism    │
-│   - VisualizerScratch  │   1   │   195 │ Mechanism    │
-│   - RenderThreadSafe   │   1   │    48 │ Mechanism    │
-│   - StreamPlayer       │   1   │   334 │ Mechanism    │
-│   - PlaybackCoord.     │   1   │   588 │ Mechanism    │
-│   - VideoDSP/          │   5   │   929 │ Mechanism    │
-│     VideoTap           │   1   │   307 │   C callbacks│
-│     VideoTapContext    │   1   │   226 │   Atomic/Mtx │
-│     BiquadCoeffSet     │   1   │   168 │   Sendable   │
-│     BiquadCascade      │   1   │    99 │   Render-conf│
-│     VideoTapVisRender  │   1   │   129 │   Render-conf│
-│   - Streaming/         │   4   │ 1,318 │ Mechanism    │
-│     ICYFramer          │   1   │   200 │   Sendable   │
-│     AudioFileStreamPrs │   1   │   194 │   Queue-conf │
-│     AudioConverterDec  │   1   │   293 │   Queue-conf │
-│     StreamDecodePipeln │   1   │   666 │   @MainActor │
-│ Window Management      │  15   │ 1,388 │ Production   │
-│   - WindowCoordinator  │   1   │   219 │ Bridge/Facade│
-│   - Coordinator+Layout │   1   │   164 │ Bridge       │
-│   - WindowRegistry     │   1   │    83 │ Bridge       │
-│   - FramePersistence   │   1   │   147 │ Bridge       │
-│   - VisibilityCtrl     │   1   │   161 │ Bridge       │
-│   - ResizeController   │   1   │   311 │ Bridge       │
-│   - SettingsObserver   │   1   │   114 │ Bridge       │
-│   - DelegateWiring     │   1   │    54 │ Bridge       │
-│   - DockingTypes       │   1   │    50 │ Mechanism    │
-│   - DockingGeometry    │   1   │   109 │ Mechanism    │
-│   - FrameStore         │   1   │    65 │ Mechanism    │
-│ Skin System            │   6   │ 2,134 │ Production   │
-│ UI Views               │  44   │ 5,915 │ Production   │
-│   - MainWindow/        │  10   │  ~850 │ Decomposed   │
-│   - PlaylistWindow/    │   7   │  ~600 │ Decomposed   │
-│ State Management       │   4   │   987 │ Production   │
-│ Models                 │  22   │ 3,142 │ Production   │
-│   - Track.swift        │   1   │    42 │ Extracted    │
-│ Utilities              │  10   │   834 │ Production   │
-│   - WeakBox            │   1   │    11 │ Extracted    │
-└────────────────────────────────────────────────────────┘
-```
+Line counts from `wc -l` on 2026-09-25. Other sections of this guide deliberately omit per-file sizes.
 
-**Recent Metrics Improvements:**
-- MainWindow: monolithic ~650-line file → 10 files in MainWindow/ subdirectory (T3)
-- PlaylistWindow: monolithic + extension file → 7 files in PlaylistWindow/ subdirectory
-- AudioPlayer.swift: 1,805 → 734 lines (-59.3%) via Phase 1-4 extractions
-- Full Sendable conformance for Swift 6 readiness
+| Directory | Files | Lines | Contents |
+|---|---:|---:|---|
+| `Audio/` (top level) | 15 | 5,367 | Playback facade, engine, EQ, visualizer, stream player, coordinator |
+| `Audio/VideoDSP/` | 5 | 925 | `MTAudioProcessingTap` video DSP |
+| `Audio/Streaming/` | 5 | 1,528 | Stream decode chain |
+| `Windows/` | 15 | 1,350 | NSWindowControllers and WindowCoordinator collaborators |
+| `ViewModels/` | 8 | 1,705 | SkinManager, WindowCoordinator, Butterchurn, docking |
+| `Views/` | 41 | 5,514 | incl. `MainWindow/` (10 files, 1,060), `PlaylistWindow/` (7, 587), `Components/` (10), `Windows/` (4), `Shared/` (2) |
+| `Models/` | 20 | 2,895 | Settings, skin model/parsers, sprite resolver, M3U, sizing state |
+| `Utilities/` | 10 | 807 | Logging, window configuration, snapping, `WeakBox` |
+| App root | 3 | 316 | `MacAmpApp.swift`, `AppCommands.swift`, `SkinsCommands.swift` |
 
-### Recent Architectural Changes (October 2025 - March 2026)
+`Audio/ObjCBridge/` adds `AUAudioUnitWorkgroupShim.h/.m` (17 + 23 lines) for `os_workgroup` access.
 
-1. **Internet Radio Support**: Added StreamPlayer with PlaybackCoordinator orchestration
-2. **Swift 6 Migration**: Converted from ObservableObject to @Observable macro
-3. **Semantic Sprites**: Replaced hard-coded sprite names with semantic identifiers
-4. **Thread Safety**: Added @MainActor isolation and strict Sendable conformance
-5. **Hot Skin Swapping**: Enabled runtime skin changes without app restart
-6. **Clutter Bar Controls (v0.7.8)**: Implemented 4 of 5 clutter bar buttons
-   - O Button: Options menu with time display toggle, double-size, repeat, shuffle (Ctrl+O, Ctrl+T)
-   - A Button: Always On Top window level control (Ctrl+A)
-   - I Button: Track Information dialog with metadata display (Ctrl+I)
-   - D Button: Double Size UI scaling 100%/200% (Ctrl+D)
-   - V Button: Visualizer control (scaffolded, pending implementation)
-7. **Three-State Repeat Mode (v0.7.9)**: Migrated from boolean to enum-based repeat system
-8. **Stream Volume Control (T5 Phase 1, v1.0.6)**: Centralized volume/balance routing through PlaybackCoordinator. Volume and balance sliders now propagate to all backends (AudioPlayer, StreamPlayer, VideoPlaybackController) via `setVolume()`/`setBalance()`. Added capability flags (`supportsEQ`, `supportsBalance`, `supportsVisualizer`) (later consolidated into `supportsAudioProcessing`) that dim controls only during stream prebuffering (before the bridge activates); once active, streams have full EQ/balance/visualizer support via the unified pipeline. Removed AudioPlayer's direct knowledge of VideoPlaybackController for volume propagation.
-   - RepeatMode enum: off/all/one matching Winamp 5 Modern skins
-   - "1" badge overlay for repeat-one mode (ZStack pattern)
-   - Manual skip vs auto-advance distinction with isManualSkip parameter
-   - Options menu with 3 explicit items and checkmarks
-8. **Five-Window Architecture (TASK 2, Days 1-8)**: Expanded from 3 to 5 windows
-   - Video Window: Native macOS video playback with VIDEO.bmp chrome (Days 1-6)
-   - Milkdrop Window: Visualization container with GEN.bmp chrome (Days 7-8)
-   - WindowDelegateMultiplexer pattern for each window controller
-   - Unified focus state management across all 5 windows
-   - Magnetic docking cluster detection for all window combinations
+**Audio mechanism files:**
 
-9. **AudioPlayer Decomposition (v0.8.0, January-March 2026)**: Full Option C extraction (Phases 1-4)
-   - Reduced AudioPlayer from 1,805 to 734 lines (-59.3%) across 4 phases
-   - Extracted 6 focused components following three-layer architecture:
-     - **EQPresetStore** (197 lines): EQ preset persistence (UserDefaults + JSON file)
-     - **MetadataLoader** (171 lines): Async track/video metadata extraction (nonisolated struct)
-     - **PlaylistController** (297 lines): Playlist state and navigation logic
-     - **VideoPlaybackController** (282 lines): AVPlayer lifecycle and observer management
-     - **VisualizerPipeline** (699 lines): Audio tap, FFT processing, SPSC shared buffer, Butterchurn data
-     - **AudioEngineController** (424 lines): AVAudioEngine graph lifecycle, node wiring, bridge activation/deactivation (Phase 4)
-   - Extracted **Track** model to `Models/Track.swift` with Sendable conformance (42 lines)
-   - AudioPlayer remains in Mechanism layer, now a slim facade (734 lines) delegating engine concerns to AudioEngineController
-   - Full Swift 6 strict concurrency compliance (Sendable, @MainActor, Task.detached)
-   - Background I/O for preset persistence (fire-and-forget pattern)
-   - Oracle review: 10/10 quality gate achieved
+| File | Lines | Isolation |
+|---|---:|---|
+| `AudioPlayer.swift` | 1,082 | `@MainActor` facade |
+| `Streaming/StreamDecodePipeline.swift` | 825 | `@MainActor` + queue-confined `DecodeContext` |
+| `StreamPlayer.swift` | 714 | `@MainActor` |
+| `PlaybackCoordinator.swift` | 587 | `@MainActor` |
+| `AudioEngineController.swift` | 578 | `@MainActor` |
+| `VisualizerPipeline.swift` | 416 | `@MainActor` |
+| `VideoPlaybackController.swift` | 362 | `@MainActor` |
+| `EqualizerController.swift` | 316 | `@MainActor` |
+| `VideoDSP/VideoTap.swift` | 306 | C callbacks |
+| `Streaming/AudioConverterDecoder.swift` | 298 | Decode-queue-confined |
+| `PlaylistController.swift` | 286 | `@MainActor` |
+| `VideoDSP/VideoTapContext.swift` | 224 | `Atomic` / `Mutex` fields |
+| `LockFreeRingBuffer.swift` | 218 | SPSC, lock-free |
+| `Streaming/ICYFramer.swift` | 200 | `Sendable` struct |
+| `VisualizerScratchBuffers.swift` | 195 | Render-confined |
+| `EQPresetStore.swift` | 191 | `@MainActor` |
+| `Streaming/AudioFileStreamParser.swift` | 186 | Decode-queue-confined |
+| `MetadataLoader.swift` | 169 | `nonisolated` struct |
+| `VideoDSP/BiquadCoefficientSet.swift` | 167 | `Sendable` |
+| `VideoDSP/VideoTapVisualizerRender.swift` | 129 | Render-confined |
+| `VisualizerFeed.swift` | 112 | SPSC hand-off |
+| `VideoDSP/BiquadCascade.swift` | 99 | Render-confined |
+| `AudioEngineConfigurationObserver.swift` | 93 | `@MainActor` |
+| `RenderThreadSafe.swift` | 48 | Marker protocol |
+| `Streaming/QueueConfined.swift` | 19 | Protocol |
 
-10. **WindowCoordinator Refactoring (February 2026)**: Facade + Composition decomposition
-   - Reduced WindowCoordinator from 1,357 to 219 lines (-84%)
-   - Extracted 10 focused types using Facade + Composition pattern:
-     - **WindowRegistry** (83 lines): Window ownership and lookup
-     - **WindowFramePersistence** (147 lines): Frame save/load/suppression
-     - **WindowVisibilityController** (161 lines): Show/hide/toggle + @Observable state
-     - **WindowResizeController** (311 lines): Resize + docking-aware layout
-     - **WindowSettingsObserver** (114 lines): Settings observation lifecycle
-     - **WindowDelegateWiring** (54 lines): Delegate setup static factory
-     - **WindowDockingTypes** (50 lines): Sendable value types
-     - **WindowDockingGeometry** (109 lines): Pure geometry functions (nonisolated)
-     - **WindowFrameStore** (65 lines): UserDefaults persistence wrapper
-     - **WindowCoordinator+Layout** (164 lines): Initialization/presentation extension
-   - Acyclic dependency graph (no controller-to-controller dependencies)
-   - 5 Oracle reviews (gpt-5.3-codex, xhigh reasoning), all passed
-   - 2 critical concurrency bugs found and fixed (debounce cancellation, observer lifecycle)
-   - Swift 6.2 compliance: Grade A+ (95/100)
-   - Thread Sanitizer clean on all phases
-   - 10 unit tests added for pure types
-   - See MULTI_WINDOW_ARCHITECTURE.md §10 for complete details
+### Recent Architectural Changes
 
-11. **MainWindow Layer Decomposition (T3, PR #54, February 2026)**: Full child-view decomposition
-   - Decomposed monolithic `WinampMainWindow.swift` + `WinampMainWindow+Helpers.swift` into 10 files in `MainWindow/` subdirectory
-   - Root composition `WinampMainWindow.swift` (~110 lines) delegates to child layer structs
-   - `WinampMainWindowLayout.swift`: Coords constants enum (pixel-perfect absolute positions)
-   - `WinampMainWindowInteractionState.swift`: @Observable class replacing 7 internal @State vars
-   - `MainWindowOptionsMenuPresenter.swift`: NSMenu bridge (isolated from interaction state)
-   - `MainWindowFullLayer.swift`: Full-mode composition assembling all child layers
-   - `MainWindowShadeLayer.swift`: Shade (collapsed) mode composition
-   - `MainWindowTransportLayer.swift`: Transport buttons (prev/play/pause/stop/next/eject)
-   - `MainWindowTrackInfoLayer.swift`: Scrolling text with TEXT.bmp character sprites
-   - `MainWindowIndicatorsLayer.swift`: Play/pause indicator, mono/stereo, bitrate, sample rate
-   - `MainWindowSlidersLayer.swift`: Volume, balance, and position sliders
-   - Key architecture patterns:
-     - Child view structs create real SwiftUI recomposition boundaries (only re-evaluate when their specific @Environment state changes)
-     - `displayTitleProvider` closure for live title reads in scroll timer (avoids stale captures)
-     - `Task.sleep` replacing `DispatchQueue.main.asyncAfter` (structured cancellation)
-     - Cancellable `scrubResetTask` for rapid position slider drag handling
-     - NSMenu presenter isolated in its own class (separate lifecycle from interaction state)
-   - Deleted files: `WinampMainWindow.swift` (old root), `WinampMainWindow+Helpers.swift` (cross-file extension)
-   - Follows same decomposition pattern as PlaylistWindow/ (PR #49 N6)
-
-12. **AudioEngineController Extraction (Phase 4, March 2026)**: Extracted AVAudioEngine graph lifecycle from AudioPlayer
-   - AudioPlayer reduced from 1,143 to 734 lines in this phase (-35.8%; overall reduction from original 1,805 to 734 across all phases)
-   - New `AudioEngineController.swift` (424 lines) owns engine setup, node wiring, bridge activation/deactivation
-   - AudioPlayer is now a slim facade delegating engine graph concerns to AudioEngineController
-   - Component count for AudioPlayer decomposition increases from 5 to 6
-   - Full backward compatibility maintained via computed forwarding properties
-
-13. **Network Auto-Reconnect (March 2026)**: Automatic reconnection for internet radio streams
-   - `StreamTerminationReason` enum with 8 typed cases classifying connection failures
-   - Reconnect state machine with exponential backoff (1s to 16s, max 10 attempts)
-   - Error classification: reconnectable (networkError, serverClosed, httpServerError) vs terminal (userStopped, decodeError, httpClientError)
-   - Bridge tear-down and re-create cycle during reconnect (PlaybackCoordinator deactivates bridge, StreamPlayer restarts pipeline)
-   - User-friendly error messages via `userMessage` extension on StreamTerminationReason
-   - StreamPlayer grew from 189 to 334 lines; StreamDecodePipeline grew from 631 to 666 lines
-   - 13 new tests added for reconnect logic and error classification
-
-14. **AVPlayer-Native Video DSP (S3-2, September 2026)**: EQ, preamp, balance and the visualizer now work for local video
-   - Video audio stays on AVPlayer; an in-place `MTAudioProcessingTap` (PreEffects) attached through `AVPlayerItem.audioMix` runs the DSP on AVPlayer's own buffers. Nothing is routed through AVAudioEngine
-   - New `Audio/VideoDSP/` cluster: `VideoTap` (C callbacks + audio-mix builder), `VideoTapContext` (render-thread state), `BiquadCoefficientSet` + `BiquadCascade` (10-band RBJ EQ matching `AVAudioUnitEQ` within 0.5 dB), `VideoTapVisualizerRender` (second visualizer producer)
-   - `VisualizerPipeline` split: the SPSC hand-off became `VisualizerFeed.swift` (renamed from `VisualizerSharedBuffer`) and the scratch buffers moved to `VisualizerScratchBuffers.swift`; `VisualizerPipeline` shrank from 661 to 416 lines
-   - `EqualizerController` (EQ) and `AudioPlayer` (balance) fan state out to registered video-tap contexts through `WeakBox` registries
-   - `AudioEngineConfigurationObserver` added: debounced handling of output-route changes for the engine path
-   - See [AVPlayer-Native Video DSP](#avplayer-native-video-dsp) and `tasks/avplayer-native-video-dsp/plan.md` (ADR-1…ADR-12)
+- **2026-09 — AVPlayer-native video DSP:** EQ, preamp, balance and the visualizer work for local video through an in-place `MTAudioProcessingTap`; `VisualizerPipeline` split into `VisualizerFeed` + `VisualizerScratchBuffers`; `AudioEngineConfigurationObserver` handles output-route changes. See [AVPlayer-Native Video DSP](#avplayer-native-video-dsp).
+- **2026-09-25 — Minimum OS raised to macOS 27.**
+- **2026-03 — Network auto-reconnect:** typed `StreamTerminationReason`, exponential backoff. See [Auto-Reconnect State Machine](#auto-reconnect-state-machine).
+- **2026-03 — Unified audio pipeline and `AudioEngineController`:** streams decode to PCM and play through AVAudioEngine; the engine graph lifecycle moved out of `AudioPlayer`.
+- **2026-02 — Window and view decomposition:** `WindowCoordinator` became a facade over 10 collaborators ([MULTI_WINDOW_ARCHITECTURE.md](MULTI_WINDOW_ARCHITECTURE.md) §10); the main and playlist windows became `MainWindow/` (10 files) and `PlaylistWindow/` (7 files) child-view decompositions.
 
 ---
 
@@ -277,7 +171,7 @@ MacAmp's architecture follows a strict three-layer separation, inspired by web f
 │  • VideoDSP/ (MTAudioProcessingTap in-place video DSP)      │
 │  • VisualizerPipeline (engine tap, VisualizerFeed consumer) │
 │  • StreamPlayer (stream decode pipeline for internet radio)  │
-│  • PlaylistController (playlist state/navigation)           │
+
 │  • SkinManager (skin loading/hot-swap)                      │
 │  • AppSettings (preferences persistence)                    │
 └─────────────────────────────────────────────────────────────┘
@@ -295,60 +189,39 @@ MacAmp's architecture follows a strict three-layer separation, inspired by web f
 ```swift
 // USER CLICKS PLAY BUTTON IN UI
 
-// 1. PRESENTATION LAYER (MainWindow/MainWindowTransportLayer.swift)
-SimpleSpriteImage(
-    sprite: skinManager.resolvedSprites.playButton,  // Visual sprite
-    action: .button(
-        onClick: { playbackCoordinator.play() }      // Command flows down
-    )
-)
+// 1. PRESENTATION (MainWindow/MainWindowTransportLayer.swift)
+Button(action: { playbackCoordinator.togglePlayPause() }, label: {
+    SimpleSpriteImage("MAIN_PLAY_BUTTON", width: 23, height: 18)
+})
+.buttonStyle(.plain)
+.focusable(false)
+.at(Layout.playButton)
 
-// 2. BRIDGE LAYER (PlaybackCoordinator.swift)
-@MainActor
-@Observable
-final class PlaybackCoordinator {
-    func play() {
-        if let track = playlistManager.currentTrack {
-            Task {
-                await play(track: track)  // Orchestrates backends
-            }
-        }
-    }
+// 2. ORCHESTRATION (PlaybackCoordinator.swift): togglePlayPause() resumes the current
+//    source; starting a track (playlist, next/previous) goes through play(track:),
+//    which routes to exactly one backend
+func play(track: Track) async {
+    audioPlayer.updatePlaylistPosition(with: track)
+    currentTrack = track
 
-    func play(track: Track) async {
-        // Route to appropriate backend
-        if track.isStream {
-            audioPlayer.stop()           // Prevent dual playback
-            await streamPlayer.play(url: track.url)
-        } else {
-            streamPlayer.stop()           // Prevent dual playback
-            audioPlayer.playTrack(track: track)
-        }
+    if track.isStream {
+        stopAllBackends()
+        await streamPlayer.play(url: track.url, title: track.title, artist: track.artist)
+        currentSource = .radioStation(RadioStation(name: track.title, streamURL: track.url))
+        currentTitle = track.title
+    } else {
+        stopAllBackends()
+        audioPlayer.playTrack(track: track)
+        updateLocalPlaybackState(for: track)
     }
+    updateNowPlayingInfo()
 }
 
-// 3. MECHANISM LAYER (AudioPlayer.swift)
-@Observable
-final class AudioPlayer {
-    private var engine = AVAudioEngine()
-    private var playerNode = AVAudioPlayerNode()
-
-    func playTrack(track: Track) {
-        // Load file
-        guard let file = try? AVAudioFile(forReading: track.url) else { return }
-
-        // Schedule playback
-        playerNode.scheduleFile(file, at: nil)
-
-        // Start engine and player
-        try? engine.start()
-        playerNode.play()
-
-        // State flows up
-        isPlaying = true
-        currentTrack = track
-    }
-}
+// 3. MECHANISM (AudioPlayer + AudioEngineController)
+// playTrack detects the media type by extension. Audio: schedule the file on
+// AVAudioPlayerNode, start the engine, install the visualizer tap. Video: build
+// the AVPlayer with its audio tap. Either way playbackState transitions to
+// .playing and @Observable state flows back up to the views.
 ```
 
 ### Why Three Layers?
@@ -366,9 +239,7 @@ MacAmp routes all audio-only sources -- local files and internet radio streams -
 
 Local **video** is the one exception: its audio stays on AVPlayer and is processed in place by an `MTAudioProcessingTap`, with the same EQ/preamp/balance state and the same visualizer feed. See [AVPlayer-Native Video DSP](#avplayer-native-video-dsp).
 
-### Background: The Original Dual Backend (Pre-March 2026)
-
-The original architecture used AVPlayer for internet radio streams. AVPlayer is a black box with no access to decoded PCM, so streams had no EQ, no visualizer, and no balance control. In March 2026, a custom stream decode pipeline replaced AVPlayer, feeding decoded PCM into the same AVAudioEngine that handles local files.
+Before March 2026, streams played through AVPlayer, which exposes no decoded PCM, so streams had no EQ, visualizer or balance. A custom decode pipeline now feeds decoded PCM into the same AVAudioEngine that plays local files.
 
 ### The Unified Architecture
 
@@ -415,7 +286,7 @@ AVURLAsset ──► AVPlayerItem(audioMix) ──► AVPlayer ──► Speaker
 
 ### Stream Decode Pipeline Components
 
-Four new files in `MacAmpApp/Audio/Streaming/` implement the custom decode chain:
+The decode chain lives in `MacAmpApp/Audio/Streaming/` (plus `QueueConfined.swift`, the queue-confinement protocol):
 
 **ICYFramer** (`ICYFramer.swift`) -- Pure `Sendable` struct. Strips ICY metadata from the HTTP byte stream before audio reaches the parser. Parses `icy-metaint` from HTTP response headers, counts audio bytes, and extracts metadata blocks at intervals. Emits `.audio(Data)` and `.metadata(ICYMetadata)` chunks. No shared state beyond counters.
 
@@ -454,26 +325,17 @@ Video playback adds a separate real-time domain, the `MTAudioProcessingTap` rend
 
 ### The Orchestrator Pattern
 
-MacAmp uses the **Orchestrator Pattern** with PlaybackCoordinator as the central controller. PlaybackCoordinator manages bridge lifecycle: when a stream's format is detected and prebuffering completes, it activates the AVAudioSourceNode bridge in AudioPlayer; when playback stops, it deactivates the bridge and rewires back to the playerNode path.
+`PlaybackCoordinator` is the single orchestrator for every source. It owns `AudioPlayer` (local files, video, the engine) and `StreamPlayer` (radio), guarantees only one backend plays at a time (`stopAllBackends()` deactivates the stream bridge and stops both players before any switch), and manages the stream bridge: when a stream's format is detected and prebuffering completes, `StreamPlayer.onFormatReady` activates the `AVAudioSourceNode` bridge in `AudioPlayer`; `onStreamTerminated` deactivates it.
 
 ```swift
-// PlaybackCoordinator.swift (Full orchestration logic)
+// PlaybackCoordinator.swift (excerpt)
 @MainActor
 @Observable
 final class PlaybackCoordinator {
-    // Dependencies
-    private let audioPlayer: AudioPlayer       // Local files with EQ
+    private let audioPlayer: AudioPlayer       // Local files (+ video) with EQ
     private let streamPlayer: StreamPlayer     // Internet radio
 
-    // MARK: - Computed Play State (PR #49 - N1/N2 fixes)
-    //
-    // isPlaying and isPaused are computed properties derived from the active
-    // audio source. This eliminates stale-state bugs where stored booleans
-    // would drift out of sync with the actual backend state during buffering
-    // stalls, error recovery, or rapid play/pause toggling.
-
-    /// True when audio is actively rendering to speakers.
-    /// During stream buffering stalls, returns false (audio is not being rendered).
+    // Derived from the active source, never stored
     var isPlaying: Bool {
         switch currentSource {
         case .localTrack: return audioPlayer.isPlaying
@@ -482,8 +344,6 @@ final class PlaybackCoordinator {
         }
     }
 
-    /// True when user has explicitly paused playback.
-    /// False during buffering stalls (not user-initiated) and error states.
     var isPaused: Bool {
         switch currentSource {
         case .localTrack: return audioPlayer.isPaused
@@ -493,7 +353,6 @@ final class PlaybackCoordinator {
         }
     }
 
-    // Stored state
     private(set) var currentSource: PlaybackSource?
     private(set) var currentTitle: String?
     private(set) var currentTrack: Track?  // For playlist position tracking
@@ -503,260 +362,44 @@ final class PlaybackCoordinator {
         case radioStation(RadioStation)
     }
 
-    // MARK: - Capability Flags (T5 Phase 1 → Unified Pipeline)
-    //
-    // These computed flags tell the UI which controls are available.
-    // With the unified pipeline, streams feed into AVAudioEngine via the
-    // bridge (AVAudioSourceNode). When the bridge is active, EQ/balance/
-    // visualizer all work — the flags return true.
-
-    /// Whether the stream backend is currently active and not in error state.
+    // Stream in error state counts as inactive so controls re-enable
     private var isStreamBackendActive: Bool {
         guard case .radioStation = currentSource else { return false }
         return streamPlayer.error == nil
     }
 
-    /// Audio processing (EQ, balance, visualizer) is available for local files always,
-    /// and for streams when bridge is active.
     var supportsAudioProcessing: Bool { !isStreamBackendActive || audioPlayer.isBridgeActive }
 
-    // MARK: - Callback Wiring (PR #49 - N3 fix)
-    //
-    // AudioPlayer uses two separate callbacks instead of a single
-    // externalPlaybackHandler. This split eliminates ambiguity about
-    // whether a callback is for metadata refresh or track advance.
-
-    init(audioPlayer: AudioPlayer, streamPlayer: StreamPlayer) {
-        self.audioPlayer = audioPlayer
-        self.streamPlayer = streamPlayer
-
-        // Sync persisted volume/balance to stream player on init
-        streamPlayer.volume = audioPlayer.volume
-        streamPlayer.balance = audioPlayer.balance
-
-        // Fires when placeholder track is replaced with loaded metadata
-        self.audioPlayer.onTrackMetadataUpdate = { [weak self] track in
-            guard let self else { return }
-            self.updateTrackMetadata(track)
-        }
-
-        // Fires on end-of-track auto-advance
-        self.audioPlayer.onPlaylistAdvanceRequest = { [weak self] track in
-            guard let self else { return }
-            Task { @MainActor in
-                await self.handleExternalPlaylistAdvance(track: track)
-            }
-        }
+    func togglePlayPause() {
+        if isPlaying { pause() } else if isPaused { resume() }
     }
-
-    // MARK: - Volume & Balance Routing
-    //
-    // Both route through AudioPlayer, whose didSet fans out to every backend.
-    // Same-value writes short-circuit (slider drag tick choke point).
-    // Persistence is call-site-driven: commitVolume()/commitBalance() on drag end.
-
-    func setVolume(_ vol: Float) {
-        guard audioPlayer.volume != vol else { return }
-        audioPlayer.volume = vol        // playerNode + streamSourceNode + videoPlaybackController.volume
-    }
-
-    func setBalance(_ bal: Float) {
-        guard audioPlayer.balance != bal else { return }
-        audioPlayer.balance = bal       // playerNode.pan + streamSourceNode.pan + registered video taps
-    }
-
-    // MARK: - Context-Aware Navigation (PR #49 - N4 fix)
-    //
-    // next()/previous() pass coordinator's currentTrack to AudioPlayer
-    // so PlaylistController can resolve position even during stream
-    // playback when audioPlayer.currentTrack is nil.
 
     func next() async {
         let action = audioPlayer.nextTrack(from: currentTrack, isManualSkip: true)
         await handlePlaylistAdvance(action: action)
     }
-
-    func previous() async {
-        let action = audioPlayer.previousTrack(from: currentTrack)
-        await handlePlaylistAdvance(action: action)
-    }
-
-    // MARK: - Unified Playback Control
-
-    func play(url: URL) async {
-        if url.isFileURL {
-            streamPlayer.stop()
-            audioPlayer.addTrack(url: url)
-            audioPlayer.play()
-            currentSource = .localTrack(url)
-            // ... title formatting ...
-        } else {
-            audioPlayer.stop()
-            let station = RadioStation(name: url.lastPathComponent, streamURL: url)
-            await streamPlayer.play(station: station)
-            currentSource = .radioStation(station)
-            currentTitle = streamPlayer.streamTitle ?? station.name
-        }
-    }
-
-    func togglePlayPause() {
-        switch currentSource {
-        case .localTrack:
-            if audioPlayer.isPlaying { audioPlayer.pause() }
-            else { audioPlayer.play() }
-            // No manual isPlaying/isPaused sync needed - computed from backend
-
-        case .radioStation:
-            if streamPlayer.isPlaying { streamPlayer.pause() }
-            else { streamPlayer.resume() }
-            // No manual isPlaying/isPaused sync needed - computed from backend
-
-        case .none:
-            break
-        }
-    }
-
-    func stop() {
-        audioPlayer.stop()
-        streamPlayer.stop()
-        currentSource = nil
-        currentTitle = nil
-        currentTrack = nil
-        // isPlaying/isPaused automatically return false (currentSource is nil)
-    }
-
-    // Computed properties for UI
-    var displayTitle: String {
-        switch currentSource {
-        case .radioStation(let station):
-            if streamPlayer.isBuffering {
-                return "Connecting..."
-            }
-            if let error = streamPlayer.error {
-                return error  // User-friendly message from StreamTerminationReason.userMessage
-            }
-            // Station name + track title combination
-            if let trackTitle = streamPlayer.streamTitle {
-                return "\(station.name) - \(trackTitle)"
-            }
-            return currentTitle ?? station.name
-
-        case .localTrack:
-            return currentTitle ?? "Unknown Track"
-
-        case .none:
-            return "MacAmp"
-        }
-    }
 }
 ```
 
-**Key architectural changes (PR #49, February 2026):**
+**Key behaviours:**
 
-1. **Computed play state**: `isPlaying` and `isPaused` are now computed properties that derive from the active backend, not stored booleans. This eliminates an entire class of state-synchronization bugs where stored flags would drift during buffering stalls, error recovery, or rapid user interaction.
-
-2. **Split callbacks**: The former `externalPlaybackHandler` closure on AudioPlayer was split into two purpose-specific callbacks:
-   - `onTrackMetadataUpdate: ((Track) -> Void)?` -- fires when a placeholder track is replaced with loaded metadata (title/artist arrived)
-   - `onPlaylistAdvanceRequest: ((Track) -> Void)?` -- fires on end-of-track auto-advance, requesting the coordinator to play the next track
-
-3. **Context-aware navigation**: `next()` and `previous()` pass `currentTrack` (the coordinator's track reference) to `audioPlayer.nextTrack(from:)` / `audioPlayer.previousTrack(from:)`. This resolves playlist position correctly during stream playback when `audioPlayer.currentTrack` is nil.
-
-**Key architectural changes (T5 Phase 1, February 2026 / Unified Pipeline, March 2026):**
-
-4. **Centralized volume/balance routing**: `setVolume()` and `setBalance()` on PlaybackCoordinator write through to `AudioPlayer`, whose `didSet` handlers do the fan-out. Volume reaches `playerNode`, `streamSourceNode` and `VideoPlaybackController.volume` (AVPlayer volume). Balance reaches `playerNode.pan`, `streamSourceNode.pan` and every registered `VideoTapContext.balance` atomic (applied inside the video tap).
-
-5. **Capability flag**: `supportsAudioProcessing` is a unified computed property on PlaybackCoordinator that returns `true` when either (a) the stream backend is not active, or (b) the AudioPlayer bridge is active (`audioPlayer.isBridgeActive`). With the unified pipeline, this flag returns `true` during stream playback once the bridge activates. The UI dims controls only during the brief prebuffering window and on error state. Video playback is not a stream source, so the flag is `true` and the EQ/balance controls act on the video tap.
-
-6. **StreamPlayer rewrite**: StreamPlayer no longer uses AVPlayer or NSObject. It owns a `StreamDecodePipeline` that decodes streams to PCM. Volume and balance are applied via AVAudioEngine (through AudioPlayer's `streamSourceNode`). StreamPlayer stores these values for state tracking only. Uses `isolated deinit` (Swift 6.2).
-
-7. **Asymmetric slider bindings**: Volume and balance sliders use `Binding<Float>(get: { audioPlayer.volume }, set: { playbackCoordinator.setVolume($0) })` instead of direct `$audioPlayer.volume` bindings. Reads come from AudioPlayer (source of truth for persistence); writes route through the coordinator for fan-out to all backends.
+1. **Computed play state.** `isPlaying` / `isPaused` derive from the active backend, so they cannot drift during buffering stalls, error recovery or rapid toggling. A buffering stream reports `isPlaying == false`.
+2. **Purpose-specific callbacks.** `AudioPlayer.onTrackMetadataUpdate` fires when a placeholder track gets its loaded metadata; `onPlaylistAdvanceRequest` fires on end-of-track auto-advance. Other wiring in `init`: `onPlaybackFinished` (clears source state and Now Playing), `StreamPlayer.onFormatReady` / `onStreamTerminated` (bridge lifecycle; `onFormatReady` also shares the audio IO workgroup with the decode thread), `onMetadataChanged` / `onStreamStateChanged` (Now Playing), `silenceGateForwarder`, and `AudioPlayer.onEngineReconfigured`.
+3. **Context-aware navigation.** `next()` / `previous()` pass the coordinator's `currentTrack` to `audioPlayer.nextTrack(from:)` / `previousTrack(from:)`, so playlist position resolves even during stream playback, when `audioPlayer.currentTrack` is nil.
+4. **Volume/balance routing.** `setVolume()` / `setBalance()` short-circuit same-value writes and write through to `AudioPlayer`, whose `didSet`s fan out to every backend; `commitVolume()` / `commitBalance()` persist on drag end. See [Volume & Balance Sliders](#volume--balance-sliders).
+5. **Capability flag.** `supportsAudioProcessing` is `true` unless a stream is active, error-free and its bridge is not yet up, so the UI dims EQ and balance only during stream prebuffering. Video is not a stream source, so the flag is `true` and EQ/balance act on the video tap.
+6. **Display title.** `displayTitle` shows "Connecting..." while a stream buffers, the stream's user-facing error message on failure, otherwise "station - ICY title"; for local tracks it prefixes the playlist position ("3. ").
+7. **Remote commands.** The coordinator owns `MPRemoteCommandCenter` and Now Playing info for all sources.
 
 ### Integration with UI
 
-The UI uses PlaybackCoordinator's unified `supportsAudioProcessing` flag to enable/disable controls based on the active backend:
-
-```swift
-// File: MacAmpApp/Views/MainWindow/MainWindowSlidersLayer.swift (simplified excerpt)
-// Purpose: Volume/balance sliders with coordinator-routed controls
-// Context: Volume/balance route through PlaybackCoordinator; capability flags dim controls
-
-struct MainWindowSlidersLayer: View {
-    @Environment(AudioPlayer.self) private var audioPlayer
-    @Environment(PlaybackCoordinator.self) private var playbackCoordinator
-    let interactionState: WinampMainWindowInteractionState
-
-    private typealias Layout = WinampMainWindowLayout
-
-    var body: some View {
-        buildPositionSlider()
-        buildVolumeSlider()
-        buildBalanceSlider()
-    }
-
-    // MARK: - Volume & Balance (T5 Phase 1)
-    // Asymmetric bindings: get from AudioPlayer, set through PlaybackCoordinator
-
-    func buildVolumeSlider() -> some View {
-        let volumeBinding = Binding<Float>(
-            get: { audioPlayer.volume },
-            set: { playbackCoordinator.setVolume($0) }
-        )
-        WinampVolumeSlider(volume: volumeBinding)
-            .at(Layout.volumeSlider)
-    }
-
-    func buildBalanceSlider() -> some View {
-        let balanceBinding = Binding<Float>(
-            get: { audioPlayer.balance },
-            set: { playbackCoordinator.setBalance($0) }
-        )
-        WinampBalanceSlider(balance: balanceBinding)
-            .at(Layout.balanceSlider)
-            .opacity(playbackCoordinator.supportsAudioProcessing ? 1.0 : 0.5)
-            .allowsHitTesting(playbackCoordinator.supportsAudioProcessing)
-            .help(playbackCoordinator.supportsAudioProcessing
-                  ? "Balance"
-                  : "Balance unavailable during streaming")
-    }
-}
-
-// File: MacAmpApp/Views/WinampEqualizerWindow.swift (simplified excerpt)
-// EQ sliders dim during stream playback via unified capability flag
-
-eqSliders
-    .opacity(playbackCoordinator.supportsAudioProcessing ? 1.0 : 0.5)
-    .allowsHitTesting(playbackCoordinator.supportsAudioProcessing)
-```
+Views read state from `AudioPlayer` and route writes through `PlaybackCoordinator`. The balance slider (`MainWindowSlidersLayer`) and the EQ sliders (`WinampEqualizerWindow`) dim to 50% opacity and disable hit testing when `supportsAudioProcessing` is false; the balance tooltip reads "Balance unavailable during streaming". `TrackInfoView` shows stream info when `playbackCoordinator.currentSource` is `.radioStation` and uses `playbackCoordinator.displayTitle` for live ICY metadata. The binding and dimming code is in [IMPLEMENTATION_PATTERNS.md → Asymmetric Binding](IMPLEMENTATION_PATTERNS.md#pattern-asymmetric-binding-for-coordinator-routing) and [Capability Flag Pattern](IMPLEMENTATION_PATTERNS.md#pattern-capability-flag-pattern).
 
 ### Critical Implementation Details
 
-1. **State Must Be @State**: PlaybackCoordinator MUST be stored as @State, not computed
-   ```swift
-   // ✅ CORRECT
-   @State private var playbackCoordinator = PlaybackCoordinator(...)
-
-   // ❌ WRONG - Will reset on every render!
-   var playbackCoordinator: PlaybackCoordinator {
-       PlaybackCoordinator(...)
-   }
-   ```
-
-2. **Prevent Simultaneous Playback**: Always stop both backends before starting
-   ```swift
-   private func ensureExclusivePlayback() {
-       audioPlayer.stop()    // Stop local playback
-       streamPlayer.stop()   // Stop stream playback
-   }
-   ```
-
-3. **Handle State Transitions**: Both backends have different state machines
-   ```swift
-   // AudioPlayer: immediate state changes
-   audioPlayer.play()  // isPlaying = true immediately
-
-   // StreamPlayer: async state changes
-   await streamPlayer.play(url: url)  // Wait for buffering
-   ```
+1. **Exclusive playback:** every source switch goes through `stopAllBackends()` (deactivate stream bridge, stop `AudioPlayer`, stop `StreamPlayer`).
+2. **Different state machines:** `AudioPlayer` state changes synchronously on `play()`; `StreamPlayer.play(...)` is `async` and reports buffering first.
+3. **Stateful objects are `@State`, never computed properties** (see [Pitfall 1](#pitfall-1-state-object-lifecycle)).
 
 ### Output Route Changes (Engine Reconfiguration)
 
@@ -777,56 +420,15 @@ notification burst ──► onWillReconfigure (first notification)
                             workgroup with the stream decode thread if the bridge is active
 ```
 
-`AudioPlayer` overrides the engine's `wasPlaying`/`currentTime` with its own state because the engine has already stopped when the notification arrives. `did` is not guaranteed after `will` if the observer is stopped mid-burst, so every user-intent entry point (`play`, `pause`, `stop`, `seek`, `playTrack`) calls `cancelPendingReconfigure()` to drop the snapshot and clear the guards. The reschedule is limited to audio media: after audio → video the previous track's file stays loaded and `isPlaying` is true, so without that check a format change during video would resume the old track under the video. AVPlayer handles its own route changes, and the video tap's pinned processing format keeps its DSP independent of the output device. Only output **format** changes (sample rate / channel count) post the configuration notification; switching between two outputs with the same format does not.
+`AudioPlayer` overrides the engine's `wasPlaying`/`currentTime` with its own state because the engine has already stopped when the notification arrives. `did` is not guaranteed after `will` if the observer is stopped mid-burst, so every user-intent entry point (`play`, `pause`, `stop`, `seek`, `playTrack`) calls `cancelPendingReconfigure()` to drop the snapshot and clear the guards. The reschedule is limited to audio media: after audio → video the previous track's file stays loaded and `isPlaying` is true, so without that check a format change during video would resume the old track under the video. AVPlayer handles its own route changes, and the video tap's pinned processing format keeps its DSP independent of the output device. Only output **format** changes (sample rate / channel count) post the configuration notification; switching between two outputs with the same format does not. The debounce code: [Debounced Will/Did Notification Bursts](IMPLEMENTATION_PATTERNS.md#pattern-debounced-willdid-notification-bursts).
 
 ---
 
 ## AudioPlayer Decomposition Architecture
 
-The AudioPlayer class was refactored in January 2026 following the Option C incremental extraction strategy. This decomposition improves maintainability, testability, and Swift 6 concurrency compliance while preserving the existing API surface for view compatibility.
+`AudioPlayer` was once a single 1,805-line class that owned the engine, playback state, EQ and presets, the playlist, video and the visualizer. It has been split into focused `@MainActor` components while keeping its public API (views still talk only to `AudioPlayer`).
 
-### Before: Monolithic AudioPlayer (1,805 lines)
-
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                        AudioPlayer.swift (1,805 lines)                   │
-│                     @Observable @MainActor final class                   │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                          │
-│  ┌─────────────────────┐  ┌─────────────────────┐  ┌─────────────────┐  │
-│  │   Engine Layer      │  │   State Layer       │  │   UI Data       │  │
-│  │   ─────────────     │  │   ───────────       │  │   ───────       │  │
-│  │   audioEngine       │  │   playbackState     │  │   currentTitle  │  │
-│  │   playerNode        │  │   isPlaying         │  │   currentTime   │  │
-│  │   eqNode            │  │   isPaused          │  │   currentDur... │  │
-│  │   audioFile         │  │   currentSeekID     │  │   playbackProg. │  │
-│  │   progressTimer     │  │   seekGuardActive   │  │   visualizer... │  │
-│  └─────────────────────┘  └─────────────────────┘  └─────────────────┘  │
-│                                                                          │
-│  ┌─────────────────────┐  ┌─────────────────────┐  ┌─────────────────┐  │
-│  │   EQ/Presets        │  │   Playlist          │  │   Video         │  │
-│  │   ─────────────     │  │   ────────          │  │   ─────         │  │
-│  │   preamp            │  │   playlist[]        │  │   videoPlayer   │  │
-│  │   eqBands[]         │  │   currentTrack      │  │   videoEnd...   │  │
-│  │   isEqOn            │  │   currentPlaylist...│  │   videoTime...  │  │
-│  │   userPresets[]     │  │   shuffleEnabled    │  │   currentMedia. │  │
-│  │   perTrackPresets{} │  │   repeatMode        │  │   videoMetadata │  │
-│  └─────────────────────┘  └─────────────────────┘  └─────────────────┘  │
-│                                                                          │
-│  ┌─────────────────────┐  ┌─────────────────────┐                       │
-│  │   Visualizer        │  │   Metadata          │                       │
-│  │   ──────────        │  │   ────────          │                       │
-│  │   visualizerTap...  │  │   channelCount      │                       │
-│  │   visualizerPeaks[] │  │   bitrate           │                       │
-│  │   latestRMS[]       │  │   sampleRate        │                       │
-│  │   latestSpectrum[]  │  │                     │                       │
-│  │   butterchurn...    │  │                     │                       │
-│  └─────────────────────┘  └─────────────────────┘                       │
-│                                                                          │
-└─────────────────────────────────────────────────────────────────────────┘
-```
-
-### After: Decomposed Architecture (705 + 6 components)
+### Decomposed Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -844,8 +446,8 @@ The AudioPlayer class was refactored in January 2026 following the Option C incr
 │  │  • perTrackPresets{}       │  │  • loadAudioProperties│                   │
 │  │  • loadUserPresets()       │  │  • loadVideoMetadata()│                   │
 │  │  • savePreset(:forTrackURL:)│ │                       │                   │
-│  │  • importEqfPreset()       │  │  ~171 lines           │                   │
-│  │  ~197 lines           │  │  @concurrent N/A     │                   │
+│  │  • importEqfPreset()       │  │  @concurrent N/A      │                   │
+│  │  (owned by EqualizerController) │                       │                   │
 │  └───────────────────────┘  └───────────────────────┘                   │
 │                                                                          │
 │  ┌───────────────────────┐  ┌───────────────────────┐                   │
@@ -860,7 +462,6 @@ The AudioPlayer class was refactored in January 2026 following the Option C incr
 │  │  • repeatMode         │  │  • loadVideo() async   │                  │
 │  │  • nextTrack() → Action│ │  • cleanup()           │                  │
 │  │  • previousTrack()    │  │  • onPlaybackEnded     │                  │
-│  │  ~297 lines           │  │  ~362 lines            │                  │
 │  └───────────────────────┘  └───────────────────────┘                   │
 │                                                                          │
 │  ┌───────────────────────────────────────────────────────────────────┐  │
@@ -876,19 +477,18 @@ The AudioPlayer class was refactored in January 2026 following the Option C incr
 │  │  • makeTapHandler() - static, Sendable closure (feed publish)     │  │
 │  │  • pollTimer (30 Hz, .common) - consumes feed, fires onPollTick   │  │
 │  │  • getRMSData() / getWaveformSamples() / snapshotButterchurnFrame │  │
-│  │  ~416 lines                                                        │  │
 │  └───────────────────────────────────────────────────────────────────┘  │
 │                                                                          │
 │  ┌───────────────────────────────────────────────────────────────────┐  │
 │  │                  AudioEngineController (Engine Graph)              │  │
 │  │                  ──────────────────────────────────                │  │
-│  │                  @MainActor @Observable                            │  │
-│  │                  579 lines (Phase 4 extraction + route changes)    │  │
+│  │                  @MainActor                                        │  │
 │  ├───────────────────────────────────────────────────────────────────┤  │
 │  │  • audioEngine, playerNode, eqNode, streamSourceNode              │  │
-│  │  • setupEngine(), configureEQ(), rewireForCurrentFile()           │  │
-│  │  • activateBridge() / deactivateBridge() (stream path)            │  │
-│  │  • startEngineIfNeeded(), scheduleFrom()                          │  │
+│  │  • setupEngine(), rewireForFile(_:) (explicit graph format)       │  │
+│  │  • activateStreamBridge() / deactivateStreamBridge()              │  │
+│  │  • startEngineIfNeeded(), scheduleFrom(), seek, eject             │  │
+│  │  • audioFile, progressTimer, visualizer tap install/remove        │  │
 │  │  • isBridgeActive flag for capability checks                      │  │
 │  │  • configObserver: AudioEngineConfigurationObserver (route chg)   │  │
 │  └───────────────────────────────────────────────────────────────────┘  │
@@ -897,7 +497,6 @@ The AudioPlayer class was refactored in January 2026 following the Option C incr
 │  │                    AudioPlayer (Facade)                            │  │
 │  │                    ───────────────────                             │  │
 │  │                    @MainActor @Observable                          │  │
-│  │                    1,082 lines (video-tap orchestration added)     │  │
 │  ├───────────────────────────────────────────────────────────────────┤  │
 │  │                                                                    │  │
 │  │  Playback Control:                                                 │  │
@@ -906,7 +505,6 @@ The AudioPlayer class was refactored in January 2026 following the Option C incr
 │  │  • seekToPercent(), seek()                                         │  │
 │  │  • playbackState, isPlaying, isPaused                              │  │
 │  │  • currentSeekID, seekGuardActive, isHandlingCompletion            │  │
-│  │  • audioFile, progressTimer                                        │  │
 │  │                                                                    │  │
 │  │  Video Tap Orchestration:                                          │  │
 │  │  ─────────────────────────────────────────────                     │  │
@@ -918,18 +516,18 @@ The AudioPlayer class was refactored in January 2026 following the Option C incr
 │  │                                                                    │  │
 │  │  Component References:                                             │  │
 │  │  ─────────────────────                                             │  │
-│  │  • engineController: AudioEngineController                         │  │
-│  │  • eqPresetStore: EQPresetStore                                    │  │
+│  │  • engine: AudioEngineController                                   │  │
+│  │  • equalizer: EqualizerController (owns EQPresetStore)             │  │
 │  │  • playlistController: PlaylistController                          │  │
 │  │  • videoPlaybackController: VideoPlaybackController                │  │
 │  │  • visualizerPipeline: VisualizerPipeline                          │  │
 │  │                                                                    │  │
 │  │  Computed Forwarding (maintains existing bindings):                │  │
 │  │  ─────────────────────────────────────────────────                 │  │
-│  │  var userPresets: [EQPreset] { eqPresetStore.userPresets }         │  │
+│  │  var userPresets: [EQPreset] { equalizer.userPresets }             │  │
 │  │  var playlist: [Track] { playlistController.playlist }             │  │
 │  │  var videoPlayer: AVPlayer? { videoPlaybackController.player }     │  │
-│  │  var isBridgeActive: Bool { engineController.isBridgeActive }      │  │
+│  │  isBridgeActive (stored; set by engine.onBridgeStateChanged)      │  │
 │  │  var shuffleEnabled: Bool {                                        │  │
 │  │      get { playlistController.shuffleEnabled }                     │  │
 │  │      set { playlistController.shuffleEnabled = newValue }          │  │
@@ -946,11 +544,11 @@ The AudioPlayer class was refactored in January 2026 following the Option C incr
 │                                                                          │
 │  Views access AudioPlayer only (never extracted components directly):    │
 │                                                                          │
-│  • MainWindow/ (10 files) → audioPlayer.play/pause/stop (via layers)     │
-│  • EqualizerView         → audioPlayer.eqBands, audioPlayer.preamp       │
-│  • PlaylistWindow/ (7 files) → audioPlayer.playlist, nextTrack           │
-│  • SpectrumAnalyzerView  → audioPlayer.getFrequencyData()                │
-│  • VideoWindowView       → audioPlayer.videoMetadataString               │
+│  • MainWindow/ (10 files) → playbackCoordinator + audioPlayer state      │
+│  • WinampEqualizerWindow → audioPlayer.eqBands, audioPlayer.preamp       │
+│  • PlaylistWindow/ (7 files) → audioPlayer.playlist                      │
+│  • VisualizerView        → audioPlayer.getFrequencyData(bands:)          │
+│  • VideoWindowChromeView → audioPlayer.videoMetadataString               │
 │                                                                          │
 │  LAYER BOUNDARY: Views never import or access:                           │
 │     EQPresetStore, PlaylistController, VisualizerPipeline, etc.          │
@@ -963,54 +561,32 @@ The AudioPlayer class was refactored in January 2026 following the Option C incr
 #### EQPresetStore (`MacAmpApp/Audio/EQPresetStore.swift`)
 
 **Layer:** Mechanism
-**Lines:** 197
-**Purpose:** Manages persistence of EQ presets (user presets and per-track presets)
+**Purpose:** Manages persistence of EQ presets (user presets and per-track presets). Owned by `EqualizerController`.
 
 ```swift
 @MainActor
 @Observable
 final class EQPresetStore {
-    // Published State
-    private(set) var userPresets: [EQPreset] = []
+    private(set) var userPresets: [EQPreset] = []                  // UserDefaults "MacAmp.UserEQPresets.v1"
+    @ObservationIgnored var perTrackPresets: [String: EqfPreset] = [:]  // perTrackPresets.json
 
-    // Internal State (not observable)
-    @ObservationIgnored var perTrackPresets: [String: EqfPreset] = [:]
-
-    // Background I/O via @concurrent static functions (Swift 6.2)
-    func savePerTrackPresets() {
-        guard let url = presetsFileURL() else { return }
-        let presetsToSave = perTrackPresets  // Capture state
-        saveTask = Task {
-            _ = await previousTask?.result  // serialize saves
-            await Self.savePresetsToDisk(presets: presetsToSave, url: url)
-        }
-    }
-
-    // Async import with @concurrent static parsing
-    func importEqfPreset(from url: URL) async -> EQPreset? {
-        let result = await Self.parseEqfFile(url: url)
-        if let preset = result { storeUserPreset(preset) }
-        return result
-    }
-
-    // MARK: - @concurrent Static I/O Functions (Swift 6.2)
-    @concurrent
-    private static func savePresetsToDisk(presets: [String: EqfPreset], url: URL) async { ... }
-    @concurrent
-    private static func parseEqfFile(url: URL) async -> EQPreset? { ... }
+    func storeUserPreset(_ preset: EQPreset)
+    func preset(forTrackURL urlString: String) -> EqfPreset?
+    func savePreset(_ preset: EqfPreset, forTrackURL urlString: String)
+    func savePerTrackPresets()                                    // serialized, off-main write
+    func importEqfPreset(from url: URL) async -> EQPreset?
 }
 ```
 
 **Key Patterns:**
-- Background I/O via `@concurrent` static functions (Swift 6.2, replaces `Task.detached`)
-- Fire-and-forget saves with serialization (captures state before dispatch)
-- Merge logic in `loadPerTrackPresets()` preserves in-flight changes
-- `Sendable` conformance for `EQPreset` and `EqfPreset`
+- File I/O in `@concurrent` static functions (`loadPresetsFromDisk`, `savePresetsToDisk`, `parseEqfFile`); code in [Background I/O with @concurrent](IMPLEMENTATION_PATTERNS.md#pattern-background-io-with-concurrent-static-functions-swift-62)
+- Saves capture a snapshot and chain on the previous save task, so writes land in order
+- `loadPerTrackPresets()` merges loaded data under in-memory changes made during the load
+- `EQPreset` and `EqfPreset` are `Sendable`
 
 #### MetadataLoader (`MacAmpApp/Audio/MetadataLoader.swift`)
 
 **Layer:** Mechanism (pure utility)
-**Lines:** 171
 **Purpose:** Async extraction of audio/video metadata from media files
 
 ```swift
@@ -1035,7 +611,6 @@ struct MetadataLoader {
 #### PlaylistController (`MacAmpApp/Audio/PlaylistController.swift`)
 
 **Layer:** Mechanism
-**Lines:** 297
 **Purpose:** Playlist state management and navigation logic
 
 ```swift
@@ -1070,7 +645,6 @@ final class PlaylistController {
 #### VideoPlaybackController (`MacAmpApp/Audio/VideoPlaybackController.swift`)
 
 **Layer:** Mechanism
-**Lines:** 362
 **Purpose:** AVPlayer lifecycle, audio-mix installation and observer management for video playback
 
 ```swift
@@ -1117,16 +691,14 @@ final class VideoPlaybackController {
 - **audioMix at item construction:** `cleanup()` → `AVURLAsset` → `await audioMixBuilder(asset)` → `isStillRelevant()` check → `AVPlayerItem(asset:)` → `playerItem.audioMix = mix` → `AVPlayer(playerItem:)`. The player never sees an item without its mix, and a superseded load returns before any player, observer or state is touched (the built mix is dropped, which finalizes its tap)
 - Identity guards: the end-of-item, periodic-time and seek completions ignore callbacks from a player/item that a newer load has replaced
 - `seek(to:resume:)` with `resume: nil` preserves current intent: a loaded-but-never-started video stays idle rather than becoming "paused"
-- `isolated deinit` (Swift 6.2) runs on @MainActor, eliminating need for `nonisolated(unsafe)` properties
 - Callback pattern for AudioPlayer synchronization (`onTimeUpdate` for UI sync)
 - `metadataTask` cancelled in both cleanup() and isolated deinit to prevent race conditions
 - State reset in cleanup() prevents stale values after stop
-- **isolated deinit safely accesses all @MainActor properties** (no manual teardown workarounds)
+- `isolated deinit` (Swift 6.2) runs on `@MainActor` and cleans up observers and the player directly
 
 #### VisualizerPipeline (`MacAmpApp/Audio/VisualizerPipeline.swift`)
 
 **Layer:** Mechanism
-**Lines:** 416 (plus `VisualizerFeed.swift` 112 and `VisualizerScratchBuffers.swift` 195)
 **Purpose:** Engine visualizer tap, consumption of the shared visualizer feed, and Butterchurn data
 
 ```swift
@@ -1176,7 +748,7 @@ struct VisualizerData: Sendable { let rms: [Float]; let spectrum: [Float]; let w
 ```
 
 **Key Patterns:**
-- **`VisualizerFeed`** (renamed from `VisualizerSharedBuffer` and moved to its own file) replaces `Task { @MainActor }` for audio-to-main data transfer (zero allocations on the render thread). Uses `os_unfair_lock` with `trylock` on the producer side (non-blocking, drops frame on contention) and a regular lock on the main thread. A generation counter avoids redundant consumption. Last write wins; only one producer is active at a time (engine tap for audio, video tap for video). See `IMPLEMENTATION_PATTERNS.md` SPSC pattern section.
+- **`VisualizerFeed`** (`VisualizerFeed.swift`) carries audio-to-main data with zero allocations on the render thread. Uses `os_unfair_lock` with `trylock` on the producer side (non-blocking, drops frame on contention) and a regular lock on the main thread. A generation counter avoids redundant consumption. Last write wins; only one producer is active at a time (engine tap for audio, video tap for video). See [SPSC Shared Buffer](IMPLEMENTATION_PATTERNS.md#pattern-spsc-shared-buffer-for-audio-to-main-thread-transfer).
 - **30 Hz poll timer** (`.common` run-loop mode) on the main thread calls `feed.consume()`; it runs while the engine tap is installed or between `startVideoVisualization()` and `stopVideoVisualization()`
 - Pre-allocated FFT buffers in `VisualizerScratchBuffers.init()` (no render-thread allocations)
 - Pre-computed Goertzel coefficients (recomputed only on sample rate change, not per-callback)
@@ -1184,246 +756,13 @@ struct VisualizerData: Sendable { let rms: [Float]; let spectrum: [Float]; let w
 - `isolated deinit` invalidates the poll timer as a backstop; normal teardown goes through `removeTap()`
 - **20-bar RMS** (not 19) per time bucket for spectrum visualization
 
-### Data Flow Diagram
-
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                           User Interaction                               │
-└─────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                         SwiftUI Views (Presentation)                     │
-│                                                                          │
-│   EqualizerView ──────┐     PlaylistView ──────┐     SpectrumView ────┐  │
-│                       │                        │                      │  │
-└───────────────────────┼────────────────────────┼──────────────────────┼──┘
-                        │                        │                      │
-                        ▼                        ▼                      ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│              AudioPlayer + AudioEngineController (Mechanism Layer)       │
-│  ┌──────────────────────────────────────────────────────────────────┐   │
-│  │                        Public API                                 │   │
-│  │  • play() / pause() / stop()                                      │   │
-│  │  • setEqBand(index:value:)          ──────▶ eqPresetStore         │   │
-│  │  • nextTrack() / previousTrack()    ──────▶ playlistController    │   │
-│  │  • getFrequencyData(bands:)         ──────▶ visualizerPipeline    │   │
-│  │  • playVideoFile(url:)              ──────▶ videoController       │   │
-│  └──────────────────────────────────────────────────────────────────┘   │
-│                                                                          │
-│  ┌──────────────────────────────────────────────────────────────────┐   │
-│  │               AudioEngineController (Engine Graph)                │   │
-│  │  • AVAudioEngine lifecycle, node wiring                           │   │
-│  │  • Bridge activation/deactivation (stream path)                   │   │
-│  │  • EQ node configuration, format rewiring                         │   │
-│  └──────────────────────────────────────────────────────────────────┘   │
-│  ┌──────────────────────────────────────────────────────────────────┐   │
-│  │                    AudioPlayer Facade (retained)                   │   │
-│  │  • Playback control (play/pause/stop/seek)                        │   │
-│  │  • Seek guards (currentSeekID, seekGuardActive)                   │   │
-│  │  • Progress timer                                                 │   │
-│  └──────────────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────────────┘
-          │              │              │              │
-          ▼              ▼              ▼              ▼
-┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐
-│ EQPreset    │  │ Playlist    │  │ Visualizer  │  │ Video       │  │ AudioEngine │
-│ Store       │  │ Controller  │  │ Pipeline    │  │ Controller  │  │ Controller  │
-│             │  │             │  │             │  │             │  │             │
-│ @Observable │  │ @Observable │  │ @Observable │  │ @Observable │  │ @Observable │
-│ @MainActor  │  │ @MainActor  │  │ @MainActor  │  │ @MainActor  │  │ @MainActor  │
-├─────────────┤  ├─────────────┤  ├─────────────┤  ├─────────────┤  ├─────────────┤
-│ File I/O    │  │ Navigation  │  │ Core Audio  │  │ AVPlayer    │  │ AVAudioEng  │
-│ UserDefaults│  │ Logic       │  │ Realtime    │  │ Observers   │  │ Graph/Nodes │
-└─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘
-          │                               │              │
-          ▼                               │              ▼
-┌─────────────────────────────┐           │ ┌─────────────────────────────┐
-│       App Support Dir       │           │ │         AVPlayer            │
-│   • perTrackPresets.json    │           │ │   (Video + in-place tap)    │
-│   • UserDefaults            │           │ │                             │
-└─────────────────────────────┘           │ └─────────────────────────────┘
-                                          │
-                                          ▼
-                              ┌─────────────────────────────┐
-                              │    Butterchurn.js / WebGL   │
-                              │    (Milkdrop Window)        │
-                              └─────────────────────────────┘
-```
-
-### File Structure After Extraction
-
-```
-MacAmpApp/
-├── Audio/
-│   ├── AudioPlayer.swift              (1,082 lines) - Playback Facade + video-tap orchestration
-│   ├── AudioEngineController.swift    (579 lines) - Engine graph lifecycle (Phase 4) + route changes
-│   ├── AudioEngineConfigurationObserver.swift (93 lines) - Debounced engine config-change observer
-│   ├── EqualizerController.swift      (319 lines) - EQ state, engine EQ + video-tap fanout
-│   ├── LockFreeRingBuffer.swift       (180 lines) - SPSC ring buffer for stream audio
-│   ├── EQPresetStore.swift            (191 lines) - Preset persistence
-│   ├── MetadataLoader.swift           (169 lines) - Track metadata
-│   ├── PlaylistController.swift       (286 lines) - Playlist logic
-│   ├── VideoPlaybackController.swift  (362 lines) - AVPlayer wrapper, audioMix at item construction
-│   ├── VisualizerPipeline.swift       (416 lines) - Engine tap + feed consumer + Butterchurn data
-│   ├── VisualizerFeed.swift           (112 lines) - SPSC visualizer hand-off (engine + video producers)
-│   ├── VisualizerScratchBuffers.swift (195 lines) - Per-producer DSP scratch (RMS/Goertzel/FFT)
-│   ├── RenderThreadSafe.swift         (48 lines) - Marker protocol for render-thread-safe storage
-│   ├── StreamPlayer.swift             (414 lines) - Internet radio + auto-reconnect
-│   ├── PlaybackCoordinator.swift      (588 lines) - Backend orchestration
-│   ├── ObjCBridge/
-│   │   ├── AUAudioUnitWorkgroupShim.h  (17 lines) - ObjC bridge for os_workgroup
-│   │   └── AUAudioUnitWorkgroupShim.m  (23 lines) - ObjC bridge implementation
-│   ├── VideoDSP/                      (S3-2 AVPlayer-native video DSP)
-│   │   ├── VideoTap.swift                 (307 lines) - Tap C callbacks, audio-mix builder, detach
-│   │   ├── VideoTapContext.swift          (226 lines) - Render-thread state (Atomic/Mutex fields)
-│   │   ├── BiquadCoefficientSet.swift     (168 lines) - RBJ coefficient math, band frequencies
-│   │   ├── BiquadCascade.swift            (99 lines) - Render-confined 10-band TDF-II filter
-│   │   └── VideoTapVisualizerRender.swift (129 lines) - Video-side visualizer producer
-│   └── Streaming/
-│       ├── QueueConfined.swift            (19 lines) - Queue confinement protocol
-│       ├── ICYFramer.swift                (200 lines) - ICY metadata protocol parser
-│       ├── AudioFileStreamParser.swift    (186 lines) - AudioFileStream C API wrapper
-│       ├── AudioConverterDecoder.swift    (285 lines) - AudioConverter C API wrapper
-│       └── StreamDecodePipeline.swift     (697 lines) - Pipeline orchestrator
-│
-├── ViewModels/
-│   ├── WindowCoordinator.swift        (218 lines) - Window management facade
-│   ├── WindowCoordinator+Layout.swift (129 lines) - Layout/presentation extension
-│   ├── SkinManager.swift              (766 lines) - Skin loading
-│   ├── DockingController.swift        (124 lines) - Window docking
-│   ├── ButterchurnBridge.swift        (247 lines) - Swift-to-JS Butterchurn bridge
-│   └── ButterchurnPresetManager.swift (273 lines) - Preset management
-│
-├── Views/
-│   ├── MainWindow/                    (T3 Decomposition, PR #54)
-│   │   ├── WinampMainWindow.swift            (~110 lines) - Root composition
-│   │   ├── WinampMainWindowLayout.swift      (~53 lines) - Coords constants enum
-│   │   ├── WinampMainWindowInteractionState.swift (~132 lines) - @Observable state
-│   │   ├── MainWindowOptionsMenuPresenter.swift (~143 lines) - NSMenu bridge
-│   │   ├── MainWindowFullLayer.swift         (~266 lines) - Full-mode composition
-│   │   ├── MainWindowShadeLayer.swift        (~142 lines) - Shade-mode composition
-│   │   ├── MainWindowTransportLayer.swift    (~57 lines) - Transport buttons
-│   │   ├── MainWindowTrackInfoLayer.swift    (~48 lines) - Scrolling text
-│   │   ├── MainWindowIndicatorsLayer.swift   (~82 lines) - Status indicators
-│   │   └── MainWindowSlidersLayer.swift      (~68 lines) - Volume/balance/position
-│   │
-│   ├── PlaylistWindow/                (N6 Decomposition, PR #49)
-│   │   ├── PlaylistBottomControlsView.swift  - Bottom control buttons
-│   │   ├── PlaylistMenuPresenter.swift       - NSMenu bridge
-│   │   ├── PlaylistResizeHandle.swift        - Resize handle
-│   │   ├── PlaylistShadeView.swift           - Shade mode
-│   │   ├── PlaylistTitleBarButtons.swift     - Titlebar controls
-│   │   ├── PlaylistTrackListView.swift       - Track list rendering
-│   │   └── PlaylistWindowInteractionState.swift - @Observable state
-│   │
-│   ├── Shared/
-│   │   ├── TitlebarDragCaptureView.swift     - Titlebar drag NSView
-│   │   └── WinampTitlebarDragHandle.swift    - Titlebar drag handle
-│   │
-│   ├── Windows/
-│   │   ├── AVPlayerViewRepresentable.swift   - AVPlayerView NSViewRepresentable
-│   │   ├── ButterchurnWebView.swift          - WKWebView for Butterchurn
-│   │   ├── MilkdropWindowChromeView.swift    - Milkdrop GEN.BMP chrome
-│   │   └── VideoWindowChromeView.swift       - Video VIDEO.BMP chrome
-│   │
-│   ├── Components/
-│   │   ├── PlaylistBitmapText.swift          - Playlist bitmap text rendering
-│   │   ├── PlaylistMenuDelegate.swift        - Playlist menu delegate
-│   │   ├── PlaylistScrollSlider.swift        - Playlist scroll slider
-│   │   ├── PlaylistTimeText.swift            - Playlist time text
-│   │   ├── SimpleSpriteImage.swift           - Sprite rendering
-│   │   ├── SpriteMenuItem.swift              - Sprite menu item
-│   │   ├── TrackInfoView.swift               - Track info display
-│   │   ├── WinampButtonStyle.swift           - Winamp button style
-│   │   └── WinampVolumeSlider.swift          - Volume slider
-│   │
-│   ├── WinampEqualizerWindow.swift    - EQ window (not yet decomposed)
-│   ├── WinampPlaylistWindow.swift     - Playlist root composition
-│   ├── WinampVideoWindow.swift        - Video window
-│   ├── WinampMilkdropWindow.swift     - Milkdrop window
-│   ├── PlaylistWindowActions.swift    - Playlist window actions (NEW/LOAD/SAVE)
-│   ├── PreferencesView.swift          - Preferences window
-│   ├── PresetsButton.swift            - EQ presets button
-│   ├── SkinnedText.swift              - Bitmap font text rendering
-│   └── VisualizerView.swift           - Spectrum/waveform visualizer
-│
-├── Windows/
-│   ├── BorderlessWindow.swift         (7 lines) - Borderless NSWindow subclass
-│   ├── WindowRegistry.swift           (83 lines) - Window ownership
-│   ├── WindowFramePersistence.swift   (147 lines) - Frame persistence
-│   ├── WindowVisibilityController.swift (161 lines) - Visibility control
-│   ├── WindowResizeController.swift   (311 lines) - Resize + docking
-│   ├── WindowSettingsObserver.swift   (114 lines) - Settings observation
-│   ├── WindowDelegateWiring.swift     (54 lines) - Delegate factory
-│   ├── WindowDockingTypes.swift       (50 lines) - Value types
-│   ├── WindowDockingGeometry.swift    (109 lines) - Pure geometry
-│   ├── WindowFrameStore.swift         (65 lines) - UserDefaults wrapper
-│   ├── WinampMainWindowController.swift (53 lines)
-│   ├── WinampEqualizerWindowController.swift (50 lines)
-│   ├── WinampPlaylistWindowController.swift (55 lines)
-│   ├── WinampVideoWindowController.swift (44 lines)
-│   └── WinampMilkdropWindowController.swift (85 lines)
-│
-├── Models/
-│   ├── Track.swift                    (42 lines) - Track data model (Sendable)
-│   ├── EQPreset.swift                 (existing, + Sendable)
-│   ├── EqfPreset.swift                (existing, + Sendable)
-│   └── ...
-│
-├── Utilities/
-│   ├── TimeFormatting.swift           (12 lines) - Duration formatting
-│   ├── WeakBox.swift                  (11 lines) - Weak reference wrapper (video-tap registries)
-│   ├── MenuActionTarget.swift         (39 lines) - NSMenu closure bridge
-│   ├── WinampAlertHelper.swift        (50 lines) - Alert presentation helpers
-│   ├── AppLogger.swift                (43 lines) - Unified logging
-│   ├── WinampWindowConfigurator.swift (62 lines) - Window configuration
-│   ├── WindowDelegateMultiplexer.swift (86 lines) - Delegate multiplexer
-│   ├── WindowFocusDelegate.swift      (41 lines) - Focus delegation
-│   ├── WindowResizePreviewOverlay.swift (111 lines) - Resize preview
-│   └── WindowSnapManager.swift        (379 lines) - Magnetic snap logic
-```
-
 ### Migration Notes
 
-**Computed Forwarding Pattern:**
-To maintain backwards compatibility, AudioPlayer exposes extracted state via computed properties:
-
-```swift
-// AudioPlayer.swift - Computed forwarding
-var playlist: [Track] { playlistController.playlist }
-var userPresets: [EQPreset] { eqPresetStore.userPresets }
-var videoPlayer: AVPlayer? { videoPlaybackController.player }
-var videoMetadataString: String { videoPlaybackController.metadataString }
-var shuffleEnabled: Bool {
-    get { playlistController.shuffleEnabled }
-    set { playlistController.shuffleEnabled = newValue }
-}
-```
-
-**Bridge Pattern for Playlist Navigation:**
-```swift
-// AudioPlayer.swift:1021-1042 - Bridge method
-private func handlePlaylistAction(_ action: PlaylistController.AdvanceAction) -> PlaylistAdvanceAction {
-    switch action {
-    case .none: return .none
-    case .restartCurrent:
-        seek(to: 0, resume: true)  // Always resume for repeat-one
-        return .restartCurrent
-    case .playTrack(let track):
-        playTrack(track: track)
-        return .playLocally(track)
-    case .requestCoordinatorPlayback(let track):
-        return .requestCoordinatorPlayback(track)
-    case .endOfPlaylist:
-        return .none
-    }
-}
-```
+`AudioPlayer` keeps a stable API through computed forwarding properties (`playlist`, `userPresets`, `videoPlayer`, `videoMetadataString`, `shuffleEnabled`, `repeatMode`, EQ and visualizer settings); see [Computed Forwarding](IMPLEMENTATION_PATTERNS.md#pattern-computed-forwarding-for-api-compatibility). Playlist navigation returns a `PlaylistController.AdvanceAction` that `AudioPlayer.handlePlaylistAction(_:)` executes; see [Action-Based Bridge](IMPLEMENTATION_PATTERNS.md#pattern-action-based-bridge-pattern). The full file layout is in [Quick Reference](#key-files--their-purposes).
 
 ### Swift 6 Concurrency Compliance
 
-All extracted components follow strict Swift 6 concurrency patterns:
+Types that cross isolation boundaries:
 
 | Type | Conformance | Notes |
 |------|-------------|-------|
@@ -1443,27 +782,7 @@ All extracted components follow strict Swift 6 concurrency patterns:
 | `VideoTapDiagnostics` | `Sendable` | Telemetry snapshot read on main |
 | `PreReconfigureSnapshot` | `Sendable` | Engine route-change snapshot |
 
-**Background I/O Pattern:**
-```swift
-// Fire-and-forget save (EQPresetStore.swift:130-146)
-func savePerTrackPresets() {
-    guard let url = presetsFileURL() else { return }
-
-    // Capture current state for background write
-    let presetsToSave = perTrackPresets
-
-    // Perform file I/O off main thread (fire-and-forget with error logging)
-    Task.detached(priority: .utility) {
-        do {
-            let data = try JSONEncoder().encode(presetsToSave)
-            try data.write(to: url, options: .atomic)
-            AppLog.debug(.audio, "Saved \(presetsToSave.count) per-track presets")
-        } catch {
-            AppLog.warn(.audio, "Failed to save per-track presets: \(error)")
-        }
-    }
-}
-```
+Preset persistence runs off the main actor through `@concurrent` static functions with serialized saves; see [Background I/O with @concurrent](IMPLEMENTATION_PATTERNS.md#pattern-background-io-with-concurrent-static-functions-swift-62).
 
 ### Risk Mitigation
 
@@ -1476,20 +795,17 @@ func savePerTrackPresets() {
 
 **VideoPlaybackController - Observer Cleanup:**
 - `cleanup()` removes observers and resets state (called during stop/eject)
-- **deinit performs manual observer teardown** (cannot call @MainActor cleanup())
-- Shadow property `_playerForCleanup` ensures AVPlayer access in deinit
-- `isolated deinit` (Swift 6.2) enables safe cleanup on @MainActor without workarounds
+- `isolated deinit` repeats the observer teardown as a backstop, directly on `@MainActor`
 
 **EQPresetStore - Race Condition Prevention:**
 - `loadPerTrackPresets()` merges loaded data with in-memory changes
-- `perTrackPresetsLoaded` flag prevents early-save overwrites
-- Fire-and-forget pattern captures state snapshot before dispatch
+- Saves capture a state snapshot before dispatch
 
 ---
 
 ## Skin System Complete Architecture
 
-The skin system is MacAmp's crown jewel—a complete implementation of Winamp 2.x skin loading with semantic sprite resolution.
+The skin system loads Winamp 2.x `.wsz` skins and resolves UI elements to sprites through semantic identifiers. Detail: [SPRITE_SYSTEM_COMPLETE.md](SPRITE_SYSTEM_COMPLETE.md) (sprite catalog, resolver rules) and [WINAMP_SKIN_VARIATIONS.md](WINAMP_SKIN_VARIATIONS.md) (format quirks).
 
 ### Skin Loading Pipeline
 
@@ -1497,558 +813,113 @@ The skin system is MacAmp's crown jewel—a complete implementation of Winamp 2.
 .wsz file (ZIP archive)
          │
          ▼
-┌──────────────────┐
-│  SkinManager     │
-│  - Extract ZIP   │
-│  - Parse files   │
-└──────────────────┘
-         │
-    ┌────┴────┬─────────┬──────────┬─────────┐
-    ▼         ▼         ▼          ▼         ▼
-  main.bmp  eq_ex.bmp  pledit.txt viscolor.txt region.txt
-    │         │         │          │         │
-    ▼         ▼         ▼          ▼         ▼
-┌────────────────────────────────────────────────────┐
-│           Skin Model (in-memory)                   │
-│  - Image cache (NSImage)                          │
-│  - Color schemes (parsed)                         │
-│  - Window regions (if present)                    │
-└────────────────────────────────────────────────────┘
+SkinArchiveLoader.loadAsync (@concurrent, off the main actor)
+  - extracts the expected BMP sheets (SkinSprites.defaultSprites + NUMS_EX) and text files
          │
          ▼
-┌──────────────────┐
-│  SpriteResolver  │
-│  - Semantic map  │
-│  - Fallback gen  │
-└──────────────────┘
+SkinManager.applySkinPayload (@MainActor)
+  - crops every sprite from its sheet (ImageSlicing, autoreleasepool per crop)
+  - sheets the skin lacks → sprites extracted lazily from the bundled default skin
+  - VISCOLOR.TXT → VisColorParser, PLEDIT.TXT → PLEditParser
          │
          ▼
-   ResolvedSprites
-   (Ready for UI)
+Skin (images, visualizerColors, playlistStyle, cursors, loadedSheets)
+         │
+         ▼
+Views: SimpleSpriteImage(name or SemanticSprite) → SpriteResolver → skin.images[name]
 ```
+
+**Memory behaviour:**
+- The bundled default skin is kept only as its ZIP payload (~200 KB). It is parsed in full only when it is the selected skin (`loadInitialSkin` parses the already-loaded payload instead of re-extracting it).
+- For a custom skin missing a sheet, `fallbackSpritesFromDefaultSkin` extracts only that sheet from the default payload and caches the sprites in `defaultSkinSpriteCache`.
+- At rest, memory holds the current skin's sprites plus that payload and the partial fallback cache.
+- `NSImage.cropped(to:)` (`Models/ImageSlicing.swift`) draws each crop into its own sRGB RGBA8 `CGContext` and wraps `context.makeImage()`, so a sprite owns only its own pixels instead of retaining the parent sheet's buffer.
 
 ### Semantic Sprite Mapping
 
-Traditional approach (fragile):
+Views request sprites by meaning, not by skin-specific name:
+
 ```swift
-// ❌ Hardcoded sprite names break with different skins
-Image("MAIN_PLAY_BUTTON_NORMAL")  // What if skin uses PLAY_NORM?
+SimpleSpriteImage(.digit(0), width: 9, height: 13)         // semantic
+SimpleSpriteImage("MAIN_PLAY_BUTTON", width: 23, height: 18) // legacy name (still supported)
 ```
 
-MacAmp's approach (resilient):
-```swift
-// ✅ Semantic identifier works with any skin
-SimpleSpriteImage(sprite: skinManager.resolvedSprites.playButton)
-```
-
-### SpriteResolver Implementation
+`SpriteResolver` (a `Sendable` struct over a `Skin`) maps a `SemanticSprite` to the first candidate name that exists in `skin.images`:
 
 ```swift
-// SpriteResolver.swift (Core resolution logic)
-final class SpriteResolver {
-    private let skin: Skin
-    private var cache: [SemanticSprite: ResolvedSprite] = [:]
-
-    func resolve(_ semantic: SemanticSprite) -> ResolvedSprite {
-        // Check cache
-        if let cached = cache[semantic] {
-            return cached
-        }
-
-        // Try primary mapping
-        if let sprite = tryPrimaryMapping(semantic) {
-            cache[semantic] = sprite
-            return sprite
-        }
-
-        // Try alternative names (handle skin variations)
-        if let sprite = tryAlternativeMapping(semantic) {
-            cache[semantic] = sprite
-            return sprite
-        }
-
-        // Generate fallback
-        let fallback = generateFallback(semantic)
-        cache[semantic] = fallback
-        return fallback
+func resolve(_ semantic: SemanticSprite) -> String? {
+    for candidate in candidates(for: semantic) where skin.images[candidate] != nil {
+        return candidate
     }
-
-    private func tryPrimaryMapping(_ semantic: SemanticSprite) -> ResolvedSprite? {
-        let primaryNames = mapSemanticToPrimary(semantic)
-
-        for name in primaryNames {
-            if let sprite = skin.sprites[name] {
-                return ResolvedSprite(
-                    image: sprite.image,
-                    rect: sprite.rect,
-                    source: .skin(name)
-                )
-            }
-        }
-
-        return nil
-    }
-
-    private func mapSemanticToPrimary(_ semantic: SemanticSprite) -> [String] {
-        switch semantic {
-        case .playButton:
-            return ["CBUTTONS_PLAY_NORM", "PLAY_BUTTON", "MAIN_PLAY"]
-        case .pauseButton:
-            return ["CBUTTONS_PAUSE_NORM", "PAUSE_BUTTON", "MAIN_PAUSE"]
-        case .digit(let n):
-            return ["NUM_\(n)", "DIGIT_\(n)", "NUMBER_\(n)"]
-        case .eqSliderThumb:
-            return ["EQ_SLIDER", "EQSLID", "EQ_THUMB"]
-        // ... hundreds more mappings
-        }
-    }
-
-    private func generateFallback(_ semantic: SemanticSprite) -> ResolvedSprite {
-        // Generate appropriate placeholder based on semantic type
-        switch semantic {
-        case .playButton, .pauseButton, .stopButton:
-            return generateButtonFallback(size: CGSize(width: 23, height: 18))
-        case .digit:
-            return generateDigitFallback()
-        case .eqSliderThumb:
-            return generateSliderFallback()
-        default:
-            return generateGenericFallback()
-        }
-    }
+    return nil  // caller handles fallback
 }
 ```
 
-### Skin File Parsing
-
-```swift
-// VISCOLOR.TXT Parser (Visualization colors)
-struct VisColorParser {
-    static func parse(_ data: Data) -> VisualizationColors {
-        let lines = String(data: data, encoding: .utf8)?.components(separatedBy: .newlines) ?? []
-        var colors = VisualizationColors()
-
-        for (index, line) in lines.enumerated() {
-            guard !line.isEmpty, !line.hasPrefix("//") else { continue }
-            let components = line.components(separatedBy: ",")
-            guard components.count == 3 else { continue }
-
-            let r = Int(components[0]) ?? 0
-            let g = Int(components[1]) ?? 0
-            let b = Int(components[2]) ?? 0
-            let color = NSColor(red: CGFloat(r)/255, green: CGFloat(g)/255, blue: CGFloat(b)/255, alpha: 1)
-
-            switch index {
-            case 0...17: colors.normal.append(color)    // 18 spectrum colors
-            case 18: colors.background = color           // Visualizer background
-            case 19: colors.gridlines = color            // Spectrum gridlines
-            case 20: colors.waveform = color             // Oscilloscope line
-            case 21: colors.waveformDot = color          // Oscilloscope dots
-            case 22: colors.volumeBar = color            // Volume indicator
-            // ... continue for all 24 colors
-            }
-        }
-
-        return colors
-    }
-}
-
-// PLEDIT.TXT Parser (Playlist colors)
-struct PLEditParser {
-    static func parse(_ data: Data) -> PlaylistColors {
-        let text = String(data: data, encoding: .windowsCP1252) ??
-                   String(data: data, encoding: .utf8) ?? ""
-
-        var colors = PlaylistColors()
-        let lines = text.components(separatedBy: .newlines)
-
-        for line in lines {
-            let parts = line.components(separatedBy: "=")
-            guard parts.count == 2 else { continue }
-
-            let key = parts[0].trimmingCharacters(in: .whitespaces)
-            let value = parts[1].trimmingCharacters(in: .whitespaces)
-
-            if let color = parseColor(value) {
-                switch key.uppercased() {
-                case "NORMAL": colors.normal = color
-                case "CURRENT": colors.current = color
-                case "NORMALBG": colors.normalBackground = color
-                case "SELECTEDBG": colors.selectedBackground = color
-                case "MBFONT": colors.minibroserFont = color
-                case "MBBG": colors.minibrowserBackground = color
-                // ... all other color keys
-                }
-            }
-        }
-
-        return colors
-    }
-
-    private static func parseColor(_ hex: String) -> NSColor? {
-        // Parse #RRGGBB or RRGGBB format
-        let cleaned = hex.replacingOccurrences(of: "#", with: "")
-        guard cleaned.count == 6 else { return nil }
-
-        let scanner = Scanner(string: cleaned)
-        var rgb: UInt64 = 0
-        scanner.scanHexInt64(&rgb)
-
-        return NSColor(
-            red: CGFloat((rgb >> 16) & 0xFF) / 255.0,
-            green: CGFloat((rgb >> 8) & 0xFF) / 255.0,
-            blue: CGFloat(rgb & 0xFF) / 255.0,
-            alpha: 1.0
-        )
-    }
-}
-```
+Candidate priority: `_EX` variants before standard sprites, then `_SELECTED` over `_ACTIVE` over the base name. When nothing resolves, `SimpleSpriteImage` draws a purple placeholder with a "?" at the requested size.
 
 ### Hot Skin Swapping
 
-```swift
-// SkinManager.swift (Hot-swap implementation)
-@MainActor
-@Observable
-final class SkinManager {
-    private(set) var currentSkin: Skin?
-    private(set) var resolvedSprites: ResolvedSpriteCollection = .empty
-    private(set) var isLoading = false
+`SkinManager` is `@MainActor @Observable`; swapping `currentSkin` re-renders every view that reads it, with no restart.
 
-    func loadSkin(from url: URL) async {
-        isLoading = true
-        defer { isLoading = false }
-
-        do {
-            // Extract and parse skin
-            let skin = try await extractSkin(from: url)
-
-            // Create resolver with new skin
-            let resolver = SpriteResolver(skin: skin)
-
-            // Resolve all sprites
-            let resolved = ResolvedSpriteCollection(
-                // Main window
-                mainBackground: resolver.resolve(.mainWindowBackground),
-                playButton: resolver.resolve(.playButton),
-                pauseButton: resolver.resolve(.pauseButton),
-                stopButton: resolver.resolve(.stopButton),
-                // ... resolve all sprites
-            )
-
-            // Atomic update (UI will redraw automatically)
-            currentSkin = skin
-            resolvedSprites = resolved
-
-            // Save preference
-            AppSettings.shared.lastSkinPath = url.path
-
-        } catch {
-            print("Failed to load skin: \(error)")
-            // Keep current skin on failure
-        }
-    }
-}
-```
+- `switchToSkin(identifier:)` looks the skin up in `availableSkins`, calls `loadSkin(from:)` and saves `AppSettings.selectedSkinIdentifier`.
+- `loadSkin(from:)` sets `isLoading`, stamps a new `loadGeneration` UUID, loads the archive off the main actor, and applies the payload only if the generation is still current (a newer load wins; `CancellationError` is ignored).
+- On failure it sets `loadingError` (`describeLoadError`) and keeps the current skin.
 
 ---
 
 ## State Management Evolution
 
-MacAmp has undergone a complete state management migration from ObservableObject to Swift 6's @Observable macro.
+All app state uses the `@Observable` macro with `@MainActor` isolation under Swift 6 strict concurrency. The migration from `ObservableObject` + `@Published` is complete. The how-to lives in [IMPLEMENTATION_PATTERNS.md](IMPLEMENTATION_PATTERNS.md): [@Observable with @MainActor](IMPLEMENTATION_PATTERNS.md#pattern-observable-with-mainactor), [Migrating from ObservableObject](IMPLEMENTATION_PATTERNS.md#migrating-from-observableobject-to-observable), [Enum State with Persistence](IMPLEMENTATION_PATTERNS.md#pattern-enum-state-with-persistence-repeatmode-pattern).
 
-### Migration Timeline
-
-```
-Phase 1 (Original): ObservableObject + @Published
-         ↓
-Phase 2 (Hybrid): Mix of ObservableObject and @Observable
-         ↓
-Phase 3 (Current): Full @Observable with @MainActor
-```
-
-### Before: ObservableObject Pattern
-
-```swift
-// ❌ OLD: ObservableObject pattern (verbose, error-prone)
-class AudioPlayer: ObservableObject {
-    @Published var isPlaying: Bool = false
-    @Published var currentTime: Double = 0.0
-    @Published var duration: Double = 0.0
-
-    private var cancellables = Set<AnyCancellable>()
-
-    init() {
-        // Manual timer setup for updates
-        Timer.publish(every: 0.1, on: .main, in: .common)
-            .autoconnect()
-            .sink { [weak self] _ in
-                self?.updateCurrentTime()
-            }
-            .store(in: &cancellables)
-    }
-
-    private func updateCurrentTime() {
-        // Must manually trigger @Published
-        objectWillChange.send()
-        currentTime = playerNode.currentTime
-    }
-}
-
-// Usage in View
-struct PlayerView: View {
-    @StateObject private var audioPlayer = AudioPlayer()  // Or @ObservedObject
-
-    var body: some View {
-        Text("\(audioPlayer.currentTime)")
-    }
-}
-```
-
-### After: @Observable Pattern
-
-```swift
-// ✅ NEW: @Observable pattern (clean, automatic)
-@MainActor
-@Observable
-final class AudioPlayer {
-    private(set) var isPlaying: Bool = false
-    private(set) var currentTime: Double = 0.0
-    private(set) var duration: Double = 0.0
-
-    // No @Published needed!
-    // No objectWillChange needed!
-    // No cancellables needed!
-
-    init() {
-        // Timer still needed but simpler
-        Task {
-            while true {
-                try await Task.sleep(for: .milliseconds(100))
-                updateCurrentTime()
-            }
-        }
-    }
-
-    private func updateCurrentTime() {
-        // Automatic change detection!
-        currentTime = playerNode.currentTime
-    }
-}
-
-// Usage in View
-struct PlayerView: View {
-    @Environment(AudioPlayer.self) var audioPlayer  // Clean injection
-
-    var body: some View {
-        Text("\(audioPlayer.currentTime)")
-    }
-}
-```
-
-### Key Migration Patterns
-
-1. **Class Declaration**
-   ```swift
-   // Before
-   class MyClass: ObservableObject
-
-   // After
-   @Observable
-   final class MyClass
-   ```
-
-2. **Published Properties**
-   ```swift
-   // Before
-   @Published var value: Int = 0
-
-   // After
-   var value: Int = 0  // Automatically observable!
-   ```
-
-3. **Non-Observable Properties**
-   ```swift
-   // Before
-   var cached: Int = 0  // Not published
-
-   // After
-   @ObservationIgnored var cached: Int = 0  // Explicitly ignored
-   ```
-
-4. **View Integration**
-   ```swift
-   // Before
-   @StateObject private var model = MyModel()
-   @ObservedObject var sharedModel: SharedModel
-   @EnvironmentObject var appModel: AppModel
-
-   // After
-   @State private var model = MyModel()
-   @Environment(SharedModel.self) var sharedModel
-   @Environment(AppModel.self) var appModel
-   ```
-
-5. **Enum State with Persistence (RepeatMode Pattern)**
-   ```swift
-   // File: MacAmpApp/Models/AppSettings.swift:232-266
-   enum RepeatMode: String, Codable, CaseIterable {
-       case off = "off"
-       case all = "all"
-       case one = "one"
-
-       func next() -> RepeatMode {
-           let cases = Self.allCases
-           guard let index = cases.firstIndex(of: self) else { return self }
-           let nextIndex = (index + 1) % cases.count
-           return cases[nextIndex]
-       }
-
-       var label: String {
-           switch self {
-           case .off: return "Repeat: Off"
-           case .all: return "Repeat: All"
-           case .one: return "Repeat: One"
-           }
-       }
-
-       var isActive: Bool { self != .off }
-   }
-
-   // In AppSettings class
-   var repeatMode: RepeatMode = .off {
-       didSet {
-           UserDefaults.standard.set(repeatMode.rawValue, forKey: "repeatMode")
-       }
-   }
-   ```
-
-### Thread Safety with @MainActor
-
-```swift
-// Thread-safe state management
-@MainActor
-@Observable
-final class PlaylistController {
-    private(set) var tracks: [Track] = []
-    private(set) var currentIndex: Int = 0
-
-    // All methods automatically run on main thread
-    func addTrack(_ track: Track) {
-        tracks.append(track)
-    }
-
-    // Async operations maintain main actor context
-    func loadPlaylist(from url: URL) async {
-        let loadedTracks = await loadTracksFromDisk(url)
-        tracks = loadedTracks  // Safe: runs on main thread
-    }
-
-    // Background work with explicit context switch
-    func processHeavyTask() async {
-        // Switch to background
-        let result = await Task.detached {
-            // Heavy computation here
-            return computeResult()
-        }.value
-
-        // Automatically back on main thread
-        self.processedResult = result
-    }
-}
-```
+**Conventions:**
+- `@ObservationIgnored` for non-UI storage (timers, tasks, registries, caches).
+- The owning class persists its own settings in `didSet` → `UserDefaults` (`AppSettings`). Slider-driven values (volume, balance) are the exception: they persist once at drag end.
+- Settings enums (`RepeatMode`, `TimeDisplayMode`, `VisualizerMode`) live in `AppSettings`. `AudioPlayer.repeatMode` forwards to `AppSettings.instance().repeatMode`. Loading `RepeatMode` migrates the old `audioPlayerRepeatEnabled` Bool (`true` → `.all`, `false` → `.off`).
+- View-local interaction state is one `@Observable` class owned via `@State` (for example `WinampMainWindowInteractionState`), not scattered `@State` vars.
+- Off-main work goes through `@concurrent` static functions or queue-confined types, never through mutable state shared with the main actor (see [Modern Swift 6.2 Patterns](#modern-swift-62-patterns)).
 
 ### Environment Injection Pattern
 
+`MacAmpApp.init()` creates the shared instances once, stores them in `@State`, and hands them to `WindowCoordinator`. The Winamp windows are AppKit `NSWindow`s, so each window controller injects the environment into its `NSHostingController` root view:
+
 ```swift
-// MacAmpApp.swift (Root injection)
-@main
-struct MacAmpApp: App {
-    // Create shared instances
-    @State private var audioPlayer = AudioPlayer()
-    @State private var streamPlayer = StreamPlayer()
-    @State private var playbackCoordinator: PlaybackCoordinator
-    @State private var skinManager = SkinManager()
-    @State private var dockingController = DockingController()
-    @State private var appSettings = AppSettings.shared
-
-    init() {
-        let audio = AudioPlayer()
-        let stream = StreamPlayer()
-        let coordinator = PlaybackCoordinator(
-            audioPlayer: audio,
-            streamPlayer: stream
-        )
-
-        _audioPlayer = State(initialValue: audio)
-        _streamPlayer = State(initialValue: stream)
-        _playbackCoordinator = State(initialValue: coordinator)
-    }
-
-    var body: some Scene {
-        WindowGroup {
-            ContentView()
-                .environment(audioPlayer)
-                .environment(streamPlayer)
-                .environment(playbackCoordinator)
-                .environment(skinManager)
-                .environment(dockingController)
-                .environment(appSettings)
-        }
-    }
+// MacAmpApp.swift (excerpt)
+init() {
+    let skinManager = SkinManager()
+    let audioPlayer = AudioPlayer()
+    let dockingController = DockingController()
+    let settings = AppSettings.instance()
+    let radioLibrary = RadioStationLibrary()
+    let streamPlayer = StreamPlayer()
+    let playbackCoordinator = PlaybackCoordinator(audioPlayer: audioPlayer, streamPlayer: streamPlayer)
+    // ... _x = State(initialValue: x) for each, skinManager.loadInitialSkin(), WindowFocusState() ...
+    let coordinator = WindowCoordinator(skinManager: skinManager, audioPlayer: audioPlayer, /* ... */)
+    WindowCoordinator.shared = coordinator
+    dockingController.windowCoordinator = coordinator
 }
 
-// Child view usage (root composition reads environment, passes to children)
-struct WinampMainWindow: View {
-    // Automatic injection from environment
-    @Environment(SkinManager.self) private var skinManager
-    @Environment(AudioPlayer.self) private var audioPlayer
-    @Environment(AppSettings.self) private var settings
-    @Environment(PlaybackCoordinator.self) private var playbackCoordinator
-    @Environment(WindowFocusState.self) private var windowFocusState
-
-    // Owned interaction state passed to child layers
-    @State private var interactionState = WinampMainWindowInteractionState()
-    @State private var optionsPresenter = MainWindowOptionsMenuPresenter()
-
-    var body: some View {
-        ZStack(alignment: .topLeading) {
-            // Background + titlebar + child layers (full or shade mode)
-            // Child layers read @Environment themselves for fine-grained updates
-        }
-    }
-}
+// WinampVideoWindowController.swift (the other window controllers follow the same shape)
+let rootView = WinampVideoWindow()
+    .environment(skinManager)
+    .environment(audioPlayer)
+    .environment(dockingController)
+    .environment(settings)
+    .environment(radioLibrary)
+    .environment(playbackCoordinator)
+    .environment(windowFocusState)
+window.contentViewController = NSHostingController(rootView: rootView)  // never set contentView
 ```
+
+The SwiftUI `body` only declares a hidden placeholder `WindowGroup`, a Preferences window and the menu commands (`AppCommands`, `SkinsCommands`). Child views read what they need with `@Environment(Type.self)`.
 
 ---
 
 ## Window Focus State Management
 
-The WindowFocusState system provides centralized tracking of which MacAmp window is currently focused, enabling proper active/inactive titlebar rendering.
-
-### Architecture Overview
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    PRESENTATION LAYER                        │
-│  Views read focus state for titlebar sprite selection       │
-├─────────────────────────────────────────────────────────────┤
-│                      BRIDGE LAYER                            │
-│  WindowFocusState (@Observable state container)             │
-│  WindowFocusDelegate (NSWindowDelegate adapter)             │
-├─────────────────────────────────────────────────────────────┤
-│                     MECHANISM LAYER                          │
-│  NSWindow focus notifications via multiplexer               │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### WindowFocusState Model
+`WindowFocusState` tracks which MacAmp window is key so titlebars and chrome can switch between active and inactive sprites. It sits in the bridge layer: AppKit focus events come in through `WindowFocusDelegate`, views read the state. Full detail: [WINDOW_FOCUS_ARCHITECTURE.md](WINDOW_FOCUS_ARCHITECTURE.md).
 
 ```swift
-// File: MacAmpApp/Models/WindowFocusState.swift
-// Purpose: Track which window is currently key (focused)
-// Pattern: @Observable @MainActor singleton
-
+// MacAmpApp/Models/WindowFocusState.swift
 @Observable
 @MainActor
 final class WindowFocusState {
@@ -2058,114 +929,29 @@ final class WindowFocusState {
     var isVideoKey: Bool = false
     var isMilkdropKey: Bool = false
 
-    // Computed for any-window-focused check
     var hasAnyFocus: Bool {
-        isMainKey || isEqualizerKey || isPlaylistKey ||
-        isVideoKey || isMilkdropKey
+        isMainKey || isEqualizerKey || isPlaylistKey || isVideoKey || isMilkdropKey
     }
 }
 ```
 
-### Focus Delegate Integration
-
-```swift
-// File: MacAmpApp/Utilities/WindowFocusDelegate.swift
-// Purpose: Bridge AppKit focus events to Observable state
-// Pattern: NSWindowDelegate adapter
-
-@MainActor
-final class WindowFocusDelegate: NSObject, NSWindowDelegate {
-    private let kind: WindowKind
-    private let focusState: WindowFocusState
-
-    func windowDidBecomeKey(_ notification: Notification) {
-        // Ensure mutual exclusivity - only one window is key
-        focusState.isMainKey = (kind == .main)
-        focusState.isEqualizerKey = (kind == .equalizer)
-        focusState.isPlaylistKey = (kind == .playlist)
-        focusState.isVideoKey = (kind == .video)
-        focusState.isMilkdropKey = (kind == .milkdrop)
-    }
-
-    func windowDidResignKey(_ notification: Notification) {
-        // Clear focus for this specific window
-        switch kind {
-        case .main: focusState.isMainKey = false
-        case .equalizer: focusState.isEqualizerKey = false
-        case .playlist: focusState.isPlaylistKey = false
-        case .video: focusState.isVideoKey = false
-        case .milkdrop: focusState.isMilkdropKey = false
-        }
-    }
-}
-```
-
-### View Layer Usage
-
-```swift
-// File: MacAmpApp/Views/MainWindow/WinampMainWindow.swift
-// Example: Using focus state for active/inactive titlebar
-
-struct WinampMainWindow: View {
-    @Environment(WindowFocusState.self) private var windowFocusState
-
-    private var isWindowActive: Bool {
-        windowFocusState.isMainKey
-    }
-
-    var body: some View {
-        ZStack(alignment: .topLeading) {
-            // ...
-            WinampTitlebarDragHandle(windowKind: .main, ...) {
-                SimpleSpriteImage(isWindowActive
-                    ? "MAIN_TITLE_BAR_SELECTED"
-                    : "MAIN_TITLE_BAR",
-                    width: 275, height: 14)
-            }
-        }
-    }
-}
-```
-
-### Wiring Through WindowCoordinator
-
-```swift
-// File: MacAmpApp/ViewModels/WindowCoordinator.swift:68,284-286
-// Integration: Create delegates and add to multiplexers
-
-private let windowFocusState: WindowFocusState
-private var videoFocusDelegate: WindowFocusDelegate?
-
-// In setupDelegates()
-videoFocusDelegate = WindowFocusDelegate(
-    kind: .video,
-    focusState: windowFocusState
-)
-videoDelegateMultiplexer?.add(delegate: videoFocusDelegate!)
-```
-
-### Key Design Decisions
-
-1. **@Observable Pattern**: Provides fine-grained SwiftUI updates when focus changes
-2. **Mutual Exclusivity**: Only one window can be key at a time (macOS convention)
-3. **Bridge Layer Position**: Follows three-layer architecture principles
-4. **Delegate Multiplexer**: Coexists with persistence and snapping delegates
-
-For complete documentation, see: `docs/WINDOW_FOCUS_ARCHITECTURE.md`
+- **Delegate:** `WindowFocusDelegate` (`Utilities/WindowFocusDelegate.swift`) sets all five flags in `windowDidBecomeKey` (only its own kind `true`, so exactly one window is key) and clears its own flag in `windowDidResignKey`.
+- **Wiring:** `WindowDelegateWiring.wire(...)` creates one `WindowFocusDelegate` per window and adds it to that window's `WindowDelegateMultiplexer` next to `WindowSnapManager.shared` and the persistence delegate. It never replaces `window.delegate` with the focus delegate alone.
+- **Views:** read a computed property, never a cached `@State` copy, e.g. `private var isWindowActive: Bool { windowFocusState.isMainKey }` selects `MAIN_TITLE_BAR_SELECTED` vs `MAIN_TITLE_BAR`.
 
 ---
 
 ## Five-Window NSWindowController Stack
 
-MacAmp's window management evolved from a 3-window system (Main, Equalizer, Playlist) to a complete 5-window multimedia stack during TASK 2 implementation.
+MacAmp runs five windows (Main, Equalizer, Playlist, Video, Milkdrop), each an AppKit `NSWindowController` hosting SwiftUI. Full detail: [MULTI_WINDOW_ARCHITECTURE.md](MULTI_WINDOW_ARCHITECTURE.md).
 
-### Window Controller Architecture (Post-Refactoring, Feb 2026)
+### Window Controller Architecture
 
-**Note:** As of February 2026, WindowCoordinator was refactored from a 1,357-line god object into an 11-file Facade + Composition architecture. See MULTI_WINDOW_ARCHITECTURE.md §10 for complete details.
+`WindowCoordinator` is a facade over focused collaborators ([WindowCoordinator Architecture](MULTI_WINDOW_ARCHITECTURE.md#windowcoordinator-architecture)):
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│              WindowCoordinator (Facade, 219 lines)           │
+│              WindowCoordinator (Facade)                      │
 │                  "Composition root + API forwarding"          │
 │                                                              │
 │ Composed Controllers:                                       │
@@ -2176,7 +962,7 @@ MacAmp's window management evolved from a 3-window system (Main, Equalizer, Play
 │  • settingsObserver: WindowSettingsObserver (lifecycle)    │
 │  • delegateWiring: WindowDelegateWiring (static factory)   │
 ├──────────────────────────────────────────────────────────────┤
-│                      WindowRegistry (83 lines)               │
+│                      WindowRegistry                          │
 │                   "Window ownership layer"                   │
 │                                                              │
 │ NSWindowController instances (strong references):           │
@@ -2191,7 +977,7 @@ MacAmp's window management evolved from a 3-window system (Main, Equalizer, Play
 │  • windowKind(for: NSWindow) -> WindowKind?                 │
 │  • forEachWindow(_ body: (NSWindow, WindowKind) -> Void)    │
 ├──────────────────────────────────────────────────────────────┤
-│              WindowDelegateWiring (54 lines)                 │
+│              WindowDelegateWiring                            │
 │              "Static factory for delegate setup"             │
 │                                                              │
 │ Manages (via WindowDelegateMultiplexer):                    │
@@ -2223,12 +1009,10 @@ WindowCoordinator
 All acyclic - no controller-to-controller dependencies.
 ```
 
-### Window Lifecycle Management (Post-Refactoring)
-
-**Refactored Feb 2026:** Window ownership moved to WindowRegistry, visibility to WindowVisibilityController, delegate wiring to WindowDelegateWiring.
+### Window Lifecycle Management
 
 ```swift
-// WindowCoordinator.swift (219 lines) - Facade pattern
+// WindowCoordinator.swift - Facade pattern
 @MainActor
 @Observable
 final class WindowCoordinator {
@@ -2254,7 +1038,7 @@ final class WindowCoordinator {
 }
 ```
 
-**WindowRegistry.swift (83 lines) - Window ownership:**
+**WindowRegistry.swift - Window ownership:**
 ```swift
 @MainActor
 final class WindowRegistry {
@@ -2270,7 +1054,7 @@ final class WindowRegistry {
 }
 ```
 
-**WindowDelegateWiring.swift (54 lines) - Static factory:**
+**WindowDelegateWiring.swift - Static factory:**
 ```swift
 @MainActor
 struct WindowDelegateWiring {
@@ -2291,82 +1075,17 @@ struct WindowDelegateWiring {
 ### Window Kind Enumeration
 
 ```swift
-enum WindowKind: String, CaseIterable {
-    case main = "main"
-    case equalizer = "equalizer"
-    case playlist = "playlist"
-    case video = "video"         // Added in TASK 2
-    case milkdrop = "milkdrop"   // Added in TASK 2
-
-    var defaultFrame: NSRect {
-        switch self {
-        case .main: return NSRect(x: 100, y: 500, width: 275, height: 116)
-        case .equalizer: return NSRect(x: 100, y: 384, width: 275, height: 116)
-        case .playlist: return NSRect(x: 100, y: 268, width: 275, height: 116)
-        case .video: return NSRect(x: 385, y: 500, width: 275, height: 232)
-        case .milkdrop: return NSRect(x: 385, y: 268, width: 275, height: 232)
-        }
-    }
+// MacAmpApp/Utilities/WindowSnapManager.swift
+enum WindowKind: Hashable {
+    case main
+    case playlist
+    case equalizer
+    case video
+    case milkdrop
 }
 ```
 
-### Cluster Detection for 5 Windows
-
-The WindowSnapManager now detects clusters across all 5 windows:
-
-```swift
-// WindowSnapManager discovers connected window groups
-func discoverCluster(containing window: NSWindow) -> Set<WindowKind> {
-    var cluster = Set<WindowKind>()
-    var toCheck = [window]
-    var checked = Set<ObjectIdentifier>()
-
-    while !toCheck.isEmpty {
-        let current = toCheck.removeFirst()
-        let currentId = ObjectIdentifier(current)
-
-        guard !checked.contains(currentId),
-              let currentKind = windowKind(for: current) else { continue }
-
-        checked.insert(currentId)
-        cluster.insert(currentKind)
-
-        // Find all connected windows (including video/milkdrop)
-        for (otherWindow, _) in registeredWindows {
-            guard otherWindow !== current,
-                  !checked.contains(ObjectIdentifier(otherWindow)),
-                  areWindowsConnected(current, otherWindow) else { continue }
-            toCheck.append(otherWindow)
-        }
-    }
-
-    return cluster
-}
-```
-
-### Focus State Integration
-
-Each window participates in the unified focus state system:
-
-```swift
-// WindowFocusState tracks all 5 windows
-@Observable
-final class WindowFocusState {
-    var focusedWindow: WindowKind? = nil
-
-    func updateFocus(to window: WindowKind?) {
-        if focusedWindow != window {
-            focusedWindow = window
-        }
-    }
-}
-
-// Each controller gets a focus delegate
-let videoFocusDelegate = WindowFocusDelegate(
-    windowKind: .video,
-    focusState: windowFocusState
-)
-```
+Cluster detection across all five windows is the snap manager's `connectedCluster` (see [Window Snap Manager](#window-snap-manager)); `WindowSnapManager.clusterKinds(containing:)` exposes it as a `Set<WindowKind>`.
 
 ### Key Implementation Points
 
@@ -2380,257 +1099,46 @@ let videoFocusDelegate = WindowFocusDelegate(
 
 ## SwiftUI Rendering Techniques
 
-Achieving pixel-perfect Winamp rendering in SwiftUI requires specific techniques that override SwiftUI's automatic layout system.
+Pixel-perfect Winamp rendering overrides SwiftUI's automatic layout. The code patterns are in [IMPLEMENTATION_PATTERNS.md → UI Component Patterns](IMPLEMENTATION_PATTERNS.md#ui-component-patterns).
 
 ### Absolute Positioning
 
-SwiftUI wants to use flexible layouts. Winamp needs exact pixel positions.
+Every element sits at an exact top-left pixel offset from `WinampMainWindowLayout` (or the equivalent per-window layout enum):
 
 ```swift
-// File: MacAmpApp/Views/Components/SimpleSpriteImage.swift:85-89
-// Purpose: Extension for absolute positioning of sprites
-// Context: Provides Winamp-style top-left origin positioning
-
+// MacAmpApp/Views/Components/SimpleSpriteImage.swift
 extension View {
-    /// Position view at exact coordinates (top-left origin like Winamp)
-    func at(x: CGFloat, y: CGFloat) -> some View {
-        self.offset(x: x, y: y)
-    }
+    func at(x: CGFloat, y: CGFloat) -> some View { self.offset(x: x, y: y) }
+    func at(_ point: CGPoint) -> some View { self.offset(x: point.x, y: point.y) }
 }
-
-// Usage: Place play button at exact Winamp coordinates
-SimpleSpriteImage(sprite: playButton)
-    .at(x: 39, y: 88)  // Exact pixels from top-left
 ```
 
 ### Pixel-Perfect Image Rendering
 
-```swift
-// Disable image interpolation for crisp pixels
-struct SimpleSpriteImage: View {
-    let sprite: ResolvedSprite
-
-    var body: some View {
-        Image(nsImage: sprite.image)
-            .interpolation(.none)  // CRITICAL: No smoothing!
-            .resizable()
-            .aspectRatio(contentMode: .fill)
-            .frame(width: sprite.rect.width, height: sprite.rect.height)
-            .clipped()
-    }
-}
-```
+`SimpleSpriteImage` draws `Image(nsImage:)` with `.interpolation(.none)`, `.antialiased(false)`, `.resizable()`, `.aspectRatio(contentMode: .fill)`, an explicit frame and `.clipped()`, so sprites stay crisp at 1x and in double-size mode. Double size is a `.scaleEffect(2, anchor: .topLeading)` on the main and EQ window roots, with `WindowResizeController.resizeMainAndEQWindows(doubled:)` resizing the NSWindows.
 
 ### Z-Layer Background Masking and Child-View Recomposition Boundaries
 
-MacAmp's main window uses child view structs as recomposition boundaries. Each child layer only re-evaluates its `body` when the specific `@Environment` properties it reads change. This prevents unnecessary redraws of static or unrelated elements.
+The main window root (`MainWindow/WinampMainWindow.swift`) stacks a static background sprite, the titlebar, and either `MainWindowFullLayer` or `MainWindowShadeLayer` in a `ZStack(alignment: .topLeading)` at a fixed 275×116 size. `MainWindowFullLayer` assembles the child layers (indicators, time display, track info, visualizer, transport, shuffle/repeat, sliders, window toggles, clutter bar).
 
-```swift
-// File: MacAmpApp/Views/MainWindow/WinampMainWindow.swift (~110 lines)
-// Root composition — delegates to child layer structs
-struct WinampMainWindow: View {
-    @Environment(SkinManager.self) private var skinManager
-    @Environment(AudioPlayer.self) private var audioPlayer
-    @Environment(AppSettings.self) private var settings
-    @Environment(PlaybackCoordinator.self) private var playbackCoordinator
-    @Environment(WindowFocusState.self) private var windowFocusState
+Each child layer is its own `View` struct that reads only the `@Environment` values it needs, so SwiftUI re-evaluates only the affected layer: the transport layer re-evaluates only when `PlaybackCoordinator` changes; the sliders layer only when `AudioPlayer` volume/balance or scrubbing state changes. How to build one: [View Layer Decomposition (MainWindow)](IMPLEMENTATION_PATTERNS.md#pattern-view-layer-decomposition-mainwindow).
 
-    @State private var interactionState = WinampMainWindowInteractionState()
-    @State private var optionsPresenter = MainWindowOptionsMenuPresenter()
+### Buttons and Hit Testing
 
-    var body: some View {
-        ZStack(alignment: .topLeading) {
-            // Layer 0: Static background (never changes)
-            SimpleSpriteImage("MAIN_WINDOW_BACKGROUND",
-                            width: WinampSizes.main.width,
-                            height: WinampSizes.main.height)
-
-            // Titlebar
-            WinampTitlebarDragHandle(windowKind: .main, ...) { ... }
-
-            // Mode switching: full vs shade
-            if !settings.isMainWindowShaded {
-                MainWindowFullLayer(           // Full-mode child layers
-                    interactionState: interactionState,
-                    optionsPresenter: optionsPresenter,
-                    openFileDialog: openFileDialog
-                )
-            } else {
-                MainWindowShadeLayer(interactionState: interactionState)
-            }
-        }
-        .frame(width: 275, height: 116)  // Exact Winamp size
-        .fixedSize()  // Prevent any resizing
-    }
-}
-```
-
-**MainWindowFullLayer** (the full-mode composition) assembles all child layers:
-
-```swift
-// File: MacAmpApp/Views/MainWindow/MainWindowFullLayer.swift
-struct MainWindowFullLayer: View {
-    var body: some View {
-        Group {
-            buildTitlebarButtons()                               // Minimize/shade/close
-            MainWindowIndicatorsLayer(pauseBlinkVisible: ...)   // Play/pause, mono/stereo
-            buildTimeDisplay()                                   // MM:SS digits
-            MainWindowTrackInfoLayer(interactionState: ...)     // Scrolling text
-            buildSpectrumAnalyzer()                              // VisualizerView
-            MainWindowTransportLayer(openFileDialog: ...)       // Prev/play/pause/stop/next/eject
-            buildShuffleRepeatButtons()                          // Shuffle + repeat
-            MainWindowSlidersLayer(interactionState: ...)       // Position/volume/balance
-            buildWindowToggleButtons()                           // EQ/playlist toggles
-            buildClutterBarOAI()                                 // O, A, I buttons
-            buildClutterBarDV()                                  // D, V buttons
-        }
-    }
-}
-```
-
-Each child layer struct (e.g., `MainWindowTransportLayer`, `MainWindowSlidersLayer`) reads only the `@Environment` values it needs, creating natural recomposition boundaries. The transport layer only re-evaluates when `PlaybackCoordinator` changes; the sliders layer only when `AudioPlayer` volume/balance or scrubbing state changes.
-```
-
-### Sprite Sheet Slicing
-
-```swift
-// File: MacAmpApp/Extensions/NSImage+Extensions.swift (pattern used throughout)
-// Purpose: Extract sprites from composite bitmap images
-// Context: Core technique for slicing Winamp skin bitmaps
-
-extension NSImage {
-    func cropped(to rect: NSRect) -> NSImage? {
-        guard let cgImage = self.cgImage(
-            forProposedRect: nil,
-            context: nil,
-            hints: nil
-        ) else { return nil }
-
-        // Convert NSRect to CGRect for cropping
-        let cgRect = CGRect(
-            x: rect.origin.x,
-            y: CGFloat(cgImage.height) - rect.origin.y - rect.height,
-            width: rect.width,
-            height: rect.height
-        )
-
-        guard let croppedCGImage = cgImage.cropping(to: cgRect) else {
-            return nil
-        }
-
-        let croppedImage = NSImage(cgImage: croppedCGImage, size: rect.size)
-        croppedImage.isTemplate = false  // Prevent system tinting
-        return croppedImage
-    }
-}
-
-// Real usage from skin loading:
-// File: MacAmpApp/ViewModels/SkinManager.swift (sprite extraction pattern)
-private func extractSprites(from sheet: NSImage, sprites: [Sprite]) -> [String: NSImage] {
-    var extracted: [String: NSImage] = [:]
-
-    for sprite in sprites {
-        if let croppedImage = sheet.cropped(to: sprite.rect) {
-            extracted[sprite.name] = croppedImage
-        }
-    }
-
-    return extracted
-}
-```
-
-### Custom Hit Testing
-
-```swift
-// Transparent areas shouldn't be clickable
-struct TransparentHitTestView: View {
-    let sprite: ResolvedSprite
-    let action: () -> Void
-
-    var body: some View {
-        SimpleSpriteImage(sprite: sprite)
-            .onTapGesture { action() }
-            .allowsHitTesting(true)
-            .contentShape(Rectangle())  // Define clickable area
-    }
-}
-```
-
-### Multi-State Components
-
-```swift
-// File: MacAmpApp/Views/Components/SimpleSpriteImage.swift (button action pattern)
-// Purpose: Components with normal/hover/pressed states
-// Context: Actual implementation used throughout the UI
-
-struct SimpleSpriteImage: View {
-    let source: SpriteSource
-    let action: SpriteAction?
-    @Environment(SkinManager.self) var skinManager
-
-    @State private var isPressed = false
-    @State private var isHovered = false
-
-    var body: some View {
-        if let imageName = resolveSpriteName(),
-           let image = skinManager.currentSkin?.images[imageName] {
-
-            // Apply interaction based on action type
-            switch action {
-            case .button(let onClick, let whilePressed, let onRelease):
-                Image(nsImage: image)
-                    .interpolation(.none)
-                    .antialiased(false)
-                    .onHover { hovering in
-                        isHovered = hovering
-                    }
-                    .gesture(
-                        DragGesture(minimumDistance: 0)
-                            .onChanged { _ in
-                                if !isPressed {
-                                    isPressed = true
-                                    whilePressed?()
-                                }
-                            }
-                            .onEnded { _ in
-                                if isPressed {
-                                    isPressed = false
-                                    onRelease?()
-                                    onClick?()
-                                }
-                            }
-                    )
-
-            case .toggle(let isOn, let onChange):
-                Image(nsImage: image)
-                    .interpolation(.none)
-                    .antialiased(false)
-                    .onTapGesture {
-                        onChange(!isOn)
-                    }
-
-            default:
-                Image(nsImage: image)
-                    .interpolation(.none)
-                    .antialiased(false)
-            }
-        }
-    }
-}
-```
+Skinned buttons are plain SwiftUI `Button`s wrapping a `SimpleSpriteImage`, styled `.buttonStyle(.plain)` and `.focusable(false)`, positioned with `.at(...)`. Selected/active states swap the sprite name (for example `MAIN_CLUTTER_BAR_BUTTON_D` / `_SELECTED`). `SimpleSpriteImage` itself has no action or pressed state.
 
 ---
 
 ## Audio Processing Pipeline
 
-MacAmp's audio processing uses AVAudioEngine for sophisticated real-time audio manipulation, with visualization processing extracted to the VisualizerPipeline component. This section covers the engine path (local audio files and streams); video audio is processed by the tap described in [AVPlayer-Native Video DSP](#avplayer-native-video-dsp), which feeds the same visualizer consumer.
+MacAmp's audio processing uses AVAudioEngine for real-time processing, with visualization in the `VisualizerPipeline` component. This section covers the engine path (local audio files and streams); video audio is processed by the tap described in [AVPlayer-Native Video DSP](#avplayer-native-video-dsp), which feeds the same visualizer consumer.
 
 ### AVAudioEngine Graph (Unified Pipeline)
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
 │                      AVAudioEngine Graph                        │
-│                 (AudioPlayer.swift: lines 29-31)                │
+│                 (owned by AudioEngineController)                │
 ├────────────────────────────────────────────────────────────────┤
 │                                                                  │
 │  LOCAL FILES:                  STREAMS:                          │
@@ -2665,7 +1173,7 @@ MacAmp's audio processing uses AVAudioEngine for sophisticated real-time audio m
 
 ### Visualizer Pipeline Architecture
 
-The visualizer tap processing was extracted to `VisualizerPipeline.swift` for single responsibility and testability:
+Visualizer tap processing lives in `VisualizerPipeline.swift` (engine tap) and `VideoTapVisualizerRender.swift` (video tap):
 
 ```
 ┌───────────────────────────────────────────────────────────────────────────┐
@@ -2755,9 +1263,9 @@ The visualizer tap processing was extracted to `VisualizerPipeline.swift` for si
 │   AudioPlayer.snapshotButterchurnFrame()                                  │
 │   └── nil unless isVisualizerRendering (engine rendering OR video playing)│
 │        │                                                                  │
-│        ▼ (30 FPS Timer)                                                   │
+│        ▼ (30 FPS async Task loop)                                         │
 │   ButterchurnBridge.swift                                                 │
-│   └── callAsyncJavaScript("receiveAudioData([...])")                      │
+│   └── callAsyncJavaScript("…setAudioData(spectrum, waveform)")            │
 │        │                                                                  │
 │        ▼ (WKWebView)                                                      │
 │   bridge.js                                                               │
@@ -2796,11 +1304,11 @@ final class VisualizerScratchBuffers: @unchecked Sendable {
 
 ### EQ Implementation
 
-The 10-band parametric EQ has been extracted from AudioPlayer into `EqualizerController.swift` (facade pattern). AudioPlayer now forwards EQ operations to `equalizer.eqNode`:
+The 10-band parametric EQ lives in `EqualizerController.swift`, which owns the `AVAudioUnitEQ` node; `AudioPlayer` forwards its EQ properties to it:
 
 ```swift
-// EqualizerController.swift - EQ facade (extracted from AudioPlayer)
-// AudioPlayer holds: let equalizer = EqualizerController()
+// EqualizerController.swift
+// AudioPlayer holds: private let equalizer = EqualizerController()
 // AudioPlayer forwards: var isEqOn { equalizer.isEqOn }
 
 private func configureEQ() {
@@ -2830,95 +1338,20 @@ private func configureEQ() {
 
 `EqualizerController` stays the single owner of EQ state for both playback paths. The `preamp`, `eqBands` and `isEqOn` `didSet` handlers write the engine `AVAudioUnitEQ` and then fan the same state out to any registered video taps, where a software `BiquadCascade` reproduces this configuration (see [EQ and Balance Fanout](#eq-and-balance-fanout)).
 
-### EQ Preset Persistence (Extracted to EQPresetStore)
+### EQ Preset Persistence
 
-EQ preset persistence is now managed by `EQPresetStore`:
-
-```swift
-// EQPresetStore.swift:130-146 - Background I/O pattern
-func savePerTrackPresets() {
-    guard let url = presetsFileURL() else { return }
-
-    // Capture current state for background write
-    let presetsToSave = perTrackPresets
-
-    // Perform file I/O off main thread (fire-and-forget with error logging)
-    Task.detached(priority: .utility) {
-        do {
-            let data = try JSONEncoder().encode(presetsToSave)
-            try data.write(to: url, options: .atomic)
-            AppLog.debug(.audio, "Saved \(presetsToSave.count) per-track presets")
-        } catch {
-            AppLog.warn(.audio, "Failed to save per-track presets: \(error)")
-        }
-    }
-}
-```
+`EQPresetStore` (owned by `EqualizerController`) keeps user presets in `UserDefaults` (`MacAmp.UserEQPresets.v1`) and per-track presets in `perTrackPresets.json` in Application Support. The JSON is read and written off the main actor with serialized saves; see [Background I/O with @concurrent](IMPLEMENTATION_PATTERNS.md#pattern-background-io-with-concurrent-static-functions-swift-62).
 
 ### Repeat Mode Implementation (PlaylistController)
 
-Repeat mode logic is now in PlaylistController with navigation actions:
+`PlaylistController.nextTrack(isManualSkip:)` returns an `AdvanceAction`; it never starts playback itself:
 
-```swift
-// PlaylistController.swift:171-213
-func nextTrack(isManualSkip: Bool = false) -> AdvanceAction {
-    guard !playlist.isEmpty else { return .none }
+- **Repeat-one**, automatic advance only: `.restartCurrent` for a local track, `.requestCoordinatorPlayback(track)` for a stream. A manual skip ignores repeat-one.
+- **Shuffle:** a random playlist entry.
+- **Sequential:** the next index; at the end, repeat-all wraps to index 0, otherwise `.endOfPlaylist`.
+- Streams always come back as `.requestCoordinatorPlayback` so `PlaybackCoordinator` routes them to `StreamPlayer`.
 
-    // Repeat-one: Only auto-restart on track end, allow manual skips
-    if repeatMode == .one && !isManualSkip {
-        guard let track = currentTrack else { return .none }
-        return track.isStream ? .requestCoordinatorPlayback(track) : .restartCurrent
-    }
-
-    // Shuffle mode: pick random track
-    if shuffleEnabled {
-        guard let randomTrack = playlist.randomElement() else { return .none }
-        // ... update currentIndex
-        return randomTrack.isStream ? .requestCoordinatorPlayback(randomTrack) : .playTrack(randomTrack)
-    }
-
-    // Sequential navigation
-    let nextIndex = resolveActiveIndex() + 1
-    if nextIndex < playlist.count {
-        let track = playlist[nextIndex]
-        currentIndex = nextIndex
-        return track.isStream ? .requestCoordinatorPlayback(track) : .playTrack(track)
-    }
-
-    // End of playlist
-    if repeatMode == .all {
-        let track = playlist[0]
-        currentIndex = 0
-        return track.isStream ? .requestCoordinatorPlayback(track) : .playTrack(track)
-    }
-
-    hasEnded = true
-    currentIndex = nil
-    return .endOfPlaylist
-}
-```
-
-AudioPlayer bridges this to actual playback:
-
-```swift
-// AudioPlayer.swift:1021-1042
-private func handlePlaylistAction(_ action: PlaylistController.AdvanceAction) -> PlaylistAdvanceAction {
-    switch action {
-    case .none: return .none
-    case .restartCurrent:
-        // Always resume: repeat-one at end-of-track means "restart and play"
-        seek(to: 0, resume: true)
-        return .restartCurrent
-    case .playTrack(let track):
-        playTrack(track: track)
-        return .playLocally(track)
-    case .requestCoordinatorPlayback(let track):
-        return .requestCoordinatorPlayback(track)
-    case .endOfPlaylist:
-        return .none
-    }
-}
-```
+`AudioPlayer.handlePlaylistAction(_:)` executes the action. `.restartCurrent` seeks to 0 with `resume: true` and, for video, re-arms the video visualizer poll timer that completion stopped. Code: [Action-Based Bridge Pattern](IMPLEMENTATION_PATTERNS.md#pattern-action-based-bridge-pattern).
 
 ### Spectrum Analyzer (20-bar Goertzel Implementation)
 
@@ -2926,7 +1359,7 @@ private func handlePlaylistAction(_ action: PlaylistController.AdvanceAction) ->
 // File: MacAmpApp/Audio/VisualizerPipeline.swift
 // Purpose: Real-time spectrum analysis using Goertzel-like single-bin DFT
 // Context: More efficient than FFT for specific frequency detection
-// Data transfer: VisualizerFeed (replaces Task { @MainActor })
+// Data transfer: VisualizerFeed (no allocations on the audio thread)
 // The video producer (VideoTapVisualizerRender.swift) duplicates the RMS and
 // Goertzel math on purpose; change both producers together.
 
@@ -3110,7 +1543,7 @@ During video no engine tap is installed, so `startVideoVisualization()` starts t
 
 ## Internet Radio Streaming
 
-Internet radio support was added in October 2025. In March 2026, the AVPlayer-based streaming was replaced with a custom decode pipeline that feeds PCM into AVAudioEngine (see section 4 for the full architecture).
+Internet radio decodes streams to PCM with the custom pipeline described in [Unified Audio Pipeline Architecture](#unified-audio-pipeline-architecture) and plays them through AVAudioEngine, so streams get EQ, balance and the visualizer.
 
 ### Stream Types Supported
 
@@ -3123,7 +1556,6 @@ Internet radio support was added in October 2025. In March 2026, the AVPlayer-ba
 2. Playlist Resolution (M3U/PLS)
    - .m3u / .m3u8 playlist files resolved to audio stream URL before streaming
    - .pls playlist files (FileN=url format) resolved before streaming
-   - AVPlayer handled these natively; custom pipeline must resolve first
 
 3. Metadata Protocols
    - ICY (SHOUTcast/Icecast) via custom ICYFramer
@@ -3132,56 +1564,40 @@ Internet radio support was added in October 2025. In March 2026, the AVPlayer-ba
 
 ### StreamPlayer Architecture (Unified Pipeline)
 
-StreamPlayer no longer uses AVPlayer or NSObject. It owns a `StreamDecodePipeline` and exposes observable state to the UI. Volume and balance are applied via AVAudioEngine (through AudioPlayer's `streamSourceNode`), not stored on StreamPlayer.
+`StreamPlayer` is a `@MainActor @Observable` class (no AVPlayer, no `NSObject`, no Combine). It owns a `StreamDecodePipeline`, exposes observable state to the UI and hands the ring buffer to `PlaybackCoordinator` for the engine bridge. Volume and balance are applied by the engine (`AudioPlayer`'s `streamSourceNode`); `StreamPlayer` has no volume or balance state.
 
 ```swift
-// StreamPlayer.swift (Simplified view of current implementation)
+// StreamPlayer.swift (excerpt)
 @MainActor
 @Observable
 final class StreamPlayer {
-    // Observable state
     private(set) var isPlaying: Bool = false
     private(set) var isBuffering: Bool = false
+    private(set) var isReconnecting: Bool = false
     private(set) var currentStation: RadioStation?
     private(set) var streamTitle: String?
     private(set) var streamArtist: String?
     private(set) var error: String?
+    private(set) var elapsedTime: Double = 0      // anchor-based stream clock
 
-    // Volume & balance stored for PlaybackCoordinator propagation.
-    // Actual audio effect is applied via AudioPlayer's engine nodes.
-    var volume: Float = 0.75
-    var balance: Float = 0.0
-
-    // Custom decode pipeline (replaces AVPlayer)
     private let pipeline = StreamDecodePipeline()
-    @ObservationIgnored private var ringBuffer: LockFreeRingBuffer?
 
-    // Ring buffer access for PlaybackCoordinator bridge lifecycle
+    // Bridge lifecycle, read by PlaybackCoordinator
     var currentRingBuffer: LockFreeRingBuffer? { ringBuffer }
     private(set) var currentSampleRate: Float64 = 0
-
-    // Callbacks to PlaybackCoordinator
     var onFormatReady: (@MainActor (Float64) -> Void)?
     var onStreamTerminated: (@MainActor () -> Void)?
 
-    func play(station: RadioStation) async {
-        currentStation = station
-        error = nil
-
-        // Create fresh ring buffer per stream (32768 frames; real-time headroom depends on sample rate)
-        let rb = LockFreeRingBuffer(capacity: 32768, channelCount: 2)
-        ringBuffer = rb
-
-        pipeline.start(url: station.streamURL, ringBuffer: rb)
-    }
-
-    func pause() { pipeline.pause(); isPlaying = false }
-    func resume() { pipeline.resume(); isPlaying = true }
-    func stop() { pipeline.stop(); /* reset all state */ }
-
-    isolated deinit { pipeline.stop() }
+    func play(station: RadioStation) async   // fresh LockFreeRingBuffer(capacity: 32768, channelCount: 2)
+    func play(url: URL, title: String? = nil, artist: String? = nil) async
+    func pause()
+    func resume()
+    func stop()
+    func setAudioWorkgroup(_ workgroup: os_workgroup_t?)
 }
 ```
+
+`StreamPlayer` uses `isolated deinit` to stop the pipeline. ICY metadata comes from `ICYFramer`, not `AVPlayerItemMetadataOutput`.
 
 The stream ring buffer is sized in frames, not seconds, so its effective buffering time changes with the decoded sample rate:
 
@@ -3191,204 +1607,48 @@ The stream ring buffer is sized in frames, not seconds, so its effective bufferi
 
 Bitrate and sample rate are separate concepts in this pipeline. A `192 kbps` MP3 is a compressed data-rate figure; once decoded, the ring buffer carries PCM frames at the stream's detected sample rate.
 
-### Auto-Reconnect State Machine (March 2026)
+### Auto-Reconnect State Machine
 
-When an internet radio stream terminates unexpectedly, StreamPlayer automatically attempts reconnection using an exponential backoff strategy.
+When a stream ends unexpectedly, `StreamPlayer` reconnects with exponential backoff. `StreamDecodePipeline.StreamTerminationReason` classifies why a stream ended, and its `userMessage` gives the string shown in the main window:
 
-**StreamTerminationReason** -- 8 typed cases classify why a stream ended:
+| Case | Reconnectable | Meaning | `userMessage` |
+|------|:------------:|-------------|---|
+| `networkError(String, Int)` | Depends | URLSession error; terminal for `NSURLErrorCannotFindHost`, `NSURLErrorUnsupportedURL`, `NSURLErrorBadURL`, reconnectable otherwise (connection lost, timeout) | "Host not found", "Connection timed out", "Connection lost", "No internet connection", "Cannot connect to server", else "Network error" |
+| `serverClosed` | Yes | Server closed the connection | "Stream ended" |
+| `httpClientError(Int)` | No | HTTP 4xx (except 429): bad URL, auth required | "HTTP error *code*" |
+| `httpServerError(Int)` | Yes | HTTP 5xx and 429 Too Many Requests | "Server error *code*" |
+| `decodeError(String)` | No | AudioConverter/AudioFileStream failure | "Unsupported audio format" |
+| `invalidResponse` | No | Non-HTTP response | "Invalid server response" |
+| `playlistResolutionFailed(String)` | Yes | M3U/PLS fetch failure (may be DNS) | "Playlist not found" |
+| `userStopped` | No | User explicitly stopped playback | "" |
 
-| Case | Reconnectable | Description |
-|------|:------------:|-------------|
-| `networkError(String, Int)` | Depends | URLSession error — reconnectable for transient (connection lost, timeout), terminal for DNS failure |
-| `serverClosed` | Yes | Server closed connection gracefully |
-| `httpClientError(Int)` | No | HTTP 4xx (except 429) — bad URL, auth required |
-| `httpServerError(Int)` | Yes | HTTP 5xx + 429 Too Many Requests |
-| `decodeError(String)` | No | AudioConverter/AudioFileStream failure |
-| `invalidResponse` | No | Non-HTTP response |
-| `playlistResolutionFailed(String)` | Yes | M3U/PLS fetch failure (may be DNS) |
-| `userStopped` | No | User explicitly stopped playback |
+**Backoff:** 1 s, 2 s, 4 s, 8 s, then 16 s (capped); at most 10 attempts, after which the error reads "Connection lost after 10 attempts". Five seconds of stable playback resets the attempt counter.
 
-**Reconnect Backoff:**
-```
-Attempt 1:  1s delay
-Attempt 2:  2s delay
-Attempt 3:  4s delay
-Attempt 4:  8s delay
-Attempt 5+: 16s delay (capped)
-Max attempts: 10 (then terminal failure)
-```
-
-**Bridge Tear-Down/Re-Create Cycle:**
-
-During reconnect, PlaybackCoordinator deactivates the AVAudioSourceNode bridge (stops reading from the old ring buffer), StreamPlayer creates a fresh `LockFreeRingBuffer` and restarts the decode pipeline, then PlaybackCoordinator re-activates the bridge with the new buffer once the stream's format is re-detected and prebuffering completes.
-
-**User-Friendly Error Messages:**
-
-`StreamTerminationReason` has a `userMessage` computed property that provides display-ready strings for the UI:
-```swift
-extension StreamTerminationReason {
-    var userMessage: String {
-        switch self {
-        case .networkError(_, let code):
-            switch code {
-            case NSURLErrorCannotFindHost: return "Host not found"
-            case NSURLErrorTimedOut: return "Connection timed out"
-            case NSURLErrorNetworkConnectionLost: return "Connection lost"
-            case NSURLErrorNotConnectedToInternet: return "No internet connection"
-            default: return "Network error"
-            }
-        case .serverClosed: return "Stream ended"
-        case .httpClientError(let code): return "HTTP error \(code)"
-        case .httpServerError(let code): return "Server error \(code)"
-        case .decodeError: return "Unsupported audio format"
-        case .invalidResponse: return "Invalid server response"
-        case .playlistResolutionFailed: return "Playlist not found"
-        case .userStopped: return ""
-        }
-    }
-}
-```
-
-**Key differences from the previous AVPlayer-based implementation:**
-- No `NSObject` base class (was required for `AVPlayerItemMetadataOutputPushDelegate`)
-- No `AVPlayer`, `AVPlayerItem`, or `AVPlayerItemMetadataOutput`
-- No `import Combine` (Combine observers removed)
-- Uses `isolated deinit` (Swift 6.2) for safe teardown on `@MainActor`
-- ICY metadata extracted by `ICYFramer` (custom parser), not `AVPlayerItemMetadataOutput`
-- `resume()` method for PlaybackCoordinator's `togglePlayPause()` (replaces `player.play()`)
-- Ring buffer and sample rate exposed for PlaybackCoordinator bridge lifecycle
+**Bridge tear-down/re-create cycle:** each attempt first fires `onStreamTerminated` (PlaybackCoordinator deactivates the `AVAudioSourceNode` bridge), then creates a fresh `LockFreeRingBuffer` and restarts the decode pipeline; `onFormatReady` re-activates the bridge with the new buffer once the format is re-detected and prebuffering completes. Code: [Exponential Backoff Reconnect](IMPLEMENTATION_PATTERNS.md#pattern-exponential-backoff-reconnect-with-bridge-tear-down) and [Typed Stream Termination Reasons](IMPLEMENTATION_PATTERNS.md#pattern-typed-stream-termination-reasons).
 
 ### Radio Station Management
 
-```swift
-// RadioStationLibrary.swift
-@MainActor
-@Observable
-final class RadioStationLibrary {
-    private(set) var stations: [RadioStation] = []
-    private(set) var categories: [String: [RadioStation]] = [:]
-
-    init() {
-        loadBuiltInStations()
-    }
-
-    private func loadBuiltInStations() {
-        stations = [
-            // SomaFM Stations
-            RadioStation(
-                name: "SomaFM - Groove Salad",
-                streamURL: URL(string: "https://somafm.com/groovesalad130.pls")!,
-                genre: "Ambient/Downtempo",
-                bitrate: 128
-            ),
-            RadioStation(
-                name: "SomaFM - Drone Zone",
-                streamURL: URL(string: "https://somafm.com/dronezone130.pls")!,
-                genre: "Ambient",
-                bitrate: 128
-            ),
-
-            // Classic stations
-            RadioStation(
-                name: "Digitally Imported - Trance",
-                streamURL: URL(string: "https://www.di.fm/trance.pls")!,
-                genre: "Trance",
-                bitrate: 128
-            ),
-
-            // ... more stations
-        ]
-
-        // Organize by genre
-        for station in stations {
-            if categories[station.genre] == nil {
-                categories[station.genre] = []
-            }
-            categories[station.genre]?.append(station)
-        }
-    }
-
-    func addCustomStation(_ station: RadioStation) {
-        stations.append(station)
-        save()
-    }
-
-    private func save() {
-        // Persist to UserDefaults
-        if let encoded = try? JSONEncoder().encode(stations) {
-            UserDefaults.standard.set(encoded, forKey: "CustomStations")
-        }
-    }
-}
-```
-
-### Internet Radio Integration Fixes (PR #49, February 2026)
-
-PR #49 addressed six systematic bugs (N1-N6) in the internet radio integration layer. These bugs surfaced during real-world testing of stream playback with playlist navigation and UI state display.
-
-**N1/N2 - Computed Play State**: PlaybackCoordinator's `isPlaying` and `isPaused` were stored booleans that drifted out of sync with actual backend state during buffering stalls, error recovery, and rapid toggling. Replaced with computed properties that derive from the active audio source (see updated PlaybackCoordinator in section 4.3 above).
-
-**N3 - Split Callbacks**: AudioPlayer's single `externalPlaybackHandler` closure conflated two distinct events: metadata arrival and end-of-track auto-advance. Split into `onTrackMetadataUpdate` and `onPlaylistAdvanceRequest` callbacks, eliminating ambiguous dispatch in PlaybackCoordinator's init.
-
-**N4 - Context-Aware Playlist Navigation**: During stream playback, `audioPlayer.currentTrack` is nil because AudioPlayer is not the active backend. PlaylistController's `nextTrack(from:)` and `previousTrack(from:)` overloads accept an external track reference so the coordinator can pass its own `currentTrack` for position resolution.
-
-**N5 - TrackInfoView Stream Gating**: TrackInfoView's stream info section now gates on `case .radioStation = playbackCoordinator.currentSource` and uses `playbackCoordinator.displayTitle` for live ICY metadata display, rather than relying on AudioPlayer state which is empty during stream playback.
-
-**N6 - File Structure**: WinampMainWindow and WinampPlaylistWindow were initially split into main file + extension files to reduce per-file complexity. The cross-file extension pattern was subsequently identified as an anti-pattern (access widening via `internal` properties, no SwiftUI recomposition boundaries) and replaced with proper child-view decomposition:
-- `WinampPlaylistWindow+Menus.swift` was DELETED and replaced by child view structs in `PlaylistWindow/` subdirectory (decomposition COMPLETE)
-- `WinampMainWindow.swift` + `WinampMainWindow+Helpers.swift` were DELETED and replaced by 10 files in `MainWindow/` subdirectory (T3, PR #54, decomposition COMPLETE)
-- Both decompositions follow the same pattern: @Observable interaction state class + child view structs as recomposition boundaries
-
-### Stream Volume & Balance Control (T5 Phase 1, February 2026)
-
-T5 Phase 1 addressed a fundamental gap: volume and balance changes from the UI only affected AudioPlayer, leaving StreamPlayer and VideoPlaybackController unsynchronized during internet radio playback.
-
-**Problem (pre-unified pipeline):** Volume and balance sliders were bound directly to `$audioPlayer.volume` / `$audioPlayer.balance`. During stream playback, moving the volume slider had no effect on the audible stream because StreamPlayer was not receiving the change. VideoPlaybackController was receiving volume changes via AudioPlayer's `didSet`, coupling AudioPlayer to a sibling it should not know about.
-
-**Solution:** PlaybackCoordinator gained two routing methods (`setVolume()`, `setBalance()`) that propagate to all backends unconditionally. UI sliders use asymmetric `Binding<Float>` that reads from AudioPlayer (source of truth for persistence) but writes through the coordinator.
-
-**Capability Flag:** A unified computed property (`supportsAudioProcessing`) gates all audio-dependent UI controls (EQ, balance, visualizer). With the unified pipeline, it returns `true` once the stream bridge is active (`audioPlayer.isBridgeActive`). Controls dim briefly during the prebuffering window (before bridge activates) and on error state:
-- EQ sliders dim (50% opacity, hit testing disabled) in WinampEqualizerWindow
-- Balance slider dims in MainWindow/MainWindowSlidersLayer
-- Controls re-enable when bridge activates or stream enters error state
-
-**Depreciated Patterns (see `tasks/internet-streaming-volume-control/depreciated.md`):**
-- `AudioPlayer.volume.didSet` no longer propagates to `videoPlaybackController.volume` (coordinator handles it)
-- Direct `$audioPlayer.volume` / `$audioPlayer.balance` UI bindings replaced with coordinator-routed asymmetric bindings
-- Note: `AudioPlayer.init()` still sets `videoPlaybackController.volume = volume` during engine setup (before coordinator exists); this is correct for initialization
-
-The PlaylistWindow decomposition follows the Gemini + Oracle converged architecture (Lesson #25 in BUILDING_RETRO_MACOS_APPS_SKILL.md).
+`RadioStationLibrary` (`Models/RadioStationLibrary.swift`, `@MainActor @Observable`) holds the user's saved stations: `addStation(_:)` (ignores a duplicate `streamURL`), `removeStation(id:)`, `removeAll()`. Stations persist as JSON under the `UserDefaults` key `MacAmp.RadioStations`. There are no built-in stations.
 
 ---
 
 ## Modern Swift 6.2 Patterns
 
-Swift 6.2 introduces strict concurrency checking, `isolated deinit`, and `@concurrent` for safe off-actor execution.
+The project builds with Swift 6.2 strict concurrency (swift-tools-version 6.2, macOS 27 minimum). The code-level patterns and migration steps are in [IMPLEMENTATION_PATTERNS.md](IMPLEMENTATION_PATTERNS.md); this section records where the language features are used.
 
 ### Strict Concurrency
 
 ```swift
+// Package.swift (excerpt; the app itself is built from the XcodeGen project.yml)
 // swift-tools-version: 6.2
-import PackageDescription
-
 let package = Package(
     name: "MacAmp",
-    platforms: [
-        .macOS("27.0")
-    ],
-    products: [
-        .executable(name: "MacAmp", targets: ["MacAmp"])
-    ],
+    platforms: [.macOS("27.0")],
     dependencies: [
-        .package(url: "https://github.com/weichsel/ZIPFoundation.git", from: "0.9.0"),
+        .package(url: "https://github.com/weichsel/ZIPFoundation.git", from: "0.9.20"),
         .package(url: "https://github.com/apple/swift-atomics.git", from: "1.2.0"),
     ],
-    targets: [
-        .executableTarget(
-            name: "MacAmp",
-            // ...
-        )
-    ]
+    // ...
 )
 ```
 
@@ -3396,43 +1656,7 @@ let package = Package(
 
 ### `isolated deinit` (Swift 6.2)
 
-Swift 6.2 introduces `isolated deinit`, which runs the deinitializer on the actor's executor.
-This eliminates the need for `nonisolated(unsafe)` properties that were previously required
-for cleanup in `deinit` of `@MainActor` classes.
-
-**Before (Swift 6.0):**
-```swift
-@MainActor @Observable
-final class VideoPlaybackController {
-    @ObservationIgnored nonisolated(unsafe) private var timeObserver: Any?
-    @ObservationIgnored nonisolated(unsafe) private var _playerForCleanup: AVPlayer?
-
-    deinit {
-        // Cannot access @MainActor properties -- must use nonisolated(unsafe) copies
-        if let observer = timeObserver, let player = _playerForCleanup {
-            player.removeTimeObserver(observer)
-        }
-    }
-}
-```
-
-**After (Swift 6.2):**
-```swift
-@MainActor @Observable
-final class VideoPlaybackController {
-    @ObservationIgnored private var timeObserver: Any?
-    @ObservationIgnored private(set) var player: AVPlayer?
-
-    isolated deinit {
-        // Runs on @MainActor -- safe to access all properties directly
-        metadataTask?.cancel()
-        if let observer = timeObserver, let player {
-            player.removeTimeObserver(observer)
-        }
-        player?.pause()
-    }
-}
-```
+`isolated deinit` runs the deinitializer on the class's actor, so `@MainActor` classes clean up their own properties directly instead of mirroring them into `nonisolated(unsafe)` copies. Pattern: [isolated deinit for @MainActor Cleanup](IMPLEMENTATION_PATTERNS.md#pattern-isolated-deinit-for-mainactor-cleanup-swift-62).
 
 **Codebase usage (7 classes):**
 - `AudioPlayer.isolated deinit` -- calls `engine.shutdown()` (stops the config observer, invalidates timer, deactivates bridge, removes tap)
@@ -3443,254 +1667,43 @@ final class VideoPlaybackController {
 - `StreamDecodePipeline.isolated deinit` -- tears down decode resources
 - `WindowCoordinator.isolated deinit` -- stops settings observer
 
+One `nonisolated(unsafe)` remains, a local `let` in `StreamDecodePipeline` that carries the `os_workgroup` across to the decode queue.
+
 ### `@concurrent` (Swift 6.2)
 
-`@concurrent` marks functions that should run off the caller's actor, useful for blocking I/O
-that would otherwise block the MainActor.
+`@concurrent` runs a function off the caller's actor. MacAmp uses it on static functions for blocking I/O:
 
-```swift
-// EQPresetStore.swift -- file I/O runs off MainActor
-@concurrent
-private static func loadPresetsFromDisk(url: URL) async -> [String: EqfPreset]? {
-    guard FileManager.default.fileExists(atPath: url.path) else { return nil }
-    let data = try Data(contentsOf: url)
-    return try JSONDecoder().decode([String: EqfPreset].self, from: data)
-}
+- `EQPresetStore`: `loadPresetsFromDisk`, `savePresetsToDisk`, `parseEqfFile`
+- `SkinArchiveLoader.loadAsync(from:expectedSheets:)`: skin ZIP extraction
 
-@concurrent
-private static func savePresetsToDisk(presets: [String: EqfPreset], url: URL) async { ... }
+`MetadataLoader` does not need it: its methods `await` `AVAsset.load` immediately, with no blocking work before the suspension point. Pattern: [Background I/O with @concurrent](IMPLEMENTATION_PATTERNS.md#pattern-background-io-with-concurrent-static-functions-swift-62).
 
-// SkinManager.swift -- skin archive loading runs off MainActor
-@concurrent
-static func loadAsync(from url: URL, expectedSheets: Set<String>) async throws -> SkinArchivePayload {
-    try load(from: url, expectedSheets: expectedSheets)
-}
-```
+### Sendable and Isolation Domains
 
-**When NOT to use `@concurrent`:**
-```swift
-// MetadataLoader -- @concurrent not needed: methods await immediately (AVAsset.load),
-// no blocking I/O before suspension point.
-struct MetadataLoader {
-    static func loadTrackMetadata(from url: URL) async -> TrackMetadata { ... }
-}
-```
-
-### Sendable Conformance
-
-```swift
-// Make types Sendable for cross-actor passing
-struct Track: Identifiable, Equatable, Sendable {
-    let id: UUID
-    let url: URL
-    let title: String
-    let artist: String
-    let duration: Double
-}
-
-// For classes with mutable state
-final class AudioBuffer: @unchecked Sendable {
-    // @unchecked because we manage thread safety manually
-    private let lock = NSLock()
-    private var buffer: [Float] = []
-
-    func append(_ samples: [Float]) {
-        lock.lock()
-        defer { lock.unlock() }
-        buffer.append(contentsOf: samples)
-    }
-}
-```
-
-### Actor Isolation
-
-```swift
-// Use actors for concurrent state management
-actor PlaylistCache {
-    private var cache: [URL: [Track]] = [:]
-
-    func tracks(for playlist: URL) async -> [Track]? {
-        if let cached = cache[playlist] {
-            return cached
-        }
-
-        // Load from disk
-        let tracks = await loadPlaylist(from: playlist)
-        cache[playlist] = tracks
-        return tracks
-    }
-
-    func invalidate() {
-        cache.removeAll()
-    }
-}
-
-// Usage from MainActor
-@MainActor
-class PlaylistController {
-    private let cache = PlaylistCache()
-
-    func loadPlaylist(url: URL) async {
-        let tracks = await cache.tracks(for: url)
-        self.tracks = tracks ?? []
-    }
-}
-```
-
-### Task Groups
-
-```swift
-// Parallel processing with structured concurrency
-func loadMultiplePlaylists(urls: [URL]) async -> [Track] {
-    await withTaskGroup(of: [Track].self) { group in
-        for url in urls {
-            group.addTask {
-                await self.loadPlaylist(from: url)
-            }
-        }
-
-        var allTracks: [Track] = []
-        for await tracks in group {
-            allTracks.append(contentsOf: tracks)
-        }
-        return allTracks
-    }
-}
-```
-
-### AsyncStream for Events
-
-```swift
-// Replace Combine publishers with AsyncStream
-@Observable
-final class AudioPlayer {
-    private(set) var events: AsyncStream<PlayerEvent>
-    private var continuation: AsyncStream<PlayerEvent>.Continuation?
-
-    init() {
-        (events, continuation) = AsyncStream<PlayerEvent>.makeStream()
-    }
-
-    private func sendEvent(_ event: PlayerEvent) {
-        continuation?.yield(event)
-    }
-}
-
-// Consumer
-Task {
-    for await event in audioPlayer.events {
-        switch event {
-        case .trackChanged(let track):
-            updateUI(for: track)
-        case .playbackEnded:
-            playNextTrack()
-        }
-    }
-}
-```
+Value types that cross isolation boundaries are `Sendable` (see the table in [Swift 6 Concurrency Compliance](#swift-6-concurrency-compliance)). There are no custom actors: UI and orchestration state is `@MainActor`; the stream decode chain is confined to one serial queue (`QueueConfined`, `dispatchPrecondition`); real-time threads share state only through lock-free or trylock structures (`LockFreeRingBuffer`, `VisualizerFeed`, `VideoTapContext` atomics).
 
 ---
 
 ## Window Snap Manager
 
-MacAmp implements Winamp's magnetic window docking with a sophisticated edge detection and cluster management system.
+`WindowSnapManager` (`Utilities/WindowSnapManager.swift`, `@MainActor`, `NSWindowDelegate`, singleton `shared`) implements Winamp's magnetic docking. Geometry helpers live in `Models/SnapUtils.swift`. Multi-window context: [MULTI_WINDOW_ARCHITECTURE.md](MULTI_WINDOW_ARCHITECTURE.md).
 
-### Architecture Overview
-
-```swift
-// File: MacAmpApp/Utilities/WindowSnapManager.swift:1-172
-// Purpose: Magnetic window snapping with 10px threshold
-// Context: Critical for authentic Winamp multi-window experience
-
-@MainActor
-final class WindowSnapManager: NSObject, NSWindowDelegate {
-    static let shared = WindowSnapManager()
-
-    private struct TrackedWindow {
-        weak var window: NSWindow?
-        let kind: WindowKind
-    }
-
-    private var windows: [WindowKind: TrackedWindow] = [:]
-    private var lastOrigins: [ObjectIdentifier: NSPoint] = [:]
-    private var isAdjusting = false
-
-    func register(window: NSWindow, kind: WindowKind) {
-        // Configure for classic borderless look
-        window.tabbingMode = .disallowed
-        window.titleVisibility = .hidden
-        window.titlebarAppearsTransparent = true
-        windows[kind] = TrackedWindow(window: window, kind: kind)
-        window.delegate = self
-        lastOrigins[ObjectIdentifier(window)] = window.frame.origin
-    }
-}
-
-> **2025-11 Update** – `WindowSnapManager` now exposes two additional helpers that the coordinator relies on during double-size toggles:
-> - `beginProgrammaticAdjustment()` / `endProgrammaticAdjustment()` suspend magnetic snapping while we recompute frames.
-> - `clusterKinds(containing:)` returns the set of `WindowKind` values currently touching the requested window. `resizeMainAndEQWindows` calls this with `.playlist` to determine whether the playlist is docked to the main window, the equalizer, or floating.
-```
-
-### Core Algorithm: Window Move Handler
-
-```swift
-// File: MacAmpApp/Utilities/WindowSnapManager.swift:33-136
-// Purpose: Handles window movement with magnetic snapping
-// Context: Uses connected cluster detection for group movement
-
-func windowDidMove(_ notification: Notification) {
-    guard !isAdjusting else { return }
-    guard let movedWindow = notification.object as? NSWindow else { return }
-
-    // Convert to top-left coordinate space for calculations
-    let allScreens = NSScreen.screens
-    let virtualTop: CGFloat = allScreens.map { $0.frame.maxY }.max() ?? 0
-    let virtualLeft: CGFloat = allScreens.map { $0.frame.minX }.min() ?? 0
-
-    func box(for window: NSWindow) -> Box {
-        let f = window.frame
-        let x = f.origin.x - virtualLeft
-        let yTop = virtualTop - (f.origin.y + f.size.height)
-        return Box(x: x, y: yTop, width: f.size.width, height: f.size.height)
-    }
-
-    // Find connected cluster (windows already docked together)
-    let clusterIDs = connectedCluster(start: movedID, boxes: idToBox)
-
-    // Move entire cluster as a unit
-    isAdjusting = true
-    for id in clusterIDs where id != movedID {
-        if let w = idToWindow[id] {
-            let origin = w.frame.origin
-            w.setFrameOrigin(NSPoint(x: origin.x + userDelta.x, y: origin.y + userDelta.y))
-        }
-    }
-    isAdjusting = false
-
-    // Snap cluster to other windows and screen edges
-    let otherBoxes = otherIDs.compactMap { idToBox[$0] }
-    let diffToOthers = SnapUtils.snapToMany(groupBox, otherBoxes)
-    let diffWithin = SnapUtils.snapWithin(groupBox, BoundingBox(width: virtualWidth, height: virtualHeight))
-    let snappedGroupPoint = SnapUtils.applySnap(Point(x: groupBox.x, y: groupBox.y), diffToOthers, diffWithin)
-}
-```
+- **Registration:** `WindowDelegateWiring` calls `register(window:kind:)` for each window and adds the manager to that window's `WindowDelegateMultiplexer`; `register` records the window and its last origin and does not set `window.delegate` itself.
+- **Move handling (`windowDidMove`):** converts every window frame to a top-left virtual-screen space spanning all displays, finds the moved window's connected cluster, moves the rest of the cluster by the same delta, then snaps the cluster's bounding box to other windows (`SnapUtils.snapToMany`) and to the screen edges (`SnapUtils.snapWithin`).
+- **Feedback prevention:** `isAdjusting` suppresses re-entry while the manager moves windows itself; `beginProgrammaticAdjustment()` / `endProgrammaticAdjustment()` let other code (double-size resize, window resize) suspend snapping.
+- **Cluster queries:** `clusterKinds(containing:)` returns the `WindowKind`s touching a window (`WindowResizeController.resizeMainAndEQWindows` uses it to tell whether the playlist is docked to the main window, the equalizer or floating); `areConnected(_:_:)` wraps it.
 
 ### Connection Detection
 
 ```swift
-// File: MacAmpApp/Utilities/WindowSnapManager.swift:139-155
-// Purpose: Determines if two windows are magnetically connected
-// Context: 10px threshold for edge proximity
-
+// Two windows are connected when they overlap on one axis and an edge pair is near on the other
 private func boxesAreConnected(_ a: Box, _ b: Box) -> Bool {
-    // Vertical stacking - check if x overlaps and edges are near
     if SnapUtils.overlapX(a, b) {
         if SnapUtils.near(SnapUtils.top(a), SnapUtils.bottom(b)) { return true }
         if SnapUtils.near(SnapUtils.bottom(a), SnapUtils.top(b)) { return true }
         if SnapUtils.near(SnapUtils.top(a), SnapUtils.top(b)) { return true }
         if SnapUtils.near(SnapUtils.bottom(a), SnapUtils.bottom(b)) { return true }
     }
-    // Horizontal side-by-side - check if y overlaps and edges are near
     if SnapUtils.overlapY(a, b) {
         if SnapUtils.near(SnapUtils.left(a), SnapUtils.right(b)) { return true }
         if SnapUtils.near(SnapUtils.right(a), SnapUtils.left(b)) { return true }
@@ -3701,319 +1714,59 @@ private func boxesAreConnected(_ a: Box, _ b: Box) -> Bool {
 }
 ```
 
-### Cluster Discovery
-
-```swift
-// File: MacAmpApp/Utilities/WindowSnapManager.swift:157-171
-// Purpose: Find all windows connected as a group
-// Context: Uses depth-first search to find connected components
-
-private func connectedCluster(start: ObjectIdentifier, boxes: [ObjectIdentifier: Box]) -> Set<ObjectIdentifier> {
-    var visited: Set<ObjectIdentifier> = []
-    var stack: [ObjectIdentifier] = [start]
-    while let id = stack.popLast() {
-        if visited.contains(id) { continue }
-        visited.insert(id)
-        guard let box = boxes[id] else { continue }
-        for (otherID, otherBox) in boxes where otherID != id {
-            if !visited.contains(otherID) && boxesAreConnected(box, otherBox) {
-                stack.append(otherID)
-            }
-        }
-    }
-    return visited
-}
-```
+`connectedCluster(start:boxes:)` is a depth-first search over `boxesAreConnected`, returning the set of window identifiers in the group.
 
 ### Key Features
 
-1. **10px Snap Threshold**: Windows snap when edges come within 10 pixels
-2. **Cluster Movement**: Docked windows move together as a group
-3. **Screen Edge Snapping**: Windows also snap to display boundaries
-4. **Multi-Monitor Support**: Works across multiple displays
-5. **Feedback Prevention**: `isAdjusting` flag prevents snap loops
+1. **15px snap threshold:** `SnapUtils.SNAP_DISTANCE = 15`; `near` is `abs(a - b) < 15`
+2. **Cluster movement:** docked windows move together as a group
+3. **Screen edge snapping:** windows also snap to display boundaries
+4. **Multi-monitor support:** the virtual space covers every `NSScreen`
+5. **Feedback prevention:** `isAdjusting` prevents snap loops
 
 ---
 
 ## Sprite-Based Menu System
 
-MacAmp implements custom NSMenuItem rendering using SwiftUI views for sprite-based menus with keyboard navigation support.
+The playlist window's ADD/REM/MISC/LIST menus are `NSMenu`s whose items render skin sprites through SwiftUI, with full keyboard navigation.
 
-### SpriteMenuItem Architecture
-
-```swift
-// File: MacAmpApp/Views/Components/SpriteMenuItem.swift:31-96
-// Purpose: Custom NSMenuItem that displays skin sprites
-// Context: Bridges AppKit menus with SwiftUI sprite rendering
-
-@MainActor
-final class SpriteMenuItem: NSMenuItem {
-    private let normalSpriteName: String
-    private let selectedSpriteName: String
-    private let skinManager: SkinManager
-    private var hostingView: NSHostingView<SpriteMenuItemView>?
-
-    /// Custom highlighted state managed by PlaylistMenuDelegate
-    /// Note: Different from NSMenuItem's built-in isHighlighted
-    var spriteHighlighted: Bool = false {
-        didSet {
-            updateView()
-        }
-    }
-
-    init(normalSprite: String, selectedSprite: String, skinManager: SkinManager, action: Selector?, target: AnyObject?) {
-        self.normalSpriteName = normalSprite
-        self.selectedSpriteName = selectedSprite
-        self.skinManager = skinManager
-
-        super.init(title: "", action: action, keyEquivalent: "")
-        self.target = target
-
-        setupView()
-    }
-
-    private func setupView() {
-        // Create click forwarding container (delegate handles highlighting)
-        let container = ClickForwardingView(frame: NSRect(x: 0, y: 0, width: 22, height: 18))
-        container.menuItem = self
-
-        // Embed SwiftUI sprite view in NSMenuItem
-        let spriteView = SpriteMenuItemView(
-            normalSprite: normalSpriteName,
-            selectedSprite: selectedSpriteName,
-            isHighlighted: spriteHighlighted,
-            skinManager: skinManager
-        )
-
-        let hosting = NSHostingView(rootView: spriteView)
-        hosting.frame = container.bounds
-        hosting.autoresizingMask = [.width, .height]
-
-        container.addSubview(hosting)
-
-        self.view = container  // Custom view for NSMenuItem
-        self.hostingView = hosting
-    }
-}
-```
-
-### Click Forwarding Pattern
+- **`SpriteMenuItem`** (`Views/Components/SpriteMenuItem.swift`, `NSMenuItem` subclass): `init(normalSprite:selectedSprite:skinManager:action:target:)`. Its custom view is a `ClickForwardingView` (22×18) hosting a `SpriteMenuItemView` in an `NSHostingView`. Setting `spriteHighlighted` swaps between the normal and selected sprite (distinct from `NSMenuItem.isHighlighted`).
+- **`ClickForwardingView`**: an item with a custom view receives no action automatically, so `mouseDown` calls `NSApp.sendAction(action, to: target, from: menuItem)` and then `menu?.cancelTracking()`.
+- **`SpriteMenuItemView`**: draws the sprite with `.interpolation(.none)` / `.antialiased(false)` at 22×18, or a gray rectangle if the sprite is missing.
+- **`PlaylistMenuDelegate`** (`NSMenuDelegate`): `menu(_:willHighlight:)` fires for mouse hover and arrow keys and sets `spriteHighlighted` on each item; `menuHasKeyEquivalent` handles Return/Enter by performing the highlighted item's action.
 
 ```swift
-// File: MacAmpApp/Views/Components/SpriteMenuItem.swift:14-26
-// Purpose: Forward clicks from custom view to menu item
-// Context: NSMenuItem with custom views need explicit click handling
-
-final class ClickForwardingView: NSView {
-    weak var menuItem: NSMenuItem?
-
-    override func mouseDown(with event: NSEvent) {
-        // Forward click to menu item's action/target
-        if let menuItem = menuItem,
-           let action = menuItem.action,
-           let target = menuItem.target {
-            NSApp.sendAction(action, to: target, from: menuItem)
-        }
-        menuItem?.menu?.cancelTracking()
-    }
-}
-```
-
-### PlaylistMenuDelegate - Keyboard Navigation
-
-```swift
-// File: MacAmpApp/Views/Components/PlaylistMenuDelegate.swift:15-41
-// Purpose: NSMenuDelegate enabling keyboard navigation for sprite menus
-// Context: Critical for accessibility and keyboard control
-
-@MainActor
-final class PlaylistMenuDelegate: NSObject, NSMenuDelegate {
-    /// Called for both mouse hover AND keyboard navigation
-    /// This is the key method that enables arrow key support
-    func menu(_ menu: NSMenu, willHighlight item: NSMenuItem?) {
-        // Update all sprite menu items in this menu
-        for menuItem in menu.items {
-            if let sprite = menuItem as? SpriteMenuItem {
-                // Swap sprites based on highlight state
-                sprite.spriteHighlighted = (menuItem === item)
-            }
-        }
-    }
-
-    /// Handle Enter key to activate highlighted item
-    func menuHasKeyEquivalent(_ menu: NSMenu, for event: NSEvent, target: AutoreleasingUnsafeMutablePointer<AnyObject?>, action: UnsafeMutablePointer<Selector?>) -> Bool {
-        // Check for Enter or Return key
-        if let key = event.charactersIgnoringModifiers,
-           key == "\r" || key == "\n" {
-            if let highlightedItem = menu.highlightedItem {
-                // Trigger the highlighted item's action
-                menu.performActionForItem(at: menu.index(of: highlightedItem))
-                return true  // We handled the key event
-            }
-        }
-        return false
-    }
-}
-```
-
-### SwiftUI Sprite Rendering in Menus
-
-```swift
-// File: MacAmpApp/Views/Components/SpriteMenuItem.swift:99-118
-// Purpose: SwiftUI view rendered inside NSMenuItem
-// Context: Allows pixel-perfect sprite rendering in native menus
-
-struct SpriteMenuItemView: View {
-    let normalSprite: String
-    let selectedSprite: String
-    let isHighlighted: Bool
-    let skinManager: SkinManager
-
-    var body: some View {
-        if let image = skinManager.currentSkin?.images[isHighlighted ? selectedSprite : normalSprite] {
-            Image(nsImage: image)
-                .interpolation(.none)  // Pixel-perfect rendering
-                .antialiased(false)
-                .resizable()
-                .frame(width: 22, height: 18)
-        } else {
-            // Fallback if sprite not found
-            Color.gray
-                .frame(width: 22, height: 18)
-        }
-    }
-}
-```
-
-### Integration Example
-
-```swift
-// Usage in playlist window menu creation
+// PlaylistWindow/PlaylistMenuPresenter.swift (excerpt)
 let menu = NSMenu()
-menu.delegate = PlaylistMenuDelegate()  // Enable keyboard navigation
+menu.autoenablesItems = false
+menu.delegate = menuDelegate   // stored property: NSMenu.delegate is weak
 
-// Add sprite-based menu items
-let playItem = SpriteMenuItem(
-    normalSprite: "PLEDIT_PLAY",
-    selectedSprite: "PLEDIT_PLAY_SELECTED",
+let addURLItem = SpriteMenuItem(
+    normalSprite: "PLAYLIST_ADD_URL",
+    selectedSprite: "PLAYLIST_ADD_URL_SELECTED",
     skinManager: skinManager,
-    action: #selector(playSelectedTrack),
-    target: self
+    action: #selector(PlaylistWindowActions.addURL),
+    target: PlaylistWindowActions.shared
 )
-menu.addItem(playItem)
-
-let removeItem = SpriteMenuItem(
-    normalSprite: "PLEDIT_REMOVE",
-    selectedSprite: "PLEDIT_REMOVE_SELECTED",
-    skinManager: skinManager,
-    action: #selector(removeSelectedTrack),
-    target: self
-)
-menu.addItem(removeItem)
+addURLItem.representedObject = audioPlayer
+menu.addItem(addURLItem)
 ```
-
-### Key Features
-
-1. **NSHostingView Bridge**: Embeds SwiftUI views in NSMenuItem
-2. **Sprite Swapping**: Normal → Selected sprite on highlight
-3. **Keyboard Navigation**: Full arrow key and Enter support via delegate
-4. **VoiceOver Compatible**: Accessibility through NSMenuDelegate
-5. **Click Forwarding**: Custom views properly trigger menu actions
 
 ---
 
 ## Video Window Architecture
 
-The Video Window provides native macOS video playback capability with authentic Winamp chrome, implemented during TASK 2 (Days 1-6).
+The video window plays local video with VIDEO.bmp chrome. Full reference: [VIDEO_WINDOW.md](VIDEO_WINDOW.md).
 
-### Window Controller Implementation
-
-```swift
-// File: MacAmpApp/Windows/WinampVideoWindowController.swift
-@MainActor
-final class WinampVideoWindowController: NSWindowController {
-
-    init(skinManager: SkinManager, playbackCoordinator: PlaybackCoordinator,
-         appSettings: AppSettings, windowFocusState: WindowFocusState) {
-
-        // Create the video window
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 275, height: 232),
-            styleMask: [.titled, .closable, .miniaturizable],
-            backing: .buffered,
-            defer: false
-        )
-
-        // Configure window properties
-        window.isReleasedWhenClosed = false
-        window.title = "Video"
-        window.isMovableByWindowBackground = true
-        window.backgroundColor = .black
-        window.minSize = CGSize(width: 275, height: 232)
-
-        super.init(window: window)
-
-        // Set up the content view with chrome + video player
-        let videoView = WinampVideoWindow(
-            skinManager: skinManager,
-            playbackCoordinator: playbackCoordinator,
-            appSettings: appSettings
-        )
-
-        let hostingController = NSHostingController(rootView: videoView)
-        window.contentViewController = hostingController
-    }
-}
-```
-
-### Chrome Structure (VIDEO.bmp)
-
-The video window chrome uses VIDEO.bmp sprites, divided into 6 sections:
-
-```swift
-// VIDEO.bmp layout (275x116 total)
-enum VideoSprite {
-    case topLeft      // 0,0 25x20 - Rounded corner with gradient
-    case topCenter    // 25,0 150x20 - Titlebar with "VIDEO" text
-    case topRight     // 175,0 100x20 - Close/minimize buttons
-    case bottomLeft   // 0,20 125x38 - Control buttons
-    case bottomCenter // 125,20 25x38 - Slider/position
-    case bottomRight  // 150,20 125x38 - Volume/options
-}
-
-// Chrome rendering structure
-struct VideoWindowChromeView: View {
-    var body: some View {
-        ZStack {
-            // Background chrome layer
-            VStack(spacing: 0) {
-                // Top section (titlebar)
-                HStack(spacing: 0) {
-                    SimpleSpriteImage(sprite: topLeft)
-                    SimpleSpriteImage(sprite: topCenter)
-                    SimpleSpriteImage(sprite: topRight)
-                }
-
-                // Bottom section (controls)
-                HStack(spacing: 0) {
-                    SimpleSpriteImage(sprite: bottomLeft)
-                    SimpleSpriteImage(sprite: bottomCenter)
-                    SimpleSpriteImage(sprite: bottomRight)
-                }
-            }
-
-            // Video content area (inset)
-            VideoPlayer(player: player)
-                .frame(width: 253, height: 174)
-                .offset(x: 11, y: 29)  // Position within chrome
-        }
-    }
-}
-```
+- **Controller:** `WinampVideoWindowController` creates a `BorderlessWindow` (275×232, `.borderless`), applies `WinampWindowConfigurator.apply(to:)` and `installHitSurface(on:)`, and sets only `contentViewController` to an `NSHostingController` whose root view is `WinampVideoWindow` with the shared environment (setting `contentView` would release the hosting controller).
+- **Chrome (`VideoWindowChromeView`):** built from VIDEO.bmp sprites positioned absolutely in a `ZStack`. The 20px titlebar uses `VIDEO_TITLEBAR_TOP_LEFT`, tiled `VIDEO_TITLEBAR_STRETCHY`, `VIDEO_TITLEBAR_TOP_CENTER` and `VIDEO_TITLEBAR_TOP_RIGHT` with an `_ACTIVE` / `_INACTIVE` suffix from `windowFocusState.isVideoKey`; side borders are `VIDEO_BORDER_LEFT` (11px) and `VIDEO_BORDER_RIGHT` (8px); the 38px bottom bar is `VIDEO_BOTTOM_LEFT` (125px), tiled `VIDEO_BOTTOM_TILE` and `VIDEO_BOTTOM_RIGHT` (125px), with a metadata ticker drawn from `CHARACTER_*` sprites.
+- **Sizing:** `VideoWindowSizeState` resizes in 25×29px segments (`Size2D`; `[0,4]` = 275×232, `[11,12]` = 550×464), with a resize-preview overlay while dragging and 1x/2x presets.
+- **Fallback:** when the skin has no VIDEO.bmp sprites (`Skin.hasVideoSprites` is false), `WinampVideoWindow` shows `VideoWindowFallbackChrome`.
+- **Player:** `WinampVideoWindow` shows `AVPlayerViewRepresentable` only when `audioPlayer.currentMediaType == .video` and `audioPlayer.videoPlayer` exists, otherwise a black "No video loaded" placeholder.
 
 ### AVPlayer Integration
 
-The video window uses AVPlayer for maximum format compatibility. `VideoPlaybackController` (owned by `AudioPlayer`) builds a fresh `AVPlayer` per video, with the audio tap already on the item:
+`VideoPlaybackController` (owned by `AudioPlayer`) builds a fresh `AVPlayer` per video, with the audio tap already on the item:
 
 ```swift
 // VideoPlaybackController.loadVideo (simplified)
@@ -4027,534 +1780,88 @@ player = AVPlayer(playerItem: playerItem)
 // end-of-item + periodic time observers (identity-guarded), metadata task
 ```
 
-`WinampVideoWindow` shows the player through `AVPlayerViewRepresentable` (an `AVPlayerView` with controls hidden and `updatesNowPlayingInfoCenter = false`). Video audio gets EQ, preamp, balance and visualizer data from the tap; see [AVPlayer-Native Video DSP](#avplayer-native-video-dsp).
-
-### Focus State Integration
-
-The video window participates in the unified focus system:
-
-```swift
-// Focus chrome changes (normal vs selected sprites)
-struct VideoWindowChromeView: View {
-    @Environment(\.windowFocusState) var windowFocusState
-
-    var isSelected: Bool {
-        windowFocusState.focusedWindow == .video
-    }
-
-    var body: some View {
-        // Use selected sprites when window has focus
-        let topSprite = isSelected ? topCenterSelected : topCenterNormal
-        SimpleSpriteImage(sprite: topSprite)
-    }
-}
-```
-
-### Window Resizing (1x/2x)
-
-Video window supports double-size mode alongside other windows:
-
-```swift
-// Double-size synchronization
-func updateVideoWindowSize() {
-    guard let window = videoController.window else { return }
-
-    let scale: CGFloat = appSettings.isDoubleSize ? 2.0 : 1.0
-    let baseSize = CGSize(width: 275, height: 232)
-
-    window.setContentSize(CGSize(
-        width: baseSize.width * scale,
-        height: baseSize.height * scale
-    ))
-}
-```
-
-### Fallback Chrome System
-
-When VIDEO.bmp is missing, the window generates fallback chrome:
-
-```swift
-// Fallback chrome generation
-func generateFallbackVideoChrome() -> NSImage {
-    return NSImage(size: CGSize(width: 275, height: 58)) { rect in
-        // Draw gradient background
-        let gradient = NSGradient(colors: [
-            NSColor(white: 0.15, alpha: 1.0),
-            NSColor(white: 0.25, alpha: 1.0)
-        ])
-        gradient?.draw(in: rect, angle: -90)
-
-        // Draw "VIDEO" text
-        let attrs: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: 9),
-            .foregroundColor: NSColor.white
-        ]
-        "VIDEO".draw(at: CGPoint(x: 12, y: 5), withAttributes: attrs)
-
-        return true
-    }
-}
-```
+`AVPlayerViewRepresentable` hides the AVKit controls and sets `updatesNowPlayingInfoCenter = false`. Video audio gets EQ, preamp, balance and visualizer data from the tap; see [AVPlayer-Native Video DSP](#avplayer-native-video-dsp).
 
 ### Key Implementation Details
 
-1. **Activation**: V button toggles visibility (Ctrl+V keyboard shortcut)
-2. **File Support**: MP4, MOV, M4V, AVI (QuickTime-compatible formats)
-3. **Chrome Rendering**: VIDEO.bmp sprites with focus state variants
-4. **Position Persistence**: Window frame saved to UserDefaults
-5. **Docking Support**: Magnetic snapping via WindowSnapManager
-6. **Audio Routing**: Audio stays on AVPlayer (not AVAudioEngine); an in-place `MTAudioProcessingTap` applies EQ, preamp and balance and feeds the visualizer
-
-For complete documentation, see: `docs/VIDEO_WINDOW.md`
+1. **Activation**: V clutter button or Ctrl+V toggles `AppSettings.showVideoWindow` (persisted)
+2. **File support**: `.mp4`, `.mov`, `.m4v`, `.avi` are detected as video by extension
+3. **Position persistence**: window frame saved to UserDefaults
+4. **Docking**: magnetic snapping via `WindowSnapManager`
+5. **Audio routing**: audio stays on AVPlayer (not AVAudioEngine); an in-place `MTAudioProcessingTap` applies EQ, preamp and balance and feeds the visualizer
 
 ---
 
 ## Milkdrop Window Architecture
 
-The Milkdrop Window provides audio visualization via Butterchurn.js - a WebGL port of the legendary Milkdrop 2 visualizer. Implemented during TASK 2 (Days 7-8) for window chrome, with Butterchurn integration completed in January 2026 (7 phases, Oracle Grade A).
+The Milkdrop window hosts Butterchurn.js, a WebGL port of the Milkdrop 2 visualizer, inside GEN.bmp chrome. Full reference: [MILKDROP_WINDOW.md](MILKDROP_WINDOW.md).
 
-### Window Controller Implementation
+### Chrome (GEN.bmp)
 
-```swift
-// File: MacAmpApp/Windows/WinampMilkdropWindowController.swift
-@MainActor
-final class WinampMilkdropWindowController: NSWindowController {
+`MilkdropWindowChromeView` builds the chrome from GEN.bmp sprites positioned absolutely in a `ZStack`, sized by `MilkdropWindowSizeState` (25×29px segments):
 
-    init(skinManager: SkinManager, appSettings: AppSettings,
-         windowFocusState: WindowFocusState) {
-
-        // Create the milkdrop window (same size as video)
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 275, height: 232),
-            styleMask: [.titled, .closable, .miniaturizable],
-            backing: .buffered,
-            defer: false
-        )
-
-        // Configure window properties
-        window.isReleasedWhenClosed = false
-        window.title = "Visualization"
-        window.isMovableByWindowBackground = true
-        window.backgroundColor = .black
-        window.minSize = CGSize(width: 275, height: 232)
-
-        super.init(window: window)
-
-        // Set up the content view with GEN chrome
-        let milkdropView = WinampMilkdropWindow(
-            skinManager: skinManager,
-            appSettings: appSettings
-        )
-
-        let hostingController = NSHostingController(rootView: milkdropView)
-        window.contentViewController = hostingController
-    }
-}
-```
-
-### GEN.bmp Two-Piece Pattern
-
-The Milkdrop window uses GEN.bmp sprites, which follow a unique two-piece pattern for each element:
-
-```swift
-// GEN.bmp sprite structure - Two pieces per element
-struct GenSprite {
-    let normal: NSImage    // First piece: normal state
-    let selected: NSImage  // Second piece: selected/focused state
-}
-
-// 6-section titlebar layout
-enum GenTitlebarSection {
-    case topLeft       // GEN_TOP_LEFT + GEN_TOP_LEFT_SELECTED
-    case topLeftEnd    // GEN_TOP_LEFT_END + GEN_TOP_LEFT_END_SELECTED
-    case topTitle      // GEN_TOP_TITLE + GEN_TOP_TITLE_SELECTED
-    case topRightBegin // GEN_TOP_RIGHT_BEGIN + GEN_TOP_RIGHT_BEGIN_SELECTED
-    case topRight      // GEN_TOP_RIGHT + GEN_TOP_RIGHT_SELECTED
-    case topRightEnd   // GEN_TOP_RIGHT_END + GEN_TOP_RIGHT_END_SELECTED
-}
-```
-
-### Chrome Rendering with Focus State
-
-```swift
-struct MilkdropWindowChromeView: View {
-    @Environment(\.windowFocusState) var windowFocusState
-    let skinManager: SkinManager
-
-    var isSelected: Bool {
-        windowFocusState.focusedWindow == .milkdrop
-    }
-
-    var body: some View {
-        ZStack {
-            // Background chrome
-            VStack(spacing: 0) {
-                // 6-section titlebar
-                HStack(spacing: 0) {
-                    renderTitlebarSection(.topLeft)
-                    renderTitlebarSection(.topLeftEnd)
-                    renderTitlebarSection(.topTitle)
-                    renderTitlebarSection(.topRightBegin)
-                    renderTitlebarSection(.topRight)
-                    renderTitlebarSection(.topRightEnd)
-                }
-                .frame(height: 20)
-
-                // Middle section with borders
-                HStack(spacing: 0) {
-                    // Left border (GEN_MIDDLE_LEFT)
-                    SimpleSpriteImage(
-                        sprite: isSelected ? genMiddleLeftSelected : genMiddleLeft
-                    )
-                    .frame(width: 11)
-
-                    // Content area (visualization placeholder)
-                    VisualizationContent()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                    // Right border (GEN_MIDDLE_RIGHT)
-                    SimpleSpriteImage(
-                        sprite: isSelected ? genMiddleRightSelected : genMiddleRight
-                    )
-                    .frame(width: 8)
-                }
-
-                // Bottom bar
-                HStack(spacing: 0) {
-                    SimpleSpriteImage(
-                        sprite: isSelected ? genBottomSelected : genBottom
-                    )
-                }
-                .frame(height: 14)
-            }
-        }
-    }
-
-    func renderTitlebarSection(_ section: GenTitlebarSection) -> some View {
-        // Use selected sprite when window has focus
-        let sprite = isSelected ?
-            skinManager.getGenSprite(section, selected: true) :
-            skinManager.getGenSprite(section, selected: false)
-
-        return SimpleSpriteImage(sprite: sprite)
-    }
-}
-```
+- **Titlebar (20px, 7 sections):** `GEN_TOP_LEFT` (25) + n × `GEN_TOP_LEFT_RIGHT_FILL` (gold filler) + `GEN_TOP_LEFT_END` + `GEN_TOP_CENTER_FILL` × 3 + `GEN_TOP_RIGHT_END` + n × `GEN_TOP_LEFT_RIGHT_FILL` + `GEN_TOP_RIGHT`. The fillers expand symmetrically as the window widens.
+- **Focus:** every titlebar piece takes a `_SELECTED` suffix when `windowFocusState.isMilkdropKey` is true (GEN.bmp's two-state pattern: normal + selected, no pressed state).
+- **Borders and bottom:** `GEN_MIDDLE_LEFT` (11px) / `GEN_MIDDLE_RIGHT` (8px); the 14px bottom bar is `GEN_BOTTOM_LEFT` (125) + tiled `GEN_BOTTOM_FILL_TOP` (13px) over `GEN_BOTTOM_FILL_BOTTOM` (1px) + `GEN_BOTTOM_RIGHT` (125).
+- **Title letters:** each GEN.bmp letter is two discontiguous pieces separated by a 1px cyan boundary, drawn as `GEN_TEXT_<L>_TOP` (6px) over `GEN_TEXT_<L>_BOTTOM` (1px normal, 2px selected), with the `GEN_TEXT_SELECTED_` prefix when focused.
 
 ### Butterchurn Integration Architecture
-
-Butterchurn.js provides real-time audio visualization via WKWebView with Swift audio bridge:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    WKWebView Container                       │
 ├─────────────────────────────────────────────────────────────┤
 │  WKUserScript Injection (atDocumentStart):                  │
-│    1. butterchurn.min.js      (270KB - ES module bundled)   │
-│    2. butterchurnPresets.min.js (187KB - preset library)    │
+│    1. butterchurn.min.js            (238KB, ES module)      │
+│    2. butterchurnPresets.min.js     (638KB, base pack)      │
+│    3. butterchurnPresetsExtra.min.js (825KB, extra pack)    │
 │                                                              │
 │  WKUserScript Injection (atDocumentEnd):                    │
-│    3. bridge.js               (Swift↔JS communication)      │
+│    4. bridge.js               (Swift↔JS communication)      │
 ├─────────────────────────────────────────────────────────────┤
 │  WebGL Canvas (60 FPS)                                       │
 │    • Butterchurn visualizer instance                        │
-│    • 100+ presets from butterchurnPresets library           │
+│    • Presets from the base + extra packs                    │
 │    • Hybrid WASM mode (see MILKDROP_WINDOW.md §9.10)        │
 └─────────────────────────────────────────────────────────────┘
           │                              ▲
-          │ postMessage("ready")         │ audioData[1024]
+          │ postMessage("ready")         │ setAudioData(spectrum, waveform)
           │ postMessage("presetsLoaded") │ loadPreset(index)
           ▼                              │ showTrackTitle(text)
 ┌─────────────────────────────────────────────────────────────┐
 │                    ButterchurnBridge                         │
 │  @Observable @MainActor                                      │
-│    • Timer: 30 FPS audio updates to JS                      │
-│    • callAsyncJavaScript for reliable execution             │
+│    • 30 FPS audio updates (async Task loop, ~33 ms sleep)    │
+│    • callAsyncJavaScript with typed arguments                │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-**Key Components:**
-
-```swift
-// ButterchurnBridge.swift - Swift→JS communication
-@Observable @MainActor
-final class ButterchurnBridge {
-    var isReady: Bool = false
-    var errorMessage: String?
-    var onPresetsLoaded: (([String]) -> Void)?
-
-    private weak var audioPlayer: AudioPlayer?
-    private var audioTimer: Timer?
-    @ObservationIgnored private weak var webView: WKWebView?
-
-    func sendAudioData() {
-        guard isReady, let audioPlayer = audioPlayer else { return }
-        let samples = audioPlayer.getVisualizationSamples(count: 1024)
-        webView?.callAsyncJavaScript(
-            "if (window.receiveAudioData) window.receiveAudioData([\(samples)]);",
-            in: nil, in: .page
-        ) { _ in }
-    }
-}
-
-// ButterchurnPresetManager.swift - Preset lifecycle
-@Observable @MainActor
-final class ButterchurnPresetManager {
-    var presets: [String] = []
-    var currentPresetIndex: Int = -1
-    var isRandomize: Bool = true      // Persisted
-    var isCycling: Bool = true        // Persisted
-    var cycleInterval: TimeInterval = 15.0
-    var trackTitleInterval: TimeInterval = 0  // 0 = manual only
-
-    @ObservationIgnored private var presetHistory: [Int] = []
-    @ObservationIgnored private var cycleTimer: Timer?
-}
-```
-
-### Fallback Chrome Generation
-
-When GEN.bmp is missing, generates procedural chrome:
-
-```swift
-func generateFallbackGenChrome() -> GenChromeSet {
-    // Generate gradient-based chrome elements
-    func createGradientImage(size: CGSize, title: String? = nil) -> NSImage {
-        return NSImage(size: size) { rect in
-            // Draw gradient background
-            let gradient = NSGradient(colors: [
-                NSColor(white: 0.2, alpha: 1.0),
-                NSColor(white: 0.3, alpha: 1.0)
-            ])
-            gradient?.draw(in: rect, angle: -90)
-
-            // Draw title if provided
-            if let title = title {
-                let attrs: [NSAttributedString.Key: Any] = [
-                    .font: NSFont.systemFont(ofSize: 9),
-                    .foregroundColor: NSColor.white
-                ]
-                title.draw(at: CGPoint(x: 8, y: 5), withAttributes: attrs)
-            }
-
-            return true
-        }
-    }
-
-    return GenChromeSet(
-        topLeft: createGradientImage(size: CGSize(width: 25, height: 20)),
-        topTitle: createGradientImage(size: CGSize(width: 100, height: 20), title: "VISUALIZATION"),
-        // ... generate all sections
-    )
-}
-```
-
-### Butterchurn Audio Data Flow
-
-See **§8 Audio Processing Pipeline → Butterchurn Data Flow** for the complete diagram (engine tap or video tap → VisualizerFeed → VisualizerPipeline → ButterchurnBridge → WebGL). Local files and internet radio feed it through the engine mixer tap; local video feeds it through the `MTAudioProcessingTap` producer (see §8a).
+- **`ButterchurnBridge`** (`ViewModels/ButterchurnBridge.swift`): each tick calls `audioPlayer.snapshotButterchurnFrame()`. `nil` (nothing rendering) stops the JS visualizer until frames return; otherwise the spectrum is mapped from 0–1 floats to 0–255 ints and sent with the float waveform via `callAsyncJavaScript("window.macampButterchurn?.setAudioData(spectrum, waveform);", arguments:)`.
+- **`ButterchurnPresetManager`** (`@Observable @MainActor`): `presets`, `currentPresetIndex`, `isRandomize` and `isCycling` (persisted), `cycleInterval` (default 15 s), `transitionDuration` (2.7 s), `trackTitleInterval` (0 = manual only), plus preset history and cycle/track-title timers.
+- The audio feed is the shared visualizer feed: engine mixer tap for local files and radio, `MTAudioProcessingTap` producer for video. Diagram: [Butterchurn Data Flow](#butterchurn-data-flow).
 
 ### Key Implementation Details
 
 1. **Activation**: Ctrl+K keyboard shortcut (matches Winamp)
-2. **Chrome Source**: GEN.bmp sprites with two-piece pattern
-3. **Focus States**: Normal/selected sprite pairs for all elements
-4. **Content Area**: 256×198 pixels for WebGL canvas
-5. **Visualization**: Butterchurn.js via WKWebView with WKUserScript injection
-6. **Audio Bridge**: 30 FPS Swift→JS using callAsyncJavaScript
-7. **Preset Management**: Cycling, randomization, history, 100+ presets
-8. **Track Title**: Manual or interval-based display (5s/10s/15s/30s/60s)
-9. **Context Menu**: Right-click for preset navigation and settings
-10. **Persistence**: All settings saved to UserDefaults via AppSettings
-
-### Sprite Discovery Process
-
-The two-piece GEN pattern was discovered through empirical analysis:
-
-```swift
-// Day 7 Research: GEN sprite pattern discovery
-// File: tasks/milk-drop-video-support/milkdrop-analysis-hank.md
-
-// Pattern discovered:
-// - Each UI element has exactly 2 sprites
-// - First sprite: normal state
-// - Second sprite: selected/focused state
-// - No pressed states (unlike MAIN.BMP buttons)
-
-// Example mapping:
-GEN_TOP_LEFT (index 0) → normal state
-GEN_TOP_LEFT_SELECTED (index 1) → focused state
-```
-
-For complete documentation, see: `docs/MILKDROP_WINDOW.md`
+2. **Chrome source**: GEN.bmp sprites with normal/selected pairs
+3. **Visualization**: Butterchurn.js via WKWebView with WKUserScript injection
+4. **Audio bridge**: 30 FPS Swift→JS using `callAsyncJavaScript`
+5. **Preset management**: cycling, randomization, history, 100+ presets
+6. **Track title**: manual or interval-based display (5s/10s/15s/30s/60s)
+7. **Context menu**: right-click for preset navigation and settings
+8. **Persistence**: settings saved to UserDefaults via AppSettings
 
 ---
 
 ## M3U Playlist Parser
 
-MacAmp supports M3U and M3U8 playlist formats with both local files and internet radio streams.
+`M3UParser` (`Models/M3UParser.swift`) reads M3U and M3U8 playlists with local files and internet radio streams; `M3UWriter` in the same file writes them.
 
-### Parser Architecture
-
-```swift
-// File: MacAmpApp/Models/M3UParser.swift:25-125
-// Purpose: Parse M3U/M3U8 playlist files with EXTINF metadata
-// Context: Critical for playlist loading and internet radio support
-
-struct M3UParser {
-    /// Parse an M3U file from disk
-    static func parse(fileURL: URL) throws -> [M3UEntry] {
-        guard FileManager.default.fileExists(atPath: fileURL.path) else {
-            throw M3UParseError.fileNotFound
-        }
-
-        guard let content = try? String(contentsOf: fileURL, encoding: .utf8) else {
-            throw M3UParseError.encodingError
-        }
-
-        return try parse(content: content, relativeTo: fileURL)
-    }
-
-    /// Parse M3U content from a string
-    static func parse(content: String, relativeTo baseURL: URL? = nil) throws -> [M3UEntry] {
-        var entries: [M3UEntry] = []
-        let lines = content.components(separatedBy: .newlines)
-
-        var currentTitle: String?
-        var currentDuration: Int?
-
-        for line in lines {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-
-            // Skip empty lines
-            guard !trimmed.isEmpty else { continue }
-
-            // Parse EXTINF metadata
-            if trimmed.hasPrefix("#EXTINF:") {
-                // Format: #EXTINF:duration,title
-                let parts = trimmed.dropFirst(8).components(separatedBy: ",")
-                if let durationStr = parts.first?.trimmingCharacters(in: .whitespaces),
-                   let duration = Int(durationStr) {
-                    currentDuration = duration
-                }
-                if parts.count > 1 {
-                    currentTitle = parts.dropFirst().joined(separator: ",").trimmingCharacters(in: .whitespaces)
-                }
-                continue
-            }
-
-            // Skip other comments (including #EXTM3U header)
-            if trimmed.hasPrefix("#") { continue }
-
-            // This is a URL/path line
-            if let url = resolveURL(trimmed, relativeTo: baseURL) {
-                let entry = M3UEntry(
-                    url: url,
-                    title: currentTitle,
-                    duration: currentDuration
-                )
-                entries.append(entry)
-
-                // Reset metadata for next entry
-                currentTitle = nil
-                currentDuration = nil
-            }
-        }
-
-        guard !entries.isEmpty else {
-            throw M3UParseError.emptyPlaylist
-        }
-
-        return entries
-    }
-}
-```
-
-### URL Resolution Logic
-
-```swift
-// File: MacAmpApp/Models/M3UParser.swift:93-124
-// Purpose: Resolve relative paths and handle various URL formats
-// Context: Supports HTTP streams, Unix paths, Windows paths
-
-private static func resolveURL(_ urlString: String, relativeTo baseURL: URL?) -> URL? {
-    let trimmed = urlString.trimmingCharacters(in: .whitespaces)
-
-    // Handle HTTP/HTTPS URLs (internet radio streams)
-    if trimmed.lowercased().hasPrefix("http://") || trimmed.lowercased().hasPrefix("https://") {
-        return URL(string: trimmed)
-    }
-
-    // Handle absolute file paths (Unix-style)
-    if trimmed.hasPrefix("/") {
-        return URL(fileURLWithPath: trimmed)
-    }
-
-    // Handle Windows absolute paths (C:\, D:\, etc.)
-    if trimmed.count > 2 && trimmed[trimmed.index(trimmed.startIndex, offsetBy: 1)] == ":" {
-        // Convert Windows path to Unix path
-        let unixPath = trimmed.replacingOccurrences(of: "\\", with: "/")
-        return URL(fileURLWithPath: unixPath)
-    }
-
-    // Handle relative paths
-    if let base = baseURL {
-        // Get the directory containing the M3U file
-        let baseDir = base.deletingLastPathComponent()
-        // Resolve relative path from M3U directory
-        return URL(fileURLWithPath: trimmed, relativeTo: baseDir).standardized
-    }
-
-    // Fallback: try as file URL
-    return URL(fileURLWithPath: trimmed)
-}
-```
-
-### M3UEntry Model
-
-```swift
-// File: MacAmpApp/Models/M3UEntry.swift
-// Purpose: Data model for parsed playlist entries
-// Context: Supports both local files and streams
-
-struct M3UEntry: Identifiable, Sendable {
-    let id = UUID()
-    let url: URL
-    let title: String?
-    let duration: Int?  // In seconds, from EXTINF
-
-    var isStream: Bool {
-        url.scheme?.lowercased().hasPrefix("http") == true
-    }
-
-    var displayTitle: String {
-        if let title = title, !title.isEmpty {
-            return title
-        }
-        return url.lastPathComponent
-    }
-}
-```
-
-### Integration with Playlist System
-
-```swift
-// Usage in playlist loading
-func loadM3UPlaylist(from url: URL) async throws -> [Track] {
-    let entries = try M3UParser.parse(fileURL: url)
-
-    return entries.map { entry in
-        Track(
-            url: entry.url,
-            title: entry.displayTitle,
-            artist: "",  // M3U doesn't specify artist
-            duration: Double(entry.duration ?? 0),
-            isStream: entry.isStream
-        )
-    }
-}
-```
-
-### Supported Formats
+- **`parse(fileURL:)`** throws `M3UParseError.fileNotFound` or `.encodingError` (UTF-8 only), then calls **`parse(content:relativeTo:)`**, which throws `.emptyPlaylist` when no entry resolves.
+- **EXTINF:** `#EXTINF:duration,title` sets the duration (Int seconds; `-1` for streams) and title of the next path line; everything after the first comma is the title. Other `#` lines, including `#EXTM3U`, are skipped.
+- **URL resolution (`resolveURL`)**, in order: `http://` / `https://` → remote URL; leading `/` → absolute file path; `X:` drive prefix → Windows path with `\` converted to `/`; otherwise relative to the playlist's directory (`.standardized`); no base URL → plain file URL.
+- **`M3UEntry`**: `url`, optional `title`, optional `duration`, and `isRemoteStream` (scheme is `http` or `https`).
+- **`M3UWriter.write(tracks:to:)`** writes `#EXTM3U`, then per track `#EXTINF:<duration>,<Artist - Title>` (title only when the artist is empty or "Unknown Artist"; duration `-1` for streams) and the URL (streams) or file path.
 
 ```
 Standard M3U:
@@ -4571,16 +1878,6 @@ Extended M3U (M3U8):
 http://stream.example.com/radio
 ```
 
-### Key Features
-
-1. **Format Support**: M3U and M3U8 (extended) formats
-2. **Stream Detection**: Automatic detection of HTTP/HTTPS streams
-3. **Path Resolution**: Handles relative paths, absolute paths, Windows paths
-4. **EXTINF Parsing**: Extracts duration and title metadata
-5. **Error Handling**: Graceful handling of malformed files
-
----
-
 ---
 
 ## Component Integration Maps
@@ -4591,7 +1888,7 @@ http://stream.example.com/radio
 ┌──────────────────────────────────────────────────┐
 │           WindowSnapManager.shared                │
 │                                                   │
-│  • Magnetic window snapping (10px threshold)     │
+│  • Magnetic window snapping (15px threshold)     │
 │  • Connected cluster detection (5 windows)       │
 │  • Screen edge snapping                          │
 │  • Multi-monitor coordinate transformation       │
@@ -4660,7 +1957,7 @@ Spectrum  Points
    ▼                 ▼
 Main Window      Milkdrop Window
 Spectrum Viz     Butterchurn.js (100+ presets)
-(60 FPS)         Placeholder Animation
+(60 FPS)
 ```
 
 ---
@@ -4669,9 +1966,9 @@ Spectrum Viz     Butterchurn.js (100+ presets)
 
 ### Clutter Bar Buttons
 
-The clutter bar is a vertical strip of 5 control buttons on the left side of the main window, providing quick access to player settings and information. As of v0.7.8, 4 of 5 buttons are functional.
+The clutter bar is the vertical strip of five buttons on the left of the main window. All five are functional.
 
-**Button Locations** (WinampMainWindowLayout.swift):
+**Button locations** (`WinampMainWindowLayout.swift`):
 ```swift
 static let clutterButtonO = CGPoint(x: 10, y: 25)  // top: 3px relative
 static let clutterButtonA = CGPoint(x: 10, y: 33)  // top: 11px relative
@@ -4680,69 +1977,18 @@ static let clutterButtonD = CGPoint(x: 10, y: 47)  // top: 25px relative
 static let clutterButtonV = CGPoint(x: 10, y: 55)  // top: 33px relative
 ```
 
-**O Button - Options Menu** (v0.7.8):
-- **Purpose**: Context menu with player settings
-- **Functionality**:
-  - Time display toggle (elapsed ⇄ remaining)
-  - Double-size mode toggle
-  - Repeat mode options (3 items with checkmarks):
-    - Repeat: Off ✓ (when off)
-    - Repeat: All ✓ (when all)
-    - Repeat: One ✓ (when one)
-  - Shuffle mode toggle
-- **Implementation**: NSMenu via MainWindowOptionsMenuPresenter (isolated class)
-- **Keyboard Shortcuts**: Ctrl+O (menu), Ctrl+T (time toggle), Ctrl+R (cycle repeat)
-- **State**: AppSettings.timeDisplayMode, AppSettings.repeatMode with UserDefaults persistence
-- **Sprites**: MAIN_CLUTTER_BAR_BUTTON_O / BUTTON_O_SELECTED
+| Button | Function | Shortcut | State | Implementation |
+|---|---|---|---|---|
+| **O** Options | Menu: time display toggle, double size, repeat Off/All/One (checkmarks), shuffle | Ctrl+O (menu), Ctrl+T (time), Ctrl+R (cycle repeat) | `AppSettings.timeDisplayMode`, `AppSettings.repeatMode` (persisted) | `NSMenu` via `MainWindowOptionsMenuPresenter` |
+| **A** Always on Top | Keeps MacAmp windows above other apps (`NSWindow.Level.floating`) | Ctrl+A | `AppSettings.isAlwaysOnTop` (persisted) | `WindowCoordinator` updates window levels |
+| **I** Track Info | Title, artist, duration; bitrate, sample rate, channels; stream-aware | Ctrl+I | `AppSettings.showTrackInfoDialog` (transient) | `TrackInfoView` sheet |
+| **D** Double Size | Scales the main and EQ windows 100% ⇄ 200% | Ctrl+D | `AppSettings.isDoubleSizeMode` (persisted) | `.scaleEffect` + `resizeMainAndEQWindows(doubled:)` |
+| **V** Video Window | Shows/hides the video window | Ctrl+V | `AppSettings.showVideoWindow` (persisted) | `WindowSettingsObserver` → `WindowVisibilityController` |
 
-**A Button - Always On Top** (v0.7.6):
-- **Purpose**: Toggle window floating level
-- **Functionality**: Keeps MacAmp windows above other apps
-- **Implementation**: NSWindow.level = .floating
-- **Keyboard Shortcut**: Ctrl+A
-- **State**: AppSettings.isAlwaysOnTop with persistence
-- **Sprites**: MAIN_CLUTTER_BAR_BUTTON_A / BUTTON_A_SELECTED
+Sprites follow `MAIN_CLUTTER_BAR_BUTTON_<X>` / `MAIN_CLUTTER_BAR_BUTTON_<X>_SELECTED`. Each button is a plain `Button` that toggles the `AppSettings` flag and picks the sprite from it:
 
-**I Button - Track Information** (v0.7.8):
-- **Purpose**: Display track/stream metadata
-- **Functionality**:
-  - Shows title, artist, duration
-  - Technical details: bitrate, sample rate, channels
-  - Stream-aware with graceful fallbacks
-- **Implementation**: SwiftUI sheet with TrackInfoView
-- **Keyboard Shortcut**: Ctrl+I
-- **State**: AppSettings.showTrackInfoDialog (transient, not persisted)
-- **Sprites**: MAIN_CLUTTER_BAR_BUTTON_I / BUTTON_I_SELECTED
-
-**D Button - Double Size** (v0.7.5):
-- **Purpose**: Scale UI between 100% and 200%
-- **Functionality**: Applies to all windows (main, EQ, playlist)
-- **Implementation**: UnifiedDockView.scaleEffect(scale, anchor: .topLeading)
-- **Keyboard Shortcut**: Ctrl+D
-- **State**: AppSettings.isDoubleSizeMode with persistence
-- **Sprites**: MAIN_CLUTTER_BAR_BUTTON_D / BUTTON_D_SELECTED
-
-**V Button - Visualizer** (scaffolded):
-- **Purpose**: Toggle visualizer modes (spectrum/oscilloscope/none)
-- **Status**: Scaffolded, pending implementation
-- **Implementation**: To be implemented
-- **Sprites**: MAIN_CLUTTER_BAR_BUTTON_V defined
-
-**Architecture Pattern**:
 ```swift
-// Clutter bar button pattern (proven in D/A/O/I implementations)
-// Real example from AppSettings.swift:
-@Observable
-@MainActor
-final class AppSettings {
-    var isDoubleSizeMode: Bool = false {
-        didSet {
-            UserDefaults.standard.set(isDoubleSizeMode, forKey: "isDoubleSizeMode")
-        }
-    }
-}
-
-// In MainWindow/MainWindowFullLayer.swift (buildClutterBarDV):
+// MainWindow/MainWindowFullLayer.swift (buildClutterBarDV)
 let dSprite = settings.isDoubleSizeMode
     ? "MAIN_CLUTTER_BAR_BUTTON_D_SELECTED"
     : "MAIN_CLUTTER_BAR_BUTTON_D"
@@ -4758,63 +2004,22 @@ Button(action: { settings.isDoubleSizeMode.toggle() }, label: {
 
 ### Repeat Mode Button (Winamp 5 Modern Pattern)
 
-**Implementation** (v0.7.9):
-- **State**: AppSettings.RepeatMode enum (off/all/one)
-- **Persistence**: UserDefaults with didSet pattern
-- **Visual**: ZStack with "1" badge overlay for repeat-one mode
-- **Badge Specs**: 8px bold font, white color, shadow for legibility
-- **Interaction**: Click button to cycle Off → All → One → Off
-- **Keyboard**: Ctrl+R cycles through modes
-- **Migration**: Boolean true → .all, false → .off (preserves user preference)
-
-**UI Implementation Pattern**:
-```swift
-// File: MacAmpApp/Views/MainWindow/MainWindowFullLayer.swift (buildShuffleRepeatButtons)
-// Repeat button with "1" badge overlay (Winamp 5 Modern fidelity)
-Button(action: { audioPlayer.repeatMode = audioPlayer.repeatMode.next() }, label: {
-    let spriteKey = audioPlayer.repeatMode.isActive
-        ? "MAIN_REPEAT_BUTTON_SELECTED"
-        : "MAIN_REPEAT_BUTTON"
-    ZStack {
-        SimpleSpriteImage(spriteKey, width: 28, height: 15)
-        // "1" badge overlay (only for repeat-one mode)
-        if audioPlayer.repeatMode == .one {
-            Text("1")
-                .font(.system(size: 8, weight: .bold))
-                .foregroundColor(.white)
-                .shadow(color: .black.opacity(0.8), radius: 1, x: 0, y: 0)
-                .offset(x: 8, y: 0)
-        }
-    }
-})
-.buttonStyle(.plain)
-.focusable(false)
-.help(audioPlayer.repeatMode.label)
-.at(Layout.repeatButton)
-```
+- **State:** `AppSettings.RepeatMode` (`off` / `all` / `one`), persisted with `didSet`; `AudioPlayer.repeatMode` forwards to it
+- **Interaction:** click cycles Off → All → One → Off (`repeatMode.next()`); Ctrl+R does the same
+- **Visual:** the button is lit when `repeatMode.isActive`; repeat-one adds a "1" badge in a `ZStack` (8pt bold white text, black shadow, offset x: 8)
+- **Tooltip:** `repeatMode.label` ("Repeat: Off/All/One")
+- **Migration:** the old Bool preference maps `true` → `.all`, `false` → `.off`
+- **Code:** `MainWindowFullLayer.buildShuffleRepeatButtons`; enum pattern in [Enum State with Persistence](IMPLEMENTATION_PATTERNS.md#pattern-enum-state-with-persistence-repeatmode-pattern)
 
 ### Time Display System
 
-**Implementation** (v0.7.8):
-- **State**: AppSettings.timeDisplayMode (elapsed/remaining)
-- **Persistence**: UserDefaults with didSet pattern
-- **Visual**: Minus sign centered at y:6 in 9x13 container for remaining mode
-- **Interaction**: Click time display or Ctrl+T to toggle
-- **Integration**: Synchronized with O button menu checkmarks
-
-**Technical Details**:
-```swift
-enum TimeDisplayMode: String, Codable {
-    case elapsed = "elapsed"      // 00:00 → track duration
-    case remaining = "remaining"  // -duration → -00:00
-}
-```
+- **State:** `AppSettings.timeDisplayMode` (`.elapsed` / `.remaining`), persisted with `didSet`; `toggleTimeDisplayMode()` flips it
+- **Visual:** remaining mode draws a minus sign centered at y:6 in a 9×13 container
+- **Interaction:** click the time display or press Ctrl+T; the O menu shows the matching checkmark
 
 ### Volume & Balance Sliders
 
-**Implementation** (v1.0.6, updated T5 Phase 1):
-
-**Signal Flow:**
+**Signal flow:**
 ```
 UI Slider → PlaybackCoordinator.setVolume() → AudioPlayer.volume didSet → engine.setVolume (playerNode + streamSourceNode)
                                                                         → VideoPlaybackController.volume (AVPlayer.volume)
@@ -4825,99 +2030,28 @@ UI Slider → PlaybackCoordinator.setBalance() → AudioPlayer.balance didSet �
 Drag end  → PlaybackCoordinator.commitVolume() / commitBalance() → UserDefaults
 ```
 
-The UI uses asymmetric `Binding<Float>` -- reads from AudioPlayer (source of truth), writes through PlaybackCoordinator. Same-value writes short-circuit in the coordinator, and persistence happens once at drag end rather than on every gesture tick.
+- **Source of truth:** `AudioPlayer.volume` (0.0–1.0, default 0.75) and `balance` (−1.0 left to 1.0 right, default 0). `init()` restores them with `UserDefaults.object(forKey:) as? Float`, so a saved 0 is distinguished from "never set".
+- **Bindings:** asymmetric `Binding<Float>`: reads from `AudioPlayer`, writes through `PlaybackCoordinator`. The coordinator short-circuits same-value writes, and persistence happens once at drag end rather than on every gesture tick. Code: [Coordinator Volume Routing](IMPLEMENTATION_PATTERNS.md#pattern-coordinator-volume-routing), [Asymmetric Binding](IMPLEMENTATION_PATTERNS.md#pattern-asymmetric-binding-for-coordinator-routing), [UserDefaults Persistence](IMPLEMENTATION_PATTERNS.md#pattern-userdefaults-persistence-with-centralized-keys).
+- **Video:** volume sets `AVPlayer.volume` and is not applied in the tap; balance is applied inside the video tap.
+- **Streams:** play through the same engine graph, so `StreamPlayer` needs no volume or balance of its own.
 
-**State & Persistence** (AudioPlayer mechanism layer):
-```swift
-// AudioPlayer.swift - Centralized UserDefaults keys
-private enum Keys {
-    static let volume = "volume"
-    static let balance = "balance"
-}
-
-var volume: Float = 0.75 {  // 0.0 to 1.0, default 0.75 (audible)
-    didSet {
-        engine?.setVolume(volume)
-        videoPlaybackController.volume = volume
-    }
-}
-
-var balance: Float = 0.0 {  // -1.0 (left) to 1.0 (right)
-    didSet {
-        engine?.setBalance(balance)
-        fanOutBalanceToVideoTaps()   // registered VideoTapContexts (WeakBox registry)
-    }
-}
-
-internal func commitVolumeToDefaults() { UserDefaults.standard.set(volume, forKey: Keys.volume) }
-internal func commitBalanceToDefaults() { UserDefaults.standard.set(balance, forKey: Keys.balance) }
-
-// Restoration in init()
-init() {
-    if let saved = UserDefaults.standard.object(forKey: Keys.volume) as? Float {
-        self.volume = saved
-    }
-    if let saved = UserDefaults.standard.object(forKey: Keys.balance) as? Float {
-        self.balance = saved
-    }
-}
-```
-
-**Coordinator Routing** (PlaybackCoordinator):
-```swift
-// PlaybackCoordinator.swift - AudioPlayer's didSets do the fan-out
-func setVolume(_ vol: Float) {
-    guard audioPlayer.volume != vol else { return }
-    audioPlayer.volume = vol
-}
-
-func setBalance(_ bal: Float) {
-    guard audioPlayer.balance != bal else { return }
-    audioPlayer.balance = bal
-}
-
-func commitVolume() { audioPlayer.commitVolumeToDefaults() }
-func commitBalance() { audioPlayer.commitBalanceToDefaults() }
-```
-
-**UI Binding Pattern** (MainWindow/MainWindowSlidersLayer.swift):
-```swift
-// Asymmetric binding: read from AudioPlayer, write through coordinator
-let volumeBinding = Binding<Float>(
-    get: { audioPlayer.volume },
-    set: { playbackCoordinator.setVolume($0) }
-)
-WinampVolumeSlider(volume: volumeBinding)
-    .at(Layout.volumeSlider)
-
-let balanceBinding = Binding<Float>(
-    get: { audioPlayer.balance },
-    set: { playbackCoordinator.setBalance($0) }
-)
-WinampBalanceSlider(balance: balanceBinding)
-    .at(Layout.balanceSlider)
-    .opacity(playbackCoordinator.supportsAudioProcessing ? 1.0 : 0.5)
-    .allowsHitTesting(playbackCoordinator.supportsAudioProcessing)
-```
-
-**Capability-Based Dimming** (T5 Phase 1, updated for unified pipeline):
-- Balance slider dims (50% opacity, hit testing disabled) only during stream prebuffering (before bridge activates) or error state
-- EQ sliders dim via `playbackCoordinator.supportsAudioProcessing` in WinampEqualizerWindow
-- Once the stream bridge is active, all controls are fully enabled (EQ, balance, visualizer all work via unified pipeline)
+**Capability-based dimming:**
+- The balance slider (and the EQ sliders in `WinampEqualizerWindow`) dim to 50% opacity with hit testing disabled only during stream prebuffering, before the bridge activates
+- Once the stream bridge is active, EQ, balance and the visualizer all work through the unified pipeline
+- A stream in an error state re-enables the controls, so the user is not stuck with a dimmed UI
 - During video the flag is `true`; EQ and balance act on the video tap
-- Controls re-enable when stream enters error state (user not stuck with dimmed UI)
-- Tooltip changes to "Balance unavailable during streaming" when dimmed (prebuffering only)
+- While dimmed, the balance tooltip reads "Balance unavailable during streaming"
 
-**Balance Slider Color Gradient** (WinampVolumeSlider.swift):
+**Balance slider color gradient** (`WinampVolumeSlider.swift`):
 - BALANCE.BMP: 28 frames stacked vertically (15px each, 420px total)
-- Frame 0 (top) = green (neutral center), Frame 27 (bottom) = red (full L/R)
-- Uses webamp-compatible linear mapping: `floor(abs(balance) * 27) * 15`
-- Symmetric via `abs(balance)`: both full-left and full-right show red
+- Frame 0 (top) = green (neutral center), frame 27 (bottom) = red (full L/R)
+- webamp-compatible linear mapping: `floor(abs(balance) * 27) * 15`
+- Symmetric via `abs(balance)`: full left and full right both show red
 
-**Haptic Snap-to-Center**:
-- Fires once on entry into center zone (not every frame)
+**Haptic snap-to-center:**
+- Fires once on entry into the center zone (not every frame)
 - Threshold: 12% of slider range
-- Uses NSHapticFeedbackManager for system-native feedback
+- Uses `NSHapticFeedbackManager` for system-native feedback
 
 ---
 
@@ -4925,114 +2059,41 @@ WinampBalanceSlider(balance: balanceBinding)
 
 ### Test Plan & Configurations
 
-**Test target**: `MacAmpTests` (`Tests/MacAmpTests`)
-**Project spec**: `project.yml` (XcodeGen — generates xcodeproj via `xcodegen generate`)
+- **Framework:** Swift Testing (`@Suite` structs, `@Test`, `#expect`); UI tests are not part of the project
+- **Target:** `MacAmpTests` (`Tests/MacAmpTests`), run through the `MacAmpApp` scheme's single "All" test-plan configuration
+- **Project spec:** `project.yml` (XcodeGen; run `xcodegen generate` when the `.xcodeproj` is stale or missing)
 
-**Configurations**:
-- Core: AppSettingsTests, EQCodecTests, SpriteResolverTests
-- Concurrency: AudioPlayerStateTests, DockingControllerTests, PlaylistNavigationTests, SkinManagerTests
-- All: full MacAmpTests target
-
-**CLI**:
 ```bash
 xcodegen generate  # if xcodeproj is stale or missing
-xcodebuild test -scheme MacAmpApp -destination 'platform=macOS'
+xcodebuild test -scheme MacAmpApp -destination 'platform=macOS' -enableThreadSanitizer YES
+xcodebuild test -scheme MacAmpApp -destination 'platform=macOS'   # also run without TSan: wall-clock benchmarks skip themselves under TSan
 ```
+
+**Suites:** `AppSettingsTests`, `AudioPlayerStateTests`, `BiquadNumericalMatchTests`, `DockingControllerTests`, `EngineConfigObserverTests`, `EQCodecTests`, `LockFreeRingBufferTests`, `PlaylistNavigationTests`, `SkinManagerTests`, `SpriteResolverTests`, `StreamPauseTailTests`, `VideoSeekStateMatrixTests`, `VideoTapCPUBenchmarkTests`, `VideoTapFanoutTests`, `VideoTapLifecycleTests`, `VideoTapSendableContractTests`, `VideoTapTelemetryTests`, `VideoTapVisualizerRenderTests`, `WindowDockingGeometryTests`, `WindowFrameStoreTests` (tags in `TestTags.swift`).
 
 ### Unit Tests
 
 ```swift
-// Tests/MacAmpTests/SpriteResolverTests.swift
-// Uses Swift Testing framework (swift-tools-version 6.2)
+// Tests/MacAmpTests/SpriteResolverTests.swift (excerpt)
 import Testing
-@testable import MacAmpApp
+import AppKit
+@testable import MacAmp
 
-@Suite struct SpriteResolverTests {
-    @Test func semanticResolution() {
-        let skin = MockSkin()
-        let resolver = SpriteResolver(skin: skin)
-
-        // Test primary mapping
-        let playButton = resolver.resolve(.playButton)
-        #expect(playButton.source == .skin("CBUTTONS_PLAY_NORM"))
-
-        // Test fallback generation
-        let missing = resolver.resolve(.customButton)
-        #expect(missing.source == .generated)
-    }
-
-    @Test func alternativeMapping() {
-        let skin = MockSkin(sprites: ["PLAY_BUTTON": mockSprite])
-        let resolver = SpriteResolver(skin: skin)
-
-        // Should find alternative name
-        let playButton = resolver.resolve(.playButton)
-        #expect(playButton.source == .skin("PLAY_BUTTON"))
+@Suite("SpriteResolver", .tags(.skin))
+struct SpriteResolverTests {
+    @Test("Out-of-range digits return nil", arguments: [-1, 10, 99, -100])
+    func digitOutOfRange(_ digit: Int) {
+        let resolver = SpriteResolver(skin: emptySkin)
+        #expect(resolver.resolve(.digit(digit)) == nil)
     }
 }
 ```
 
-### Integration Tests
+Testing patterns (async release polling, TSan-aware benchmarks, numerical match against `AVAudioUnitEQ`) are in [IMPLEMENTATION_PATTERNS.md → Testing Patterns](IMPLEMENTATION_PATTERNS.md#testing-patterns).
 
-```swift
-// Tests/MacAmpTests/PlaybackCoordinatorTests.swift
-// Uses Swift Testing framework (swift-tools-version 6.2)
-import Testing
-@testable import MacAmpApp
+### Integration Testing
 
-@Suite @MainActor struct PlaybackCoordinatorTests {
-    @Test func exclusivePlayback() async {
-        let audioPlayer = MockAudioPlayer()
-        let streamPlayer = MockStreamPlayer()
-        let coordinator = PlaybackCoordinator(
-            audioPlayer: audioPlayer,
-            streamPlayer: streamPlayer
-        )
-
-        // Start local playback
-        let localTrack = Track(url: URL(fileURLWithPath: "/test.mp3"))
-        await coordinator.play(track: localTrack)
-
-        #expect(audioPlayer.isPlaying)
-        #expect(!streamPlayer.isPlaying)
-
-        // Switch to stream
-        let streamTrack = Track(url: URL(string: "http://stream.mp3")!)
-        await coordinator.play(track: streamTrack)
-
-        #expect(!audioPlayer.isPlaying)
-        #expect(streamPlayer.isPlaying)
-    }
-}
-```
-
-### UI Tests
-
-```swift
-// UITests/MacAmpUITests.swift
-// UI tests still use XCTest (XCUIApplication requires it)
-import XCTest
-
-final class MacAmpUITests: XCTestCase {
-    func testSkinLoading() {
-        let app = XCUIApplication()
-        app.launch()
-
-        // Open skin selector
-        app.menuBars.menuItems["Skins"].click()
-        app.menuItems["Load Skin..."].click()
-
-        // Select test skin
-        let dialog = app.dialogs.firstMatch
-        dialog.textFields.firstMatch.typeText("TestSkin.wsz")
-        dialog.buttons["Open"].click()
-
-        // Verify skin loaded
-        XCTAssertTrue(app.windows["main"].exists)
-        XCTAssertTrue(app.images["mainBackground"].exists)
-    }
-}
-```
+Manual, before release: load 3–5 different skins, test magnetic docking, verify local and radio playback, check keyboard shortcuts and double-size mode, compare against Winamp 5 Modern behaviour, and watch for visualizer frame drops.
 
 ---
 
@@ -5056,45 +2117,22 @@ var playbackCoordinator: PlaybackCoordinator {
 
 ### Pitfall 2: Threading Violations
 
-**Problem**: Updating UI from background thread
+**Problem**: Updating UI state from a background context
 ```swift
-// ❌ Crashes with purple warning
+// ❌ Data race: self is @MainActor
 Task.detached {
     let result = await heavyComputation()
-    self.displayText = result  // CRASH: Not on main thread!
+    self.displayText = result
 }
 ```
 
-**Solution**: Use @MainActor or explicit dispatch
-```swift
-// ✅ Safe update
-Task.detached {
-    let result = await heavyComputation()
-    await MainActor.run {
-        self.displayText = result
-    }
-}
-```
+**Solution**: Do the work off-actor and assign on the main actor, e.g. a `@concurrent` static function awaited from `@MainActor` code (see [Modern Swift 6.2 Patterns](#modern-swift-62-patterns)), or `await MainActor.run { ... }`.
 
 ### Pitfall 3: AVAudioEngine State
 
-**Problem**: Not handling audio session interruptions
-```swift
-// ❌ Crashes after phone call on iOS or system audio change
-engine.start()  // Throws after interruption
-```
+**Problem**: Assuming `engine.start()` succeeds. It throws after interruptions and output-device changes.
 
-**Solution**: Implement proper error handling
-```swift
-// ✅ Resilient to interruptions
-do {
-    try engine.start()
-} catch {
-    // Reset audio graph
-    resetAudioEngine()
-    try? engine.start()
-}
-```
+**Solution**: Treat engine start as a hard gate: if it fails, abort (don't install taps or call `playerNode.play()`). Output-route changes are handled by the reconfigure flow in [Output Route Changes](#output-route-changes-engine-reconfiguration).
 
 ### Pitfall 4: Memory Leaks in Closures
 
@@ -5114,53 +2152,13 @@ Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] timer i
 }
 ```
 
-> **Companion pitfall — run-loop mode (mwvi PR #A, April 2026):** `Timer.scheduledTimer(withTimeInterval:repeats:block:)` schedules the timer on the run loop in `.default` mode only. During an active `DragGesture` (or any `.eventTracking` mode change — window move, scroll, menu), `.default`-mode timers are **paused**. If the timer is feeding a producer→consumer pipeline (e.g., audio data poll → SwiftUI visualizer body), the consumer keeps running but reads stale data → looks frozen. **Use `Timer(...)` + `RunLoop.main.add(timer, forMode: .common)` for any timer that must keep firing during user gestures.** See `BUILDING_RETRO_MACOS_APPS_SKILL.md` → "Lesson: RunLoop Mode Discipline in Feeding Pipelines" for the full pattern + audit checklist.
+> **Companion pitfall: run-loop mode.** `Timer.scheduledTimer(withTimeInterval:repeats:block:)` schedules the timer in `.default` mode only. During an active `DragGesture` (or any `.eventTracking` mode: window move, scroll, menu), `.default`-mode timers are **paused**. If the timer feeds a producer→consumer pipeline (e.g., audio data poll → SwiftUI visualizer body), the consumer keeps running but reads stale data and looks frozen. **Use `Timer(...)` + `RunLoop.main.add(timer, forMode: .common)` for any timer that must keep firing during user gestures.** See `BUILDING_RETRO_MACOS_APPS_SKILL.md` → "Lesson: RunLoop Mode Discipline in Feeding Pipelines" for the audit checklist.
 
 ### Pitfall 5: SwiftUI Redraw Storms
 
-**Problem**: Entire view hierarchy redraws on state change
-```swift
-// ❌ Everything redraws when time updates (pre-decomposition monolithic body)
-struct WinampMainWindow: View {
-    @Environment(AudioPlayer.self) var audioPlayer  // Updates every 100ms
+**Problem**: A monolithic view body that reads fast-changing state (`AudioPlayer` time updates every 100 ms) re-evaluates every element on each change.
 
-    var body: some View {
-        ZStack {
-            TransportButtons()       // Redraws unnecessarily
-            TimeDisplay()            // Needs update
-            SpectrumAnalyzer()       // Redraws unnecessarily
-            VolumeSlider()           // Redraws unnecessarily
-        }
-    }
-}
-```
-
-**Solution**: Extract child view structs as recomposition boundaries (T3 pattern)
-```swift
-// ✅ Only the child layer that reads the changed @Environment re-evaluates
-// File: MainWindow/WinampMainWindow.swift (root composition)
-struct WinampMainWindow: View {
-    var body: some View {
-        ZStack(alignment: .topLeading) {
-            MainWindowFullLayer(...)  // Delegates to child layers
-        }
-    }
-}
-
-// File: MainWindow/MainWindowTransportLayer.swift
-// Only re-evaluates when PlaybackCoordinator state changes
-struct MainWindowTransportLayer: View {
-    @Environment(PlaybackCoordinator.self) private var playbackCoordinator
-    // Does NOT read AudioPlayer → unaffected by volume/time changes
-}
-
-// File: MainWindow/MainWindowSlidersLayer.swift
-// Only re-evaluates when AudioPlayer volume/balance or scrubbing changes
-struct MainWindowSlidersLayer: View {
-    @Environment(AudioPlayer.self) private var audioPlayer
-    let interactionState: WinampMainWindowInteractionState
-}
-```
+**Solution**: Split the window into child `View` structs that each read only the `@Environment` values they need; see [Z-Layer Background Masking and Child-View Recomposition Boundaries](#z-layer-background-masking-and-child-view-recomposition-boundaries) and [View Layer Decomposition](IMPLEMENTATION_PATTERNS.md#pattern-view-layer-decomposition-mainwindow).
 
 ---
 
@@ -5168,57 +2166,69 @@ struct MainWindowSlidersLayer: View {
 
 ### Key Files & Their Purposes
 
+Line counts for the audio files are in [Component Breakdown](#component-breakdown).
+
 ```
 MacAmpApp/
 ├── Audio/
-│   ├── AudioPlayer.swift           # Playback facade, volume/balance, seek, video-tap orchestration (1,082 lines)
-│   ├── AudioEngineController.swift # AVAudioEngine graph lifecycle, node wiring, bridge, route changes (579 lines)
-│   ├── AudioEngineConfigurationObserver.swift # Debounced AVAudioEngineConfigurationChange observer (93 lines)
-│   ├── EqualizerController.swift   # EQ state; engine EQ + video-tap fanout (319 lines)
-│   ├── LockFreeRingBuffer.swift    # SPSC ring buffer for stream audio (180 lines)
-│   ├── EQPresetStore.swift         # EQ preset persistence (191 lines)
-│   ├── MetadataLoader.swift        # Async track/video metadata (169 lines)
-│   ├── PlaylistController.swift    # Playlist state and navigation (286 lines)
-│   ├── VideoPlaybackController.swift # AVPlayer lifecycle, audioMix at item construction (362 lines)
-│   ├── VisualizerPipeline.swift    # Engine tap, feed consumer, Butterchurn data (416 lines)
-│   ├── VisualizerFeed.swift        # SPSC visualizer hand-off, engine + video producers (112 lines)
-│   ├── VisualizerScratchBuffers.swift # Per-producer RMS/Goertzel/FFT scratch (195 lines)
-│   ├── RenderThreadSafe.swift      # Marker protocol + all conformances for render-thread storage (48 lines)
-│   ├── StreamPlayer.swift          # Stream playback, auto-reconnect, owns StreamDecodePipeline (414 lines)
-│   ├── PlaybackCoordinator.swift   # Orchestrates both backends, bridge lifecycle, capability flag (588 lines)
+│   ├── AudioPlayer.swift           # Playback facade, volume/balance, seek, video-tap orchestration
+│   ├── AudioEngineController.swift # AVAudioEngine graph lifecycle, node wiring, bridge, route changes
+│   ├── AudioEngineConfigurationObserver.swift # Debounced AVAudioEngineConfigurationChange observer
+│   ├── EqualizerController.swift   # EQ state (owns EQPresetStore); engine EQ + video-tap fanout
+│   ├── EQPresetStore.swift         # EQ preset persistence
+│   ├── LockFreeRingBuffer.swift    # SPSC ring buffer for stream audio
+│   ├── MetadataLoader.swift        # Async track/video metadata
+│   ├── PlaylistController.swift    # Playlist state and navigation
+│   ├── VideoPlaybackController.swift # AVPlayer lifecycle, audioMix at item construction
+│   ├── VisualizerPipeline.swift    # Engine tap, feed consumer, Butterchurn data
+│   ├── VisualizerFeed.swift        # SPSC visualizer hand-off, engine + video producers
+│   ├── VisualizerScratchBuffers.swift # Per-producer RMS/Goertzel/FFT scratch
+│   ├── RenderThreadSafe.swift      # Marker protocol + all conformances for render-thread storage
+│   ├── StreamPlayer.swift          # Stream playback, auto-reconnect, owns StreamDecodePipeline
+│   ├── PlaybackCoordinator.swift   # Orchestrates both backends, bridge lifecycle, capability flag, remote commands
 │   ├── ObjCBridge/
-│   │   ├── AUAudioUnitWorkgroupShim.h  # ObjC bridge for os_workgroup (17 lines)
-│   │   └── AUAudioUnitWorkgroupShim.m  # ObjC bridge implementation (23 lines)
+│   │   ├── AUAudioUnitWorkgroupShim.h  # ObjC bridge for os_workgroup
+│   │   └── AUAudioUnitWorkgroupShim.m  # ObjC bridge implementation
 │   ├── VideoDSP/
-│   │   ├── VideoTap.swift              # MTAudioProcessingTap callbacks, audio-mix builder, detach (307 lines)
-│   │   ├── VideoTapContext.swift       # Render-thread state, Atomic/Mutex fields, telemetry (226 lines)
-│   │   ├── BiquadCoefficientSet.swift  # RBJ coefficients + shared band frequencies (168 lines)
-│   │   ├── BiquadCascade.swift         # Render-confined 10-band TDF-II filter (99 lines)
-│   │   └── VideoTapVisualizerRender.swift # Video-side visualizer producer (129 lines)
+│   │   ├── VideoTap.swift              # MTAudioProcessingTap callbacks, audio-mix builder, detach
+│   │   ├── VideoTapContext.swift       # Render-thread state, Atomic/Mutex fields, telemetry
+│   │   ├── BiquadCoefficientSet.swift  # RBJ coefficients + shared band frequencies
+│   │   ├── BiquadCascade.swift         # Render-confined 10-band TDF-II filter
+│   │   └── VideoTapVisualizerRender.swift # Video-side visualizer producer
 │   └── Streaming/
-│       ├── QueueConfined.swift         # Queue confinement protocol (19 lines)
-│       ├── ICYFramer.swift             # ICY metadata protocol parser, Sendable struct (200 lines)
-│       ├── AudioFileStreamParser.swift # AudioFileStream C API wrapper, decode-queue-confined (186 lines)
-│       ├── AudioConverterDecoder.swift # AudioConverter C API wrapper, decode-queue-confined (285 lines)
-│       └── StreamDecodePipeline.swift  # Pipeline orchestrator (@MainActor + DecodeContext, 697 lines)
+│       ├── QueueConfined.swift         # Queue confinement protocol
+│       ├── ICYFramer.swift             # ICY metadata protocol parser, Sendable struct
+│       ├── AudioFileStreamParser.swift # AudioFileStream C API wrapper, decode-queue-confined
+│       ├── AudioConverterDecoder.swift # AudioConverter C API wrapper, decode-queue-confined
+│       └── StreamDecodePipeline.swift  # Pipeline orchestrator (@MainActor + DecodeContext)
 │
 ├── Models/
-│   ├── Track.swift                 # Track data model (42 lines, Sendable)
+│   ├── AppSettings.swift           # Preferences (didSet persistence), RepeatMode/TimeDisplayMode/VisualizerMode
+│   ├── Track.swift                 # Track data model (Sendable)
+│   ├── Skin.swift                  # Skin model
+│   ├── SkinSprites.swift           # Sprite sheet coordinate tables
 │   ├── SpriteResolver.swift        # Semantic → actual sprite mapping
-│   ├── Skin.swift                  # Skin model and loading
-│   └── RadioStation.swift          # Internet radio station model
+│   ├── ImageSlicing.swift          # NSImage.cropped(to:) (independent pixel copy)
+│   ├── VisColorParser.swift / PLEditParser.swift # VISCOLOR.TXT / PLEDIT.TXT
+│   ├── EQPreset.swift / EQF.swift  # EQ preset models, EQF codec
+│   ├── M3UParser.swift / M3UEntry.swift # Playlist parse/write
+│   ├── RadioStation.swift / RadioStationLibrary.swift # Saved stations
+│   ├── WindowFocusState.swift      # Key-window tracking
+│   ├── SnapUtils.swift / Size2D.swift # Snap geometry, segment sizes
+│   └── VideoWindowSizeState.swift / MilkdropWindowSizeState.swift / PlaylistWindowSizeState.swift
 │
 ├── ViewModels/
-│   ├── SkinManager.swift           # Skin loading and hot-swap (766 lines)
-│   ├── DockingController.swift     # Window magnetic docking (124 lines)
-│   ├── ButterchurnBridge.swift      # Swift-to-JS Butterchurn bridge (247 lines)
-│   ├── ButterchurnPresetManager.swift # Preset management (273 lines)
-│   ├── WindowCoordinator.swift      # Window management facade (218 lines)
-│   └── WindowCoordinator+Layout.swift # Layout/presentation (129 lines)
+│   ├── SkinManager.swift (+ SkinManager+Import.swift) # Skin loading, hot-swap, import
+│   ├── SkinArchiveLoader.swift     # @concurrent ZIP extraction
+│   ├── DockingController.swift     # Window magnetic docking
+│   ├── ButterchurnBridge.swift     # Swift-to-JS Butterchurn bridge
+│   ├── ButterchurnPresetManager.swift # Preset management
+│   ├── WindowCoordinator.swift     # Window management facade
+│   └── WindowCoordinator+Layout.swift # Layout/presentation
 │
 ├── Views/
-│   ├── MainWindow/                 # Main player window (T3 decomposition, 10 files)
-│   │   ├── WinampMainWindow.swift            # Root composition (~110 lines)
+│   ├── MainWindow/                 # Main player window (10 files)
+│   │   ├── WinampMainWindow.swift            # Root composition
 │   │   ├── WinampMainWindowLayout.swift      # Coords constants enum
 │   │   ├── WinampMainWindowInteractionState.swift # @Observable interaction state
 │   │   ├── MainWindowOptionsMenuPresenter.swift # NSMenu bridge for O button
@@ -5229,7 +2239,7 @@ MacAmpApp/
 │   │   ├── MainWindowIndicatorsLayer.swift   # Play/pause, mono/stereo, bitrate, sample rate
 │   │   └── MainWindowSlidersLayer.swift      # Volume, balance, position sliders
 │   │
-│   ├── PlaylistWindow/             # Playlist window (N6 decomposition, 7 files)
+│   ├── PlaylistWindow/             # Playlist window (7 files)
 │   │   ├── PlaylistBottomControlsView.swift  # Bottom control buttons
 │   │   ├── PlaylistMenuPresenter.swift       # NSMenu bridge
 │   │   ├── PlaylistResizeHandle.swift        # Resize handle
@@ -5240,8 +2250,12 @@ MacAmpApp/
 │   │
 │   ├── WinampEqualizerWindow.swift # 10-band EQ window
 │   ├── WinampPlaylistWindow.swift  # Playlist root composition
+│   ├── PlaylistWindowActions.swift # Playlist NEW/LOAD/SAVE and ADD/REM actions
 │   ├── WinampVideoWindow.swift     # Video playback window
 │   ├── WinampMilkdropWindow.swift  # Visualization window
+│   ├── VisualizerView.swift        # Spectrum/oscilloscope visualizer
+│   ├── SkinnedText.swift           # Bitmap font text rendering
+│   ├── PreferencesView.swift       # Preferences window
 │   ├── Shared/
 │   │   ├── TitlebarDragCaptureView.swift     # Titlebar drag NSView
 │   │   └── WinampTitlebarDragHandle.swift    # Titlebar drag handle
@@ -5253,92 +2267,82 @@ MacAmpApp/
 │   │   └── VideoWindowChromeView.swift       # Video VIDEO.BMP chrome
 │   │
 │   └── Components/
+│       ├── EQPresetPickerView.swift          # EQ preset picker
 │       ├── PlaylistBitmapText.swift          # Playlist bitmap text
-│       ├── PlaylistMenuDelegate.swift        # Playlist menu delegate
+│       ├── PlaylistMenuDelegate.swift        # Sprite-menu keyboard navigation
 │       ├── PlaylistScrollSlider.swift        # Playlist scroll slider
 │       ├── PlaylistTimeText.swift            # Playlist time text
-│       ├── SimpleSpriteImage.swift           # Sprite rendering
+│       ├── SimpleSpriteImage.swift           # Sprite rendering + .at() positioning
 │       ├── SpriteMenuItem.swift              # Sprite menu item
 │       ├── TrackInfoView.swift               # Track info display
-│       ├── WinampButtonStyle.swift           # Winamp button style
-│       └── WinampVolumeSlider.swift          # Volume slider
+│       ├── WinampVerticalSlider.swift        # EQ band slider
+│       └── WinampVolumeSlider.swift          # Volume and balance sliders
 │
 ├── Windows/
-│   ├── BorderlessWindow.swift                # Borderless NSWindow subclass (7 lines)
-│   ├── WindowRegistry.swift                  # Window ownership + lookup (83 lines)
-│   ├── WindowFramePersistence.swift          # Frame save/load/suppress (147 lines)
-│   ├── WindowVisibilityController.swift      # Show/hide/toggle (@Observable, 161 lines)
-│   ├── WindowResizeController.swift          # Resize + docking (311 lines)
-│   ├── WindowSettingsObserver.swift          # Settings observation (114 lines)
-│   ├── WindowDelegateWiring.swift            # Delegate factory (54 lines)
-│   ├── WindowDockingTypes.swift              # Value types (Sendable, 50 lines)
-│   ├── WindowDockingGeometry.swift           # Pure geometry (nonisolated, 109 lines)
-│   ├── WindowFrameStore.swift                # UserDefaults persistence (65 lines)
-│   ├── WinampMainWindowController.swift      # NSWindowController for main (53 lines)
-│   ├── WinampEqualizerWindowController.swift # NSWindowController for EQ (50 lines)
-│   ├── WinampPlaylistWindowController.swift  # NSWindowController for playlist (55 lines)
-│   ├── WinampVideoWindowController.swift     # NSWindowController for video (44 lines)
-│   └── WinampMilkdropWindowController.swift  # NSWindowController for milkdrop (85 lines)
+│   ├── BorderlessWindow.swift                # Borderless NSWindow subclass
+│   ├── WindowRegistry.swift                  # Window ownership + lookup
+│   ├── WindowFramePersistence.swift          # Frame save/load/suppress
+│   ├── WindowVisibilityController.swift      # Show/hide/toggle (@Observable)
+│   ├── WindowResizeController.swift          # Resize + docking
+│   ├── WindowSettingsObserver.swift          # Settings observation
+│   ├── WindowDelegateWiring.swift            # Delegate factory
+│   ├── WindowDockingTypes.swift              # Value types (Sendable)
+│   ├── WindowDockingGeometry.swift           # Pure geometry (nonisolated)
+│   ├── WindowFrameStore.swift                # UserDefaults persistence
+│   └── Winamp{Main,Equalizer,Playlist,Video,Milkdrop}WindowController.swift
 │
 ├── Utilities/
-│   ├── TimeFormatting.swift                  # Duration formatting (12 lines)
-│   ├── WeakBox.swift                         # Weak reference wrapper for video-tap registries (11 lines)
-│   ├── MenuActionTarget.swift                # NSMenu closure bridge (39 lines)
-│   ├── WinampAlertHelper.swift               # Alert presentation helpers (50 lines)
-│   ├── AppLogger.swift                       # Unified logging (43 lines)
-│   ├── WinampWindowConfigurator.swift        # Window configuration (62 lines)
-│   ├── WindowDelegateMultiplexer.swift       # Delegate multiplexer (86 lines)
-│   ├── WindowFocusDelegate.swift             # Focus delegation (41 lines)
-│   ├── WindowResizePreviewOverlay.swift      # Resize preview (111 lines)
-│   └── WindowSnapManager.swift              # Magnetic snap logic (379 lines)
+│   ├── TimeFormatting.swift                  # Duration formatting
+│   ├── WeakBox.swift                         # Weak reference wrapper for video-tap registries
+│   ├── MenuActionTarget.swift                # NSMenu closure bridge (MenuItemFactory)
+│   ├── WinampAlertHelper.swift               # Alert presentation helpers
+│   ├── AppLogger.swift                       # Unified logging (AppLog)
+│   ├── WinampWindowConfigurator.swift        # Window configuration
+│   ├── WindowDelegateMultiplexer.swift       # Delegate multiplexer
+│   ├── WindowFocusDelegate.swift             # Focus delegation
+│   ├── WindowResizePreviewOverlay.swift      # Resize preview
+│   └── WindowSnapManager.swift               # Magnetic snap logic
 │
 ├── MacAmpApp.swift                 # App entry point, DI setup
-├── AppCommands.swift                # App menu commands
-└── SkinsCommands.swift               # Skins menu commands
+├── AppCommands.swift               # App menu commands and shortcuts
+└── SkinsCommands.swift             # Skins menu commands
 ```
 
 ### Common Tasks
 
 **Load a skin:**
 ```swift
-await skinManager.loadSkin(from: URL(fileURLWithPath: "/path/to/skin.wsz"))
+skinManager.loadSkin(from: URL(fileURLWithPath: "/path/to/skin.wsz"))  // loads asynchronously
+skinManager.switchToSkin(identifier: "bundled:Winamp")                  // by identifier, saves the selection
 ```
 
-**Play a file:**
+**Play a track (local file or stream):**
 ```swift
-await playbackCoordinator.play(url: URL(fileURLWithPath: "/path/to/song.mp3"))
+await playbackCoordinator.play(track: track)
 ```
 
 **Play internet radio:**
 ```swift
-let station = RadioStation(name: "My Station", streamURL: URL(string: "http://stream.url")!)
+let station = RadioStation(name: "My Station", streamURL: url)
 await playbackCoordinator.play(station: station)
 ```
 
 **Apply EQ preset:**
 ```swift
-audioPlayer.applyEQPreset(.rock)
+audioPlayer.applyEQPreset(preset)   // an EQPreset, e.g. from EQPreset.builtIn
 ```
 
 **Set repeat mode:**
 ```swift
-// Set specific mode
 audioPlayer.repeatMode = .one  // Repeat current track
 audioPlayer.repeatMode = .all  // Loop playlist
 audioPlayer.repeatMode = .off  // Stop at end
-
-// Cycle through modes (button behavior)
-audioPlayer.repeatMode = audioPlayer.repeatMode.next()
+audioPlayer.repeatMode = audioPlayer.repeatMode.next()  // Cycle (button behavior)
 ```
 
 **Add to playlist:**
 ```swift
-playlistManager.addTrack(Track(url: url, title: "Song", artist: "Artist", duration: 180))
-```
-
-**Dock windows:**
-```swift
-dockingController.dockWindow(.equalizer, to: .main, edge: .bottom)
+audioPlayer.addTrack(url: url)
 ```
 
 ### Build & Run
@@ -5358,6 +2362,8 @@ xcodebuild test -scheme MacAmpApp -destination 'platform=macOS' -enableThreadSan
 xcodebuild clean
 ```
 
+Release signing and notarization: [RELEASE_BUILD_GUIDE.md](RELEASE_BUILD_GUIDE.md).
+
 ### Performance Metrics
 
 ```
@@ -5375,8 +2381,8 @@ CPU (Visualizer):     5-10% (60 FPS spectrum)
 MAIN.BMP         # Main window chrome (275x116)
 EQ_EX.BMP        # Equalizer window chrome (275x116)
 PLEDIT.BMP       # Playlist window chrome (275x164)
-VIDEO.BMP        # Video window chrome (275x116) - 6 sections
-GEN.BMP          # Generic/Milkdrop chrome - Two-piece pattern
+VIDEO.BMP        # Video window chrome (titlebar, borders, bottom bar)
+GEN.BMP          # Generic/Milkdrop chrome - normal/selected pairs
 ```
 
 **Button Sprites:**
@@ -5407,25 +2413,7 @@ PLEDIT.TXT       # Playlist text colors and fonts
 REGION.TXT       # Window shape regions (for non-rectangular windows)
 ```
 
-**GEN.bmp Sprite Pattern (Milkdrop):**
-```
-// Two-piece pattern: each element has normal + selected state
-GEN_TOP_LEFT           # Index 0: Normal state
-GEN_TOP_LEFT_SELECTED  # Index 1: Selected/focused state
-
-// 6-section titlebar layout:
-- GEN_TOP_LEFT / GEN_TOP_LEFT_SELECTED
-- GEN_TOP_LEFT_END / GEN_TOP_LEFT_END_SELECTED
-- GEN_TOP_TITLE / GEN_TOP_TITLE_SELECTED
-- GEN_TOP_RIGHT_BEGIN / GEN_TOP_RIGHT_BEGIN_SELECTED
-- GEN_TOP_RIGHT / GEN_TOP_RIGHT_SELECTED
-- GEN_TOP_RIGHT_END / GEN_TOP_RIGHT_END_SELECTED
-
-// Borders and bottom:
-- GEN_MIDDLE_LEFT / GEN_MIDDLE_LEFT_SELECTED
-- GEN_MIDDLE_RIGHT / GEN_MIDDLE_RIGHT_SELECTED
-- GEN_BOTTOM / GEN_BOTTOM_SELECTED
-```
+**GEN.bmp sprite names (Milkdrop):** each element has a normal and a `_SELECTED` variant: `GEN_TOP_LEFT`, `GEN_TOP_LEFT_RIGHT_FILL`, `GEN_TOP_LEFT_END`, `GEN_TOP_CENTER_FILL`, `GEN_TOP_RIGHT_END`, `GEN_TOP_RIGHT`. Borders and bottom bar: `GEN_MIDDLE_LEFT`, `GEN_MIDDLE_RIGHT`, `GEN_BOTTOM_LEFT`, `GEN_BOTTOM_FILL_TOP`, `GEN_BOTTOM_FILL_BOTTOM`, `GEN_BOTTOM_RIGHT`.
 
 ---
 
@@ -5433,7 +2421,7 @@ GEN_TOP_LEFT_SELECTED  # Index 1: Selected/focused state
 
 MacAmp demonstrates that retro UI aesthetics and modern development practices are not mutually exclusive. By building a unified audio pipeline (custom stream decode feeding AVAudioEngine) plus an in-place DSP tap for AVPlayer video, leveraging modern language features (Swift 6.2 concurrency), and maintaining strict architectural boundaries (three-layer pattern), we've created a maintainable, performant, and pixel-perfect recreation of a beloved classic.
 
-The key insight: **The skin is not the app**. This separation enables MacAmp to be simultaneously a faithful Winamp clone and a modern macOS application built with 2025's best practices.
+The key insight: **The skin is not the app**. This separation enables MacAmp to be simultaneously a faithful Winamp clone and a modern macOS application.
 
 For developers joining the project: start with `PlaybackCoordinator.swift` to understand the orchestration pattern, explore `SpriteResolver.swift` for the semantic mapping system, and examine the `MainWindow/` subdirectory to see how it all comes together in SwiftUI -- `WinampMainWindow.swift` is the root composition, `MainWindowFullLayer.swift` assembles child layers, and each layer struct (Transport, Sliders, Indicators, TrackInfo) creates a focused recomposition boundary.
 
@@ -5441,54 +2429,11 @@ Welcome to MacAmp. May your audio be crisp and your skins be pixel-perfect.
 
 ---
 
-*Document Version: 3.2.0 | Last Updated: 2026-09-25 | Lines: ~5,500*
+*Document Version: 3.3.0 | Last Updated: 2026-09-25*
 
-**Recent Updates (v3.2.0 - 2026-09-25, S3-2 AVPlayer-Native Video DSP):**
-- Added §8a "AVPlayer-Native Video DSP": topology, tap lifecycle, preferred processing format (stereo pin), `tapProcess` render path, biquad EQ, EQ/balance fanout, Audio Mechanism Concurrency Contract, visualizer gating, remote commands, known limitations
-- Added Recent Architectural Changes #14 and the "Output Route Changes (Engine Reconfiguration)" subsection in §4
-- Corrected statements that video audio has no EQ/visualizer or shares the engine; `snapshotButterchurnFrame` is now gated on `isVisualizerRendering`
-- Renamed `VisualizerSharedBuffer` → `VisualizerFeed` throughout; `VisualizerScratchBuffers` now lives in its own file
-- Updated volume/balance routing to the current AudioPlayer `didSet` fan-out (balance now reaches video taps) and call-site persistence
-- Updated metrics, component table, file structure and Quick Reference for the new/changed files; Package.swift snippet to macOS 27
-
-**Previous Updates (v3.0.0 - 2026-03-22):**
-- Added AudioEngineController (413->424 lines) to Component Breakdown table, Three-Layer diagram, Section 4a decomposition architecture, Data Flow diagram, File Structure, and Quick Reference
-- Updated AudioPlayer line count from 1,143 to 734 throughout (Phase 4 extraction + subsequent growth)
-- Updated StreamPlayer line count from 189 to 334 (auto-reconnect growth)
-- Updated StreamDecodePipeline line count from 631 to 666
-- Added Recent Architectural Changes #12 (AudioEngineController Phase 4 extraction)
-- Added Recent Architectural Changes #13 (Network Auto-Reconnect)
-- Added Auto-Reconnect State Machine subsection in Section 9 (StreamTerminationReason, exponential backoff, error classification, bridge tear-down/re-create, user-friendly error messages)
-- Updated PlaybackCoordinator.displayTitle code example: "Buffering..." to "Connecting...", added error branch, station name + track title combination
-- Updated "After" decomposition diagram from 5 to 6 components (AudioPlayer split into Facade + AudioEngineController)
-
-**Previous Updates (v2.9.0 - 2026-03-14):**
-- Renamed section 4 from "Dual Audio Backend Architecture" to "Unified Audio Pipeline Architecture"
-- Replaced dual backend diagrams with unified pipeline architecture showing both input paths converging at AVAudioEngine
-- Added Stream Decode Pipeline Components subsection (ICYFramer, AudioFileStreamParser, AudioConverterDecoder, StreamDecodePipeline)
-- Added Threading Model diagram (MainActor / Decode Queue / Audio IO Thread)
-- Updated capability flags to reflect `|| audioPlayer.isBridgeActive` logic
-- Updated volume/balance routing comments for unified pipeline (no more AVPlayer.volume)
-- Rewrote StreamPlayer Architecture in section 9 (no AVPlayer, no NSObject, custom pipeline, isolated deinit)
-- Updated stream types supported (removed OGG/HLS claims, added M3U/PLS playlist resolution)
-- Updated AVAudioEngine Graph diagram in section 8 to show both AVAudioPlayerNode and AVAudioSourceNode input paths
-- Updated Quick Reference file listing with Streaming/ subdirectory (4 new files)
-- Updated Executive Summary and Conclusion to reference unified pipeline instead of dual backends
-
-**Previous Updates (v2.7.0 - 2026-02-22):**
-- Added MainWindow Layer Decomposition (T3, PR #54) to Recent Architectural Changes (#11)
-- Updated Component Breakdown table with MainWindow/ (10 files) and PlaylistWindow/ (7 files)
-- Updated File Structure with Views/MainWindow/ and Views/PlaylistWindow/ subdirectories
-- Updated SwiftUI Rendering Techniques with child-view recomposition boundary pattern
-- Updated all file path references from deleted files (WinampMainWindow.swift, WinampMainWindow+Helpers.swift, VideoWindowChromeView.swift)
-- Updated Clutter Bar, Repeat Mode, Volume/Balance, and Capability Dimming sections with new file paths
-- Updated N6 section to reflect both MainWindow and PlaylistWindow decompositions as COMPLETE
-- Updated Quick Reference directory listing with full MainWindow/ and PlaylistWindow/ breakdown
-- Updated onboarding guidance in Conclusion to reference decomposed MainWindow/ structure
-
-**Previous Updates (v2.4.0 - 2026-02-09):**
-- Added WindowCoordinator refactoring to Recent Architectural Changes (#10)
-- Updated Component Breakdown table with Window Management section (11 files, 1,470 lines)
-- Updated Five-Window NSWindowController Stack with post-refactoring architecture
-- Updated File Structure Quick Reference with Windows/ directory breakdown
-- Cross-referenced MULTI_WINDOW_ARCHITECTURE.md §10 for refactoring details
+**Recent updates** (full history in git):
+- **3.3.0 (2026-09-25):** Pruned: one home per topic (code patterns moved to IMPLEMENTATION_PATTERNS.md), snippets checked against the code, per-file sizes consolidated into Component Breakdown, stale sections corrected.
+- **3.2.0 (2026-09-25):** Added AVPlayer-Native Video DSP and Output Route Changes; `VisualizerSharedBuffer` → `VisualizerFeed`; balance reaches video taps.
+- **3.0.0 (2026-03-22):** AudioEngineController extraction; network auto-reconnect.
+- **2.9.0 (2026-03-14):** Unified audio pipeline replaced the dual AVPlayer/engine backends.
+- **2.7.0 (2026-02-22):** MainWindow layer decomposition.

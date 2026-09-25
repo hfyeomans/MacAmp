@@ -1,100 +1,65 @@
 # MacAmp Release Build & Distribution Guide
 
-> **Consolidated:** Merged content from `CODE_SIGNING_FIX.md`, `CODE_SIGNING_FIX_DIAGRAM.md`, and `RELEASE_BUILD_COMPARISON.md` (2026-03-25).
+This guide covers building MacAmp for direct download distribution using Developer ID signing, notarization, and a DMG.
 
-This guide covers building MacAmp for direct download distribution using Developer ID signing.
+Key facts (from `project.yml`):
+
+| Setting | Value |
+|---------|-------|
+| Scheme | `MacAmpApp` |
+| Target / product | `MacAmp` → `MacAmp.app` (not `MacAmpApp.app`) |
+| Bundle ID | `com.hankyeomans.MacAmp` |
+| Team | `AC3LGVEJJ8` |
+| Signing | `CODE_SIGN_STYLE: Automatic`; Debug `Apple Development`, Release `Developer ID Application` |
+| Hardened runtime | `ENABLE_HARDENED_RUNTIME: true` (all configurations) |
+| Entitlements | `MacAmpApp/MacAmp.entitlements` |
+| Version | `MARKETING_VERSION` / `CURRENT_PROJECT_VERSION` (Info.plist reads both) |
+| Release output | `CONFIGURATION_BUILD_DIR: $(PROJECT_DIR)/dist` (`dist/` is gitignored; don't delete it) |
+| Notary profile | `notarytool-password` (Keychain) |
 
 ## Prerequisites
 
 ### 1. Apple Developer Account
 
-You need an **Apple Developer Program** membership ($99/year) to:
-- Obtain Developer ID certificates
-- Notarize your app with Apple
-- Distribute outside the Mac App Store
-
-Sign up at: https://developer.apple.com/programs/
+An **Apple Developer Program** membership is required for Developer ID certificates, notarization, and distribution outside the Mac App Store: https://developer.apple.com/programs/
 
 ### 2. Build Toolchain
 
-- **Swift 6.2** — the project uses `swift-tools-version: 6.2` and requires Xcode with Swift 6.2 support
-- **XcodeGen** — the Xcode project (`MacAmpApp.xcodeproj`) is generated from `project.yml` and is gitignored. Install with `brew install xcodegen` (v2.38.0+). Run `xcodegen generate` before any build.
+- **Swift 6.2** — `swift-tools-version: 6.2`; requires Xcode with Swift 6.2 support
+- **XcodeGen** v2.38.0+ (`brew install xcodegen`). `MacAmpApp.xcodeproj` is generated from `project.yml` and gitignored; run `xcodegen generate` before any build.
 
 ### 3. Developer ID Certificates
 
-After enrolling, create your certificates:
+1. https://developer.apple.com/account/resources/certificates/list → **+**
+2. Select **Developer ID Application**
+3. Generate a CSR from Keychain Access, then download and install the certificate
 
-1. Go to https://developer.apple.com/account/resources/certificates/list
-2. Click the "+" button to create a new certificate
-3. Select **Developer ID Application** (for signing apps)
-4. Follow the wizard to generate a Certificate Signing Request (CSR) from Keychain Access
-5. Download and install the certificate in your Keychain
+Check it is installed: `security find-identity -v -p codesigning`
 
-### 3. Xcode Configuration
+## Xcode Configuration
 
-In Xcode, configure your project:
-
-1. Run `xcodegen generate` (generates xcodeproj from `project.yml`)
-2. Open `MacAmpApp.xcodeproj`
-3. Select the **MacAmp** target
-3. Go to **Signing & Capabilities** tab
-4. Set **Team** to your Apple Developer Team
-5. Set **Signing Certificate** to "Developer ID Application"
-6. Add the **MacAmp.entitlements** file (already created in `MacAmpApp/MacAmp.entitlements`)
-
-#### Manual Project Settings (if needed)
-
-If Xcode doesn't auto-configure, set these build settings manually:
-
-**For Release configuration:**
-```
-CODE_SIGN_STYLE = Manual
-CODE_SIGN_IDENTITY = "Developer ID Application: Your Name (TEAM_ID)"
-DEVELOPMENT_TEAM = YOUR_TEAM_ID
-CODE_SIGN_ENTITLEMENTS = MacAmpApp/MacAmp.entitlements
-ENABLE_HARDENED_RUNTIME = YES
-```
+Signing settings live in `project.yml` (see the table above). Change them there and re-run `xcodegen generate`; never edit the generated project. The Xcode **Signing & Capabilities** tab of the **MacAmp** target should show team `AC3LGVEJJ8` and the entitlements file.
 
 ## Building a Release Build
 
-### Method 1: Archive in Xcode (Recommended)
+### Method 1: Archive in Xcode
 
-1. **Select Release Scheme:**
-   - Product → Scheme → Edit Scheme
-   - Set "Run" to use "Release" configuration
+1. `xcodegen generate`, open `MacAmpApp.xcodeproj`
+2. **Product → Archive** (Archive uses the Release configuration)
+3. In Organizer: **Distribute App → Developer ID → Export**, choose a folder
 
-2. **Archive the App:**
-   - Product → Archive (Cmd+Shift+B)
-   - Wait for build to complete
-   - Organizer window will open
+### Method 2: Command Line
 
-3. **Export the App:**
-   - Click **Distribute App**
-   - Choose **Developer ID**
-   - Select **Export** (not Upload)
-   - Choose destination folder
-   - Click **Export**
-
-This creates a signed, notarization-ready `.app` bundle.
-
-### Method 2: Command Line Build
-
-**Pre-flight:** Read project config before running any build commands:
+Pre-flight:
 ```bash
-# Check product name, version, and build dir
 grep -E "MARKETING_VERSION|CURRENT_PROJECT_VERSION|PRODUCT_NAME|CONFIGURATION_BUILD_DIR" project.yml
-# IMPORTANT: Product name is "MacAmp" — exported app is MacAmp.app (NOT MacAmpApp.app)
-# IMPORTANT: Release CONFIGURATION_BUILD_DIR is $(PROJECT_DIR)/dist — do NOT delete dist/
-ls -d build/ dist/ 2>/dev/null  # check existing state
+ls -d build/ dist/ 2>/dev/null
 ```
 
 ```bash
-# Generate Xcode project (required — xcodeproj is gitignored)
 xcodegen generate
 
-# Archive with manual signing overrides
-# NOTE: CONFIGURATION_BUILD_DIR override is required — project.yml sets it to dist/
-# which conflicts with the archive intermediate paths
+# CONFIGURATION_BUILD_DIR override is required: project.yml's dist/ conflicts with archive intermediate paths
 xcodebuild archive \
   -project MacAmpApp.xcodeproj \
   -scheme MacAmpApp \
@@ -108,123 +73,55 @@ xcodebuild archive \
 # If SPM packages fail to resolve:
 # xcodebuild -resolvePackageDependencies -project MacAmpApp.xcodeproj -scheme MacAmpApp
 
-# Export the archive
 xcodebuild -exportArchive \
   -archivePath ./build/MacAmp.xcarchive \
   -exportPath ./build/Release \
   -exportOptionsPlist ExportOptions.plist
 ```
 
-Create `ExportOptions.plist`:
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>method</key>
-    <string>developer-id</string>
-    <key>teamID</key>
-    <string>YOUR_TEAM_ID</string>
-    <key>signingStyle</key>
-    <string>manual</string>
-    <key>signingCertificate</key>
-    <string>Developer ID Application</string>
-</dict>
-</plist>
-```
+`ExportOptions.plist` (repo root) sets `method: developer-id`, `teamID: AC3LGVEJJ8`, `signingStyle: manual`, `signingCertificate: Developer ID Application`.
 
 ## Notarization
 
-**Required** on every supported macOS (27+). Users cannot run your app without notarization.
+**Required** on every supported macOS (27+); users cannot run the app without it.
 
-### Step 1: Create App-Specific Password
+### Credentials
 
-1. Go to https://appleid.apple.com
-2. Sign in with your Apple ID
-3. Go to **Security** → **App-Specific Passwords**
-4. Click **Generate Password**
-5. Name it "MacAmp Notarization"
-6. Save the generated password
-
-### Step 2: Store Credentials
-
-Credentials are stored in Keychain under profile name `notarytool-password`. This is already configured:
+Credentials are stored in the Keychain under profile `notarytool-password` (Apple ID `hank.yeomans@me.com`, team `AC3LGVEJJ8`). To re-create it (new machine, Keychain reset, rotated password), generate an app-specific password at https://appleid.apple.com (Security → App-Specific Passwords), then:
 
 ```bash
-# Already done — reference with --keychain-profile "notarytool-password"
-# Apple ID: hank.yeomans@me.com
-# Team ID: AC3LGVEJJ8
-```
-
-If you ever need to re-create the profile (new machine, Keychain reset, rotated app-specific password):
-
-```bash
-# 1. Generate a new app-specific password at https://appleid.apple.com
-#    (Security → App-Specific Passwords → Generate)
-# 2. Store credentials:
 xcrun notarytool store-credentials "notarytool-password" \
   --apple-id "hank.yeomans@me.com" \
-  --team-id "AC3LGVEJJ8" \
-  --password "xxxx-xxxx-xxxx-xxxx"
-# 3. It will prompt for the app-specific password if --password is omitted
+  --team-id "AC3LGVEJJ8"
+# prompts for the app-specific password (or pass --password)
 ```
 
-### Step 3: Submit for Notarization
+### Submit, Check, Staple
 
 ```bash
-# Create a ZIP of your app
 cd build/Release
 ditto -c -k --keepParent MacAmp.app MacAmp.zip
 
-# Submit to Apple
-xcrun notarytool submit MacAmp.zip \
-  --keychain-profile "notarytool-password" \
-  --wait
+# --wait blocks until Apple returns a result (usually 2-5 minutes)
+xcrun notarytool submit MacAmp.zip --keychain-profile "notarytool-password" --wait
 
-# This will return a submission ID like:
-# Successfully received submission info
-#   id: 12345678-1234-1234-1234-123456789012
-#   status: Accepted
-```
+# Without --wait, or to inspect a rejection:
+xcrun notarytool info SUBMISSION_ID --keychain-profile "notarytool-password"
+xcrun notarytool log  SUBMISSION_ID --keychain-profile "notarytool-password" notarization-log.json
 
-The `--wait` flag makes it wait for results (usually 2-5 minutes).
-
-### Step 4: Check Status (if not using --wait)
-
-```bash
-# Check notarization status
-xcrun notarytool info SUBMISSION_ID \
-  --keychain-profile "notarytool-password"
-
-# View logs if rejected
-xcrun notarytool log SUBMISSION_ID \
-  --keychain-profile "notarytool-password"
-```
-
-### Step 5: Staple the Ticket
-
-Once accepted, staple the notarization ticket to your app:
-
-```bash
-# Staple to the app bundle
 xcrun stapler staple MacAmp.app
-
-# Verify stapling
 xcrun stapler validate MacAmp.app
 ```
 
 ## Creating a DMG for Distribution
 
-Users expect a `.dmg` file for macOS apps. Here's how to create one:
-
 ### Option 1: Branded DMG (Recommended)
 
-Uses the branded background image at `assets/dmg-background.png` (MacAmp screenshot with gradient overlay and install instructions).
+Uses `assets/dmg-background.png` (MacAmp screenshot with gradient overlay and install instructions).
 
 ```bash
 brew install create-dmg  # if not installed
 
-# Copy signed+stapled app to dist/
 mkdir -p dist
 cp -R build/Release/MacAmp.app dist/
 
@@ -241,16 +138,11 @@ create-dmg \
   "dist/MacAmp-VERSION.dmg" \
   "dist/"
 
-# Notarize the DMG
-xcrun notarytool submit dist/MacAmp-VERSION.dmg \
-  --keychain-profile "notarytool-password" \
-  --wait
-
-# Staple to DMG
+xcrun notarytool submit dist/MacAmp-VERSION.dmg --keychain-profile "notarytool-password" --wait
 xcrun stapler staple dist/MacAmp-VERSION.dmg
 ```
 
-**Background image regeneration** (if source screenshot changes):
+**Background image regeneration** (if the source screenshot changes):
 ```bash
 magick SOURCE_SCREENSHOT.png \
   -resize 800x \
@@ -266,427 +158,82 @@ magick SOURCE_SCREENSHOT.png \
 ### Option 2: Quick DMG (No Branding)
 
 ```bash
-hdiutil create -volname "MacAmp" \
-  -srcfolder build/Release/MacAmp.app \
-  -ov -format UDZO \
-  MacAmp-VERSION.dmg
-
-xcrun notarytool submit MacAmp-VERSION.dmg \
-  --keychain-profile "notarytool-password" \
-  --wait
-
+hdiutil create -volname "MacAmp" -srcfolder build/Release/MacAmp.app -ov -format UDZO MacAmp-VERSION.dmg
+xcrun notarytool submit MacAmp-VERSION.dmg --keychain-profile "notarytool-password" --wait
 xcrun stapler staple MacAmp-VERSION.dmg
 ```
 
 ## Verification
 
-Before distributing, verify your app works:
-
-### 1. Check Code Signature
-
 ```bash
 codesign --verify --deep --strict --verbose=2 MacAmp.app
-codesign -dv --verbose=4 MacAmp.app
+codesign -dv --verbose=4 MacAmp.app        # Authority: Developer ID Application: Hank Yeomans (AC3LGVEJJ8)
+codesign -d --entitlements - MacAmp.app    # MacAmp.entitlements, and no get-task-allow
+spctl --assess --verbose=4 --type execute MacAmp.app   # "MacAmp.app: accepted"
 ```
 
-Should show:
-- `Developer ID Application: Your Name (TEAM_ID)`
-- `Sealed Resources version 2 rules`
-- `signed app bundle with Mach-O universal (x86_64 arm64)`
+Expected signature: identifier `com.hankyeomans.MacAmp`, team `AC3LGVEJJ8`, authority chain Developer ID Application → Developer ID Certification Authority → Apple Root CA, `Sealed Resources version 2`. See the `get-task-allow` trap under [Testing a Release Build](#testing-a-release-build).
 
-### 2. Check Hardened Runtime
-
-```bash
-codesign -d --entitlements - MacAmp.app
-```
-
-Should show your entitlements from `MacAmp.entitlements` and no `com.apple.security.get-task-allow` (see the `get-task-allow` trap under [Testing a Release Build](#testing-a-release-build)).
-
-### 3. Check Notarization
-
-```bash
-spctl --assess --verbose=4 --type execute MacAmp.app
-```
-
-Should show: `MacAmp.app: accepted`
-
-### 4. Test on Clean Mac
-
-Best practice:
-1. Copy the DMG to a USB drive
-2. Test on a Mac that has **never** run this app
-3. Double-click the DMG and drag to Applications
-4. Launch from Applications folder
-5. Verify no "unidentified developer" warnings
+Finally, test the DMG on a Mac that has never run the app: drag to Applications, launch, confirm no "unidentified developer" warning.
 
 ## Distribution Checklist
 
-Before releasing:
-
-- [ ] Bundle ID set to `com.hankyeomans.MacAmp`
-- [ ] Version number updated in Info.plist
-- [ ] Build number incremented
-- [ ] App signed with Developer ID certificate
-- [ ] Hardened Runtime enabled
-- [ ] Entitlements file included
-- [ ] App notarized with Apple
-- [ ] Notarization ticket stapled
-- [ ] DMG created and notarized
-- [ ] DMG stapled
-- [ ] Tested on clean macOS 27+ system
-- [ ] Release notes written
-- [ ] README.md updated with download link
+- [ ] `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` bumped in `project.yml`
+- [ ] Signed with Developer ID, hardened runtime, entitlements included, no `get-task-allow`
+- [ ] App notarized and stapled
+- [ ] DMG created, notarized, and stapled
+- [ ] Tested on a clean macOS 27+ system
+- [ ] Release notes written; README.md download link and version references updated
 
 ## Troubleshooting
 
-### "App is damaged and can't be opened"
-
-**Cause:** Missing notarization or quarantine attribute issues.
-
-**Fix:**
-```bash
-# Check notarization
-spctl --assess --verbose MacAmp.app
-
-# If testing unsigned build, remove quarantine
-xattr -cr MacAmp.app
-```
-
-### "Developer cannot be verified"
-
-**Cause:** App not notarized or notarization ticket not stapled.
-
-**Fix:**
-- Re-run notarization process
-- Ensure stapling succeeded
-- Check with `stapler validate`
-
-### Notarization Rejected
-
-**Cause:** Common issues include:
-- Hardened Runtime not enabled
-- Invalid entitlements
-- Unsigned frameworks or plugins
-
-**Fix:**
-```bash
-# Get detailed logs
-xcrun notarytool log SUBMISSION_ID \
-  --keychain-profile "notarytool-password" \
-  notarization-log.json
-
-# Review the JSON for specific issues
-cat notarization-log.json
-```
-
-### Certificate Not Found
-
-**Cause:** Developer ID certificate not installed.
-
-**Fix:**
-1. Open **Keychain Access**
-2. Check **login** keychain for "Developer ID Application"
-3. If missing, re-download from developer.apple.com
-4. Ensure certificate is valid and not expired
-
-## Automated Release Script
-
-Create `scripts/release.sh`:
-
-```bash
-#!/bin/bash
-set -e
-
-VERSION="0.1.0"
-SCHEME="MacAmpApp"
-APP_NAME="MacAmp"            # product: MacAmp.app
-BUNDLE_ID="com.hankyeomans.MacAmp"
-TEAM_ID="AC3LGVEJJ8"
-NOTARY_PROFILE="notarytool-password"
-
-echo "Building MacAmp v${VERSION}..."
-
-# Clean and build
-xcodebuild clean -project MacAmpApp.xcodeproj -scheme ${SCHEME}
-xcodebuild archive \
-  -project MacAmpApp.xcodeproj \
-  -scheme ${SCHEME} \
-  -configuration Release \
-  -archivePath ./build/${APP_NAME}.xcarchive
-
-# Export
-xcodebuild -exportArchive \
-  -archivePath ./build/${APP_NAME}.xcarchive \
-  -exportPath ./build/Release \
-  -exportOptionsPlist ExportOptions.plist
-
-# Verify signature
-codesign --verify --deep --strict ./build/Release/${APP_NAME}.app
-echo "✅ Code signature verified"
-
-# Notarize
-echo "Submitting for notarization..."
-cd build/Release
-ditto -c -k --keepParent ${APP_NAME}.app ${APP_NAME}.zip
-
-xcrun notarytool submit ${APP_NAME}.zip \
-  --keychain-profile "${NOTARY_PROFILE}" \
-  --wait
-
-# Staple
-xcrun stapler staple ${APP_NAME}.app
-echo "✅ Notarization ticket stapled"
-
-# Create DMG
-cd ../..
-hdiutil create -volname "MacAmp" \
-  -srcfolder build/Release/${APP_NAME}.app \
-  -ov -format UDZO \
-  MacAmp-${VERSION}.dmg
-
-# Notarize DMG
-xcrun notarytool submit MacAmp-${VERSION}.dmg \
-  --keychain-profile "${NOTARY_PROFILE}" \
-  --wait
-
-# Staple DMG
-xcrun stapler staple MacAmp-${VERSION}.dmg
-echo "✅ DMG notarized and stapled"
-
-echo "🎉 Release build complete: MacAmp-${VERSION}.dmg"
-```
-
-Make executable and run:
-```bash
-chmod +x scripts/release.sh
-./scripts/release.sh
-```
-
-## Updating Versions
-
-Before each release, update:
-
-1. **Info.plist** - `CFBundleShortVersionString` (e.g., "0.2.0")
-2. **Info.plist** - `CFBundleVersion` (e.g., "2")
-3. **README.md** - Version references
-4. **Release notes** - Document changes
-
-## Resources
-
-- [Apple Developer Documentation - Notarization](https://developer.apple.com/documentation/security/notarizing_macos_software_before_distribution)
-- [Apple Developer - Code Signing Guide](https://developer.apple.com/support/code-signing/)
-- [TN3127: Inside Code Signing](https://developer.apple.com/documentation/technotes/tn3127-inside-code-signing-provisioning-profiles)
-- [Hardened Runtime](https://developer.apple.com/documentation/security/hardened_runtime)
-
-## Next Steps
-
-1. **Set up CI/CD** - Automate builds with GitHub Actions
-2. **Update mechanisms** - Implement Sparkle framework for auto-updates
-3. **Crash reporting** - Add Sentry or similar for production monitoring
-4. **Analytics** - Track usage patterns (respecting privacy)
-
----
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| "App is damaged and can't be opened" | Missing notarization or quarantine issue | `spctl --assess --verbose MacAmp.app`; for an unsigned test build, `xattr -cr MacAmp.app` |
+| "Developer cannot be verified" | Not notarized or ticket not stapled | Re-notarize; confirm with `xcrun stapler validate` |
+| Notarization rejected | Hardened runtime off, invalid entitlements, unsigned frameworks/plugins, or `get-task-allow` present | Read `notarytool log` JSON (above) |
+| Certificate / `CODE_SIGN_IDENTITY` not found | Developer ID cert missing or expired | Check the **login** keychain / `security find-identity -v -p codesigning`; re-download from developer.apple.com |
+| Signature verification fails | Expired/revoked cert, Team ID mismatch, entitlements mismatch, unsigned embedded framework, resource modified after signing | Check cert validity and that Team ID matches `project.yml` |
 
 ## Code Signing Troubleshooting
 
-### P0 Bug: Unsigned App in dist/ (Commit 6a80a97)
+Release builds write straight to `dist/` via `CONFIGURATION_BUILD_DIR`, so `dist/MacAmp.app` is signed in place by Xcode's CodeSign step; there is no copy step. Don't add a Run Script that copies the app into `dist/`: Run Script phases can execute before CodeSign, which previously shipped an unsigned app. If a copy is ever needed, do it in a scheme post-action, which runs after all build phases.
 
-The Release build script was copying `MacAmp.app` to `dist/` BEFORE Xcode's code signing phase completed, resulting in an unsigned app in the distribution directory.
-
-**Root Cause:** Xcode build phase execution order places `CodeSign` AFTER custom Run Script phases. The "Copy to dist" script was running before signing.
-
-**Fix:** Moved distribution copy from a Build Phase Script to a **Scheme Post-Action**, which runs AFTER all build phases including CodeSign.
-
-```
-Before (BROKEN):  Build → Copy → Sign   (dist/ gets unsigned app)
-After  (WORKING): Build → Sign → Copy → Verify  (dist/ gets signed app)
-```
-
-The post-action script automatically verifies the signature and fails the build if invalid.
-
-### Alternatives Considered
-
-| Option | Why Not Used |
-|--------|-------------|
-| Move script to end of Build Phases | Xcode controls order; scripts may still run before CodeSign |
-| Manual re-sign in script | Redundant signing; script signature may differ from Xcode's |
-| Use xcodebuild archive | Good for production but overkill for quick development builds |
-
-### Debug vs Release Signing Configuration
-
-```
-CODE_SIGN_IDENTITY = "Apple Development"
-CODE_SIGN_IDENTITY[sdk=macosx*] = "Developer ID Application"
-CODE_SIGN_STYLE = Manual
-DEVELOPMENT_TEAM[sdk=macosx*] = AC3LGVEJJ8
-```
-
-- **Debug builds**: "Apple Development" with automatic signing
-- **Release builds**: "Developer ID Application" for distribution outside Mac App Store
-
-### Additional Troubleshooting
-
-#### "CODE_SIGN_IDENTITY not found"
-Ensure Developer ID certificate is installed in Keychain Access:
+Verify the Release product:
 ```bash
-security find-identity -v -p codesigning
+./scripts/verify-dist-signature.sh            # defaults to dist/MacAmp.app; accepts a path or DIST_APP
 ```
-
-#### Post-action not running
-1. Product -> Scheme -> Edit Scheme...
-2. Build -> Post-actions -> Verify script is present
-3. Ensure "Provide build settings from: MacAmp" is selected
-
-#### Signature verification fails
-1. Check certificate validity: `security find-identity -v -p codesigning`
-2. Ensure certificate is not expired
-3. Verify Team ID matches in project settings
-
-#### Verification script
-```bash
-./scripts/verify-dist-signature.sh
-```
-
----
-
-## Code Signing Flow Diagram
-
-### Build Phase Execution Order (After Fix)
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    Xcode Build Process (Release)                 │
-└─────────────────────────────────────────────────────────────────┘
-
-Step 1: Compile Sources
-┌─────────────────┐
-│  Swift Files    │  →  Compile  →  Object Files
-└─────────────────┘
-
-Step 2: Copy Resources
-┌─────────────────┐
-│  Assets, WSZ    │  →  Copy  →  Build Directory
-└─────────────────┘
-
-Step 3: Link & Embed Frameworks
-┌─────────────────┐
-│  ZIPFoundation  │  →  Link  →  MacAmp.app (unsigned)
-└─────────────────┘
-
-Step 4: CodeSign
-┌─────────────────────────────────────────────────────────────┐
-│  codesign -s "Developer ID Application" MacAmp.app          │
-└─────────────────────────────────────────────────────────────┘
-         │
-         v
-Step 5: POST-ACTION "Copy signed app to dist"
-┌─────────────────────────────────────────────────────────────┐
-│  Copy signed app → Verify signature → Fail if invalid       │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Signature Verification Flow
-
-```
-codesign --verify --deep --strict dist/MacAmp.app
-    │
-    ├─ Exit code 0 → Signature valid → Display authority chain → Build succeeds
-    │
-    └─ Exit code 1+ → Signature INVALID → Display error → Fail build (exit 1)
-        Possible causes: expired cert, revoked cert, entitlements mismatch,
-        unsigned embedded framework, resource modified after signing
-```
-
-### Certificate Chain
-
-```
-dist/MacAmp.app
-    └── Code Signature
-            ├── Identifier: com.hankyeomans.MacAmp
-            ├── Format: Mach-O thin (arm64)
-            ├── Authority Chain:
-            │       ├── Developer ID Application: Hank Yeomans (AC3LGVEJJ8)
-            │       ├── Developer ID Certification Authority
-            │       └── Apple Root CA
-            ├── Team Identifier: AC3LGVEJJ8
-            └── Entitlements: MacAmp.entitlements
-```
-
-### Summary Comparison
-
-| Aspect | Before Fix | After Fix |
-|--------|-----------|-----------|
-| **Copy Timing** | Before CodeSign | After CodeSign |
-| **Signature Status** | Unsigned | Signed |
-| **Verification** | None | Automatic |
-| **Error Detection** | Silent failure | Build fails |
-| **Notarization** | Impossible | Ready |
-| **Build Time** | ~15s | ~16s (+1s) |
-
----
+It checks `codesign --verify --deep --strict`, prints identifier/authority/team, and checks hardened runtime and sealed resources.
 
 ## Debug vs Release Configuration
 
-> **Note (2026-03-25):** This section consolidated from `RELEASE_BUILD_COMPARISON.md`. The Swift 6 migration is complete (Swift 6.2 with strict concurrency). Verify build settings match current `project.yml` if discrepancies arise.
-
-### Build Phase Order Comparison
-
-**Release Build (current):**
-```
-1. Sources          ← Compile Swift files
-2. Resources        ← Copy resources
-3. Frameworks       ← Embed frameworks
-4. CodeSign         ← Sign app in DerivedData
-5. Post-Action      ← Copy SIGNED app to dist/ + verify
-```
+| | Debug | Release |
+|---|---|---|
+| Signing identity | Apple Development | Developer ID Application |
+| Output | DerivedData | `dist/` |
+| Hardened runtime | Enabled | Enabled |
+| Notarization-ready | No | Yes (with `CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO` for local builds) |
 
 ### Testing a Release Build
 
 ```bash
-# Build Release (CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO keeps get-task-allow out)
+# CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO keeps get-task-allow out
 xcodebuild -project MacAmpApp.xcodeproj -scheme MacAmpApp -configuration Release build \
   CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO
 
-# Verify signature
 codesign --verify --deep --strict --verbose=2 dist/MacAmp.app
-
-# Display signature details
 codesign -dvvv dist/MacAmp.app
-
-# Confirm get-task-allow is absent
 codesign -d --entitlements - dist/MacAmp.app | grep get-task-allow || echo "no get-task-allow"
-
-# Run standalone verification
 ./scripts/verify-dist-signature.sh
 ```
 
-**`get-task-allow` trap:** a plain `xcodebuild build` injects the `com.apple.security.get-task-allow` (debugger-attach) entitlement even for the Release configuration, and an Xcode Run does the same. Notarization rejects apps carrying it. Pass `CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO` to any locally built Release app meant for distribution or release-equivalent testing; with it, `codesign -d --entitlements -` shows no `get-task-allow` and `codesign --verify --strict` passes with `Developer ID Application: Hank Yeomans (AC3LGVEJJ8)` (verified 2026-09-07 and 2026-09-25).
+**`get-task-allow` trap:** a plain `xcodebuild build` injects the `com.apple.security.get-task-allow` (debugger-attach) entitlement even for the Release configuration, and an Xcode Run does the same. Notarization rejects apps carrying it. Pass `CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO` to any locally built Release app meant for distribution or release-equivalent testing; with it, `codesign -d --entitlements -` shows no `get-task-allow` and `codesign --verify --strict` passes with `Developer ID Application: Hank Yeomans (AC3LGVEJJ8)` (verified 2026-09-25).
 
-### Performance Impact
+## Resources
 
-| Metric | Debug | Release | Notes |
-|--------|-------|---------|-------|
-| Build Time | ~10s | ~16s | +signing +verification |
-| Code Signing | Apple Development | Developer ID Application | Manual for Release |
-| Signature Verification | None | Automatic (post-action) | +1s overhead |
-| Notarization Ready | No | Yes | Required for distribution |
-| Hardened Runtime | Optional | Required | Enabled in Release config |
+- [Notarizing macOS software before distribution](https://developer.apple.com/documentation/security/notarizing_macos_software_before_distribution)
+- [Code Signing Guide](https://developer.apple.com/support/code-signing/)
+- [TN3127: Inside Code Signing](https://developer.apple.com/documentation/technotes/tn3127-inside-code-signing-provisioning-profiles)
+- [Hardened Runtime](https://developer.apple.com/documentation/security/hardened_runtime)
 
-### Distribution Checklist (Post-Fix)
-
-- [x] Build Release (automatic signing + verification)
-- [x] App in dist/ is SIGNED and VERIFIED
-- [ ] Notarize (standard workflow, see Notarization section above)
-- [ ] Staple notarization ticket
-- [ ] Create DMG (see DMG section above)
-- [ ] Distribute
-
----
-
-**Important:** Never share your:
-- Developer ID certificates
-- App-specific passwords
-- Team ID (unless publicly distributing)
-- Keychain profiles
-
-Store these securely and use environment variables in CI/CD pipelines.
+**Never share** Developer ID certificates, app-specific passwords, or Keychain profiles; use secrets/environment variables in CI.
