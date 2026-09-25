@@ -903,9 +903,10 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
         engine.setBalance(balance)
 
         // 2. Local-file path: ALWAYS reschedule from saved time, even when paused.
-        //    play() does NOT itself reschedule (see line 417), so a subsequent
-        //    play() would resume the now-detached pre-restart segment.
-        if !snapshot.wasStreamBridge && engine.audioFile != nil {
+        //    play() does NOT itself reschedule, so a subsequent play() would
+        //    resume the now-detached pre-restart segment. Audio media only: the
+        //    previous track's file stays loaded during video and must not resume.
+        if currentMediaType == .audio && !snapshot.wasStreamBridge && engine.audioFile != nil {
             _ = engine.scheduleFrom(time: snapshot.currentTime, seekID: currentSeekID)
             currentTime = snapshot.currentTime
             if snapshot.wasPlaying {
