@@ -1,6 +1,6 @@
 # Research: Swift 6.4 / macOS 27 Readiness
 
-> **Status:** STUB — research not started (scaffolded 2026-09-05, S4-1).
+> **Status:** STUB — research not started (scaffolded 2026-09-05, S4-1). **2026-09-25:** deployment target decided (D-TARGET27 — macOS 27, PR #87 merged); the task is re-scoped to adoption, so the "macOS 15.0 deployment target" framing below is historical.
 > **Gate:** findings feed `plan.md`, which must reach Codex Oracle ≥ 9/10 before any code is written.
 
 ---
@@ -63,7 +63,7 @@ TBD
 
 ## (d) Deployment target: stay at 15.0, or raise to 26 / 27?
 
-TBD
+Decided 2026-09-25 by the user (D-TARGET27 in `_context/state.md`): macOS 27.0, implemented in PR #87.
 
 ## Impact matrix per MacAmp subsystem
 

@@ -2,7 +2,7 @@
 
 > **Task:** `tasks/avplayer-native-video-dsp/`
 > **Status:** ACTIVE — 3 of 6 items still open (P-2, P-3, P-6); P-1/P-4/P-5 closed.
-> **Last revised:** 2026-09-05 — P-2/P-3/P-6 open; P-1/P-4/P-5 resolved.
+> **Last revised:** 2026-09-25 — P-2/P-3/P-6 open; P-1/P-4/P-5 resolved. P-6 not observed either way in the 2026-09-25 gate 8.14 run.
 
 Per project convention (`/Users/hank/.claude/CLAUDE.md` — "Placeholders" section), no `// TODO` comments are allowed in production code. Anything that's stubbed/deferred during implementation must be documented here with: file:line, purpose, status, and action.
 
@@ -68,4 +68,4 @@ Per project convention (`/Users/hank/.claude/CLAUDE.md` — "Placeholders" secti
 - **Symptom:** After playing a video, loading an audio track does NOT auto-play — the user must hit Next/forward to start audio. Audio-only → audio-only transitions auto-play normally.
 - **Suspected cause (unconfirmed):** the `.video → .audio` cleanup (`invalidateInFlightVideoLoad` + `pauseAndDetachVideoTapIfNeeded` + `videoPlaybackController.cleanup()`) likely leaves transport state such that the trailing `play()` no-ops; or `loadAudioFile` is async and the immediate `play()` races ahead of the engine being ready. Needs end-to-end diagnosis (instrument both the media-switch decision and the engine-ready state, per the pipeline-diagnosis discipline).
 - **Status:** Open, NON-BLOCKING (user deprioritized 2026-05-28). Not a leak; does not affect Phase 3 gating. Logged so it is not lost.
-- **Action:** Phase 7 closed 2026-06-26 without diagnosing it. Now: expected known-issue caveat in Phase 8 manual gate 8.14; document in Phase 9 (`docs/VIDEO_WINDOW.md` "Known Issue" section); fix in a dedicated follow-up or the S4-2 GitHub-issues sprint. Likely fix: sequence the audio `play()` to fire after the video→audio teardown + engine-ready completes.
+- **Action:** Phase 7 closed 2026-06-26 without diagnosing it. Carried as the known-issue caveat in Phase 8 gate 8.14 (8.14 PASSED 2026-09-25; whether P-6 reproduced was not observed); document in Phase 9 (`docs/VIDEO_WINDOW.md` "Known Issue" section); fix in a dedicated follow-up or the S4-2 GitHub-issues sprint. Likely fix: sequence the audio `play()` to fire after the video→audio teardown + engine-ready completes.

@@ -2,7 +2,7 @@
 
 > **Plan:** `tasks/avplayer-native-video-dsp/plan.md` (Oracle 9.8/10 final, commit `fdce0ed`)
 > **Branch:** `feat/avplayer-native-video-dsp`
-> **Status:** 🔧 IMPLEMENTING — Phases 1-7 ✅; Phase 8 automated gates ✅ (2026-06-27); **Phase 8 Phase A (Claude objective gates) ✅ DONE (2026-09-07)** — 7.9/8.1b/8.5e/7.10 + mechanical axis of 8.5b/8.5c/8.5d/8.13/8.14 measured via Xcode MCP LLDB on the signed Release build; **Phase B (user ears + hardware) + Phase C (≥10-min video) ⏳ REMAIN**; Phase 9 NEXT.
+> **Status:** 🔧 IMPLEMENTING — Phases 1-7 ✅; **Phase 8 ✅ COMPLETE 2026-09-25** (automated 2026-06-27; Phase A objective gates 2026-09-07; Phase B/C with the user 2026-09-25); **Phase 9 NEXT.** Branch HEAD `5125bb3`, pushed; PR #C not opened.
 > **Updated:** 2026-09-25 (Phase 8 manual gates complete: Phase B + C PASS after the AVKit remote-command fix and the ADR-12 preferred-format tap; multichannel deferred to #88; PR #87 merged in; **Phase 9 next**)
 
 Numbering: `<Phase>.<Item>`. `[x]` complete, `[~]` in-progress, `[!]` blocked.
@@ -321,7 +321,7 @@ Numbering: `<Phase>.<Item>`. `[x]` complete, `[~]` in-progress, `[!]` blocked.
 
 - [x] 8.18 Commit ✅ — benchmark + verification.md committed (`2c410a0` gates + checklist; `944795a` methodology/honesty fixes).
 
-> **Gate dispositions (2026-09-05):** 8.2 ⛔ NOT ABLE TO COMPLETE (no Intel Mac; DSP identical scalar, Apple Silicon is the primary gate); 8.12 ⛔ NOT ABLE TO COMPLETE (no in-app trigger — no track picker, `audioMix` set once per item per ADR-7; optional, skip sanctioned); 8.11 ⛔ NOT ABLE AS WRITTEN (no supported AAC↔SBC forcing path on macOS 15/27 — Bluetooth Explorer not installed/shipped, debug menu removed macOS 12+; optional device-substitution fallback → PARTIAL, user decides); 8.1b best outcome PARTIAL (aggregate `tapProcess` share + telemetry counters — a literal per-callback 99p is not producible: Time Profiler gives an aggregate share, `VideoTap.swift:112` samples 1-in-64 into two bucket counters, and the every-callback mode was never built); 8.5 CONDITIONAL on a user-supplied ≥10-min lip-sync video; 8.6–8.9 hardware-dependent (any device the user cannot source → NOT ABLE with reason) — see `verification.md` Summary.
+> **Gate dispositions (2026-09-05):** 8.2 ⛔ NOT ABLE TO COMPLETE (no Intel Mac; DSP identical scalar, Apple Silicon is the primary gate); 8.12 ⛔ NOT ABLE TO COMPLETE (no in-app trigger — no track picker, `audioMix` set once per item per ADR-7; optional, skip sanctioned); 8.11 ⛔ NOT ABLE AS WRITTEN (no supported AAC↔SBC forcing path on macOS 15/27 — Bluetooth Explorer not installed/shipped, debug menu removed macOS 12+; optional device-substitution fallback → PARTIAL, user decides); 8.1b best outcome PARTIAL (aggregate `tapProcess` share + telemetry counters — a literal per-callback 99p is not producible: Time Profiler gives an aggregate share, `VideoTap.swift:112` samples 1-in-64 into two bucket counters, and the every-callback mode was never built); 8.5 CONDITIONAL on a user-supplied ≥10-min lip-sync video; 8.6–8.9 hardware-dependent (any device the user cannot source → NOT ABLE with reason) — see `verification.md` Summary. *(Superseded 2026-09-25 for 8.1b/8.5/8.6–8.9 — see the gate rows above.)*
 
 ---
 
@@ -356,7 +356,7 @@ Numbering: `<Phase>.<Item>`. `[x]` complete, `[~]` in-progress, `[!]` blocked.
 - [ ] 9.9 Pre-PR Codex Oracle review (per `feedback_sprint_workflow.md` memory)
 - [ ] 9.10 Apply Oracle feedback if any
 - [ ] 9.11 Commit if any final fixes: `chore(s3-2): Phase 9 — UI polish + docs`
-- [ ] 9.12 Push branch: `git push -u origin feat/avplayer-native-video-dsp` (branch pushed at `5fe8c3c` on 2026-09-05; re-push after Phase 9 commits)
+- [ ] 9.12 Push branch: `git push -u origin feat/avplayer-native-video-dsp` (upstream set; last pushed at `5125bb3` on 2026-09-25; re-push after Phase 9 commits)
 - [ ] 9.13 `gh pr create` with PR description summarizing the 5-round research + 5-round plan + 9-phase implementation
 - [ ] 9.14 Wait for human review
 

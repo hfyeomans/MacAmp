@@ -4,7 +4,7 @@
 > **Created:** 2026-09-05
 > **Sprint:** S4-2 (Post-Structure-Sprint)
 > **Status:** 📋 **QUEUED** — blocked on the Post-S3 Structure Sprint (user mandate) and on S4-1 `swift64-macos27-readiness` (ordering confirmed by user 2026-09-05). Research not started.
-> **Updated:** 2026-09-05 (S4-1-before-S4-2 ordering confirmed by user; S3-2 predecessor chain status refreshed — branch pushed to origin at `5fe8c3c`, manual runbook in progress)
+> **Updated:** 2026-09-25 (S3-2 predecessor status refreshed — Phase 8 complete, branch pushed at `5125bb3`, PR #C not yet opened; issue list re-checked). Earlier: 2026-09-05 S4-1-before-S4-2 ordering confirmed by user.
 
 ---
 
@@ -15,13 +15,13 @@
 | Post-S3 Structure Sprint | The user's mandate: the issue fixes land in the new `.swift` layout, so they are not rebased across a stop-the-world file-move pass. #78 touches windowing and benefits most from the moves having landed. | **User mandate** |
 | S4-1 `swift64-macos27-readiness` | S4-1's deprecation findings may change *how* these issues are fixed; fixing first would risk reworking fresh code. | **CONFIRMED BY USER 2026-09-05.** See `_context/state.md` decision D-S4. |
 
-The Structure Sprint itself starts only after S3-4 `ogg-vorbis-support` merges, which is behind S3-3 `hls-streaming-support`, which is behind the S3-2 PR #C. As of 2026-09-05 the S3-2 branch `feat/avplayer-native-video-dsp` is pushed to origin at `5fe8c3c` (docs sync; code unchanged since `944795a`) and unmerged, with its Phase 8 hardware-manual gates being executed by the user and PR #C not yet opened.
+The Structure Sprint itself starts only after S3-4 `ogg-vorbis-support` merges, which is behind S3-3 `hls-streaming-support`, which is behind the S3-2 PR #C. As of 2026-09-25 the S3-2 branch `feat/avplayer-native-video-dsp` is pushed to origin at `5125bb3`, unmerged; Phase 8 (all manual gates) is complete, Phase 9 (docs + pre-PR review) is in progress, and PR #C is not yet opened.
 
 ---
 
 ## Issues in scope
 
-Open on `hfyeomans/MacAmp` as of 2026-09-05 (`gh issue list`; no recently closed issues).
+Open on `hfyeomans/MacAmp` as of 2026-09-05 (`gh issue list`; no recently closed issues). **Re-checked 2026-09-25:** #84/#79/#78/#47 still open; two more are open and not listed below — **#88** multichannel video output (tracked as S4-4 `video-multichannel-output`) and **#86** test depends on the saved Repeat setting (pre-existing test-isolation defect; whether it belongs here is the user's call).
 
 | # | Filed | Author | Title | Summary | Size guess | Likely subsystem |
 |---|-------|--------|-------|---------|:----------:|------------------|
