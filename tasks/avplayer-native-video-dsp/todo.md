@@ -294,11 +294,13 @@ Numbering: `<Phase>.<Item>`. `[x]` complete, `[~]` in-progress, `[!]` blocked.
 ### Dynamic transition gates
 
 - [ ] 8.5 Long-playback drift — ≥10 min continuous playback of ONE user-supplied lip-sync video; A/V sync within ±40 ms. **Do NOT loop a short clip** (each loop restarts the AVPlayerItem and resets accumulated drift) — CONDITIONAL on the user's video (2026-09-05)
-- [ ] 8.6 Route-change AirPods 1st-gen — connect mid-playback / disconnect mid-playback. Tap callbacks resume within 500 ms; no DSP-state loss; no silent output
-- [ ] 8.7 Route-change AirPods Pro — same gate
+- [x] 8.6 ✅ PASS 2026-09-25 (non-Pro AirPods substitute; after the AVKit remote-command fix) — Route-change AirPods 1st-gen — connect mid-playback / disconnect mid-playback. Tap callbacks resume within 500 ms; no DSP-state loss; no silent output
+- [x] 8.7 ✅ PASS 2026-09-25 (after the AVKit remote-command fix) — Route-change AirPods Pro — same gate
 - [ ] 8.8 Route-change AirPlay-1 receiver — same gate
 - [ ] 8.9 Route-change AirPlay-2 receiver — same gate
-- [ ] 8.10 System default-output change — Settings → Sound → switch internal speakers ↔ HDMI display speakers. Same gate
+- [x] 8.10 ✅ PASS 2026-09-25 (3 live switches via SwitchAudioSource) — System default-output change — Settings → Sound → switch internal speakers ↔ HDMI display speakers. Same gate
+- [x] 8.10b Fix found during 8.6/8.7: `AVPlayerView` default `updatesNowPlayingInfoCenter = true` let AVKit's remote-command handler pause `AVPlayer` behind `PlaybackCoordinator` (UI stuck "playing"). Fixed with `updatesNowPlayingInfoCenter = false` in `AVPlayerViewRepresentable.swift`; verified live (2026-09-25).
+- [ ] 8.10c **Before PR #C:** TSan suite is 113/116 (was 116/116 on 2026-06-27, code unchanged). Fix `VideoTapLifecycleTests` "Ten rapid build/attach cycles: all Contexts released" and `VideoTapCPUBenchmarkTests` "fits the deadline even in Debug" (p99 ≈ 79%). `PlaylistNavigationTests` "stream handoff for mixed playlist" also fails on `main` → pre-existing, tracked in `_context/state.md`, not an S3-2 blocker.
 - [ ] 8.11 Bluetooth codec switch — AAC ↔ SBC (forced via `Bluetooth Explorer` or CLI). Tap callback continuity, no audio drop > 200 ms — ⛔ **NOT ABLE AS WRITTEN (2026-09-05); optional device-substitution → PARTIAL, user decides**
 - [x] 8.12 Mid-playback format re-prepare — AVPlayerItem audio-track swap (constructed multi-track item). `tapPrepare` re-fires; coefficient recompute fires — ⛔ **NOT ABLE TO COMPLETE (2026-09-05): no in-app trigger; optional**
 - [ ] 8.13 Surround handling — 5.1 clip plays through native AVPlayer downmix; visualizer mono-downmix non-clipping; EQ uniform across 6 channels

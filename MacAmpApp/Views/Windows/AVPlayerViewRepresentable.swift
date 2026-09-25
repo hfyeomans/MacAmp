@@ -13,6 +13,7 @@ struct AVPlayerViewRepresentable: NSViewRepresentable {
         view.showsFullScreenToggleButton = false  // No native fullscreen button
         view.showsSharingServiceButton = false  // No sharing button
         view.allowsPictureInPicturePlayback = false  // No PiP for now
+        view.updatesNowPlayingInfoCenter = false  // PlaybackCoordinator owns remote commands; AVKit's would pause the player behind it
         return view
     }
 
