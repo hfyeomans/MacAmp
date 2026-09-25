@@ -333,6 +333,56 @@ struct VideoTapLifecycleTests {
         #expect(weakContext == nil, "replaceCurrentItem(nil) must finalize the outgoing tap's Context")
     }
 
+    @Test("Preferred format for a stereo source: source rate, 2 ch, Float32 non-interleaved")
+    func preferredFormatForStereoSource() async throws {
+        let asset = AVURLAsset(url: try Self.clipURL("1_mp4_441_stereo.mp4"))
+        let audioTrack = try #require(try await asset.loadTracks(withMediaType: .audio).first)
+
+        let format = try #require(await VideoTap.preferredProcessingFormat(for: audioTrack))
+        let asbd = try #require(CMAudioFormatDescriptionGetStreamBasicDescription(format)?.pointee)
+
+        #expect(asbd.mSampleRate == 44_100)
+        #expect(asbd.mChannelsPerFrame == 2)
+        #expect(asbd.mFormatID == kAudioFormatLinearPCM)
+        #expect(asbd.mBitsPerChannel == 32)
+        #expect(asbd.mFormatFlags & kAudioFormatFlagIsFloat != 0)
+        #expect(asbd.mFormatFlags & kAudioFormatFlagIsNonInterleaved != 0)
+    }
+
+    @Test("Preferred format for a 5.1 source downmixes to stereo at the source rate")
+    func preferredFormatForSurroundSource() async throws {
+        let asset = AVURLAsset(url: try Self.clipURL("5_mp4_480_surround.mp4"))
+        let audioTrack = try #require(try await asset.loadTracks(withMediaType: .audio).first)
+
+        let format = try #require(await VideoTap.preferredProcessingFormat(for: audioTrack))
+        let asbd = try #require(CMAudioFormatDescriptionGetStreamBasicDescription(format)?.pointee)
+
+        #expect(asbd.mSampleRate == 48_000)
+        #expect(asbd.mChannelsPerFrame == 2, "balance treats channels 0/1 as L/R")
+        #expect(asbd.mFormatFlags & kAudioFormatFlagIsFloat != 0)
+        #expect(asbd.mFormatFlags & kAudioFormatFlagIsNonInterleaved != 0)
+    }
+
+    @Test("Preferred-format tap: Context released after AVPlayer drop")
+    func preferredFormatTapLifecycle() async throws {
+        let asset = AVURLAsset(url: try Self.clipURL("1_mp4_441_stereo.mp4"))
+        let audioTrack = try #require(try await asset.loadTracks(withMediaType: .audio).first)
+        let preferredFormat = try #require(await VideoTap.preferredProcessingFormat(for: audioTrack))
+
+        weak var weakContext: VideoTapContext?
+        try {
+            let context = VideoTapContext(feed: VisualizerFeed())
+            weakContext = context
+            let mix = try VideoTap.buildAudioMix(audioTrack: audioTrack, context: context, preferredFormat: preferredFormat)
+            let item = AVPlayerItem(asset: asset)
+            item.audioMix = mix
+            _ = AVPlayer(playerItem: item)
+        }()
+
+        try await Self.waitUntilNil(weakContext)
+        #expect(weakContext == nil, "the preferred-format tap must still finalize and release its Context")
+    }
+
     // MARK: - Helpers
 
     private static func clipURL(_ filename: String) throws -> URL {

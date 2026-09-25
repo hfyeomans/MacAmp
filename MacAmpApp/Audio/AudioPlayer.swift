@@ -255,8 +255,11 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
                         let audioTracks = try await asset.loadTracks(withMediaType: .audio)
                         guard gen == self.videoLoadGeneration else { return nil }
                         guard let audioTrack = audioTracks.first else { return nil }
+                        let preferredFormat = await VideoTap.preferredProcessingFormat(for: audioTrack)
+                        guard gen == self.videoLoadGeneration else { return nil }
                         let context = VideoTapContext(feed: self.visualizerPipeline.sharedFeed)
-                        let mix = try VideoTap.buildAudioMix(audioTrack: audioTrack, context: context)
+                        let mix = try VideoTap.buildAudioMix(
+                            audioTrack: audioTrack, context: context, preferredFormat: preferredFormat)
                         // Store the Context only after buildAudioMix has
                         // succeeded — a thrown `createFailed` here would
                         // otherwise leave a phantom Context in the field.

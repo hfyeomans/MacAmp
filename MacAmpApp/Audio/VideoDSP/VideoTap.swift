@@ -218,6 +218,15 @@ enum VideoTap {
         return (left, right)
     }
 
+    /// Stereo Float32 non-interleaved at the source rate, so the tap's format doesn't follow the
+    /// output device and channels 0/1 are always L/R (mono is upmixed, multichannel downmixed); nil = default.
+    @MainActor
+    static func preferredProcessingFormat(for audioTrack: AVAssetTrack) async -> CMAudioFormatDescription? {
+        guard let source = try? await audioTrack.load(.formatDescriptions).first else { return nil }
+        let sampleRate = AVAudioFormat(cmAudioFormatDescription: source).sampleRate
+        return AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 2)?.formatDescription
+    }
+
     /// Build the `MTAudioProcessingTap` and wrap it in an
     /// `AVMutableAudioMix` for assignment to a not-yet-constructed
     /// `AVPlayerItem.audioMix`. Caller must subsequently set
@@ -227,7 +236,11 @@ enum VideoTap {
     /// retained Context is released before throwing so the +1 retain
     /// does not leak (ADR-10).
     @MainActor
-    static func buildAudioMix(audioTrack: AVAssetTrack, context: VideoTapContext) throws -> AVMutableAudioMix {
+    static func buildAudioMix(
+        audioTrack: AVAssetTrack,
+        context: VideoTapContext,
+        preferredFormat: CMAudioFormatDescription? = nil
+    ) throws -> AVMutableAudioMix {
         prewarmVideoTapTimebase()  // init the Mach timebase off the render thread (Phase 6)
         let retained = Unmanaged.passRetained(context)
         var callbacks = MTAudioProcessingTapCallbacks(
@@ -250,12 +263,10 @@ enum VideoTap {
         if VideoTap._testForceTapCreateFailure {
             status = OSStatus(-1)
         } else {
-            status = MTAudioProcessingTapCreate(
-                kCFAllocatorDefault, &callbacks, kMTAudioProcessingTapCreationFlag_PreEffects, &tapOut)
+            status = createTap(&callbacks, preferredFormat: preferredFormat, tapOut: &tapOut)
         }
         #else
-        status = MTAudioProcessingTapCreate(
-            kCFAllocatorDefault, &callbacks, kMTAudioProcessingTapCreationFlag_PreEffects, &tapOut)
+        status = createTap(&callbacks, preferredFormat: preferredFormat, tapOut: &tapOut)
         #endif
         guard status == noErr, let tap = tapOut else {
             retained.release()
@@ -268,6 +279,19 @@ enum VideoTap {
         let audioMix = AVMutableAudioMix()
         audioMix.inputParameters = [inputParams]
         return audioMix
+    }
+
+    private static func createTap(
+        _ callbacks: inout MTAudioProcessingTapCallbacks,
+        preferredFormat: CMAudioFormatDescription?,
+        tapOut: inout MTAudioProcessingTap?
+    ) -> OSStatus {
+        if let preferredFormat, #available(macOS 27, *) {
+            return MTAudioProcessingTapCreateWithPreferredFormat(
+                kCFAllocatorDefault, &callbacks, kMTAudioProcessingTapCreationFlag_PreEffects, preferredFormat, &tapOut)
+        }
+        return MTAudioProcessingTapCreate(
+            kCFAllocatorDefault, &callbacks, kMTAudioProcessingTapCreationFlag_PreEffects, &tapOut)
     }
 
     /// Detach the tap from a currently-active player item. Used during

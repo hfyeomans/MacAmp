@@ -407,6 +407,12 @@ guard status == noErr, let tap = tapOut else {
 **Drivers.** `BiquadCascade.process` assumes Float32. The spike assumes the same — production cannot. AVPlayer's typical decoder output for AAC/MP3 in modern macOS is Float32 LPCM, so the pass-through path should rarely fire in practice; but it's the correctness floor.
 **Logging.** When pass-through engages, log once per item (not per buffer) at info level so support can diagnose "EQ doesn't apply to this video" reports.
 
+### ADR-12: Pin the tap's processing format to the source (macOS 27 preferred-format tap) — added 2026-09-25
+**Decision.** On macOS 27, create the tap with `MTAudioProcessingTapCreateWithPreferredFormat`, requesting **stereo** Float32 non-interleaved at the source track's sample rate (`VideoTap.preferredProcessingFormat(for:)`). Mono is upmixed and multichannel downmixed by the system before the tap, so channels 0/1 are always L/R for balance (Webamp's `StereoBalanceNode` does the same). Fall back to `MTAudioProcessingTapCreate` when the source format can't be read. Still a per-track PreEffects tap; ADR-7/9/10/11 unchanged — ADR-11's `tapPrepare` guard still validates whatever format is actually negotiated.
+**Drivers.** Without a preferred format a tap runs "in a format optimized for delivery to the audio output device" (Apple, What's new in HLS 2026), so its format followed the route. Over system-output AirPlay 2 (real-time engine) that produced audible pumping and cut-outs on a Sonos stereo pair — reproduced with the tap attached, absent with no tap, absent with the pinned format (2026-09-25, Phase 8 gate 8.9). QuickTime/Music (no tap) were clean on the same route.
+**Amended same day (stereo pin).** First version pinned the source channel layout; on the 5.1 clip (`C L R Ls Rs LFE`) balance then hit Center/Left instead of Left/Right (gate 8.13, user ear). User chose the stereo downmix for fidelity and deferred multichannel output to S4-4 `video-multichannel-output` (#88).
+**Consequences.** Requires macOS 27 (D-TARGET27, PR #87). 5.1+ video plays as stereo, including on multichannel/spatial outputs, until #88. The whole-mix tap (`AVAudioMixInputParametersTrackMixID`, macOS 27) was not needed and is not adopted.
+
 ---
 
 ## 5. Files Affected

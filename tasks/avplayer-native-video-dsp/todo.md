@@ -296,14 +296,14 @@ Numbering: `<Phase>.<Item>`. `[x]` complete, `[~]` in-progress, `[!]` blocked.
 - [ ] 8.5 Long-playback drift — ≥10 min continuous playback of ONE user-supplied lip-sync video; A/V sync within ±40 ms. **Do NOT loop a short clip** (each loop restarts the AVPlayerItem and resets accumulated drift) — CONDITIONAL on the user's video (2026-09-05)
 - [x] 8.6 ✅ PASS 2026-09-25 (non-Pro AirPods substitute; after the AVKit remote-command fix) — Route-change AirPods 1st-gen — connect mid-playback / disconnect mid-playback. Tap callbacks resume within 500 ms; no DSP-state loss; no silent output
 - [x] 8.7 ✅ PASS 2026-09-25 (after the AVKit remote-command fix) — Route-change AirPods Pro — same gate
-- [ ] 8.8 Route-change AirPlay-1 receiver — same gate
-- [ ] 8.9 Route-change AirPlay-2 receiver — same gate
+- [x] 8.8 Route-change AirPlay-1 receiver — ➖ N/A (2026-09-25, user: AirPlay 1 out of scope)
+- [x] 8.9 Route-change AirPlay-2 receiver — ✅ PASS after fix (2026-09-25): pumping on Sonos AirPlay 2 root-caused to the device-following tap format; fixed by ADR-12 preferred-format tap (stereo, source rate); Sonos + HomePod pair clean incl. route round trip. See verification.md
 - [x] 8.10 ✅ PASS 2026-09-25 (3 live switches via SwitchAudioSource) — System default-output change — Settings → Sound → switch internal speakers ↔ HDMI display speakers. Same gate
 - [x] 8.10b Fix found during 8.6/8.7: `AVPlayerView` default `updatesNowPlayingInfoCenter = true` let AVKit's remote-command handler pause `AVPlayer` behind `PlaybackCoordinator` (UI stuck "playing"). Fixed with `updatesNowPlayingInfoCenter = false` in `AVPlayerViewRepresentable.swift`; verified live (2026-09-25).
 - [x] 8.10c TSan suite regression (113/116, found 2026-09-25) root-caused and fixed: (1) `tenRapidCyclesNoLeak` passed in isolation and failed only under parallel-test contention — its hand-rolled 1 s release budget was the outlier vs the 5 s `waitUntilNil` used by every sibling test → aligned to 5 s; (2) the Debug CPU benchmark asserted wall-clock time inside a TSan build (p99 17.5% without TSan vs 75.7% with — ~4.4× sanitizer overhead) → `.disabled(if:)` when the TSan runtime is loaded, still runs + asserts in non-TSan runs. Result: TSan 114 pass / 1 skip / 1 fail, non-TSan 115 pass / 1 fail; the remaining failure (`PlaylistNavigationTests` stream handoff) also fails on `main` 9cca40a — pre-existing, not an S3-2 blocker (GitHub issue #86: test depends on the saved Repeat setting).
 - [ ] 8.11 Bluetooth codec switch — AAC ↔ SBC (forced via `Bluetooth Explorer` or CLI). Tap callback continuity, no audio drop > 200 ms — ⛔ **NOT ABLE AS WRITTEN (2026-09-05); optional device-substitution → PARTIAL, user decides**
 - [x] 8.12 Mid-playback format re-prepare — AVPlayerItem audio-track swap (constructed multi-track item). `tapPrepare` re-fires; coefficient recompute fires — ⛔ **NOT ABLE TO COMPLETE (2026-09-05): no in-app trigger; optional**
-- [ ] 8.13 Surround handling — 5.1 clip plays through native AVPlayer downmix; visualizer mono-downmix non-clipping; EQ uniform across 6 channels
+- [x] 8.13 Surround handling — ✅ PASS (2026-09-25): 5.1 downmixed to stereo before the tap (ADR-12 stereo pin); balance L/R/centre correct and EQ audible (user). Multichannel output deferred → #88
 - [ ] 8.14 Item replacement during playback — `player.replaceCurrentItem(with: nextItem)` for video → audio file (and reverse). Outgoing item's `tapFinalize` fires; no leak; ≤200 ms audio gap
 
 ### Lifecycle gates (covered by Phase 7 tests)
