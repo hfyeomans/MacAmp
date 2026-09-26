@@ -2573,7 +2573,7 @@ final class AudioEngineConfigurationObserver {
 **Consumer side — user intent cancels a pending `did`**:
 ```swift
 // File: MacAmpApp/Audio/AudioPlayer.swift
-// Called from play/pause/stop/seek/playTrack
+// Called from play/stop/seek/playTrack (pause rewrites the snapshot to paused instead)
 private func cancelPendingReconfigure() {
     pendingReconfigureSnapshot = nil
     seekGuardActive = false

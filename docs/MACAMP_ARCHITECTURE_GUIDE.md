@@ -408,19 +408,20 @@ Switching the output device (Control Center, AirPlay, HDMI hot-plug, sleep/wake)
 ```
 notification burst ──► onWillReconfigure (first notification)
                           AudioEngineController → PreReconfigureSnapshot → AudioPlayer
-                          AudioPlayer: record isPlaying/currentTime, bump currentSeekID, arm seek guards
+                          AudioPlayer (audio media only): record isPlaying/isPaused/currentTime,
+                            bump currentSeekID, arm seek guards
                    ──► 150 ms quiet window
                    ──► onDidReconfigure
                           AudioEngineController: reconnect stream bridge at the new output rate,
                             verify mixer → output, prepare + restart engine
                           AudioPlayer: re-apply volume/balance; when audio is the current media,
-                            reschedule the local file from the saved time (resume only if it was
-                            playing); release guards (100/200 ms)
+                            reschedule the local file from the saved time (resume if it was playing,
+                            show paused if it was paused, leave stopped as is); release guards
                           PlaybackCoordinator (onEngineReconfigured): re-share the audio IO
                             workgroup with the stream decode thread if the bridge is active
 ```
 
-`AudioPlayer` overrides the engine's `wasPlaying`/`currentTime` with its own state because the engine has already stopped when the notification arrives. `did` is not guaranteed after `will` if the observer is stopped mid-burst, so every user-intent entry point (`play`, `pause`, `stop`, `seek`, `playTrack`) calls `cancelPendingReconfigure()` to drop the snapshot and clear the guards. The reschedule is limited to audio media: after audio → video the previous track's file stays loaded and `isPlaying` is true, so without that check a format change during video would resume the old track under the video. AVPlayer handles its own route changes, and the video tap's pinned processing format keeps its DSP independent of the output device. Only output **format** changes (sample rate / channel count) post the configuration notification; switching between two outputs with the same format does not. The debounce code: [Debounced Will/Did Notification Bursts](IMPLEMENTATION_PATTERNS.md#pattern-debounced-willdid-notification-bursts).
+`AudioPlayer` overrides the engine's `wasPlaying`/`currentTime` with its own state because the engine has already stopped when the notification arrives. `did` is not guaranteed after `will` if the observer is stopped mid-burst, so the user-intent entry points (`play`, `stop`, `seek`, `playTrack`) call `cancelPendingReconfigure()` to drop the snapshot and clear the guards. `pause` instead rewrites the pending snapshot to paused: the engine has already auto-stopped, so dropping the snapshot would leave the UI playing over silence. The will-handler ignores video media: after audio → video the previous track's file stays loaded and `isPlaying` is true, so a format change during video would otherwise resume the old track under the video, and the armed guards would swallow the video's end-of-item callback. AVPlayer handles its own route changes, and the video tap's pinned processing format keeps its DSP independent of the output device. Only output **format** changes (sample rate / channel count) post the configuration notification; switching between two outputs with the same format does not. The debounce code: [Debounced Will/Did Notification Bursts](IMPLEMENTATION_PATTERNS.md#pattern-debounced-willdid-notification-bursts).
 
 ---
 
