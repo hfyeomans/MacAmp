@@ -13,6 +13,7 @@ import os
 /// from `playerNode.lastRenderTime`.
 struct PreReconfigureSnapshot: Sendable {
     let wasPlaying: Bool
+    let wasPaused: Bool  // engine can't know; AudioPlayer supplies it
     let currentTime: Double
     let wasStreamBridge: Bool
 }
@@ -516,6 +517,7 @@ final class AudioEngineController {
     private func handleEngineWillReconfigure() {
         let snapshot = PreReconfigureSnapshot(
             wasPlaying: playerNode.isPlaying,
+            wasPaused: false,
             currentTime: readPlayerNodeCurrentTime() ?? 0,
             wasStreamBridge: isBridgeActive
         )

@@ -650,6 +650,20 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     }
 
     func pause() {
+        // Mid route-change the engine has already auto-stopped: keep the snapshot so
+        // the did-handler reschedules, but record the pause so it doesn't resume.
+        if let snapshot = pendingReconfigureSnapshot, currentMediaType == .audio {
+            pendingReconfigureSnapshot = PreReconfigureSnapshot(
+                wasPlaying: false,
+                wasPaused: true,
+                currentTime: snapshot.currentTime,
+                wasStreamBridge: snapshot.wasStreamBridge
+            )
+            engine.removeVisualizerTapIfNeeded()
+            transition(to: .paused)
+            AppLog.debug(.audio, "Pause (during route change)")
+            return
+        }
         cancelPendingReconfigure()
         if currentMediaType == .video {
             videoPlaybackController.pause()
@@ -867,6 +881,9 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     /// without any subsequent user action — and at that point AudioPlayer
     /// itself is being torn down, so the leftover state is harmless.
     private func handleEngineWillReconfigure(snapshot: PreReconfigureSnapshot) {
+        // AVPlayer handles its own route changes; arming the guards during video
+        // would swallow the video's end-of-item completion.
+        guard currentMediaType == .audio else { return }
         // The engine captures its snapshot at notification-receipt time, by
         // which point the system has ALREADY auto-stopped the engine —
         // `playerNode.isPlaying` is false and `playerNode.lastRenderTime` is
@@ -877,6 +894,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
         // the reconfigure — accurate to within one tick.
         let corrected = PreReconfigureSnapshot(
             wasPlaying: isPlaying,
+            wasPaused: isPaused,
             currentTime: currentTime,
             wasStreamBridge: snapshot.wasStreamBridge
         )
@@ -915,9 +933,10 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
                 engine.playAudio()
                 engine.startProgressTimer()
                 transition(to: .playing)
-            } else {
+            } else if snapshot.wasPaused {
                 transition(to: .paused)
             }
+            // Stopped / completed: rescheduled so a later play() starts cleanly; state unchanged.
         }
         // 3. Stream-bridge path: AVAudioSourceNode + ring buffer survived; the
         //    workgroup refresh is delegated to PlaybackCoordinator.

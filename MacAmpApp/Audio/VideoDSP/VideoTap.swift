@@ -137,7 +137,7 @@ private let tapProcess: MTAudioProcessingTapProcessCallback = { tap, framesToPro
     // Step 6 params — balance ∈ [-1, 1], 0.0 = center (see `VideoTap.balanceGains`).
     let applyBalance = balance != 0.0
     let (leftGain, rightGain) = VideoTap.balanceGains(balance)
-    let applyPreamp = preamp != 1.0
+    let applyPreamp = eqOn && preamp != 1.0  // EQ off bypasses preamp too, like the engine's AVAudioUnitEQ
 
     let bufferPointer = UnsafeMutableAudioBufferListPointer(bufferList)
     var globalChannel = 0

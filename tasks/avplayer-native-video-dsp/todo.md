@@ -354,8 +354,8 @@ Numbering: `<Phase>.<Item>`. `[x]` complete, `[~]` in-progress, `[!]` blocked.
 
 - [x] 9.7 End-to-end: launch app, open video window, load video, toggle EQ, drag bands, drag balance, switch visualizer mode (spectrum ↔ Butterchurn) — all work — ✅ 2026-09-25: covered by the user-run Phase B checks on this build lineage (8.5b/c/d, 8.13, 8.14, 7.9) plus the reconfigure-fix live verification
 - [x] 9.8 Full TSan-on test suite green (including `VideoTapSendableContractTests` + `VideoTapLifecycleTests` + `BiquadNumericalMatchTests`) — ✅ 2026-09-25: 119 tests under TSan, only pre-existing #86 fails, no sanitizer warnings
-- [ ] 9.9 Pre-PR Codex Oracle review (per `feedback_sprint_workflow.md` memory)
-- [ ] 9.10 Apply Oracle feedback if any
+- [x] 9.9 Pre-PR Codex Oracle review (per `feedback_sprint_workflow.md` memory) — ✅ 2026-09-25: `/codex:review --base main` (one exhaustive pass): 4 × P2 — video preamp not bypassed with EQ off; route-change guards swallowing video end-of-item; pause lost during the 150 ms route-change window; stopped tracks flipped to paused after a route change
+- [x] 9.10 Apply Oracle feedback if any — ✅ 2026-09-25: all 4 fixed (preamp gated on `eqOn`; will-handler skips video; `pause()` records intent into the pending snapshot; snapshot gains `wasPaused`, did-handler only restores paused when it was paused). TSan 119, only #86 fails; no new warnings. User ear checks: EQ off removes the video preamp boost; stopped track stays stopped across a forced 44.1 kHz route change
 - [ ] 9.11 Commit if any final fixes: `chore(s3-2): Phase 9 — UI polish + docs`
 - [ ] 9.12 Push branch: `git push -u origin feat/avplayer-native-video-dsp` (upstream set; last pushed at `5125bb3` on 2026-09-25; re-push after Phase 9 commits)
 - [ ] 9.13 `gh pr create` with PR description summarizing the 5-round research + 5-round plan + 9-phase implementation
