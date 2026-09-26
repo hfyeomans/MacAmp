@@ -2,7 +2,7 @@
 
 > **Plan:** `tasks/done/avplayer-native-video-dsp/plan.md` (Oracle 9.8/10 final, commit `fdce0ed`)
 > **Branch:** `feat/avplayer-native-video-dsp`
-> **Status:** ✅ MERGED — **PR #C = [PR #89](https://github.com/hfyeomans/MacAmp/pull/89)** merged 2026-09-25 (merge commit `ae15f5c`). Phases 1-9 ✅; post-merge close-out 10.1-10.7 ✅; 10.3 (delete local spike branch) pending the user's decision; 10.8 is the close-out commit.
+> **Status:** ✅ MERGED — **PR #C = [PR #89](https://github.com/hfyeomans/MacAmp/pull/89)** merged 2026-09-25 (merge commit `ae15f5c`). Phases 1-9 ✅; post-merge close-out 10.1-10.7 ✅; 10.3 spike branch preserved on `origin` (evaluate later); 10.8 = close-out commit `0da4b97`.
 > **Updated:** 2026-09-25 (PR #89 merged as `ae15f5c`; task moved to `tasks/done/`; post-merge close-out). Prior — 2026-09-25 (Phase 9: UI audit, docs, pre-PR Codex review 4 × P2 fixed in `e094e2e`, pushed, PR #89 opened). Prior — 2026-09-25 (Phase 8 manual gates complete: Phase B + C PASS after the AVKit remote-command fix and the ADR-12 preferred-format tap; multichannel deferred to #88; PR #87 merged in)
 
 Numbering: `<Phase>.<Item>`. `[x]` complete, `[~]` in-progress, `[!]` blocked.
@@ -367,7 +367,7 @@ Numbering: `<Phase>.<Item>`. `[x]` complete, `[~]` in-progress, `[!]` blocked.
 
 - [x] 10.1 Update task `state.md` to MERGED with PR link + merge commit
 - [x] 10.2 `git mv tasks/avplayer-native-video-dsp/ tasks/done/avplayer-native-video-dsp/` (path references rewritten)
-- [ ] 10.3 Delete throwaway `spike/avplayer-inplace-tap-dsp` branch (locally) — **PENDING user decision:** the branch is local-only (no remote) and holds commit `dd53d64`, which is not in `main`; deleting it loses that commit
+- [x] 10.3 Delete throwaway `spike/avplayer-inplace-tap-dsp` branch (locally) — **not deleted:** preserved on `origin` 2026-09-26 at the user's request (`dd53d64`, not in `main`); evaluate later whether it can be deleted
 - [x] 10.4 Update `tasks/_context/state.md` Quick Reference + sprint table
 - [x] 10.5 Update `tasks/_context/tasks_index.md` (S3-2 row → MERGED with `done/` path; S3 not yet complete, so the sprint stays in the active table)
 - [x] 10.6 Update `tasks/_context/resume-prompt.md` Active Work Queue (advance to S3-3)
