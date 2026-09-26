@@ -97,4 +97,5 @@ MilkDrop3/
 # Covered by .* pattern above
 
 ######## Local session transcripts ########
-macamp-converstion-1.md
+/macamp-converstion-*.md
+/macamp-save-*.md
