@@ -2,8 +2,8 @@
 
 > **Plan:** `tasks/avplayer-native-video-dsp/plan.md` (Oracle 9.8/10 final, commit `fdce0ed`)
 > **Branch:** `feat/avplayer-native-video-dsp`
-> **Status:** 🔧 IMPLEMENTING — Phases 1-7 ✅; **Phase 8 ✅ COMPLETE 2026-09-25** (automated 2026-06-27; Phase A objective gates 2026-09-07; Phase B/C with the user 2026-09-25); **Phase 9 NEXT.** Branch HEAD `5125bb3`, pushed; PR #C not opened.
-> **Updated:** 2026-09-25 (Phase 8 manual gates complete: Phase B + C PASS after the AVKit remote-command fix and the ADR-12 preferred-format tap; multichannel deferred to #88; PR #87 merged in; **Phase 9 next**)
+> **Status:** 🔍 IN REVIEW — Phases 1-8 ✅; **Phase 9 ✅ complete 2026-09-25 except 9.14** (human review). Branch pushed; **PR #C = [PR #89](https://github.com/hfyeomans/MacAmp/pull/89)**, opened 2026-09-25, awaiting the user's review/merge. Next: address review comments, then post-merge close-out 10.1-10.8.
+> **Updated:** 2026-09-25 (Phase 9: UI audit, docs, pre-PR Codex review 4 × P2 fixed in `e094e2e`, pushed, PR #89 opened). Prior — 2026-09-25 (Phase 8 manual gates complete: Phase B + C PASS after the AVKit remote-command fix and the ADR-12 preferred-format tap; multichannel deferred to #88; PR #87 merged in)
 
 Numbering: `<Phase>.<Item>`. `[x]` complete, `[~]` in-progress, `[!]` blocked.
 
@@ -356,14 +356,14 @@ Numbering: `<Phase>.<Item>`. `[x]` complete, `[~]` in-progress, `[!]` blocked.
 - [x] 9.8 Full TSan-on test suite green (including `VideoTapSendableContractTests` + `VideoTapLifecycleTests` + `BiquadNumericalMatchTests`) — ✅ 2026-09-25: 119 tests under TSan, only pre-existing #86 fails, no sanitizer warnings
 - [x] 9.9 Pre-PR Codex Oracle review (per `feedback_sprint_workflow.md` memory) — ✅ 2026-09-25: `/codex:review --base main` (one exhaustive pass): 4 × P2 — video preamp not bypassed with EQ off; route-change guards swallowing video end-of-item; pause lost during the 150 ms route-change window; stopped tracks flipped to paused after a route change
 - [x] 9.10 Apply Oracle feedback if any — ✅ 2026-09-25: all 4 fixed (preamp gated on `eqOn`; will-handler skips video; `pause()` records intent into the pending snapshot; snapshot gains `wasPaused`, did-handler only restores paused when it was paused). TSan 119, only #86 fails; no new warnings. User ear checks: EQ off removes the video preamp boost; stopped track stays stopped across a forced 44.1 kHz route change
-- [ ] 9.11 Commit if any final fixes: `chore(s3-2): Phase 9 — UI polish + docs`
-- [ ] 9.12 Push branch: `git push -u origin feat/avplayer-native-video-dsp` (upstream set; last pushed at `5125bb3` on 2026-09-25; re-push after Phase 9 commits)
-- [ ] 9.13 `gh pr create` with PR description summarizing the 5-round research + 5-round plan + 9-phase implementation
-- [ ] 9.14 Wait for human review
+- [x] 9.11 Commit if any final fixes: `chore(s3-2): Phase 9 — UI polish + docs` — ✅ 2026-09-25: committed as `d078e57` (comment cleanup), `9d7ef92` + `4ff7364` (docs; pruned 19,340 → 8,811 lines), `0f556a8` (reconfigure no longer resumes the previous music track under a video after an output-format change), `ce914c1`, `e094e2e` (Codex 4 × P2), `d1d89ea`
+- [x] 9.12 Push branch: `git push -u origin feat/avplayer-native-video-dsp` — ✅ 2026-09-25: pushed with the Phase 9 commits (local == origin; 96 commits ahead of `origin/main`)
+- [x] 9.13 `gh pr create` with PR description summarizing the 5-round research + 5-round plan + 9-phase implementation — ✅ 2026-09-25: [PR #89](https://github.com/hfyeomans/MacAmp/pull/89) (`feat/avplayer-native-video-dsp` → `main`)
+- [ ] 9.14 Wait for human review (PR #89 — awaiting the user)
 
 ---
 
-## Post-merge close-out (after PR #C merges)
+## Post-merge close-out (after PR #C / #89 merges)
 
 - [ ] 10.1 Update task `state.md` to MERGED with PR link + merge commit
 - [ ] 10.2 `git mv tasks/avplayer-native-video-dsp/ tasks/done/avplayer-native-video-dsp/`

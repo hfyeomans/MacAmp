@@ -4,7 +4,7 @@
 > **Created:** 2026-09-05
 > **Sprint:** S4-1 (Post-Structure-Sprint)
 > **Status:** 📋 **QUEUED** — blocked on the Post-S3 Structure Sprint. Runs **before** S4-2 `github-issues-triage` (ordering confirmed by user 2026-09-05). Research not started. **Re-scoped 2026-09-25 (D-TARGET27) to an adoption task:** the deployment target is now macOS 27.0 (PR #87 merged); first item is the macOS-27 deprecations — 14 on `main` + 2 test-only on the S3-2 branch (`BiquadNumericalMatchTests.swift:246-247`), deferred here by user decision 2026-09-25 (warnings only). See `_context/state.md` D-TARGET27.
-> **Updated:** 2026-09-25 (D-TARGET27 re-scope; S3-2 predecessor status refreshed — Phase 8 complete, Phase 9 next, branch pushed at `5125bb3`). Prior — 2026-09-05 (S4-1-before-S4-2 ordering confirmed by user)
+> **Updated:** 2026-09-25 (S3-2 predecessor: PR #89 open, awaiting merge). Earlier 2026-09-25 (D-TARGET27 re-scope; S3-2 predecessor then at Phase 8 complete, branch pushed at `5125bb3`). Prior — 2026-09-05 (S4-1-before-S4-2 ordering confirmed by user)
 
 ---
 
@@ -12,7 +12,7 @@
 
 | Predecessor | Why | Status |
 |-------------|-----|--------|
-| S3-2 `avplayer-native-video-dsp` → PR #C merged | The branch that introduced `Audio/VideoDSP/` (ADR-3a `@unchecked Sendable` containment, `Synchronization.Atomic`/`Mutex`) must land before its concurrency surface can be re-evaluated under a new language mode | 🔧 in progress — Phase 8 complete 2026-09-25, Phase 9 next; branch pushed to origin at `5125bb3`, unmerged, PR #C not yet opened |
+| S3-2 `avplayer-native-video-dsp` → PR #C merged | The branch that introduced `Audio/VideoDSP/` (ADR-3a `@unchecked Sendable` containment, `Synchronization.Atomic`/`Mutex`) must land before its concurrency surface can be re-evaluated under a new language mode | 🔍 [PR #89](https://github.com/hfyeomans/MacAmp/pull/89) open, awaiting merge (Phases 1-9 complete 2026-09-25) |
 | S3-3 `hls-streaming-support` → merged | S3 must close before the Structure Sprint starts | queued |
 | S3-4 `ogg-vorbis-support` → merged | Adds vendored C deps + `Package.swift` / `project.yml` changes that a tools-version bump would touch | queued |
 | Post-S3 Structure Sprint | File-move consolidation is a stop-the-world pass; a language-mode bump on top of moving files doubles the conflict surface | not started |
@@ -79,3 +79,4 @@ Secondary ADRs likely needed: language-mode bump (`SWIFT_VERSION` + swift-tools-
 | 2026-09-05 | Folder scaffolded. Queued as S4-1. No research started. |
 | 2026-09-05 | Ordering **confirmed by user**: S4-1 runs before S4-2 `github-issues-triage`. Predecessor S3-2 status refreshed — branch pushed to origin at `5fe8c3c` (docs sync; code unchanged since `944795a`), Phase 8 manual gates in progress with the user. |
 | 2026-09-25 | **Re-scoped by D-TARGET27** — min OS macOS 27 (PR #87 merged, `c79c2ca`); this task becomes adoption. macOS-27 deprecations (14 on `main` + 2 test-only on the S3-2 branch) deferred here by user decision. S3-2 predecessor: Phase 8 complete, Phase 9 next, branch at `5125bb3`. |
+| 2026-09-25 | S3-2 predecessor: Phase 9 complete; PR #C opened as PR #89, awaiting merge. |

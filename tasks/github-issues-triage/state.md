@@ -4,7 +4,7 @@
 > **Created:** 2026-09-05
 > **Sprint:** S4-2 (Post-Structure-Sprint)
 > **Status:** 📋 **QUEUED** — blocked on the Post-S3 Structure Sprint (user mandate) and on S4-1 `swift64-macos27-readiness` (ordering confirmed by user 2026-09-05). Research not started.
-> **Updated:** 2026-09-25 (S3-2 predecessor status refreshed — Phase 8 complete, branch pushed at `5125bb3`, PR #C not yet opened; issue list re-checked). Earlier: 2026-09-05 S4-1-before-S4-2 ordering confirmed by user.
+> **Updated:** 2026-09-25 (S3-2 predecessor: PR #89 open, awaiting merge). Earlier 2026-09-25 (S3-2 predecessor then at Phase 8 complete, branch pushed at `5125bb3`; issue list re-checked). Earlier: 2026-09-05 S4-1-before-S4-2 ordering confirmed by user.
 
 ---
 
@@ -15,7 +15,7 @@
 | Post-S3 Structure Sprint | The user's mandate: the issue fixes land in the new `.swift` layout, so they are not rebased across a stop-the-world file-move pass. #78 touches windowing and benefits most from the moves having landed. | **User mandate** |
 | S4-1 `swift64-macos27-readiness` | S4-1's deprecation findings may change *how* these issues are fixed; fixing first would risk reworking fresh code. | **CONFIRMED BY USER 2026-09-05.** See `_context/state.md` decision D-S4. |
 
-The Structure Sprint itself starts only after S3-4 `ogg-vorbis-support` merges, which is behind S3-3 `hls-streaming-support`, which is behind the S3-2 PR #C. As of 2026-09-25 the S3-2 branch `feat/avplayer-native-video-dsp` is pushed to origin at `5125bb3`, unmerged; Phase 8 (all manual gates) is complete, Phase 9 (docs + pre-PR review) is in progress, and PR #C is not yet opened.
+The Structure Sprint itself starts only after S3-4 `ogg-vorbis-support` merges, which is behind S3-3 `hls-streaming-support`, which is behind the S3-2 PR #C. As of 2026-09-25 S3-2 (`feat/avplayer-native-video-dsp`) has Phases 1-9 complete and is **[PR #89](https://github.com/hfyeomans/MacAmp/pull/89) open, awaiting merge**.
 
 ---
 
@@ -57,3 +57,4 @@ Open on `hfyeomans/MacAmp` as of 2026-09-05 (`gh issue list`; no recently closed
 |------|-------|
 | 2026-09-05 | Folder scaffolded. Queued as S4-2. Issue list captured from `gh issue list`. No reproduction attempted yet. |
 | 2026-09-05 | Ordering **confirmed by user**: S4-1 `swift64-macos27-readiness` runs first, then this task. Predecessor chain refreshed — S3-2 pushed to origin at `5fe8c3c`, Phase 8 manual gates in progress with the user, PR #C not yet opened. |
+| 2026-09-25 | S3-2 predecessor: Phase 9 complete; PR #C opened as PR #89, awaiting merge. |
