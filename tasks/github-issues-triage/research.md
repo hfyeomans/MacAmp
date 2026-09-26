@@ -66,7 +66,7 @@ TBD — expected `AppCommands` / menu + shortcut map.
 TBD — play a video, then load an audio track; expected auto-play, observed silence until Next. Audio→audio is fine. **Re-confirm against HEAD after S3-2 PR #C merges** — the pivot may have moved this.
 
 ### Hypothesis
-TBD — carried from `tasks/avplayer-native-video-dsp/placeholder.md` P-6: either `.video → .audio` cleanup leaves transport state that no-ops the `play()`, or async `loadAudioFile` races the immediate `play()`.
+TBD — carried from `tasks/done/avplayer-native-video-dsp/placeholder.md` P-6: either `.video → .audio` cleanup leaves transport state that no-ops the `play()`, or async `loadAudioFile` races the immediate `play()`.
 
 ### Subsystem
 TBD — expected `Audio/AudioPlayer.swift`, `Audio/PlaybackCoordinator.swift`, `Audio/VideoPlaybackController.swift`.

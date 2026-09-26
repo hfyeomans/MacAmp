@@ -282,7 +282,7 @@ controls reach it through an in-place `MTAudioProcessingTap` on the `AVPlayerIte
 output (speakers, HDMI, AirPods, AirPlay 2). Internals (render path, biquad EQ, fanout,
 concurrency contract, telemetry) are in the Architecture Guide:
 [AVPlayer-Native Video DSP](MACAMP_ARCHITECTURE_GUIDE.md#avplayer-native-video-dsp). Code:
-`MacAmpApp/Audio/VideoDSP/`. Decision record: `tasks/avplayer-native-video-dsp/plan.md`.
+`MacAmpApp/Audio/VideoDSP/`. Decision record: `tasks/done/avplayer-native-video-dsp/plan.md`.
 
 **What the user gets**
 
@@ -319,7 +319,7 @@ Telemetry is read from `VideoTapContext.diagnosticSnapshot` in LLDB (nothing is 
 ### Known Limitations
 
 - **Video → audio does not auto-play.** After a video, starting an audio track may need a
-  manual Next/Play. Open; tracked as P-6 in `tasks/avplayer-native-video-dsp/placeholder.md`.
+  manual Next/Play. Open; tracked as P-6 in `tasks/done/avplayer-native-video-dsp/placeholder.md`.
 - **Stereo only.** 5.1+ video is downmixed to stereo, including on multichannel or spatial
   outputs. Multichannel output: issue #88.
 - **First audio track only.** No audio-track picker; the tap attaches to `audioTracks.first`.

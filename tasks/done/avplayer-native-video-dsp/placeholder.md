@@ -1,6 +1,6 @@
 # Placeholders: AVPlayer-Native Video DSP
 
-> **Task:** `tasks/avplayer-native-video-dsp/`
+> **Task:** `tasks/done/avplayer-native-video-dsp/`
 > **Status:** ACTIVE — 3 of 6 items still open (P-2, P-3, P-6); P-1/P-4/P-5 closed.
 > **Last revised:** 2026-09-25 — P-2/P-3/P-6 open; P-1/P-4/P-5 resolved. P-6 not observed either way in the 2026-09-25 gate 8.14 run.
 
@@ -52,7 +52,7 @@ Per project convention (`/Users/hank/.claude/CLAUDE.md` — "Placeholders" secti
 
 ## P-4 — ADR-4 double-buffer coefficient hand-off needed redesign before Phase 3 read coefficients (closed)
 
-- **Files:** `MacAmpApp/Audio/VideoDSP/VideoTapContext.swift` (at the time of the finding: alloc/dealloc still in place, install method withdrawn for Phase 2); `tasks/avplayer-native-video-dsp/plan.md` ADR-4 — amended in Phase 3 (amendment #2).
+- **Files:** `MacAmpApp/Audio/VideoDSP/VideoTapContext.swift` (at the time of the finding: alloc/dealloc still in place, install method withdrawn for Phase 2); `tasks/done/avplayer-native-video-dsp/plan.md` ADR-4 — amended in Phase 3 (amendment #2).
 - **Phase:** Phase 2 finding; resolution required by Phase 3.
 - **Purpose:** Oracle review of Phase 2 (gpt-5.5, 2026-05-02, score 8/10 REVISE) flagged that the naive A/B swap from ADR-4 is not race-safe in practice. Sequence: render thread loads pointer → P=A → starts processing using A. Main thread installs new coefficients into B and swaps pointer → P=B. Main thread installs again — picks A as the "inactive" block (since current is B) and writes to A while render thread is STILL reading A (its initial load happened before any of this). Result: render reads partially-overwritten A. Acquire/release ordering does not fix the pointee-lifetime race. Latent in Phase 2 because `tapProcess` does not yet read coefficients, but the scaffold encoded the unsafe invariant — `installCoefficientSet` was withdrawn before Phase 2 close to avoid making the racy contract reusable.
 - **Status:** ✅ **CLOSED (Phase 3 — `Mutex<BiquadCoefficientSet?>` + `installCoefficients` + `BiquadCascade` landed; todo 3.8 / 5.6).**

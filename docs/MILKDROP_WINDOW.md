@@ -422,7 +422,7 @@ no engine tap is installed, the poll timer is driven separately:
 
 Tap internals: [AVPlayer-Native Video DSP](MACAMP_ARCHITECTURE_GUIDE.md#avplayer-native-video-dsp) and
 [VIDEO_WINDOW.md](VIDEO_WINDOW.md#video-audio-dsp-pipeline); why the two producers are parallel
-functions rather than one generalized handler: `tasks/avplayer-native-video-dsp/plan.md` (ADR-6).
+functions rather than one generalized handler: `tasks/done/avplayer-native-video-dsp/plan.md` (ADR-6).
 
 **Invariants:**
 - Only one producer is live at a time, so the single-slot last-write-wins feed needs no

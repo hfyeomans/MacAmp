@@ -1418,7 +1418,7 @@ private nonisolated static func makeTapHandler(
 
 ## AVPlayer-Native Video DSP
 
-Local video plays through AVPlayer, and its audio stays there. Instead of bridging video audio into AVAudioEngine, MacAmp attaches an `MTAudioProcessingTap` to the `AVPlayerItem` and applies preamp, EQ and balance to AVPlayer's own buffers in place, then feeds the processed signal to the shared visualizer. There is no ring buffer, no second clock domain and no extra sample-rate conversion stage. The decision record is `tasks/avplayer-native-video-dsp/plan.md` (ADR-1…ADR-12); background research is in `research.md` in the same folder.
+Local video plays through AVPlayer, and its audio stays there. Instead of bridging video audio into AVAudioEngine, MacAmp attaches an `MTAudioProcessingTap` to the `AVPlayerItem` and applies preamp, EQ and balance to AVPlayer's own buffers in place, then feeds the processed signal to the shared visualizer. There is no ring buffer, no second clock domain and no extra sample-rate conversion stage. The decision record is `tasks/done/avplayer-native-video-dsp/plan.md` (ADR-1…ADR-12); background research is in `research.md` in the same folder.
 
 ### Topology
 
@@ -1536,7 +1536,7 @@ During video no engine tap is installed, so `startVideoVisualization()` starts t
 ### Known Limitations
 
 - **Multichannel output:** 5.1+ video is downmixed to stereo in the tap (see Processing Format); issue #88, S4-4 `video-multichannel-output`.
-- **P-6:** after a video, loading an audio track does not auto-play; the user has to press Next. Open and non-blocking (`tasks/avplayer-native-video-dsp/placeholder.md`).
+- **P-6:** after a video, loading an audio track does not auto-play; the user has to press Next. Open and non-blocking (`tasks/done/avplayer-native-video-dsp/placeholder.md`).
 - **Streaming video:** HLS video is not a supported target; `MTAudioProcessingTap` is unreliable for streaming items (plan.md §2).
 - **macOS 27 deprecations:** the build carries 16 deprecated-API warnings (14 app, 2 test), including `AVPlayerItemDidPlayToEndTime` in `VideoPlaybackController` and `installTap(onBus:)` in `VisualizerPipeline`; S4-1 `swift64-macos27-readiness` replaces them.
 

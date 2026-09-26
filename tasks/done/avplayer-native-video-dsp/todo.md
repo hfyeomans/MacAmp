@@ -1,9 +1,9 @@
 # Todo: AVPlayer-Native Video DSP
 
-> **Plan:** `tasks/avplayer-native-video-dsp/plan.md` (Oracle 9.8/10 final, commit `fdce0ed`)
+> **Plan:** `tasks/done/avplayer-native-video-dsp/plan.md` (Oracle 9.8/10 final, commit `fdce0ed`)
 > **Branch:** `feat/avplayer-native-video-dsp`
-> **Status:** 🔍 IN REVIEW — Phases 1-8 ✅; **Phase 9 ✅ complete 2026-09-25 except 9.14** (human review). Branch pushed; **PR #C = [PR #89](https://github.com/hfyeomans/MacAmp/pull/89)**, opened 2026-09-25, awaiting the user's review/merge. Next: address review comments, then post-merge close-out 10.1-10.8.
-> **Updated:** 2026-09-25 (Phase 9: UI audit, docs, pre-PR Codex review 4 × P2 fixed in `e094e2e`, pushed, PR #89 opened). Prior — 2026-09-25 (Phase 8 manual gates complete: Phase B + C PASS after the AVKit remote-command fix and the ADR-12 preferred-format tap; multichannel deferred to #88; PR #87 merged in)
+> **Status:** ✅ MERGED — **PR #C = [PR #89](https://github.com/hfyeomans/MacAmp/pull/89)** merged 2026-09-25 (merge commit `ae15f5c`). Phases 1-9 ✅; post-merge close-out 10.1-10.7 ✅; 10.3 (delete local spike branch) pending the user's decision; 10.8 is the close-out commit.
+> **Updated:** 2026-09-25 (PR #89 merged as `ae15f5c`; task moved to `tasks/done/`; post-merge close-out). Prior — 2026-09-25 (Phase 9: UI audit, docs, pre-PR Codex review 4 × P2 fixed in `e094e2e`, pushed, PR #89 opened). Prior — 2026-09-25 (Phase 8 manual gates complete: Phase B + C PASS after the AVKit remote-command fix and the ADR-12 preferred-format tap; multichannel deferred to #88; PR #87 merged in)
 
 Numbering: `<Phase>.<Item>`. `[x]` complete, `[~]` in-progress, `[!]` blocked.
 
@@ -16,7 +16,7 @@ Numbering: `<Phase>.<Item>`. `[x]` complete, `[~]` in-progress, `[!]` blocked.
 - [x] 1.3 Cherry-pick 13 Phase 1 commits (`3ed4356` → `2aa2f18`) — engine config observer
 - [x] 1.4 Drop `wasVideoBridge` field from `PreReconfigureSnapshot` (commit `ffd77c1`)
 - [x] 1.5 Build + TSan green (72/72)
-- [x] 1.6 Scaffold `tasks/avplayer-native-video-dsp/` with 6 canonical files
+- [x] 1.6 Scaffold `tasks/done/avplayer-native-video-dsp/` with 6 canonical files
 - [x] 1.7 Create `tasks/_context/s3-2-pivot.md` three-step tracker
 - [x] 1.8 Cross-reference pivot tracker from `_context/state.md`, `tasks_index.md`, `resume-prompt.md`
 - [x] 1.9 Mark old branch + old task PAUSED-AS-REFERENCE
@@ -317,7 +317,7 @@ Numbering: `<Phase>.<Item>`. `[x]` complete, `[~]` in-progress, `[!]` blocked.
 
 ### Documentation
 
-- [x] 8.16 ✅ — created `tasks/avplayer-native-video-dsp/verification.md`: every gate's result + the hardware-manual checklist + commit/date evidence.
+- [x] 8.16 ✅ — created `tasks/done/avplayer-native-video-dsp/verification.md`: every gate's result + the hardware-manual checklist + commit/date evidence.
 - [ ] 8.17 (standing) Any gate failure → ADR amendment + targeted retry, NOT a soft-skip.
 
 - [x] 8.18 Commit ✅ — benchmark + verification.md committed (`2c410a0` gates + checklist; `944795a` methodology/honesty fixes).
@@ -359,17 +359,17 @@ Numbering: `<Phase>.<Item>`. `[x]` complete, `[~]` in-progress, `[!]` blocked.
 - [x] 9.11 Commit if any final fixes: `chore(s3-2): Phase 9 — UI polish + docs` — ✅ 2026-09-25: committed as `d078e57` (comment cleanup), `9d7ef92` + `4ff7364` (docs; pruned 19,340 → 8,811 lines), `0f556a8` (reconfigure no longer resumes the previous music track under a video after an output-format change), `ce914c1`, `e094e2e` (Codex 4 × P2), `d1d89ea`
 - [x] 9.12 Push branch: `git push -u origin feat/avplayer-native-video-dsp` — ✅ 2026-09-25: pushed with the Phase 9 commits (local == origin; 96 commits ahead of `origin/main`)
 - [x] 9.13 `gh pr create` with PR description summarizing the 5-round research + 5-round plan + 9-phase implementation — ✅ 2026-09-25: [PR #89](https://github.com/hfyeomans/MacAmp/pull/89) (`feat/avplayer-native-video-dsp` → `main`)
-- [ ] 9.14 Wait for human review (PR #89 — awaiting the user)
+- [x] 9.14 Wait for human review (PR #89) — ✅ 2026-09-25: user approved and merged (merge condition: CI green — Socket ×2, Snyk, Semgrep all passed; CodeRabbit still processing at merge, no review posted). Late working-tree Codex P2 fixed pre-merge in `bebfee5`
 
 ---
 
-## Post-merge close-out (after PR #C / #89 merges)
+## Post-merge close-out (after PR #C / #89 merges) — PR #89 merged 2026-09-25, merge commit `ae15f5c`
 
-- [ ] 10.1 Update task `state.md` to MERGED with PR link + merge commit
-- [ ] 10.2 `git mv tasks/avplayer-native-video-dsp/ tasks/done/avplayer-native-video-dsp/`
-- [ ] 10.3 Delete throwaway `spike/avplayer-inplace-tap-dsp` branch (locally)
-- [ ] 10.4 Update `tasks/_context/state.md` Quick Reference + sprint table
-- [ ] 10.5 Update `tasks/_context/tasks_index.md` (move row to "Completed Sprints" section)
-- [ ] 10.6 Update `tasks/_context/resume-prompt.md` Active Work Queue (advance to S3-3)
-- [ ] 10.7 Mark `tasks/_context/s3-2-pivot.md` as RESOLVED
-- [ ] 10.8 Single `chore: close out avplayer-native-video-dsp (PR #C)` commit
+- [x] 10.1 Update task `state.md` to MERGED with PR link + merge commit
+- [x] 10.2 `git mv tasks/avplayer-native-video-dsp/ tasks/done/avplayer-native-video-dsp/` (path references rewritten)
+- [ ] 10.3 Delete throwaway `spike/avplayer-inplace-tap-dsp` branch (locally) — **PENDING user decision:** the branch is local-only (no remote) and holds commit `dd53d64`, which is not in `main`; deleting it loses that commit
+- [x] 10.4 Update `tasks/_context/state.md` Quick Reference + sprint table
+- [x] 10.5 Update `tasks/_context/tasks_index.md` (S3-2 row → MERGED with `done/` path; S3 not yet complete, so the sprint stays in the active table)
+- [x] 10.6 Update `tasks/_context/resume-prompt.md` Active Work Queue (advance to S3-3)
+- [x] 10.7 Mark `tasks/_context/s3-2-pivot.md` as RESOLVED
+- [x] 10.8 Single `chore: close out avplayer-native-video-dsp (PR #89)` commit — ✅ 2026-09-25

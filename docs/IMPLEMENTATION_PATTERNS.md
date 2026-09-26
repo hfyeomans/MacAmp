@@ -1622,7 +1622,7 @@ if self.currentMediaType == .audio, self.engine.currentFileDuration > 0 {
 
 **When to use**: Carrying Swift state into a C-callback API that runs on a real-time thread and hands back an opaque `void *` — here, an `MTAudioProcessingTap` on a video `AVPlayerItem` that runs EQ, preamp, balance and the visualizer in place.
 
-Video audio (played by `AVPlayer`, never routed through `AVAudioEngine`) gets the same DSP as local files this way. Architecture: [MACAMP_ARCHITECTURE_GUIDE.md → AVPlayer-Native Video DSP](MACAMP_ARCHITECTURE_GUIDE.md#avplayer-native-video-dsp); design rationale: `tasks/avplayer-native-video-dsp/plan.md` ADR-1, ADR-3, ADR-7, ADR-10.
+Video audio (played by `AVPlayer`, never routed through `AVAudioEngine`) gets the same DSP as local files this way. Architecture: [MACAMP_ARCHITECTURE_GUIDE.md → AVPlayer-Native Video DSP](MACAMP_ARCHITECTURE_GUIDE.md#avplayer-native-video-dsp); design rationale: `tasks/done/avplayer-native-video-dsp/plan.md` ADR-1, ADR-3, ADR-7, ADR-10.
 
 **Implementation**:
 ```swift
@@ -1990,7 +1990,7 @@ var isVisualizerRendering: Bool {
 
 **When to use**: Production visibility into whether a real-time callback fits its buffer deadline, without logging or timing every callback on the render thread.
 
-Used in `tapProcess`. Rationale: `tasks/avplayer-native-video-dsp/plan.md` Phase 6.
+Used in `tapProcess`. Rationale: `tasks/done/avplayer-native-video-dsp/plan.md` Phase 6.
 
 **Implementation**:
 ```swift
@@ -2021,7 +2021,7 @@ func recordProcessingDeadline(elapsedNanos: UInt64, budgetNanos: UInt64, nowHost
 }
 ```
 
-**Readout**: there is no log path — counters are read on the main thread via `VideoTapContext.diagnosticSnapshot` (an immutable `Sendable` `VideoTapDiagnostics`). In practice they are read from LLDB with a breakpoint in `EqualizerController.pollVideoTapSampleRates()`, which fires at 30 Hz during video. In optimized builds the computed `diagnosticSnapshot` getter is stripped; load the atomics directly instead (`expr -l swift -- import Synchronization`, then `….registeredVideoTapContexts[0].value!.budgetOverrunCount.load(ordering: .relaxed)`). Procedure: `tasks/avplayer-native-video-dsp/verification.md` gate 8.5e.
+**Readout**: there is no log path — counters are read on the main thread via `VideoTapContext.diagnosticSnapshot` (an immutable `Sendable` `VideoTapDiagnostics`). In practice they are read from LLDB with a breakpoint in `EqualizerController.pollVideoTapSampleRates()`, which fires at 30 Hz during video. In optimized builds the computed `diagnosticSnapshot` getter is stripped; load the atomics directly instead (`expr -l swift -- import Synchronization`, then `….registeredVideoTapContexts[0].value!.budgetOverrunCount.load(ordering: .relaxed)`). Procedure: `tasks/done/avplayer-native-video-dsp/verification.md` gate 8.5e.
 
 **Real usage**: `VideoTap.swift` (`tapProcess`, cached `videoTapMachTimebase`, `prewarmVideoTapTimebase()`), `VideoTapContext.swift` (`recordProcessingDeadline`, `diagnosticSnapshot`). Tests: `Tests/MacAmpTests/VideoTapTelemetryTests.swift` call `recordProcessingDeadline` directly with synthetic values.
 

@@ -45,7 +45,7 @@
 //     deadline counters (`budgetOverrunCount`, `deadlineRiskCount`,
 //     `lastDeadlineRiskHostTime`), all `Atomic<UInt64>`.
 //
-// Design rationale: tasks/avplayer-native-video-dsp/plan.md.
+// Design rationale: tasks/done/avplayer-native-video-dsp/plan.md.
 
 import Foundation
 import Synchronization

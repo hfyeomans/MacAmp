@@ -3,7 +3,7 @@
 > **Purpose:** Add audio-only HLS protocol support (M3U8 + AAC ADTS, master/media playlists, live + VOD) to the unified audio pipeline.
 > **Created:** 2026-03-14
 > **Sprint:** S3, Wave S3-3 (sequential after S3-2 merges)
-> **Status:** PLAN APPROVED — ready for implementation pending S3-1 + S3-2 merges
+> **Status:** PLAN APPROVED — **NEXT; gates satisfied** (S3-1 merged PR #80/#82; S3-2 merged PR #89, `ae15f5c`, 2026-09-25). Ready for pre-flight PF.1-PF.5.
 
 ---
 
@@ -41,7 +41,7 @@
 - **Spike:** none
 - **Wave:** S3-3 sequential (after S3-2 merges)
 - **PR target:** PR #D
-- **Predecessors:** S3-1 (`stream-pause-tail`) and S3-2 (`video-audio-engine-routing`) must merge first.
+- **Predecessors:** S3-1 (`stream-pause-tail`) ✅ merged PR #82; S3-2 ✅ merged PR #89 (`ae15f5c`, 2026-09-25) — shipped as the pivot `avplayer-native-video-dsp` (the original `video-audio-engine-routing` is PAUSED-AS-REFERENCE). Gate satisfied.
 - **Successors:** `ogg-vorbis-support` (S3-4) — must rebase its plan against post-HLS HEAD; HLS plan §17.1 includes a detailed OGG rebase checklist.
 
 **Pre-flight (PF.1 – PF.5 in todo):** re-read every `Files Affected` source at HEAD post-merge; reconcile any line-number drift before Phase 1.
@@ -79,7 +79,7 @@
 
 ---
 
-## Next Steps (implementation, after S3-2 merges)
+## Next Steps (implementation — S3-2 merged 2026-09-25, gate satisfied)
 
 1. Pre-flight: PF.1 – PF.5 (re-read at HEAD).
 2. Optional: Gemini re-run if any open question warrants (research §"Gemini Research Findings" pending).

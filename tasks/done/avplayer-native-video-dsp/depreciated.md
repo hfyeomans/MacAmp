@@ -1,6 +1,6 @@
 # Depreciated: AVPlayer-Native Video DSP
 
-> **Task:** `tasks/avplayer-native-video-dsp/`
+> **Task:** `tasks/done/avplayer-native-video-dsp/`
 > **Status:** POPULATED — implementation Phases 1-8 complete (Phase 8 automated gates ✅ 2026-06-27; manual/hardware gates pending). Last revised 2026-09-05.
 
 Per project convention, deprecated/replaced code is removed entirely (not marked with `// Deprecated`) and its removal documented here. This file tracks what gets removed during the implementation, not what's preserved on the saved branch (`feat/video-audio-engine-routing`).

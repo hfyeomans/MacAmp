@@ -8,7 +8,7 @@
 > **PR target:** PR #C (replaces the previous S3-2 PR target).
 > **Predecessors:** S3-1A ✅, S3-1B ✅, Phase 1 (engine config observer) ✅ as cherry-pick base.
 > **Successors (file-conflict aware):** S3-3 (`hls-streaming-support`) and S3-4 (`ogg-vorbis-support`) both touch `MacAmpApp/Audio/StreamDecodePipeline.swift` and `MacAmpApp/Audio/StreamPlayer.swift` — this plan does NOT touch those files (audio-side path unchanged). See §11 conflict map.
-> **Source of truth:** `tasks/avplayer-native-video-dsp/research.md` (Oracle 10/10 after 5 review rounds, commit `46bb6af`).
+> **Source of truth:** `tasks/done/avplayer-native-video-dsp/research.md` (Oracle 10/10 after 5 review rounds, commit `46bb6af`).
 > **Spike artifact:** `spike/avplayer-inplace-tap-dsp` branch (kept locally until S3-2 close).
 
 ---
@@ -752,7 +752,7 @@ Each phase is individually reviewable and individually testable. Each phase ends
 
 ### Phase 8 — Verification matrix execution + state.md update
 
-**Goal.** Execute every gate from research.md "Verification gate matrix" (§7 below). Document results in `tasks/avplayer-native-video-dsp/state.md` (or a new `verification.md`). Any gate failure → stop, update plan, fix, retest.
+**Goal.** Execute every gate from research.md "Verification gate matrix" (§7 below). Document results in `tasks/done/avplayer-native-video-dsp/state.md` (or a new `verification.md`). Any gate failure → stop, update plan, fix, retest.
 
 **Tier 1 — static gates (one-time):**
 1. **CPU benchmark.** Apple Silicon (M-series) + Intel build target, 3 clip configurations (44.1 stereo, 48 stereo, 48 5.1), baseline (pass-through tap) vs full chain (BiquadCascade + balance + visualizer DSP). Sampled over ≥30 s playback per configuration. Pass: 99th-percentile `tapProcess` wall-clock ≤10 % of buffer budget. Reject: any single sample >50 %.
@@ -915,13 +915,13 @@ This branch is the only S3 task currently in flight; no peer branches.
 This task adds new files (`VideoDSP/` module) and modifies a small number of existing files. Rollback strategy:
 
 1. **If a kill switch fires (§9):** revert the failing phase's commits via `git revert <SHA>` on the branch; keep prior phases' progress. Restart from the failing phase.
-2. **If the entire architecture must abandon:** the branch is throwaway. Switch back to `feat/video-audio-engine-routing` (saved-as-reference) and resume there with new mitigations. The new task folder `tasks/avplayer-native-video-dsp/` is preserved as a "what we tried, why it failed" reference.
+2. **If the entire architecture must abandon:** the branch is throwaway. Switch back to `feat/video-audio-engine-routing` (saved-as-reference) and resume there with new mitigations. The new task folder `tasks/done/avplayer-native-video-dsp/` is preserved as a "what we tried, why it failed" reference.
 3. **If specific commits cause regressions discovered post-merge:** `git revert <SHA>` on `main` for the offending commit(s); fix forward in a new task.
 4. **Engine path is never at risk.** All modifications to `EqualizerController`, `AudioPlayer`, `VisualizerPipeline` are additive (new methods, type renames at the boundary). The engine code path remains byte-for-byte identical (per Phase 1 exit criterion). Rolling back the new tap module restores audio-side behavior with no engine-side regression.
 
 **Cleanup at S3-2 close (post-merge):**
 - Delete local branch `spike/avplayer-inplace-tap-dsp` (throwaway).
-- Move `tasks/avplayer-native-video-dsp/` → `tasks/done/avplayer-native-video-dsp/` (per project workflow).
+- Move `tasks/done/avplayer-native-video-dsp/` → `tasks/done/avplayer-native-video-dsp/` (per project workflow).
 - Update `tasks/_context/resume-prompt.md`, `tasks/_context/state.md`, `tasks/_context/tasks_index.md`.
 - Mark `tasks/_context/s3-2-pivot.md` as resolved.
 - Single `chore: close out avplayer-native-video-dsp (PR #C)` commit.
@@ -958,12 +958,12 @@ These items are documented for resolution during the named phase. They are **not
 
 ## 15. References
 
-- `tasks/avplayer-native-video-dsp/research.md` — full research package (10/10 Oracle, commit `46bb6af`)
-- `tasks/avplayer-native-video-dsp/research-notes/spike-findings.md` — Phase 0 spike empirical results + production-translation hazards
-- `tasks/avplayer-native-video-dsp/research-notes/apple-docs.md` — TN2249 + SDK-header citations
-- `tasks/avplayer-native-video-dsp/research-notes/eq-numerical-match.md` — RBJ cookbook + Apple parametric EQ design
-- `tasks/avplayer-native-video-dsp/research-notes/saved-branch-retrospective.md` — allowlist/denylist with file:line citations
-- `tasks/avplayer-native-video-dsp/research-notes/visualizer-feed.md` — `VisualizerPipeline` mapping
+- `tasks/done/avplayer-native-video-dsp/research.md` — full research package (10/10 Oracle, commit `46bb6af`)
+- `tasks/done/avplayer-native-video-dsp/research-notes/spike-findings.md` — Phase 0 spike empirical results + production-translation hazards
+- `tasks/done/avplayer-native-video-dsp/research-notes/apple-docs.md` — TN2249 + SDK-header citations
+- `tasks/done/avplayer-native-video-dsp/research-notes/eq-numerical-match.md` — RBJ cookbook + Apple parametric EQ design
+- `tasks/done/avplayer-native-video-dsp/research-notes/saved-branch-retrospective.md` — allowlist/denylist with file:line citations
+- `tasks/done/avplayer-native-video-dsp/research-notes/visualizer-feed.md` — `VisualizerPipeline` mapping
 - `tasks/_context/s3-2-pivot.md` — strategic decision log
 - `tasks/_context/principles.md` — 7 decomposition principles
 - `tasks/done/stream-pause-tail/plan.md` — recent S3 plan exemplar

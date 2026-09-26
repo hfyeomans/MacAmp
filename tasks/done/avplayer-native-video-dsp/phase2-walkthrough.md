@@ -219,10 +219,10 @@ We're not behind the saved branch — we're rebuilding under a different (smalle
 
 | What | Where it lives now | Where it goes |
 |---|---|---|
-| Architecture diagram (engine + video paths, data flow, topology deltas vs saved branch) | `tasks/avplayer-native-video-dsp/research.md` §"Architecture (proposed end-state)" lines 19-93 | Phase 9 → `docs/MACAMP_ARCHITECTURE_GUIDE.md` + `docs/VIDEO_WINDOW.md` |
-| ADRs 1-11 + 3a + amendments (concurrency contract, coefficient hand-off, EQ/balance fanout, dual-producer visualizer, tap lifecycle, biquad implementation, filter reset, release-on-fail, ASBD gate, plus the ADR-4/ADR-7 amendments from Phase 2 implementation reality) | `tasks/avplayer-native-video-dsp/plan.md` §4 | Phase 9 → cited from the architecture guide |
+| Architecture diagram (engine + video paths, data flow, topology deltas vs saved branch) | `tasks/done/avplayer-native-video-dsp/research.md` §"Architecture (proposed end-state)" lines 19-93 | Phase 9 → `docs/MACAMP_ARCHITECTURE_GUIDE.md` + `docs/VIDEO_WINDOW.md` |
+| ADRs 1-11 + 3a + amendments (concurrency contract, coefficient hand-off, EQ/balance fanout, dual-producer visualizer, tap lifecycle, biquad implementation, filter reset, release-on-fail, ASBD gate, plus the ADR-4/ADR-7 amendments from Phase 2 implementation reality) | `tasks/done/avplayer-native-video-dsp/plan.md` §4 | Phase 9 → cited from the architecture guide |
 | `RenderThreadSafe` pattern (`@unchecked Sendable` + `Synchronization.Atomic` + marker protocol + DEBUG contract tests) | `MacAmpApp/Audio/RenderThreadSafe.swift` + `VideoTapContext.swift` header contract block + `VideoTapSendableContractTests.swift` | Phase 9 → new "Audio Mechanism Concurrency Contract" subsection of `docs/MACAMP_ARCHITECTURE_GUIDE.md` codifying it as a project-wide convention |
-| In-place tap DSP topology (replaces engine-routing) | `tasks/avplayer-native-video-dsp/research.md` + `plan.md` ADR-1, ADR-2, ADR-7 | Phase 9 → new "Audio DSP Architecture" section of `docs/VIDEO_WINDOW.md` |
+| In-place tap DSP topology (replaces engine-routing) | `tasks/done/avplayer-native-video-dsp/research.md` + `plan.md` ADR-1, ADR-2, ADR-7 | Phase 9 → new "Audio DSP Architecture" section of `docs/VIDEO_WINDOW.md` |
 | Phase 2 implementation findings (4 deviations forced by Swift 6 / Oracle review) | `placeholder.md` P-1/P-2/P-3/P-4 + `state.md` "Phase 2 implementation findings" | Phase 3 closes P-1 + P-4; Phase 9 docs reference P-2 + P-3 as standing items if not resolved by then |
 
 **`plan.md` §6 Phase 9 §9.4-9.6 is the explicit extraction mandate** as a hard PR requirement (mandatory documentation updates land in the same PR as the implementation per project convention — docs/code drift is unacceptable).
@@ -248,7 +248,7 @@ The two deferred items are:
 - **todo 2.39 — manual smoke on 5 clapperboard clips.** Each clip should play normally with the tap installed but no DSP applied (audio plays through clean, no audible glitches, video plays without stutter). Tests that the pass-through tap doesn't break video playback.
 - **todo 2.40 — Allocations Instruments leak check.** Launch the app, attach Instruments → Allocations template, play N video tracks (e.g. queue 5-10 clips and let them auto-advance), stop, observe whether `VideoTapContext` allocation count == deallocation count. Tests that the +1 retain from `Unmanaged.passRetained` is always balanced by `tapFinalize`.
 
-**Where they're deferred TO:** I haven't formally moved them to a future phase — they're still open as `[ ]` items in `tasks/avplayer-native-video-dsp/todo.md` §2.39 + §2.40. Practically, two timing options:
+**Where they're deferred TO:** I haven't formally moved them to a future phase — they're still open as `[ ]` items in `tasks/done/avplayer-native-video-dsp/todo.md` §2.39 + §2.40. Practically, two timing options:
 
 1. **Do them NOW**, before starting Phase 3. Catches any pass-through regression Phase 3 might trip over. ~10 minutes of clapperboard playback + ~5 minutes of Allocations attach/run. **Recommended** because it confirms Phase 2's ground truth before Phase 3 layers DSP on top.
 2. **Defer to Phase 8 (verification matrix execution).** Phase 8 already has slots for "Manual end-to-end" + "Allocations Instruments" gates as part of the 15-gate matrix. Combining keeps Phase 2 closure unblocked but means a Phase 3 regression caught at Phase 8 has more to bisect.

@@ -4,7 +4,7 @@
 > **Created:** 2026-09-05
 > **Sprint:** S4-2 (Post-Structure-Sprint)
 > **Status:** 📋 **QUEUED** — blocked on the Post-S3 Structure Sprint (user mandate) and on S4-1 `swift64-macos27-readiness` (ordering confirmed by user 2026-09-05). Research not started.
-> **Updated:** 2026-09-25 (S3-2 predecessor: PR #89 open, awaiting merge). Earlier 2026-09-25 (S3-2 predecessor then at Phase 8 complete, branch pushed at `5125bb3`; issue list re-checked). Earlier: 2026-09-05 S4-1-before-S4-2 ordering confirmed by user.
+> **Updated:** 2026-09-25 (S3-2 predecessor ✅ merged — PR #89, `ae15f5c`). Earlier 2026-09-25 (S3-2 predecessor: PR #89 open). Earlier 2026-09-25 (S3-2 predecessor then at Phase 8 complete, branch pushed at `5125bb3`; issue list re-checked). Earlier: 2026-09-05 S4-1-before-S4-2 ordering confirmed by user.
 
 ---
 
@@ -15,7 +15,7 @@
 | Post-S3 Structure Sprint | The user's mandate: the issue fixes land in the new `.swift` layout, so they are not rebased across a stop-the-world file-move pass. #78 touches windowing and benefits most from the moves having landed. | **User mandate** |
 | S4-1 `swift64-macos27-readiness` | S4-1's deprecation findings may change *how* these issues are fixed; fixing first would risk reworking fresh code. | **CONFIRMED BY USER 2026-09-05.** See `_context/state.md` decision D-S4. |
 
-The Structure Sprint itself starts only after S3-4 `ogg-vorbis-support` merges, which is behind S3-3 `hls-streaming-support`, which is behind the S3-2 PR #C. As of 2026-09-25 S3-2 (`feat/avplayer-native-video-dsp`) has Phases 1-9 complete and is **[PR #89](https://github.com/hfyeomans/MacAmp/pull/89) open, awaiting merge**.
+The Structure Sprint itself starts only after S3-4 `ogg-vorbis-support` merges, which is behind S3-3 `hls-streaming-support`, which was behind the S3-2 PR #C. S3-2 (`avplayer-native-video-dsp`) ✅ **merged 2026-09-25 as [PR #89](https://github.com/hfyeomans/MacAmp/pull/89)** (merge commit `ae15f5c`), so S3-3 is now next.
 
 ---
 
@@ -31,7 +31,7 @@ Open on `hfyeomans/MacAmp` as of 2026-09-05 (`gh issue list`; no recently closed
 | #47 | 2026-02-10 | @hfyeomans | Keyboard shortcut conflict: Cmd+Shift+1-3 (skins vs window toggles) | The same chord is bound twice — skin selection and window toggles | Small | `AppCommands` / menu + keyboard shortcut map |
 | **P-6** | 2026-05-28 | internal | Video→audio transition does not auto-play | After a video plays, loading an audio track does not auto-play (user must hit Next). Audio→audio is fine. Suspected: `.video → .audio` cleanup leaves transport state that no-ops the `play()`, or async `loadAudioFile` races the immediate `play()`. Non-blocking; surfaced in S3-2 Phase 8 gate 8.14 | Small | `Audio/AudioPlayer.swift`, `Audio/PlaybackCoordinator.swift`, `Audio/VideoPlaybackController.swift` |
 
-**P-6 provenance:** carried over from `tasks/avplayer-native-video-dsp/placeholder.md` (P-6) and the "Post-S3-2 `avplayer-native-video-dsp` Findings" section of `_context/state.md`, which records it as still open and needing a dedicated follow-up task. This is that task. It should be re-confirmed against HEAD after PR #C merges — the S3-2 pivot may have moved it.
+**P-6 provenance:** carried over from `tasks/done/avplayer-native-video-dsp/placeholder.md` (P-6) and the "Post-S3-2 `avplayer-native-video-dsp` Findings" section of `_context/state.md`, which records it as still open and needing a dedicated follow-up task. This is that task. It should be re-confirmed against HEAD now that PR #C (#89) has merged — the S3-2 pivot may have moved it.
 
 ---
 
@@ -58,3 +58,4 @@ Open on `hfyeomans/MacAmp` as of 2026-09-05 (`gh issue list`; no recently closed
 | 2026-09-05 | Folder scaffolded. Queued as S4-2. Issue list captured from `gh issue list`. No reproduction attempted yet. |
 | 2026-09-05 | Ordering **confirmed by user**: S4-1 `swift64-macos27-readiness` runs first, then this task. Predecessor chain refreshed — S3-2 pushed to origin at `5fe8c3c`, Phase 8 manual gates in progress with the user, PR #C not yet opened. |
 | 2026-09-25 | S3-2 predecessor: Phase 9 complete; PR #C opened as PR #89, awaiting merge. |
+| 2026-09-25 | S3-2 predecessor ✅ merged (PR #89, `ae15f5c`). Chain now: S3-3 → S3-4 → Structure Sprint → S4-1 → this task. |

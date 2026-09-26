@@ -3,7 +3,7 @@
 > **Purpose:** Play 5.1 and other multichannel/spatial video audio as multichannel (like Apple Music/TV) while MacAmp's balance still controls the left vs right speakers.
 > **Created:** 2026-09-25
 > **Issue:** [#88](https://github.com/hfyeomans/MacAmp/issues/88)
-> **Status:** 📋 **QUEUED** — deferred from S3-2 by the owner on 2026-09-25; S3-2 ships a stereo downmix for fidelity. Research findings seeded in `research.md`; experiments not started.
+> **Status:** 📋 **QUEUED** — deferred from S3-2 by the owner on 2026-09-25; S3-2 ships a stereo downmix for fidelity. Research findings seeded in `research.md`; experiments not started. **Predecessors satisfied** (S3-2 PR #89 + PR #87 both merged) — unblocked; roadmap position unchanged.
 
 ---
 
@@ -11,7 +11,7 @@
 
 | Predecessor | Why | Status |
 |-------------|-----|--------|
-| S3-2 `avplayer-native-video-dsp` → PR #C merged | Introduces the preferred-format tap (ADR-12) this task extends | 🔧 in progress |
+| S3-2 `avplayer-native-video-dsp` → PR #C merged | Introduces the preferred-format tap (ADR-12) this task extends | ✅ merged 2026-09-25 — PR #89 (`ae15f5c`) |
 | D-TARGET27 / PR #87 merged | `MTAudioProcessingTapCreateWithPreferredFormat` is macOS 27 | ✅ merged 2026-09-25 (`c79c2ca`) |
 
 ## Starting point
