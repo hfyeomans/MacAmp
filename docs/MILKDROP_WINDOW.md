@@ -1,30 +1,28 @@
 # Milkdrop Window Implementation Guide
 
-**Document Version**: 2.2.0
-**Last Updated**: 2026-03-22
-**Implementation**: Days 7-8 of TASK 2 (milk-drop-video-support) + Butterchurn Integration + Window Resize
-**Status**: ✅ PRODUCTION - Complete with Butterchurn visualization and resizable window
+**Document Version**: 2.4.0
+**Last Updated**: 2026-09-25
+**Status**: Production (GEN.bmp chrome, Butterchurn visualization, segment-based resize, video-audio visualization)
 
 ---
 
 ## 1. Introduction
 
-The Milkdrop window provides audio visualization capabilities in MacAmp, faithfully recreating the Winamp visualization window using GEN.bmp sprites. This window hosts the legendary Milkdrop visualizer via Butterchurn.js - a WebGL port of the original Milkdrop 2 visualization engine.
+The Milkdrop window recreates the Winamp visualization window using GEN.bmp sprites and hosts Butterchurn.js, a WebGL port of the Milkdrop 2 engine, in a WKWebView.
 
 ### 1.1 Purpose
 
-- **Primary**: Display Butterchurn audio visualizations synchronized with music playback
+- **Primary**: Display Butterchurn audio visualizations synchronized with playback — local files, internet radio, and the audio track of video files
 - **Secondary**: Preset cycling, randomization, and history navigation (matches Winamp behavior)
 - **Tertiary**: Track title overlay display with configurable intervals
-- **Current State**: ✅ Complete with Butterchurn.js integration (7 phases)
 
 ### 1.2 User Interaction
 
-- **Open/Close**: Ctrl+K keyboard shortcut (matches Winamp)
+- **Open/Close**: Ctrl+K (toggles `settings.showMilkdropWindow`; matches Winamp)
 - **Focus**: Click to focus, shows selected chrome state
 - **Position**: Persisted across sessions in UserDefaults
 - **Resize**: Drag bottom-right corner (25x29px segment grid)
-- **Size**: Persisted across sessions (minimum 275x116, default 275x232)
+- **Size**: Persisted across sessions (minimum 275x116, default 275x232, no maximum)
 - **Docking**: Magnetic snapping to other MacAmp windows and screen edges
 - **Context Menu** (right-click):
   - Current preset display (header)
@@ -34,29 +32,7 @@ The Milkdrop window provides audio visualization capabilities in MacAmp, faithfu
   - Cycle Interval submenu (5s/10s/15s/30s/60s)
   - Show Track Title (T key)
   - Track Title Interval submenu (Once/5s/10s/15s/30s/60s)
-  - Presets submenu (up to 100 shown)
-
-### 1.3 Implementation Timeline
-
-- **Days 1-6**: Video window implementation (complete)
-- **Day 7**: GEN sprite research and two-piece discovery
-- **Day 8**: Milkdrop window chrome implementation
-- **Butterchurn Integration** (7 phases):
-  - Phase 1: WKWebView lifecycle and Butterchurn setup
-  - Phase 2: ButterchurnBridge Swift→JS audio pipeline
-  - Phase 3: Preset loading from butterchurnPresets.min.js
-  - Phase 4: Context menu with preset navigation
-  - Phase 5: ButterchurnPresetManager (cycling, randomization, history)
-  - Phase 6: Oracle A-grade fixes (error handling, thread safety)
-  - Phase 7: Track title interval display feature
-- **Window Resize** (7 phases, branch `feature/milkdrop-window-resize`):
-  - Phase 1: Size2D presets + MilkdropWindowSizeState foundation
-  - Phase 2: Size state wiring + WindowCoordinator + ButterchurnBridge sync
-  - Phase 3: Dynamic chrome layout (7-section titlebar)
-  - Phase 4: Resize gesture with AppKit preview overlay
-  - Phase 5: WindowCoordinator.updateMilkdropWindowSize() (bundled in Phase 2)
-  - Phase 6: ButterchurnBridge.setSize() canvas sync (bundled in Phase 2)
-  - Phase 7: Titlebar tile gap fix using ceil() (Pattern 9)
+  - Presets submenu (first 100 shown, then "... and N more")
 
 ---
 
@@ -64,66 +40,41 @@ The Milkdrop window provides audio visualization capabilities in MacAmp, faithfu
 
 ### 2.1 Dimensions
 
-The MILKDROP window is **resizable** using Winamp's 25x29px segment grid system:
+The window is resizable on Winamp's 25x29px segment grid (see §4.4):
 
-```swift
-// Size constraints (segment-based resizing)
-static let minimumSize = CGSize(width: 275, height: 116)  // Size2D[0,0]
-static let defaultSize = CGSize(width: 275, height: 232)  // Size2D[0,4]
-
-// Segment dimensions (matches Video/Playlist)
-static let widthSegment: CGFloat = 25   // Horizontal resize increment
-static let heightSegment: CGFloat = 29  // Vertical resize increment
-
-// Component dimensions (fixed chrome)
-static let titlebarHeight: CGFloat = 20   // GEN titlebar sprites
-static let bottomBarHeight: CGFloat = 14  // GEN bottom bar sprites
-static let leftBorderWidth: CGFloat = 11  // GEN_MIDDLE_LEFT width
-static let rightBorderWidth: CGFloat = 8  // GEN_MIDDLE_RIGHT width
-static let totalChrome: CGFloat = 34      // titlebar + bottom bar
-static let totalBorders: CGFloat = 19     // left + right borders
-
-// Content area (dynamic based on window size)
-// contentWidth = pixelSize.width - 19 (borders)
-// contentHeight = pixelSize.height - 34 (chrome)
-
-// Example: At default 275x232
-static let contentWidth: CGFloat = 256    // 275 - 19
-static let contentHeight: CGFloat = 198   // 232 - 34
-```
-
-**Size Formula:**
-```
-pixelWidth = 275 + (widthSegments * 25)
-pixelHeight = 116 + (heightSegments * 29)
-```
+| Property | Value | Notes |
+|----------|-------|-------|
+| Minimum Size | 275×116 | `Size2D.milkdropMinimum` [0,0], matches Main/EQ |
+| Default Size | 275×232 | `Size2D.milkdropDefault` [0,4] |
+| Width / Height Segment | 25px / 29px | `pixelWidth = 275 + w*25`, `pixelHeight = 116 + h*29` |
+| Titlebar Height | 20px | GEN titlebar sprites |
+| Bottom Bar Height | 14px | GEN bottom bar sprites |
+| Left / Right Border | 11px / 8px | `GEN_MIDDLE_LEFT` / `GEN_MIDDLE_RIGHT` |
+| Content Area | width − 19, height − 34 | 256×198 at the default size |
 
 ### 2.2 Sprite Source
 
-All window chrome uses GEN.bmp sprites at coordinates defined in `SkinSprites.swift`:
+All window chrome uses GEN.bmp sprites defined in `MacAmpApp/Models/SkinSprites.swift` (GEN section):
 
 ```swift
-// GEN.bmp sprite definitions (excerpt)
-static let genSprites: [Sprite] = [
-    // Active/Selected titlebar (Y=0-19)
-    Sprite(name: "GEN_TOP_LEFT_SELECTED", x: 0, y: 0, width: 25, height: 20),
-    Sprite(name: "GEN_TOP_LEFT_END_SELECTED", x: 26, y: 0, width: 25, height: 20),
-    Sprite(name: "GEN_TOP_CENTER_FILL_SELECTED", x: 52, y: 0, width: 25, height: 20),
-    Sprite(name: "GEN_TOP_RIGHT_END_SELECTED", x: 78, y: 0, width: 25, height: 20),
-    Sprite(name: "GEN_TOP_LEFT_RIGHT_FILL_SELECTED", x: 104, y: 0, width: 25, height: 20),
-    Sprite(name: "GEN_TOP_RIGHT_SELECTED", x: 130, y: 0, width: 25, height: 20),
+// Active/Selected titlebar (Y=0-19)
+Sprite(name: "GEN_TOP_LEFT_SELECTED", x: 0, y: 0, width: 25, height: 20),
+Sprite(name: "GEN_TOP_LEFT_END_SELECTED", x: 26, y: 0, width: 25, height: 20),
+Sprite(name: "GEN_TOP_CENTER_FILL_SELECTED", x: 52, y: 0, width: 25, height: 20),
+Sprite(name: "GEN_TOP_RIGHT_END_SELECTED", x: 78, y: 0, width: 25, height: 20),
+Sprite(name: "GEN_TOP_LEFT_RIGHT_FILL_SELECTED", x: 104, y: 0, width: 25, height: 20),
+Sprite(name: "GEN_TOP_RIGHT_SELECTED", x: 130, y: 0, width: 25, height: 20),
 
-    // Inactive titlebar (Y=21-40)
-    Sprite(name: "GEN_TOP_LEFT", x: 0, y: 21, width: 25, height: 20),
-    Sprite(name: "GEN_TOP_LEFT_END", x: 26, y: 21, width: 25, height: 20),
-    Sprite(name: "GEN_TOP_CENTER_FILL", x: 52, y: 21, width: 25, height: 20),
-    // ... etc
-]
+// Inactive titlebar (Y=21-40)
+Sprite(name: "GEN_TOP_LEFT", x: 0, y: 21, width: 25, height: 20),
+Sprite(name: "GEN_TOP_LEFT_END", x: 26, y: 21, width: 25, height: 20),
+Sprite(name: "GEN_TOP_CENTER_FILL", x: 52, y: 21, width: 25, height: 20),
+// ... etc
 ```
 
 ### 2.3 Coordinate Grid
 
-The 275×232 window is divided into a precise grid for sprite positioning:
+At the default 275×232 size:
 
 ```
 Column Grid (25px tiles):
@@ -149,100 +100,34 @@ Y=218-231: Bottom bar (14px)
 
 ## 3. Architecture
 
-### 3.1 Three-Layer Pattern
+Shared window infrastructure (three-layer pattern, controller stack, focus, snapping) is described in the [Architecture Guide](MACAMP_ARCHITECTURE_GUIDE.md#milkdrop-window-architecture). Milkdrop-specific pieces:
 
-Following MacAmp's architectural principles (see `docs/MACAMP_ARCHITECTURE_GUIDE.md`):
+### 3.1 Layers
 
-```
-Mechanism Layer: NSWindowController
-    ↓
-Bridge Layer: WindowFocusState, AppSettings
-    ↓
-Presentation Layer: SwiftUI Views
-```
+- **Mechanism:** WKWebView + Butterchurn JS (`Butterchurn/`), the shared `VisualizerFeed` producers (§9.4)
+- **Bridge:** `ButterchurnBridge` (Swift↔JS), `ButterchurnPresetManager`, `AudioPlayer.snapshotButterchurnFrame()`, `WindowFocusState`, `AppSettings`
+- **Presentation:** `WinampMilkdropWindow`, `MilkdropWindowChromeView`, `ButterchurnWebView`
 
 ### 3.2 NSWindowController Pattern
 
-`WinampMilkdropWindowController.swift` follows the established window controller pattern:
-
-```swift
-class WinampMilkdropWindowController: NSWindowController {
-    convenience init(skinManager: SkinManager, audioPlayer: AudioPlayer,
-                     dockingController: DockingController, settings: AppSettings,
-                     radioLibrary: RadioStationLibrary,
-                     playbackCoordinator: PlaybackCoordinator,
-                     windowFocusState: WindowFocusState) {
-
-        // Create borderless window (matches Video/Playlist)
-        let window = BorderlessWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 275, height: 232),
-            styleMask: [.borderless],
-            backing: .buffered,
-            defer: false
-        )
-
-        // Apply standard Winamp configuration
-        WinampWindowConfigurator.apply(to: window)
-
-        // Configure borderless appearance
-        window.isOpaque = false
-        window.hasShadow = true
-        window.backgroundColor = .clear
-
-        // Create root view with environment injection
-        let rootView = WinampMilkdropWindow()
-            .environment(skinManager)
-            .environment(audioPlayer)
-            .environment(dockingController)
-            .environment(settings)
-            .environment(radioLibrary)
-            .environment(playbackCoordinator)
-            .environment(windowFocusState)
-
-        let hostingController = NSHostingController(rootView: rootView)
-
-        // CRITICAL: Only set contentViewController
-        // Setting contentView releases the hosting controller
-        window.contentViewController = hostingController
-
-        // Install translucent backing layer
-        WinampWindowConfigurator.installHitSurface(on: window)
-
-        self.init(window: window)
-    }
-}
-```
+`WinampMilkdropWindowController` (`MacAmpApp/Windows/WinampMilkdropWindowController.swift`) follows the same pattern as the Video window: a 275×232 `BorderlessWindow`, `WinampWindowConfigurator.apply(to:)`, `hasShadow = true`, an `NSHostingController` set as `contentViewController` only (setting `contentView` would release the hosting controller), then `installHitSurface(on:)`. In addition it creates and owns the `ButterchurnBridge` and `ButterchurnPresetManager`, calling `presetManager.configure(bridge:appSettings:playbackCoordinator:)`.
 
 ### 3.3 Environment Injection
 
-All dependencies are injected via SwiftUI environment:
-
-- `SkinManager`: Provides GEN.bmp sprites
-- `AudioPlayer`: Future audio data for visualization
-- `DockingController`: Magnetic window snapping
-- `AppSettings`: Window position persistence
-- `WindowFocusState`: Focus tracking for chrome state
+- `SkinManager`: GEN.bmp sprites
+- `AudioPlayer`: source of Butterchurn audio frames (`snapshotButterchurnFrame()`, see §9.4)
+- `DockingController`, `AppSettings`, `RadioStationLibrary`, `PlaybackCoordinator`
+- `WindowFocusState`: focus tracking for chrome state
+- `ButterchurnBridge`, `ButterchurnPresetManager`: owned by the controller
 
 ---
 
 ## 4. GEN.bmp Chrome Implementation
 
+`MilkdropWindowChromeView` (`MacAmpApp/Views/Windows/MilkdropWindowChromeView.swift`) lays out all chrome from `MilkdropWindowSizeState` (`MacAmpApp/Models/MilkdropWindowSizeState.swift`).
+
 ### 4.1 Titlebar Composition (7 Sections - Dynamic)
 
-The titlebar uses a sophisticated **7-section dynamic layout** that expands via gold filler tiles. This enables window resizing while maintaining visual consistency.
-
-**Static Layout (fixed 275px - legacy reference):**
-```
-Section 1: LEFT_CAP         (25px)  - Close button
-Section 2: LEFT_GOLD        (2×25)  - Gold decorative (dynamic)
-Section 3: LEFT_END         (25px)  - Transition piece
-Section 4: CENTER_FILL      (3×25)  - Grey text area (fixed)
-Section 5: RIGHT_END        (25px)  - Transition piece
-Section 6: RIGHT_GOLD       (2×25)  - Gold decorative (dynamic)
-Section 7: RIGHT_CAP        (25px)  - End piece
-```
-
-**Dynamic Layout (resizable - current implementation):**
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
 │ LEFT_CAP │ LEFT_GOLD(n) │ LEFT_END │ CENTER(3) │ RIGHT_END │ RIGHT_GOLD(n) │ RIGHT_CAP │
@@ -250,81 +135,62 @@ Section 7: RIGHT_CAP        (25px)  - End piece
 └─────────────────────────────────────────────────────────────────────────┘
 
 Fixed: LEFT_CAP + LEFT_END + RIGHT_END + RIGHT_CAP = 100px
-Center: 3 grey tiles = 75px (fixed)
+Center: 3 grey tiles = 75px (fixed, centerGreyTileCount)
 Variable: LEFT_GOLD + RIGHT_GOLD expand symmetrically (n = goldFillerTilesPerSide)
 ```
 
-**See Section 12.3 for complete dynamic titlebar implementation with code examples.**
+| Section | Sprite (`suffix` = `_SELECTED` when focused) | X position (centre) |
+|---------|------|------|
+| Left cap | `GEN_TOP_LEFT` | 12.5 |
+| Left gold ×n | `GEN_TOP_LEFT_RIGHT_FILL` | 37.5 + i·25 |
+| Left end | `GEN_TOP_LEFT_END` | `centerStart − 12.5` |
+| Centre ×3 | `GEN_TOP_CENTER_FILL` | `centerStart + 12.5 + i·25` |
+| Right end | `GEN_TOP_RIGHT_END` | `centerStart + 87.5` |
+| Right gold ×n | `GEN_TOP_LEFT_RIGHT_FILL` | `centerStart + 112.5 + i·25` |
+| Right cap (close) | `GEN_TOP_RIGHT` | width − 12.5 |
 
-Legacy fixed-width implementation (275px only):
+The whole titlebar is wrapped in `WinampTitlebarDragHandle(windowKind: .milkdrop, …)`; "MILKDROP HD" letters (§6) sit at `milkdropLettersCenterX`, y = 8.
 
 ```swift
-ZStack(alignment: .topLeading) {
-    let suffix = isWindowActive ? "_SELECTED" : ""
-
-    // Section 1: Left cap with close button
-    SimpleSpriteImage("GEN_TOP_LEFT\(suffix)", width: 25, height: 20)
-        .position(x: 12.5, y: 10)
-
-    // Section 2: Left gold bar tiles (fixed at 2 for 275px)
-    ForEach(0..<2, id: \.self) { i in
-        SimpleSpriteImage("GEN_TOP_LEFT_RIGHT_FILL\(suffix)", width: 25, height: 20)
-            .position(x: 25 + 12.5 + CGFloat(i) * 25, y: 10)
-    }
-
-    // Section 3: Left fixed transition
-    SimpleSpriteImage("GEN_TOP_LEFT_END\(suffix)", width: 25, height: 20)
-        .position(x: 87.5, y: 10)
-
-    // Section 4: Center grey tiles (text area)
-    ForEach(0..<3, id: \.self) { i in
-        SimpleSpriteImage("GEN_TOP_CENTER_FILL\(suffix)", width: 25, height: 20)
-            .position(x: 100 + 12.5 + CGFloat(i) * 25, y: 10)
-    }
-
-    // Sections 5-7: Mirror of left side...
+// MilkdropWindowSizeState.swift
+var goldFillerTilesPerSide: Int {
+    let goldSpace = pixelSize.width - 100 - 75  // Fixed caps/ends (100) + center grey (75)
+    let perSide = goldSpace / 2.0
+    return max(0, Int(ceil(perSide / 25.0)))
 }
+var centerSectionStartX: CGFloat { 25 + CGFloat(goldFillerTilesPerSide) * 25 + 25 }
+var milkdropLettersCenterX: CGFloat { centerSectionStartX + 37.5 }
 ```
+
+**Use `ceil()`, not floor, for the gold count.** Floor division leaves a visible gap at widths where `perSide` is not a multiple of 25; `ceil()` overlaps slightly instead:
+
+| Width | goldSpace | perSide | floor() | ceil() |
+|-------|-----------|---------|---------|--------|
+| 275px | 100px | 50px | 2 tiles | 2 tiles |
+| 300px | 125px | 62.5px | 2 tiles (gap) | 3 tiles |
+| 325px | 150px | 75px | 3 tiles | 3 tiles |
 
 ### 4.2 Side Borders
 
-Vertical borders use tiled sprites (29px per tile):
-
-```swift
-let sideHeight: CGFloat = 198  // Content area height
-let sideTileCount = Int(ceil(sideHeight / 29))  // 7 tiles
-
-ForEach(0..<sideTileCount, id: \.self) { i in
-    // Left border (11px wide)
-    SimpleSpriteImage("GEN_MIDDLE_LEFT", width: 11, height: 29)
-        .position(x: 5.5, y: 20 + 14.5 + CGFloat(i) * 29)
-
-    // Right border (8px wide)
-    SimpleSpriteImage("GEN_MIDDLE_RIGHT", width: 8, height: 29)
-        .position(x: 271, y: 20 + 14.5 + CGFloat(i) * 29)
-}
-```
+`GEN_MIDDLE_LEFT` (11×29) at x = 5.5 and `GEN_MIDDLE_RIGHT` (8×29) at x = width − 4, tiled from y = 20 + 14.5 in 29px steps; the count is `verticalBorderTileCount` (7 at the default size).
 
 ### 4.3 Bottom Bar
 
-The bottom bar uses three pieces:
+At y = height − 7: `GEN_BOTTOM_LEFT` (125×14) at x = 62.5, `centerTileCount` two-piece fill tiles (§5) from x = 125, and `GEN_BOTTOM_RIGHT` (125×14, contains the resize corner) at x = width − 62.5.
 
-```swift
-// Left corner (125px)
-SimpleSpriteImage("GEN_BOTTOM_LEFT", width: 125, height: 14)
-    .position(x: 62.5, y: 225)
+### 4.4 Resize Gesture
 
-// Center fill (two-piece sprite - see Section 5)
-VStack(spacing: 0) {
-    SimpleSpriteImage("GEN_BOTTOM_FILL_TOP", width: 25, height: 13)
-    SimpleSpriteImage("GEN_BOTTOM_FILL_BOTTOM", width: 25, height: 1)
-}
-.position(x: 137.5, y: 225)
+A 20×20 clear area at the bottom-right corner with `DragGesture(minimumDistance: 0)`, the same pattern as the Video window:
 
-// Right corner with resize handle (125px)
-SimpleSpriteImage("GEN_BOTTOM_RIGHT", width: 125, height: 14)
-    .position(x: 212.5, y: 225)
-```
+- **First tick:** capture `dragStartSize`, `WindowSnapManager.shared.beginProgrammaticAdjustment()`.
+- **onChanged:** candidate = start + `round(dx/25)`, `round(dy/29)` segments (clamped at 0); only the AppKit `WindowResizePreviewOverlay` is updated (`resizePreview.show(in: coordinator.milkdropWindow, previewSize:)`).
+- **onEnded:** commit `sizeState.size` (persists via `didSet`), `WindowCoordinator.shared?.updateMilkdropWindowSize(to:)`, hide the preview, `bridge.setSize(width:height:)` with the new content size, clear drag state, `endProgrammaticAdjustment()`.
+
+### 4.5 Frame and Canvas Sync
+
+- `WindowCoordinator.updateMilkdropWindowSize(to:)` forwards to `WindowResizeController.updateMilkdropWindowSize(to:)`, which rounds to integral pixels and keeps the top-left corner fixed (macOS frames are bottom-left origin).
+- `ButterchurnBridge.setSize(width:height:)` calls `window.macampButterchurn?.setSize(w, h)` (guarded by `isReady`).
+- `WinampMilkdropWindow.onAppear` configures the bridge with `AudioPlayer`, does the initial frame sync and the initial canvas `setSize`.
 
 ---
 
@@ -332,7 +198,7 @@ SimpleSpriteImage("GEN_BOTTOM_RIGHT", width: 125, height: 14)
 
 ### 5.1 The Cyan Delimiter Pattern
 
-A critical discovery during Day 7 research revealed that GEN.bmp uses cyan pixels (#00C6FF) as sprite boundary markers:
+GEN.bmp uses cyan pixels (#00C6FF) as sprite boundary markers:
 
 ```
 Normal sprite:     [SPRITE_PIXELS]
@@ -343,41 +209,27 @@ Two-piece sprite:  [TOP_PIXELS]
 
 ### 5.2 GEN_BOTTOM_FILL Structure
 
-The `GEN_BOTTOM_FILL` sprite is split into two pieces:
-
 ```swift
 // SkinSprites.swift definitions
 Sprite(name: "GEN_BOTTOM_FILL_TOP", x: 127, y: 72, width: 25, height: 13),
 Sprite(name: "GEN_BOTTOM_FILL_BOTTOM", x: 127, y: 87, width: 25, height: 1),
 
-// Usage: Stack vertically with no gap
+// Usage: Stack vertically with no gap (13px + 1px = 14px)
 VStack(spacing: 0) {
-    SimpleSpriteImage("GEN_BOTTOM_FILL_TOP", width: 25, height: 13)    // Main part
-    SimpleSpriteImage("GEN_BOTTOM_FILL_BOTTOM", width: 25, height: 1)  // 1px bottom
+    SimpleSpriteImage("GEN_BOTTOM_FILL_TOP", width: 25, height: 13)
+    SimpleSpriteImage("GEN_BOTTOM_FILL_BOTTOM", width: 25, height: 1)
 }
 ```
 
-### 5.3 Why Two Pieces?
+Extracting the two pieces separately keeps the cyan line out of the rendered sprite. The GEN letters use the same pattern (§6).
 
-The two-piece structure allows for:
-- Variable height content areas
-- Clean sprite extraction without cyan boundaries
-- Pixel-perfect alignment across different window sizes
-- Same pattern used for GEN letters (88/95 for selected, 96/108 for normal)
-
-### 5.4 Verification Process
-
-During implementation, ImageMagick was used to verify sprite coordinates:
+### 5.3 Verification Process
 
 ```bash
-# Extract sprite and check for cyan pixels
 magick GEN.png -crop 25x13+127+72 test_top.png
-magick test_top.png txt:- | grep "00C6FF"
-# No output = clean extraction ✓
-
+magick test_top.png txt:- | grep "00C6FF"   # no output = clean extraction
 magick GEN.png -crop 25x1+127+87 test_bottom.png
 magick test_bottom.png txt:- | grep "00C6FF"
-# No output = clean extraction ✓
 ```
 
 ---
@@ -386,738 +238,351 @@ magick test_bottom.png txt:- | grep "00C6FF"
 
 ### 6.1 GEN Letter Sprites
 
-GEN.bmp contains 32 letter sprites for dynamic text rendering:
+GEN.bmp contains letter sprites for titlebar text, each split into a top and bottom piece:
 
 ```
-Letters: A-Z (26 letters)
-Numbers: 0-9 (10 digits)
-Special: ( ) - _ . (5 characters)
-Total: 41 characters
-
-Layout: Two rows
-Row 1 (Y=88-94):  Selected/active letter tops (6px)
-Row 2 (Y=96-102): Normal/inactive letter tops (6px)
-Row 3 (Y=95):     Selected letter bottoms (1px)
-Row 4 (Y=108):    Normal letter bottoms (1px)
+Row (Y=88-94):  Selected/active letter tops (6px)
+Row (Y=95):     Selected letter bottoms (2px)
+Row (Y=96-102): Normal/inactive letter tops (6px)
+Row (Y=108):    Normal letter bottoms (1px)
 ```
 
-### 6.2 Dynamic Extraction Challenge
+### 6.2 Current Implementation
 
-Unlike standardized sprites, letter X positions vary by skin:
+The titlebar renders the fixed text "MILKDROP HD" from `GEN_TEXT_[SELECTED_]<letter>_TOP` / `_BOTTOM` sprites defined at fixed coordinates in `SkinSprites.swift` (selected bottoms are 2px, normal 1px). Letter widths are hard-coded in `MilkdropWindowChromeView.milkdropLetters`: M=8, I=4, L=5, K=7, D=6, R=7, O=6, P=6, H=6, plus a 5px word space and a 1px gap between H and D — 67px, centred in the 75px grey section.
 
-```swift
-// PROBLEM: Letters don't have fixed X coordinates
-// Different skins arrange letters differently in GEN.bmp
-// Cannot hardcode like we do for titlebar pieces
+### 6.3 Limitation: Per-Skin Letter Extraction
 
-// SOLUTION NEEDED: Pixel-scanning algorithm
-// 1. Scan horizontally for non-cyan pixels
-// 2. Detect letter boundaries dynamically
-// 3. Build letter coordinate map at runtime
-// 4. Cache for performance
-```
-
-### 6.3 Implementation Status
-
-**Current**: DEFERRED - Complex feature requiring dedicated implementation time
-
-**Future Implementation** (based on webamp's approach):
-```javascript
-// webamp/js/skinParser.js genGenTextSprites()
-// Scans GEN.bmp to find letter boundaries dynamically
-// Creates sprite map for each character
-// Handles variable-width letters
-```
-
-**Workaround**: Currently showing static "MILKDROP" text, will implement dynamic text extraction in future session.
+Letter X positions vary between skins, so fixed coordinates can pick the wrong glyphs on skins with a different GEN.bmp layout. Dynamic extraction (scan for non-cyan pixels to find letter boundaries at load time, as webamp's `genGenTextSprites()` in `skinParser.js` does) is not implemented.
 
 ---
 
 ## 7. Focus Integration
 
-### 7.1 WindowFocusState
-
-The window participates in MacAmp's focus tracking system:
+`WindowFocusDelegate` sets `WindowFocusState.isMilkdropKey` when the window becomes key and clears it on resign. `MilkdropWindowChromeView` reads it:
 
 ```swift
-@Observable
-@MainActor
-final class WindowFocusState {
-    var isMainKey: Bool = true
-    var isEqualizerKey: Bool = false
-    var isPlaylistKey: Bool = false
-    var isVideoKey: Bool = false
-    var isMilkdropKey: Bool = false  // Added for Milkdrop window
-
-    var hasAnyFocus: Bool {
-        isMainKey || isEqualizerKey || isPlaylistKey ||
-        isVideoKey || isMilkdropKey
-    }
-}
+@Environment(WindowFocusState.self) private var windowFocusState
+private var isWindowActive: Bool { windowFocusState.isMilkdropKey }
+// let suffix = isWindowActive ? "_SELECTED" : ""
 ```
 
-### 7.2 Focus-Dependent Chrome
-
-The window chrome changes based on focus state:
-
-```swift
-struct MilkdropWindowChromeView<Content: View>: View {
-    @Environment(WindowFocusState.self) private var windowFocusState
-    private var isWindowActive: Bool { windowFocusState.isMilkdropKey }
-
-    var body: some View {
-        ZStack {
-            // Use _SELECTED suffix when focused
-            let suffix = isWindowActive ? "_SELECTED" : ""
-
-            SimpleSpriteImage("GEN_TOP_LEFT\(suffix)", ...)
-            SimpleSpriteImage("GEN_TOP_CENTER_FILL\(suffix)", ...)
-            // etc...
-        }
-    }
-}
-```
-
-### 7.3 Focus Behavior
-
-- **Click**: Window becomes key, `isMilkdropKey = true`
-- **Click another MacAmp window**: `isMilkdropKey = false`
-- **Visual feedback**: Chrome switches between normal and selected sprites
-- **Delegate**: `WindowFocusDelegate` handles NSWindow focus events
+The titlebar pieces and letters switch between normal and `_SELECTED` sprites immediately. See [Window Focus State Management](MACAMP_ARCHITECTURE_GUIDE.md#window-focus-state-management).
 
 ---
 
-## 8. Placeholder Content
+## 8. Loading and Error State
 
-### 8.1 Current Implementation
-
-While visualization is deferred, the window displays informative placeholder:
-
-```swift
-struct WinampMilkdropWindow: View {
-    var body: some View {
-        MilkdropWindowChromeView {
-            VStack {
-                Text("MILKDROP")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(.white)
-
-                Text("275 × 232")
-                    .font(.system(size: 10))
-                    .foregroundColor(.gray)
-                    .padding(.top, 4)
-
-                Text("Visualization: Deferred")
-                    .font(.system(size: 9))
-                    .foregroundColor(.gray)
-                    .padding(.top, 4)
-            }
-        }
-    }
-}
-```
-
-### 8.2 Future Content Area
-
-The 256×198px content area will host:
-- Butterchurn.js visualization (via WKWebView)
-- OR projectM native visualization
-- OR custom Metal-based renderer
-- OR simple waveform/spectrum analyzer
+`WinampMilkdropWindow` always creates the `ButterchurnWebView` (it must exist to send `ready`). While `bridge.isReady` is false it overlays a black placeholder with "MILKDROP" and either "Loading..." or `bridge.errorMessage`; the overlay fades out (0.3 s) once ready. A transparent `RightClickCaptureView` on top captures right-clicks for the context menu.
 
 ---
 
-## 9. Butterchurn Integration ✅ COMPLETE
+## 9. Butterchurn Integration
 
 ### 9.1 Solution Architecture
 
-The Butterchurn integration uses WKUserScript injection to load JavaScript libraries:
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    WKWebView (ButterchurnWebView)            │
+├─────────────────────────────────────────────────────────────┤
+│  WKUserScript injection (atDocumentStart):                  │
+│    1. butterchurn.min.js            (library, WASM built in)│
+│    2. butterchurnPresets.min.js     (base preset pack)      │
+│    3. butterchurnPresetsExtra.min.js (extra pack, optional) │
+│  WKUserScript injection (atDocumentEnd):                    │
+│    4. bridge.js  (init, preset merge, Swift↔JS interface)   │
+├─────────────────────────────────────────────────────────────┤
+│  index.html canvas + WebGL, 60 FPS requestAnimationFrame    │
+└─────────────────────────────────────────────────────────────┘
+          │ postMessage "ready"          ▲ setAudioData(spectrum, waveform)
+          │   (preset names + counts)    │ loadPreset(index, transition)
+          │ postMessage "loadFailed"     │ showTrackTitle(title), setSize(w, h)
+          ▼                              │ start() / stop() / dispose()
+┌─────────────────────────────────────────────────────────────┐
+│          ButterchurnBridge (@MainActor @Observable)          │
+│    isReady, presetCount, presetNames, errorMessage           │
+│    onPresetsLoaded → ButterchurnPresetManager                │
+│    30 FPS Task loop: audio frames to JS                      │
+└─────────────────────────────────────────────────────────────┘
+          ▲
+          │ AudioPlayer.snapshotButterchurnFrame()
+          │ (1024 FFT bins + 1024 waveform samples; nil when idle)
+┌─────────────────────────────────────────────────────────────┐
+│          VisualizerPipeline + VisualizerFeed (§9.4)          │
+└─────────────────────────────────────────────────────────────┘
+```
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    WKWebView Container                       │
-├─────────────────────────────────────────────────────────────┤
-│  WKUserScript Injection (atDocumentStart):                  │
-│    1. butterchurn.min.js      (270KB - ES module bundled)   │
-│    2. butterchurnPresets.min.js (187KB - preset library)    │
-│                                                              │
-│  WKUserScript Injection (atDocumentEnd):                    │
-│    3. bridge.js               (Swift↔JS communication)      │
-├─────────────────────────────────────────────────────────────┤
-│  HTML Canvas + WebGL Context                                 │
-│    • 60 FPS render loop (requestAnimationFrame)             │
-│    • Butterchurn visualizer instance                        │
-│    • Audio data receiver (from Swift)                       │
-└─────────────────────────────────────────────────────────────┘
-          │                              ▲
-          │ postMessage("ready")         │ audioData[1024]
-          │ postMessage("presetsLoaded") │ loadPreset(index)
-          ▼                              │ showTrackTitle(text)
-┌─────────────────────────────────────────────────────────────┐
-│                    ButterchurnBridge                         │
-│  @Observable @MainActor                                      │
-│    • isReady: Bool                                           │
-│    • errorMessage: String?                                   │
-│    • onPresetsLoaded: ([String]) -> Void                    │
-│    • Timer: 30 FPS audio updates to JS                      │
-│    • callAsyncJavaScript for reliable execution             │
-└─────────────────────────────────────────────────────────────┘
-          │                              ▲
-          │ audioSamples[1024]           │ loadPreset()
-          │ (Accelerate vDSP FFT)        │ showTrackTitle()
-          ▼                              │
-┌─────────────────────────────────────────────────────────────┐
-│                    AVAudioEngine                             │
-│    • installTap(2048 samples, 48kHz)                        │
-│    • Goertzel-like 20-band spectrum analysis                │
-└─────────────────────────────────────────────────────────────┘
-```
+JS→Swift messages go through the `butterchurn` script message handler. `ready` carries preset count and names (and base/extra pack counts); on `ready` the bridge starts the audio loop and calls `onPresetsLoaded`. `loadFailed` calls `markLoadFailed`.
 
 ### 9.2 Key Implementation Files
 
-```swift
-// Bridge (Swift→JS communication)
-MacAmpApp/ViewModels/ButterchurnBridge.swift
+| File | Purpose |
+|------|---------|
+| `MacAmpApp/ViewModels/ButterchurnBridge.swift` | Swift↔JS bridge, 30 FPS audio frames, canvas resize |
+| `MacAmpApp/ViewModels/ButterchurnPresetManager.swift` | Preset cycling, history, track-title timer, persistence |
+| `MacAmpApp/Views/Windows/ButterchurnWebView.swift` | WKWebView wrapper, script injection, navigation delegate |
+| `MacAmpApp/Views/WinampMilkdropWindow.swift` | Main view, loading overlay, context menu |
+| `MacAmpApp/Views/Windows/MilkdropWindowChromeView.swift` | GEN.bmp chrome, dynamic titlebar, resize gesture |
+| `MacAmpApp/Models/MilkdropWindowSizeState.swift` | Size state (segments, persistence, titlebar layout) |
+| `MacAmpApp/Windows/WinampMilkdropWindowController.swift` | Controller owning bridge + preset manager |
+| `MacAmpApp/Windows/WindowResizeController.swift` | `updateMilkdropWindowSize(to:)` |
+| `MacAmpApp/Audio/VisualizerPipeline.swift`, `VisualizerFeed.swift`, `VisualizerScratchBuffers.swift` | Shared audio feed (engine producer, 30 Hz poll, `snapshotButterchurnFrame()`) |
+| `MacAmpApp/Audio/VideoDSP/VideoTapVisualizerRender.swift` | Video producer |
+| `Butterchurn/` | `butterchurn.min.js`, `butterchurnPresets.min.js`, `butterchurnPresetsExtra.min.js`, `bridge.js`, `index.html` |
 
-// Preset Manager (cycling, history, persistence)
-MacAmpApp/ViewModels/ButterchurnPresetManager.swift
-
-// WKWebView wrapper
-MacAmpApp/Views/Components/ButterchurnWebView.swift
-
-// Window controller (owns bridge + preset manager)
-MacAmpApp/Windows/WinampMilkdropWindowController.swift
-
-// Main view with context menu
-MacAmpApp/Views/WinampMilkdropWindow.swift
-
-// JavaScript resources (project root, bundled as folder resource via XcodeGen)
-Butterchurn/
-├── butterchurn.min.js            # ES module bundle
-├── butterchurnPresets.min.js     # Preset library
-├── butterchurnPresetsExtra.min.js # Extended preset library
-├── bridge.js                      # Swift↔JS interface
-└── index.html                     # Canvas + initialization
-
-// XcodeGen configuration (project.yml) for Butterchurn resources:
-//   sources:
-//     - path: Butterchurn
-//       type: folder
-//       buildPhase: resources
-```
+`Butterchurn/` sits at the project root and is bundled as a folder resource by `project.yml` (`path: Butterchurn`, `type: folder`, `buildPhase: resources`).
 
 ### 9.3 WKUserScript Injection Strategy
 
-**Critical Discovery:** WKWebView's `<script src="...">` fails for local files, but WKUserScript works:
-
-```swift
-// ButterchurnWebView.swift - Load JS from bundle and inject
-private func createUserScripts() -> [WKUserScript] {
-    var scripts: [WKUserScript] = []
-
-    // 1. Butterchurn library (atDocumentStart - before any rendering)
-    if let url = Bundle.main.url(forResource: "butterchurn.min", withExtension: "js"),
-       let content = try? String(contentsOf: url) {
-        let script = WKUserScript(source: content, injectionTime: .atDocumentStart, forMainFrameOnly: true)
-        scripts.append(script)
-    }
-
-    // 2. Presets library (atDocumentStart)
-    if let url = Bundle.main.url(forResource: "butterchurnPresets.min", withExtension: "js"),
-       let content = try? String(contentsOf: url) {
-        let script = WKUserScript(source: content, injectionTime: .atDocumentStart, forMainFrameOnly: true)
-        scripts.append(script)
-    }
-
-    // 3. Bridge script (atDocumentEnd - after DOM ready)
-    if let url = Bundle.main.url(forResource: "bridge", withExtension: "js"),
-       let content = try? String(contentsOf: url) {
-        let script = WKUserScript(source: content, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
-        scripts.append(script)
-    }
-
-    return scripts
-}
-```
+WKWebView's `<script src="...">` fails for local files, so `ButterchurnWebView.makeNSView` reads each JS file from the bundle as a string and injects it with `WKUserScript` (libraries at `.atDocumentStart`, `bridge.js` at `.atDocumentEnd`, all `forMainFrameOnly: true`; `butterchurn.min.js` is an ES module, so `loadBundleJS` rewrites its `export{X as default}` into a `window.butterchurn` global, while the preset packs are UMD and load as-is), registers the bridge as the `butterchurn` message handler, then loads `Butterchurn/index.html` with `loadFileURL(_:allowingReadAccessTo:)`. If `index.html` is missing it loads an inline fallback page with a canvas. The web view has a transparent background and is inspectable.
 
 ### 9.4 Audio Data Pipeline
 
-**End-to-End Audio Flow (Local Playback Only):**
+**End-to-End Audio Flow (local files, streams and video):**
+
+Butterchurn has one consumer path and two producers. Whichever producer is live
+publishes pre-computed arrays into the shared `VisualizerFeed`; everything from the
+feed onward is identical for audio and video.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │                        BUTTERCHURN AUDIO DATA FLOW                            │
 ├──────────────────────────────────────────────────────────────────────────────┤
 │                                                                               │
-│  ┌─────────────┐    ┌─────────────────┐    ┌─────────────────────────────┐   │
-│  │ Audio File  │───▶│ AVAudioEngine   │───▶│ installTap(2048 samples)   │   │
-│  │ (.mp3/flac) │    │ (48kHz stereo)  │    │ Mono downsample + FFT      │   │
-│  └─────────────┘    └─────────────────┘    └─────────────────────────────┘   │
-│                                                       │                       │
-│                                                       ▼                       │
-│                           ┌───────────────────────────────────────────────┐   │
-│                           │        AudioPlayer.swift                       │   │
-│                           │  @ObservationIgnored butterchurnSpectrum[1024] │   │
-│                           │  @ObservationIgnored butterchurnWaveform[1024] │   │
-│                           │  snapshotButterchurnFrame() → ButterchurnFrame │   │
-│                           └───────────────────────────────────────────────┘   │
-│                                                       │                       │
-│                                                       ▼ (30 FPS Timer)        │
-│                           ┌───────────────────────────────────────────────┐   │
-│                           │        ButterchurnBridge.swift                 │   │
-│                           │  sendAudioData() → callAsyncJavaScript         │   │
-│                           │  "window.receiveAudioData([...samples])"       │   │
-│                           └───────────────────────────────────────────────┘   │
-│                                                       │                       │
-│                                                       ▼ (WKWebView)           │
-│                           ┌───────────────────────────────────────────────┐   │
-│                           │        bridge.js (JavaScript)                  │   │
-│                           │  receiveAudioData(data) → audioBuffer.set()    │   │
-│                           │  ScriptProcessorNode → Butterchurn analyser    │   │
-│                           └───────────────────────────────────────────────┘   │
-│                                                       │                       │
-│                                                       ▼ (60 FPS RAF)          │
-│                           ┌───────────────────────────────────────────────┐   │
-│                           │        butterchurn.min.js                      │   │
-│                           │  visualizer.render() → WebGL Canvas            │   │
-│                           │  100+ presets with audio-reactive shaders      │   │
-│                           └───────────────────────────────────────────────┘   │
+│  PRODUCER A — local files + streams        PRODUCER B — video files          │
+│  ┌───────────────────────────────┐         ┌───────────────────────────────┐ │
+│  │ AVAudioEngine (EQ → mixer)    │         │ AVPlayer + AVPlayerItem       │ │
+│  │ mainMixerNode.installTap      │         │ .audioMix MTAudioProcessingTap│ │
+│  │ (2048-frame buffers)          │         │ (after EQ / preamp / balance) │ │
+│  │ VisualizerPipeline            │         │ videoTapVisualizerRender()    │ │
+│  │   .makeTapHandler             │         │                               │ │
+│  └───────────────┬───────────────┘         └───────────────┬───────────────┘ │
+│                  │  render thread: mono mix → 20× RMS, 20× Goertzel,         │
+│                  │  2048-pt FFT (1024 bins) + 1024 waveform, per-tap scratch  │
+│                  └──────────────┬──────────────────────────┘                  │
+│                                 ▼ tryPublish() (trylock; drop on contention)  │
+│                  ┌───────────────────────────────────────────────┐            │
+│                  │        VisualizerFeed (single slot, SPSC)      │            │
+│                  └───────────────────────────────────────────────┘            │
+│                                 │ consume() — 30 Hz main-thread poll          │
+│                                 ▼                                             │
+│                  ┌───────────────────────────────────────────────┐            │
+│                  │        VisualizerPipeline.swift                │            │
+│                  │  butterchurnSpectrum[1024] / Waveform[1024]    │            │
+│                  │  snapshotButterchurnFrame() → ButterchurnFrame │            │
+│                  └───────────────────────────────────────────────┘            │
+│                                 │                                             │
+│                                 ▼                                             │
+│                  ┌───────────────────────────────────────────────┐            │
+│                  │        AudioPlayer.snapshotButterchurnFrame()  │            │
+│                  │  nil unless isVisualizerRendering              │            │
+│                  └───────────────────────────────────────────────┘            │
+│                                 │ (30 FPS Task loop)                          │
+│                                 ▼                                             │
+│                  ┌───────────────────────────────────────────────┐            │
+│                  │        ButterchurnBridge.swift                 │            │
+│                  │  sendAudioFrame() → callAsyncJavaScript        │            │
+│                  │  macampButterchurn.setAudioData(spec, wave)    │            │
+│                  └───────────────────────────────────────────────┘            │
+│                                 │ (WKWebView)                                 │
+│                                 ▼                                             │
+│                  ┌───────────────────────────────────────────────┐            │
+│                  │        bridge.js (JavaScript)                  │            │
+│                  │  latestWaveform ← waveform                     │            │
+│                  │  ScriptProcessorNode → Butterchurn analyser    │            │
+│                  └───────────────────────────────────────────────┘            │
+│                                 │ (60 FPS RAF)                                │
+│                                 ▼                                             │
+│                  ┌───────────────────────────────────────────────┐            │
+│                  │        butterchurn.min.js                      │            │
+│                  │  visualizer.render() → WebGL Canvas            │            │
+│                  └───────────────────────────────────────────────┘            │
 │                                                                               │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Note (S1 update):** The visualizer tap install/remove lifecycle is now managed by
-`AudioEngineController` (see `MacAmpApp/Audio/AudioEngineController.swift`).
-`AudioPlayer` delegates to `AudioEngineController.installVisualizerTapIfNeeded()` and
-`AudioEngineController.removeVisualizerTapIfNeeded()`, which in turn call through to
-`VisualizerPipeline`. The diagram above shows the logical data flow; the ownership chain
-is `AudioPlayer` -> `AudioEngineController` -> `VisualizerPipeline`.
+**Producer A (engine tap).** `AudioEngineController` manages the tap
+(`installVisualizerTapIfNeeded()` / `removeVisualizerTapIfNeeded()`), calling through to
+`VisualizerPipeline.installTap(on:)` / `removeTap()`. Ownership chain: `AudioPlayer` →
+`AudioEngineController` → `VisualizerPipeline`. Installing the tap also starts the 30 Hz
+feed poll.
+
+**Producer B (video tap).** Video audio stays on `AVPlayer`, and the engine mixer tap is
+removed when playback switches to video. The video's `MTAudioProcessingTap` runs
+`videoTapVisualizerRender(...)` at the end of each render callback, on the buffer it has
+just processed, and publishes to the same feed via `VisualizerPipeline.sharedFeed`. Because
+no engine tap is installed, the poll timer is driven separately:
+
+| Event | Call |
+|-------|------|
+| Video track starts (`playTrack` `.video` branch) | `visualizerPipeline.startVideoVisualization()` |
+| Repeat-one restart of a video | `startVideoVisualization()` (restart bypasses `playTrack`) |
+| Video reaches end | `stopVideoVisualization()` |
+| `stop()` during video, or video → audio switch | `stopVideoVisualization()` (also clears stale bars) |
+
+Tap internals: [AVPlayer-Native Video DSP](MACAMP_ARCHITECTURE_GUIDE.md#avplayer-native-video-dsp) and
+[VIDEO_WINDOW.md](VIDEO_WINDOW.md#video-audio-dsp-pipeline); why the two producers are parallel
+functions rather than one generalized handler: `tasks/avplayer-native-video-dsp/plan.md` (ADR-6).
+
+**Invariants:**
+- Only one producer is live at a time, so the single-slot last-write-wins feed needs no
+  producer coordination.
+- Both producers see the post-EQ signal (engine tap on `mainMixerNode`, video tap after its
+  in-place EQ/preamp/balance), so Milkdrop reacts to what the user hears.
+- The RMS and Goertzel math in `videoTapVisualizerRender` must stay numerically identical
+  to `VisualizerPipeline.makeTapHandler`; the Butterchurn FFT is shared
+  (`VisualizerScratchBuffers.processButterchurnFFT`).
+- `AudioPlayer.isVisualizerRendering` (`isEngineRendering`, or video with
+  `videoPlaybackController.isPlaying`) gates every UI consumer: `snapshotButterchurnFrame()`,
+  `getFrequencyData(bands:)` and the main-window `VisualizerView`. Pausing a video therefore
+  freezes Butterchurn exactly as pausing a music track does.
 
 **Frame Rates:**
-- **AVAudioEngine tap:** 48kHz continuous (2048 samples per buffer)
-- **Swift→JS updates:** 30 FPS (33ms interval)
+- **Producer callbacks:** engine tap at 2048-frame buffers; the video tap at whatever slice
+  size the route delivers (≈4096 frames wired, ≈1920 on Bluetooth). The FFT always runs on
+  2048 points.
+- **Feed poll:** 30 Hz (`Timer` in `.common` run-loop mode, so it keeps firing during drags)
+- **Swift→JS updates:** 30 FPS (async `Task` loop, ~33 ms sleep)
 - **WebGL rendering:** 60 FPS (requestAnimationFrame)
 
 **30 FPS Swift→JS Audio Updates:**
 
 ```swift
-// ButterchurnBridge.swift - Timer-based audio streaming.
-//
-// IMPORTANT: Timer must be added to RunLoop.main in .common mode so it keeps
-// firing during user gestures. Timer.scheduledTimer(withTimeInterval:repeats:block:)
-// defaults to .default mode and pauses during .eventTracking (any active
-// DragGesture / window-move / scroll). A paused producer-side timer stalls
-// the visualizer pipeline and freezes the rendered output. See mwvi PR #A.
-private func startAudioTimer() {
-    let timer = Timer(timeInterval: 1.0/30.0, repeats: true) { [weak self] _ in
-        Task { @MainActor in
-            self?.sendAudioData()
+// ButterchurnBridge.swift
+private func startAudioUpdates() {
+    guard audioUpdateTask == nil else { return }
+    audioUpdateTask = Task { @MainActor [weak self] in
+        while !Task.isCancelled {
+            self?.sendAudioFrame()
+            try? await Task.sleep(nanoseconds: 33_333_333) // ~30 FPS
         }
     }
-    RunLoop.main.add(timer, forMode: .common)
-    audioTimer = timer
 }
 
-private func sendAudioData() {
-    guard isReady, let audioPlayer = audioPlayer else { return }
+private func sendAudioFrame() {
+    guard isReady, let webView = webView else { return }
 
-    // Get FFT samples from AVAudioEngine tap
-    let samples = audioPlayer.getVisualizationSamples(count: 1024)
+    // nil when nothing is rendering (idle, paused, stopped) — freeze the canvas
+    guard let frame = audioPlayer?.snapshotButterchurnFrame() else {
+        if isVisualizationActive {
+            isVisualizationActive = false
+            webView.evaluateJavaScript("window.macampButterchurn?.stop();", completionHandler: nil)
+        }
+        return
+    }
+    if !isVisualizationActive {
+        isVisualizationActive = true
+        webView.evaluateJavaScript("window.macampButterchurn?.start();", completionHandler: nil)
+    }
 
-    // Convert to JSON array for JS
-    let jsArray = samples.map { String(format: "%.4f", $0) }.joined(separator: ",")
-
-    // Use callAsyncJavaScript for reliable delivery
-    webView?.callAsyncJavaScript(
-        "if (window.receiveAudioData) window.receiveAudioData([\(jsArray)]);",
-        in: nil, in: .page
-    ) { _ in }
+    let spectrumInts = frame.spectrum.map { Int(min(255, max(0, $0 * 255))) }
+    webView.callAsyncJavaScript(
+        "window.macampButterchurn?.setAudioData(spectrum, waveform);",
+        arguments: ["spectrum": spectrumInts, "waveform": frame.waveform],
+        in: nil, in: .page, completionHandler: nil
+    )
 }
 ```
 
-**60 FPS JS Render Loop:**
+**JS side (bridge.js):** `setAudioData` copies the waveform into `latestWaveform`. A muted
+`ScriptProcessorNode` (1024-frame buffer) replays that buffer into Butterchurn's internal
+analyser, which derives its own spectrum (the Swift spectrum argument is currently unused).
+`start()` / `stop()` toggle the 60 FPS `requestAnimationFrame` render loop.
 
 ```javascript
-// bridge.js - Render loop with audio data
-let audioData = new Float32Array(1024);
-
-window.receiveAudioData = function(data) {
-    audioData.set(data);
-};
-
-function render() {
-    if (visualizer && isPlaying) {
-        visualizer.render(audioData);
+// bridge.js
+scriptProcessor.onaudioprocess = function(e) {
+    var output = e.outputBuffer.getChannelData(0);
+    for (var i = 0; i < output.length; i++) {
+        output[i] = latestWaveform[waveformWriteIndex];
+        waveformWriteIndex = (waveformWriteIndex + 1) % latestWaveform.length;
     }
-    requestAnimationFrame(render);
-}
-requestAnimationFrame(render);
+};
+// scriptProcessor → muteGain(0) → destination; visualizer.connectAudio(scriptProcessor)
 ```
 
 ### 9.5 ButterchurnPresetManager
 
-Manages preset cycling, randomization, and history:
+`ButterchurnPresetManager` (`@MainActor @Observable`) holds `presets`, `currentPresetIndex`, `isRandomize`, `isCycling`, `cycleInterval` (default 15 s), `transitionDuration` (2.7 s) and `trackTitleInterval` (0 = on request only). Settings write through to `AppSettings` in their `didSet`s.
 
-```swift
-// ButterchurnPresetManager.swift
-@MainActor
-@Observable
-final class ButterchurnPresetManager {
-    // Observable state
-    var presets: [String] = []
-    var currentPresetIndex: Int = -1
-    var isRandomize: Bool = true      // Persisted
-    var isCycling: Bool = true        // Persisted
-    var cycleInterval: TimeInterval = 15.0  // Persisted
-    var trackTitleInterval: TimeInterval = 0  // 0 = manual only
-
-    // History for previous/next navigation
-    @ObservationIgnored private var presetHistory: [Int] = []
-
-    // Timer management
-    @ObservationIgnored private var cycleTimer: Timer?
-    @ObservationIgnored private var trackTitleTimer: Timer?
-
-    func nextPreset() {
-        if isRandomize {
-            selectRandomPreset()
-        } else {
-            selectPreset(at: (currentPresetIndex + 1) % presets.count)
-        }
-    }
-
-    func previousPreset() {
-        guard presetHistory.count >= 2 else { return }
-        presetHistory.removeLast()  // Pop current
-        if let prev = presetHistory.last {
-            selectPreset(at: prev, addToHistory: false)
-        }
-    }
-}
-```
+- `nextPreset()` (needs ≥ 2 presets): random if `isRandomize` (never repeats the current preset), else sequential with wrap-around.
+- `previousPreset()`: pops the current entry from `presetHistory` and re-selects the previous one without re-adding it. History is capped at 100 entries.
+- `selectPreset(at:transition:addToHistory:)` calls `bridge.loadPreset(at:transition:)`.
+- Cycle and track-title timers are `Timer`s added to `RunLoop.main` in `.common` mode; callbacks use `MainActor.assumeIsolated`. `cleanup()` stops both (called from `bridge.cleanup()`).
 
 ### 9.6 Context Menu Implementation
 
-Uses NSMenu with closure-to-selector bridge pattern:
+`WinampMilkdropWindow.showContextMenu(at:)` builds an `NSMenu` on right-click (from `RightClickCaptureView`), keeps it in `@State activeContextMenu` so it is not deallocated while open, and creates items with `MenuItemFactory.createMenuItem(title:keyEquivalent:modifiers:action:)` (closure-to-selector bridge via `MenuActionTarget`, `MacAmpApp/Utilities/`). Items are listed in §1.2. The menu is shown with `menu.popUp(positioning: nil, at: location, in: nil)`.
 
-```swift
-// WinampMilkdropWindow.swift - Context menu via right-click overlay
-private func showContextMenu(at location: NSPoint) {
-    let menu = NSMenu()
-    activeContextMenu = menu  // Keep strong reference!
+### 9.7 Pitfalls
 
-    // Header: Current preset
-    if let name = presetManager.currentPresetName {
-        let item = NSMenuItem(title: "▶ \(name)", action: nil, keyEquivalent: "")
-        item.isEnabled = false
-        menu.addItem(item)
-        menu.addItem(.separator())
-    }
-
-    // Navigation
-    menu.addItem(createMenuItem(title: "Next Preset", keyEquivalent: " ", action: {
-        [weak presetManager] in presetManager?.nextPreset()
-    }))
-
-    // Show at click location
-    menu.popUp(positioning: nil, at: location, in: nil)
-}
-
-// Uses MenuActionTarget from MacAmpApp/Utilities/MenuActionTarget.swift
-// and MenuItemFactory.createMenuItem() for streamlined menu item creation
-let item = MenuItemFactory.createMenuItem(title: title, action: { ... })
-```
-
-### 9.7 Critical Bug Fixes (Oracle A-Grade)
-
-**Bug 1: markLoadFailed Called Before Setup**
-```swift
-// WRONG: Direct call before bridge configured
-if !isReady { markLoadFailed("Setup incomplete") }
-
-// CORRECT: Guard + async delay for initialization
-func markLoadFailed(_ message: String) {
-    guard isReady else { return }  // Only fail if was previously ready
-    errorMessage = message
-}
-```
-
-**Bug 2: isReady Guard in sendAudioData**
-```swift
-// WRONG: Send data without checking ready state
-private func sendAudioData() {
-    let samples = audioPlayer?.getVisualizationSamples(count: 1024) ?? []
-    webView?.evaluateJavaScript(...)  // May execute before bridge ready
-}
-
-// CORRECT: Guard all JS calls
-private func sendAudioData() {
-    guard isReady, let audioPlayer = audioPlayer else { return }
-    // Now safe to send
-}
-```
-
-**Bug 3: WKNavigationDelegate Lifecycle**
-```swift
-// CRITICAL: Implement didFinish to know when page ready
-extension ButterchurnWebView.Coordinator: WKNavigationDelegate {
-    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        // Page loaded, scripts injected, now can receive messages
-    }
-
-    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-        parent.bridge.markLoadFailed(error.localizedDescription)
-    }
-}
-```
-
-**Bug 4: callAsyncJavaScript vs evaluateJavaScript**
-```swift
-// WRONG: evaluateJavaScript can race with page load
-webView.evaluateJavaScript("loadPreset(5)")
-
-// CORRECT: callAsyncJavaScript waits for context
-webView.callAsyncJavaScript(
-    "loadPreset(\(index), \(transition))",
-    in: nil,
-    in: .page
-) { result in
-    // Handle completion
-}
-```
-
-**Bug 5: Timer Thread Safety**
-```swift
-// WRONG: Timer callback not on main actor
-cycleTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
-    self?.nextPreset()  // ⚠️ May be on wrong thread
-}
-
-// CORRECT: Dispatch to MainActor
-cycleTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
-    Task { @MainActor in
-        self?.nextPreset()
-    }
-}
-```
+- **Guard every Swift→JS call** on `isReady` and a live `webView` (`sendAudioFrame`, `loadPreset`, `showTrackTitle`, `setSize`, `pauseRendering`/`resumeRendering`); calls before `ready` or after a failure go to a dead page.
+- **Surface WebView failures.** `ButterchurnWebView.Coordinator` (`WKNavigationDelegate`) routes `didFail`, `didFailProvisionalNavigation` and `webViewWebContentProcessDidTerminate` to `bridge.markLoadFailed`, which clears `isReady` and the preset list, sets `errorMessage` and stops the audio loop. `bridge.js` can also post `loadFailed`.
+- **Pass per-frame data as arguments.** Audio frames use `callAsyncJavaScript(_:arguments:in:in:)` with typed arguments rather than string interpolation; `showTrackTitle` JSON-encodes the title so quotes, newlines and Unicode are safe.
+- **Timers on the main run loop in `.common` mode** with `MainActor.assumeIsolated`, so they keep firing during drags and stay main-actor-correct.
+- **Break the retain cycle.** `dismantleNSView` removes the `butterchurn` script message handler and calls `bridge.cleanup()` (stops the audio loop and preset timers, calls JS `dispose()`, drops the web view).
+- **`ceil()` for titlebar filler tiles** (§4.1).
 
 ### 9.8 Persistence Pattern
 
-All settings use AppSettings with didSet persistence:
+`AppSettings` persists Butterchurn settings with `didSet` → UserDefaults: `butterchurnRandomize` (default true), `butterchurnCycling` (true), `butterchurnCycleInterval` (15.0; a saved 0 falls back to 15), `butterchurnTrackTitleInterval` (0). Window size is persisted by `MilkdropWindowSizeState` (§10.1).
 
-```swift
-// AppSettings.swift
-@Observable @MainActor
-final class AppSettings {
-    var butterchurnRandomize: Bool = true {
-        didSet { UserDefaults.standard.set(butterchurnRandomize, forKey: "butterchurnRandomize") }
-    }
-    var butterchurnCycling: Bool = true {
-        didSet { UserDefaults.standard.set(butterchurnCycling, forKey: "butterchurnCycling") }
-    }
-    var butterchurnCycleInterval: Double = 15.0 {
-        didSet { UserDefaults.standard.set(butterchurnCycleInterval, forKey: "butterchurnCycleInterval") }
-    }
-    var butterchurnTrackTitleInterval: Double = 0 {
-        didSet { UserDefaults.standard.set(butterchurnTrackTitleInterval, forKey: "butterchurnTrackTitleInterval") }
-    }
-}
-```
+### 9.9 Track Title Display
 
-### 9.9 Track Title Display (Phase 7)
-
-Automatic or manual track title overlay on visualization:
-
-```swift
-// ButterchurnPresetManager.swift
-var trackTitleInterval: TimeInterval = 0 {  // 0 = manual only
-    didSet {
-        appSettings?.butterchurnTrackTitleInterval = trackTitleInterval
-        if trackTitleInterval > 0 {
-            restartTrackTitleTimer()
-        } else {
-            stopTrackTitleTimer()
-        }
-    }
-}
-
-func showCurrentTrackTitle() {
-    guard let displayTitle = playbackCoordinator?.displayTitle else { return }
-    bridge?.showTrackTitle(displayTitle)
-}
-
-// bridge.js - Display with fade animation
-window.showTrackTitle = function(title) {
-    const overlay = document.getElementById('trackTitle');
-    overlay.textContent = title;
-    overlay.style.opacity = 1;
-    setTimeout(() => { overlay.style.opacity = 0; }, 3000);
-};
-```
+`ButterchurnPresetManager.trackTitleInterval` > 0 starts a repeating timer that shows the title immediately and then every interval; 0 means only "Show Track Title" (T) shows it. `showCurrentTrackTitle()` reads `playbackCoordinator.displayTitle` and calls `bridge.showTrackTitle(_:)`, which calls `window.macampButterchurn.showTrackTitle(title)`; bridge.js runs Butterchurn's `visualizer.launchSongTitleAnim(title)`.
 
 ### 9.10 WASM Rendering Mode Configuration
 
-Butterchurn.js supports two rendering modes:
+`bridge.js` creates the visualizer with `width`/`height` from the canvas, `pixelRatio: window.devicePixelRatio || 1` and `textureRatio: 1`, without `onlyUseWASM`, so Butterchurn uses WASM with a JavaScript fallback (hybrid mode). `butterchurn.min.js` includes the WASM code (no separate `.wasm` file) and auto-detects support.
 
-**Hybrid Mode (Current Implementation):**
-```javascript
-// bridge.js - Current configuration (default behavior)
-visualizer = butterchurn.createVisualizer(audioContext, canvas, {
-    width: canvas.width,
-    height: canvas.height,
-    pixelRatio: window.devicePixelRatio || 1,
-    textureRatio: 1
-    // onlyUseWASM not specified - uses WASM with JavaScript fallback
-});
-```
+| Mode | Security | Compatibility |
+|------|----------|---------------|
+| Hybrid (current) | JS fallback less sandboxed; acceptable inside WKWebView's sandbox | Works everywhere |
+| WASM-only (`onlyUseWASM: true`) | Memory-sandboxed | Fails without WASM |
 
-**WASM-Only Mode (Recommended for Security):**
-```javascript
-// bridge.js - Hardened security configuration
-visualizer = butterchurn.createVisualizer(audioContext, canvas, {
-    width: canvas.width,
-    height: canvas.height,
-    pixelRatio: window.devicePixelRatio || 1,
-    textureRatio: 1,
-    onlyUseWASM: true  // Force WASM-only rendering
-});
-```
-
-**Trade-offs:**
-
-| Mode | Security | Compatibility | Notes |
-|------|----------|---------------|-------|
-| Hybrid (default) | ⚠️ JS fallback less sandboxed | ✅ Works everywhere | Acceptable with WKWebView sandboxing |
-| WASM-only | ✅ Memory-sandboxed | ⚠️ Fails without WASM | Recommended for production |
-
-**Note:** MacAmp uses hybrid mode because:
-1. WKWebView already provides sandboxing
-2. All modern macOS (15+) support WASM
-3. Hybrid mode ensures graceful degradation
-
-**Implementation Note:** The `butterchurn.min.js` file includes WASM code built-in (no separate `.wasm` file required). The library auto-detects WASM support and uses it when available.
+Hybrid is kept because WKWebView already sandboxes the content, every supported macOS has WASM, and hybrid degrades gracefully. Switching is a one-line option change in `createVisualizer`.
 
 ---
 
 ## 10. Persistence & Docking
 
-### 10.1 Window Position Persistence
+### 10.1 Window Position and Size Persistence
 
-Position saved to UserDefaults:
-
-```swift
-// AppSettings.swift
-@Observable @MainActor
-final class AppSettings {
-    var milkdropWindowFrame: NSRect? {
-        didSet {
-            if let frame = milkdropWindowFrame {
-                UserDefaults.standard.set(
-                    NSStringFromRect(frame),
-                    forKey: "milkdropWindowFrame"
-                )
-            }
-        }
-    }
-
-    init() {
-        // Restore saved position
-        if let frameString = UserDefaults.standard.string(
-            forKey: "milkdropWindowFrame") {
-            milkdropWindowFrame = NSRectFromString(frameString)
-        }
-    }
-}
-```
+- **Frame:** saved for all windows by `WindowFramePersistence` via `WindowFrameStore` under UserDefaults key `WindowFrame.milkdrop` (debounced 150 ms after geometry changes; suppressed during programmatic moves).
+- **Size (segments):** `MilkdropWindowSizeState.size.didSet` saves `["width": Int, "height": Int]` under `milkdropWindowSize`; `loadSize()` restores it clamped to `milkdropMinimum`, defaulting to `milkdropDefault`.
 
 ### 10.2 Magnetic Docking
 
-The window participates in MacAmp's magnetic docking system:
-
-```swift
-// DockingController manages all window snapping
-dockingController.registerWindow(milkdropWindow, kind: .milkdrop)
-
-// Snapping behavior:
-- Snap to screen edges (10px threshold)
-- Snap to other MacAmp windows
-- Form window clusters
-- Move as a group when docked
-```
+The window is registered with `WindowSnapManager` as `WindowKind.milkdrop`: it snaps to screen edges and other MacAmp windows within `SnapUtils.SNAP_DISTANCE` (15px), forms clusters and moves with them. See [Window Snap Manager](MACAMP_ARCHITECTURE_GUIDE.md#window-snap-manager).
 
 ### 10.3 Window Lifecycle
 
-```swift
-// Open (Ctrl+K pressed)
-1. Check if controller exists
-2. Create if needed
-3. Restore saved position
-4. Show window
-5. Update isMilkdropVisible = true
-
-// Close (window closed)
-1. Save current position
-2. Update isMilkdropVisible = false
-3. Controller remains in memory
-```
+Ctrl+K (or the Options menu item) toggles `AppSettings.showMilkdropWindow` (persisted). `WindowSettingsObserver` observes it and `WindowCoordinator` calls `showMilkdrop()` (`makeKeyAndOrderFront`) or `hideMilkdrop()` (`orderOut`) through `WindowVisibilityController`. Hiding orders the window out; the controller, bridge and web view are not torn down.
 
 ---
 
 ## 11. Testing
 
-### 11.1 Focus State Testing
+**Chrome and focus**
+- Ctrl+K opens/closes; `_SELECTED` sprites when focused, normal sprites after clicking another window
+- Titlebar sections align with no gaps at several widths (e.g. 275, 300, 325px); side borders and bottom bar tile correctly; close button in place
+- Resize drag shows the preview, snaps to 25×29 steps, and the Butterchurn canvas follows
+- Position and size persist across relaunch; magnetic docking and titlebar drag work
+- Test with the default skin, classic skins and skins with different GEN.bmp layouts (letters may render wrongly, §6.3)
 
-```bash
-# Test focus transitions
-1. Open Milkdrop window (Ctrl+K)
-2. Verify _SELECTED sprites shown
-3. Click Main window
-4. Verify normal sprites shown
-5. Click back to Milkdrop
-6. Verify _SELECTED sprites return
-```
+**Audio sources** (window open)
+- Local file: visuals react to the music; pause freezes the canvas, play resumes it
+- Internet radio: visuals react to the stream
+- Video file: visuals react to the video's audio; pause freezes, seek keeps animating
+- Change EQ bands while a video plays: visuals follow the EQ'd sound
+- Video → audio and audio → video switches: no stale frame, no stuck canvas
+- Toggle Milkdrop and cycle main-window visualizer modes during video: no glitch
 
-### 11.2 Sprite Alignment Testing
+Automated coverage for the video producer: `Tests/MacAmpTests/VideoTapVisualizerRenderTests.swift`.
 
-```bash
-# Visual inspection points
-- Titlebar sections align seamlessly
-- No gaps between tiles
-- Side borders tile correctly (7×29px tiles)
-- Bottom bar pieces connect properly
-- Close button in correct position
-```
+### 11.1 WKWebView Console Errors (Non-Fatal)
 
-### 11.3 Multi-Skin Testing
-
-Test with various skins to ensure GEN sprite compatibility:
-
-```bash
-# Test skins
-- Base skin (default)
-- Winamp Classic
-- Custom skins with different GEN.bmp layouts
-- Skins with missing GEN sprites (fallback behavior)
-```
-
-### 11.4 Window Management
-
-```bash
-# Test window operations
-- Ctrl+K opens/closes
-- Window position persists
-- Magnetic docking works
-- Drag via titlebar works
-- Close button works
-```
-
-### 11.5 macOS 26 Tahoe WKWebView Console Errors (Non-Fatal)
-
-On macOS 26 (Tahoe), the WKWebView hosting Butterchurn produces several non-fatal console
-errors during normal operation. These are WebKit/system-level issues unrelated to MacAmp and
-do not affect rendering. Butterchurn visualizations display correctly despite these messages.
-
-**Common console errors observed:**
+On macOS 26 (Tahoe) and later, the WKWebView hosting Butterchurn logs non-fatal WebKit/system errors that do not affect rendering or audio reception and need no code change:
 
 | Error Source | Message (excerpt) | Impact |
 |---|---|---|
@@ -1126,531 +591,23 @@ do not affect rendering. Butterchurn visualizations display correctly despite th
 | RunningBoard | `Connection to service ... interrupted` | None -- process management noise |
 | Metal | `Shader compilation warning` / `GPU validation` | None -- WebGL shaders compile successfully |
 
-**Root Cause:** WebKit bug [302212](https://bugs.webkit.org/show_bug.cgi?id=302212) -- the
-WebContent process on macOS 26 emits spurious diagnostics for pasteboard access, launch
-services queries, and Metal shader compilation that do not occur on macOS 15 (Sequoia).
-
-**Recommendation:** These errors can be safely ignored. They appear in Xcode's console output
-and `Console.app` but do not affect Butterchurn's WebGL rendering pipeline or audio data
-reception. No code changes are needed.
+Root cause: WebKit bug [302212](https://bugs.webkit.org/show_bug.cgi?id=302212) — the WebContent process emits spurious diagnostics for pasteboard access, launch services queries and Metal shader compilation (not seen on macOS 15).
 
 ---
 
 ## 12. Future Work
 
-### 12.1 Visualization Enhancements
-
-**Completed:**
-- ✅ Butterchurn.js integration via WKWebView
-- ✅ Preset cycling with randomization and history
-- ✅ Track title overlay display
-
-**Future:**
-1. **Native Metal Renderer** - Best performance, port from WebGL
-2. **projectM Integration** - Load native .milk presets
-3. **Custom Preset Editor** - Create/modify presets
-
-### 12.2 Dynamic Text Rendering
-
-Implement GEN letter extraction for titlebar text:
-- ✅ Two-piece sprite system implemented
-- ✅ Static "MILKDROP" letters rendered
-- **Future:** Pixel-scanning for variable-width letters
-- **Future:** Support for preset names in titlebar
-
-### 12.3 Window Resizing - ✅ COMPLETE
-
-**Implementation Status**: Complete (branch `feature/milkdrop-window-resize`)
-**Commits**: `655c5d3` through `099705f` (7 phases)
-
-The MILKDROP window now supports full segment-based resizing, matching the VIDEO window pattern.
-
-#### 12.3.1 Architecture Overview
-
-**Size Model (Size2D):**
-```swift
-// MacAmpApp/Models/Size2D.swift
-struct Size2D: Equatable, Codable, Hashable {
-    var width: Int   // Number of 25px segments beyond base width
-    var height: Int  // Number of 29px segments beyond base height
-
-    // MILKDROP presets
-    static let milkdropMinimum = Size2D(width: 0, height: 0)  // 275×116
-    static let milkdropDefault = Size2D(width: 0, height: 4)  // 275×232
-
-    /// Convert segments to pixel dimensions for MILKDROP window
-    func toPixels() -> CGSize {
-        CGSize(
-            width: 275 + width * 25,
-            height: 116 + height * 29
-        )
-    }
-}
-```
-
-**Observable State (MilkdropWindowSizeState):**
-```swift
-// MacAmpApp/Models/MilkdropWindowSizeState.swift
-@MainActor
-@Observable
-final class MilkdropWindowSizeState {
-    /// Current size in segments (persisted via didSet)
-    var size: Size2D = .milkdropDefault {
-        didSet { saveSize() }
-    }
-
-    /// Pixel dimensions calculated from segments
-    var pixelSize: CGSize { size.toPixels() }
-
-    /// Content dimensions (for Butterchurn canvas)
-    var contentWidth: CGFloat { pixelSize.width - 19 }   // Minus borders
-    var contentHeight: CGFloat { pixelSize.height - 34 } // Minus chrome
-    var contentSize: CGSize { CGSize(width: contentWidth, height: contentHeight) }
-
-    // Titlebar layout computed properties
-    var goldFillerTilesPerSide: Int    // Dynamic gold expansion
-    var centerSectionStartX: CGFloat   // After left gold + left end
-    var milkdropLettersCenterX: CGFloat // Center of 75px grey section
-}
-```
-
-#### 12.3.2 Specifications
-
-| Property | Value | Notes |
-|----------|-------|-------|
-| Minimum Size | 275×116 | Size2D[0,0], matches Main/EQ |
-| Default Size | 275×232 | Size2D[0,4], 4 height segments |
-| Width Segment | 25px | Horizontal resize increment |
-| Height Segment | 29px | Vertical resize increment |
-| Titlebar Height | 20px | Fixed chrome |
-| Bottom Bar Height | 14px | Fixed chrome |
-| Left Border | 11px | GEN_MIDDLE_LEFT |
-| Right Border | 8px | GEN_MIDDLE_RIGHT |
-
-#### 12.3.3 Dynamic Chrome System (7-Section Titlebar)
-
-The titlebar dynamically expands via gold filler tiles:
-
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│ LEFT_CAP │ LEFT_GOLD(n) │ LEFT_END │ CENTER(3) │ RIGHT_END │ RIGHT_GOLD(n) │ RIGHT_CAP │
-│   25px   │    n×25px    │   25px   │   75px    │   25px    │     n×25px    │   25px    │
-└─────────────────────────────────────────────────────────────────────────┘
-
-Fixed sections: LEFT_CAP(25) + LEFT_END(25) + RIGHT_END(25) + RIGHT_CAP(25) = 100px
-Center section: 3 grey tiles = 75px (fixed)
-Variable sections: LEFT_GOLD + RIGHT_GOLD expand symmetrically
-```
-
-**Implementation in MilkdropWindowChromeView.swift:**
-
-```swift
-@ViewBuilder
-private func buildDynamicTitlebar() -> some View {
-    let suffix = isWindowActive ? "_SELECTED" : ""
-    let goldTiles = sizeState.goldFillerTilesPerSide
-    let centerStart = sizeState.centerSectionStartX
-
-    ZStack(alignment: .topLeading) {
-        // Section 1: Left cap (25px)
-        SimpleSpriteImage("GEN_TOP_LEFT\(suffix)", width: 25, height: 20)
-            .position(x: 12.5, y: 10)
-
-        // Section 2: Left gold bar tiles (dynamic count)
-        ForEach(0..<goldTiles, id: \.self) { i in
-            SimpleSpriteImage("GEN_TOP_LEFT_RIGHT_FILL\(suffix)", width: 25, height: 20)
-                .position(x: 25 + 12.5 + CGFloat(i) * 25, y: 10)
-        }
-
-        // Section 3: Left end (25px)
-        SimpleSpriteImage("GEN_TOP_LEFT_END\(suffix)", width: 25, height: 20)
-            .position(x: centerStart - 12.5, y: 10)
-
-        // Section 4: Center grey tiles (fixed 3 tiles = 75px)
-        ForEach(0..<sizeState.centerGreyTileCount, id: \.self) { i in
-            SimpleSpriteImage("GEN_TOP_CENTER_FILL\(suffix)", width: 25, height: 20)
-                .position(x: centerStart + 12.5 + CGFloat(i) * 25, y: 10)
-        }
-
-        // Section 5: Right end (25px)
-        SimpleSpriteImage("GEN_TOP_RIGHT_END\(suffix)", width: 25, height: 20)
-            .position(x: centerStart + 75 + 12.5, y: 10)
-
-        // Section 6: Right gold bar tiles (symmetric with left)
-        ForEach(0..<goldTiles, id: \.self) { i in
-            SimpleSpriteImage("GEN_TOP_LEFT_RIGHT_FILL\(suffix)", width: 25, height: 20)
-                .position(x: centerStart + 75 + 25 + 12.5 + CGFloat(i) * 25, y: 10)
-        }
-
-        // Section 7: Right cap with close button (25px)
-        SimpleSpriteImage("GEN_TOP_RIGHT\(suffix)", width: 25, height: 20)
-            .position(x: pixelSize.width - 12.5, y: 10)
-
-        // MILKDROP HD letters - centered in 75px center section
-        milkdropLetters
-            .position(x: sizeState.milkdropLettersCenterX, y: 8)
-    }
-}
-```
-
-#### 12.3.4 Computed Properties
-
-**Gold Filler Tiles (with ceil() pattern):**
-```swift
-// MilkdropWindowSizeState.swift
-/// Gold filler tiles per side (symmetric)
-/// Uses ceil() to ensure tiles fully cover the space at all widths (Pattern 9)
-var goldFillerTilesPerSide: Int {
-    let goldSpace = pixelSize.width - 100 - 75  // Fixed caps/ends (100) + center grey (75)
-    let perSide = goldSpace / 2.0
-    return max(0, Int(ceil(perSide / 25.0)))
-}
-
-/// X position for center section start (after LEFT_CAP + LEFT_GOLD + LEFT_END)
-var centerSectionStartX: CGFloat {
-    25 + CGFloat(goldFillerTilesPerSide) * 25 + 25
-}
-
-/// X position for MILKDROP HD letters (centered in 75px center section)
-var milkdropLettersCenterX: CGFloat {
-    centerSectionStartX + 37.5  // Center of 75px center section
-}
-```
-
-**CRITICAL: ceil() Pattern (Pattern 9 from BUILDING_RETRO_MACOS_APPS_SKILL.md)**
-
-The `ceil()` function ensures full tile coverage at all widths:
-
-| Width | goldSpace | perSide | floor() | ceil() | Result |
-|-------|-----------|---------|---------|--------|--------|
-| 275px | 100px | 50px | 2 tiles | 2 tiles | OK |
-| 300px | 125px | 62.5px | 2 tiles | 3 tiles | ceil() prevents gap |
-| 325px | 150px | 75px | 3 tiles | 3 tiles | OK |
-
-Without `ceil()`, widths like 300px would have a visible gap between the gold tiles and the center section.
-
-#### 12.3.5 Resize Gesture
-
-**DragGesture with Quantization:**
-```swift
-// MilkdropWindowChromeView.swift
-@ViewBuilder
-private func buildResizeHandle() -> some View {
-    Rectangle()
-        .fill(Color.clear)
-        .frame(width: 20, height: 20)
-        .contentShape(Rectangle())
-        .gesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { value in
-                    // Capture start size on first drag tick
-                    if dragStartSize == nil {
-                        dragStartSize = sizeState.size
-                        isDragging = true
-                        WindowSnapManager.shared.beginProgrammaticAdjustment()
-                    }
-
-                    guard let baseSize = dragStartSize else { return }
-
-                    // Calculate quantized size from drag delta (25px width, 29px height)
-                    let widthDelta = Int(round(value.translation.width / 25))
-                    let heightDelta = Int(round(value.translation.height / 29))
-
-                    let candidate = Size2D(
-                        width: max(0, baseSize.width + widthDelta),
-                        height: max(0, baseSize.height + heightDelta)
-                    )
-
-                    // Show AppKit preview overlay
-                    if let coordinator = WindowCoordinator.shared,
-                       let window = coordinator.milkdropWindow {
-                        resizePreview.show(in: window, previewSize: candidate.toPixels())
-                    }
-                }
-                .onEnded { value in
-                    guard let baseSize = dragStartSize else { return }
-
-                    // Calculate final quantized size
-                    let widthDelta = Int(round(value.translation.width / 25))
-                    let heightDelta = Int(round(value.translation.height / 29))
-
-                    let finalSize = Size2D(
-                        width: max(0, baseSize.width + widthDelta),
-                        height: max(0, baseSize.height + heightDelta)
-                    )
-
-                    // Commit size change (triggers persistence via didSet)
-                    sizeState.size = finalSize
-
-                    // Sync NSWindow with top-left anchoring
-                    if let coordinator = WindowCoordinator.shared {
-                        coordinator.updateMilkdropWindowSize(to: sizeState.pixelSize)
-                    }
-
-                    // Hide preview overlay
-                    resizePreview.hide()
-
-                    // Notify Butterchurn of canvas resize
-                    bridge.setSize(width: contentSize.width, height: contentSize.height)
-
-                    // Cleanup
-                    isDragging = false
-                    dragStartSize = nil
-                    WindowSnapManager.shared.endProgrammaticAdjustment()
-                }
-        )
-        .position(x: pixelSize.width - 10, y: pixelSize.height - 10)
-}
-```
-
-**AppKit Preview Overlay:**
-
-During drag, a translucent overlay shows the target size:
-```swift
-// WindowResizePreviewOverlay (shared with VIDEO window)
-resizePreview.show(in: window, previewSize: candidate.toPixels())
-resizePreview.hide()
-```
-
-#### 12.3.6 Integration Points
-
-**WindowCoordinator.updateMilkdropWindowSize():**
-```swift
-// MacAmpApp/ViewModels/WindowCoordinator.swift
-/// Update MILKDROP window frame to match new size (top-left anchoring)
-func updateMilkdropWindowSize(to pixelSize: CGSize) {
-    guard let milkdrop = milkdropWindow else { return }
-
-    var frame = milkdrop.frame
-    guard frame.size != pixelSize else { return }
-
-    // Use integer coordinates to prevent blurry rendering
-    let roundedSize = CGSize(
-        width: round(pixelSize.width),
-        height: round(pixelSize.height)
-    )
-
-    // Top-left anchoring: preserve top-left corner position
-    // macOS uses bottom-left origin, so calculate new origin from top-left
-    let topLeft = NSPoint(
-        x: round(frame.origin.x),
-        y: round(frame.origin.y + frame.size.height)
-    )
-    frame.size = roundedSize
-    frame.origin = NSPoint(x: topLeft.x, y: topLeft.y - roundedSize.height)
-
-    milkdrop.setFrame(frame, display: true)
-}
-```
-
-**ButterchurnBridge.setSize():**
-```swift
-// MacAmpApp/ViewModels/ButterchurnBridge.swift
-/// Resize the Butterchurn canvas to match window content area
-func setSize(width: CGFloat, height: CGFloat) {
-    guard isReady, let webView = webView else { return }
-    let js = "window.macampButterchurn?.setSize(\(Int(width)), \(Int(height)));"
-    webView.evaluateJavaScript(js, completionHandler: nil)
-}
-```
-
-#### 12.3.7 Persistence
-
-**UserDefaults with didSet Pattern:**
-```swift
-// MilkdropWindowSizeState.swift
-private static let sizeKey = "milkdropWindowSize"
-
-private func saveSize() {
-    let data = ["width": size.width, "height": size.height]
-    UserDefaults.standard.set(data, forKey: Self.sizeKey)
-}
-
-func loadSize() {
-    guard let data = UserDefaults.standard.dictionary(forKey: Self.sizeKey),
-          let width = data["width"] as? Int,
-          let height = data["height"] as? Int else {
-        size = .milkdropDefault
-        return
-    }
-    size = Size2D(width: width, height: height).clamped(min: .milkdropMinimum)
-}
-```
-
-#### 12.3.8 Bug Fix: Titlebar Tile Gap (commit `099705f`)
-
-**Problem:** At certain window widths (e.g., 300px), a visible gap appeared between the gold tiles and center section.
-
-**Root Cause:** The `goldFillerTilesPerSide` calculation used floor division:
-```swift
-// WRONG: Floor division leaves gaps
-Int(perSide / 25)  // At 62.5px, returns 2 tiles (gap!)
-```
-
-**Solution:** Apply Pattern 9 from BUILDING_RETRO_MACOS_APPS_SKILL.md - use `ceil()`:
-```swift
-// CORRECT: Ceiling ensures full coverage
-Int(ceil(perSide / 25.0))  // At 62.5px, returns 3 tiles (full coverage)
-```
-
-**Visual Example:**
-```
-Width 300px, goldSpace = 125px, perSide = 62.5px
-
-With floor (Int(62.5/25) = 2):
-[CAP][GOLD][GOLD][END] ← 100px   [CENTER 75px]   [END][GOLD][GOLD][CAP] ← 100px
-                         ↑ GAP! (275px total, 25px missing)
-
-With ceil (Int(ceil(62.5/25)) = 3):
-[CAP][GOLD][GOLD][GOLD][END][CENTER 75px][END][GOLD][GOLD][GOLD][CAP]
-                         ↑ Full coverage (tiles overlap slightly, no gap)
-```
-
-#### 12.3.9 Implementation Summary
-
-| Phase | Commit | Description |
-|-------|--------|-------------|
-| 1 | `655c5d3` | Foundation: Size2D presets + MilkdropWindowSizeState |
-| 2 | `39bc227` | Size state wiring + WindowCoordinator + ButterchurnBridge |
-| 3 | `104db69` | Dynamic chrome layout (7-section titlebar) |
-| 4 | `34c9c87` | Resize gesture with AppKit preview overlay |
-| 5 | (bundled) | WindowCoordinator.updateMilkdropWindowSize() |
-| 6 | (bundled) | ButterchurnBridge.setSize() initial sync |
-| 7 | `099705f` | Fix titlebar tile gap using ceil() (Pattern 9) |
-
-**Files Changed:**
-- `MacAmpApp/Models/Size2D.swift` - MILKDROP presets
-- `MacAmpApp/Models/MilkdropWindowSizeState.swift` - NEW: Observable size state
-- `MacAmpApp/Views/Windows/MilkdropWindowChromeView.swift` - Dynamic layout + resize gesture
-- `MacAmpApp/ViewModels/WindowCoordinator.swift` - updateMilkdropWindowSize()
-- `MacAmpApp/ViewModels/ButterchurnBridge.swift` - setSize() canvas sync
-
-### 12.4 Advanced Audio Analysis
-
-Current: 1024-sample FFT via AVAudioEngine tap
-Future: Enhanced visualization features
-- Beat detection (BPM)
-- Multi-band frequency analysis
-- Smooth transitions between presets
-- Audio-reactive preset selection
+- **Visualization:** native Metal renderer (port from WebGL), projectM integration for native `.milk` presets, custom preset editor
+- **Titlebar text:** per-skin GEN letter extraction by pixel scanning (§6.3); preset names in the titlebar
+- **Audio analysis:** beat detection (BPM), multi-band analysis, audio-reactive preset selection. Current input is a 2048-point FFT (1024 bins) + 1024-sample waveform from the engine or video tap (§9.4)
+
+Historical research and plans: `tasks/stale/milk-drop-video-support/`, `tasks/done/milkdrop-window-resize/`.
 
 ---
 
-## Code References
-
-### Primary Implementation Files
-
-```swift
-// Window Controller
-MacAmpApp/Windows/WinampMilkdropWindowController.swift
-
-// Main View
-MacAmpApp/Views/WinampMilkdropWindow.swift
-
-// Chrome Implementation (dynamic titlebar + resize gesture)
-MacAmpApp/Views/Windows/MilkdropWindowChromeView.swift
-
-// Size State (quantized segments + titlebar computed properties)
-MacAmpApp/Models/MilkdropWindowSizeState.swift
-
-// Size Model (MILKDROP presets + pixel conversion)
-MacAmpApp/Models/Size2D.swift
-
-// Sprite Definitions
-MacAmpApp/Models/SkinSprites.swift (GEN section)
-
-// Focus State
-MacAmpApp/Models/WindowFocusState.swift
-
-// Settings Persistence
-MacAmpApp/Models/AppSettings.swift
-
-// Window Coordination (updateMilkdropWindowSize)
-MacAmpApp/ViewModels/WindowCoordinator.swift
-
-// Butterchurn Canvas Resize (setSize)
-MacAmpApp/ViewModels/ButterchurnBridge.swift
-```
-
-### Research & Documentation
-
-```
-// Implementation research
-tasks/milk-drop-video-support/research.md
-tasks/milk-drop-video-support/plan.md
-tasks/milk-drop-video-support/state.md
-
-// Day summaries
-tasks/milk-drop-video-support/DAY_7_8_SUMMARY.md
-
-// Technical blockers
-tasks/milk-drop-video-support/BUTTERCHURN_BLOCKERS.md
-
-// Resize specification (future)
-tasks/milk-drop-video-support/MILKDROP_RESIZE_SPEC.md
-```
-
-### Related Documentation
-
-```
-// Architecture patterns
-docs/MACAMP_ARCHITECTURE_GUIDE.md
-
-// Sprite system
-docs/SPRITE_SYSTEM_COMPLETE.md
-
-// Window patterns
-docs/IMPLEMENTATION_PATTERNS.md
-```
-
----
-
-## Summary
-
-The Milkdrop window implementation demonstrates several key MacAmp patterns:
-
-1. **Pixel-perfect sprite rendering** using GEN.bmp chrome
-2. **Two-piece sprite discovery** for BOTTOM_FILL and letter components
-3. **Seven-section dynamic titlebar** with gold filler expansion
-4. **Focus state integration** with _SELECTED sprite switching
-5. **NSWindowController pattern** with environment injection
-6. **WKUserScript injection** for JavaScript library loading
-7. **Swift→JS audio bridge** at 30 FPS with callAsyncJavaScript
-8. **Preset management** with cycling, randomization, and history
-9. **Context menu** using NSMenu with closure-to-selector bridge
-10. **Track title overlay** with configurable interval display
-11. **WASM rendering mode** - Hybrid mode with security option (`onlyUseWASM: true`)
-12. **Segment-based resizing** with Size2D quantized model
-13. **ceil() pattern** for titlebar tile coverage (Pattern 9)
-
-The Milkdrop window is complete with Butterchurn.js visualization and full resize support, providing real-time audio-reactive psychedelic visuals. The implementation follows MacAmp's three-layer architecture, maintains Winamp compatibility, and integrates seamlessly with the existing window management system.
-
-### Implementation Metrics
-
-- **7 Phases** of Butterchurn integration + **7 Phases** of resize implementation
-- **6 Oracle A-grade bug fixes** for production stability (including ceil() pattern)
-- **30 FPS** Swift→JS audio data pipeline
-- **60 FPS** WebGL render loop
-- **100+ presets** from butterchurnPresets library
-- **5 persisted settings** (randomize, cycling, cycle interval, title interval, window size)
-- **Hybrid WASM mode** (WASM with JS fallback, `onlyUseWASM: true` available)
-- **275×116** minimum size to **unlimited** maximum (segment-based)
-- **25×29px** resize segments matching Winamp behavior
-
-### Key Files
-
-| File | Purpose |
-|------|---------|
-| `ButterchurnBridge.swift` | Swift→JS communication bridge + canvas resize |
-| `ButterchurnPresetManager.swift` | Preset cycling, history, persistence |
-| `ButterchurnWebView.swift` | WKWebView wrapper with script injection |
-| `WinampMilkdropWindow.swift` | Main view with context menu |
-| `WinampMilkdropWindowController.swift` | NSWindowController owning bridge + manager |
-| `MilkdropWindowChromeView.swift` | GEN.bmp chrome + dynamic titlebar + resize gesture |
-| `MilkdropWindowSizeState.swift` | Observable size state with titlebar computed properties |
-| `Size2D.swift` | Quantized segment model with MILKDROP presets |
-| `WindowCoordinator.swift` | updateMilkdropWindowSize() for NSWindow sync |
-
----
-
-**End of Document**
+**Version History:**
+- v2.4.0 (2026-09-25): Pruned; review-history and phase logs removed; snippets checked against code
+- v2.3.0 (2026-09-25): Video audio drives Butterchurn via the shared `VisualizerFeed`
+- Segment-based window resize (Size2D, 7-section dynamic titlebar, `ceil()` tile fix)
+- Butterchurn integration (WKUserScript injection, 30 FPS bridge, preset manager, context menu, track title)
+- Initial GEN.bmp chrome and two-piece sprite discovery

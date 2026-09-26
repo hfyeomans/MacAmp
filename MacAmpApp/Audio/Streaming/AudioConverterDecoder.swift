@@ -14,7 +14,7 @@ import Foundation
 /// - `AudioConverterFillComplexBuffer()` decodes packets via input callback
 /// - `AudioConverterDispose()` disposes — MUST be called BEFORE AudioFileStreamClose()
 ///
-/// **Input buffer contract (Oracle fix):**
+/// **Input buffer contract:**
 /// The input callback provides pointers to compressed data. Apple's contract requires
 /// these pointers remain valid until the NEXT input callback invocation. The callback
 /// pulls packets from the queue itself and keeps the previous buffer alive until replaced.

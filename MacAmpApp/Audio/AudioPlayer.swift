@@ -19,6 +19,12 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     private let equalizer = EqualizerController()
     private let visualizerPipeline = VisualizerPipeline()
 
+    // MARK: - Video-tap balance fanout
+    // `AudioPlayer` owns balance state; on change it fans out to the engine balance
+    // node (the didSet) and to any registered video-tap Context's `balance` atomic.
+    // Separate registry from `EqualizerController`'s (two canonical owners).
+    @ObservationIgnored private var registeredVideoTapContexts: [WeakBox<VideoTapContext>] = []
+
     /// Legacy toggle - derives from AppSettings.visualizerMode (forwarded to pipeline)
     var useSpectrumVisualizer: Bool {
         get { AppSettings.instance().visualizerMode == .spectrum }
@@ -49,6 +55,12 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     @ObservationIgnored private var isHandlingCompletion = false
     @ObservationIgnored private var seekGuardActive = false
     @ObservationIgnored private var playlistGeneration: UInt64 = 0
+
+    /// Snapshot captured by the engine config observer's onWill callback,
+    /// consumed by the matching onDid callback. Carries the pre-rewire state
+    /// AudioPlayer needs to decide whether to resume after the route change.
+    /// nil except during the ~150 ms gap between will and did.
+    @ObservationIgnored private var pendingReconfigureSnapshot: PreReconfigureSnapshot?
     var currentTrackURL: URL?
     var currentTitle: String = "No Track Loaded"
     var currentDuration: Double = 0.0
@@ -61,12 +73,20 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     /// True when the audio engine is running AND producing audio output.
     var isEngineRendering: Bool { engine.isEngineRunning && (isPlaying || isBridgeActive) }
 
+    /// Whether the visualizer should be live — true for engine-rendered audio AND
+    /// for video playback (the video-tap producer feeds the same `VisualizerFeed`).
+    /// Routes the UI consumers (`getFrequencyData`, `snapshotButterchurnFrame`,
+    /// `VisualizerView`) so spectrum + Butterchurn animate for video too.
+    var isVisualizerRendering: Bool {
+        isEngineRendering || (currentMediaType == .video && videoPlaybackController.isPlaying)
+    }
+
     /// Audio volume (0.0-1.0 linear amplitude).
     ///
     /// Persistence is **call-site-driven** — call `commitVolumeToDefaults()`
     /// (or `PlaybackCoordinator.commitVolume()`) at gesture-end. The setter
     /// only propagates to audio backends; writing `UserDefaults` per gesture
-    /// tick was shown to starve the main thread (mwvi Phase 0, Mechanism B).
+    /// tick was shown to starve the main thread.
     var volume: Float = 0.75 {
         didSet {
             engine?.setVolume(volume)
@@ -80,17 +100,41 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     var balance: Float = 0.0 {
         didSet {
             engine?.setBalance(balance)
+            fanOutBalanceToVideoTaps()
+        }
+    }
+
+    /// Register a video-tap Context for balance fanout (separate registry from the
+    /// EQ controller's) and immediately push the current balance. `internal` for the
+    /// balance-fanout test seam (mirrors `EqualizerController.register…`).
+    func registerVideoTapContextForBalance(_ context: VideoTapContext) {
+        registeredVideoTapContexts.removeAll { $0.value == nil || $0.value === context }
+        registeredVideoTapContexts.append(WeakBox(context))
+        context.balance.store(balance.bitPattern, ordering: .relaxed)
+    }
+
+    func unregisterVideoTapContextForBalance(_ context: VideoTapContext) {
+        registeredVideoTapContexts.removeAll { $0.value == nil || $0.value === context }
+    }
+
+    /// Fan the current balance out to every live registered Context's atomic.
+    private func fanOutBalanceToVideoTaps() {
+        guard !registeredVideoTapContexts.isEmpty else { return } // fast path: audio-only
+        registeredVideoTapContexts.removeAll { $0.value == nil }
+        let bits = balance.bitPattern
+        for box in registeredVideoTapContexts {
+            box.value?.balance.store(bits, ordering: .relaxed)
         }
     }
 
     /// Commit the current `volume` to `UserDefaults`.
-    /// Approved callers (plan §6.1): `PlaybackCoordinator.commitVolume()`.
+    /// Approved callers: `PlaybackCoordinator.commitVolume()`.
     internal func commitVolumeToDefaults() {
         UserDefaults.standard.set(volume, forKey: Keys.volume)
     }
 
     /// Commit the current `balance` to `UserDefaults`.
-    /// Approved callers (plan §6.1, mirrored per todo 1B.9):
+    /// Approved callers:
     /// `PlaybackCoordinator.commitBalance()`.
     internal func commitBalanceToDefaults() {
         UserDefaults.standard.set(balance, forKey: Keys.balance)
@@ -106,6 +150,12 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     var onTrackMetadataUpdate: ((Track) -> Void)?
     var onPlaylistAdvanceRequest: ((Track) -> Void)?
     var onPlaybackFinished: (() -> Void)?
+    /// Fired once at the end of an engine reconfigure burst, after AudioPlayer
+    /// has re-applied volume/balance and rescheduled local-file playback.
+    /// PlaybackCoordinator hooks this to refresh the stream-decode thread's
+    /// audio IO workgroup, since the post-reconfigure outputNode may live on
+    /// a different audio HAL device with a different real-time workgroup.
+    var onEngineReconfigured: (() -> Void)?
     var shuffleEnabled: Bool {
         get { playlistController.shuffleEnabled }
         set { playlistController.shuffleEnabled = newValue }
@@ -121,6 +171,125 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     enum MediaType {
         case audio
         case video
+    }
+
+    // MARK: - Video Tap (in-place DSP on AVPlayer audio path)
+
+    /// One-tap-per-AVPlayerItem. Owned by the `AVPlayerItem`'s
+    /// `audioMix`, which is set ONCE during item construction (see
+    /// `startVideoLoad` + `VideoPlaybackController.loadVideo`). The
+    /// reference held here exists for diagnostics + EQ/balance fanout
+    /// registration; it does not control the tap's lifetime.
+    @ObservationIgnored private var videoTapContext: VideoTapContext?
+
+    /// Monotonic counter used to invalidate in-flight video-load Tasks.
+    /// Bumped on every new video play, video→audio switch, or stop.
+    /// Stale Tasks observe the bump after their async work completes
+    /// and bail out before the new player is constructed.
+    @ObservationIgnored private var videoLoadGeneration: UInt64 = 0
+
+    /// Handle to the currently-running video-load Task. Cancelled when
+    /// a newer video load supersedes it. Cancellation is advisory —
+    /// `AVURLAsset.loadTracks` does not respect it; the generation
+    /// counter is the load-bearing staleness signal.
+    @ObservationIgnored private var inFlightVideoLoadTask: Task<Void, Never>?
+
+    /// Pause the video player (if currently playing) and detach the tap
+    /// from the current item. Pause-before-detach honours the
+    /// "`audioMix` not mutated during playback" — `audioMix = nil` is a
+    /// mutation, so the player must be quiesced first.
+    private func pauseAndDetachVideoTapIfNeeded() {
+        guard let context = videoTapContext else { return }
+        if let item = videoPlaybackController.player?.currentItem {
+            if videoPlaybackController.isPlaying {
+                videoPlaybackController.pause()
+            }
+            VideoTap.detach(from: item)
+        }
+        equalizer.unregisterVideoTapContext(context)
+        unregisterVideoTapContextForBalance(context)
+        if videoTapContext === context {
+            videoTapContext = nil
+        }
+    }
+
+    /// Cancel any in-flight load and bump the generation so its Task
+    /// bails out at the next staleness check.
+    private func invalidateInFlightVideoLoad() {
+        inFlightVideoLoadTask?.cancel()
+        inFlightVideoLoadTask = nil
+        videoLoadGeneration &+= 1
+    }
+
+    /// Begin loading a video URL. The actual asset load + AVPlayer
+    /// construction happens inside an async Task so the tap's
+    /// `MTAudioProcessingTap` can be installed on the `AVPlayerItem`
+    /// at construction time, not after `play()` has
+    /// already started.
+    ///
+    /// Concurrency contract:
+    ///  - Each call increments `videoLoadGeneration` and stores a fresh
+    ///    Task in `inFlightVideoLoadTask`.
+    ///  - The `audioMixBuilder` closure rechecks the generation after
+    ///    its `await asset.loadTracks(...)` so a superseded load cannot
+    ///    install a tap on a stale player item.
+    ///  - The post-`loadVideo` guard skips `play()` when the load is
+    ///    stale.
+    private func startVideoLoad(track: Track) {
+        // `invalidateInFlightVideoLoad` already retires the previous
+        // generation (cancel + bump). The new generation is whatever it
+        // produced; no second bump needed.
+        invalidateInFlightVideoLoad()
+        let gen = videoLoadGeneration
+        let url = track.url
+
+        inFlightVideoLoadTask = Task { @MainActor [weak self] in
+            guard let self, gen == self.videoLoadGeneration else { return }
+
+            await self.videoPlaybackController.loadVideo(
+                url: url,
+                autoPlay: false,
+                audioMixBuilder: { [weak self] asset in
+                    guard let self, gen == self.videoLoadGeneration else { return nil }
+                    do {
+                        let audioTracks = try await asset.loadTracks(withMediaType: .audio)
+                        guard gen == self.videoLoadGeneration else { return nil }
+                        guard let audioTrack = audioTracks.first else { return nil }
+                        let preferredFormat = await VideoTap.preferredProcessingFormat(for: audioTrack)
+                        guard gen == self.videoLoadGeneration else { return nil }
+                        let context = VideoTapContext(feed: self.visualizerPipeline.sharedFeed)
+                        let mix = try VideoTap.buildAudioMix(
+                            audioTrack: audioTrack, context: context, preferredFormat: preferredFormat)
+                        // Store the Context only after buildAudioMix has
+                        // succeeded — a thrown `createFailed` here would
+                        // otherwise leave a phantom Context in the field.
+                        self.videoTapContext = context
+                        // Fanout: register with both canonical owners so the
+                        // tap receives current EQ + balance state (and future changes).
+                        // Sample rate is still unknown here (tapPrepare hasn't fired);
+                        // the EQ registry recomputes when `pendingSampleRate` lands.
+                        self.equalizer.registerVideoTapContext(context)
+                        self.registerVideoTapContextForBalance(context)
+                        return mix
+                    } catch {
+                        AppLog.error(.audio, "Video tap audio mix build failed: \(error)")
+                        return nil
+                    }
+                },
+                isStillRelevant: { [weak self] in
+                    guard let self else { return false }
+                    return gen == self.videoLoadGeneration
+                }
+            )
+
+            guard gen == self.videoLoadGeneration else { return }
+            // Gate auto-play on intended transport state — the user may
+            // have paused or stopped while the asset was loading. The
+            // load itself is still useful (the new player is constructed
+            // and ready); it just doesn't auto-start.
+            guard case .playing = self.playbackState else { return }
+            self.videoPlaybackController.play()
+        }
     }
 
     /// Repeat mode (Winamp 5 Modern: off/all/one with "1" badge)
@@ -174,6 +343,13 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
 
         engine = AudioEngineController(eqNode: equalizer.eqNode, visualizerPipeline: visualizerPipeline)
 
+        // Poll each registered video-tap Context's sample rate on the
+        // visualizer's 30 Hz tick, so EQ coefficients recompute once tapPrepare
+        // publishes the real rate (e.g. EQ already on when a video starts).
+        visualizerPipeline.onPollTick = { [weak self] in
+            self?.equalizer.pollVideoTapSampleRates()
+        }
+
         // Wire engine callbacks
         engine.onProgressUpdate = { [weak self] currentTime, progress in
             guard let self else { return }
@@ -189,6 +365,12 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
         }
         engine.onBridgeStateChanged = { [weak self] isActive in
             self?.isBridgeActive = isActive
+        }
+        engine.onEngineWillReconfigure = { [weak self] snapshot in
+            self?.handleEngineWillReconfigure(snapshot: snapshot)
+        }
+        engine.onEngineDidReconfigure = { [weak self] in
+            self?.handleEngineDidReconfigure()
         }
 
         // Apply restored volume/balance to engine nodes
@@ -327,6 +509,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     }
 
     func playTrack(track: Track) {
+        cancelPendingReconfigure()
         guard !track.isStream else {
             AppLog.error(.audio, "Cannot play internet radio streams. Stream URL: \(track.url). Use PlaybackCoordinator to route streams to StreamPlayer.")
             return
@@ -361,7 +544,10 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
 
         if currentMediaType != mediaType {
             if currentMediaType == .video {
+                invalidateInFlightVideoLoad()
+                pauseAndDetachVideoTapIfNeeded()
                 videoPlaybackController.cleanup()
+                visualizerPipeline.stopVideoVisualization()
                 AppLog.debug(.audio, "Switching from video to audio - cleanup complete")
             } else if currentMediaType == .audio {
                 engine.removeVisualizerTapIfNeeded()
@@ -375,7 +561,9 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
         case .audio:
             loadAudioFile(url: track.url)
         case .video:
-            videoPlaybackController.loadVideo(url: track.url, autoPlay: false)
+            pauseAndDetachVideoTapIfNeeded()
+            startVideoLoad(track: track)
+            visualizerPipeline.startVideoVisualization()
             transition(to: .playing)
         }
 
@@ -383,7 +571,9 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
             equalizer.applyAutoPreset(for: track)
         }
 
-        play()
+        if mediaType == .audio {
+            play()
+        }
     }
 
     private func detectMediaType(url: URL) -> MediaType {
@@ -422,6 +612,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     // MARK: - Transport
 
     func play() {
+        cancelPendingReconfigure()
         if playlistController.hasEnded && !playlist.isEmpty {
             playTrack(track: playlist[0])
             return
@@ -459,6 +650,21 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     }
 
     func pause() {
+        // Mid route-change the engine has already auto-stopped: keep the snapshot so
+        // the did-handler reschedules, but record the pause so it doesn't resume.
+        if let snapshot = pendingReconfigureSnapshot, currentMediaType == .audio {
+            pendingReconfigureSnapshot = PreReconfigureSnapshot(
+                wasPlaying: false,
+                wasPaused: true,
+                currentTime: snapshot.currentTime,
+                wasStreamBridge: snapshot.wasStreamBridge
+            )
+            engine.removeVisualizerTapIfNeeded()
+            transition(to: .paused)
+            AppLog.debug(.audio, "Pause (during route change)")
+            return
+        }
+        cancelPendingReconfigure()
         if currentMediaType == .video {
             videoPlaybackController.pause()
             transition(to: .paused)
@@ -475,10 +681,14 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     }
 
     func stop() {
+        cancelPendingReconfigure()
         transition(to: .stopped(.manual))
 
         if currentMediaType == .video {
+            invalidateInFlightVideoLoad()
+            pauseAndDetachVideoTapIfNeeded()
             videoPlaybackController.stop()
+            visualizerPipeline.stopVideoVisualization()
             currentMediaType = .audio
             AppLog.debug(.audio, "Stop (Video) - cleaned up AVPlayer")
         }
@@ -589,6 +799,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     }
 
     func seek(to time: Double, resume: Bool? = nil) {
+        cancelPendingReconfigure()
         if currentMediaType == .video {
             videoPlaybackController.seek(to: time, resume: resume, completion: videoSeekCompletion)
             return
@@ -634,6 +845,121 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
         }
     }
 
+    // MARK: - Engine Reconfiguration Handlers
+
+    /// Discard any in-flight reconfigure-resume context. Called from user-intent
+    /// entry points (play/pause/stop/seek/playTrack) so that a stale `onDid`
+    /// callback fired during the 150 ms debounce window can't override the
+    /// user's new intent. handleEngineDidReconfigure early-returns when
+    /// `pendingReconfigureSnapshot` is nil, so the snapshot nil-out is the
+    /// cancel hook.
+    ///
+    /// Also clears `seekGuardActive` and `isHandlingCompletion` — the will-handler
+    /// armed both, and the did-handler is the only path that schedules their
+    /// 100/200 ms release tasks. Without this clear, the early-returned did
+    /// would leave both guards stuck on indefinitely, wedging the next
+    /// `onPlaybackEnded` completion. (No-op when no burst is in flight; both
+    /// fields are independently managed by the seek() / onPlaybackEnded paths.)
+    private func cancelPendingReconfigure() {
+        pendingReconfigureSnapshot = nil
+        seekGuardActive = false
+        isHandlingCompletion = false
+    }
+
+    /// Invoked at the START of an output-route reconfigure burst (Control Center,
+    /// AirPlay, HDMI hot-plug, sleep/wake). Captures the engine's pre-rewire
+    /// snapshot and arms seek guards before the engine restart fires a stale
+    /// playerNode completion. The matching `handleEngineDidReconfigure` consumes
+    /// the stored snapshot to decide whether to resume.
+    ///
+    /// **Pairing note:** if `stop()` or `deinit` interrupts the burst before
+    /// `onDidReconfigure` fires, the 100/200 ms guard release tasks scheduled
+    /// inside `handleEngineDidReconfigure` never run. The user-intent entry
+    /// points (play/pause/stop/seek/playTrack) cover this gap by calling
+    /// `cancelPendingReconfigure()`, which clears both guards. The only
+    /// remaining "stuck guards" case is observer-stop / deinit during a burst
+    /// without any subsequent user action — and at that point AudioPlayer
+    /// itself is being torn down, so the leftover state is harmless.
+    private func handleEngineWillReconfigure(snapshot: PreReconfigureSnapshot) {
+        // AVPlayer handles its own route changes; arming the guards during video
+        // would swallow the video's end-of-item completion.
+        guard currentMediaType == .audio else { return }
+        // The engine captures its snapshot at notification-receipt time, by
+        // which point the system has ALREADY auto-stopped the engine —
+        // `playerNode.isPlaying` is false and `playerNode.lastRenderTime` is
+        // nil. The engine's `wasPlaying` / `currentTime` fields are therefore
+        // unreliable. Override with AudioPlayer's own state: `isPlaying` is
+        // transition-managed (reflects user intent, not engine running state)
+        // and `currentTime` is updated by the progress timer ~100 ms before
+        // the reconfigure — accurate to within one tick.
+        let corrected = PreReconfigureSnapshot(
+            wasPlaying: isPlaying,
+            wasPaused: isPaused,
+            currentTime: currentTime,
+            wasStreamBridge: snapshot.wasStreamBridge
+        )
+        pendingReconfigureSnapshot = corrected
+        // Bump currentSeekID BEFORE engine restart so the impending stale
+        // playerNode completion (carrying the OLD seekID) is filtered by
+        // shouldIgnoreCompletion. Same pattern as seek() / playTrack().
+        currentSeekID = UUID()
+        seekGuardActive = true
+        isHandlingCompletion = true
+    }
+
+    /// Invoked once at the END of a reconfigure burst (150 ms quiet window).
+    /// The engine has been restarted and stream-bridge graph format refreshed
+    /// for the new output device. AudioPlayer re-applies volume + balance,
+    /// reschedules the local-file player from the saved time, and releases
+    /// seek guards on the same 100/200 ms cadence as `seek()`.
+    private func handleEngineDidReconfigure() {
+        guard let snapshot = pendingReconfigureSnapshot else { return }
+        pendingReconfigureSnapshot = nil
+
+        // 1. Re-apply volume + balance — engine nodes may have been recreated.
+        engine.setVolume(volume)
+        engine.setBalance(balance)
+
+        // 2. Local-file path: ALWAYS reschedule from saved time, even when paused.
+        //    play() does NOT itself reschedule, so a subsequent play() would
+        //    resume the now-detached pre-restart segment. Audio media only: the
+        //    previous track's file stays loaded during video and must not resume.
+        if currentMediaType == .audio && !snapshot.wasStreamBridge && engine.audioFile != nil {
+            _ = engine.scheduleFrom(time: snapshot.currentTime, seekID: currentSeekID)
+            currentTime = snapshot.currentTime
+            if snapshot.wasPlaying {
+                engine.startEngineIfNeeded()
+                engine.installVisualizerTapIfNeeded()
+                engine.playAudio()
+                engine.startProgressTimer()
+                transition(to: .playing)
+            } else if snapshot.wasPaused {
+                transition(to: .paused)
+            }
+            // Stopped / completed: rescheduled so a later play() starts cleanly; state unchanged.
+        }
+        // 3. Stream-bridge path: AVAudioSourceNode + ring buffer survived; the
+        //    workgroup refresh is delegated to PlaybackCoordinator.
+        // 4. Video path: AVPlayer and its audioMix tap live outside the engine,
+        //    so there is nothing to refresh here — paused stays paused.
+
+        // 5. Release seek guards on the same cadence as seek() / onPlaybackEnded.
+        //    Modern Duration API (Swift 5.7+) — matches the pattern introduced
+        //    in AudioEngineConfigurationObserver.
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(100))
+            self?.seekGuardActive = false
+        }
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(200))
+            self?.isHandlingCompletion = false
+        }
+
+        // 6. Notify external subscribers (PlaybackCoordinator refreshes the
+        //    stream workgroup; future subscribers may update Now Playing, etc.).
+        onEngineReconfigured?()
+    }
+
     /// Shared completion handler for video seek operations.
     /// Syncs video playback state back to AudioPlayer after AVPlayer seek completes.
     private var videoSeekCompletion: @Sendable (Double) -> Void {
@@ -651,7 +977,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     // MARK: - Visualizer Forwarding (backed by VisualizerPipeline)
 
     func getFrequencyData(bands: Int) -> [Float] {
-        visualizerPipeline.getFrequencyData(bands: bands, isPlaying: isEngineRendering)
+        visualizerPipeline.getFrequencyData(bands: bands, isPlaying: isVisualizerRendering)
     }
 
     func getWaveformSamples(count: Int) -> [Float] {
@@ -659,7 +985,7 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
     }
 
     func snapshotButterchurnFrame() -> ButterchurnFrame? {
-        guard currentMediaType == .audio && isEngineRendering else { return nil }
+        guard isVisualizerRendering else { return nil }
         return visualizerPipeline.snapshotButterchurnFrame()
     }
 
@@ -674,6 +1000,13 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
 
             self.isHandlingCompletion = true
             self.transition(to: .stopped(.completed))
+            // Video that just ended: stop the visualizer poll timer. If the next
+            // track is video, playTrack's `.video` branch restarts it; if audio, the
+            // video→audio switch stops it again (idempotent). Without this, terminal
+            // video completion (no next track) leaks the 30 Hz timer.
+            if self.currentMediaType == .video {
+                self.visualizerPipeline.stopVideoVisualization()
+            }
             self.engine.invalidateProgressTimer()
             self.playbackProgress = 1
             // Use engine file duration (authoritative for audio) to avoid jump if
@@ -750,6 +1083,11 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
             return .none
         case .restartCurrent:
             seek(to: 0, resume: true)
+            // Repeat-one restart bypasses `playTrack`, so it must re-arm the video
+            // visualizer poll timer that `onPlaybackEnded` stopped on completion.
+            if currentMediaType == .video {
+                visualizerPipeline.startVideoVisualization()
+            }
             return .restartCurrent
         case .playTrack(let track):
             playTrack(track: track)

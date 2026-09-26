@@ -1,9 +1,8 @@
-# MacAmp Sprite System Complete Documentation
+# MacAmp Sprite System
 
-**Version:** 2.1.0 (Synced with SpriteResolver.swift)
-**Date:** 2026-03-14
-**Status:** Production - Fully Implemented
-**Purpose:** Complete reference for MacAmp's semantic sprite resolution system
+**Version:** 2.2.0
+**Date:** 2026-09-25
+**Purpose:** Reference for MacAmp's semantic sprite resolution system (`MacAmpApp/Models/SpriteResolver.swift`)
 
 ---
 
@@ -17,34 +16,25 @@
 6. [Fallback Generation](#fallback-generation)
 7. [Skin File Structure](#skin-file-structure)
 8. [Integration with Views](#integration-with-views)
-9. [Visual Examples](#visual-examples)
-10. [Testing & Validation](#testing--validation)
-11. [Migration Guide](#migration-guide)
-12. [Quick Reference](#quick-reference)
+9. [Testing & Validation](#testing--validation)
+10. [Migration Guide](#migration-guide)
+11. [Quick Reference](#quick-reference)
 
 ---
 
 ## System Overview
 
-The MacAmp sprite system enables complete skin compatibility by decoupling UI components from specific sprite names. Instead of hardcoding sprite names, components request semantic identifiers that are resolved to actual sprites at runtime.
-
-### The Problem It Solves
+Components request semantic identifiers instead of hard-coded sprite names; `SpriteResolver` maps each to the best sprite the current skin provides.
 
 ```swift
-// ❌ OLD: Breaks with different skins
-SimpleSpriteImage("DIGIT_0", width: 9, height: 13)  // Assumes "DIGIT_0" exists
-
-// ✅ NEW: Works with any skin
-SimpleSpriteImage(sprite: resolver.resolve(.digit(0)))  // Finds best match
+SimpleSpriteImage("DIGIT_0", width: 9, height: 13)   // legacy: assumes "DIGIT_0" exists
+SimpleSpriteImage(.digit(0), width: 9, height: 13)   // semantic: prefers DIGIT_0_EX, falls back to DIGIT_0
 ```
 
-### Key Benefits
-
-- **100% Skin Compatibility**: Works with all Winamp 2.x skins
-- **Graceful Fallbacks**: Never crashes, generates sprites if missing
-- **Hot Swapping**: Change skins without restart
-- **Type Safety**: Compile-time verification of sprite requests
-- **Performance**: Cached resolution, no repeated lookups
+- Works across Winamp 2.x skins, including optional extended sheets (e.g. `NUMS_EX.bmp`)
+- Missing sheets/sprites never crash: `SkinManager` substitutes default-skin or transparent sprites
+- Skins change without restart
+- Semantic requests are compile-time checked enum cases
 
 ---
 
@@ -53,126 +43,27 @@ SimpleSpriteImage(sprite: resolver.resolve(.digit(0)))  // Finds best match
 The sprite system follows webamp's three-layer architecture:
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                     MECHANISM LAYER                             │
-│                   "What is happening"                           │
-│                                                                  │
-│  • Timer updates currentTime (seconds)                         │
-│  • Volume changes from 0-100                                   │
-│  • Track title updates                                         │
-└──────────────────────────┬──────────────────────────────────────┘
-                           │
-                           ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                      BRIDGE LAYER                               │
-│                "Semantic representation"                        │
-│                                                                  │
-│  • Component requests: .digit(5)                               │
-│  • Component requests: .volumeThumb                            │
-│  • Component requests: .playButton                             │
-│                                                                  │
-│  SpriteResolver maps semantic → actual sprite name             │
-└──────────────────────────┬──────────────────────────────────────┘
-                           │
-                           ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                   PRESENTATION LAYER                            │
-│                   "What user sees"                              │
-│                                                                  │
-│  • Skin provides: "DIGIT_5" or "DIGIT_5_EX"                   │
-│  • Skin provides: "VOLUME_THUMB" or "VOL_SLIDER"              │
-│  • Skin provides: "CBUTTONS_PLAY_NORM"                        │
-└─────────────────────────────────────────────────────────────────┘
+MECHANISM     "What is happening"     timer updates currentTime, volume 0-100, track title
+    │
+    ▼
+BRIDGE        "Semantic request"      .digit(5), .volumeThumb, .playButton
+    │                                 SpriteResolver maps semantic → sprite name
+    ▼
+PRESENTATION  "What the user sees"    skin provides DIGIT_5 or DIGIT_5_EX, MAIN_VOLUME_THUMB, ...
 ```
 
 ---
 
 ## Semantic Sprite Enum
 
-Complete enumeration of all semantic sprites from actual implementation:
-
-```swift
-// File: MacAmpApp/Models/SpriteResolver.swift
-// Purpose: Semantic sprite identifiers that decouple UI from skin presentation
-// Context: Following webamp's architecture: mechanism → bridge → presentation
-
-enum SemanticSprite {
-    // MARK: - Time Display
-    case digit(Int)              // 0-9 for time display
-    case minusSign               // For negative time / remaining time
-    case noMinusSign             // Placeholder for minus sign space
-    case character(UInt8)        // ASCII character for text display
-
-    // MARK: - Transport Controls
-    case playButton
-    case pauseButton
-    case stopButton
-    case nextButton
-    case previousButton
-    case ejectButton
-
-    // MARK: - Window Controls
-    case closeButton
-    case minimizeButton
-    case shadeButton
-
-    // MARK: - Sliders
-    case volumeBackground
-    case volumeThumb
-    case volumeThumbSelected
-    case balanceBackground
-    case balanceThumb
-    case balanceThumbActive
-    case positionSliderBackground
-    case positionSliderThumb
-    case positionSliderThumbSelected
-
-    // MARK: - Indicators
-    case playingIndicator
-    case pausedIndicator
-    case stoppedIndicator
-    case monoIndicator
-    case monoIndicatorSelected
-    case stereoIndicator
-    case stereoIndicatorSelected
-
-    // MARK: - Equalizer
-    case eqWindowBackground
-    case eqTitleBar
-    case eqTitleBarSelected
-    case eqSliderBackground
-    case eqSliderThumb
-    case eqSliderThumbSelected
-    case eqOnButton
-    case eqAutoButton
-
-    // MARK: - Playlist
-    case playlistTopTile
-    case playlistTopLeftCorner
-    case playlistTitleBar
-    case playlistTopRightCorner
-
-    // MARK: - Main Window
-    case mainWindowBackground
-    case mainTitleBar
-    case mainTitleBarSelected
-    case mainShadeBackground
-    case mainShadeBackgroundSelected
-    case eqButton
-    case playlistButton
-}
-```
+`enum SemanticSprite` groups its cases as Time Display (`digit(Int)`, `minusSign`, `noMinusSign`, `character(UInt8)`), Transport Controls, Window Controls, Sliders, Indicators, Equalizer, Playlist, and Main Window. Every case and its candidate sprite names are listed in the `candidates(for:)` switch below.
 
 ---
 
 ## SpriteResolver Implementation
 
-The core resolution engine from actual codebase:
-
 ```swift
-// File: MacAmpApp/Models/SpriteResolver.swift
-// Purpose: Resolves semantic sprite requests to actual sprite names
-// Context: Decouples UI mechanism from skin presentation
+// MacAmpApp/Models/SpriteResolver.swift
 
 struct SpriteResolver: Sendable {
     private let skin: Skin
@@ -297,137 +188,48 @@ struct SpriteResolver: Sendable {
         guard let spriteName = resolve(semantic) else { return nil }
         return skin.images[spriteName]
     }
-
-    /// Get dimensions for a semantic sprite without loading the image.
-    func dimensions(for semantic: SemanticSprite) -> CGSize? {
-        guard let spriteName = resolve(semantic),
-              let image = skin.images[spriteName] else {
-            return nil
-        }
-        return image.size
-    }
 }
 ```
+
+An out-of-range `.digit(n)` logs a warning and returns no candidates. The same file defines an `EnvironmentValues.spriteResolver` key and a `View.spriteResolver(_:)` modifier for injecting a resolver.
 
 ---
 
 ## Resolution Algorithm
 
-The resolution flow is straightforward -- no caching or derived mappings.
-`candidates(for:)` returns an ordered list of sprite names, and `resolve(_:)`
-picks the first one that exists in the skin. If none match, it returns `nil`
-and the caller (typically `SkinManager`) handles the fallback.
+No caching or derived mappings: `candidates(for:)` returns an ordered list of sprite names, and `resolve(_:)` returns the first one present in `skin.images`, or `nil`.
 
 ```
 resolve(.playButton)
-         │
-         ▼
-┌───────────────────────────┐
-│ candidates(for:) returns  │
-│ priority-ordered names:   │
-│  1. MAIN_PLAY_BUTTON_ACTIVE
-│  2. MAIN_PLAY_BUTTON      │
-└───────────────────────────┘
-         │
-         ▼
-┌───────────────────────────┐
-│ Iterate candidates        │
-│ Check skin.images[name]   │──▶ Found? Return sprite name
-└───────────────────────────┘
-         │ None found
-         ▼
-    Return nil
-    (caller generates transparent fallback)
+  → candidates: MAIN_PLAY_BUTTON_ACTIVE, MAIN_PLAY_BUTTON
+  → first name found in skin.images is returned
+  → none found: nil (caller decides what to draw)
 ```
 
 ---
 
 ## Fallback Generation
 
-Actual fallback sprite generation from the codebase:
+Fallbacks are produced by `SkinManager.loadSkin(from:)` (`MacAmpApp/ViewModels/SkinManager.swift`), not by the resolver. For each sheet in `SkinSprites.defaultSprites.sheets` (plus `NUMS_EX` when the archive has `nums_ex`):
 
-```swift
-// File: MacAmpApp/ViewModels/SkinManager.swift:417-461
-// Purpose: Generate transparent fallback sprites for missing elements
-// Context: Ensures app never crashes due to missing sprites
+1. **Sheet missing from the skin** → use that sheet's sprites from the bundled default Winamp skin (`fallbackSpritesFromDefaultSkin`, cached per sheet); if that fails, generate transparent sprites (`createFallbackSprites(forSheet:sprites:)`). The sheet is not recorded in `loadedSheets`.
+2. **Sheet data fails to decode** → transparent sprites for the whole sheet.
+3. **Individual crop fails** → one transparent sprite (`createFallbackSprite(named:)`).
 
-/// Create a transparent fallback image for a missing sprite
-private func createFallbackSprite(named spriteName: String) -> NSImage {
-    // Try to get dimensions from sprite definitions
-    let size: CGSize
-    if let definedSize = SkinSprites.defaultSprites.dimensions(forSprite: spriteName) {
-        size = definedSize
-        NSLog("⚠️ Creating fallback for '\(spriteName)' with defined size: \(definedSize.width)x\(definedSize.height)")
-    } else {
-        // Use a reasonable default size for unknown sprites
-        size = CGSize(width: 16, height: 16)
-        NSLog("⚠️ Creating fallback for '\(spriteName)' with default size: 16x16 (no definition found)")
-    }
+`createFallbackSprite(named:)` sizes the transparent image from `SkinSprites.defaultSprites.dimensions(forSprite:)`, or 16×16 if the sprite has no definition, and logs via `AppLog.debug(.skin, ...)`.
 
-    // Create a transparent image
-    let image = NSImage(size: size)
-    image.lockFocus()
-
-    // Fill with transparent color
-    NSColor.clear.setFill()
-    NSRect(origin: .zero, size: size).fill()
-
-    image.unlockFocus()
-
-    return image
-}
-
-/// Generate fallback sprites for all missing sprites from a sheet
-private func createFallbackSprites(forSheet sheetName: String, sprites: [Sprite]) -> [String: NSImage] {
-    var fallbacks: [String: NSImage] = [:]
-
-    NSLog("⚠️ Sheet '\(sheetName)' is missing - generating \(sprites.count) fallback sprites")
-
-    for sprite in sprites {
-        let fallbackImage = createFallbackSprite(named: sprite.name)
-        fallbacks[sprite.name] = fallbackImage
-    }
-
-    return fallbacks
-}
-
-// Usage during skin loading:
-// File: MacAmpApp/ViewModels/SkinManager.swift (loading pattern)
-private func loadSkinImages(from directory: URL) -> [String: NSImage] {
-    var images: [String: NSImage] = [:]
-
-    // Try to load each required sheet
-    for (sheetName, sprites) in SkinSprites.defaultSprites.sheets {
-        let sheetPath = directory.appendingPathComponent(sheetName)
-
-        if let sheetImage = NSImage(contentsOf: sheetPath) {
-            // Extract sprites from sheet
-            let extracted = extractSprites(from: sheetImage, sprites: sprites)
-            images.merge(extracted) { _, new in new }
-        } else {
-            // Generate fallbacks for missing sheet
-            let fallbacks = createFallbackSprites(forSheet: sheetName, sprites: sprites)
-            images.merge(fallbacks) { _, new in new }
-        }
-    }
-
-    return images
-}
-```
+If a `SimpleSpriteImage` still can't find an image (no skin loaded, or `resolve` returned `nil`), it draws a purple placeholder rectangle with a "?".
 
 ---
 
 ## Skin File Structure
 
-How skins organize their sprites:
-
 ```
 MySkin.wsz (ZIP archive)
-│
-├── main.bmp          # Main window sprites
+├── main.bmp          # Main window background
 ├── cbuttons.bmp      # Transport control buttons
 ├── titlebar.bmp      # Title bar graphics
-├── shufrep.bmp       # Shuffle/repeat buttons
+├── shufrep.bmp       # Shuffle/repeat/EQ/playlist buttons
 ├── monoster.bmp      # Mono/stereo indicators
 ├── playpaus.bmp      # Play/pause indicators
 ├── posbar.bmp        # Position slider
@@ -439,6 +241,8 @@ MySkin.wsz (ZIP archive)
 ├── eqmain.bmp        # Equalizer window
 ├── eq_ex.bmp         # Extended EQ graphics
 ├── pledit.bmp        # Playlist editor
+├── gen.bmp           # Generic window chrome (Milkdrop)
+├── video.bmp         # Video window chrome
 ├── pledit.txt        # Playlist colors
 ├── viscolor.txt      # Visualization colors
 └── region.txt        # Window regions (optional)
@@ -446,211 +250,61 @@ MySkin.wsz (ZIP archive)
 
 ### Sprite Extraction Coordinates
 
-```swift
-// Standard Winamp sprite locations
-struct WinampSpriteCoordinates {
-    // CBUTTONS.BMP layout (each button 23x18)
-    static let playNormal = NSRect(x: 0, y: 0, width: 23, height: 18)
-    static let playPressed = NSRect(x: 0, y: 18, width: 23, height: 18)
-    static let pauseNormal = NSRect(x: 23, y: 0, width: 23, height: 18)
-    static let pausePressed = NSRect(x: 23, y: 18, width: 23, height: 18)
-    static let stopNormal = NSRect(x: 46, y: 0, width: 23, height: 18)
-    static let stopPressed = NSRect(x: 46, y: 18, width: 23, height: 18)
-    static let nextNormal = NSRect(x: 69, y: 0, width: 22, height: 18)
-    static let nextPressed = NSRect(x: 69, y: 18, width: 22, height: 18)
-    static let prevNormal = NSRect(x: 91, y: 0, width: 22, height: 18)
-    static let prevPressed = NSRect(x: 91, y: 18, width: 22, height: 18)
-    static let ejectNormal = NSRect(x: 113, y: 0, width: 22, height: 16)
-    static let ejectPressed = NSRect(x: 113, y: 16, width: 22, height: 16)
+All sprite rectangles are defined in `MacAmpApp/Models/SkinSprites.swift` (`SkinSprites.defaultSprites`, keyed by sheet: `MAIN`, `CBUTTONS`, `NUMBERS`, `MONOSTER`, `PLAYPAUS`, `TITLEBAR`, `POSBAR`, `VOLUME`, `BALANCE`, `SHUFREP`, `EQMAIN`, `EQ_EX`, `GEN`, `PLEDIT`, `VIDEO`; `NUMS_EX` separately). Examples:
 
-    // NUMBERS.BMP layout (each digit 9x13)
-    static func digit(_ n: Int) -> NSRect {
-        NSRect(x: n * 9, y: 0, width: 9, height: 13)
-    }
+| Sprite | Rect (x, y, w, h) |
+|--------|-------------------|
+| `MAIN_PREVIOUS_BUTTON` / `_ACTIVE` | 0,0,23,18 / 0,18,23,18 |
+| `MAIN_PLAY_BUTTON` / `_ACTIVE` | 23,0,23,18 / 23,18,23,18 |
+| `MAIN_PAUSE_BUTTON` / `_ACTIVE` | 46,0,23,18 / 46,18,23,18 |
+| `MAIN_STOP_BUTTON` / `_ACTIVE` | 69,0,23,18 / 69,18,23,18 |
+| `MAIN_NEXT_BUTTON` / `_ACTIVE` | 92,0,23,18 / 92,18,22,18 |
+| `MAIN_EJECT_BUTTON` / `_ACTIVE` | 114,0,22,16 / 114,16,22,16 |
+| `DIGIT_n` | n×9,0,9,13 |
+| `MAIN_VOLUME_BACKGROUND` | 0,0,68,420 |
+| `MAIN_VOLUME_THUMB` / `_SELECTED` | 15,422,14,11 / 0,422,14,11 |
+| `MAIN_BALANCE_BACKGROUND` | 9,0,38,420 |
+| `MAIN_BALANCE_THUMB` / `_ACTIVE` | 15,422,14,11 / 0,422,14,11 |
 
-    // VOLUME.BMP layout (28 frames stacked vertically, 15px each)
-    // Frame 0 (y:0) = green (mute), Frame 27 (y:405) = red (max)
-    static let volumeBackground = NSRect(x: 0, y: 0, width: 68, height: 420)
-    static let volumeThumb = NSRect(x: 15, y: 422, width: 14, height: 11)
-    static let volumeThumbPressed = NSRect(x: 0, y: 422, width: 14, height: 11)
-
-    // BALANCE.BMP layout (28 frames stacked vertically, 15px each)
-    // Frame 0 (y:0) = green (center/neutral), Frame 27 (y:405) = red (full L/R)
-    // Webamp-compatible: offset = floor(abs(balance) * 27) * 15
-    static let balanceBackground = NSRect(x: 9, y: 0, width: 38, height: 420)
-    static let balanceThumb = NSRect(x: 15, y: 422, width: 14, height: 11)
-    static let balanceThumbActive = NSRect(x: 0, y: 422, width: 14, height: 11)
-}
-```
+Volume and balance backgrounds are 28 frames stacked vertically (15px each). Volume frame 0 is green (mute) and frame 27 red (max); balance frame 0 is green (center) and frame 27 red (full L/R), with the Webamp-compatible offset `floor(abs(balance) * 27) * 15` (`calculateBalanceFrameOffset()` in `WinampVolumeSlider.swift`).
 
 ---
 
 ## Integration with Views
 
-How views use the sprite system:
+Views use `SimpleSpriteImage` (`MacAmpApp/Views/Components/SimpleSpriteImage.swift`), which reads `SkinManager` from the environment and accepts either source:
 
 ```swift
-// MacAmpApp/Views/MainWindow/WinampMainWindow.swift
-struct WinampMainWindow: View {
-    @Environment(SkinManager.self) private var skinManager
-
-    var body: some View {
-        ZStack {
-            // Background (always resolved)
-            SimpleSpriteImage(
-                sprite: skinManager.resolvedSprites.mainBackground
-            )
-
-            // Play button with pressed state
-            SkinButton(
-                normal: skinManager.resolvedSprites.playButton,
-                pressed: skinManager.resolvedSprites.playButtonPressed,
-                action: { playbackCoordinator.play() }
-            )
-            .at(x: 39, y: 88)
-
-            // Time display using digits
-            TimeDisplay(
-                time: audioPlayer.currentTime,
-                resolver: skinManager.spriteResolver
-            )
-            .at(x: 48, y: 26)
-        }
-    }
-}
-
-// TimeDisplay component
-struct TimeDisplay: View {
-    let time: TimeInterval
-    let resolver: SpriteResolver
-
-    var body: some View {
-        HStack(spacing: 0) {
-            ForEach(timeDigits, id: \.offset) { digit in
-                SimpleSpriteImage(
-                    sprite: resolver.resolve(.digit(digit.value))
-                )
-            }
-        }
-    }
-
-    private var timeDigits: [(offset: Int, value: Int)] {
-        let minutes = Int(time) / 60
-        let seconds = Int(time) % 60
-
-        return [
-            (0, minutes / 10),
-            (1, minutes % 10),
-            (2, 10), // Colon (special digit)
-            (3, seconds / 10),
-            (4, seconds % 10)
-        ]
-    }
-}
+init(_ semantic: SemanticSprite, width: CGFloat? = nil, height: CGFloat? = nil)  // resolved via SpriteResolver(skin:)
+init(_ spriteKey: String, width: CGFloat? = nil, height: CGFloat? = nil)         // legacy name, used as-is
 ```
 
----
+It resolves the name once per body evaluation and renders with `.interpolation(.none)`, no antialiasing, filling the given frame. Example (time digits, `MacAmpApp/Views/MainWindow/MainWindowFullLayer.swift`):
 
-## Visual Examples
-
-### Resolution in Action
-
-```
-User clicks play button:
-
-1. Component requests: .playButton
-                            │
-2. Resolver calls            ▼
-   candidates(for: .playButton):
-   ┌──────────────────────────────────┐
-   │ "MAIN_PLAY_BUTTON_ACTIVE"? Yes! │
-   └──────────────────────────────────┘
-                            │
-3. Returns:                 ▼
-   "MAIN_PLAY_BUTTON_ACTIVE"  (String?)
-   Caller uses skin.images[name] to get NSImage
-```
-
-### Fallback Generation Example
-
-```
-Missing sprite: .eqSliderThumb
-
-Generator creates:
-┌─────────────┐
-│             │  ← Gray background
-│    ╔═╗      │  ← White thumb
-│    ╚═╝      │
-│             │
-└─────────────┘
-    11x11 px
+```swift
+SimpleSpriteImage(.digit(digits[0]), width: 9, height: 13).offset(x: 8, y: 0)
+SimpleSpriteImage(.digit(digits[1]), width: 9, height: 13).offset(x: 19, y: 0)
 ```
 
 ---
 
 ## Testing & Validation
 
-### Unit Tests
+`Tests/MacAmpTests/SpriteResolverTests.swift` (Swift Testing, `@Suite("SpriteResolver", .tags(.skin))`) builds `Skin` values directly (`Skin(visualizerColors:playlistStyle:images:cursors:loadedSheets:)`) and checks:
 
-```swift
-// Tests/SpriteResolverTests.swift
-func testDigitResolution() {
-    let skin = loadTestSkin("standard.wsz")
-    let resolver = SpriteResolver(skin: skin)
-
-    // Test standard digit -- returns sprite name string or nil
-    let digit5 = resolver.resolve(.digit(5))
-    XCTAssertEqual(digit5, "DIGIT_5")
-
-    // Test extended digit skin (has NUMS_EX.BMP)
-    let extendedSkin = loadTestSkin("extended.wsz")
-    let extResolver = SpriteResolver(skin: extendedSkin)
-    let extDigit5 = extResolver.resolve(.digit(5))
-    XCTAssertEqual(extDigit5, "DIGIT_5_EX")
-}
-
-func testMissingSpriteReturnsNil() {
-    let emptySkin = Skin(images: [:])
-    let resolver = SpriteResolver(skin: emptySkin)
-
-    let playButton = resolver.resolve(.playButton)
-    XCTAssertNil(playButton)
-}
-
-func testImageConvenience() {
-    let skin = loadTestSkin("standard.wsz")
-    let resolver = SpriteResolver(skin: skin)
-
-    let image = resolver.image(for: .volumeThumb)
-    XCTAssertNotNil(image)
-}
-```
+- out-of-range digits (`-1, 10, 99, -100`) resolve to `nil`
+- a valid digit resolves to its name when the image is present (`DIGIT_3`)
 
 ---
 
 ## Migration Guide
 
-### Converting from Hard-Coded Sprites
+To convert a hard-coded sprite:
 
-**Step 1**: Identify hard-coded sprite usage
 ```swift
-// Find all SimpleSpriteImage with string literals
-SimpleSpriteImage("MAIN_PLAY_BUTTON_NORMAL", width: 23, height: 18)
+SimpleSpriteImage("MAIN_PLAY_BUTTON", width: 23, height: 18)   // before
+SimpleSpriteImage(.playButton, width: 23, height: 18)          // after
 ```
-
-**Step 2**: Map to semantic enum
-```swift
-// Replace with semantic identifier
-SimpleSpriteImage(sprite: resolver.resolve(.playButton))
-```
-
-**Step 3**: Remove size parameters
-```swift
-// Size comes from resolved sprite
-// No need for width/height
-```
-
-### Common Mappings
 
 | Old Hard-Coded | Semantic Enum | Notes |
 |----------------|---------------|-------|
@@ -668,62 +322,16 @@ SimpleSpriteImage(sprite: resolver.resolve(.playButton))
 
 ## Quick Reference
 
-### Most Common Resolutions
-
-```swift
-// Transport controls
-resolver.resolve(.playButton)
-resolver.resolve(.pauseButton)
-resolver.resolve(.stopButton)
-resolver.resolve(.nextButton)
-resolver.resolve(.previousButton)
-
-// Digits for time
-(0...9).map { resolver.resolve(.digit($0)) }
-
-// Sliders (static thumb images; dynamic frame selection via calculateBalanceFrameOffset())
-resolver.resolve(.volumeThumb)
-resolver.resolve(.balanceThumb)
-resolver.resolve(.positionSliderThumb)
-
-// Window backgrounds
-resolver.resolve(.mainWindowBackground)
-resolver.resolve(.eqWindowBackground)
-resolver.resolve(.playlistBackground)
-
-// Indicators
-resolver.resolve(.stereoIndicator)
-resolver.resolve(.playingIndicator)
-```
-
 ### Adding New Semantic Sprites
 
-1. Add a new case to the `SemanticSprite` enum
-2. Add a corresponding case in `candidates(for:)` returning priority-ordered sprite names
-3. Ensure `SkinManager` generates a transparent fallback for the new sprite if missing
+1. Add a case to `SemanticSprite`
+2. Add it to `candidates(for:)`, returning priority-ordered sprite names
+3. Make sure the sprite is defined in `SkinSprites` so `SkinManager` can size a fallback
 4. Update tests
 
 ### Design Notes
 
-- Resolution is stateless -- no caching layer; `resolve(_:)` iterates candidates each call
-- The `Skin.images` dictionary lookup is O(1), so repeated resolution is cheap
+- Resolution is stateless (no cache); `Skin.images` lookup is O(1), so repeated resolution is cheap
 - `SpriteResolver` is `Sendable` and safe to share across concurrency domains
-- Fallback generation lives in `SkinManager`, not in the resolver itself
-
----
-
-## Conclusion
-
-The sprite system is the foundation of MacAmp's skin compatibility. By separating semantic meaning from visual presentation, we achieve:
-
-- **Universal compatibility** with all Winamp skins
-- **Graceful degradation** when sprites are missing
-- **Clean component code** without hard-coded names
-- **Type safety** through Swift enums
-- **Sendable** and safe across concurrency domains
-
-The system embodies the principle: "The skin is not the app, the app is not the skin."
-
----
-
-*Document Version: 2.1.0 | Last Updated: 2026-03-14*
+- Fallback generation lives in `SkinManager`, not in the resolver
+- Slider thumbs are static images; background frame selection is computed in the slider views

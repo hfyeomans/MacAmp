@@ -2,6 +2,22 @@ import AVFoundation
 import Atomics
 import os
 
+/// Snapshot of pre-reconfiguration engine + bridge state, captured by
+/// `AudioEngineController.handleEngineWillReconfigure()` and forwarded to
+/// AudioPlayer via `onEngineWillReconfigure`. AudioPlayer uses these fields to
+/// decide whether to resume after the rewire and from which time position.
+///
+/// Captured at notification time, so `wasPlaying` may already reflect
+/// post-reconfigure state (the engine auto-stops on output route change). The
+/// bridge flags are MacAmp-owned and stay accurate; `currentTime` is best-effort
+/// from `playerNode.lastRenderTime`.
+struct PreReconfigureSnapshot: Sendable {
+    let wasPlaying: Bool
+    let wasPaused: Bool  // engine can't know; AudioPlayer supplies it
+    let currentTime: Double
+    let wasStreamBridge: Bool
+}
+
 /// Owns the AVAudioEngine graph and all node-level operations.
 ///
 /// Responsibilities:
@@ -37,6 +53,10 @@ final class AudioEngineController {
     private var streamSilenceGate: ManagedAtomic<UInt8>?
     private(set) var isBridgeActive: Bool = false
 
+    // MARK: - Engine Configuration Observer
+
+    private let configObserver: AudioEngineConfigurationObserver
+
     // MARK: - Injected Dependencies
 
     private let eqNode: AVAudioUnitEQ
@@ -54,16 +74,38 @@ final class AudioEngineController {
     /// Called when isBridgeActive changes so AudioPlayer can update its observable property.
     var onBridgeStateChanged: ((_ isActive: Bool) -> Void)?
 
+    /// Called at the START of an output-route reconfigure burst, before any rewire.
+    /// AudioPlayer arms `seekGuardActive` and bumps `currentSeekID` here so the
+    /// stale playerNode completion (that the impending engine restart will fire)
+    /// is filtered. Snapshot fields let AudioPlayer reconstruct resume state in
+    /// the matching `onEngineDidReconfigure` callback.
+    var onEngineWillReconfigure: ((PreReconfigureSnapshot) -> Void)?
+
+    /// Called once after the route change has settled (150 ms quiet window).
+    /// Engine has been restarted and bridge connections refreshed; AudioPlayer
+    /// re-applies volume/balance, reschedules from the saved position, and
+    /// PlaybackCoordinator refreshes the stream workgroup.
+    var onEngineDidReconfigure: (() -> Void)?
+
     // MARK: - Init
 
     init(eqNode: AVAudioUnitEQ, visualizerPipeline: VisualizerPipeline) {
         self.eqNode = eqNode
         self.visualizerPipeline = visualizerPipeline
+        self.configObserver = AudioEngineConfigurationObserver(engine: audioEngine)
         setupEngine()
+        configObserver.onWillReconfigure = { [weak self] in
+            self?.handleEngineWillReconfigure()
+        }
+        configObserver.onDidReconfigure = { [weak self] in
+            self?.handleEngineDidReconfigure()
+        }
+        configObserver.start()
     }
 
     /// Tear down engine resources. Called from AudioPlayer's isolated deinit.
     func shutdown() {
+        configObserver.stop()
         progressTimer?.invalidate()
         deactivateStreamBridge()
         visualizerPipeline.removeTap()
@@ -341,11 +383,11 @@ final class AudioEngineController {
     /// Activate the stream bridge: wire AVAudioSourceNode into the engine graph.
     /// Replaces the playerNode path with streamSourceNode → EQ → mixer → output.
     ///
-    /// **Critical lessons (from T5 Phase 2):**
+    /// **Critical constraints:**
     /// - Source node format MUST be interleaved (matches ring buffer layout)
     /// - Graph connection format MUST be non-interleaved (engine internal)
-    /// - MUST stop/reset engine before rewiring (lesson #3, avoids -10868)
-    /// - MUST verify mixer→output after reset (lesson #4)
+    /// - MUST stop/reset engine before rewiring (avoids -10868)
+    /// - MUST verify mixer→output after reset
     func activateStreamBridge(ringBuffer: LockFreeRingBuffer, sampleRate: Float64) {
         guard !isBridgeActive else { return }
 
@@ -457,6 +499,78 @@ final class AudioEngineController {
     /// Clear the loaded audio file (used by eject).
     func clearFile() {
         audioFile = nil
+    }
+
+    // MARK: - Engine Configuration Change Handlers
+
+    /// Invoked at burst start by `configObserver.onWillReconfigure`. Captures a
+    /// snapshot of pre-rewire state and forwards it to AudioPlayer so seek guards
+    /// can be armed before the engine restart fires a stale playerNode completion.
+    ///
+    /// **Caller note:** the system posts AVAudioEngineConfigurationChange *after*
+    /// auto-stopping the engine, so by the time this runs `playerNode.isPlaying`
+    /// is false and `lastRenderTime` is nil. The `wasPlaying` / `currentTime`
+    /// fields below are therefore best-effort placeholders — AudioPlayer
+    /// overrides them with its own authoritative state in
+    /// `handleEngineWillReconfigure`. The bridge flags are MacAmp-owned and
+    /// remain accurate.
+    private func handleEngineWillReconfigure() {
+        let snapshot = PreReconfigureSnapshot(
+            wasPlaying: playerNode.isPlaying,
+            wasPaused: false,
+            currentTime: readPlayerNodeCurrentTime() ?? 0,
+            wasStreamBridge: isBridgeActive
+        )
+        onEngineWillReconfigure?(snapshot)
+    }
+
+    /// Invoked once at burst end by `configObserver.onDidReconfigure` (150 ms
+    /// quiet window). The system has auto-reconfigured the output to the new
+    /// route and stopped the engine; we refresh format-dependent connections,
+    /// verify mixer→output, restart the engine, and notify AudioPlayer to
+    /// re-apply transient state and resume playback.
+    private func handleEngineDidReconfigure() {
+        // 1. Refresh stream bridge graph format if active. The graph format
+        //    captured at activate time references the old output sample rate;
+        //    re-establishing with the current outputNode format avoids
+        //    AVAudioEngine's silent format-conversion overhead.
+        if isBridgeActive, let sourceNode = streamSourceNode {
+            audioEngine.disconnectNodeOutput(sourceNode)
+            audioEngine.disconnectNodeOutput(eqNode)
+            let graphFormat = AVAudioFormat(
+                commonFormat: .pcmFormatFloat32,
+                sampleRate: audioEngine.outputNode.inputFormat(forBus: 0).sampleRate,
+                channels: 2,
+                interleaved: false
+            )!
+            audioEngine.connect(sourceNode, to: eqNode, format: graphFormat)
+            audioEngine.connect(eqNode, to: audioEngine.mainMixerNode, format: graphFormat)
+        }
+
+        // 2. Video audio plays through AVPlayer outside this graph; nothing to refresh.
+
+        // 3. Verify mixer → output connection survived the reconfigure.
+        if audioEngine.outputConnectionPoints(for: audioEngine.mainMixerNode, outputBus: 0).isEmpty {
+            audioEngine.connect(audioEngine.mainMixerNode, to: audioEngine.outputNode, format: nil)
+        }
+
+        // 4. Restart engine (system stopped it during reconfigure).
+        audioEngine.prepare()
+        _ = startEngineIfNeeded()
+
+        // 5. Notify AudioPlayer to re-apply volume/balance and resume.
+        onEngineDidReconfigure?()
+    }
+
+    /// Best-effort snapshot of player-node playback time, mirroring the
+    /// computation in `startProgressTimer`. Returns nil during the brief
+    /// post-restart window where `lastRenderTime` is not yet populated.
+    private func readPlayerNodeCurrentTime() -> Double? {
+        guard let nodeTime = playerNode.lastRenderTime,
+              let playerTime = playerNode.playerTime(forNodeTime: nodeTime) else {
+            return nil
+        }
+        return Double(playerTime.sampleTime) / playerTime.sampleRate + playheadOffset
     }
 
     // MARK: - Engine State

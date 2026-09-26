@@ -1,5 +1,6 @@
-import SwiftUI
 import AppKit
+import Combine
+import SwiftUI
 
 /// Pixel-perfect recreation of Winamp's main window using absolute positioning.
 /// Root composition view — delegates to child layer structs for recomposition boundaries.

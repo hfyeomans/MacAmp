@@ -22,19 +22,24 @@ final class EqualizerController {
     // (direct property write or behavioral method like setPreamp/toggleEq).
 
     var preamp: Float = 0.0 { // -12.0 to 12.0 dB (typical range)
-        didSet { eqNode.globalGain = preamp }
+        didSet {
+            eqNode.globalGain = preamp
+            fanOutToVideoTaps()
+        }
     }
     var eqBands: [Float] = Array(repeating: 0.0, count: 10) { // 10 bands, -12.0 to 12.0 dB
         didSet {
             for i in 0..<eqNode.bands.count {
                 eqNode.bands[i].gain = i < eqBands.count ? eqBands[i] : 0.0
             }
+            fanOutToVideoTaps()
         }
     }
     var isEqOn: Bool = false {
         didSet {
             eqNode.bypass = !isEqOn
             UserDefaults.standard.set(isEqOn, forKey: "isEqOn")
+            fanOutToVideoTaps()
         }
     }
     var eqAutoEnabled: Bool = false
@@ -53,6 +58,78 @@ final class EqualizerController {
     @ObservationIgnored private var autoEQTask: Task<Void, Never>?
     @ObservationIgnored private var autoPresetClearTask: Task<Void, Never>?
     @ObservationIgnored private var appliedAutoPresetURL: String?
+
+    // MARK: - Video-tap EQ fanout
+    //
+    // `EqualizerController` is the single owner of EQ state. On any change it fans
+    // out to two consumers: the engine `AVAudioUnitEQ` (the didSet handlers above)
+    // and any registered video-tap `VideoTapContext`s (here). Each video tap gets
+    // the recomputed `BiquadCoefficientSet` (via `installCoefficients` — the Mutex
+    // hand-off) plus the `isEqOn` / preamp atomics. Coefficients
+    // depend on sample rate, which the render thread publishes per tap in
+    // `pendingSampleRate`; `pollVideoTapSampleRates()` catches the rate becoming
+    // known after registration. Writes ONLY the Mutex (coefficients) + atomics —
+    // never the render-confined cascade field (that stays inside the render thread).
+
+    @ObservationIgnored private var registeredVideoTapContexts: [WeakBox<VideoTapContext>] = []
+    /// Last sample rate each Context's coefficients were computed at, so the poll
+    /// only recomputes when the rate actually changes (keyed by object identity).
+    @ObservationIgnored private var lastFannedSampleRate: [ObjectIdentifier: Double] = [:]
+
+    /// Register a video-tap Context for EQ fanout and immediately push current state.
+    func registerVideoTapContext(_ context: VideoTapContext) {
+        registeredVideoTapContexts.removeAll { $0.value == nil || $0.value === context }
+        registeredVideoTapContexts.append(WeakBox(context))
+        pushEQState(to: context)
+    }
+
+    /// Remove a Context from EQ fanout (by identity) and drop its rate record.
+    func unregisterVideoTapContext(_ context: VideoTapContext) {
+        registeredVideoTapContexts.removeAll { $0.value == nil || $0.value === context }
+        lastFannedSampleRate.removeValue(forKey: ObjectIdentifier(context))
+    }
+
+    /// Recompute + reinstall coefficients for a Context whose sample rate just changed.
+    func handleSampleRateChange(_ context: VideoTapContext, newSampleRate: Double) {
+        pushEQState(to: context, sampleRate: newSampleRate)
+    }
+
+    /// Main-thread poll (driven at 30 Hz during video): if a registered Context's
+    /// render-published `pendingSampleRate` differs from what we last computed for,
+    /// recompute. Catches the rate becoming known after registration (e.g. EQ-on
+    /// when video starts) without a user EQ change.
+    func pollVideoTapSampleRates() {
+        guard !registeredVideoTapContexts.isEmpty else { return }
+        registeredVideoTapContexts.removeAll { $0.value == nil }
+        for box in registeredVideoTapContexts {
+            guard let context = box.value else { continue }
+            let current = Double(bitPattern: context.pendingSampleRate.load(ordering: .relaxed))
+            if lastFannedSampleRate[ObjectIdentifier(context)] != current {
+                pushEQState(to: context, sampleRate: current)
+            }
+        }
+    }
+
+    /// Fan current EQ state out to every live registered Context.
+    private func fanOutToVideoTaps() {
+        guard !registeredVideoTapContexts.isEmpty else { return } // fast path: audio-only
+        registeredVideoTapContexts.removeAll { $0.value == nil }
+        for box in registeredVideoTapContexts {
+            guard let context = box.value else { continue }
+            pushEQState(to: context)
+        }
+    }
+
+    /// Push the current EQ state (gate + preamp + recomputed coefficients) to one
+    /// Context. `sampleRate` defaults to the Context's render-published rate.
+    private func pushEQState(to context: VideoTapContext, sampleRate: Double? = nil) {
+        let state = equalizerState
+        let rate = sampleRate ?? Double(bitPattern: context.pendingSampleRate.load(ordering: .relaxed))
+        context.isEqOn.store(state.isEqOn, ordering: .relaxed)
+        context.preampLinearGainBits.store(state.preampLinearGain.bitPattern, ordering: .relaxed)
+        context.installCoefficients(BiquadCoefficientSet.compute(for: state, sampleRate: rate))
+        lastFannedSampleRate[ObjectIdentifier(context)] = rate
+    }
 
     // MARK: - Initialization
 
@@ -191,8 +268,10 @@ final class EqualizerController {
     /// at the endpoints better approximate Winamp's perceptual behavior (sub-bass and
     /// air control) than strict parametric everywhere.
     private func configureEQ() {
-        // Actual Winamp internal frequencies (NOT the skin label values 60/170/310)
-        let freqs: [Float] = [70, 180, 320, 600, 1000, 3000, 6000, 12000, 14000, 16000]
+        // Single source of truth shared with the video-tap cascade — keeps the
+        // engine↔tap numerical match from drifting (Winamp internal frequencies,
+        // NOT the skin labels 60/170/310).
+        let freqs = BiquadCoefficientSet.frequencies
         for i in 0..<min(eqNode.bands.count, freqs.count) {
             let band = eqNode.bands[i]
             if i == 0 {
@@ -209,5 +288,29 @@ final class EqualizerController {
         }
         eqNode.globalGain = preamp
         eqNode.bypass = !isEqOn
+    }
+}
+
+/// Immutable snapshot of equalizer state, produced on the main thread by
+/// `EqualizerController` and consumed by `BiquadCoefficientSet.compute` to build
+/// the video-tap biquad cascade. `EqualizerController` remains the single source
+/// of EQ truth; this is a read-only projection.
+struct EqualizerState: Sendable, Equatable {
+    let isEqOn: Bool
+    /// Preamp as a linear gain multiplier. Engine side stores dB in
+    /// `AVAudioUnitEQ.globalGain`; the tap applies this linear value directly.
+    /// `10^(preampDB/20)`.
+    let preampLinearGain: Float
+    /// 10 per-band gains in dB, indexed to `BiquadCoefficientSet.frequencies`.
+    let bandGainsDB: [Float]
+}
+
+extension EqualizerController {
+    /// Current EQ state as an immutable snapshot. The EQ fanout pushes this to
+    /// registered video-tap contexts on each EQ change.
+    var equalizerState: EqualizerState {
+        EqualizerState(isEqOn: isEqOn,
+                       preampLinearGain: Float(pow(10.0, Double(preamp) / 20.0)),
+                       bandGainsDB: eqBands)
     }
 }

@@ -226,11 +226,11 @@ Add as `@ObservationIgnored private let configObserver: AudioEngineConfiguration
 ### 6.3 Callbacks Surfaced from AudioEngineController
 
 ```swift
-struct PreReconfigureSnapshot {
-    let wasPlaying: Bool
-    let currentTime: Double
-    let wasStreamBridge: Bool
-    let wasVideoBridge: Bool
+struct PreReconfigureSnapshot: Sendable {
+    let wasPlaying: Bool       // best-effort; AudioPlayer overrides — see §6.3 contract note
+    let currentTime: Double    // best-effort; AudioPlayer overrides — see §6.3 contract note
+    let wasStreamBridge: Bool  // authoritative (MacAmp-owned)
+    let wasVideoBridge: Bool   // authoritative (MacAmp-owned, false until Phase 3)
 }
 
 var onEngineWillReconfigure: ((_ snapshot: PreReconfigureSnapshot) -> Void)?
@@ -238,6 +238,32 @@ var onEngineDidReconfigure: (() -> Void)?
 ```
 
 AudioPlayer wires these in init. PlaybackCoordinator subscribes to an AudioPlayer-level `onEngineReconfigured` to refresh the stream workgroup (matches the design in `tasks/done/airplay-integration/plan.md` §1.3).
+
+**Contract note — split state ownership** (added 2026-04-30 after manual verification surfaced an AirPlay-resume bug, commit `3267091`):
+
+The `wasPlaying` and `currentTime` fields in `PreReconfigureSnapshot` are **best-effort placeholders**, not authoritative. The system posts `AVAudioEngineConfigurationChange` *after* auto-stopping the engine — by the time `handleEngineWillReconfigure` runs, `playerNode.isPlaying` is already false and `playerNode.lastRenderTime` is nil (so `readPlayerNodeCurrentTime` returns nil and the snapshot's `currentTime` falls back to 0).
+
+AudioPlayer is the authoritative source for those two fields and **MUST override them** in its `handleEngineWillReconfigure` handler:
+- `currentTime`: use `self.currentTime` (updated by the progress timer ~100 ms before the reconfigure — accurate to within one tick).
+- `wasPlaying`: use `self.isPlaying` (transition-managed; reflects user intent independent of engine running state).
+
+The bridge flags (`wasStreamBridge`, `wasVideoBridge`) come from MacAmp-owned engine state and remain accurate at notification time — they are NOT overridden by AudioPlayer.
+
+**Cancellation contract** (added 2026-04-30, commit `fabe5e2`):
+
+A user action (`play`/`pause`/`stop`/`seek`/`playTrack`) within the ~150 ms gap between `onWill` and `onDid` would otherwise allow the stale `onDid` callback to override the user's new intent (e.g. user pauses → `onDid` reschedules and resumes). AudioPlayer therefore exposes a private `cancelPendingReconfigure()` helper that nils the stored snapshot, called at the start of every user-intent entry point. `handleEngineDidReconfigure` early-returns when the snapshot is nil, so the user-intent paths are the cancel hook.
+
+**Phase 3 refactor opportunity** — the split state ownership is documented but the type still carries unreliable engine-derived fields. A cleaner long-term shape narrows `PreReconfigureSnapshot` to MacAmp-owned bridge facts only, with AudioPlayer carrying its own play-state/time separately:
+
+```swift
+// Future shape (Phase 3 candidate, when wasVideoBridge becomes a real flag):
+struct PreReconfigureSnapshot: Sendable {
+    let wasStreamBridge: Bool
+    let wasVideoBridge: Bool
+}
+```
+
+This is deferred to Phase 3 because: (a) it's a refactor for clarity, not a correctness fix; (b) the override pattern is tested and documented; (c) folding into Phase 3's video-bridge wiring keeps the type churn in one place.
 
 ### 6.4 Explicit Seek-Guard / Completion-Filter Coordination
 

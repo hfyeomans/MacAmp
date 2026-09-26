@@ -94,7 +94,7 @@ final class PlaybackCoordinator {
     // MARK: - Playlist Position
 
     /// Track position string ("3/15") — nil when no playlist track is active.
-    /// Guards against stale values during non-playlist playback (Oracle finding).
+    /// Guards against stale values during non-playlist playback.
     var trackPositionString: String? {
         guard currentTrack != nil,
               let position = audioPlayer.playlistPosition else { return nil }
@@ -185,6 +185,17 @@ final class PlaybackCoordinator {
             self?.audioPlayer.setStreamSilenced(silenced)
         }
 
+        // After an engine reconfigure (output route change), the post-restart
+        // outputNode may live on a different audio HAL device with a different
+        // real-time workgroup. Re-share the workgroup with the stream-decode
+        // thread so it stays joined to the IO scheduling group.
+        self.audioPlayer.onEngineReconfigured = { [weak self] in
+            guard let self else { return }
+            if self.audioPlayer.isBridgeActive {
+                self.streamPlayer.setAudioWorkgroup(self.audioPlayer.audioWorkgroup)
+            }
+        }
+
         setupRemoteCommands()
     }
 
@@ -195,8 +206,7 @@ final class PlaybackCoordinator {
     /// `streamSourceNode?.volume`) and to `videoPlaybackController.volume`.
     /// Idempotent — same-value writes short-circuit before reaching the
     /// audio backends. This is the gesture-tick choke point that keeps the
-    /// main run loop free for SwiftUI rendering during slider drag (mwvi
-    /// Phase 0 / Phase 1B+ fix).
+    /// main run loop free for SwiftUI rendering during slider drag.
     func setVolume(_ vol: Float) {
         guard audioPlayer.volume != vol else { return }
         audioPlayer.volume = vol
@@ -212,7 +222,7 @@ final class PlaybackCoordinator {
 
     /// Drag-end forwarder — writes current `volume` to `UserDefaults`.
     /// Called from `WinampVolumeSlider.onDragEnded` to keep persistence off
-    /// the gesture-tick path (Phase 1B fix; see mwvi Phase 0 results).
+    /// the gesture-tick path.
     func commitVolume() { audioPlayer.commitVolumeToDefaults() }
 
     /// Drag-end forwarder for balance. See `commitVolume()`.

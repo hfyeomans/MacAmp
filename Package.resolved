@@ -1,5 +1,5 @@
 {
-  "originHash" : "182af05c32eec290997435a92ff585198a21682e651b46abe218d5dae6cf8acd",
+  "originHash" : "129a413496836566cb7fe2b5d5216ef9415b5873e1b952dd76b5123c206c2dae",
   "pins" : [
     {
       "identity" : "swift-atomics",
@@ -15,8 +15,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/weichsel/ZIPFoundation.git",
       "state" : {
-        "revision" : "02b6abe5f6eef7e3cbd5f247c5cc24e246efcfe0",
-        "version" : "0.9.19"
+        "revision" : "22787ffb59de99e5dc1fbfe80b19c97a904ad48d",
+        "version" : "0.9.20"
       }
     }
   ],

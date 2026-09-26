@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 
 /// Winamp visualizer constants
@@ -70,11 +71,11 @@ struct VisualizerView: View {
             }
         }
         .onReceive(updateTimer) { _ in
-            if audioPlayer.isEngineRendering && mode == .spectrum {
+            if audioPlayer.isVisualizerRendering && mode == .spectrum {
                 updateBars()
             }
         }
-        .onChange(of: audioPlayer.isEngineRendering) { _, isPlaying in
+        .onChange(of: audioPlayer.isVisualizerRendering) { _, isPlaying in
             if !isPlaying {
                 // Animate bars to zero when stopped
                 withAnimation(.easeOut(duration: 0.3)) {
@@ -99,7 +100,7 @@ struct VisualizerView: View {
                 var targetHeight = CGFloat(frequencyData[i]) * maxHeight * amplificationFactor * frequencyBoost
                 
                 // Add minimum height when playing to ensure visibility
-                if audioPlayer.isEngineRendering && frequencyData[i] > 0.01 {
+                if audioPlayer.isVisualizerRendering && frequencyData[i] > 0.01 {
                     targetHeight = max(minBarHeight, targetHeight)
                 }
                 
@@ -259,7 +260,7 @@ struct OscilloscopeView: View {
         }
         .frame(width: VisualizerLayout.width, height: VisualizerLayout.height)
         .onReceive(updateTimer) { _ in
-            if audioPlayer.isEngineRendering {
+            if audioPlayer.isVisualizerRendering {
                 waveformData = audioPlayer.getWaveformSamples(count: VisualizerLayout.oscilloscopeSampleCount)
             } else {
                 waveformData = []

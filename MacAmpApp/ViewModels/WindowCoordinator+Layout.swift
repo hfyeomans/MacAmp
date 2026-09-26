@@ -86,8 +86,8 @@ extension WindowCoordinator {
             _ = self.skinManager.isLoading
             _ = self.skinManager.currentSkin
             _ = self.skinManager.loadingError
-        } onChange: {
-            Task { @MainActor [weak self] in
+        } onChange: { [weak self] in
+            Task { @MainActor in
                 guard let self else { return }
                 if self.canPresentImmediately {
                     self.presentInitialWindows()

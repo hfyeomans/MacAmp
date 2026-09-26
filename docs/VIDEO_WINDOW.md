@@ -1,9 +1,8 @@
 # MacAmp Video Window Documentation
 
-**Version:** 2.0.0
-**Last Updated:** November 2025
-**Status:** Production Ready (TASK 2 + Part 21)
-**Author:** MacAmp Development Team
+**Version:** 3.1.0
+**Last Updated:** 2026-09-25
+**Status:** Production (VIDEO.bmp chrome, quantized resize, AVPlayer-native video audio DSP)
 
 ---
 
@@ -14,11 +13,11 @@
 3. [Architecture Overview](#architecture-overview)
 4. [Chrome Components](#chrome-components)
 5. [Video Playback System](#video-playback-system)
-6. [Window Focus Integration](#window-focus-integration)
-7. [Window Resizing (1x/2x)](#window-resizing-1x2x)
-8. [Persistence & Window Docking](#persistence--window-docking)
-9. [Fallback Chrome System](#fallback-chrome-system)
-10. [Implementation Patterns](#implementation-patterns)
+6. [Video Audio DSP Pipeline](#video-audio-dsp-pipeline)
+7. [Window Focus Integration](#window-focus-integration)
+8. [Window Resizing](#window-resizing)
+9. [Persistence & Window Docking](#persistence--window-docking)
+10. [Fallback Chrome System](#fallback-chrome-system)
 11. [Testing Guidelines](#testing-guidelines)
 12. [Future Enhancements](#future-enhancements)
 13. [Appendix: Sprite Definitions](#appendix-sprite-definitions)
@@ -27,25 +26,22 @@
 
 ## Introduction
 
-The Video Window is a core component of MacAmp's media playback system, providing native video playback with authentic Winamp skinning. Implemented during TASK 2 (Days 1-6), it establishes MacAmp as a complete multimedia player matching Winamp's capabilities.
+The Video Window plays local video files through AVPlayer inside VIDEO.bmp-skinned chrome, following the Winamp 5.x integrated video model.
 
 ### Purpose
 
 - **Video Playback:** Native macOS video rendering via AVPlayer
+- **Winamp Audio Controls on Video:** 10-band EQ, preamp, balance, spectrum/oscilloscope and Milkdrop all apply to the video's audio (in-place processing tap, see [Video Audio DSP Pipeline](#video-audio-dsp-pipeline))
 - **Skinned Chrome:** Pixel-perfect VIDEO.bmp sprite rendering
 - **Seamless Integration:** Works with MacAmp's 5-window system
 - **Format Support:** MP4, MOV, M4V, and other QuickTime-compatible formats
 
 ### Activation Methods
 
-1. **V Button:** Click the "V" button on the main window (toggles visibility)
+1. **V Button:** Click the "V" button on the main window (toggles `settings.showVideoWindow`)
 2. **Keyboard:** Press `Ctrl+V` to toggle window visibility
-3. **Menu:** Windows → Show/Hide Video Window
-4. **Automatic:** Opens when playing video files
-
-### Historical Context
-
-Winamp's video window evolved from simple plugin support (Winamp 2.x) to integrated video playback (Winamp 5.x). MacAmp implements the Winamp 5.x model with modern macOS video capabilities while maintaining classic visual authenticity.
+3. **Menu:** Options → Show/Hide Video Window
+4. **Playlist:** Playing a video file does not open the window automatically (open it with V / Ctrl+V); while open with no video loaded it shows "No video loaded"
 
 ---
 
@@ -53,20 +49,14 @@ Winamp's video window evolved from simple plugin support (Winamp 2.x) to integra
 
 ### Dimensions
 
-```swift
-// Standard (1x) Size - matches Playlist window height
-static let windowSize = CGSize(width: 275, height: 232)
+Default size is 275×232 (matches the Playlist default). Chrome sizes come from `VideoWindowLayout` in `VideoWindowChromeView.swift`:
 
-// Component breakdown:
-static let titlebarHeight: CGFloat = 20   // Draggable titlebar
-static let bottomBarHeight: CGFloat = 38  // Controls and metadata
-static let leftBorderWidth: CGFloat = 11  // Left chrome border
-static let rightBorderWidth: CGFloat = 8  // Right chrome border
-
-// Content area (actual video viewport):
-static let contentWidth: CGFloat = 256   // 275 - 11 - 8
-static let contentHeight: CGFloat = 174  // 232 - 20 - 38
-```
+| Part | Size |
+|------|------|
+| Titlebar | 20 px high (draggable) |
+| Bottom bar | 38 px high; 125 px fixed left + 125 px fixed right sections |
+| Left / right border | 11 px / 8 px wide |
+| Content area | `pixelSize - (19, 58)` → 256×174 at the default size |
 
 ### Coordinate System
 
@@ -87,193 +77,64 @@ Window Layout (275×232):
 
 ### VIDEO.bmp Resource
 
-The video window chrome is rendered using sprites extracted from `VIDEO.bmp`:
-
-- **Source:** `skins/{skin-name}/VIDEO.bmp`
+- **Source:** `VIDEO.bmp` in the skin archive
 - **Dimensions:** Variable (typically 306×164 or similar)
 - **Color Depth:** 8-bit indexed (Winamp palette)
-- **Required:** No (fallback chrome available)
+- **Required:** No (default-skin sprites or fallback chrome are used)
 
 ---
 
 ## Architecture Overview
 
+Shared window infrastructure (controller stack, three-layer pattern, focus) is documented in the [Architecture Guide](MACAMP_ARCHITECTURE_GUIDE.md#video-window-architecture); this section lists what is specific to the video window.
+
 ### Window Controller Pattern
 
-```swift
-// WinampVideoWindowController.swift
-class WinampVideoWindowController: NSWindowController {
-    convenience init(
-        skinManager: SkinManager,
-        audioPlayer: AudioPlayer,
-        dockingController: DockingController,
-        settings: AppSettings,
-        radioLibrary: RadioStationLibrary,
-        playbackCoordinator: PlaybackCoordinator,
-        windowFocusState: WindowFocusState
-    ) {
-        // Create borderless window (NSWindowController pattern)
-        let window = BorderlessWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 275, height: 232),
-            styleMask: [.borderless],
-            backing: .buffered,
-            defer: false
-        )
-
-        // Apply Winamp window configuration
-        WinampWindowConfigurator.apply(to: window)
-
-        // Create SwiftUI view with environment injection
-        let rootView = WinampVideoWindow()
-            .environment(skinManager)
-            .environment(audioPlayer)
-            // ... inject all dependencies
-
-        let hostingController = NSHostingController(rootView: rootView)
-        window.contentViewController = hostingController
-
-        self.init(window: window)
-    }
-}
-```
+`WinampVideoWindowController` (`MacAmpApp/Windows/WinampVideoWindowController.swift`) creates a 275×232 `BorderlessWindow`, applies `WinampWindowConfigurator.apply(to:)`, enables the shadow, hosts `WinampVideoWindow` in an `NSHostingController` set as `contentViewController` (never `contentView`, which would release the hosting controller), then calls `WinampWindowConfigurator.installHitSurface(on:)`. It injects `SkinManager`, `AudioPlayer`, `DockingController`, `AppSettings`, `RadioStationLibrary`, `PlaybackCoordinator` and `WindowFocusState` into the environment.
 
 ### Five-Window System Integration
 
-MacAmp manages five windows as a coordinated system:
-
-```
-WindowCoordinator
-├── Main Window (always visible)
-├── Equalizer Window
-├── Playlist Window
-├── Video Window      ← Our focus
-└── Milkdrop Window
-```
-
-Each window:
-- Has its own NSWindowController
-- Shares environment objects via injection
-- Participates in magnetic docking
-- Maintains position persistence
-- Responds to focus changes
+The video window is one of the five windows owned by `WindowCoordinator` (Main, Equalizer, Playlist, Video, Milkdrop). Like the others it has its own `NSWindowController`, shares environment objects, participates in magnetic docking, persists its frame and tracks focus.
 
 ### Layer Architecture
 
-Following MacAmp's three-layer pattern:
+Following the [three-layer pattern](MACAMP_ARCHITECTURE_GUIDE.md#three-layer-architecture-deep-dive):
 
-1. **Mechanism Layer:** AVPlayer, AVPlayerView (AVKit framework)
-2. **Bridge Layer:** AVPlayerViewRepresentable, AudioPlayer
-3. **Presentation Layer:** VideoWindowChromeView, WinampVideoWindow
+1. **Mechanism:** AVPlayer, AVPlayerView, `VideoPlaybackController` (AVPlayer lifecycle, observers, seek), `VideoTap` + `VideoTapContext` + `BiquadCascade` (in-place audio DSP on the render thread)
+2. **Bridge:** `AVPlayerViewRepresentable`, `AudioPlayer` (media-type routing, `startVideoLoad`, balance fanout), `EqualizerController` (EQ fanout)
+3. **Presentation:** `VideoWindowChromeView`, `WinampVideoWindow`
 
 ---
 
 ## Chrome Components
 
+All chrome is laid out in `VideoWindowChromeView` with absolute `.position()` and tile counts from `VideoWindowSizeState`, so it follows the window size.
+
 ### Titlebar System
 
-The titlebar consists of four sprite sections that change based on window focus:
+Four sprites per focus state (`suffix` = `ACTIVE` / `INACTIVE`):
 
-```swift
-// Active window sprites (bright blue gradient)
-VIDEO_TITLEBAR_TOP_LEFT_ACTIVE     // 25×20 - Left cap
-VIDEO_TITLEBAR_TOP_CENTER_ACTIVE   // 100×20 - "WINAMP VIDEO" text
-VIDEO_TITLEBAR_STRETCHY_ACTIVE     // 25×20 - Tileable middle
-VIDEO_TITLEBAR_TOP_RIGHT_ACTIVE    // 25×20 - Right cap with close button
+| Sprite | Size | Placement |
+|--------|------|-----------|
+| `VIDEO_TITLEBAR_TOP_LEFT_<suffix>` | 25×20 | left cap, x = 12.5 |
+| `VIDEO_TITLEBAR_STRETCHY_<suffix>` | 25×20 | `stretchyTilesPerSide` tiles each side of the centre |
+| `VIDEO_TITLEBAR_TOP_CENTER_<suffix>` | 100×20 | "WINAMP VIDEO", centred at `pixelSize.width / 2` |
+| `VIDEO_TITLEBAR_TOP_RIGHT_<suffix>` | 25×20 | right cap, x = width − 12.5 |
 
-// Inactive window sprites (dark gray)
-VIDEO_TITLEBAR_TOP_LEFT_INACTIVE
-VIDEO_TITLEBAR_TOP_CENTER_INACTIVE
-VIDEO_TITLEBAR_STRETCHY_INACTIVE
-VIDEO_TITLEBAR_TOP_RIGHT_INACTIVE
-```
-
-**Rendering Logic:**
-
-```swift
-// VideoWindowChromeView.swift
-let suffix = isWindowActive ? "ACTIVE" : "INACTIVE"
-
-// Left cap
-SimpleSpriteImage("VIDEO_TITLEBAR_TOP_LEFT_\(suffix)", width: 25, height: 20)
-    .position(x: 12.5, y: 10)
-
-// Stretchy tiles (3 copies to fill width)
-ForEach(0..<3, id: \.self) { i in
-    SimpleSpriteImage("VIDEO_TITLEBAR_STRETCHY_\(suffix)", width: 25, height: 20)
-        .position(x: 25 + 12.5 + CGFloat(i) * 25, y: 10)
-}
-
-// Center text
-SimpleSpriteImage("VIDEO_TITLEBAR_TOP_CENTER_\(suffix)", width: 100, height: 20)
-    .position(x: 137.5, y: 10)
-```
+`stretchyTilesPerSide = ceil((width − 50 − 100) / 2 / 25)` (3 at 275 px; overlap is fine). Left tiles start at x = 37.5; right tiles start at `centerX + 50`. The whole titlebar is wrapped in `WinampTitlebarDragHandle(windowKind: .video, …)`.
 
 ### Border System
 
-Vertical borders use tiled sprites (29px tiles):
-
-```swift
-// Side border sprites
-VIDEO_BORDER_LEFT   // 11×29 - Left border tile
-VIDEO_BORDER_RIGHT  // 8×29 - Right border tile
-
-// Tiling calculation
-let sideHeight: CGFloat = 174  // Content area height
-let sideTileCount = Int(ceil(sideHeight / 29))  // 6 tiles needed
-
-// Render tiles
-ForEach(0..<sideTileCount, id: \.self) { i in
-    SimpleSpriteImage("VIDEO_BORDER_LEFT", width: 11, height: 29)
-        .position(x: 5.5, y: 20 + 14.5 + CGFloat(i) * 29)
-}
-```
+`VIDEO_BORDER_LEFT` (11×29) and `VIDEO_BORDER_RIGHT` (8×29) are tiled vertically from y = 20; `verticalBorderTileCount = ceil((height − 58) / 29)`.
 
 ### Bottom Bar
 
-The bottom bar contains controls and metadata display:
-
-```swift
-// Bottom bar sprites (38px height)
-VIDEO_BOTTOM_LEFT   // 125×38 - Buttons area
-VIDEO_BOTTOM_TILE   // 25×38 - Stretchy center
-VIDEO_BOTTOM_RIGHT  // 125×38 - Info display area
-
-// Button sprites (in VIDEO_BOTTOM_LEFT region)
-VIDEO_FULLSCREEN_BUTTON  // 15×18 @ (9, 51)
-VIDEO_1X_BUTTON         // 15×18 @ (24, 51)
-VIDEO_2X_BUTTON         // 15×18 @ (39, 51)
-VIDEO_MISC_BUTTON       // 15×18 @ (69, 51)
-
-// Pressed states
-VIDEO_FULLSCREEN_BUTTON_PRESSED
-VIDEO_1X_BUTTON_PRESSED
-VIDEO_2X_BUTTON_PRESSED
-VIDEO_MISC_BUTTON_PRESSED
-```
+- `VIDEO_BOTTOM_LEFT` (125×38, baked-on buttons) at the left, `VIDEO_BOTTOM_RIGHT` (125×38, metadata area) at the right, and `centerTileCount = Int(max(0, width − 250) / 25)` copies of `VIDEO_BOTTOM_TILE` (25×38) starting at x = 125.
+- Baked-on buttons: fullscreen, 1x, 2x, misc (normal and `_PRESSED` sprites exist). Only **1x** and **2x** are clickable (transparent overlays, see [1x/2x Preset Buttons](#1x2x-preset-buttons)); the others are visual only.
 
 ### Metadata Display
 
-Video metadata scrolls in the bottom-right section:
-
-```swift
-// Metadata string composition
-let metadataString = "\(filename) - \(codec) - \(width)×\(height)"
-
-// TEXT.bmp sprite rendering (5×6 per character)
-HStack(spacing: 0) {
-    ForEach(Array(text.uppercased().enumerated()), id: \.offset) { _, character in
-        SimpleSpriteImage("CHARACTER_\(charCode)", width: 5, height: 6)
-    }
-}
-
-// Scrolling animation (when text exceeds display width)
-.offset(x: textWidth > displayWidth ? metadataScrollOffset : 0, y: 0)
-.onAppear {
-    if textWidth > displayWidth {
-        startMetadataScrolling(textWidth: textWidth, displayWidth: displayWidth)
-    }
-}
-```
+`audioPlayer.videoMetadataString` (from `VideoPlaybackController.metadataString`, built by `MetadataLoader.VideoMetadata.displayString`) has the Winamp form `filename (M4V): Video: 1280x720` (or `Video: Unknown`). It is drawn with TEXT.bmp `CHARACTER_<ascii>` sprites (5×6, letters mapped to lowercase codes) in a 160 px clipped box at x = width − 110. When wider than the box, a `Timer` (0.15 s, `.common` run-loop mode so it keeps running during gestures) scrolls it 5 px per tick and wraps; the timer resets when the string changes and is invalidated on disappear.
 
 ---
 
@@ -281,31 +142,17 @@ HStack(spacing: 0) {
 
 ### AVPlayerViewRepresentable
 
-Bridges AppKit's AVPlayerView to SwiftUI:
+`AVPlayerViewRepresentable` wraps `AVPlayerView` with `controlsStyle = .none`, `videoGravity = .resizeAspect`, fullscreen/sharing buttons and PiP disabled, and `updatesNowPlayingInfoCenter = false`. `updateNSView` swaps the player only when the instance changes.
 
-```swift
-// AVPlayerViewRepresentable.swift
-struct AVPlayerViewRepresentable: NSViewRepresentable {
-    let player: AVPlayer
-
-    func makeNSView(context: Context) -> AVPlayerView {
-        let view = AVPlayerView()
-        view.player = player
-        view.controlsStyle = .none           // Use VIDEO.bmp controls
-        view.videoGravity = .resizeAspect   // Maintain aspect ratio
-        view.showsFullScreenToggleButton = false
-        view.showsSharingServiceButton = false
-        view.allowsPictureInPicturePlayback = false
-        return view
-    }
-
-    func updateNSView(_ nsView: AVPlayerView, context: Context) {
-        if nsView.player !== player {
-            nsView.player = player
-        }
-    }
-}
-```
+**Remote commands are MacAmp's, not AVKit's.** A default `AVPlayerView` registers its own
+Now Playing / `MPRemoteCommandCenter` handler. System pause commands (AirPods removed, case
+closed, route loss) would then pause the `AVPlayer` directly, behind `VideoPlaybackController`:
+the UI stays "playing", audio goes silent, and the next Play press pauses. With
+`updatesNowPlayingInfoCenter = false`, media keys, AirPods and other remote commands all go
+through `PlaybackCoordinator.setupRemoteCommands()` → `AudioPlayer` →
+`VideoPlaybackController`, so transport state stays truthful. `VideoPlaybackController`
+does not observe `AVPlayer.timeControlStatus`, so any other pause path that bypasses
+MacAmp would desync the same way.
 
 ### Format Support
 
@@ -317,355 +164,219 @@ struct AVPlayerViewRepresentable: NSViewRepresentable {
 - Any format supported by AVFoundation
 
 **Audio Track Handling:**
-- Embedded audio plays through standard audio pipeline
-- Volume control synchronized with main window
-- EQ not available for video playback (AVPlayer limitation)
+- Video audio stays on AVPlayer (it is not routed through `AVAudioEngine`)
+- 10-band EQ, preamp, balance and the visualizers apply via an in-place processing tap on the first audio track (see [Video Audio DSP Pipeline](#video-audio-dsp-pipeline))
+- Volume control synchronized with main window (`AVPlayer.volume`)
+- The tap is pinned to stereo, so mono is upmixed and 5.1+ downmixed before processing; multichannel output is not yet supported (issue #88)
 
 ### Media Type Switching
 
-```swift
-// AudioPlayer.swift
-enum MediaType {
-    case audio
-    case video
-    case internetRadio
-}
+`AudioPlayer.detectMediaType(url:)` classifies by extension: `mp4`, `mov`, `m4v`, `avi` → `.video`, everything else → `.audio`.
 
-// Automatic detection on file load
-private func detectMediaType(for url: URL) -> MediaType {
-    let videoExtensions = ["mp4", "mov", "m4v", "avi"]
-    if videoExtensions.contains(url.pathExtension.lowercased()) {
-        return .video
-    }
-    return .audio
-}
+`playTrack(track:)` tears down the outgoing media type before loading the new one:
 
-// Window visibility management
-if audioPlayer.currentMediaType == .video {
-    settings.showVideoWindow = true  // Auto-show for video
-}
-```
+| Transition | Teardown |
+|------------|----------|
+| audio → video | `engine.removeVisualizerTapIfNeeded()` |
+| video → audio | `invalidateInFlightVideoLoad()`, `pauseAndDetachVideoTapIfNeeded()`, `videoPlaybackController.cleanup()`, `visualizerPipeline.stopVideoVisualization()` |
+| video → video | `pauseAndDetachVideoTapIfNeeded()` (then a fresh tap is built for the new item) |
 
-### Part 21: Unified Video Controls
+For video it then calls `startVideoLoad(track:)` (async) and
+`visualizerPipeline.startVideoVisualization()`, and transitions to `.playing`; the AVPlayer
+starts once the asynchronous load finishes. For audio it calls `loadAudioFile(url:)` + `play()`.
+
+### Unified Video Controls
+
+`AudioPlayer` is the façade the UI talks to; for video it forwards to
+`VideoPlaybackController` (`MacAmpApp/Audio/VideoPlaybackController.swift`), which owns the
+`AVPlayer`, its observers and seek handling.
 
 **Volume Synchronization:**
 
 ```swift
-// AudioPlayer.swift - volume didSet (Line ~160)
-var volume: Float = 1.0 {
+// AudioPlayer.swift — volume fans out to both backends
+var volume: Float = 0.75 {
     didSet {
-        audioEngine.mainMixerNode.outputVolume = volume
-        videoPlayer?.volume = volume  // ← Sync to video
-        UserDefaults.standard.set(volume, forKey: "playerVolume")
+        engine?.setVolume(volume)
+        videoPlaybackController.volume = volume
     }
 }
 
-// loadVideoFile() - apply initial volume (Line ~382)
-videoPlayer = AVPlayer(url: url)
-videoPlayer?.volume = volume  // ← Apply saved volume immediately
+// VideoPlaybackController.swift
+var volume: Float = 1.0 {
+    didSet { player?.volume = volume }
+}
+// loadVideo(...) applies it to each new player: `player?.volume = volume`
 ```
+
+Persistence is call-site-driven (`commitVolumeToDefaults()` at gesture end), not in the setter.
 
 **Time Observer Pattern:**
 
 ```swift
-// AudioPlayer.swift - setupVideoTimeObserver() (Lines 480-505)
-private func setupVideoTimeObserver() {
-    guard let player = videoPlayer else { return }
-
-    let interval = CMTime(seconds: 0.1, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
-
-    videoTimeObserver = player.addPeriodicTimeObserver(
-        forInterval: interval,
-        queue: .main
-    ) { [weak self] time in
-        // CRITICAL: Use Task { @MainActor in } for proper isolation
-        Task { @MainActor in
-            guard let self else { return }
-            let seconds = time.seconds
-
-            // CRITICAL: Must assign ALL THREE values (playbackProgress is STORED, not computed)
-            self.currentTime = seconds
-            if let duration = player.currentItem?.duration.seconds, duration.isFinite {
-                self.currentDuration = duration
-                self.playbackProgress = duration > 0 ? seconds / duration : 0
-            }
+// VideoPlaybackController.swift — setupTimeObserver()
+timeObserver = player.addPeriodicTimeObserver(
+    forInterval: CMTime(seconds: 0.1, preferredTimescale: 600),
+    queue: .main
+) { [weak self, weak player] time in
+    Task { @MainActor in
+        guard let self, let player else { return }
+        guard self.player === player else { return }  // ignore ticks from a replaced player
+        let seconds = time.seconds
+        self.currentTime = seconds
+        if let item = player.currentItem, item.duration.seconds.isFinite {
+            let dur = item.duration.seconds
+            self.duration = dur
+            self.progress = dur > 0 ? seconds / dur : 0
+            self.onTimeUpdate?(seconds, dur, self.progress)
         }
     }
 }
-```
 
-**Shared Cleanup Function:**
-
-```swift
-// AudioPlayer.swift - cleanupVideoPlayer() (Line ~686)
-private func cleanupVideoPlayer() {
-    tearDownVideoTimeObserver()
-    if let observer = videoEndObserver {
-        NotificationCenter.default.removeObserver(observer)
-        videoEndObserver = nil
-    }
-    videoPlayer?.pause()
-    videoPlayer = nil
+// AudioPlayer.init — mirror into the UI-bound properties (all three are stored)
+videoPlaybackController.onTimeUpdate = { [weak self] time, duration, progress in
+    guard let self else { return }
+    self.currentTime = time
+    self.currentDuration = duration
+    self.playbackProgress = progress
 }
 ```
+
+**Cleanup:**
+
+`VideoPlaybackController.cleanup()` cancels the metadata task, removes the time and
+end-of-item observers, pauses and releases the player, and resets all playback state.
+`AudioPlayer` wraps it with the tap teardown (`invalidateInFlightVideoLoad()` +
+`pauseAndDetachVideoTapIfNeeded()`) and `visualizerPipeline.stopVideoVisualization()` on
+`stop()` and on a video → audio switch.
 
 **Seeking Support:**
 
-```swift
-// AudioPlayer.swift - seek(to:resume:) video branch (Line ~1179)
-func seek(to time: TimeInterval, resume: Bool = true) {
-    if currentMediaType == .video, let player = videoPlayer {
-        let cmTime = CMTime(seconds: time, preferredTimescale: 1000)
-        player.seek(to: cmTime) { [weak self] _ in
-            Task { @MainActor in
-                guard let self else { return }
-                // Update ALL THREE values on completion
-                self.currentTime = time
-                if let duration = player.currentItem?.duration.seconds, duration.isFinite {
-                    self.currentDuration = duration
-                    self.playbackProgress = duration > 0 ? time / duration : 0
-                }
-                if resume && self.isPlaying {
-                    player.play()
-                }
-            }
-        }
-        return  // Early return for video path
-    }
-    // ... audio path continues
-}
+`AudioPlayer.seek(to:resume:)` and `seekToPercent(_:resume:)` forward to
+`videoPlaybackController.seek` / `seekToPercent` (with `completion: videoSeekCompletion`)
+when `currentMediaType == .video`. `VideoPlaybackController.seek` seeks with default
+tolerance (nearest keyframe; fast, avoids -12860 decode errors). In the completion it
+ignores a stale player (identity guard), records the actual position, and applies `resume`:
 
-// AudioPlayer.swift - seekToPercent() video branch (Line ~1245)
-func seekToPercent(_ percent: Double) {
-    if currentMediaType == .video, let player = videoPlayer {
-        guard let duration = player.currentItem?.duration.seconds,
-              duration.isFinite else { return }
-        let targetTime = duration * percent
-        seek(to: targetTime, resume: true)
-        return
-    }
-    // ... audio path continues
-}
-```
+| `resume` | After seek |
+|----------|------------|
+| `true` | play (`isPlaying = true`, `isPaused = false`) |
+| `false` | pause (`isPlaying = false`, `isPaused = true`) |
+| `nil` | keep the current intent, re-read at completion time: play if `isPlaying`, else stay paused or loaded-idle (`isPaused` untouched) |
 
-**Critical Bug Fix (currentSeekID invalidation):**
+`videoSeekCompletion` then syncs `currentTime`, `playbackProgress`, `currentDuration` and the
+`.playing` / `.paused` transport state back onto `AudioPlayer`. A seek also flushes the
+tap's EQ filter history, so no ringing from before the seek leaks into the new position.
 
-```swift
-// AudioPlayer.swift - loadAudioFile() (Line ~215)
-func loadAudioFile(url: URL) {
-    // CRITICAL: Invalidate seek ID BEFORE stopping playerNode
-    // Prevents completion handler from re-scheduling audio
-    currentSeekID = UUID()
+**Stale-callback guards:** the end-of-item notification, periodic time observer and seek
+completion all check that the player (or item) they captured is still the current one, so a
+superseding `loadVideo` can't have old callbacks mutate transport state.
 
-    playerNode.stop()
-    cleanupVideoPlayer()
-    // ... rest of audio loading
-}
-```
+---
+
+## Video Audio DSP Pipeline
+
+Video audio stays on `AVPlayer`; it is never routed through `AVAudioEngine`. Winamp's audio
+controls reach it through an in-place `MTAudioProcessingTap` on the `AVPlayerItem`'s
+`audioMix`, which processes decoded samples before AVPlayer renders them to the current
+output (speakers, HDMI, AirPods, AirPlay 2). Internals (render path, biquad EQ, fanout,
+concurrency contract, telemetry) are in the Architecture Guide:
+[AVPlayer-Native Video DSP](MACAMP_ARCHITECTURE_GUIDE.md#avplayer-native-video-dsp). Code:
+`MacAmpApp/Audio/VideoDSP/`. Decision record: `tasks/avplayer-native-video-dsp/plan.md`.
+
+**What the user gets**
+
+- Preamp, 10-band EQ and balance change video audio in real time; turning EQ back on resets
+  filter history first, so it does not click. The tap's EQ matches the engine `AVAudioUnitEQ`
+  within 0.5 dB (`BiquadNumericalMatchTests`).
+- Spectrum, oscilloscope and Milkdrop are driven by the processed (post-EQ, post-balance)
+  video audio through the shared `VisualizerFeed`; pausing the video freezes them
+  (`AudioPlayer.isVisualizerRendering`). See [MILKDROP_WINDOW.md §9.4](MILKDROP_WINDOW.md#94-audio-data-pipeline)
+  for the consumer side.
+- Route changes (AirPods connect/disconnect, AirPlay 2, system output switch) keep the same
+  tap; EQ, balance and the visualizer carry across. Remote pause/resume from AirPods arrives
+  through `PlaybackCoordinator` (see [AVPlayerViewRepresentable](#avplayerviewrepresentable)).
+- Seeks and new streams flush the EQ filter history (`StartOfStream` flag).
+
+**Invariants that affect the window**
+
+- One tap per `AVPlayerItem`; `audioMix` is set before the `AVPlayer` is constructed and is
+  never mutated while playing. Teardown (`pauseAndDetachVideoTapIfNeeded`) pauses first, then
+  detaches the mix and unregisters the tap context.
+- Loads are asynchronous and generation-checked (`videoLoadGeneration`): a superseded load
+  never builds a player, and auto-play happens only if the load is still current and
+  `playbackState == .playing`.
+- A video with no audio track plays without a tap; if tap creation fails, the video plays
+  without DSP. A non-Float32 negotiated format passes through untouched.
+- The tap format is pinned to stereo Float32 at the source sample rate (a device-following
+  format caused volume pumping over AirPlay 2), so channels 0/1 are always L/R for balance.
+- Video volume is `AVPlayer.volume`, not applied in the tap.
+
+**Measured cost** (Apple Silicon, Release): `tapProcess` about 0.4–1.0% of one core across
+44.1 kHz stereo, 48 kHz stereo and 5.1 sources, with zero budget overruns or deadline risks.
+Telemetry is read from `VideoTapContext.diagnosticSnapshot` in LLDB (nothing is logged).
+
+### Known Limitations
+
+- **Video → audio does not auto-play.** After a video, starting an audio track may need a
+  manual Next/Play. Open; tracked as P-6 in `tasks/avplayer-native-video-dsp/placeholder.md`.
+- **Stereo only.** 5.1+ video is downmixed to stereo, including on multichannel or spatial
+  outputs. Multichannel output: issue #88.
+- **First audio track only.** No audio-track picker; the tap attaches to `audioTracks.first`.
+- **Pauses that bypass MacAmp desync the UI.** `VideoPlaybackController` does not observe
+  `AVPlayer.timeControlStatus`.
 
 ---
 
 ## Window Focus Integration
 
-### WindowFocusState
-
-Tracks which window is key (active):
+`WindowFocusState` (`@MainActor @Observable`) holds one Bool per window (`isMainKey`, `isEqualizerKey`, `isPlaylistKey`, `isVideoKey`, `isMilkdropKey`). `WindowFocusDelegate` sets `isVideoKey` when the video window becomes key and clears it on resign. `VideoWindowChromeView` reads it:
 
 ```swift
-// WindowFocusState.swift
-@Observable
-final class WindowFocusState {
-    private(set) var focusedWindow: WindowKind? = nil
-
-    var isVideoKey: Bool {
-        focusedWindow == .video
-    }
-
-    func setFocusedWindow(_ kind: WindowKind?) {
-        focusedWindow = kind
-    }
-}
-```
-
-### Titlebar State Changes
-
-The video window titlebar responds to focus changes:
-
-```swift
-// VideoWindowChromeView.swift
 @Environment(WindowFocusState.self) private var windowFocusState
-
-private var isWindowActive: Bool {
-    windowFocusState.isVideoKey
-}
-
-// In body:
-let suffix = isWindowActive ? "ACTIVE" : "INACTIVE"
-SimpleSpriteImage("VIDEO_TITLEBAR_TOP_LEFT_\(suffix)", ...)
+private var isWindowActive: Bool { windowFocusState.isVideoKey }
+// titlebar: let suffix = isWindowActive ? "ACTIVE" : "INACTIVE"
 ```
 
-**Visual States:**
-- **Active:** Bright blue gradient, white text
-- **Inactive:** Dark gray, dimmed appearance
-- **Transition:** Immediate sprite swap on focus change
+Active shows the skin's bright titlebar, inactive the dimmed one; the sprite swap is immediate. See [Window Focus State Management](MACAMP_ARCHITECTURE_GUIDE.md#window-focus-state-management).
 
 ---
 
-## Window Resizing (Full Quantized Resize)
+## Window Resizing
 
-### Size2D Model (Part 21 Implementation)
+The window resizes any-to-any in quantized 25×29 px segments, so chrome tiles always fit.
 
-```swift
-// Size2D.swift - Quantized resize with 25×29px segments
-struct Size2D: Codable, Equatable {
-    var w: Int  // Width segments (0 = 275px base)
-    var h: Int  // Height segments (0 = 116px base)
+### Size2D Model
 
-    // Presets
-    static let videoMinimum = Size2D(w: 0, h: 0)   // 275×116 (matches Main/EQ)
-    static let videoDefault = Size2D(w: 0, h: 4)   // 275×232 (standard VIDEO size)
-    static let video2x = Size2D(w: 11, h: 12)      // 550×464 (2x default)
+`Size2D` (`MacAmpApp/Models/Size2D.swift`) stores `width` / `height` in segments on a shared 275×116 base (`toPixels()` = `275 + width*25`, `116 + height*29`), with `clamped(min:max:)`. Video presets:
 
-    // Conversion to pixels
-    func toPixels() -> CGSize {
-        CGSize(
-            width: 275 + CGFloat(w) * 25,   // 25px width increments
-            height: 116 + CGFloat(h) * 29    // 29px height increments
-        )
-    }
-}
-```
+| Preset | Segments | Pixels |
+|--------|----------|--------|
+| `videoMinimum` | [0,0] | 275×116 (matches Main/EQ) |
+| `videoDefault` | [0,4] | 275×232 |
+| `video2x` | [11,12] | 550×464 |
 
 ### VideoWindowSizeState Observable
 
-```swift
-// VideoWindowSizeState.swift - State management with persistence
-@Observable
-@MainActor
-final class VideoWindowSizeState {
-    var size: Size2D = .videoDefault {
-        didSet { persist() }
-    }
-
-    var pixelSize: CGSize { size.toPixels() }
-    var contentSize: CGSize {
-        CGSize(width: pixelSize.width - 19, height: pixelSize.height - 58)
-    }
-    var centerWidth: CGFloat { pixelSize.width - 250 }
-    var centerTileCount: Int { max(0, Int(centerWidth / 25)) }
-
-    private func persist() {
-        UserDefaults.standard.set(size.w, forKey: "videoSizeW")
-        UserDefaults.standard.set(size.h, forKey: "videoSizeH")
-    }
-}
-```
+`VideoWindowSizeState` (`@MainActor @Observable`, owned as `@State` by `WinampVideoWindow`) holds `size` and derives `pixelSize`, `contentSize`, `centerWidth`, `centerTileCount`, `stretchyTilesPerSide`, `titlebarTileDistribution` and `verticalBorderTileCount`. `size.didSet` persists to UserDefaults key `videoWindowSize` as `["width": Int, "height": Int]`; `init` loads and clamps to `videoMinimum` (default `videoDefault`).
 
 ### 1x/2x Preset Buttons
 
-Clickable overlays over baked-on sprites:
-
-```swift
-// VideoWindowChromeView.swift - Button overlays
-// 1X button at (31.5, 212)
-Button(action: { sizeState.size = .videoDefault }) {
-    Color.clear.frame(width: 15, height: 18)
-}
-.position(x: 31.5, y: 212)
-.focusable(false)
-
-// 2X button at (46.5, 212)
-Button(action: { sizeState.size = .video2x }) {
-    Color.clear.frame(width: 15, height: 18)
-}
-.position(x: 46.5, y: 212)
-.focusable(false)
-```
+Transparent 15×18 `Button` overlays (`.buttonStyle(.plain)`, `.focusable(false)`) sit over the baked-on sprites at x = 31.5 (1x → `.videoDefault`) and x = 46.5 (2x → `.video2x`), y = `bottomBarY`. Each wraps the change in `WindowSnapManager.shared.beginProgrammaticAdjustment()` / `endProgrammaticAdjustment()` and calls `WindowCoordinator.shared?.updateVideoWindowSize(to:)`.
 
 ### Resize Handle Implementation
 
-```swift
-// VideoWindowChromeView.swift - 20×20px drag area in bottom-right
-private func buildVideoResizeHandle() -> some View {
-    Color.clear
-        .frame(width: 20, height: 20)
-        .contentShape(Rectangle())
-        .gesture(
-            DragGesture()
-                .onChanged { value in
-                    let delta = value.translation
-                    let wSegments = Int(round(delta.width / 25))
-                    let hSegments = Int(round(delta.height / 29))
+A 20×20 clear area at the bottom-right corner with `DragGesture(minimumDistance: 0)`:
 
-                    let candidate = Size2D(
-                        w: max(0, startSize.w + wSegments),
-                        h: max(0, startSize.h + hSegments)
-                    )
+- **First tick:** capture `dragStartSize`, call `beginProgrammaticAdjustment()`.
+- **onChanged:** compute `Size2D(width: max(0, start.width + round(dx/25)), height: max(0, start.height + round(dy/29)))` and only update the AppKit preview via `coordinator.showVideoResizePreview(resizePreview, previewSize:)`. `sizeState` is **not** changed during the drag.
+- **onEnded:** commit `sizeState.size`, call `coordinator.updateVideoWindowSize(to:)` with rounded pixels, hide the preview, clear drag state, `endProgrammaticAdjustment()`.
 
-                    // Show preview overlay (AppKit window)
-                    if let coordinator = WindowCoordinator.shared {
-                        coordinator.showVideoResizePreview(resizePreview, previewSize: candidate.toPixels())
-                    }
-
-                    // Update state (quantized)
-                    withAnimation(.none) {
-                        sizeState.size = candidate
-                    }
-                }
-                .onEnded { _ in
-                    WindowCoordinator.shared?.hideVideoResizePreview(resizePreview)
-                    WindowCoordinator.shared?.syncVideoWindowFrame(sizeState.pixelSize)
-                }
-        )
-        .position(x: pixelSize.width - 10, y: pixelSize.height - 10)
-}
-```
-
-### Dynamic Chrome Tiling
-
-```swift
-// Titlebar stretchy tiles - calculated dynamically
-let stretchyTilesPerSide = Int(ceil(CGFloat(centerTileCount) / 2))
-
-// Left stretchy tiles
-ForEach(0..<stretchyTilesPerSide, id: \.self) { i in
-    SimpleSpriteImage("VIDEO_TITLEBAR_STRETCHY_\(suffix)", width: 25, height: 20)
-        .position(x: 25 + 12.5 + CGFloat(i) * 25, y: 10)
-}
-
-// Bottom bar center tiles
-ForEach(0..<centerTileCount, id: \.self) { i in
-    SimpleSpriteImage("VIDEO_BOTTOM_TILE", width: 25, height: 38)
-        .position(x: 125 + 12.5 + CGFloat(i) * 25, y: bottomBarY)
-}
-```
+Committing only at the end avoids calling `setFrame` on every drag tick (the jitter source). `WinampVideoWindow.onAppear` does one initial frame sync.
 
 ### Preview Overlay (AppKit)
 
-```swift
-// WindowResizePreviewOverlay.swift - Shows preview during drag
-class WindowResizePreviewOverlay {
-    private var overlayWindow: NSPanel?
-
-    func show(in parentWindow: NSWindow, previewSize: CGSize) {
-        // Create borderless overlay panel
-        // Draw dashed rectangle showing target size
-        // Visible even when growing beyond current window bounds
-    }
-
-    func hide() {
-        overlayWindow?.orderOut(nil)
-    }
-}
-```
-
-### Key Improvements (Part 21)
-
-- **Full Any-to-Any Resize:** Not limited to 1x/2x presets
-- **Quantized Segments:** 25×29px snapping for consistent chrome tiling
-- **AppKit Preview:** Overlay visible when resizing larger (solves SwiftUI clipping)
-- **No Jitter:** Preview pattern + no NSWindow spam during drag
-- **Buttons Still Work:** 1x/2x as Size2D presets, not scale factors
+`WindowResizePreviewOverlay` (`MacAmpApp/Utilities/WindowResizePreviewOverlay.swift`) shows a borderless `.floating` `NSWindow` outlining the target size. Because it is a separate window it stays visible when growing beyond the current bounds (a SwiftUI overlay would be clipped). `hide()` orders it out.
 
 ---
 
@@ -673,234 +384,26 @@ class WindowResizePreviewOverlay {
 
 ### Position Persistence
 
-Window positions are saved to UserDefaults:
-
-```swift
-// WindowCoordinator.swift
-private func saveWindowPositions() {
-    if let video = videoWindow {
-        UserDefaults.standard.set(
-            NSStringFromRect(video.frame),
-            forKey: "videoWindowFrame"
-        )
-    }
-}
-
-private func restoreWindowPositions() {
-    if let frameString = UserDefaults.standard.string(forKey: "videoWindowFrame"),
-       let video = videoWindow {
-        let frame = NSRectFromString(frameString)
-        video.setFrame(frame, display: false)
-    }
-}
-```
+Frames are saved for every window by `WindowFramePersistence` (`MacAmpApp/Windows/`) through `WindowFrameStore`, under UserDefaults key `WindowFrame.video`. Geometry-change notifications schedule a debounced flush (150 ms); programmatic moves suppress persistence. The window's size in segments is persisted separately by `VideoWindowSizeState`.
 
 ### Magnetic Docking
 
-The video window participates in MacAmp's magnetic window snapping:
-
-```swift
-// WindowSnapManager.swift
-enum WindowKind: String, CaseIterable {
-    case main, equalizer, playlist, video, milkdrop
-
-    var defaultSize: CGSize {
-        switch self {
-        case .video:
-            return CGSize(width: 275, height: 232)
-        default:
-            // ... other window sizes
-        }
-    }
-}
-
-// Docking behavior:
-// - Snaps to screen edges (10px threshold)
-// - Snaps to other MacAmp windows
-// - Forms window clusters
-// - Maintains relative positions when dragging clusters
-```
+The window is registered with `WindowSnapManager` as `WindowKind.video`: it snaps to screen edges and other MacAmp windows within `SnapUtils.SNAP_DISTANCE` (15 px), joins clusters and moves with them. Double-size mode does not scale the video window; `WindowResizeController` repositions it to stay docked. See [Window Snap Manager](MACAMP_ARCHITECTURE_GUIDE.md#window-snap-manager).
 
 ### Visibility State
 
-```swift
-// AppSettings.swift
-var showVideoWindow: Bool = false {
-    didSet {
-        UserDefaults.standard.set(showVideoWindow, forKey: "showVideoWindow")
-    }
-}
-
-// WindowCoordinator observer pattern
-private func setupVideoWindowObserver() {
-    videoWindowTask = Task { @MainActor [weak self] in
-        guard let self else { return }
-
-        withObservationTracking {
-            _ = self.settings.showVideoWindow
-        } onChange: {
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                if self.settings.showVideoWindow {
-                    self.showVideoWindow()
-                } else {
-                    self.hideVideoWindow()
-                }
-                self.setupVideoWindowObserver()
-            }
-        }
-    }
-}
-```
+`AppSettings.showVideoWindow` persists via `didSet` (key `showVideoWindow`). `WindowSettingsObserver.observeShowVideo()` watches it with recursive `withObservationTracking` and calls `WindowCoordinator`'s `onShowVideoChanged` handler, which calls `showVideo()` (only once the initial windows have been presented) or `hideVideo()`.
 
 ---
 
 ## Fallback Chrome System
 
-When VIDEO.bmp is missing from a skin, the window displays fallback chrome:
+`WinampVideoWindow` checks `skinManager.currentSkin?.hasVideoSprites`, a `Skin` extension that tests for `VIDEO_TITLEBAR_TOP_CENTER_ACTIVE` in the skin's images (which may come from the skin itself or the default Winamp fallback sprites). If present it uses `VideoWindowChromeView`; otherwise `VideoWindowFallbackChrome`:
 
-### Fallback Implementation
-
-```swift
-// WinampVideoWindow.swift
-struct VideoWindowFallbackChrome<Content: View>: View {
-    @ViewBuilder let content: Content
-
-    var body: some View {
-        ZStack(alignment: .topLeading) {
-            // Dark gray background (Winamp classic color)
-            Color(red: 0.16, green: 0.16, blue: 0.20)
-                .frame(width: 275, height: 232)
-
-            // Gradient titlebar
-            WinampTitlebarDragHandle(windowKind: .video, size: CGSize(width: 275, height: 20)) {
-                LinearGradient(
-                    colors: [
-                        Color(red: 0.0, green: 0.0, blue: 0.5),
-                        Color(red: 0.0, green: 0.5, blue: 0.8)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .overlay(
-                    Text("WINAMP VIDEO")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(.white)
-                )
-            }
-
-            // Content area
-            content
-                .frame(width: 256, height: 174)
-                .position(x: 137.5, y: 107)
-
-            // Bottom bar
-            Rectangle()
-                .fill(Color(red: 0.12, green: 0.12, blue: 0.16))
-                .frame(width: 275, height: 38)
-                .overlay(
-                    Text("No VIDEO.bmp - Using Fallback")
-                        .font(.system(size: 8))
-                        .foregroundColor(.gray)
-                )
-        }
-    }
-}
-```
-
-### Fallback Appearance
-
-- **Colors:** Classic Winamp 2.x dark gray palette
-- **Titlebar:** Blue gradient with white text
-- **Borders:** Simplified solid colors (no sprites)
-- **Bottom Bar:** Dark gray with status text
-- **Functionality:** Full video playback, no buttons
-
-### Skin Detection
-
-```swift
-// SkinManager checks for VIDEO.bmp
-var hasVideoSprites: Bool {
-    currentSkin?.sprites["VIDEO_TITLEBAR_TOP_LEFT_ACTIVE"] != nil
-}
-
-// Usage in view
-if skinManager.currentSkin?.hasVideoSprites ?? false {
-    VideoWindowChromeView { content }
-} else {
-    VideoWindowFallbackChrome { content }
-}
-```
-
----
-
-## Implementation Patterns
-
-### Sprite Resolution Pattern
-
-Never hard-code sprite names. Use semantic resolution:
-
-```swift
-// ❌ WRONG: Hard-coded sprite names
-let sprite = loadBitmap("VIDEO.bmp")
-
-// ✅ CORRECT: Semantic sprite keys
-SimpleSpriteImage("VIDEO_TITLEBAR_TOP_LEFT_ACTIVE", width: 25, height: 20)
-```
-
-### Position Calculation Pattern
-
-Use absolute positioning with .position() modifier:
-
-```swift
-// ✅ CORRECT: Absolute positioning
-SimpleSpriteImage(spriteName, width: w, height: h)
-    .position(x: centerX, y: centerY)  // Center point
-
-// ❌ AVOID: Frame-based positioning (less precise)
-SimpleSpriteImage(spriteName)
-    .frame(width: w, height: h)
-    .offset(x: offsetX, y: offsetY)
-```
-
-### Environment Injection Pattern
-
-Pass all dependencies through environment:
-
-```swift
-// In window controller
-let rootView = WinampVideoWindow()
-    .environment(skinManager)
-    .environment(audioPlayer)
-    .environment(settings)
-    // ... inject all required objects
-
-// In view
-@Environment(SkinManager.self) var skinManager
-@Environment(AudioPlayer.self) var audioPlayer
-```
-
-### Observer Pattern
-
-Use withObservationTracking for reactive updates:
-
-```swift
-private func setupSizeObserver() {
-    sizeTask = Task { @MainActor [weak self] in
-        guard let self else { return }
-
-        withObservationTracking {
-            _ = self.settings.videoWindowSizeMode
-        } onChange: {
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                self.resizeVideoWindow(mode: self.settings.videoWindowSizeMode)
-                self.setupSizeObserver()  // Re-register
-            }
-        }
-    }
-}
-```
+- Dark gray background (`0.16, 0.16, 0.20`), sized from the same `VideoWindowSizeState`
+- Draggable blue gradient titlebar (`WinampTitlebarDragHandle`) with "WINAMP VIDEO" text
+- Solid-colour side borders; bottom bar reading "No VIDEO.bmp - Using Fallback"
+- Content placeholder "Video Window (No VIDEO.bmp)"; no buttons or resize handle
 
 ---
 
@@ -921,6 +424,15 @@ private func setupSizeObserver() {
 - [ ] Volume control affects video audio
 - [ ] Play/pause/stop controls work
 
+**Video Audio DSP:**
+- [ ] EQ on/off, band drags and preamp change video audio in real time, without clicks
+- [ ] Balance full left / full right / centre hits the left / right / both speakers (stereo and 5.1 sources)
+- [ ] Repeated seeks/scrubs with EQ boosted: clean audio right after each seek
+- [ ] Spectrum, oscilloscope and Milkdrop animate from the video's audio; pausing freezes them
+- [ ] Route changes mid-video (AirPods connect/disconnect, AirPlay 2, system output switch): audio resumes, EQ still applied, lip sync intact
+- [ ] AirPods one-bud-out / case close pauses through MacAmp (UI shows paused); one Play press resumes
+- [ ] Video ↔ audio switches: no crash, EQ carries over (video → audio may need Next: known P-6)
+
 **Skinning:**
 - [ ] VIDEO.bmp chrome renders correctly
 - [ ] Fallback chrome appears when VIDEO.bmp missing
@@ -928,8 +440,8 @@ private func setupSizeObserver() {
 - [ ] Metadata text scrolls when too long
 
 **Window Resizing:**
-- [ ] Ctrl+1 switches to 1x size
-- [ ] Ctrl+2 switches to 2x size
+- [ ] 1x button restores 275×232; 2x button gives 550×464
+- [ ] Corner drag resizes in 25×29 steps with the preview outline; chrome tiles fill the width
 - [ ] Video content scales properly
 - [ ] Window position maintained during resize
 
@@ -941,87 +453,35 @@ private func setupSizeObserver() {
 
 ### Automated Testing
 
-```swift
-// Example test structure
-func testVideoWindowCreation() {
-    let coordinator = WindowCoordinator(...)
+Video audio DSP suites (`Tests/MacAmpTests/`, Swift Testing; run with Thread Sanitizer):
 
-    // Show video window
-    coordinator.settings.showVideoWindow = true
+| Suite | Covers |
+|-------|--------|
+| `VideoTapLifecycleTests` | Context retain/release balance, tap-create failure, rapid build/attach cycles, item replacement |
+| `VideoTapFanoutTests` | EQ and balance fanout to registered contexts, sample-rate poll |
+| `BiquadNumericalMatchTests` | Tap cascade vs `AVAudioUnitEQ` within 0.5 dB |
+| `VideoTapVisualizerRenderTests` | Video visualizer producer output |
+| `VideoTapTelemetryTests` | Deadline telemetry counters |
+| `VideoTapCPUBenchmarkTests` | Debug-build regression guard on DSP cost per callback |
+| `VideoSeekStateMatrixTests` | `resume: true/false/nil` seek outcomes |
+| `VideoTapSendableContractTests` | `VideoTapContext` stored fields stay render-thread-safe |
 
-    // Verify window exists
-    XCTAssertNotNil(coordinator.videoWindow)
-    XCTAssertTrue(coordinator.videoWindow!.isVisible)
-}
-
-func testVideoSizeMode() {
-    let settings = AppSettings()
-
-    // Test persistence
-    settings.videoWindowSizeMode = .twoX
-    XCTAssertEqual(
-        UserDefaults.standard.string(forKey: "videoWindowSizeMode"),
-        "2x"
-    )
-}
-```
-
-### Performance Testing
-
-**Key Metrics:**
-- Video decode performance (CPU usage)
-- Memory usage during playback
-- Window resize animation smoothness
-- Sprite rendering performance
-
-**Target Performance:**
-- < 5% CPU for UI rendering
-- < 30% CPU for 1080p video decode
-- 60 FPS window animations
-- < 50MB memory for chrome sprites
+Window geometry is covered by `WindowFrameStoreTests` and `WindowDockingGeometryTests`.
 
 ---
 
 ## Future Enhancements
 
-### Planned Features
+**Current gaps:**
+- Chrome stays 1x in double-size mode (no VIDEO.bmp sprite scaling)
+- Chrome buttons other than 1x/2x are visual only; no fullscreen mode
+- Codec support is whatever AVFoundation decodes
 
-**Chrome Scaling (Priority: High)**
-- Scale VIDEO.bmp sprites in 2x mode
-- Implement sprite scaling pipeline
-- Match main window scaling behavior
-
-**Interactive Buttons (Priority: Medium)**
-- Wire up fullscreen button to AVPlayerView
-- Implement 1x/2x buttons in chrome
-- Add context menu for video options
-
-**Advanced Playback (Priority: Low)**
-- Subtitle support (.srt, .vtt)
-- Audio track selection
-- Playback speed controls
-- Frame-by-frame stepping
-
-### Technical Debt
-
-**Current Issues:**
-- Chrome remains 1x in 2x mode
-- Buttons are visual-only (not interactive)
-- No fullscreen mode implementation
-- Limited codec support (QuickTime only)
-
-**Refactoring Opportunities:**
-- Extract metadata scrolling to reusable component
-- Unify sprite scaling across all windows
-- Create shared video controls component
-
-### API Considerations
-
-**macOS 26 (Tahoe) Opportunities:**
-- New AVKit APIs for video processing
-- Enhanced HDR video support
-- Improved codec support
-- Picture-in-Picture enhancements
+**Planned:**
+- Chrome scaling for double-size mode, matching the main window
+- Wire the fullscreen button to `AVPlayerView`; context menu for video options
+- Fix video → audio auto-play (P-6); multichannel (5.1+) output through the tap (issue #88)
+- Subtitles (.srt, .vtt), audio-track selection, playback speed, frame stepping
 
 ---
 
@@ -1029,124 +489,49 @@ func testVideoSizeMode() {
 
 ### Complete VIDEO.bmp Sprite Map
 
-```swift
-// From SkinSprites.swift
-let videoSprites = [
-    // Active titlebar (y: 0-20)
-    Sprite(name: "VIDEO_TITLEBAR_TOP_LEFT_ACTIVE", x: 0, y: 0, width: 25, height: 20),
-    Sprite(name: "VIDEO_TITLEBAR_TOP_CENTER_ACTIVE", x: 26, y: 0, width: 100, height: 20),
-    Sprite(name: "VIDEO_TITLEBAR_STRETCHY_ACTIVE", x: 127, y: 0, width: 25, height: 20),
-    Sprite(name: "VIDEO_TITLEBAR_TOP_RIGHT_ACTIVE", x: 153, y: 0, width: 25, height: 20),
-
-    // Inactive titlebar (y: 21-41)
-    Sprite(name: "VIDEO_TITLEBAR_TOP_LEFT_INACTIVE", x: 0, y: 21, width: 25, height: 20),
-    Sprite(name: "VIDEO_TITLEBAR_TOP_CENTER_INACTIVE", x: 26, y: 21, width: 100, height: 20),
-    Sprite(name: "VIDEO_TITLEBAR_STRETCHY_INACTIVE", x: 127, y: 21, width: 25, height: 20),
-    Sprite(name: "VIDEO_TITLEBAR_TOP_RIGHT_INACTIVE", x: 153, y: 21, width: 25, height: 20),
-
-    // Side borders
-    Sprite(name: "VIDEO_BORDER_LEFT", x: 127, y: 42, width: 11, height: 29),
-    Sprite(name: "VIDEO_BORDER_RIGHT", x: 139, y: 42, width: 8, height: 29),
-
-    // Bottom bar sections
-    Sprite(name: "VIDEO_BOTTOM_LEFT", x: 0, y: 42, width: 125, height: 38),
-    Sprite(name: "VIDEO_BOTTOM_RIGHT", x: 0, y: 81, width: 125, height: 38),
-    Sprite(name: "VIDEO_BOTTOM_TILE", x: 127, y: 81, width: 25, height: 38),
-
-    // Buttons (normal state)
-    Sprite(name: "VIDEO_CLOSE_BUTTON", x: 167, y: 3, width: 9, height: 9),
-    Sprite(name: "VIDEO_FULLSCREEN_BUTTON", x: 9, y: 51, width: 15, height: 18),
-    Sprite(name: "VIDEO_1X_BUTTON", x: 24, y: 51, width: 15, height: 18),
-    Sprite(name: "VIDEO_2X_BUTTON", x: 39, y: 51, width: 15, height: 18),
-    Sprite(name: "VIDEO_MISC_BUTTON", x: 69, y: 51, width: 15, height: 18),
-
-    // Buttons (pressed state)
-    Sprite(name: "VIDEO_CLOSE_BUTTON_PRESSED", x: 148, y: 42, width: 9, height: 9),
-    Sprite(name: "VIDEO_FULLSCREEN_BUTTON_PRESSED", x: 158, y: 42, width: 15, height: 18),
-    Sprite(name: "VIDEO_1X_BUTTON_PRESSED", x: 173, y: 42, width: 15, height: 18),
-    Sprite(name: "VIDEO_2X_BUTTON_PRESSED", x: 188, y: 42, width: 15, height: 18),
-    Sprite(name: "VIDEO_MISC_BUTTON_PRESSED", x: 218, y: 42, width: 15, height: 18)
-]
-```
-
-### Sprite Extraction Pipeline
+Defined in `MacAmpApp/Models/SkinSprites.swift` (VIDEO sheet) and extracted with the rest of the skin; views reference them by these keys:
 
 ```swift
-// SkinLoader.swift extracts VIDEO.bmp automatically
-if let videoBMP = loadBitmap("VIDEO.bmp") {
-    extractSprites(from: videoBMP, definitions: videoSprites)
-}
+// Active titlebar (y: 0-20)
+Sprite(name: "VIDEO_TITLEBAR_TOP_LEFT_ACTIVE", x: 0, y: 0, width: 25, height: 20),
+Sprite(name: "VIDEO_TITLEBAR_TOP_CENTER_ACTIVE", x: 26, y: 0, width: 100, height: 20),
+Sprite(name: "VIDEO_TITLEBAR_STRETCHY_ACTIVE", x: 127, y: 0, width: 25, height: 20),
+Sprite(name: "VIDEO_TITLEBAR_TOP_RIGHT_ACTIVE", x: 153, y: 0, width: 25, height: 20),
 
-// Sprites available via semantic keys:
-skinManager.currentSkin?.sprites["VIDEO_TITLEBAR_TOP_LEFT_ACTIVE"]
+// Inactive titlebar (y: 21-41)
+Sprite(name: "VIDEO_TITLEBAR_TOP_LEFT_INACTIVE", x: 0, y: 21, width: 25, height: 20),
+Sprite(name: "VIDEO_TITLEBAR_TOP_CENTER_INACTIVE", x: 26, y: 21, width: 100, height: 20),
+Sprite(name: "VIDEO_TITLEBAR_STRETCHY_INACTIVE", x: 127, y: 21, width: 25, height: 20),
+Sprite(name: "VIDEO_TITLEBAR_TOP_RIGHT_INACTIVE", x: 153, y: 21, width: 25, height: 20),
+
+// Side borders
+Sprite(name: "VIDEO_BORDER_LEFT", x: 127, y: 42, width: 11, height: 29),
+Sprite(name: "VIDEO_BORDER_RIGHT", x: 139, y: 42, width: 8, height: 29),
+
+// Bottom bar sections
+Sprite(name: "VIDEO_BOTTOM_LEFT", x: 0, y: 42, width: 125, height: 38),
+Sprite(name: "VIDEO_BOTTOM_RIGHT", x: 0, y: 81, width: 125, height: 38),
+Sprite(name: "VIDEO_BOTTOM_TILE", x: 127, y: 81, width: 25, height: 38),
+
+// Buttons (normal state)
+Sprite(name: "VIDEO_CLOSE_BUTTON", x: 167, y: 3, width: 9, height: 9),
+Sprite(name: "VIDEO_FULLSCREEN_BUTTON", x: 9, y: 51, width: 15, height: 18),
+Sprite(name: "VIDEO_1X_BUTTON", x: 24, y: 51, width: 15, height: 18),
+Sprite(name: "VIDEO_2X_BUTTON", x: 39, y: 51, width: 15, height: 18),
+Sprite(name: "VIDEO_MISC_BUTTON", x: 69, y: 51, width: 15, height: 18),
+
+// Buttons (pressed state)
+Sprite(name: "VIDEO_CLOSE_BUTTON_PRESSED", x: 148, y: 42, width: 9, height: 9),
+Sprite(name: "VIDEO_FULLSCREEN_BUTTON_PRESSED", x: 158, y: 42, width: 15, height: 18),
+Sprite(name: "VIDEO_1X_BUTTON_PRESSED", x: 173, y: 42, width: 15, height: 18),
+Sprite(name: "VIDEO_2X_BUTTON_PRESSED", x: 188, y: 42, width: 15, height: 18),
+Sprite(name: "VIDEO_MISC_BUTTON_PRESSED", x: 218, y: 42, width: 15, height: 18),
 ```
-
-### Coordinate Reference
-
-```
-VIDEO.bmp Layout (typical 306×164):
-
-[Active Titlebar - y:0-20]
-├─ Left Cap (0,0,25,20)
-├─ Center Text (26,0,100,20)
-├─ Stretchy (127,0,25,20)
-└─ Right Cap (153,0,25,20)
-
-[Inactive Titlebar - y:21-41]
-├─ Left Cap (0,21,25,20)
-├─ Center Text (26,21,100,20)
-├─ Stretchy (127,21,25,20)
-└─ Right Cap (153,21,25,20)
-
-[Chrome Components - y:42+]
-├─ Bottom Left (0,42,125,38)
-├─ Bottom Right (0,81,125,38)
-├─ Left Border (127,42,11,29)
-├─ Right Border (139,42,8,29)
-└─ Bottom Tile (127,81,25,38)
-
-[Buttons - embedded in chrome]
-├─ Fullscreen (9,51,15,18)
-├─ 1x Size (24,51,15,18)
-├─ 2x Size (39,51,15,18)
-└─ Misc (69,51,15,18)
-```
-
----
-
-## Summary
-
-The MacAmp Video Window represents a complete implementation of Winamp's video playback capabilities with modern macOS integration. Through careful sprite extraction, precise positioning, and native AVPlayer integration, it provides authentic visual presentation while leveraging platform-native video decoding.
-
-Key achievements:
-- ✅ Pixel-perfect VIDEO.bmp skinning (24 sprites)
-- ✅ Native video format support (MP4, MOV, M4V)
-- ✅ Focus-aware chrome states (active/inactive titlebars)
-- ✅ Magnetic window docking (5-window system)
-- ✅ Fallback for missing sprites (classic gray chrome)
-- ✅ **Full quantized resize** (25×29px segments) - Part 21
-- ✅ **1x/2x preset buttons** (clickable overlays) - Part 21
-- ✅ **Volume slider sync** (video audio control) - Part 21
-- ✅ **Seek bar functionality** (drag to any position) - Part 21
-- ✅ **Time display integration** (elapsed/remaining) - Part 21
-- ✅ **Metadata ticker** (auto-scrolling filename, codec, resolution)
-- ✅ **AppKit preview overlay** (resize visualization)
-- ✅ Oracle Grade A validated architecture
-
-Part 21 additions complete the video window as a fully functional media player with unified controls matching audio playback behavior. The Size2D quantized resize model enables any-to-any window sizing while maintaining pixel-perfect chrome rendering.
-
-Future work focuses on fullscreen mode, subtitle support, and additional codec support. The architecture is designed for extensibility while maintaining the authentic Winamp experience that defines MacAmp.
 
 ---
 
 **Document Version History:**
-- v2.0.0 (2025-11-15): Part 21 Video Control Unification
-  - Added Size2D quantized resize documentation
-  - Added volume/seek/time integration patterns
-  - Added WindowCoordinator bridge patterns
-  - Added @MainActor and Task { } patterns
-  - Updated from scaleEffect to full resize
-- v1.0.0 (2025-11-14): Initial comprehensive documentation
-  - TASK 2 Days 1-6 implementation
-  - VIDEO.bmp sprite system
-  - Focus tracking architecture
+- v3.1.0 (2026-09-25): Pruned; DSP internals moved to the Architecture Guide; snippets replaced with current code
+- v3.0.0 (2026-09-25): AVPlayer-native video audio DSP (EQ, preamp, balance, visualizers on video audio)
+- v2.0.0 (2025-11-15): Size2D quantized resize; unified volume/seek/time controls
+- v1.0.0 (2025-11-14): Initial documentation (VIDEO.bmp sprites, focus tracking)
