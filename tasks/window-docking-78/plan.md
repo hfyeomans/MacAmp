@@ -1,6 +1,6 @@
 # Plan: Window Docking, Minimize, Persistence, Windowshade & Sleep/Wake (#78)
 
-> **Status:** APPROVED (decisions D1–D5, owner, 2026-09-27). Next: Phase 0 runtime experiments.
+> **Status:** APPROVED (decisions D1–D5, owner, 2026-09-27). **Phase 0 done** (findings in `verification.md`; Designs C and D updated). Next: Phase 1.
 > **Branch:** `fix/window-docking-78`.
 > **Target:** macOS 27; Swift 6.2 language mode on the Swift 6.4 toolchain; strict concurrency, `@MainActor` UI, `@Observable` state. SwiftUI handles content and menu commands (`Commands`). AppKit `NSWindow` stays for the borderless Winamp windows, because SwiftUI can't do docking, custom shapes or group moves (research §3).
 > **Research:** `research.md`. **Verification log:** `verification.md`.
@@ -63,21 +63,43 @@
 
 This is Webamp's cluster shift (`ensureWindowsAreOnScreen`) applied per cluster. Winamp's per-window clamp would break stacks.
 
+**What Phase 0 showed** (`verification.md` exp 3–4): on wake, macOS first reports a **temporary 1920×1080 screen** and moves every window onto it **one at a time**, which splits docked groups. It posts `didChangeScreenParameters` *before* `didWake`. The real screen returns about 1.3 s after `didWake`, and the last screen change comes about 1.7 s after it. Our `windowDidMove` cluster logic chased these system moves.
+
+**Layout snapshot:** on `NSWorkspace.WillSleepMessage` (and on the first `DidChangeScreenParametersMessage` of a burst while awake), save every window's frame **as the user left it** into `intendedLayout`. Current frames after a transition can't be trusted to show docking.
+
+**Transition mode:** between the snapshot and the settle run, `isScreenTransition = true`. While it is set:
+- `WindowSnapManager.windowDidMove` ignores moves, so no cluster chasing.
+- `WindowFramePersistence` doesn't save, so the split layout isn't persisted.
+
+**Settle run** (debounced; re-run on every event in the burst):
+1. restore `intendedLayout`
+2. run `ScreenClamp` per docked cluster against the current screens (D3: groups move as a unit)
+3. persist
+4. end transition mode once no screen event has arrived for `screenSettleDelay`
+
+**Timing:**
+- `screenSettleDelay` is a named constant with a UserDefaults override, **default 1.0 s**.
+- Additionally the transition stays open for at least `wakeSettleWindow` (named constant, **default 3.0 s**) after `didWake`, so a lull between the temporary and the real screen can't end it early. Phase 0 measured a 1.3 s lull.
+- Restoring then clamping is idempotent, so extra runs are harmless.
+
 **Triggers:**
-- after launch restore
-- on `NSApplication.DidChangeScreenParametersMessage`
-- on `NSWorkspace.DidWakeMessage` / `ScreensDidWakeMessage`, as a hint only
+- after launch restore (restore persisted frames, then clamp)
+- `NSApplication.DidChangeScreenParametersMessage`
+- `NSWorkspace.WillSleepMessage` for the snapshot
+- `NSWorkspace.DidWakeMessage` / `ScreensDidWakeMessage` to start the wake window
 
-All triggers are coalesced by a debounce, `screenSettleDelay`: a named constant with a UserDefaults override, default 0.75 s. The observers use the macOS 27 typed `MainActorMessage` API and keep `ObservationToken`s, which are torn down in `stop()`.
+The observers use the macOS 27 typed `MainActorMessage` API (`ScreensDidWakeMessage` is an `AsyncMessage`, so it hops to the main actor) and keep `ObservationToken`s, torn down in `stop()`.
 
-**Moves:** guard moves are wrapped in `isAdjusting` and persisted like any other move.
+**Moves:** guard moves are wrapped in `isAdjusting` and persisted once the settle run ends.
+
+**Windows taller than the screen:** the Playlist was seen at 1566 px, taller than the usable height. The clamp pins the top edge so the titlebar stays reachable. Phase 3 also traces why the Playlist grew from 900 → 1566 during restore.
 
 **Recovery command:** "Reset Window Positions" is a SwiftUI `CommandGroup` item in the Windows menu. It runs the existing default-stack layout on the main screen, then persists. Its shortcut is chosen in Phase 3 so it doesn't clash with existing bindings.
 
 ### D. Minimize (D2, D5)
 
 - Main's `BorderlessWindow` gains `.miniaturizable`.
-- `BorderlessWindow` overrides `performMiniaturize(_:)`, and validates the menu item, so Cmd+M works from **any** MacAmp window without beeping. Phase 0 experiment 1 settles this.
+- `BorderlessWindow` overrides `validateUserInterfaceItem(_:)` to return **true** for `performMiniaturize(_:)`, and overrides `performMiniaturize(_:)` to call `minimizeApp()`. Phase 0 exp 2 showed that without this, Window › Minimize is greyed out on the non-miniaturizable windows and Cmd+M beeps, because the action is never sent. Exp 1 confirmed that `.miniaturizable` on Main minimizes and restores cleanly.
 - `WindowVisibilityController.minimizeKeyWindow()` becomes `minimizeApp()`:
   - record which windows are open
   - `orderOut` the non-Main windows
@@ -145,7 +167,7 @@ A per-button checklist lives in `verification.md`.
 
 ## Risks
 
-- **Wake timing:** screens may reappear late. Mitigated by debouncing and re-running the guard on every screen-parameter change.
+- **Wake timing (measured):** a temporary 1080p screen appears, then the real screen comes back about 1.3 s after `didWake`. Mitigated by the sleep snapshot, transition mode, and the 3 s wake window plus re-running on every event.
 - **Borderless minimize quirks** (beep, a disabled menu item, animation): settled by Phase 0 before any building.
 - **Moving closed windows with the group** could surprise someone who parked the EQ elsewhere. It only happens when the EQ was docked when closed, which is the #78 intent.
 - **Snap 15 → 10 px:** saved layouts with an 11–15 px gap will no longer count as docked. This is rare, because snapping leaves 0 px gaps; the first Main drag re-snaps within 10 px.
