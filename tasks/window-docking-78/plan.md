@@ -98,6 +98,30 @@ Fix:
 - **Minimize buttons:** see decision D5.
 - **Main:** audit it to the same pattern.
 
+### D3. Windowshade windows (owner request, 2026-09-27)
+
+Windowshade collapses a window to its skin's shade strip; it is the compact "mini player". It is a separate mode from minimize (Winamp `WINAMP_OPTIONS_WINDOWSHADE`, Ctrl+W, per window). As with the titlebars (D2 above), **every control in a shade strip is part of the strip's bitmap**:
+- Buttons are invisible hit areas. Webamp keeps `background: none` even while pressed.
+- Only sliders draw a thumb sprite.
+
+The owner notes that some shade-view buttons may not work yet, so this is a **functional** audit as well as a visual one.
+
+| Window | Shade strip (skin) | Controls in the strip (Webamp positions) | MacAmp today | Work |
+|---|---|---|---|---|
+| **Main** | `MAIN_SHADE_BACKGROUND` (`titlebar.bmp`) | Titlebar min/shade/close at x=244/254/264, y=3; the shade glyph uses `MAIN_SHADE_BUTTON_SELECTED`. **Transport** hit areas at top 2, height 10: prev 169 (w7), play 176 (w10), pause 186 (w9), stop 195 (w9), next 204 (w10), eject 215 (w10). **Position** mini-slider at 226,4, 17×7 with a 3×7 thumb (`main-window.css:427-500`). | Transport draws full-size `cbuttons` sprites scaled to 0.6 (`MainWindowShadeLayer.swift:28-56`). The titlebar buttons draw sprites (`:104-133`). No eject; the position slider is unaudited. | Replace with invisible hit areas at those positions. Titlebar buttons show pressed or selected sprites only. Add eject and the position slider if missing. Verify every control works. |
+| **EQ** | EQ shade strip (`eqmain.bmp`) | Shade (x=254) and close (x=264) hit areas; the pressed shade-state glyph is `EQ_MINIMIZE_BUTTON_ACTIVE`. **Volume** and **balance** mini-sliders with thumb sprites (Webamp `EqualizerShade.tsx:27-28`). | Shade state is local `@State` and not persisted (Phase 1). The titlebar draws `MAIN_*` sprites at 244/254/264, including a non-Winamp minimize (D5). Shade-mode sliders and buttons are unaudited. | Hit areas plus EQ's own pressed sprites. Working volume/balance sliders in the shade strip. Persist the shade state. |
+| **Playlist** | Playlist shade strip (PLEDIT) | Track title and time text; shade (right−12) and close (right−2) hit areas with `PLAYLIST_*_SELECTED` pressed sprites (`PlaylistShade.tsx:59-71`, `skinSelectors.ts:130-135`). | `PlaylistShadeView` reuses `PlaylistTitleBarButtons`: `MAIN_*` sprites plus the extra minimize (`PlaylistShadeView.swift:33`). | Same fix as the titlebar. Verify the title and time render and both buttons work. |
+| **Video / Milkdrop** | No Winamp shade mode | — | — | Out of scope. They only take part in the group minimize. |
+
+**Shade changes and docking (ties into Design A):** shade and unshade change a window's height, so docked neighbours below must move by the height delta to stay attached. Winamp does this with `set_aot(1)` (`Set.cpp:914-937`) and Webamp with `withWindowGraphIntegrity` (`actionCreators/windows.ts:22-50`). The same applies to double-size. MacAmp re-anchors on double-size (`WindowResizeController.swift:105-149`) but not on shade. That is research open question 4: the Main shade collapse may leave a 102 px gap that breaks the chain. Phase 2 extends the re-anchoring to shade toggles on all three windows.
+
+**Per-button checklist (manual, Phase 4):**
+- Main shade: every transport button, eject, position drag, unshade, minimize, close.
+- EQ shade: volume, balance, unshade, close.
+- Playlist shade: unshade, close, title and time display.
+
+Record each as PASS, FAIL or FIXED in the task's verification notes.
+
 ### D. Minimize (D2: Winamp model, every window)
 
 - `BorderlessWindow` gains `.miniaturizable`, and overrides `performMiniaturize(_:)` to call `miniaturize(_:)` so Cmd+M doesn't beep. Experiment 1 decides whether `.miniaturizable` goes on Main only or on all windows.
@@ -114,9 +138,9 @@ Fix:
 |---|---|---|
 | 0 | Runtime experiments 1–5 (research §4), using a debug build and temporary logging that is removed before commit | Findings recorded in `research.md` |
 | 1 | B: visibility and shade persistence; `DockingController` cleanup | Unit tests (settings round-trip, `showAllWindows` honours flags); manual relaunch |
-| 2 | A: `DockGraph` pure function plus cluster including closed windows; bracket unguarded moves | Unit tests (graph with closed EQ, transitive chains, detached child); manual #78 repro |
+| 2 | A: `DockGraph` pure function plus cluster including closed windows; bracket unguarded moves; re-anchor docked neighbours on shade and unshade (as double-size does) | Unit tests (graph with closed EQ, transitive chains, detached child); manual #78 repro |
 | 3 | C: `ScreenClamp` pure function plus `WindowScreenGuard` plus the Reset command | Unit tests (cluster fits/overflows, multi-screen, Dock left, union larger than screen); manual sleep/wake, display unplug, resolution change |
-| 4 | D2 titlebar/shade hit areas (EQ, Playlist, Main audit) + D: minimize plus shortcuts (Cmd+M, Option+M → group minimize; Ctrl+W → Main windowshade) | Manual: button, Cmd+M, Option+M, Ctrl+W, Dock restore, restore then off-screen |
+| 4 | D2 titlebar hit areas + D3 windowshade strips (Main, EQ, Playlist): hit areas, working controls, per-button checklist + D: minimize plus shortcuts (Cmd+M, Option+M → group minimize; Ctrl+W → Main windowshade) | Manual: button, Cmd+M, Option+M, Ctrl+W, Dock restore, restore then off-screen |
 | 5 | D4: Shift-drag flips snapping; `SNAP_DISTANCE` 15 → 10 (and docs) | Unit tests (snap and cluster at 10 px); manual |
 | 6 | Docs: fix the two stale `MULTI_WINDOW_ARCHITECTURE.md` statements, document docking, recovery and minimize; fix the triage note | Link checker |
 | 7 | Full TSan suite, one Codex review, PR (closes #78) | CI green |
