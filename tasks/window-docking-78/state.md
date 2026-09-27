@@ -3,7 +3,7 @@
 > **Purpose:** Fix issue #78 (join/clamp, minimize, window-state persistence) and the owner's sleep/wake off-screen windows problem.
 > **Created:** 2026-09-26 — pulled ahead of the Structure Sprint (D-WIN78, user).
 > **Branch:** `fix/window-docking-78` (from `main` `0d6e258`).
-> **Status:** 📝 PLAN APPROVED (decisions D1–D5, 2026-09-27) — **Phase 0 ✅ + Phase 1 ✅** (2026-09-27; `verification.md`). Next: Phase 2 (docking graph, snap 10 px, Shift-drag, shade re-anchoring).
+> **Status:** 📝 PLAN APPROVED (decisions D1–D5, 2026-09-27) — **Phases 0–2 ✅** (2026-09-27; `verification.md`). Next: Phase 3 (screen guard, sleep/wake, Reset Window Positions, top-edge overlap, Playlist size/position).
 > **Files:** `research.md`, `plan.md`, `todo.md`, `verification.md`, `placeholder.md`, `depreciated.md`.
 
 ## Root causes (summary — details in research.md §1)

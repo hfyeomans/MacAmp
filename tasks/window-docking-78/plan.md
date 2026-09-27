@@ -1,6 +1,6 @@
 # Plan: Window Docking, Minimize, Persistence, Windowshade & Sleep/Wake (#78)
 
-> **Status:** APPROVED (decisions D1–D5, owner, 2026-09-27). **Phase 0 ✅, Phase 1 ✅.** Next: Phase 2.
+> **Status:** APPROVED (decisions D1–D5, owner, 2026-09-27). **Phases 0–2 ✅.** Next: Phase 3.
 > **Branch:** `fix/window-docking-78`.
 > **Target:** macOS 27; Swift 6.2 language mode on the Swift 6.4 toolchain; strict concurrency, `@MainActor` UI, `@Observable` state. SwiftUI handles content and menu commands (`Commands`). AppKit `NSWindow` stays for the borderless Winamp windows, because SwiftUI can't do docking, custom shapes or group moves (research §3).
 > **Research:** `research.md`. **Verification log:** `verification.md`.
@@ -92,6 +92,12 @@ The observers use the macOS 27 typed `MainActorMessage` API (`ScreensDidWakeMess
 
 **Moves:** guard moves are wrapped in `isAdjusting` and persisted once the settle run ends.
 
+**Top-edge overlap (owner, 2026-09-27; screenshots 7:26:09 → 7:26:22 → 7:26:33 PM):**
+- **Symptom:** dragging Main (with the EQ docked under it) to the very top of the LG makes the EQ slide *under* Main. The EQ's titlebar is hidden behind Main's bottom by about one titlebar, ~28–30 px at double size. Clicking the EQ brings it to the front, overlapping Main.
+- **Why it matters:** the group should move as one, so a member was shifted relative to the others.
+- **Hypothesis to confirm first with logging:** ~30 px is the LG's menu-bar height (1600 − 1570 `visibleFrame`). Either macOS constrains only one member (e.g. the key window) out of the menu-bar area, or the group snap (`snapWithinUnion` against `visibleFrame`) and per-window placement disagree at the top edge.
+- **Fix:** keep the group's relative offsets. Apply one delta to all members and clamp the group's union to the top of `visibleFrame`, sharing the `ScreenClamp` logic.
+
 **Windows taller than the screen:** the Playlist was seen at 1566 px, taller than the usable height. The clamp pins the top edge so the titlebar stays reachable. Phase 3 also traces why the Playlist grew from 900 → 1566 during restore.
 
 **Recovery command:** "Reset Window Positions" is a SwiftUI `CommandGroup` item in the Windows menu. It runs the existing default-stack layout on the main screen, then persists. Its shortcut is chosen in Phase 3 so it doesn't clash with existing bindings.
@@ -142,6 +148,8 @@ The owner notes that some shade-view buttons may not work yet, so this is a **fu
 | **EQ** | EQ shade strip (`eqmain.bmp`) | Shade/**unshade** (x=254; the baked glyph looks like two small overlapping windows) and close (x=264) hit areas; the pressed shade-state glyph is `EQ_MINIMIZE_BUTTON_ACTIVE`. **Volume** slider at 61,4, 97×6, and **balance** slider at 164,4, 43×6, each with a 3×7 thumb (`equalizer-window.css:11-44`, `EqualizerShade.tsx:27-28`). | **Owner screenshot (2026-09-27):** `buildShadeMode()` uses a centre-aligned `ZStack` with `.at()` children, so everything is misplaced: the unshade button doesn't respond, and the slider thumbs render as three yellow bars in the middle. The sliders are static sprites, not controls. In the screenshot the baked tracks appear at ~x 5–57 and ~208–250 (1×), **not** Webamp's 61–158 / 164–207. Either this skin differs or `EQ_SHADE_BACKGROUND` is cut from the wrong region: **settle it in Design G with the owner.** | Hit areas with EQ's own sprites; working volume and balance sliders. |
 | **Playlist** | Playlist shade strip (PLEDIT) | Track title and time text; shade (right−12) and close (right−2) hit areas with `PLAYLIST_*_SELECTED` pressed sprites (`PlaylistShade.tsx:59-71`). | `PlaylistShadeView` reuses `PlaylistTitleBarButtons` (`PlaylistShadeView.swift:33`). | Same fix as E; verify the title and time render and both buttons work. |
 | **Video / Milkdrop** | No Winamp shade mode | — | — | Out of scope; they only take part in the group minimize. |
+
+**Dragging shaded windows (owner, 2026-09-27):** none of the three shade views has a `WinampTitlebarDragHandle`. Only the full EQ (`WinampEqualizerWindow.swift:76`) and full Playlist (`WinampPlaylistWindow.swift:153`) views do, so a shaded window can't be moved. In Winamp the whole shade strip, outside its buttons, is the drag area, and a shaded Main still drags its docked group. Add drag handles to the Main, EQ and Playlist shade strips beneath the button hit areas.
 
 A per-button checklist lives in `verification.md`.
 

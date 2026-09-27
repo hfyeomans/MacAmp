@@ -25,20 +25,25 @@ final class WindowSnapManager: NSObject, NSWindowDelegate {
     }
 
     private var windows: [WindowKind: TrackedWindow] = [:]
-    private var lastOrigins: [ObjectIdentifier: NSPoint] = [:]
+    private var lastFrames: [ObjectIdentifier: NSRect] = [:]
     private var isAdjusting = false
+    /// Nesting depth of `begin/endProgrammaticAdjustment`; callers may bracket code that brackets again.
+    private var programmaticDepth = 0
 
     // Public methods to disable snap manager during programmatic resizing
     func beginProgrammaticAdjustment() {
-        isAdjusting = true
+        programmaticDepth += 1
     }
 
     func endProgrammaticAdjustment() {
-        isAdjusting = false
-        // Update lastOrigins for all windows after programmatic adjustment
+        programmaticDepth = max(0, programmaticDepth - 1)
+        if programmaticDepth == 0 { recordFrames() }
+    }
+
+    private func recordFrames() {
         for (_, tracked) in windows {
             if let w = tracked.window {
-                lastOrigins[ObjectIdentifier(w)] = w.frame.origin
+                lastFrames[ObjectIdentifier(w)] = w.frame
             }
         }
     }
@@ -46,7 +51,7 @@ final class WindowSnapManager: NSObject, NSWindowDelegate {
     func register(window: NSWindow, kind: WindowKind) {
         windows[kind] = TrackedWindow(window: window, kind: kind)
         // Delegate is set via WindowDelegateMultiplexer in WindowCoordinator
-        lastOrigins[ObjectIdentifier(window)] = window.frame.origin
+        lastFrames[ObjectIdentifier(window)] = window.frame
     }
 
     func clusterKinds(containing kind: WindowKind) -> Set<WindowKind>? {
@@ -55,7 +60,7 @@ final class WindowSnapManager: NSObject, NSWindowDelegate {
         let targetID = ObjectIdentifier(targetWindow)
         guard idToBox[targetID] != nil else { return nil }
 
-        let clusterIDs = connectedCluster(start: targetID, boxes: idToBox)
+        let clusterIDs = DockGraph.cluster(from: targetID, boxes: idToBox)
         var connectedKinds: Set<WindowKind> = []
         for (candidateKind, tracked) in windows {
             guard let window = tracked.window else { continue }
@@ -72,7 +77,7 @@ final class WindowSnapManager: NSObject, NSWindowDelegate {
     }
 
     func windowDidMove(_ notification: Notification) {
-        guard !isAdjusting else { return }
+        guard !isAdjusting, programmaticDepth == 0 else { return }
         guard let movedWindow = notification.object as? NSWindow else { return }
 
         // Determine which tracked kind moved
@@ -92,10 +97,12 @@ final class WindowSnapManager: NSObject, NSWindowDelegate {
         guard let moved = windows[movedKind]?.window else { return }
         let movedID = ObjectIdentifier(moved)
 
-        // Compute user delta from last origin
+        // A move caused by a size change (shade/unshade keeps the top edge) is handled in windowDidResize.
+        let lastFrame = lastFrames[movedID] ?? moved.frame
+        guard lastFrame.size == moved.frame.size else { return }
         let currentOrigin = moved.frame.origin
-        let lastOrigin = lastOrigins[movedID] ?? currentOrigin
-        let userDelta = NSPoint(x: currentOrigin.x - lastOrigin.x, y: currentOrigin.y - lastOrigin.y)
+        let userDelta = NSPoint(x: currentOrigin.x - lastFrame.origin.x, y: currentOrigin.y - lastFrame.origin.y)
+        guard abs(userDelta.x) >= 1 || abs(userDelta.y) >= 1 else { return }
 
         // Build mapping from window -> box (ONLY for visible windows)
         var idToWindow: [ObjectIdentifier: NSWindow] = [:]
@@ -109,7 +116,7 @@ final class WindowSnapManager: NSObject, NSWindowDelegate {
         }
 
         // Find connected cluster including the moved window
-        let clusterIDs = connectedCluster(start: movedID, boxes: idToBox)
+        let clusterIDs = DockGraph.cluster(from: movedID, boxes: idToBox)
         let otherIDs = Set(idToBox.keys).subtracting(clusterIDs)
 
         // 1) Move the rest of the cluster by the user's delta (the moved window already moved)
@@ -154,47 +161,31 @@ final class WindowSnapManager: NSObject, NSWindowDelegate {
             isAdjusting = false
         }
 
-        // Update last origins for all tracked windows to current
+        recordFrames()
+    }
+
+    /// Shade/unshade (and other top-anchored height changes) of Main, EQ or Playlist: move the
+    /// windows docked below by the same amount so the chain stays attached.
+    func windowDidResize(_ notification: Notification) {
+        guard !isAdjusting, programmaticDepth == 0, let resized = notification.object as? NSWindow,
+              let kind = windows.first(where: { $0.value.window === resized })?.key else { return }
+        defer { recordFrames() }
+        guard kind == .main || kind == .equalizer || kind == .playlist else { return }
+        let resizedID = ObjectIdentifier(resized)
+        guard let old = lastFrames[resizedID], let space = makeVirtualSpace() else { return }
+        let new = resized.frame
+        guard abs(new.width - old.width) < 1, abs(new.maxY - old.maxY) < 1,
+              abs(new.height - old.height) >= 1 else { return }
+
+        let below = DockGraph.dockedBelow(resizedID, oldBox: box(for: old, in: space),
+                                          boxes: boxes(in: space, includeHidden: true))
+        let dy = new.minY - old.minY
+        isAdjusting = true
         for (_, tracked) in windows {
-            if let w = tracked.window {
-                lastOrigins[ObjectIdentifier(w)] = w.frame.origin
-            }
+            guard let w = tracked.window, below.contains(ObjectIdentifier(w)) else { continue }
+            w.setFrameOrigin(NSPoint(x: w.frame.origin.x, y: w.frame.origin.y + dy))
         }
-    }
-
-    // Determine if two boxes are connected (snapped) according to snap rules
-    private func boxesAreConnected(_ a: Box, _ b: Box) -> Bool {
-        // Connected vertically (stacked) when x overlaps and edges near
-        if SnapUtils.overlapX(a, b) {
-            if SnapUtils.near(SnapUtils.top(a), SnapUtils.bottom(b)) { return true }
-            if SnapUtils.near(SnapUtils.bottom(a), SnapUtils.top(b)) { return true }
-            if SnapUtils.near(SnapUtils.top(a), SnapUtils.top(b)) { return true }
-            if SnapUtils.near(SnapUtils.bottom(a), SnapUtils.bottom(b)) { return true }
-        }
-        // Connected horizontally (side-by-side) when y overlaps and edges near
-        if SnapUtils.overlapY(a, b) {
-            if SnapUtils.near(SnapUtils.left(a), SnapUtils.right(b)) { return true }
-            if SnapUtils.near(SnapUtils.right(a), SnapUtils.left(b)) { return true }
-            if SnapUtils.near(SnapUtils.left(a), SnapUtils.left(b)) { return true }
-            if SnapUtils.near(SnapUtils.right(a), SnapUtils.right(b)) { return true }
-        }
-        return false
-    }
-
-    private func connectedCluster(start: ObjectIdentifier, boxes: [ObjectIdentifier: Box]) -> Set<ObjectIdentifier> {
-        var visited: Set<ObjectIdentifier> = []
-        var stack: [ObjectIdentifier] = [start]
-        while let id = stack.popLast() {
-            if visited.contains(id) { continue }
-            visited.insert(id)
-            guard let box = boxes[id] else { continue }
-            for (otherID, otherBox) in boxes where otherID != id {
-                if !visited.contains(otherID) && boxesAreConnected(box, otherBox) {
-                    stack.append(otherID)
-                }
-            }
-        }
-        return visited
+        isAdjusting = false
     }
 
     // Helper to convert top-left box coordinates back to AppKit bottom-left origin and apply to window
@@ -219,28 +210,25 @@ final class WindowSnapManager: NSObject, NSWindowDelegate {
         let clusterIDs: Set<ObjectIdentifier>
         let baseBoxes: [ObjectIdentifier: Box]
         let virtualSpace: VirtualScreenSpace
+        let snapping: Bool
         var lastInputDelta: CGPoint = .zero
     }
 
     private var dragContexts: [WindowKind: DragContext] = [:]
 
     func beginCustomDrag(kind: WindowKind, startPointInScreen _: NSPoint) {
-        guard let window = windows[kind]?.window else { return }
-        guard let (virtualSpace, idToBox) = buildBoxes() else { return }
+        guard let window = windows[kind]?.window, let virtualSpace = makeVirtualSpace() else { return }
         let draggedID = ObjectIdentifier(window)
+        // Closed windows keep their saved frame and still link the chain, so they move with the group.
+        let idToBox = boxes(in: virtualSpace, includeHidden: true)
         guard idToBox[draggedID] != nil else { return }
 
-        // WEBAMP BEHAVIOR: Window-specific cluster logic
-        // Main window → drags entire cluster (static)
-        // EQ/Playlist → drags only itself (separates from cluster, allows re-snapping)
-        let clusterIDs: Set<ObjectIdentifier>
-        if kind == .main {
-            // Main window: Capture full connected cluster
-            clusterIDs = connectedCluster(start: draggedID, boxes: idToBox)
-        } else {
-            // EQ/Playlist: Move only this window (separates from cluster)
-            clusterIDs = [draggedID]
-        }
+        // Winamp: Main drags its docked group; other windows drag alone (detach).
+        // Shift at mouse-down turns snapping off for this drag, and Main then moves alone.
+        let snapping = !NSEvent.modifierFlags.contains(.shift)
+        let clusterIDs: Set<ObjectIdentifier> = (kind == .main && snapping)
+            ? DockGraph.cluster(from: draggedID, boxes: idToBox)
+            : [draggedID]
 
         var baseBoxes: [ObjectIdentifier: Box] = [:]
         for id in clusterIDs {
@@ -253,7 +241,8 @@ final class WindowSnapManager: NSObject, NSWindowDelegate {
             draggedWindowID: draggedID,
             clusterIDs: clusterIDs,
             baseBoxes: baseBoxes,
-            virtualSpace: virtualSpace
+            virtualSpace: virtualSpace,
+            snapping: snapping
         )
     }
 
@@ -299,10 +288,10 @@ final class WindowSnapManager: NSObject, NSWindowDelegate {
             diffToOthers,
             diffWithin
         )
-        let snapDelta = CGPoint(
+        let snapDelta = context.snapping ? CGPoint(
             x: snappedPoint.x - translatedGroupBox.x,
             y: snappedPoint.y - translatedGroupBox.y
-        )
+        ) : .zero
         let finalDelta = CGPoint(
             x: topLeftDelta.x + snapDelta.x,
             y: topLeftDelta.y + snapDelta.y
@@ -330,11 +319,7 @@ final class WindowSnapManager: NSObject, NSWindowDelegate {
 
     func endCustomDrag(kind: WindowKind) {
         dragContexts.removeValue(forKey: kind)
-        for (_, tracked) in windows {
-            if let w = tracked.window {
-                lastOrigins[ObjectIdentifier(w)] = w.frame.origin
-            }
-        }
+        recordFrames()
     }
 
     private func buildBoxes() -> (VirtualScreenSpace, [ObjectIdentifier: Box])? {
@@ -360,18 +345,18 @@ final class WindowSnapManager: NSObject, NSWindowDelegate {
         return VirtualScreenSpace(top: virtualTop, left: virtualLeft, bounds: bounds, screenBoxes: screenBoxes)
     }
 
-    private func boxes(in space: VirtualScreenSpace) -> [ObjectIdentifier: Box] {
+    /// Snapping targets visible windows only; docking chains may include closed windows.
+    private func boxes(in space: VirtualScreenSpace, includeHidden: Bool = false) -> [ObjectIdentifier: Box] {
         var idToBox: [ObjectIdentifier: Box] = [:]
         for (_, tracked) in windows {
-            if let window = tracked.window, window.isVisible {  // CRITICAL: Skip invisible windows
-                idToBox[ObjectIdentifier(window)] = box(for: window, in: space)
+            if let window = tracked.window, includeHidden || window.isVisible {
+                idToBox[ObjectIdentifier(window)] = box(for: window.frame, in: space)
             }
         }
         return idToBox
     }
 
-    private func box(for window: NSWindow, in space: VirtualScreenSpace) -> Box {
-        let frame = window.frame
+    private func box(for frame: NSRect, in space: VirtualScreenSpace) -> Box {
         let x = frame.origin.x - space.left
         let yTop = space.top - (frame.origin.y + frame.size.height)
         return Box(x: x, y: yTop, width: frame.size.width, height: frame.size.height)

@@ -216,7 +216,9 @@ final class WindowResizeController {
 
         frame = topLeftAnchoredFrame(from: frame, newSize: pixelSize)
 
+        WindowSnapManager.shared.beginProgrammaticAdjustment()
         video.setFrame(frame, display: true)
+        WindowSnapManager.shared.endProgrammaticAdjustment()
 
         AppLog.debug(.window, "[VIDEO RESIZE] After: Frame: \(video.frame), Origin: (\(video.frame.origin.x), \(video.frame.origin.y)), Size: \(video.frame.size)")
     }
@@ -234,7 +236,9 @@ final class WindowResizeController {
 
         frame = topLeftAnchoredFrame(from: frame, newSize: roundedSize)
 
+        WindowSnapManager.shared.beginProgrammaticAdjustment()
         milkdrop.setFrame(frame, display: true)
+        WindowSnapManager.shared.endProgrammaticAdjustment()
 
         AppLog.debug(.window, "[MILKDROP RESIZE] size: \(roundedSize), frame: \(frame)")
     }
@@ -247,7 +251,9 @@ final class WindowResizeController {
 
         frame = topLeftAnchoredFrame(from: frame, newSize: pixelSize)
 
+        WindowSnapManager.shared.beginProgrammaticAdjustment()
         playlist.setFrame(frame, display: true)
+        WindowSnapManager.shared.endProgrammaticAdjustment()
 
         AppLog.debug(.window, "[PLAYLIST RESIZE] size: \(pixelSize), frame: \(frame)")
     }

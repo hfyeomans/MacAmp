@@ -24,7 +24,7 @@ struct BoundingBox {
 }
 
 enum SnapUtils {
-    static let SNAP_DISTANCE: CGFloat = 15
+    static let SNAP_DISTANCE: CGFloat = 10  // Winamp default ("Dock skinned windows at 10 pixels")
 
     static func top(_ b: Box) -> CGFloat { b.y }
     static func bottom(_ b: Box) -> CGFloat { b.y + b.height }
