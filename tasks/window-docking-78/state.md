@@ -3,7 +3,7 @@
 > **Purpose:** Fix issue #78 (join/clamp, minimize, window-state persistence) and the owner's sleep/wake off-screen windows problem.
 > **Created:** 2026-09-26 — pulled ahead of the Structure Sprint (D-WIN78, user).
 > **Branch:** `fix/window-docking-78` (from `main` `0d6e258`).
-> **Status:** 📝 PLAN DRAFT — research done (`research.md`); `plan.md` awaiting owner decisions D1–D4, then one Codex plan review, then Phase 0 experiments.
+> **Status:** 📝 PLAN APPROVED (decisions D1–D4, 2026-09-27) — next: Phase 0 runtime experiments.
 
 ## Root causes (summary — details in research.md §1)
 

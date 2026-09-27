@@ -1,6 +1,6 @@
 # Plan: Window Docking, Minimize, Persistence & Sleep/Wake (#78)
 
-> **Status:** DRAFT, pending the owner's decisions D1–D4 below, then one Codex plan review before code.
+> **Status:** APPROVED DECISIONS D1–D4 (2026-09-27). Next: Phase 0 runtime experiments.
 > **Branch:** `fix/window-docking-78`. **Target:** macOS 27, Swift 6.2 language mode on the Swift 6.4 toolchain, strict concurrency, `@MainActor` UI, `@Observable` state. SwiftUI for content and commands; AppKit (`NSWindow`) stays for the borderless Winamp windows (see research §3).
 > **Research:** `research.md`.
 
@@ -13,24 +13,19 @@
 5. **Recovery command.** A "Reset Window Positions" command restores the default Winamp stack on the main screen.
 6. **No regressions.** Double-size, shade, snapping, always-on-top, focus and the Video/Milkdrop windows keep working. Tests pass under TSan.
 
-## Decisions for the owner
+## Decisions (owner, 2026-09-27)
 
-**D1. What counts as "joined" when a middle window is closed** (#78's case). Recommended option: **(a)**.
-- **(a)** Closed windows keep their saved frame, still link the chain, and move with the group. The EQ reopens where it was.
-- **(b)** Winamp-faithful: closed windows break the chain. This is today's behaviour, and #78 stays unfixed.
-- **(c)** An explicit, saved join/lock state. This adds a second source of truth that neither original has.
-
-**D2. Minimize model.** Recommended option: **(a)**.
-- **(a)** Winamp-style: minimize Main to one Dock tile, hide the other open windows, and restore them all together.
-- **(b)** macOS-style: each window minimizes to its own Dock tile.
-
-**D3. Handling a display that goes away.** Recommended option: **(a)**.
-- **(a)** Move windows onto an available screen and save that position. If the display returns, windows stay where they are, as most macOS apps behave.
-- **(b)** Remember the intended frames per display and move windows back when that display returns. This means more state and more edge cases.
-
-**D4. Winamp extras.**
-- Shift-drag temporarily flips snapping. Recommended: **include it**; it's small.
-- Snap distance: stay at 15 px (Webamp) or change to 10 px (Winamp). Recommended: **keep 15**.
+- **D1 = (a):** a closed window keeps its saved frame, still links the docking chain, and moves with the group. The EQ reopens in place.
+- **D2 = Winamp model, extended to every window.**
+  - In Winamp and Webamp only the Main window has a minimize button, and it minimizes the whole player: EQ and Playlist hide with it and everything restores together (Winamp `main_wndproc.cpp:68-108`; Webamp `MINIMIZE_WINAMP` → host callback, `webampLazy.tsx:441`).
+  - The EQ and Playlist have only shade and close. Webamp's "EQ_MINIMIZE" sprite is its shade toggle (`skinSelectors.ts:201`).
+  - MacAmp: the Main minimize button, MacAmp's EQ and Playlist minimize hit areas (`WinampEqualizerWindow.swift:137`, `WinampPlaylistWindow.swift:51,109`), and Cmd+M from **any** MacAmp window (Video and Milkdrop included) all minimize the whole player to one Dock tile and restore it together.
+  - Windowshade stays the compact "mini player".
+- **D3 = (a):** when a display is lost, move windows to an available screen (docked groups as a unit) and keep them there.
+- **D4 = both:**
+  - Holding Shift during a drag flips snapping.
+  - Snap distance changes 15 → **10 px** (Winamp default, `config.h:100`). The same value is the docking-detection tolerance.
+- **Plan review:** skipped as a separate step to save a review round. The one Codex review happens before the PR (Phase 7). The owner can ask for a plan review.
 
 ## Design
 
@@ -77,7 +72,7 @@ All triggers are coalesced by a debounce, `screenSettleDelay`: a named constant 
 
 **Recovery command:** "Reset Window Positions" (SwiftUI `CommandGroup` in the Windows menu, with a shortcut to confirm) runs the existing default-stack layout on the main screen, then persists.
 
-### D. Minimize (D2a)
+### D. Minimize (D2: Winamp model, every window)
 
 - `BorderlessWindow` gains `.miniaturizable`, and overrides `performMiniaturize(_:)` to call `miniaturize(_:)` so Cmd+M doesn't beep. Experiment 1 decides whether `.miniaturizable` goes on Main only or on all windows.
 - `WindowVisibilityController.minimizeKeyWindow()` becomes `minimizeApp()`:
@@ -85,7 +80,7 @@ All triggers are coalesced by a debounce, `screenSettleDelay`: a named constant 
   - `orderOut` the non-Main windows
   - `miniaturize` Main
 - On `NSWindow.DidDeminiaturizeMessage` for Main, re-show the recorded set, then run the screen guard.
-- The sprite minimize buttons and Cmd+M all route through `minimizeApp()`.
+- The Main sprite button, the EQ and Playlist minimize hit areas, and Cmd+M from any MacAmp window (via `BorderlessWindow.performMiniaturize`) all route through `minimizeApp()`. Only Main gets a Dock tile.
 
 ## Phases
 
@@ -96,7 +91,7 @@ All triggers are coalesced by a debounce, `screenSettleDelay`: a named constant 
 | 2 | A: `DockGraph` pure function plus cluster including closed windows; bracket unguarded moves | Unit tests (graph with closed EQ, transitive chains, detached child); manual #78 repro |
 | 3 | C: `ScreenClamp` pure function plus `WindowScreenGuard` plus the Reset command | Unit tests (cluster fits/overflows, multi-screen, Dock left, union larger than screen); manual sleep/wake, display unplug, resolution change |
 | 4 | D: minimize | Manual: button, Cmd+M, Dock restore, restore then off-screen |
-| 5 | D4 extras (Shift-drag), if approved | Manual |
+| 5 | D4: Shift-drag flips snapping; `SNAP_DISTANCE` 15 → 10 (and docs) | Unit tests (snap and cluster at 10 px); manual |
 | 6 | Docs: fix the two stale `MULTI_WINDOW_ARCHITECTURE.md` statements, document docking, recovery and minimize; fix the triage note | Link checker |
 | 7 | Full TSan suite, one Codex review, PR (closes #78) | CI green |
 
