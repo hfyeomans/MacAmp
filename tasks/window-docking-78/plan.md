@@ -145,6 +145,20 @@ The owner notes that some shade-view buttons may not work yet, so this is a **fu
 
 A per-button checklist lives in `verification.md`.
 
+### G. Sprite surfacing follow-up (owner, 2026-09-27)
+
+The EQ and Main bitmaps (`eqmain.bmp`, `titlebar.bmp`, `main.bmp`) likely contain sprites MacAmp has never defined, because this area hadn't been worked on. **Do this at the start of Phase 4, before E and F: surface the missing sprites and settle their coordinates together with the owner.** Don't guess coordinates.
+
+**Candidates (name comparison, 2026-09-27).** 11 of the 52 relevant Webamp names in `webamp_clone/packages/webamp/js/skinSprites.ts` have no exact match in `MacAmpApp/Models/SkinSprites.swift`. Some may already exist under another name, so check before adding:
+- **EQ titlebar:** `EQ_CLOSE_BUTTON`, `EQ_CLOSE_BUTTON_ACTIVE`, `EQ_MAXIMIZE_BUTTON_ACTIVE_FALLBACK`
+- **Main titlebar:** `MAIN_OPTIONS_BUTTON`, `MAIN_OPTIONS_BUTTON_DEPRESSED`
+- **Main shade:** `MAIN_SHADE_BUTTON_SELECTED`, `MAIN_SHADE_BUTTON_SELECTED_DEPRESSED`, `MAIN_SHADE_POSITION_BACKGROUND`, `MAIN_SHADE_POSITION_THUMB`, `MAIN_SHADE_POSITION_THUMB_LEFT`, `MAIN_SHADE_POSITION_THUMB_RIGHT`
+
+**Process:**
+1. Confirm each against the bitmap: open the default skin's BMP, check it against Webamp's coordinates, and verify with the owner.
+2. Add them as `SpriteResolver` semantic IDs; never hard-code sprite names.
+3. Record each one in `verification.md`.
+
 ## Phases
 
 | Phase | Work | Verification |
@@ -153,7 +167,7 @@ A per-button checklist lives in `verification.md`.
 | 1 | B: visibility and shade persistence (EQ, Playlist); `DockingController` cleanup. | Unit tests (settings round-trip, `showAllWindows` honours flags); manual relaunch. |
 | 2 | A: `DockGraph` with closed windows keeping the chain; snap distance 10 px; Shift-drag; re-anchor neighbours on shade/unshade; guard the resize moves. | Unit tests (closed EQ, transitive chains, detached child, 10 px tolerance); manual #78 repro. |
 | 3 | C: `ScreenClamp`, `WindowScreenGuard`, "Reset Window Positions". | Unit tests (cluster fits/overflows, multi-screen, Dock left, union larger than screen); manual sleep/wake, display unplug, resolution change. |
-| 4 | E and F: titlebar and shade-strip hit areas, working shade controls; remove EQ and Playlist minimize (D5). | Per-button checklist in `verification.md`; manual with 3+ skins. |
+| 4 | G (first): surface the missing EQ/Main sprites and settle coordinates with the owner. Then E and F: titlebar and shade-strip hit areas, working shade controls; remove EQ and Playlist minimize (D5). | Per-button checklist in `verification.md`; manual with 3+ skins. |
 | 5 | D: group minimize; Cmd+M, Option+M, Ctrl+W. | Manual: button, Cmd+M and Option+M from each window, Ctrl+W, Dock restore, restore then off-screen. |
 | 6 | Docs:<br>• fix the two stale `MULTI_WINDOW_ARCHITECTURE.md` statements<br>• document docking, recovery, minimize, windowshade and the shortcuts<br>• fix the triage note (#78 EQ reopens) | Link checker. |
 | 7 | Full TSan suite, one Codex review, PR (closes #78). | CI green. |

@@ -8,7 +8,7 @@
 - [ ] **Phase 1:** persist EQ/Playlist visibility and EQ/Playlist shade; remove or trim `DockingController`/`DockLayoutV1` (`depreciated.md`)
 - [ ] **Phase 2:** `DockGraph` (closed windows keep the chain); snap distance 10 px; Shift-drag flips snapping; re-anchor neighbours on shade/unshade; guard the resize moves with `isAdjusting`
 - [ ] **Phase 3:** `ScreenClamp` + `WindowScreenGuard`: sleep snapshot, transition mode (no cluster chasing, no persistence), settle run (restore snapshot, clamp clusters, persist), 1 s debounce + 3 s wake window; tall-window pinning; trace the Playlist 900→1566 growth; "Reset Window Positions" command
-- [ ] **Phase 4:** titlebar and windowshade strips as hit areas with each window's own sprites; working shade controls (Main transport/eject/position, EQ volume/balance, Playlist title/time); remove the EQ/Playlist minimize buttons (D5); per-button checklist
+- [ ] **Phase 4:** (first) surface the missing EQ/Main sprites and settle coordinates with the owner (Design G, 11 candidates); then titlebar and windowshade strips as hit areas with each window's own sprites; working shade controls (Main transport/eject/position, EQ volume/balance, Playlist title/time); remove the EQ/Playlist minimize buttons (D5); per-button checklist
 - [ ] **Phase 5:** group minimize (`minimizeApp`); Cmd+M and Option+M from every window; Ctrl+W Main windowshade
 - [ ] **Phase 6:** docs (`MULTI_WINDOW_ARCHITECTURE.md` fixes + docking/recovery/minimize/windowshade/shortcuts); triage-note fix
 - [ ] **Phase 7:** full TSan suite, one Codex review, PR (closes #78)

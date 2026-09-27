@@ -23,6 +23,16 @@
 
 **Phase 0 conclusion (2026-09-27):** experiments 1, 2, 4 and 5 answered; 3 answered for plain sleep/wake; 6 answered for shade, with the resize paths deferred to Phase 2. Plan updated (Design C: sleep snapshot, transition suppression, settle window; Design D: menu validation override).
 
+## Phase 4: sprite surfacing (Design G, done with the owner)
+
+| Sprite | Bitmap | Coordinates (confirmed with owner) | Exists under another name? | Result |
+|---|---|---|---|---|
+| EQ_CLOSE_BUTTON / _ACTIVE | eqmain.bmp | | | |
+| EQ_MAXIMIZE_BUTTON_ACTIVE_FALLBACK | eqmain.bmp | | | |
+| MAIN_OPTIONS_BUTTON / _DEPRESSED | titlebar.bmp | | | |
+| MAIN_SHADE_BUTTON_SELECTED / _DEPRESSED | titlebar.bmp | | | |
+| MAIN_SHADE_POSITION_BACKGROUND / THUMB / _LEFT / _RIGHT | titlebar.bmp | | | |
+
 ## Phase 4: titlebar and windowshade checklist
 
 Test with at least 3 skins (default plus 2 others). Each control must look like the skin, be clickable and do the right thing.
