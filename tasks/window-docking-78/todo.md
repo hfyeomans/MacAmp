@@ -1,13 +1,14 @@
-# TODO: Window Docking, Minimize, Persistence & Sleep/Wake (#78)
+# TODO: Window Docking, Minimize, Persistence, Windowshade & Sleep/Wake (#78)
 
-- [x] Research: MacAmp code audit, Webamp/Winamp behaviour, macOS 27 APIs → `research.md`
-- [x] Draft `plan.md`
-- [x] Owner decisions D1–D4 (2026-09-27): D1 closed windows keep the chain; D2 Winamp-model group minimize from every window; D3 move and keep; D4 Shift-drag + 10 px
-- [ ] Phase 0 — runtime experiments 1–5 (research §4)
-- [ ] Phase 1 — visibility + shade persistence; DockingController cleanup
-- [ ] Phase 2 — DockGraph (closed windows keep the chain); bracket unguarded moves; re-anchor neighbours on shade/unshade
-- [ ] Phase 3 — ScreenClamp + WindowScreenGuard + Reset Window Positions
-- [ ] Phase 4 — faithful titlebar hit areas + windowshade strips (Main transport/eject/position, EQ volume/balance, Playlist title/time) as hit areas with working controls; per-button checklist; + minimize (Winamp model) + shortcuts: Cmd+M / Option+M group minimize, Ctrl+W Main windowshade
-- [ ] Phase 5 — Shift-drag snap toggle + snap distance 10 px
-- [ ] Phase 6 — docs
-- [ ] Phase 7 — TSan suite, Codex review, PR (closes #78)
+> Phases and designs: `plan.md`. Results: `verification.md`.
+
+- [x] Research: MacAmp code audit, Webamp/Winamp behaviour, macOS 27 APIs (`research.md`)
+- [x] Plan with owner decisions D1–D5 (2026-09-27)
+- [ ] **Phase 0:** runtime experiments 1–6 (`verification.md` §Phase 0); adjust the plan if the findings require it
+- [ ] **Phase 1:** persist EQ/Playlist visibility and EQ/Playlist shade; remove or trim `DockingController`/`DockLayoutV1` (`depreciated.md`)
+- [ ] **Phase 2:** `DockGraph` (closed windows keep the chain); snap distance 10 px; Shift-drag flips snapping; re-anchor neighbours on shade/unshade; guard the resize moves with `isAdjusting`
+- [ ] **Phase 3:** `ScreenClamp` + `WindowScreenGuard` (launch, screen-parameter change, wake; debounced); "Reset Window Positions" command
+- [ ] **Phase 4:** titlebar and windowshade strips as hit areas with each window's own sprites; working shade controls (Main transport/eject/position, EQ volume/balance, Playlist title/time); remove the EQ/Playlist minimize buttons (D5); per-button checklist
+- [ ] **Phase 5:** group minimize (`minimizeApp`); Cmd+M and Option+M from every window; Ctrl+W Main windowshade
+- [ ] **Phase 6:** docs (`MULTI_WINDOW_ARCHITECTURE.md` fixes + docking/recovery/minimize/windowshade/shortcuts); triage-note fix
+- [ ] **Phase 7:** full TSan suite, one Codex review, PR (closes #78)

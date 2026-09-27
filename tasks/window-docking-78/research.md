@@ -84,8 +84,4 @@ Winamp facts come from the Nullsoft source (2.25 and 5.x, with the same docking 
 
 ## 4. Runtime experiments still needed
 
-1. Borderless window with `.miniaturizable`: does `miniaturize(_:)` animate to the Dock and restore cleanly? Does `performMiniaturize` beep? Does the chrome, shadow or key behaviour change?
-2. Sleep/wake with an external display unplugged during sleep: log the order of `didWake`, `screensDidWake`, `didChangeScreenParameters` and `windowDidMove`, and what `NSScreen.screens` contains at each point.
-3. Does AppKit move borderless windows at all when their display disappears?
-4. Is `windowDidMove` from `setFrameOrigin` delivered synchronously (inside `isAdjusting`)?
-5. Do the unbracketed Video, Milkdrop and Playlist resize paths move the cluster by accident?
+Now tracked, with results, in `verification.md` §Phase 0 (experiments 1–6).
