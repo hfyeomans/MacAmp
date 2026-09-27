@@ -9,8 +9,6 @@ struct WinampEqualizerWindow: View {
     @Environment(AppSettings.self) var settings
     @Environment(PlaybackCoordinator.self) var playbackCoordinator
     @Environment(WindowFocusState.self) var windowFocusState
-
-    @State private var isShadeMode: Bool = false
     @State private var showPresetPicker: Bool = false
 
     // Computed: Is this window currently focused?
@@ -67,7 +65,7 @@ struct WinampEqualizerWindow: View {
     
     var body: some View {
         ZStack(alignment: .topLeading) {
-            if !isShadeMode {
+            if !settings.isEqualizerWindowShaded {
                 // Full window mode
                 // Background - The EQMAIN sprite includes preamp text and frequency labels
                 SimpleSpriteImage("EQ_WINDOW_BACKGROUND",
@@ -111,7 +109,7 @@ struct WinampEqualizerWindow: View {
         }
         .frame(
             width: WinampSizes.equalizer.width,
-            height: isShadeMode ? WinampSizes.equalizerShade.height : WinampSizes.equalizer.height,
+            height: settings.isEqualizerWindowShaded ? WinampSizes.equalizerShade.height : WinampSizes.equalizer.height,
             alignment: .topLeading
         )
         .scaleEffect(
@@ -120,7 +118,7 @@ struct WinampEqualizerWindow: View {
         )
         .frame(
             width: settings.isDoubleSizeMode ? WinampSizes.equalizer.width * 2 : WinampSizes.equalizer.width,
-            height: isShadeMode
+            height: settings.isEqualizerWindowShaded
                 ? (settings.isDoubleSizeMode ? WinampSizes.equalizerShade.height * 2 : WinampSizes.equalizerShade.height)
                 : (settings.isDoubleSizeMode ? WinampSizes.equalizer.height * 2 : WinampSizes.equalizer.height),
             alignment: .topLeading
@@ -144,7 +142,7 @@ struct WinampEqualizerWindow: View {
 
             // Shade button
             Button(action: {
-                isShadeMode.toggle()
+                settings.isEqualizerWindowShaded.toggle()
             }) {
                 SimpleSpriteImage("MAIN_SHADE_BUTTON", width: 9, height: 9)
             }

@@ -1,6 +1,6 @@
 # Plan: Window Docking, Minimize, Persistence, Windowshade & Sleep/Wake (#78)
 
-> **Status:** APPROVED (decisions D1–D5, owner, 2026-09-27). **Phase 0 done** (findings in `verification.md`; Designs C and D updated). Next: Phase 1.
+> **Status:** APPROVED (decisions D1–D5, owner, 2026-09-27). **Phase 0 ✅, Phase 1 ✅.** Next: Phase 2.
 > **Branch:** `fix/window-docking-78`.
 > **Target:** macOS 27; Swift 6.2 language mode on the Swift 6.4 toolchain; strict concurrency, `@MainActor` UI, `@Observable` state. SwiftUI handles content and menu commands (`Commands`). AppKit `NSWindow` stays for the borderless Winamp windows, because SwiftUI can't do docking, custom shapes or group moves (research §3).
 > **Research:** `research.md`. **Verification log:** `verification.md`.
@@ -139,7 +139,7 @@ The owner notes that some shade-view buttons may not work yet, so this is a **fu
 | Window | Shade strip (skin) | Controls (Webamp positions) | MacAmp today | Work |
 |---|---|---|---|---|
 | **Main** | `MAIN_SHADE_BACKGROUND` (`titlebar.bmp`) | Titlebar buttons as in E; the shade glyph uses `MAIN_SHADE_BUTTON_SELECTED`. **Transport** hit areas at top 2, height 10: prev 169 (w7), play 176 (w10), pause 186 (w9), stop 195 (w9), next 204 (w10), eject 215 (w10). **Position** mini-slider at 226,4, 17×7 with a 3×7 thumb (`main-window.css:427-500`). | Transport draws full-size `cbuttons` sprites scaled to 0.6 (`MainWindowShadeLayer.swift:28-56`); the titlebar draws sprites (`:104-133`); no eject; the position slider is unaudited. | Replace with hit areas at those positions; add eject and the position slider if missing; verify every control works. |
-| **EQ** | EQ shade strip (`eqmain.bmp`) | Shade (x=254) and close (x=264) hit areas; the pressed shade-state glyph is `EQ_MINIMIZE_BUTTON_ACTIVE`. **Volume** and **balance** mini-sliders with thumb sprites (Webamp `EqualizerShade.tsx:27-28`). | Shade-mode sliders and buttons are unaudited; the titlebar uses `MAIN_*` sprites (E). | Hit areas with EQ's own sprites; working volume and balance sliders. |
+| **EQ** | EQ shade strip (`eqmain.bmp`) | Shade/**unshade** (x=254; the baked glyph looks like two small overlapping windows) and close (x=264) hit areas; the pressed shade-state glyph is `EQ_MINIMIZE_BUTTON_ACTIVE`. **Volume** slider at 61,4, 97×6, and **balance** slider at 164,4, 43×6, each with a 3×7 thumb (`equalizer-window.css:11-44`, `EqualizerShade.tsx:27-28`). | **Owner screenshot (2026-09-27):** `buildShadeMode()` uses a centre-aligned `ZStack` with `.at()` children, so everything is misplaced: the unshade button doesn't respond, and the slider thumbs render as three yellow bars in the middle. The sliders are static sprites, not controls. In the screenshot the baked tracks appear at ~x 5–57 and ~208–250 (1×), **not** Webamp's 61–158 / 164–207. Either this skin differs or `EQ_SHADE_BACKGROUND` is cut from the wrong region: **settle it in Design G with the owner.** | Hit areas with EQ's own sprites; working volume and balance sliders. |
 | **Playlist** | Playlist shade strip (PLEDIT) | Track title and time text; shade (right−12) and close (right−2) hit areas with `PLAYLIST_*_SELECTED` pressed sprites (`PlaylistShade.tsx:59-71`). | `PlaylistShadeView` reuses `PlaylistTitleBarButtons` (`PlaylistShadeView.swift:33`). | Same fix as E; verify the title and time render and both buttons work. |
 | **Video / Milkdrop** | No Winamp shade mode | — | — | Out of scope; they only take part in the group minimize. |
 
@@ -164,7 +164,7 @@ The EQ and Main bitmaps (`eqmain.bmp`, `titlebar.bmp`, `main.bmp`) likely contai
 | Phase | Work | Verification |
 |---|---|---|
 | 0 | Runtime experiments 1–6 (research §4, plus the Cmd+M menu-validation check). Uses a debug build with temporary logging, removed before commit. | Findings in `verification.md` §Phase 0; plan adjusted if needed. |
-| 1 | B: visibility and shade persistence (EQ, Playlist); `DockingController` cleanup. | Unit tests (settings round-trip, `showAllWindows` honours flags); manual relaunch. |
+| 1 | B: visibility and shade persistence (EQ, Playlist); `DockingController` removed. | Manual relaunch checks. There are no unit tests because `AppSettings` is a singleton over `UserDefaults.standard`, and the app-hosted tests would overwrite the owner's real settings. Full TSan suite. |
 | 2 | A: `DockGraph` with closed windows keeping the chain; snap distance 10 px; Shift-drag; re-anchor neighbours on shade/unshade; guard the resize moves. | Unit tests (closed EQ, transitive chains, detached child, 10 px tolerance); manual #78 repro. |
 | 3 | C: `ScreenClamp`, `WindowScreenGuard`, "Reset Window Positions". | Unit tests (cluster fits/overflows, multi-screen, Dock left, union larger than screen); manual sleep/wake, display unplug, resolution change. |
 | 4 | G (first): surface the missing EQ/Main sprites and settle coordinates with the owner. Then E and F: titlebar and shade-strip hit areas, working shade controls; remove EQ and Playlist minimize (D5). | Per-button checklist in `verification.md`; manual with 3+ skins. |

@@ -6,7 +6,6 @@ import AppKit
 final class PlaylistWindowInteractionState {
     private static let escapeKeyCode: UInt16 = 53
     var selectedIndices: Set<Int> = []
-    var isShadeMode: Bool = false
     var scrollOffset: Int = 0
     var dragStartSize: Size2D?
     var isDragging: Bool = false

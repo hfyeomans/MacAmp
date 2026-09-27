@@ -29,6 +29,7 @@
 |---|---|---|---|---|
 | EQ_CLOSE_BUTTON / _ACTIVE | eqmain.bmp | | | |
 | EQ_MAXIMIZE_BUTTON_ACTIVE_FALLBACK | eqmain.bmp | | | |
+| EQ_SHADE_BACKGROUND (verify region: owner screenshot shows tracks at ~5–57 / ~208–250 vs Webamp 61–158 / 164–207) | eqmain.bmp | | | |
 | MAIN_OPTIONS_BUTTON / _DEPRESSED | titlebar.bmp | | | |
 | MAIN_SHADE_BUTTON_SELECTED / _DEPRESSED | titlebar.bmp | | | |
 | MAIN_SHADE_POSITION_BACKGROUND / THUMB / _LEFT / _RIGHT | titlebar.bmp | | | |
@@ -62,10 +63,20 @@ Test with at least 3 skins (default plus 2 others). Each control must look like 
 
 ## Phases 1–3: behaviour
 
+**Phase 1 check (owner, 2026-09-27):**
+- EQ shades from its button ✅.
+- **Options › Shade/Unshade Equalizer unshades it ✅.** This was broken before Phase 1: the menu flipped a `DockingController` flag nothing read.
+- **The shade-strip unshade button doesn't work ❌ (→ Phase 4).** `buildShadeMode()` (`WinampEqualizerWindow.swift:289`) uses a `ZStack` with the default **centre** alignment, but its children are placed with `.at(x:y:)`, which assumes top-left. Everything in the strip is misplaced: the owner sees an "x" and "two tiny grey windows at the far left".
+- The volume/balance "sliders" there are **static sprites, not controls**.
+- The EQ minimize button isn't supposed to work: D5 removes it in Phase 4.
+- **Playlist position data (for Phase 2/3):** each launch the Playlist restored further down (−341 → −2339 → −655, the last one while shaded). A debugger `setFrameOrigin(40, −460)` was immediately overridden to (553, −1643). Something re-positions the Playlist after moves and at launch, probably its layout/resize code (the unguarded paths). Trace this in Phase 3.
+- **Tooling note:** the command-line `defaults read com.hankyeomans.MacAmp` doesn't show keys written by the Xcode-launched debug app, although the app reads them back correctly. Verify persistence in-app over LLDB.
+
+
 | Check | Result |
 |---|---|
-| EQ closed at quit stays closed at launch; the same for Playlist | |
-| EQ and Playlist shade state survives relaunch | |
+| EQ closed at quit stays closed at launch; the same for Playlist | ✅ **PASS (EQ)** 2026-09-27: closed the EQ → quit → relaunch; `showEqualizerWindow=false` was restored and the owner confirmed the EQ stayed closed. The Options menu reopens it. The Playlist uses the same code path (`showPlaylistWindow`), so it wasn't exercised separately. |
+| EQ and Playlist shade state survives relaunch | ✅ **PASS (Playlist)** 2026-09-27: shaded via the menu → quit → relaunch; `isPlaylistWindowShaded=true` was restored and the Playlist window is 400×14 (shaded; still off-screen, a Phase 3 issue). The EQ uses the same pattern (`isEqualizerWindowShaded`). |
 | #78: with the EQ closed, dragging Main brings the docked Playlist; reopening the EQ puts it back in place | |
 | Dragging a docked EQ or Playlist detaches it; Shift-drag flips snapping | |
 | Shade and unshade keep docked neighbours attached | |

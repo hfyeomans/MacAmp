@@ -41,6 +41,10 @@ final class AppSettings {
         static let isMainWindowShaded = "isMainWindowShaded"
         static let showVideoWindow = "showVideoWindow"
         static let showMilkdropWindow = "showMilkdropWindow"
+        static let showEqualizerWindow = "showEqualizerWindow"
+        static let showPlaylistWindow = "showPlaylistWindow"
+        static let isEqualizerWindowShaded = "isEqualizerWindowShaded"
+        static let isPlaylistWindowShaded = "isPlaylistWindowShaded"
         static let timeDisplayMode = "timeDisplayMode"
         static let visualizerMode = "visualizerMode"
         static let repeatMode = "repeatMode"
@@ -78,6 +82,10 @@ final class AppSettings {
         self.isMainWindowShaded = UserDefaults.standard.bool(forKey: Keys.isMainWindowShaded)
         self.showVideoWindow = UserDefaults.standard.bool(forKey: Keys.showVideoWindow)
         self.showMilkdropWindow = UserDefaults.standard.bool(forKey: Keys.showMilkdropWindow)
+        self.showEqualizerWindow = UserDefaults.standard.object(forKey: Keys.showEqualizerWindow) as? Bool ?? true
+        self.showPlaylistWindow = UserDefaults.standard.object(forKey: Keys.showPlaylistWindow) as? Bool ?? true
+        self.isEqualizerWindowShaded = UserDefaults.standard.bool(forKey: Keys.isEqualizerWindowShaded)
+        self.isPlaylistWindowShaded = UserDefaults.standard.bool(forKey: Keys.isPlaylistWindowShaded)
 
         // NOTE: videoWindowSizeMode loading removed - Size2D persisted in VideoWindowSizeState
 
@@ -219,6 +227,26 @@ final class AppSettings {
         didSet {
             UserDefaults.standard.set(isMainWindowShaded, forKey: Keys.isMainWindowShaded)
         }
+    }
+
+    // MARK: - Equalizer / Playlist Window State
+
+    /// EQ window open at quit is reopened at launch (Winamp `eq_open`); defaults to open.
+    var showEqualizerWindow: Bool = true {
+        didSet { UserDefaults.standard.set(showEqualizerWindow, forKey: Keys.showEqualizerWindow) }
+    }
+
+    /// Playlist window open at quit is reopened at launch (Winamp `pe_open`); defaults to open.
+    var showPlaylistWindow: Bool = true {
+        didSet { UserDefaults.standard.set(showPlaylistWindow, forKey: Keys.showPlaylistWindow) }
+    }
+
+    var isEqualizerWindowShaded: Bool = false {
+        didSet { UserDefaults.standard.set(isEqualizerWindowShaded, forKey: Keys.isEqualizerWindowShaded) }
+    }
+
+    var isPlaylistWindowShaded: Bool = false {
+        didSet { UserDefaults.standard.set(isPlaylistWindowShaded, forKey: Keys.isPlaylistWindowShaded) }
     }
 
     // MARK: - Time Display Mode

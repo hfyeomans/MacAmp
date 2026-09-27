@@ -7,7 +7,6 @@ import SwiftUI
 struct WinampMainWindow: View {
     @Environment(SkinManager.self) private var skinManager
     @Environment(AudioPlayer.self) private var audioPlayer
-    @Environment(DockingController.self) private var dockingController
     @Environment(AppSettings.self) private var settings
     @Environment(PlaybackCoordinator.self) private var playbackCoordinator
     @Environment(WindowFocusState.self) private var windowFocusState
@@ -107,5 +106,4 @@ struct WinampMainWindow: View {
     WinampMainWindow()
         .environment(SkinManager())
         .environment(AudioPlayer())
-        .environment(DockingController())
 }

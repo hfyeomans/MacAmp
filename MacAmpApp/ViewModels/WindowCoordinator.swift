@@ -23,7 +23,7 @@ final class WindowCoordinator {
     var videoWindow: NSWindow? { registry.videoWindow }
     var milkdropWindow: NSWindow? { registry.milkdropWindow }
     // swiftlint:disable:next function_body_length
-    init(skinManager: SkinManager, audioPlayer: AudioPlayer, dockingController: DockingController, settings: AppSettings, radioLibrary: RadioStationLibrary, playbackCoordinator: PlaybackCoordinator, windowFocusState: WindowFocusState) {
+    init(skinManager: SkinManager, audioPlayer: AudioPlayer, settings: AppSettings, radioLibrary: RadioStationLibrary, playbackCoordinator: PlaybackCoordinator, windowFocusState: WindowFocusState) {
         // Store shared state references
         self.settings = settings
         self.skinManager = skinManager
@@ -33,31 +33,31 @@ final class WindowCoordinator {
         registry = WindowRegistry(
             mainController: WinampMainWindowController(
                 skinManager: skinManager, audioPlayer: audioPlayer,
-                dockingController: dockingController, settings: settings,
+                settings: settings,
                 radioLibrary: radioLibrary, playbackCoordinator: playbackCoordinator,
                 windowFocusState: windowFocusState
             ),
             eqController: WinampEqualizerWindowController(
                 skinManager: skinManager, audioPlayer: audioPlayer,
-                dockingController: dockingController, settings: settings,
+                settings: settings,
                 radioLibrary: radioLibrary, playbackCoordinator: playbackCoordinator,
                 windowFocusState: windowFocusState
             ),
             playlistController: WinampPlaylistWindowController(
                 skinManager: skinManager, audioPlayer: audioPlayer,
-                dockingController: dockingController, settings: settings,
+                settings: settings,
                 radioLibrary: radioLibrary, playbackCoordinator: playbackCoordinator,
                 windowFocusState: windowFocusState
             ),
             videoController: WinampVideoWindowController(
                 skinManager: skinManager, audioPlayer: audioPlayer,
-                dockingController: dockingController, settings: settings,
+                settings: settings,
                 radioLibrary: radioLibrary, playbackCoordinator: playbackCoordinator,
                 windowFocusState: windowFocusState
             ),
             milkdropController: WinampMilkdropWindowController(
                 skinManager: skinManager, audioPlayer: audioPlayer,
-                dockingController: dockingController, settings: settings,
+                settings: settings,
                 radioLibrary: radioLibrary, playbackCoordinator: playbackCoordinator,
                 windowFocusState: windowFocusState
             )
@@ -207,6 +207,8 @@ final class WindowCoordinator {
     func showAllWindows() { visibility.showAllWindows() }
     func showMain() { visibility.showMain() }
     func hideMain() { visibility.hideMain() }
+    func toggleMain() { visibility.toggleMain() }
+    var isMainWindowVisible: Bool { visibility.isMainWindowVisible }
     func showEqualizer() { visibility.showEQWindow(makeKey: true) }
     func hideEqualizer() { visibility.hideEQWindow() }
     func showPlaylist() { visibility.showPlaylistWindow(makeKey: true) }

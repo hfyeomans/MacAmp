@@ -3,7 +3,7 @@ import AppKit
 import UniformTypeIdentifiers
 
 struct AppCommands: Commands {
-    @Bindable var dockingController: DockingController
+    var windowCoordinator: WindowCoordinator
     @Bindable var audioPlayer: AudioPlayer
     @Bindable var settings: AppSettings
     var playbackCoordinator: PlaybackCoordinator
@@ -11,20 +11,20 @@ struct AppCommands: Commands {
 
     var body: some Commands {
         CommandMenu("Options") {
-            Button(dockingController.showMain ? "Hide Main" : "Show Main") { dockingController.toggleMain() }
+            Button(windowCoordinator.isMainWindowVisible ? "Hide Main" : "Show Main") { windowCoordinator.toggleMain() }
                 .keyboardShortcut("1", modifiers: [.command, .shift])
-            Button(dockingController.showPlaylist ? "Hide Playlist" : "Show Playlist") { dockingController.togglePlaylist() }
+            Button(windowCoordinator.isPlaylistWindowVisible ? "Hide Playlist" : "Show Playlist") { _ = windowCoordinator.togglePlaylistWindowVisibility() }
                 .keyboardShortcut("2", modifiers: [.command, .shift])
-            Button(dockingController.showEqualizer ? "Hide Equalizer" : "Show Equalizer") { dockingController.toggleEqualizer() }
+            Button(windowCoordinator.isEQWindowVisible ? "Hide Equalizer" : "Show Equalizer") { _ = windowCoordinator.toggleEQWindowVisibility() }
                 .keyboardShortcut("3", modifiers: [.command, .shift])
 
             Divider()
 
             Button("Shade/Unshade Main") { settings.isMainWindowShaded.toggle() }
                 .keyboardShortcut("1", modifiers: [.command, .option])
-            Button("Shade/Unshade Playlist") { dockingController.toggleShade(.playlist) }
+            Button("Shade/Unshade Playlist") { settings.isPlaylistWindowShaded.toggle() }
                 .keyboardShortcut("2", modifiers: [.command, .option])
-            Button("Shade/Unshade Equalizer") { dockingController.toggleShade(.equalizer) }
+            Button("Shade/Unshade Equalizer") { settings.isEqualizerWindowShaded.toggle() }
                 .keyboardShortcut("3", modifiers: [.command, .option])
 
             Divider()

@@ -8,8 +8,16 @@ final class WindowVisibilityController {
     private let registry: WindowRegistry
     private let settings: AppSettings
 
-    var isEQWindowVisible: Bool = false
-    var isPlaylistWindowVisible: Bool = false
+    /// Persisted in AppSettings so the open/closed state survives relaunch.
+    var isEQWindowVisible: Bool {
+        get { settings.showEqualizerWindow }
+        set { settings.showEqualizerWindow = newValue }
+    }
+    var isPlaylistWindowVisible: Bool {
+        get { settings.showPlaylistWindow }
+        set { settings.showPlaylistWindow = newValue }
+    }
+    var isMainWindowVisible: Bool = true
 
     init(registry: WindowRegistry, settings: AppSettings) {
         self.registry = registry
@@ -90,8 +98,19 @@ final class WindowVisibilityController {
 
     // MARK: - Menu Command Integration
 
-    func showMain() { registry.mainWindow?.makeKeyAndOrderFront(nil) }
-    func hideMain() { registry.mainWindow?.orderOut(nil) }
+    func showMain() {
+        registry.mainWindow?.makeKeyAndOrderFront(nil)
+        isMainWindowVisible = true
+    }
+
+    func hideMain() {
+        registry.mainWindow?.orderOut(nil)
+        isMainWindowVisible = false
+    }
+
+    func toggleMain() {
+        if isMainWindowVisible { hideMain() } else { showMain() }
+    }
 
     func showVideo() {
         AppLog.debug(.window, "showVideo() called")
@@ -118,11 +137,13 @@ final class WindowVisibilityController {
 
     func showAllWindows() {
         registry.mainWindow?.makeKeyAndOrderFront(nil)
-        registry.eqWindow?.orderFront(nil)
-        registry.playlistWindow?.orderFront(nil)
-
-        isEQWindowVisible = true
-        isPlaylistWindowVisible = true
+        isMainWindowVisible = true
+        if settings.showEqualizerWindow {
+            registry.eqWindow?.orderFront(nil)
+        }
+        if settings.showPlaylistWindow {
+            registry.playlistWindow?.orderFront(nil)
+        }
 
         if settings.showVideoWindow {
             registry.videoWindow?.orderFront(nil)

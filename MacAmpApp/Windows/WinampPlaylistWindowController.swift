@@ -3,7 +3,7 @@ import SwiftUI
 
 @MainActor
 class WinampPlaylistWindowController: NSWindowController {
-    convenience init(skinManager: SkinManager, audioPlayer: AudioPlayer, dockingController: DockingController, settings: AppSettings, radioLibrary: RadioStationLibrary, playbackCoordinator: PlaybackCoordinator, windowFocusState: WindowFocusState) {
+    convenience init(skinManager: SkinManager, audioPlayer: AudioPlayer, settings: AppSettings, radioLibrary: RadioStationLibrary, playbackCoordinator: PlaybackCoordinator, windowFocusState: WindowFocusState) {
         // Playlist window is user-resizable (width fixed at 275, height 232-900)
         let window = BorderlessWindow(
             contentRect: NSRect(x: 0, y: 0, width: 275, height: 232),
@@ -29,7 +29,6 @@ class WinampPlaylistWindowController: NSWindowController {
         let rootView = WinampPlaylistWindow()
             .environment(skinManager)
             .environment(audioPlayer)
-            .environment(dockingController)
             .environment(settings)
             .environment(radioLibrary)
             .environment(playbackCoordinator)
