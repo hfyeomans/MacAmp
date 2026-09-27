@@ -75,7 +75,7 @@ Test with at least 3 skins (default plus 2 others). Each control must look like 
 
 | Check | Result |
 |---|---|
-| EQ closed at quit stays closed at launch; the same for Playlist | ✅ **PASS (EQ)** 2026-09-27: closed the EQ → quit → relaunch; `showEqualizerWindow=false` was restored and the owner confirmed the EQ stayed closed. The Options menu reopens it. The Playlist uses the same code path (`showPlaylistWindow`), so it wasn't exercised separately. |
+| EQ closed at quit stays closed at launch; the same for Playlist | ✅ **PASS (EQ)** 2026-09-27: closed the EQ → quit → relaunch; `showEqualizerWindow=false` was restored and the owner confirmed the EQ stayed closed. The Options menu reopens it, **docked under Main where it was** (owner). The Playlist uses the same code path (`showPlaylistWindow`), so it wasn't exercised separately. |
 | EQ and Playlist shade state survives relaunch | ✅ **PASS (Playlist)** 2026-09-27: shaded via the menu → quit → relaunch; `isPlaylistWindowShaded=true` was restored and the Playlist window is 400×14 (shaded; still off-screen, a Phase 3 issue). The EQ uses the same pattern (`isEqualizerWindowShaded`). |
 | #78: with the EQ closed, dragging Main brings the docked Playlist; reopening the EQ puts it back in place | |
 | Dragging a docked EQ or Playlist detaches it; Shift-drag flips snapping | |
