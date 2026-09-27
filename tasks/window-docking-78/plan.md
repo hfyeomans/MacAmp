@@ -20,7 +20,12 @@
   - In Winamp and Webamp only the Main window has a minimize button, and it minimizes the whole player: EQ and Playlist hide with it and everything restores together (Winamp `main_wndproc.cpp:68-108`; Webamp `MINIMIZE_WINAMP` → host callback, `webampLazy.tsx:441`).
   - The EQ and Playlist have only shade and close. Webamp's "EQ_MINIMIZE" sprite is its shade toggle (`skinSelectors.ts:201`).
   - MacAmp: the Main minimize button, MacAmp's EQ and Playlist minimize hit areas (`WinampEqualizerWindow.swift:137`, `WinampPlaylistWindow.swift:51,109`), and Cmd+M from **any** MacAmp window (Video and Milkdrop included) all minimize the whole player to one Dock tile and restore it together.
-  - Windowshade stays the compact "mini player".
+  - Windowshade stays the compact "mini player". Winamp has **two separate modes**, verified in its accelerator table (Winamp 5.02 SDK `lang_b/main.rc:1953,1965`):
+    - `WINAMP_MINIMIZE`: Alt+M, and the titlebar Minimize button
+    - `WINAMP_OPTIONS_WINDOWSHADE`: Ctrl+W, and the per-window shade buttons
+  - **Shortcuts:**
+    - **Ctrl+W** toggles Main windowshade. Today it is only on Cmd+Option+1, which stays as well.
+    - **Option+M** (Winamp's Alt+M) and **Cmd+M** (macOS standard) minimize the whole player.
 - **D3 = (a):** when a display is lost, move windows to an available screen (docked groups as a unit) and keep them there.
 - **D4 = both:**
   - Holding Shift during a drag flips snapping.
@@ -90,7 +95,7 @@ All triggers are coalesced by a debounce, `screenSettleDelay`: a named constant 
 | 1 | B: visibility and shade persistence; `DockingController` cleanup | Unit tests (settings round-trip, `showAllWindows` honours flags); manual relaunch |
 | 2 | A: `DockGraph` pure function plus cluster including closed windows; bracket unguarded moves | Unit tests (graph with closed EQ, transitive chains, detached child); manual #78 repro |
 | 3 | C: `ScreenClamp` pure function plus `WindowScreenGuard` plus the Reset command | Unit tests (cluster fits/overflows, multi-screen, Dock left, union larger than screen); manual sleep/wake, display unplug, resolution change |
-| 4 | D: minimize | Manual: button, Cmd+M, Dock restore, restore then off-screen |
+| 4 | D: minimize plus shortcuts (Cmd+M, Option+M → group minimize; Ctrl+W → Main windowshade) | Manual: button, Cmd+M, Option+M, Ctrl+W, Dock restore, restore then off-screen |
 | 5 | D4: Shift-drag flips snapping; `SNAP_DISTANCE` 15 → 10 (and docs) | Unit tests (snap and cluster at 10 px); manual |
 | 6 | Docs: fix the two stale `MULTI_WINDOW_ARCHITECTURE.md` statements, document docking, recovery and minimize; fix the triage note | Link checker |
 | 7 | Full TSan suite, one Codex review, PR (closes #78) | CI green |
