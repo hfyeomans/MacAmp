@@ -30,6 +30,7 @@
 - **D4 = both:**
   - Holding Shift during a drag flips snapping.
   - Snap distance changes 15 → **10 px** (Winamp default, `config.h:100`). The same value is the docking-detection tolerance.
+- **D5 (pending):** remove the non-Winamp minimize buttons from the EQ and Playlist titlebars (recommended; Cmd+M / Option+M from any window and Main's button still minimize the group), or keep them as invisible hit areas.
 - **Plan review:** skipped as a separate step to save a review round. The one Codex review happens before the PR (Phase 7). The owner can ask for a plan review.
 
 ## Design
@@ -77,6 +78,26 @@ All triggers are coalesced by a debounce, `screenSettleDelay`: a named constant 
 
 **Recovery command:** "Reset Window Positions" (SwiftUI `CommandGroup` in the Windows menu, with a shortcut to confirm) runs the existing default-stack layout on the main screen, then persists.
 
+### D2. Titlebar and shade buttons: faithful hit areas (owner observation, 2026-09-27)
+
+Winamp and Webamp draw titlebar and shade buttons as part of each window's **background bitmap**. The app only places invisible hit areas on top and draws the window's **own** pressed sprite while clicked, plus the shade-state glyph in shade mode. Webamp:
+- Main: `skinSelectors.ts:254-261,286-288`
+- EQ: `:200-214`
+- Playlist: `:130-135`
+
+Positions:
+- EQ has shade at x=254 and close at x=264, with **no minimize** (`equalizer-window.css:55-67`).
+- Playlist has shade at right−12 and close at right−2, with **no minimize** (`playlist-window.css:242-254`).
+- The playlist's bottom-right mini-transport is pure hit areas (`PlaylistActionArea.tsx:19-23`). MacAmp already does this correctly (`PlaylistBottomControlsView.swift:90-96`, `Color.clear`).
+
+MacAmp today:
+- **EQ and Playlist:** they permanently draw the **Main** titlebar's `MAIN_MINIMIZE/SHADE/CLOSE_BUTTON` sprites over their own titlebar art (`WinampEqualizerWindow.swift:136-163`, `PlaylistTitleBarButtons.swift:12-31`), and each adds a minimize button that isn't in the skin (EQ x=244, Playlist right−26). This is wrong for any skin whose Main buttons differ.
+
+Fix:
+- **EQ and Playlist:** shade and close become invisible hit areas at the Winamp positions, drawing only that window's own pressed or shade-state sprite (via `SpriteResolver` semantic IDs).
+- **Minimize buttons:** see decision D5.
+- **Main:** audit it to the same pattern.
+
 ### D. Minimize (D2: Winamp model, every window)
 
 - `BorderlessWindow` gains `.miniaturizable`, and overrides `performMiniaturize(_:)` to call `miniaturize(_:)` so Cmd+M doesn't beep. Experiment 1 decides whether `.miniaturizable` goes on Main only or on all windows.
@@ -95,7 +116,7 @@ All triggers are coalesced by a debounce, `screenSettleDelay`: a named constant 
 | 1 | B: visibility and shade persistence; `DockingController` cleanup | Unit tests (settings round-trip, `showAllWindows` honours flags); manual relaunch |
 | 2 | A: `DockGraph` pure function plus cluster including closed windows; bracket unguarded moves | Unit tests (graph with closed EQ, transitive chains, detached child); manual #78 repro |
 | 3 | C: `ScreenClamp` pure function plus `WindowScreenGuard` plus the Reset command | Unit tests (cluster fits/overflows, multi-screen, Dock left, union larger than screen); manual sleep/wake, display unplug, resolution change |
-| 4 | D: minimize plus shortcuts (Cmd+M, Option+M → group minimize; Ctrl+W → Main windowshade) | Manual: button, Cmd+M, Option+M, Ctrl+W, Dock restore, restore then off-screen |
+| 4 | D2 titlebar/shade hit areas (EQ, Playlist, Main audit) + D: minimize plus shortcuts (Cmd+M, Option+M → group minimize; Ctrl+W → Main windowshade) | Manual: button, Cmd+M, Option+M, Ctrl+W, Dock restore, restore then off-screen |
 | 5 | D4: Shift-drag flips snapping; `SNAP_DISTANCE` 15 → 10 (and docs) | Unit tests (snap and cluster at 10 px); manual |
 | 6 | Docs: fix the two stale `MULTI_WINDOW_ARCHITECTURE.md` statements, document docking, recovery and minimize; fix the triage note | Link checker |
 | 7 | Full TSan suite, one Codex review, PR (closes #78) | CI green |
