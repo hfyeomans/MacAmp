@@ -466,7 +466,7 @@ Video audio DSP suites (`Tests/MacAmpTests/`, Swift Testing; run with Thread San
 | `VideoSeekStateMatrixTests` | `resume: true/false/nil` seek outcomes |
 | `VideoTapSendableContractTests` | `VideoTapContext` stored fields stay render-thread-safe |
 
-Window geometry is covered by `WindowFrameStoreTests` and `WindowDockingGeometryTests`.
+Window geometry is covered by `WindowFrameStoreTests`, `DockGraphTests` and `ScreenClampTests`.
 
 ---
 

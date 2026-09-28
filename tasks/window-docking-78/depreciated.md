@@ -23,3 +23,11 @@ The orphaned `DockLayoutV1` UserDefaults key is left in place. Nothing reads it,
 | `MacAmpApp/Views/SkinnedText.swift` | Unused since the initial commit. | — |
 | TEXT.BMP space at column 28 | Webamp/Winamp use column 30; some skins draw a glyph at 28, so spaces showed as arrows. | `fontLookup` maps `" "` to (0, 30). |
 
+
+## Removed in Phase 7 (2026-09-28)
+
+| Removed | Why | Replacement |
+|---|---|---|
+| `MacAmpApp/Windows/WindowDockingGeometry.swift`, `WindowDockingTypes.swift` (`PlaylistDockingContext`, `PlaylistAttachmentSnapshot`, `VideoAttachmentSnapshot`), `WindowResizeController` `makePlaylistDockingContext` / `makeVideoDockingContext` / `movePlaylist` / `moveVideoWindow` / docking debug logs, `WindowRegistry.liveAnchorFrame`, `Tests/MacAmpTests/WindowDockingGeometryTests.swift` | Double size re-docked only the Playlist and Video, one window at a time, and forced the EQ under Main; Milkdrop was ignored, so Video moved up into it on Normal Size (owner, 2026-09-28). | `DockGraph.followResize`: one rule for shade and double size, over every window (closed ones included). |
+| `DockGraph.dockedBelow` | Height-only special case of the same rule. | `DockGraph.followResize` (its tests were converted). |
+| `WindowCoordinator.minimizeApp` body, `minimizedWith`, `deminiaturizeToken` | Group-minimize state belongs in the visibility controller. | `WindowVisibilityController.minimizeGroup()` / `start()` / `stop()`; the Facade forwards. |

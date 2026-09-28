@@ -62,16 +62,6 @@ final class WindowRegistry {
         }
     }
 
-    /// Live anchor frame from actual window positions.
-    func liveAnchorFrame(_ anchor: WindowKind) -> NSRect? {
-        switch anchor {
-        case .main: return mainWindow?.frame
-        case .equalizer: return eqWindow?.frame
-        case .playlist: return playlistWindow?.frame
-        default: return nil
-        }
-    }
-
     // MARK: - Private
 
     private func mapWindowsToKinds() {

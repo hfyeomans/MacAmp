@@ -1693,7 +1693,7 @@ Value types that cross isolation boundaries are `Sendable` (see the table in [Sw
 - **Registration:** `WindowDelegateWiring` calls `register(window:kind:)` for each window and adds the manager to that window's `WindowDelegateMultiplexer`; `register` records the window and its last frame and does not set `window.delegate` itself.
 - **Move handling (`windowDidMove`):** converts every window frame to a top-left virtual-screen space spanning all displays, finds the moved window's connected cluster, moves the rest of the cluster by the same delta, then snaps the cluster's bounding box to other windows (`SnapUtils.snapToMany`) and to the screen edges (`SnapUtils.snapWithin`).
 - **Titlebar drags (`beginCustomDrag` / `updateCustomDrag`):** dragging Main moves its docked group (`DockGraph.cluster` over all windows, closed ones included, so a closed window still links the chain); any other window drags alone. Holding Shift at mouse-down turns off snapping to other windows for that drag, and Main moves alone; the screens still contain it.
-- **Shade re-anchoring (`windowDidResize`):** when Main, EQ or Playlist changes height with its top edge fixed (shade/unshade), the windows docked below it (`DockGraph.dockedBelow`) move by the same amount; a window hanging from a window that doesn't move stays put.
+- **Size changes (`windowDidResize`, double size):** when Main, EQ or Playlist changes size with its top-left fixed (shade/unshade, Ctrl+D), `DockGraph.followResize` moves the windows attached below or to its right by the size change; a window attached to one that doesn't move stays put.
 - **Feedback prevention:** `isAdjusting` suppresses re-entry while the manager moves windows itself; `beginProgrammaticAdjustment()` / `endProgrammaticAdjustment()` let other code (double-size resize, window resize) suspend snapping.
 - **Cluster queries:** `clusterKinds(containing:)` returns the `WindowKind`s touching a window (`WindowResizeController.resizeMainAndEQWindows` uses it to tell whether the playlist is docked to the main window, the equalizer or floating); `areConnected(_:_:)` wraps it.
 
@@ -2073,7 +2073,7 @@ xcodebuild test -scheme MacAmpApp -destination 'platform=macOS' -enableThreadSan
 xcodebuild test -scheme MacAmpApp -destination 'platform=macOS'   # also run without TSan: wall-clock benchmarks skip themselves under TSan
 ```
 
-**Suites:** `AppSettingsTests`, `AudioPlayerStateTests`, `BiquadNumericalMatchTests`, `DockGraphTests`, `EngineConfigObserverTests`, `EQCodecTests`, `LockFreeRingBufferTests`, `PlaylistNavigationTests`, `ScreenClampTests`, `SkinManagerTests`, `SpriteResolverTests`, `StreamPauseTailTests`, `VideoSeekStateMatrixTests`, `VideoTapCPUBenchmarkTests`, `VideoTapFanoutTests`, `VideoTapLifecycleTests`, `VideoTapSendableContractTests`, `VideoTapTelemetryTests`, `VideoTapVisualizerRenderTests`, `WindowDockingGeometryTests`, `WindowFrameStoreTests` (tags in `TestTags.swift`).
+**Suites:** `AppSettingsTests`, `AudioPlayerStateTests`, `BiquadNumericalMatchTests`, `DockGraphTests`, `EngineConfigObserverTests`, `EQCodecTests`, `LockFreeRingBufferTests`, `PlaylistNavigationTests`, `ScreenClampTests`, `SkinManagerTests`, `SpriteResolverTests`, `StreamPauseTailTests`, `VideoSeekStateMatrixTests`, `VideoTapCPUBenchmarkTests`, `VideoTapFanoutTests`, `VideoTapLifecycleTests`, `VideoTapSendableContractTests`, `VideoTapTelemetryTests`, `VideoTapVisualizerRenderTests`, `WindowFrameStoreTests` (tags in `TestTags.swift`).
 
 ### Unit Tests
 
@@ -2291,8 +2291,6 @@ MacAmpApp/
 │   ├── WindowResizeController.swift          # Resize + docking
 │   ├── WindowSettingsObserver.swift          # Settings observation
 │   ├── WindowDelegateWiring.swift            # Delegate factory
-│   ├── WindowDockingTypes.swift              # Value types (Sendable)
-│   ├── WindowDockingGeometry.swift           # Pure geometry (nonisolated)
 │   ├── WindowFrameStore.swift                # UserDefaults persistence
 │   └── Winamp{Main,Equalizer,Playlist,Video,Milkdrop}WindowController.swift
 │

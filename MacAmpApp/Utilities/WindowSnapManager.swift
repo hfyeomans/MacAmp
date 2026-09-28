@@ -166,7 +166,7 @@ final class WindowSnapManager: NSObject, NSWindowDelegate {
         recordFrames()
     }
 
-    /// Top-anchored height change (shade/unshade): windows docked below follow so the chain stays attached.
+    /// Top-anchored height change (shade/unshade): attached windows follow via `DockGraph.followResize`.
     func windowDidResize(_ notification: Notification) {
         guard !isAdjusting, programmaticDepth == 0, let resized = notification.object as? NSWindow,
               let kind = windows.first(where: { $0.value.window === resized })?.key else { return }
@@ -178,16 +178,18 @@ final class WindowSnapManager: NSObject, NSWindowDelegate {
         guard abs(new.width - old.width) < 1, abs(new.maxY - old.maxY) < 1,
               abs(new.height - old.height) >= 1 else { return }
 
-        let below = DockGraph.dockedBelow(resizedID, oldBox: box(for: old, in: space),
-                                          boxes: boxes(in: space, includeHidden: true))
-        let dy = new.minY - old.minY
-        isAdjusting = true
+        var before = boxes(in: space, includeHidden: true)
+        before[resizedID] = box(for: old, in: space)
+        let order = Self.dockOrder.compactMap { windows[$0]?.window.map(ObjectIdentifier.init) }
+        let after = DockGraph.followResize(boxes: before, newSizes: [resizedID: new.size], order: order)
         for (_, tracked) in windows {
-            guard let w = tracked.window, below.contains(ObjectIdentifier(w)) else { continue }
-            w.setFrameOrigin(NSPoint(x: w.frame.origin.x, y: w.frame.origin.y + dy))
+            guard let w = tracked.window, ObjectIdentifier(w) != resizedID, let box = after[ObjectIdentifier(w)] else { continue }
+            apply(box: box, to: w, virtualTop: space.top, virtualLeft: space.left)
         }
-        isAdjusting = false
     }
+
+    /// Tie-break order when windows compete as anchors.
+    static let dockOrder: [WindowKind] = [.main, .equalizer, .playlist, .video, .milkdrop]
 
     // Helper to convert top-left box coordinates back to AppKit bottom-left origin and apply to window
     private func apply(box: Box, to window: NSWindow, virtualTop: CGFloat, virtualLeft: CGFloat) {

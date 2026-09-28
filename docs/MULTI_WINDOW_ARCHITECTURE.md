@@ -39,19 +39,15 @@ Shared-state rules (singleton `@Observable @MainActor` models with `didSet` pers
 
 1. `AppSettings.isDoubleSizeMode` toggles via Ctrl+D / "D" button.
 2. `WindowSettingsObserver` detects the change via recursive `withObservationTracking` and fires the `onDoubleSizeChanged` callback.
-3. `WindowCoordinator` forwards to `WindowResizeController.resizeMainAndEQWindows()`, which captures the live frames for Main, EQ, Playlist and Video.
-4. `makePlaylistDockingContext()` queries `WindowSnapManager.clusterKinds(containing: .playlist)` to discover the current magnetic cluster. If the playlist is touching the EQ (checked first) or Main window, it derives an attachment (`below`, `above`, `left`, `right` with an offset) plus the anchor using `WindowDockingGeometry` pure functions; otherwise it falls back to a heuristic or the last remembered attachment. `makeVideoDockingContext()` does the same for the Video window.
-5. Main and EQ resize synchronously (no animation). While `WindowSnapManager` is in programmatic adjustment mode and `WindowFramePersistence` has suppressed writes, the playlist and video windows are re-aligned to their anchor frames, preserving the Winamp stack. Playlist and Video keep their own size.
-6. DEBUG logging prints `[DOCKING] source: ...` so QA can see which anchor drove the adjustment.
-
-Any window registered with `WindowSnapManager` (via `WindowDelegateWiring`) can take part: the resize controller asks for its cluster membership and keeps it attached to its anchor.
+3. `WindowCoordinator` forwards to `WindowResizeController.resizeMainAndEQWindows()`, which scales Main and EQ from their current size (so a shaded window keeps its strip height) with their top-left corners fixed.
+4. `DockGraph.followResize` moves every attached window, including closed ones, by the size change of the window it's attached to — the same rule as shade/unshade (see [Docking](#docking)).
+5. The moves run inside a programmatic-adjustment bracket with persistence suppressed; a debounced flush saves the result. Playlist, Video and Milkdrop keep their own size.
 
 | File | Role |
 |------|------|
 | `WindowSettingsObserver.swift` | Detects `isDoubleSizeMode` change |
-| `WindowResizeController.swift` | Orchestrates resize + docking context |
-| `WindowDockingGeometry.swift` | Pure geometry (attachment detection, origin calculation) |
-| `WindowDockingTypes.swift` | Value types (`PlaylistDockingContext`, `PlaylistAttachmentSnapshot`, `VideoAttachmentSnapshot`) |
+| `WindowResizeController.swift` | Scales Main/EQ and applies the new frames |
+| `DockGraph.swift` | Pure `followResize` rule (attached windows follow; hanging and overlap rules) |
 | `WindowFramePersistence.swift` | Suppresses persistence during programmatic moves |
 
 ---
@@ -90,8 +86,6 @@ MacAmpApp/Windows/
     WindowResizeController.swift      (311 lines) -- Resize + docking-aware layout
     WindowSettingsObserver.swift      (113 lines) -- Settings observation lifecycle
     WindowDelegateWiring.swift        ( 54 lines) -- Delegate setup static factory
-    WindowDockingTypes.swift          ( 50 lines) -- Value types (Sendable)
-    WindowDockingGeometry.swift       (109 lines) -- Pure geometry (nonisolated)
     WindowFrameStore.swift            ( 65 lines) -- UserDefaults wrapper (injectable)
 ```
 
@@ -99,15 +93,13 @@ MacAmpApp/Windows/
 |------|----------------|:----------:|:-----------:|
 | `WindowCoordinator` | Composition root, API forwarding | Yes | Yes |
 | `WindowCoordinator+Layout` | Init-time layout, skin-ready presentation, debug | Yes (inherited) | -- |
-| `WindowRegistry` | Owns the 5 NSWindowControllers, window↔kind mapping, `liveAnchorFrame` | Yes | No |
+| `WindowRegistry` | Owns the 5 NSWindowControllers, window↔kind mapping | Yes | No |
 | `WindowFramePersistence` | Save/restore/suppress frames; restores keep the saved top edge; Video and Milkdrop restore their whole saved frame | Yes | No |
 | `WindowScreenGuard` | Keeps windows reachable across sleep/wake and display changes; `clampOnScreen()` | Yes | No |
 | `WindowVisibilityController` | Show/hide/toggle for all windows; group minimize | Yes | Yes |
 | `WindowResizeController` | Double-size resize, docking context, playlist/video/milkdrop size updates, resize previews | Yes | No |
 | `WindowSettingsObserver` | Observes `isAlwaysOnTop`, `isDoubleSizeMode`, `showVideoWindow`, `showMilkdropWindow` | Yes | No |
 | `WindowDelegateWiring` | Static factory: per window, registers with `WindowSnapManager` and installs a `WindowDelegateMultiplexer` (snap manager, persistence delegate, `WindowFocusDelegate`) | Yes (struct) | No |
-| `WindowDockingTypes` | Value types for docking context | No (Sendable) | No |
-| `WindowDockingGeometry` | Pure geometry calculations | nonisolated | No |
 | `WindowFrameStore` | JSON-encoded frames in UserDefaults, key `WindowFrame.<kind>` | No | No |
 
 ### Dependency Graph (Acyclic)
@@ -125,8 +117,7 @@ WindowCoordinator (facade / composition root)
     |
     +-- WindowResizeController        (depends on: WindowRegistry, WindowFramePersistence)
     |       |
-    |       +-- uses WindowDockingGeometry (static, pure functions)
-    |       +-- uses WindowDockingTypes (value types)
+    |       +-- uses DockGraph (pure docking rules)
     |
     +-- WindowSettingsObserver        (depends on: AppSettings only)
     |
@@ -143,8 +134,7 @@ When coordination is required (for example, suppressing persistence during resiz
 
 Every type that touches `NSWindow` or other AppKit objects is `@MainActor` (`WindowCoordinator` and `WindowVisibilityController` are also `@Observable`). Two are intentionally not:
 
-- **`WindowDockingGeometry`**: `nonisolated struct` with static methods taking `NSRect` and returning `NSRect`/`NSPoint`. No side effects; callable from any isolation domain.
-- **`WindowDockingTypes`**: `Sendable` value types (`PlaylistAttachmentSnapshot`, `VideoAttachmentSnapshot`, `PlaylistDockingContext`).
+- **`DockGraph`** and **`ScreenClamp`** (`Models/`): caseless enums of static functions over `Box`/`CGRect`, generic over the window ID. No side effects; callable from any isolation domain.
 
 `WindowCoordinator+Layout.swift` inherits `@MainActor` from the base type.
 
@@ -232,7 +222,7 @@ func schedulePersistenceFlush() {
 
 1. **Facade stays in `ViewModels/`**: `WindowCoordinator` and its layout extension are consumed by SwiftUI views as an `@Observable` model.
 2. **Controllers live in `Windows/`**, next to the window controllers and `BorderlessWindow`.
-3. **Pure types are nonisolated**: `WindowDockingGeometry` and `WindowDockingTypes` can be called from any context and unit-tested directly (`WindowDockingGeometryTests`).
+3. **Pure types are nonisolated**: `DockGraph` and `ScreenClamp` can be called from any context and unit-tested directly (`DockGraphTests`, `ScreenClampTests`).
 4. **Static factories for complex construction**: `WindowDelegateWiring.wire(registry:persistenceDelegate:windowFocusState:)` returns an immutable struct holding strong references to the multiplexers and focus delegates (`NSWindow.delegate` is weak).
 5. **Injectable dependencies**: `WindowFrameStore(defaults:)` takes a `UserDefaults`, so tests use isolated suites (`WindowFrameStoreTests`).
 
@@ -248,7 +238,7 @@ Refactor plan and final state: `tasks/done/window-coordinator-refactor/`.
 - **Closed windows keep the chain.** A Main drag moves every window docked to it, including hidden ones (`WindowSnapManager.beginCustomDrag` builds boxes with `includeHidden: true`), so a closed EQ still links Main to the Playlist under it and reopens in place.
 - **Shift at mouse-down** turns off snapping to other windows for that drag, and Main moves alone, without its group; the screens still contain the drag.
 - **Menu bar:** a drag keeps the group's top edge out of each screen's menu-bar strip (`VirtualScreenSpace.menuBarStrips`).
-- **Shade/unshade re-anchoring.** Shading keeps a window's top edge and changes its height. `WindowSnapManager.windowDidResize` moves the windows docked below it (`DockGraph.dockedBelow`) by the height change so the chain stays attached. A window hanging from a window that doesn't move (e.g. Milkdrop under a Video window docked beside Main) stays with it, as does anything hanging from it.
+- **Size changes (shade/unshade, double size).** The resized window keeps its top-left corner. `DockGraph.followResize` moves each window attached below or to the right of a window that changed by that window's size change, carried along the chain (Webamp `getPositionDiff`). A window attached to a window that doesn't move stays with it (e.g. Milkdrop under a Video window docked beside Main), as does anything attached to it. When the windows a window is attached to disagree, it takes the first position that overlaps no other window, else stays. Shade uses it from `WindowSnapManager.windowDidResize`, double size from `WindowResizeController.resizeMainAndEQWindows`. No rule keeps every contact in every layout (e.g. a 550-wide Playlist under a normal-size Main and EQ).
 - Programmatic moves are bracketed with `WindowSnapManager.beginProgrammaticAdjustment()` / `endProgrammaticAdjustment()` (nestable); the snap manager ignores moves inside a bracket and re-records frames when it closes.
 
 ### Persistence

@@ -35,40 +35,87 @@ struct DockGraphTests {
         #expect(DockGraph.cluster(from: "main", boxes: boxes) == ["main", "eq", "beside"])
     }
 
-    @Test("Shading Main moves only the windows docked below it")
-    func dockedBelowOnShade() {
-        let video = Box(x: 275, y: 0, width: 275, height: 116)  // beside Main, not below
-        let shadedMain = Box(x: 0, y: 0, width: 275, height: 14)
-        let boxes: [String: Box] = ["main": shadedMain, "eq": eq, "playlist": playlist, "video": video]
-        #expect(DockGraph.dockedBelow("main", oldBox: main, boxes: boxes) == ["eq", "playlist"])
+    private let order = ["main", "eq", "playlist", "video", "milkdrop", "under"]
+    private let shade = CGSize(width: 275, height: 14)
+
+    /// IDs whose box changed position (size changes of the resized window itself don't count).
+    private func moved(_ before: [String: Box], _ after: [String: Box]) -> Set<String> {
+        Set(before.keys.filter { before[$0]?.x != after[$0]?.x || before[$0]?.y != after[$0]?.y })
     }
 
-    @Test("Unshading Main pushes the docked chain back down")
-    func dockedBelowOnUnshade() {
+    @Test("Shading Main moves only the windows attached below it")
+    func shadeMovesChainBelow() {
+        let video = Box(x: 275, y: 0, width: 275, height: 116)  // beside Main, not below
+        let boxes: [String: Box] = ["main": main, "eq": eq, "playlist": playlist, "video": video]
+        let after = DockGraph.followResize(boxes: boxes, newSizes: ["main": shade], order: order)
+        #expect(moved(boxes, after) == ["eq", "playlist"])
+        #expect(after["eq"]?.y == 14 && after["playlist"]?.y == 130)
+    }
+
+    @Test("Unshading Main pushes the chain back down")
+    func unshadePushesDown() {
         let shadedMain = Box(x: 0, y: 0, width: 275, height: 14)
         let raisedEQ = Box(x: 0, y: 14, width: 275, height: 116)
-        let boxes: [String: Box] = ["main": main, "eq": raisedEQ]
-        #expect(DockGraph.dockedBelow("main", oldBox: shadedMain, boxes: boxes) == ["eq"])
+        let after = DockGraph.followResize(boxes: ["main": shadedMain, "eq": raisedEQ],
+                                           newSizes: ["main": CGSize(width: 275, height: 116)], order: order)
+        #expect(after["eq"]?.y == 116)
     }
 
     @Test("A window beside the EQ follows the EQ when Main shades")
     func besideEQFollows() {
         let video = Box(x: 275, y: 116, width: 275, height: 116)
-        let shadedMain = Box(x: 0, y: 0, width: 275, height: 14)
-        let boxes: [String: Box] = ["main": shadedMain, "eq": eq, "video": video]
-        #expect(DockGraph.dockedBelow("main", oldBox: main, boxes: boxes) == ["eq", "video"])
+        let boxes: [String: Box] = ["main": main, "eq": eq, "video": video]
+        let after = DockGraph.followResize(boxes: boxes, newSizes: ["main": shade], order: order)
+        #expect(moved(boxes, after) == ["eq", "video"])
+        #expect(after["video"]?.y == after["eq"]?.y)
     }
 
-    @Test("A window hanging from one that stays doesn't follow the shade, nor what hangs from it")
+    @Test("A window hanging from one that stays doesn't follow, nor what hangs from it")
     func hangingFromStayingWindowStays() {
         let playlist = Box(x: 0, y: 232, width: 275, height: 174)
         let video = Box(x: 275, y: 0, width: 275, height: 174)       // beside Main, tops level
         let milkdrop = Box(x: 275, y: 174, width: 275, height: 232)  // under Video, beside the Playlist
         let under = Box(x: 275, y: 406, width: 275, height: 116)     // under Milkdrop
-        let shadedMain = Box(x: 0, y: 0, width: 275, height: 14)
-        let boxes: [String: Box] = ["main": shadedMain, "eq": eq, "playlist": playlist,
+        let boxes: [String: Box] = ["main": main, "eq": eq, "playlist": playlist,
                                     "video": video, "milkdrop": milkdrop, "under": under]
-        #expect(DockGraph.dockedBelow("main", oldBox: main, boxes: boxes) == ["eq", "playlist"])
+        let after = DockGraph.followResize(boxes: boxes, newSizes: ["main": shade], order: order)
+        #expect(moved(boxes, after) == ["eq", "playlist"])
+    }
+
+    @Test("A window beside Main follows Main's width change")
+    func besideMainFollowsWidth() {
+        let doubledMain = Box(x: 0, y: 0, width: 550, height: 232)
+        let video = Box(x: 550, y: 0, width: 275, height: 232)
+        let after = DockGraph.followResize(boxes: ["main": doubledMain, "video": video],
+                                           newSizes: ["main": CGSize(width: 275, height: 116)], order: order)
+        #expect(after["video"]?.x == 275 && after["video"]?.y == 0)
+    }
+
+    @Test("Double → normal size in the owner's layout: no overlaps; a round trip restores it")
+    func doubleSizeOwnerLayout() {
+        // Double size: Main/EQ/Playlist stacked 550 wide; Milkdrop beside Main+EQ; Video under Milkdrop, beside the Playlist.
+        let doubled: [String: Box] = [
+            "main": Box(x: 0, y: 0, width: 550, height: 232),
+            "eq": Box(x: 0, y: 232, width: 550, height: 232),
+            "playlist": Box(x: 0, y: 464, width: 550, height: 348),
+            "milkdrop": Box(x: 550, y: 0, width: 550, height: 464),
+            "video": Box(x: 550, y: 464, width: 550, height: 348),
+        ]
+        let normal = DockGraph.followResize(boxes: doubled, newSizes: ["main": CGSize(width: 275, height: 116), "eq": CGSize(width: 275, height: 116)], order: order)
+        #expect(normal["eq"]?.y == 116)
+        #expect(normal["playlist"]?.y == 232)
+        #expect(normal["milkdrop"] == doubled["milkdrop"] && normal["video"] == doubled["video"])
+        let boxes = Array(normal.values)
+        for a in boxes.indices {
+            for b in boxes.indices where b > a {
+                let overlap = boxes[a].x < boxes[b].x + boxes[b].width && boxes[b].x < boxes[a].x + boxes[a].width
+                    && boxes[a].y < boxes[b].y + boxes[b].height && boxes[b].y < boxes[a].y + boxes[a].height
+                #expect(!overlap)
+            }
+        }
+        let back = DockGraph.followResize(boxes: normal, newSizes: ["main": CGSize(width: 550, height: 232), "eq": CGSize(width: 550, height: 232)],
+                                          order: order)
+        #expect(back == doubled)
     }
 
     @Test("clusters partitions AppKit frames into docked groups")
@@ -81,9 +128,9 @@ struct DockGraphTests {
         #expect(Set(groups) == [["main", "eq"], ["far"]])
     }
 
-    @Test("A window resized with nothing docked below moves nothing")
-    func nothingBelow() {
-        let boxes: [String: Box] = ["main": main]
-        #expect(DockGraph.dockedBelow("main", oldBox: main, boxes: boxes).isEmpty)
+    @Test("A resize with nothing attached moves nothing")
+    func nothingAttached() {
+        let after = DockGraph.followResize(boxes: ["main": main], newSizes: ["main": shade], order: order)
+        #expect(after["main"]?.x == 0 && after["main"]?.y == 0 && after["main"]?.height == 14)
     }
 }

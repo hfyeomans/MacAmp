@@ -12,7 +12,7 @@ This document gives a fast, practical overview of the MacAmp Xcode test setup so
 - **Test plan**: `MacAmpApp.xctestplan` (`MacAmpApp.xcodeproj/xcshareddata/xctestplans/MacAmpApp.xctestplan`)
 - **Configuration**: Single "All" configuration (simplified from prior 3-config setup)
 - **swift-tools-version**: 6.2
-- **Total tests**: 141 (across 22 suites)
+- **Total tests**: 136 (across 21 suites)
 
 ## Test Tags
 
@@ -23,7 +23,7 @@ Tests are organized with Swift Testing tags defined in `Tests/MacAmpTests/TestTa
 | `.audio` | LockFreeRingBufferTests, AudioPlayerStateTests |
 | `.concurrency` | LockFreeRingBufferConcurrencyTests |
 | `.skin` | SkinManagerTests, SpriteResolverTests |
-| `.window` | DockGraphTests, ScreenClampTests, WindowDockingGeometryTests, WindowFrameStoreTests |
+| `.window` | DockGraphTests, ScreenClampTests, WindowFrameStoreTests |
 | `.persistence` | AppSettingsTests, WindowFrameStoreTests |
 | `.parsing` | EQCodecTests, PlaylistNavigationTests |
 

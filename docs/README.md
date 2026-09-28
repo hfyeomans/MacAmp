@@ -45,7 +45,7 @@ xcodegen generate      # generates MacAmpApp.xcodeproj from project.yml
 xcodebuild test -scheme MacAmpApp -destination 'platform=macOS' -enableThreadSanitizer YES
 ```
 
-The suite has 141 tests in 22 suites. Suite tags, `xcodebuildmcp` usage and per-suite notes: [xcode-testing-context.md](context/xcode-testing-context.md).
+The suite has 136 tests in 21 suites. Suite tags, `xcodebuildmcp` usage and per-suite notes: [xcode-testing-context.md](context/xcode-testing-context.md).
 
 ---
 
@@ -109,7 +109,7 @@ The suite has 141 tests in 22 suites. Suite tags, `xcodebuildmcp` usage and per-
 - **Purpose**: Multi-window system design: window ownership, coordination, docking, recovery, minimize and windowshade
 - **Key Sections**:
   - Window infrastructure and scenes (borderless `NSWindow`s, hidden placeholder `WindowGroup`)
-  - Instant double-size docking pipeline
+  - Instant double-size docking pipeline (`DockGraph.followResize`, shared with shade)
   - `WindowCoordinator` Facade + Composition: controllers, acyclic dependency graph, `@MainActor` boundaries
   - Swift 6.2 concurrency patterns (recursive `withObservationTracking`, `isolated deinit`, observation chaining, debounced persistence)
   - Docking: `DockGraph` groups (closed windows keep the chain), 10 px snap, Shift-drag, shade/unshade re-anchoring
@@ -353,7 +353,7 @@ The suite has 141 tests in 22 suites. Suite tags, `xcodebuildmcp` usage and per-
 | **Window ownership** | MULTI_WINDOW_ARCHITECTURE.md | [File Structure and Responsibilities](MULTI_WINDOW_ARCHITECTURE.md#file-structure-and-responsibilities) |
 | **Docking / DockGraph** | MULTI_WINDOW_ARCHITECTURE.md | [Docking](MULTI_WINDOW_ARCHITECTURE.md#docking) (closed windows keep the chain, 10 px snap) |
 | **Shift-drag (no window snapping)** | MULTI_WINDOW_ARCHITECTURE.md, CUSTOM_DRAG_FIX.md | [Docking](MULTI_WINDOW_ARCHITECTURE.md#docking), [Solution](CUSTOM_DRAG_FIX.md#solution) |
-| **Shade/unshade re-anchoring** | MULTI_WINDOW_ARCHITECTURE.md | [Docking](MULTI_WINDOW_ARCHITECTURE.md#docking) (`DockGraph.dockedBelow`) |
+| **Shade/unshade re-anchoring** | MULTI_WINDOW_ARCHITECTURE.md | [Docking](MULTI_WINDOW_ARCHITECTURE.md#docking) (`DockGraph.followResize`) |
 | **Window frame / visibility persistence** | MULTI_WINDOW_ARCHITECTURE.md | [Persistence](MULTI_WINDOW_ARCHITECTURE.md#persistence) |
 | **Off-screen windows / sleep-wake / display changes** | MULTI_WINDOW_ARCHITECTURE.md | [Off-Screen Recovery](MULTI_WINDOW_ARCHITECTURE.md#off-screen-recovery-windowscreenguard) |
 | **WindowScreenGuard / ScreenClamp** | MULTI_WINDOW_ARCHITECTURE.md | [Off-Screen Recovery](MULTI_WINDOW_ARCHITECTURE.md#off-screen-recovery-windowscreenguard) |
