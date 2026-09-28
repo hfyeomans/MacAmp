@@ -6,8 +6,8 @@ import AppKit
 /// snapping, no persistence). When the screens settle:
 /// - **same displays** (sleep/wake): macOS first moved each window onto a temporary screen, splitting
 ///   docked groups, so the snapshot is restored (translated if the displays were re-based);
-/// - **a display was added or returned**: macOS keeps or returns windows to their own display, so
-///   their positions are trusted (restoring would drag them off it);
+/// - **a display was added or returned**: macOS keeps or returns windows to their own display, one
+///   by one, so each docked group is re-formed rigidly around its anchor where macOS put it;
 /// - **a display was removed**: the snapshot is restored so groups stay docked, and stranded groups
 ///   are moved onto a remaining screen together.
 /// Any window still unreachable is then clamped on screen, one docked group at a time.
@@ -125,10 +125,25 @@ final class WindowScreenGuard {
     private func settle() {
         let current = Self.currentDisplays()
         let displayAdded = !Set(current.keys).isSubset(of: Set(snapshotDisplays.keys))
-        if let snapshot, !displayAdded {
+        if let snapshot {
+            // Docked groups are rigid across any transition; only their position may change.
             let groups = DockGraph.clusters(boxes: snapshot.mapValues(DockGraph.box(for:)))
-            let restored = ScreenClamp.translate(groups: groups, frames: snapshot,
+            let restored: [WindowKind: CGRect]
+            if displayAdded {
+                var now: [WindowKind: CGRect] = [:]
+                var visible: Set<WindowKind> = []
+                registry.forEachWindow { window, kind in
+                    now[kind] = window.frame
+                    if window.isVisible { visible.insert(kind) }
+                }
+                restored = ScreenClamp.rigid(groups: groups, snapshot: snapshot, current: now) { group in
+                    Self.anchorOrder.first { group.contains($0) && visible.contains($0) }
+                        ?? Self.anchorOrder.first { group.contains($0) }
+                }
+            } else {
+                restored = ScreenClamp.translate(groups: groups, frames: snapshot,
                                                  from: snapshotDisplays, to: current)
+            }
             registry.forEachWindow { window, kind in
                 guard let saved = restored[kind] else { return }
                 // Top-anchored: keep the saved top edge even if the height changed meanwhile.
@@ -147,6 +162,9 @@ final class WindowScreenGuard {
         persistence.endSuppressingPersistence()
         WindowSnapManager.shared.endProgrammaticAdjustment()
     }
+
+    /// A group's anchor: Main when it's in the group, else the first visible member in this order.
+    private static let anchorOrder: [WindowKind] = [.main, .equalizer, .playlist, .video, .milkdrop]
 
     private static func currentDisplays() -> [UInt32: CGRect] {
         var result: [UInt32: CGRect] = [:]

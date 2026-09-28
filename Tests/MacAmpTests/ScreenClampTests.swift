@@ -109,7 +109,21 @@ struct ScreenClampTests {
         #expect(laptop.contains(newMain) && laptop.contains(newVideo))
     }
 
-    @Test("DockGraph.clusters partitions windows into docked groups")
+    @Test("A group macOS returned piecemeal is re-formed rigidly around its anchor")
+    func rigidRegroup() throws {
+        let playlist = CGRect(x: 100, y: 500, width: 550, height: 468)  // docked under EQ
+        let snapshot = ["main": main, "eq": eq, "playlist": playlist]
+        // macOS put Main back 1800 px right and 431 px lower, but the Playlist somewhere else.
+        let current = ["main": main.offsetBy(dx: 1800, dy: -431), "eq": eq.offsetBy(dx: 1800, dy: -431),
+                       "playlist": CGRect(x: 2500, y: 100, width: 550, height: 468)]
+        let result = ScreenClamp.rigid(groups: [["main", "eq", "playlist"]], snapshot: snapshot,
+                                       current: current) { $0.contains("main") ? "main" : nil }
+        let newPlaylist = try #require(result["playlist"]), newEQ = try #require(result["eq"])
+        #expect(newPlaylist == playlist.offsetBy(dx: 1800, dy: -431))
+        #expect(newEQ.minY - newPlaylist.maxY == 0)  // docked again
+    }
+
+        @Test("DockGraph.clusters partitions windows into docked groups")
     func clustersPartition() {
         let far = CGRect(x: 2000, y: 200, width: 275, height: 116)
         let rects = ["main": main, "eq": eq, "far": far]

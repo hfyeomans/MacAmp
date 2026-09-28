@@ -76,6 +76,21 @@ enum ScreenClamp {
         return result
     }
 
+    /// Rigid docked groups: each member keeps its `snapshot` offset from the group's anchor, and the
+    /// group is placed where the anchor is now (top-left corner). Used when macOS has moved windows
+    /// back one by one.
+    static func rigid<ID: Hashable>(
+        groups: [Set<ID>], snapshot: [ID: CGRect], current: [ID: CGRect], anchor: (Set<ID>) -> ID?
+    ) -> [ID: CGRect] {
+        var result: [ID: CGRect] = [:]
+        for group in groups {
+            guard let anchorID = anchor(group), let was = snapshot[anchorID], let now = current[anchorID] else { continue }
+            let dx = now.minX - was.minX, dy = now.maxY - was.maxY
+            for id in group { result[id] = snapshot[id]?.offsetBy(dx: dx, dy: dy) }
+        }
+        return result
+    }
+
     private static func measuredUnion<ID: Hashable>(of group: Set<ID>, frames: [ID: CGRect], visible: Set<ID>) -> CGRect? {
         let shown = group.intersection(visible)
         let measured = (shown.isEmpty ? group : shown).compactMap { frames[$0] }

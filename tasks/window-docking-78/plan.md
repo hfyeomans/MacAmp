@@ -93,9 +93,11 @@ This is Webamp's cluster shift (`ensureWindowsAreOnScreen`) applied per cluster.
 
 The observers use the macOS 27 typed `MainActorMessage` API (`ScreensDidWakeMessage` is an `AsyncMessage`, so it hops to the main actor) and keep `ObservationToken`s, torn down in `stop()`.
 
+**Governing rule (owner, 2026-09-27: "tackle window flow broadly, not in every bespoke way"):** a docked group is **rigid**. Across any display change or sleep/wake it may move as a whole, but its members keep their relative offsets. The cases below differ only in where the group's anchor goes: Main, else the first visible member of main/eq/playlist/video/milkdrop.
+
 **Settle cases (after the owner's Phase 3 test, 2026-09-27):**
 - **Same displays** (sleep/wake): restore the snapshot, translated by each display's origin change, then clamp.
-- **Display added or returned:** trust macOS's positions, then clamp only. Restoring saved *absolute* frames after the built-in became primary re-based the LG from (0,0) to (1800,−431) and dragged windows onto the built-in display.
+- **Display added or returned:** the anchor stays where macOS put it and the other members are placed at their snapshot offsets (`ScreenClamp.rigid`), then clamp. macOS returns windows one by one and not exactly, and the Playlist lost its dock on re-plug. Restoring saved *absolute* frames after the built-in became primary re-based the LG from (0,0) to (1800,−431) and dragged windows onto the built-in display.
 - **Display removed:** restore the snapshot so groups stay docked (translated for surviving displays), then clamp; stranded groups move together when they fit (`ScreenClamp.translate` + `clamp`).
 
 The guard tracks display frames by `NSScreen.cgDirectDisplayID` (macOS 26+).
