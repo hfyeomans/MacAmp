@@ -29,12 +29,15 @@
 
 | Sprite | Bitmap | Coordinates (confirmed with owner) | Exists under another name? | Result |
 |---|---|---|---|---|
-| EQ_CLOSE_BUTTON / _ACTIVE | eqmain.bmp | | | |
-| EQ_MAXIMIZE_BUTTON_ACTIVE_FALLBACK | eqmain.bmp | | | |
-| EQ_SHADE_BACKGROUND (verify region: owner screenshot shows tracks at ~5–57 / ~208–250 vs Webamp 61–158 / 164–207) | eqmain.bmp | | | |
-| MAIN_OPTIONS_BUTTON / _DEPRESSED | titlebar.bmp | | | |
-| MAIN_SHADE_BUTTON_SELECTED / _DEPRESSED | titlebar.bmp | | | |
-| MAIN_SHADE_POSITION_BACKGROUND / THUMB / _LEFT / _RIGHT | titlebar.bmp | | | |
+| EQ_CLOSE_BUTTON / _ACTIVE | eqmain.bmp | (0,116) / (0,125), 9×9 | no | ✅ added |
+| EQ_MAXIMIZE_BUTTON_ACTIVE_FALLBACK | eqmain.bmp | (254,152), 9×9 | no; used when the skin has no EQ_EX.BMP | ✅ added |
+| EQ_SHADE_BACKGROUND region | eq_ex.bmp | already correct | — | ✅ the long bars at ~5–57 / ~208–250 are decorative grips; Webamp's slider wells (61–158 / 164–207) are right |
+| MAIN_OPTIONS_BUTTON / _DEPRESSED | titlebar.bmp | (0,0) / (0,9), 9×9 | no | ✅ added |
+| MAIN_SHADE_BUTTON_SELECTED / _DEPRESSED | titlebar.bmp | (0,27) / (9,27), 9×9 | no | ✅ added |
+| MAIN_SHADE_POSITION_BACKGROUND / THUMB / _LEFT / _RIGHT | titlebar.bmp | (0,36) 17×7; (20,36) / (17,36) / (23,36) 3×7 | no | ✅ added |
+| PLAYLIST_CLOSE / COLLAPSE / EXPAND _SELECTED; PLAYLIST_SHADE_BACKGROUND / _LEFT / _RIGHT / _RIGHT_SELECTED | pledit.bmp | Webamp `skinSprites.ts` (contact sheet 2026-09-28) | no | ✅ added |
+
+Confirmed with the owner from a contact sheet on the default skin (EQ/Main 2026-09-27; Playlist 2026-09-28).
 
 ## Phase 4: titlebar and windowshade checklist
 
@@ -42,17 +45,21 @@ Test with at least 3 skins (default plus 2 others). Each control must look like 
 
 | Window | Mode | Control | Result |
 |---|---|---|---|
-| Main | normal | minimize (group), shade, close | |
-| Main | shade | previous, play, pause, stop, next, eject | |
-| Main | shade | position mini-slider (drag and seek) | |
-| Main | shade | unshade, minimize, close | |
-| EQ | normal | shade, close (no minimize, D5) | |
-| EQ | shade | volume, balance sliders | |
-| EQ | shade | unshade, close | |
-| Playlist | normal | shade, close (no minimize, D5) | |
-| Playlist | normal | bottom-right mini-transport (regression check) | |
-| Playlist | shade | title and time display; unshade, close | |
-| Main / EQ / Playlist | shade | strip is draggable outside its buttons; a shaded Main drags its docked group | ❌ 2026-09-27: no drag handle in any shade view (owner) |
+| Main | normal | options (bow → Options menu), shade, close | ✅ 2026-09-28 |
+| Main | normal/shade | minimize | ⏭ no-op until Phase 5 (borderless Main isn't `.miniaturizable`) |
+| Main | shade | previous, play, pause, stop, next, eject | ✅ 2026-09-28 |
+| Main | shade | position mini-slider (drag and seek) | ✅ 2026-09-28 |
+| Main | shade | mini time (TEXT.BMP; blank when stopped, blinks when paused, click toggles remaining) | ✅ 2026-09-28 |
+| Main | shade | mini visualizer (38×5, follows the main visualizer mode, click cycles) | ✅ 2026-09-28 (added at owner request) |
+| Main | shade | options, unshade, close | ✅ 2026-09-28 |
+| EQ | normal | shade, close (no minimize, D5) | ✅ 2026-09-28 |
+| EQ | shade | volume, balance sliders (synced with Main; balance snaps to centre) | ✅ 2026-09-28 |
+| EQ | shade | unshade, close | ✅ 2026-09-28 |
+| Playlist | normal | shade, close (no minimize, D5); whole top bar drags | ✅ 2026-09-28 |
+| Playlist | shade | title and track length (TEXT.BMP); unshade, close | ✅ 2026-09-28 (length is static, as in Winamp/Webamp) |
+| Playlist | shade | width-only resize grip; strip keeps 14 px; unshade keeps width/height; stays docked | ✅ 2026-09-28 |
+| Main / EQ / Playlist | shade | strip is draggable outside its buttons; a shaded Main drags its docked group | ✅ 2026-09-28 (❌ 2026-09-27 before the fix) |
+| all | — | other skins | ✅ 2026-09-28 (owner: 2+ skins) |
 
 ## Phase 5: minimize and shortcuts
 

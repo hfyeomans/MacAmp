@@ -7,11 +7,13 @@ struct PlaylistResizeHandle: View {
     @Binding var dragStartSize: Size2D?
     @Binding var isDragging: Bool
     let resizePreview: WindowResizePreviewOverlay
+    /// The shade strip's grip: resizes the width only and keeps the strip height.
+    var widthOnly = false
 
     var body: some View {
         Rectangle()
             .fill(Color.clear)
-            .frame(width: 20, height: 20)
+            .frame(width: widthOnly ? 9 : 20, height: widthOnly ? 9 : 20)
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0)
@@ -25,7 +27,7 @@ struct PlaylistResizeHandle: View {
                         guard let baseSize = dragStartSize else { return }
 
                         let widthDelta = Int(round(value.translation.width / PlaylistWindowSizeState.segmentWidth))
-                        let heightDelta = Int(round(value.translation.height / PlaylistWindowSizeState.segmentHeight))
+                        let heightDelta = widthOnly ? 0 : Int(round(value.translation.height / PlaylistWindowSizeState.segmentHeight))
 
                         let candidate = Size2D(
                             width: max(0, baseSize.width + widthDelta),
@@ -33,7 +35,8 @@ struct PlaylistResizeHandle: View {
                         )
 
                         if let coordinator = WindowCoordinator.shared {
-                            let previewPixels = candidate.toPixels()
+                            var previewPixels = candidate.toPixels()
+                            if widthOnly { previewPixels.height = WinampSizes.playlistShade.height }
                             coordinator.showPlaylistResizePreview(resizePreview, previewSize: previewPixels)
                         }
                     }
@@ -41,7 +44,7 @@ struct PlaylistResizeHandle: View {
                         guard let baseSize = dragStartSize else { return }
 
                         let widthDelta = Int(round(value.translation.width / PlaylistWindowSizeState.segmentWidth))
-                        let heightDelta = Int(round(value.translation.height / PlaylistWindowSizeState.segmentHeight))
+                        let heightDelta = widthOnly ? 0 : Int(round(value.translation.height / PlaylistWindowSizeState.segmentHeight))
 
                         let finalSize = Size2D(
                             width: max(0, baseSize.width + widthDelta),
@@ -51,7 +54,9 @@ struct PlaylistResizeHandle: View {
                         sizeState.size = finalSize
 
                         if let coordinator = WindowCoordinator.shared {
-                            coordinator.updatePlaylistWindowSize(to: sizeState.pixelSize)
+                            var pixels = sizeState.pixelSize
+                            if widthOnly { pixels.height = WinampSizes.playlistShade.height }
+                            coordinator.updatePlaylistWindowSize(to: pixels)
                             coordinator.hidePlaylistResizePreview(resizePreview)
                         }
 
@@ -60,6 +65,8 @@ struct PlaylistResizeHandle: View {
                         WindowSnapManager.shared.endProgrammaticAdjustment()
                     }
             )
-            .position(x: windowWidth - 10, y: windowHeight - 10)
+            // Shade grip: Webamp's `right: 20px; top: 3px`.
+            .position(x: widthOnly ? windowWidth - 24.5 : windowWidth - 10,
+                      y: widthOnly ? 7.5 : windowHeight - 10)
     }
 }

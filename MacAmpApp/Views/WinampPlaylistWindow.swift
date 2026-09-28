@@ -14,6 +14,12 @@ struct WinampPlaylistWindow: View {
 
     private var windowWidth: CGFloat { sizeState.windowWidth }
     private var windowHeight: CGFloat { sizeState.windowHeight }
+    /// The window's frame size: the strip height while shaded.
+    private var windowPixelSize: CGSize {
+        settings.isPlaylistWindowShaded
+            ? CGSize(width: sizeState.pixelSize.width, height: WinampSizes.playlistShade.height)
+            : sizeState.pixelSize
+    }
 
     private var isWindowActive: Bool {
         windowFocusState.isPlaylistKey
@@ -48,7 +54,10 @@ struct WinampPlaylistWindow: View {
                     PlaylistShadeView(
                         windowWidth: windowWidth,
                         isWindowActive: isWindowActive,
-                        onMinimize: { WindowCoordinator.shared?.minimizeKeyWindow() },
+                        sizeState: sizeState,
+                        dragStartSize: $ui.dragStartSize,
+                        isDragging: $ui.isDragging,
+                        resizePreview: ui.resizePreview,
                         onShadeToggle: { settings.isPlaylistWindowShaded.toggle() },
                         onClose: { WindowCoordinator.shared?.hidePlaylistWindow() }
                     )
@@ -62,11 +71,10 @@ struct WinampPlaylistWindow: View {
             ui.installKeyboardMonitor { [audioPlayer] in audioPlayer.playlist.count }
             PlaylistWindowActions.shared.radioLibrary = radioLibrary
             PlaylistWindowActions.shared.playbackCoordinator = playbackCoordinator
-            WindowCoordinator.shared?.updatePlaylistWindowSize(to: sizeState.pixelSize)
+            WindowCoordinator.shared?.updatePlaylistWindowSize(to: windowPixelSize)
         }
-        .onChange(of: sizeState.size) { _, newSize in
-            let pixelSize = newSize.toPixels()
-            WindowCoordinator.shared?.updatePlaylistWindowSize(to: pixelSize)
+        .onChange(of: sizeState.size) { _, _ in
+            WindowCoordinator.shared?.updatePlaylistWindowSize(to: windowPixelSize)
         }
         .onDisappear {
             ui.removeKeyboardMonitor()
@@ -106,7 +114,7 @@ struct WinampPlaylistWindow: View {
 
         PlaylistTitleBarButtons(
             windowWidth: windowWidth,
-            onMinimize: { WindowCoordinator.shared?.minimizeKeyWindow() },
+            shaded: false,
             onShadeToggle: { settings.isPlaylistWindowShaded.toggle() },
             onClose: { WindowCoordinator.shared?.hidePlaylistWindow() }
         )
@@ -141,22 +149,25 @@ struct WinampPlaylistWindow: View {
     private func buildCompleteBackground() -> some View {
         let suffix = isWindowActive ? "_SELECTED" : ""
 
-        // === TOP BAR ===
-        SimpleSpriteImage("PLAYLIST_TOP_LEFT\(isWindowActive ? "_SELECTED" : "_CORNER")", width: 25, height: 20)
-            .position(x: 12.5, y: 10)
+        // === TOP BAR === (the whole bar drags the window; the titlebar buttons sit above it)
+        WinampTitlebarDragHandle(windowKind: .playlist, size: CGSize(width: windowWidth, height: 20)) {
+            ZStack {
+                SimpleSpriteImage("PLAYLIST_TOP_LEFT\(isWindowActive ? "_SELECTED" : "_CORNER")", width: 25, height: 20)
+                    .position(x: 12.5, y: 10)
 
-        ForEach(0..<sizeState.topBarTileCount, id: \.self) { i in
-            SimpleSpriteImage("PLAYLIST_TOP_TILE\(suffix)", width: 25, height: 20)
-                .position(x: 25 + 12.5 + CGFloat(i) * 25, y: 10)
-        }
+                ForEach(0..<sizeState.topBarTileCount, id: \.self) { i in
+                    SimpleSpriteImage("PLAYLIST_TOP_TILE\(suffix)", width: 25, height: 20)
+                        .position(x: 25 + 12.5 + CGFloat(i) * 25, y: 10)
+                }
 
-        WinampTitlebarDragHandle(windowKind: .playlist, size: CGSize(width: 100, height: 20)) {
-            SimpleSpriteImage("PLAYLIST_TITLE_BAR\(suffix)", width: 100, height: 20)
+                SimpleSpriteImage("PLAYLIST_TITLE_BAR\(suffix)", width: 100, height: 20)
+                    .position(x: windowWidth / 2, y: 10)
+
+                SimpleSpriteImage("PLAYLIST_TOP_RIGHT_CORNER\(suffix)", width: 25, height: 20)
+                    .position(x: windowWidth - 12.5, y: 10)
+            }
         }
         .position(x: windowWidth / 2, y: 10)
-
-        SimpleSpriteImage("PLAYLIST_TOP_RIGHT_CORNER\(suffix)", width: 25, height: 20)
-            .position(x: windowWidth - 12.5, y: 10)
 
         // === SIDE BORDERS ===
         let borderTileCount = sizeState.verticalBorderTileCount

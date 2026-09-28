@@ -122,7 +122,15 @@ struct SkinSprites {
         "TITLEBAR": [
             Sprite(name: "MAIN_TITLE_BAR", x: 27, y: 15, width: 275, height: 14),
             Sprite(name: "MAIN_TITLE_BAR_SELECTED", x: 27, y: 0, width: 275, height: 14),
+            Sprite(name: "MAIN_OPTIONS_BUTTON", x: 0, y: 0, width: 9, height: 9),
+            Sprite(name: "MAIN_OPTIONS_BUTTON_DEPRESSED", x: 0, y: 9, width: 9, height: 9),
             Sprite(name: "MAIN_MINIMIZE_BUTTON", x: 9, y: 0, width: 9, height: 9),
+            Sprite(name: "MAIN_SHADE_BUTTON_SELECTED", x: 0, y: 27, width: 9, height: 9),
+            Sprite(name: "MAIN_SHADE_BUTTON_SELECTED_DEPRESSED", x: 9, y: 27, width: 9, height: 9),
+            Sprite(name: "MAIN_SHADE_POSITION_BACKGROUND", x: 0, y: 36, width: 17, height: 7),
+            Sprite(name: "MAIN_SHADE_POSITION_THUMB", x: 20, y: 36, width: 3, height: 7),
+            Sprite(name: "MAIN_SHADE_POSITION_THUMB_LEFT", x: 17, y: 36, width: 3, height: 7),
+            Sprite(name: "MAIN_SHADE_POSITION_THUMB_RIGHT", x: 23, y: 36, width: 3, height: 7),
             Sprite(name: "MAIN_MINIMIZE_BUTTON_DEPRESSED", x: 9, y: 9, width: 9, height: 9),
             Sprite(name: "MAIN_SHADE_BUTTON", x: 0, y: 18, width: 9, height: 9),
             Sprite(name: "MAIN_SHADE_BUTTON_DEPRESSED", x: 9, y: 18, width: 9, height: 9),
@@ -191,6 +199,9 @@ struct SkinSprites {
         "EQMAIN": [
             Sprite(name: "EQ_WINDOW_BACKGROUND", x: 0, y: 0, width: 275, height: 116),
             Sprite(name: "EQ_TITLE_BAR", x: 0, y: 149, width: 275, height: 14),
+            Sprite(name: "EQ_CLOSE_BUTTON", x: 0, y: 116, width: 9, height: 9),
+            Sprite(name: "EQ_CLOSE_BUTTON_ACTIVE", x: 0, y: 125, width: 9, height: 9),
+            Sprite(name: "EQ_MAXIMIZE_BUTTON_ACTIVE_FALLBACK", x: 254, y: 152, width: 9, height: 9),
             Sprite(name: "EQ_TITLE_BAR_SELECTED", x: 0, y: 134, width: 275, height: 14),
             Sprite(name: "EQ_SLIDER_BACKGROUND", x: 13, y: 164, width: 209, height: 129),
             Sprite(name: "EQ_SLIDER_THUMB", x: 0, y: 164, width: 11, height: 11),
@@ -340,6 +351,13 @@ struct SkinSprites {
             Sprite(name: "PLAYLIST_BOTTOM_RIGHT_CORNER", x: 126, y: 72, width: 150, height: 38),
             Sprite(name: "PLAYLIST_SCROLL_HANDLE", x: 52, y: 53, width: 8, height: 18),
             Sprite(name: "PLAYLIST_SCROLL_HANDLE_SELECTED", x: 61, y: 53, width: 8, height: 18),
+            Sprite(name: "PLAYLIST_CLOSE_SELECTED", x: 52, y: 42, width: 9, height: 9),
+            Sprite(name: "PLAYLIST_COLLAPSE_SELECTED", x: 62, y: 42, width: 9, height: 9),
+            Sprite(name: "PLAYLIST_EXPAND_SELECTED", x: 150, y: 42, width: 9, height: 9),
+            Sprite(name: "PLAYLIST_SHADE_BACKGROUND", x: 72, y: 57, width: 25, height: 14),
+            Sprite(name: "PLAYLIST_SHADE_BACKGROUND_LEFT", x: 72, y: 42, width: 25, height: 14),
+            Sprite(name: "PLAYLIST_SHADE_BACKGROUND_RIGHT", x: 99, y: 57, width: 50, height: 14),
+            Sprite(name: "PLAYLIST_SHADE_BACKGROUND_RIGHT_SELECTED", x: 99, y: 42, width: 50, height: 14),
             Sprite(name: "PLAYLIST_ADD_URL", x: 0, y: 111, width: 22, height: 18),
             Sprite(name: "PLAYLIST_ADD_URL_SELECTED", x: 23, y: 111, width: 22, height: 18),
             Sprite(name: "PLAYLIST_ADD_DIR", x: 0, y: 130, width: 22, height: 18),
@@ -444,8 +462,10 @@ extension SkinSprites {
     private static let fontLookup: [Character: (Int, Int)] = {
         var map: [Character: (Int, Int)] = [:]
         func set(_ ch: Character, _ r: Int, _ c: Int) { map[ch] = (r, c) }
-        let row0 = "abcdefghijklmnopqrstuvwxyz\"@ "
+        let row0 = "abcdefghijklmnopqrstuvwxyz\"@"
         for (i, ch) in row0.enumerated() { set(ch, 0, i) }
+        // Columns 28-29 hold skin-specific glyphs; the space is column 30.
+        set(" ", 0, 30)
         let row1 = "0123456789….:()-'!_+\\/[]^&%,=$#"
         for (i, ch) in row1.enumerated() { set(ch, 1, i) }
         let row2: [(Character, Int)] = [("Å",0),("Ö",1),("Ä",2),("?",3),("*",4)]

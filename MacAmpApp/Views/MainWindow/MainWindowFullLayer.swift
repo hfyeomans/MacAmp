@@ -55,31 +55,25 @@ struct MainWindowFullLayer: View {
     @ViewBuilder
     private func buildTitlebarButtons() -> some View {
         Group {
-            Button(action: {
+            SkinHitButton(pressedSprite: "MAIN_OPTIONS_BUTTON_DEPRESSED", width: 9, height: 9) {
+                optionsPresenter.showOptionsMenu(from: Layout.optionsButton, settings: settings,
+                                                 audioPlayer: audioPlayer, isDoubleSizeMode: settings.isDoubleSizeMode)
+            }
+            .at(Layout.optionsButton)
+
+            SkinHitButton(pressedSprite: "MAIN_MINIMIZE_BUTTON_DEPRESSED", width: 9, height: 9) {
                 WindowCoordinator.shared?.minimizeKeyWindow()
-            }, label: {
-                SimpleSpriteImage("MAIN_MINIMIZE_BUTTON", width: 9, height: 9)
-            })
-            .buttonStyle(.plain)
-            .focusable(false)
+            }
             .at(Layout.minimizeButton)
 
-            Button(action: {
+            SkinHitButton(pressedSprite: "MAIN_SHADE_BUTTON_DEPRESSED", width: 9, height: 9) {
                 settings.isMainWindowShaded.toggle()
-            }, label: {
-                SimpleSpriteImage("MAIN_SHADE_BUTTON", width: 9, height: 9)
-            })
-            .buttonStyle(.plain)
-            .focusable(false)
+            }
             .at(Layout.shadeButton)
 
-            Button(action: {
+            SkinHitButton(pressedSprite: "MAIN_CLOSE_BUTTON_DEPRESSED", width: 9, height: 9) {
                 NSApplication.shared.terminate(nil)
-            }, label: {
-                SimpleSpriteImage("MAIN_CLOSE_BUTTON", width: 9, height: 9)
-            })
-            .buttonStyle(.plain)
-            .focusable(false)
+            }
             .at(Layout.closeButton)
         }
     }

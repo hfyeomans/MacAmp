@@ -40,7 +40,8 @@ struct WinampMainWindow: View {
                     openFileDialog: openFileDialog
                 )
             } else {
-                MainWindowShadeLayer(interactionState: interactionState)
+                MainWindowShadeLayer(interactionState: interactionState, optionsPresenter: optionsPresenter,
+                                     openFileDialog: openFileDialog)
             }
         }
         .frame(

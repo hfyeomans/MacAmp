@@ -4,7 +4,7 @@ import AppKit
 /// Sprite-based text renderer for playlist time displays
 /// Uses CHARACTER sprites from TEXT.BMP with colors from PLEDIT.TXT
 ///
-/// Unlike SkinnedText (which uses raw character sprites), this component:
+/// Unlike raw character sprites, this component:
 /// 1. Applies PLEDIT.TXT normalTextColor for proper skin theming
 /// 2. Uses monospaced layout for time display (5px char width + 1px spacing)
 /// 3. Optimized for playlist info bar rendering

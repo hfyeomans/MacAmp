@@ -39,9 +39,12 @@ enum WinampMainWindowLayout {
     static let playlistButton = CGPoint(x: 242, y: 58)
 
     // Titlebar buttons (at top)
+    static let optionsButton = CGPoint(x: 6, y: 3)
     static let minimizeButton = CGPoint(x: 244, y: 3)
     static let shadeButton = CGPoint(x: 254, y: 3)
     static let closeButton = CGPoint(x: 264, y: 3)
+    static let shadeTime = CGPoint(x: 127, y: 4)
+    static let shadeVisualizer = CGPoint(x: 79, y: 5)
 
     // Clutter bar (vertical button strip, left side)
     static let clutterBar = CGPoint(x: 10, y: 22)

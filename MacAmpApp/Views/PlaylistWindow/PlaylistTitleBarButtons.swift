@@ -1,33 +1,20 @@
 import SwiftUI
 
+/// Shade and close are part of the titlebar bitmap; only the pressed sprite is drawn.
 struct PlaylistTitleBarButtons: View {
     let windowWidth: CGFloat
-    let onMinimize: () -> Void
+    let shaded: Bool
     let onShadeToggle: () -> Void
     let onClose: () -> Void
 
     var body: some View {
         let buttonY: CGFloat = 7.5
 
-        Button(action: onMinimize, label: {
-            SimpleSpriteImage("MAIN_MINIMIZE_BUTTON", width: 9, height: 9)
-        })
-        .buttonStyle(.plain)
-        .focusable(false)
-        .position(x: windowWidth - 26.5, y: buttonY)
+        SkinHitButton(pressedSprite: shaded ? "PLAYLIST_EXPAND_SELECTED" : "PLAYLIST_COLLAPSE_SELECTED",
+                      width: 9, height: 9, action: onShadeToggle)
+            .position(x: windowWidth - 16.5, y: buttonY)
 
-        Button(action: onShadeToggle, label: {
-            SimpleSpriteImage("MAIN_SHADE_BUTTON", width: 9, height: 9)
-        })
-        .buttonStyle(.plain)
-        .focusable(false)
-        .position(x: windowWidth - 16.5, y: buttonY)
-
-        Button(action: onClose, label: {
-            SimpleSpriteImage("MAIN_CLOSE_BUTTON", width: 9, height: 9)
-        })
-        .buttonStyle(.plain)
-        .focusable(false)
-        .position(x: windowWidth - 6.5, y: buttonY)
+        SkinHitButton(pressedSprite: "PLAYLIST_CLOSE_SELECTED", width: 9, height: 9, action: onClose)
+            .position(x: windowWidth - 6.5, y: buttonY)
     }
 }
