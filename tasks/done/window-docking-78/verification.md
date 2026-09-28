@@ -85,6 +85,30 @@ Test with at least 3 skins (default plus 2 others). Each control must look like 
 | Shade/unshade EQ — nothing jumps | ✅ 2026-09-28 (owner) |
 | A second arrangement: shade/unshade Main and EQ | ✅ 2026-09-28 (owner) |
 
+## Phase 7: review fixes and owner checks (2026-09-28)
+
+Codex review (6 findings) and the ultracode Swift 6.4 design review (66 agents; 29/30 findings confirmed by two lenses; 24 design invariants) were applied together; a 9-agent guard pass re-checked the fixes against the invariants (no violations; 2 gaps in the fixes found and fixed). Deferred refactors → `tasks/windowing-structure-consolidation/todo.md`.
+
+| Check | Result |
+|---|---|
+| Shift-drag against screen edges: stays on screen, no snapping to other windows | ✅ owner |
+| Minimize, hide EQ, restore: EQ stays hidden | ✅ owner |
+| Minimize, show EQ, restore: EQ returns with the group (not alone) | ✅ owner |
+| Main hidden: Window › Minimize and Option+M disabled | ✅ owner |
+| Playlist mini visualizer only while Main is closed | ✅ owner (a one-off pinned-at-max shade visualizer cleared on restart; not from this branch — logged as `visualizer-fidelity-audit`) |
+| Normal Size in the owner layout (Milkdrop beside Main/EQ, Video under Milkdrop): no overlap; Video/Milkdrop stay | ✅ owner (was: Video jumped into Milkdrop) |
+| Double Size back: layout restored | ✅ owner |
+| Stacked Main/EQ/Playlist toggled repeatedly | ✅ owner (was: EQ overlapped Main on Double when SwiftUI resized first) |
+| Shade/unshade Main in the owner layout after the unified rule | ✅ owner |
+| TSan suite | ✅ 136 tests / 21 suites, all pass |
+
+## Phase 7: regression checks
+
+| Check | Result |
+|---|---|
+| Resolution change | ✅ 2026-09-28 (owner): covered by opening the laptop lid (resolution/primary-display change), passing since Phase 3 |
+| Dock on the left: drag the group to the left edge; Reset Window Positions | ✅ 2026-09-28 (owner): nothing under the Dock; Reset works |
+
 ## Phases 1–3: behaviour
 
 **Phase 1 check (owner, 2026-09-27):**

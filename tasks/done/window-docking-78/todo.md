@@ -12,4 +12,10 @@
 - [x] **Phase 5:** group minimize (`WindowCoordinator.minimizeApp`, Main `.miniaturizable`, `BorderlessWindow` routes Window › Minimize); Cmd+M and Option+M from every window; Ctrl+W Main windowshade. ✅ 2026-09-28: TSan 137 all pass; owner checks 1–8 pass (incl. display change while minimized).
 - [x] **Phase 5b:** Video/Milkdrop restore the whole saved frame (they came back higher by their own height); shade/unshade re-anchoring leaves a window hanging from a non-moving window in place (Milkdrop under Video no longer jumps over it). ✅ 2026-09-28: TSan 139 all pass (+2 `DockGraphTests`); owner checks pass (`verification.md`).
 - [x] **Phase 6:** docs: `MULTI_WINDOW_ARCHITECTURE.md` (stale `DockingController`/`contentView` statements fixed; new Docking, Recovery, Minimize & Windowshade section with shortcuts); stale references fixed across the other docs; `docs/README.md` fully re-audited (inventory, topic lookup, common questions, statistics); triage note fixed. ✅ 2026-09-28: link/anchor check 0 broken.
-- [ ] **Phase 7:** full TSan suite, one Codex review, PR (closes #78)
+- [x] **Phase 7:** release gate ✅ 2026-09-28
+  - [x] one Codex review (`/codex:review --base main`) + ultracode Swift 6.4 design review; fixes guarded against the design invariants
+  - [x] owner regression checks: resolution change (lid open); Dock on the left (drag to the left edge, Reset Window Positions)
+  - [x] Normal/Double Size fixed with one resize rule (`DockGraph.followResize`); owner checks pass
+  - [x] full TSan suite after the review fixes: 136 tests / 21 suites pass
+  - [x] push, PR [#90](https://github.com/hfyeomans/MacAmp/pull/90) closing #78 (owner merges)
+  - [x] close-out: task → `tasks/done/`, `_context` (`state.md`, `tasks_index.md` S4-2a) marked complete

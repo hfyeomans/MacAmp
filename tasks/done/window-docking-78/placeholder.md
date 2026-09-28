@@ -2,4 +2,4 @@
 
 > **Purpose:** Track stubs and placeholders introduced/removed during this task
 
-None yet. Task in research.
+None. The branch adds no stubs, TODOs or placeholder code (checked against `main` 2026-09-28).
