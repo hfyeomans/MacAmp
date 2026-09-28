@@ -76,8 +76,8 @@ final class WindowFramePersistence {
         applied = restoreMainWindow(scale: scale) || applied
         applied = restoreEQWindow(scale: scale) || applied
         applied = restorePlaylistWindow() || applied
-        applied = restoreOriginOnly(kind: .video) || applied
-        applied = restoreOriginOnly(kind: .milkdrop) || applied
+        applied = restoreSavedFrame(kind: .video) || applied
+        applied = restoreSavedFrame(kind: .milkdrop) || applied
 
         return applied
     }
@@ -116,12 +116,13 @@ final class WindowFramePersistence {
         return true
     }
 
-    private func restoreOriginOnly(kind: WindowKind) -> Bool {
+    /// Video and Milkdrop get their size from their SwiftUI content after this runs; until then the
+    /// window can be 0 high, and AppKit grows it upward from the bottom edge. Restoring the whole saved
+    /// frame keeps the saved position once the content settles at its saved size.
+    private func restoreSavedFrame(kind: WindowKind) -> Bool {
         guard let window = registry.window(for: kind),
               let stored = windowFrameStore.frame(for: kind) else { return false }
-        var frame = window.frame
-        frame.origin = topAnchoredOrigin(stored, height: frame.height)
-        window.setFrame(frame, display: true)
+        window.setFrame(stored, display: true)
         return true
     }
 

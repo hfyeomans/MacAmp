@@ -72,6 +72,19 @@ Test with at least 3 skins (default plus 2 others). Each control must look like 
 | Ctrl+W toggles Main windowshade | ✅ 2026-09-28 |
 | Restore after the display changed while minimized: the group comes back on screen | ✅ 2026-09-28 (owner, LG unplug/re-plug) |
 
+## Phase 5b: Video and Milkdrop
+
+**Relaunch position (root cause, LLDB 2026-09-28):** Video saved at y 300 (h 348) came back at y 648, Milkdrop saved at y 300 (h 464) at y 764: each moved up by exactly its height. `restoreOriginOnly` top-anchored the saved frame using the window's height at restore time, which was 0 before the SwiftUI content sized it; AppKit then grew the window upward from the bottom edge. Fixed by restoring the whole saved frame. ✅ After the fix a relaunch restored both exactly (LLDB).
+
+**Shade jump (root cause, LLDB with the owner's layout 2026-09-28):** Main/EQ/Playlist stacked; Video right of Main (tops level); Milkdrop under Video and beside the Playlist. Shading Main moved every clustered window whose top was below Main's old bottom, so Milkdrop (hanging from Video, which stays) was lifted over Video. Fixed in `DockGraph.dockedBelow`: a window hanging from a staying window stays, transitively. Unit tests for this layout and for Video beside the EQ (which must still follow).
+
+| Check | Result |
+|---|---|
+| Video/Milkdrop reopen where they were left | ✅ 2026-09-28 (LLDB relaunch) |
+| Owner layout: shade/unshade Main — Milkdrop stays under Video; EQ/Playlist move and return | ✅ 2026-09-28 (owner) |
+| Shade/unshade EQ — nothing jumps | ✅ 2026-09-28 (owner) |
+| A second arrangement: shade/unshade Main and EQ | ✅ 2026-09-28 (owner) |
+
 ## Phases 1–3: behaviour
 
 **Phase 1 check (owner, 2026-09-27):**

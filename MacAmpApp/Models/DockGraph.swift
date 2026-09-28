@@ -54,13 +54,35 @@ enum DockGraph {
 
     /// Windows docked below `resized` (transitively) that must follow a height change of `resized`
     /// whose top edge stays fixed, e.g. shade/unshade. `oldBox` is `resized` before the change.
+    /// A window hanging from one that stays (its top on that window's bottom) stays with it, and so
+    /// does anything hanging from it; otherwise it would be pulled over or away from that window.
     static func dockedBelow<ID: Hashable>(_ resized: ID, oldBox: Box, boxes: [ID: Box]) -> Set<ID> {
         var graph = boxes
         graph[resized] = oldBox
         let oldBottom = SnapUtils.bottom(oldBox)
-        return cluster(from: resized, boxes: graph).filter { id in
+        let group = cluster(from: resized, boxes: graph)
+        var below = group.filter { id in
             guard id != resized, let box = graph[id] else { return false }
             return SnapUtils.top(box) >= oldBottom - SnapUtils.SNAP_DISTANCE
         }
+        var staying = group.subtracting(below).subtracting([resized])
+        var changed = true
+        while changed {
+            changed = false
+            for id in below {
+                guard let box = graph[id],
+                      staying.contains(where: { graph[$0].map { hangs(box, from: $0) } ?? false }) else { continue }
+                below.remove(id)
+                staying.insert(id)
+                changed = true
+            }
+        }
+        return below
+    }
+
+    /// `box`'s top edge is on `other`'s bottom edge and they share some horizontal span.
+    private static func hangs(_ box: Box, from other: Box) -> Bool {
+        SnapUtils.left(box) < SnapUtils.right(other) && SnapUtils.left(other) < SnapUtils.right(box)
+            && SnapUtils.near(SnapUtils.top(box), SnapUtils.bottom(other))
     }
 }

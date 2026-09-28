@@ -51,6 +51,26 @@ struct DockGraphTests {
         #expect(DockGraph.dockedBelow("main", oldBox: shadedMain, boxes: boxes) == ["eq"])
     }
 
+    @Test("A window beside the EQ follows the EQ when Main shades")
+    func besideEQFollows() {
+        let video = Box(x: 275, y: 116, width: 275, height: 116)
+        let shadedMain = Box(x: 0, y: 0, width: 275, height: 14)
+        let boxes: [String: Box] = ["main": shadedMain, "eq": eq, "video": video]
+        #expect(DockGraph.dockedBelow("main", oldBox: main, boxes: boxes) == ["eq", "video"])
+    }
+
+    @Test("A window hanging from one that stays doesn't follow the shade, nor what hangs from it")
+    func hangingFromStayingWindowStays() {
+        let playlist = Box(x: 0, y: 232, width: 275, height: 174)
+        let video = Box(x: 275, y: 0, width: 275, height: 174)       // beside Main, tops level
+        let milkdrop = Box(x: 275, y: 174, width: 275, height: 232)  // under Video, beside the Playlist
+        let under = Box(x: 275, y: 406, width: 275, height: 116)     // under Milkdrop
+        let shadedMain = Box(x: 0, y: 0, width: 275, height: 14)
+        let boxes: [String: Box] = ["main": shadedMain, "eq": eq, "playlist": playlist,
+                                    "video": video, "milkdrop": milkdrop, "under": under]
+        #expect(DockGraph.dockedBelow("main", oldBox: main, boxes: boxes) == ["eq", "playlist"])
+    }
+
     @Test("A window resized with nothing docked below moves nothing")
     func nothingBelow() {
         let boxes: [String: Box] = ["main": main]
