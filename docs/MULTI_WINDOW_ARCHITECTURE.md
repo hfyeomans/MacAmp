@@ -182,7 +182,7 @@ for await _ in Observations(\.isAlwaysOnTop, on: settings) {
 isolated deinit {
     settingsObserver.stop()
     screenGuard.stop()
-    if let deminiaturizeToken { NotificationCenter.default.removeObserver(deminiaturizeToken) }
+    visibility.stop()
 }
 ```
 

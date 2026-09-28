@@ -1085,7 +1085,7 @@ enum WindowKind: Hashable {
 }
 ```
 
-Cluster detection across all five windows is `DockGraph.cluster(from:boxes:)` (see [Window Snap Manager](#window-snap-manager)); `WindowSnapManager.clusterKinds(containing:)` exposes it as a `Set<WindowKind>`.
+Cluster detection across all five windows is `DockGraph.cluster(from:boxes:)` (see [Window Snap Manager](#window-snap-manager)).
 
 ### Key Implementation Points
 
@@ -1695,7 +1695,6 @@ Value types that cross isolation boundaries are `Sendable` (see the table in [Sw
 - **Titlebar drags (`beginCustomDrag` / `updateCustomDrag`):** dragging Main moves its docked group (`DockGraph.cluster` over all windows, closed ones included, so a closed window still links the chain); any other window drags alone. Holding Shift at mouse-down turns off snapping to other windows for that drag, and Main moves alone; the screens still contain it.
 - **Size changes (`windowDidResize`, double size):** when Main, EQ or Playlist changes size with its top-left fixed (shade/unshade, Ctrl+D), `DockGraph.followResize` moves the windows attached below or to its right by the size change; a window attached to one that doesn't move stays put.
 - **Feedback prevention:** `isAdjusting` suppresses re-entry while the manager moves windows itself; `beginProgrammaticAdjustment()` / `endProgrammaticAdjustment()` let other code (double-size resize, window resize) suspend snapping.
-- **Cluster queries:** `clusterKinds(containing:)` returns the `WindowKind`s touching a window (`WindowResizeController.resizeMainAndEQWindows` uses it to tell whether the playlist is docked to the main window, the equalizer or floating); `areConnected(_:_:)` wraps it.
 
 ### Connection Detection
 

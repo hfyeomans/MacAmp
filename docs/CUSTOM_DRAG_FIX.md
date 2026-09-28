@@ -74,7 +74,7 @@ private struct DragContext {
 
 **`endCustomDrag(kind:)`** clears the context and records every window's frame in `lastFrames`.
 
-Helpers: `buildBoxes()`, `makeVirtualSpace()`, `boxes(in:)`, `box(for:in:)`, `apply(box:to:virtualTop:virtualLeft:)`.
+Helpers: `makeVirtualSpace()`, `boxes(in:)`, `box(for:in:)`, `apply(box:to:virtualTop:virtualLeft:)`.
 
 ## Verification
 

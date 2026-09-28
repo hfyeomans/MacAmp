@@ -90,7 +90,7 @@
 | S4-4 | `video-multichannel-output` | **Issue #88.** Multichannel (5.1+/spatial) video output with speaker-side balance. Deferred from S3-2 on 2026-09-25 (user): S3-2 ships a stereo downmix at the source rate. Recommended design and 4 pre-implementation experiments in the folder's `research.md`. | Medium | 📋 **QUEUED** — folder scaffolded 2026-09-25; predecessors satisfied (unblocked) | S3-2 PR #89 ✅ merged 2026-09-25; PR #87 ✅ |
 
 > **Ordering — confirmed by user 2026-09-05.** The user mandated that the GitHub-issue fixes come *after* the `.swift` rearrangement, and confirmed on 2026-09-05 that **S4-1 runs before S4-2**: S4-1's deprecation findings may change how the S4-2 issues are fixed, so doing it second would risk reworking fresh fixes.
-> **Allowance:** S4-1's **research half touches no code**, so it may run opportunistically earlier (even during S3 or the Structure Sprint); only its implementation half is gated on the Structure Sprint landing. S4-2 stays hard-gated behind the Structure Sprint — #78 in particular touches windowing and benefits most from the moves having landed.
+> **Allowance:** S4-1's **research half touches no code**, so it may run opportunistically earlier (even during S3 or the Structure Sprint); only its implementation half is gated on the Structure Sprint landing. S4-2 stays hard-gated behind the Structure Sprint (#78 left S4-2: it was pulled ahead as S4-2a and completed in PR #90).
 
 ---
 

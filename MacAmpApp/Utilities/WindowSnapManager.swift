@@ -56,28 +56,6 @@ final class WindowSnapManager: NSObject, NSWindowDelegate {
         lastFrames[ObjectIdentifier(window)] = window.frame
     }
 
-    func clusterKinds(containing kind: WindowKind) -> Set<WindowKind>? {
-        guard let (_, idToBox) = buildBoxes() else { return nil }
-        guard let targetWindow = windows[kind]?.window else { return nil }
-        let targetID = ObjectIdentifier(targetWindow)
-        guard idToBox[targetID] != nil else { return nil }
-
-        let clusterIDs = DockGraph.cluster(from: targetID, boxes: idToBox)
-        var connectedKinds: Set<WindowKind> = []
-        for (candidateKind, tracked) in windows {
-            guard let window = tracked.window else { continue }
-            if clusterIDs.contains(ObjectIdentifier(window)) {
-                connectedKinds.insert(candidateKind)
-            }
-        }
-        return connectedKinds
-    }
-
-    func areConnected(_ first: WindowKind, _ second: WindowKind) -> Bool {
-        guard let cluster = clusterKinds(containing: first) else { return false }
-        return cluster.contains(second)
-    }
-
     func windowDidMove(_ notification: Notification) {
         guard !isAdjusting, programmaticDepth == 0 else { return }
         guard let movedWindow = notification.object as? NSWindow else { return }
@@ -332,11 +310,6 @@ final class WindowSnapManager: NSObject, NSWindowDelegate {
     func endCustomDrag(kind: WindowKind) {
         dragContexts.removeValue(forKey: kind)
         recordFrames()
-    }
-
-    private func buildBoxes() -> (VirtualScreenSpace, [ObjectIdentifier: Box])? {
-        guard let virtualSpace = makeVirtualSpace() else { return nil }
-        return (virtualSpace, boxes(in: virtualSpace))
     }
 
     private func makeVirtualSpace() -> VirtualScreenSpace? {

@@ -37,7 +37,7 @@ Open on `hfyeomans/MacAmp` as of 2026-09-05 (`gh issue list`; no recently closed
 
 ## Approach
 
-**One branch + one PR per issue**, each Oracle-gated per `feedback_sprint_workflow.md` (every sprint task gets Oracle review + a PR for user review before merge, regardless of size). Suggested execution order once unblocked: #47 (smallest, isolated) → P-6 → #79 → #84 → #78 (largest, windowing).
+**One branch + one PR per issue**, each Oracle-gated per `feedback_sprint_workflow.md` (every sprint task gets Oracle review + a PR for user review before merge, regardless of size). Suggested execution order once unblocked: #47 (smallest, isolated) → P-6 → #79 → #84. (#78 was done separately as S4-2a, PR #90.)
 
 ---
 
