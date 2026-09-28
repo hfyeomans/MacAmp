@@ -12,7 +12,7 @@ This document gives a fast, practical overview of the MacAmp Xcode test setup so
 - **Test plan**: `MacAmpApp.xctestplan` (`MacAmpApp.xcodeproj/xcshareddata/xctestplans/MacAmpApp.xctestplan`)
 - **Configuration**: Single "All" configuration (simplified from prior 3-config setup)
 - **swift-tools-version**: 6.2
-- **Total tests**: 40 (across 10 suites)
+- **Total tests**: 139 (across 22 suites)
 
 ## Test Tags
 
@@ -23,8 +23,8 @@ Tests are organized with Swift Testing tags defined in `Tests/MacAmpTests/TestTa
 | `.audio` | LockFreeRingBufferTests, AudioPlayerStateTests |
 | `.concurrency` | LockFreeRingBufferConcurrencyTests |
 | `.skin` | SkinManagerTests, SpriteResolverTests |
-| `.window` | DockingControllerTests, WindowDockingGeometryTests, WindowFrameStoreTests |
-| `.persistence` | DockingControllerTests, WindowFrameStoreTests |
+| `.window` | DockGraphTests, ScreenClampTests, WindowDockingGeometryTests, WindowFrameStoreTests |
+| `.persistence` | AppSettingsTests, WindowFrameStoreTests |
 | `.parsing` | EQCodecTests, PlaylistNavigationTests |
 
 ## Concurrency-Related Tests
@@ -32,7 +32,6 @@ Tests are organized with Swift Testing tags defined in `Tests/MacAmpTests/TestTa
 The following suites catch async and thread-safety regressions:
 
 - `AudioPlayerStateTests`: verifies @MainActor playback state transitions for stop/eject.
-- `DockingControllerTests`: verifies debounced persistence to UserDefaults using async waits.
 - `PlaylistNavigationTests`: verifies next/previous playlist actions across local + stream tracks.
 - `SkinManagerTests`: verifies async skin loading and error state updates.
 - `LockFreeRingBufferConcurrencyTests`: verifies SPSC ring buffer under concurrent write/read, format changes, and high throughput.

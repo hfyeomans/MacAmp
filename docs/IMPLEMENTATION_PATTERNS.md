@@ -122,7 +122,6 @@ Mark non-UI storage (timers, tasks, registries, caches) `@ObservationIgnored`, e
 let rootView = WinampVideoWindow()
     .environment(skinManager)
     .environment(audioPlayer)
-    .environment(dockingController)
     .environment(settings)
     .environment(radioLibrary)
     .environment(playbackCoordinator)
@@ -857,7 +856,7 @@ Button(action: { settings.showVideoWindow.toggle() }, label: {
 
 `SimpleSpriteImage` (`Views/Components/SimpleSpriteImage.swift`) takes either a legacy sprite name or a `SemanticSprite`, resolves it against `skinManager.currentSkin`, and renders it with `.interpolation(.none)`, `.antialiased(false)`, `.resizable()`, `.aspectRatio(contentMode: .fill)`, the given frame and `.clipped()`. A missing sprite renders as a purple "?" placeholder.
 
-**Real usage**: All buttons in `MainWindow/MainWindowFullLayer.swift`, `MainWindow/MainWindowTransportLayer.swift`, `WinampEqualizerWindow.swift`
+**Real usage**: Buttons in `MainWindow/MainWindowFullLayer.swift`, `MainWindow/MainWindowTransportLayer.swift`, `WinampEqualizerWindow.swift`. Titlebar and shade-strip buttons, whose normal image is part of the window bitmap, use `SkinHitButton` (`Views/Shared/SkinHitButton.swift`) instead: an invisible hit area that draws only the pressed sprite while held.
 
 **Pitfalls**:
 - Omitting `.buttonStyle(.plain)` draws a system bezel around the sprite
@@ -2993,7 +2992,6 @@ extension WinampPlaylistWindow {
 @MainActor @Observable
 final class PlaylistWindowInteractionState {
     var selectedIndices: Set<Int> = []
-    var isShadeMode: Bool = false
     var scrollOffset: Int = 0
     // ...
 }
@@ -3002,7 +3000,7 @@ final class PlaylistWindowInteractionState {
 // File: MacAmpApp/Views/PlaylistWindow/PlaylistTitleBarButtons.swift
 struct PlaylistTitleBarButtons: View {
     let windowWidth: CGFloat
-    let onMinimize: () -> Void
+    let shaded: Bool
     let onShadeToggle: () -> Void
     let onClose: () -> Void
     // body re-evaluates only when these inputs change

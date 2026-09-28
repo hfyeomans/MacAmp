@@ -15,7 +15,7 @@ Applying the per-tick delta (`finalDelta - lastAppliedDelta`) to boxes rebuilt f
 
 ### Cause 2: Dynamic Cluster Recalculation (Fragile)
 
-Calling `connectedCluster(start:boxes:)` on every tick, using current frames, lets the cluster change mid-drag. On a fast drag the main window snaps to an edge, the EQ doesn't, the connection breaks, and the next recalculation drops the EQ, which stops following.
+Calling `DockGraph.cluster(from:boxes:)` on every tick, using current frames, lets the cluster change mid-drag. On a fast drag the main window snaps to an edge, the EQ doesn't, the connection breaks, and the next recalculation drops the EQ, which stops following.
 
 ### Cause 3: Missing Base Boxes for Cluster Windows
 
@@ -54,22 +54,25 @@ private struct DragContext {
     let clusterIDs: Set<ObjectIdentifier>      // static for the whole drag
     let baseBoxes: [ObjectIdentifier: Box]     // base box for every cluster member
     let virtualSpace: VirtualScreenSpace
+    let snapping: Bool                         // false when Shift was held at mouse-down
     var lastInputDelta: CGPoint = .zero
 }
 ```
 
 **`beginCustomDrag(kind:startPointInScreen:)`**
-- Builds boxes once (`buildBoxes()`).
-- Cluster membership follows Webamp: dragging the **main** window captures the full connected cluster (`connectedCluster`); dragging **EQ/Playlist** (or any other window) moves only that window, separating it from the cluster so it can re-snap.
+- Builds boxes once (`boxes(in:includeHidden: true)`), so closed windows keep their saved frames and still link the chain.
+- Cluster membership follows Webamp: dragging the **main** window captures the full connected cluster (`DockGraph.cluster(from:boxes:)`); dragging **EQ/Playlist** (or any other window) moves only that window, separating it from the cluster so it can re-snap.
+- Holding Shift at mouse-down turns snapping off for the drag (`snapping = false`), and the main window then moves alone.
 - Stores a base box for every member in `dragContexts[kind]`.
 
 **`updateCustomDrag(kind:cumulativeDelta:)`**
 - Ignores a repeated delta (`delta == lastInputDelta`).
 - Treats live boxes outside `clusterIDs` as snap targets.
 - Translates the cluster's **bounding box** (`SnapUtils.boundingBox` of the base boxes) by the cumulative delta (y flipped to top-left space), then snaps it with `SnapUtils.snapToMany` (other windows) and `SnapUtils.snapWithinUnion` (screen union and per-screen regions). Snapping the group box rather than just the dragged window prevents off-screen drift.
-- Applies `cumulative delta + snap delta` to every member from its base box, via `apply(box:to:virtualTop:virtualLeft:)` with `isAdjusting = true`.
+- Applies `cumulative delta + snap delta` (snap delta is zero when `snapping` is false) to every member from its base box, via `apply(box:to:virtualTop:virtualLeft:)` with `isAdjusting = true`.
+- Keeps the group's top edge out of each screen's menu-bar strip (`VirtualScreenSpace.menuBarStrips`), so a window can't slide under the menu bar.
 
-**`endCustomDrag(kind:)`** clears the context and records every window's origin in `lastOrigins`.
+**`endCustomDrag(kind:)`** clears the context and records every window's frame in `lastFrames`.
 
 Helpers: `buildBoxes()`, `makeVirtualSpace()`, `boxes(in:)`, `box(for:in:)`, `apply(box:to:virtualTop:virtualLeft:)`.
 

@@ -87,7 +87,7 @@ Transparent fallbacks (`createFallbackSprite(named:)`) take their size from `Ski
 
 ### Where Digits Appear
 
-Only the main window time display uses digit sprites (`MainWindowFullLayer.swift` and `MainWindowShadeLayer.swift`). Bitrate and sample rate use TEXT.bmp `CHARACTER_<ascii>` sprites (5×6, `MainWindowIndicatorsLayer.swift`); playlist times are not digit sprites.
+Only the main window time display uses digit sprites (`MainWindowFullLayer.swift`). The shade-mode mini time (`MainWindowShadeLayer.swift`), bitrate and sample rate use TEXT.bmp `CHARACTER_<ascii>` sprites (5×6, `MainWindowIndicatorsLayer.swift`); playlist times are not digit sprites.
 
 ---
 
