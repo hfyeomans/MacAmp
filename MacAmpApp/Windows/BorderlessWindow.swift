@@ -5,13 +5,14 @@ class BorderlessWindow: NSWindow {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
 
-    /// Window › Minimize (Cmd+M) minimizes the whole player from any MacAmp window, including
-    /// those that aren't miniaturizable themselves.
+    /// Window › Minimize (Cmd+M) minimizes the whole player from any MacAmp window.
     override func performMiniaturize(_ sender: Any?) {
         WindowCoordinator.shared?.minimizeApp()
     }
 
     override func validateUserInterfaceItem(_ item: any NSValidatedUserInterfaceItem) -> Bool {
-        item.action == #selector(performMiniaturize(_:)) || super.validateUserInterfaceItem(item)
+        item.action == #selector(performMiniaturize(_:))
+            ? WindowCoordinator.shared?.canMinimizeApp ?? false
+            : super.validateUserInterfaceItem(item)
     }
 }

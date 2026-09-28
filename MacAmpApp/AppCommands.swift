@@ -31,6 +31,7 @@ struct AppCommands: Commands {
                 .keyboardShortcut("w", modifiers: [.control])
             Button("Minimize All") { windowCoordinator.minimizeApp() }
                 .keyboardShortcut("m", modifiers: [.option])
+                .disabled(!windowCoordinator.isMainWindowVisible)
 
             Button("Reset Window Positions") { windowCoordinator.resetWindowPositions() }
 

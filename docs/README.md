@@ -45,7 +45,7 @@ xcodegen generate      # generates MacAmpApp.xcodeproj from project.yml
 xcodebuild test -scheme MacAmpApp -destination 'platform=macOS' -enableThreadSanitizer YES
 ```
 
-The suite has 139 tests in 22 suites. Suite tags, `xcodebuildmcp` usage and per-suite notes: [xcode-testing-context.md](context/xcode-testing-context.md).
+The suite has 141 tests in 22 suites. Suite tags, `xcodebuildmcp` usage and per-suite notes: [xcode-testing-context.md](context/xcode-testing-context.md).
 
 ---
 
@@ -151,7 +151,7 @@ The suite has 139 tests in 22 suites. Suite tags, `xcodebuildmcp` usage and per-
   - Track position display (`trackPositionString`)
   - Resize gesture with AppKit preview overlay
   - Scroll slider with proportional thumb
-  - Mini visualizer (when main window shaded)
+  - Mini visualizer (when the main window is closed)
   - WindowCoordinator bridge methods
   - Size persistence and NSWindow sync
 - **When to Read**: Working with playlist, implementing resize, debugging layout issues
@@ -202,7 +202,7 @@ The suite has 139 tests in 22 suites. Suite tags, `xcodebuildmcp` usage and per-
 - **Key Sections**:
   - Problem analysis: incremental deltas on current positions, dynamic cluster recalculation, missing base boxes
   - Webamp's working pattern (apply the total delta to base boxes captured at drag start)
-  - Solution: `DragContext`, `beginCustomDrag` (main drags the cluster, closed windows included; EQ/Playlist detach; Shift turns snapping off), `updateCustomDrag` (snaps the cluster bounding box; keeps it out of the menu-bar strip)
+  - Solution: `DragContext`, `beginCustomDrag` (main drags the cluster, closed windows included; EQ/Playlist detach; Shift turns off window snapping), `updateCustomDrag` (snaps the cluster bounding box; keeps it out of the menu-bar strip)
   - Verification
 - **When to Read**: Implementing custom window dragging, debugging drag issues
 - **Related Docs**: MULTI_WINDOW_ARCHITECTURE.md
@@ -352,7 +352,7 @@ The suite has 139 tests in 22 suites. Suite tags, `xcodebuildmcp` usage and per-
 | **Window management** | MULTI_WINDOW_ARCHITECTURE.md, MACAMP_ARCHITECTURE_GUIDE.md | Full document, [Window Snap Manager](MACAMP_ARCHITECTURE_GUIDE.md#window-snap-manager) |
 | **Window ownership** | MULTI_WINDOW_ARCHITECTURE.md | [File Structure and Responsibilities](MULTI_WINDOW_ARCHITECTURE.md#file-structure-and-responsibilities) |
 | **Docking / DockGraph** | MULTI_WINDOW_ARCHITECTURE.md | [Docking](MULTI_WINDOW_ARCHITECTURE.md#docking) (closed windows keep the chain, 10 px snap) |
-| **Shift-drag (no snapping)** | MULTI_WINDOW_ARCHITECTURE.md, CUSTOM_DRAG_FIX.md | [Docking](MULTI_WINDOW_ARCHITECTURE.md#docking), [Solution](CUSTOM_DRAG_FIX.md#solution) |
+| **Shift-drag (no window snapping)** | MULTI_WINDOW_ARCHITECTURE.md, CUSTOM_DRAG_FIX.md | [Docking](MULTI_WINDOW_ARCHITECTURE.md#docking), [Solution](CUSTOM_DRAG_FIX.md#solution) |
 | **Shade/unshade re-anchoring** | MULTI_WINDOW_ARCHITECTURE.md | [Docking](MULTI_WINDOW_ARCHITECTURE.md#docking) (`DockGraph.dockedBelow`) |
 | **Window frame / visibility persistence** | MULTI_WINDOW_ARCHITECTURE.md | [Persistence](MULTI_WINDOW_ARCHITECTURE.md#persistence) |
 | **Off-screen windows / sleep-wake / display changes** | MULTI_WINDOW_ARCHITECTURE.md | [Off-Screen Recovery](MULTI_WINDOW_ARCHITECTURE.md#off-screen-recovery-windowscreenguard) |

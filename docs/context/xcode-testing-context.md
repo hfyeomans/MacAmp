@@ -12,7 +12,7 @@ This document gives a fast, practical overview of the MacAmp Xcode test setup so
 - **Test plan**: `MacAmpApp.xctestplan` (`MacAmpApp.xcodeproj/xcshareddata/xctestplans/MacAmpApp.xctestplan`)
 - **Configuration**: Single "All" configuration (simplified from prior 3-config setup)
 - **swift-tools-version**: 6.2
-- **Total tests**: 139 (across 22 suites)
+- **Total tests**: 141 (across 22 suites)
 
 ## Test Tags
 

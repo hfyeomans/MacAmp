@@ -26,7 +26,6 @@ struct VisualizerView: View {
     private let barCount = 19
     private let barWidth: CGFloat = 3
     private let barSpacing: CGFloat = 1
-    private var maxHeight: CGFloat { height }
 
     // Animation timing
     private let updateInterval: TimeInterval = 1.0/30.0  // 30 FPS for classic feel
@@ -56,9 +55,9 @@ struct VisualizerView: View {
                         SpectrumBar(
                             height: barHeights[index],
                             peakPosition: peakPositions[index],
-                            maxHeight: maxHeight
+                            maxHeight: height
                         )
-                        .frame(width: barWidth, height: maxHeight)
+                        .frame(width: barWidth, height: height)
                     }
                 }
             }
@@ -100,7 +99,7 @@ struct VisualizerView: View {
                 let frequencyBoost: CGFloat = 1.0 + (CGFloat(i) / CGFloat(barCount)) * 0.5
                 
                 // Update bar height with amplified frequency data
-                var targetHeight = CGFloat(frequencyData[i]) * maxHeight * amplificationFactor * frequencyBoost
+                var targetHeight = CGFloat(frequencyData[i]) * height * amplificationFactor * frequencyBoost
                 
                 // Add minimum height when playing to ensure visibility
                 if audioPlayer.isVisualizerRendering && frequencyData[i] > 0.01 {
@@ -108,7 +107,7 @@ struct VisualizerView: View {
                 }
                 
                 // Clamp to max height
-                targetHeight = min(maxHeight, targetHeight)
+                targetHeight = min(height, targetHeight)
                 
                 // Apply smoothing for more natural movement
                 barHeights[i] = max(targetHeight, barHeights[i] * decayRate)

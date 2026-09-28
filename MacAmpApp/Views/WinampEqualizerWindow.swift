@@ -148,7 +148,7 @@ struct WinampEqualizerWindow: View {
 
     /// EQ_EX.BMP is optional; without it the pressed shade button comes from EQMAIN.BMP.
     private var maximizePressedSprite: String {
-        skinManager.currentSkin?.images["EQ_MAXIMIZE_BUTTON_ACTIVE"] != nil
+        skinManager.currentSkin?.loadedSheets.contains("EQ_EX") == true
             ? "EQ_MAXIMIZE_BUTTON_ACTIVE" : "EQ_MAXIMIZE_BUTTON_ACTIVE_FALLBACK"
     }
 
@@ -302,8 +302,7 @@ struct WinampEqualizerWindow: View {
         }
     }
 
-    /// The well is part of the shade strip; only the 3×7 thumb is drawn, its variant picked by
-    /// which third `value` (0...1) falls in, as Webamp does.
+    /// Only the 3×7 thumb is drawn; its variant follows which third `value` (0...1) is in.
     private func buildShadeSlider(value: Double, width: CGFloat, thumbPrefix: String,
                                   set: @escaping (Double) -> Void, commit: @escaping () -> Void) -> some View {
         let variant = value < 1.0 / 3 ? "LEFT" : value < 2.0 / 3 ? "CENTER" : "RIGHT"

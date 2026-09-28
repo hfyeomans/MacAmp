@@ -1006,7 +1006,7 @@ WindowCoordinator
     ├── WindowSettingsObserver (depends on: AppSettings only)
     └── WindowDelegateWiring (depends on: WindowRegistry, persistence, focus state)
 
-All acyclic - no controller-to-controller dependencies.
+All acyclic: WindowRegistry, WindowFramePersistence and AppSettings are shared services; controllers never depend on each other.
 ```
 
 ### Window Lifecycle Management
@@ -1093,7 +1093,7 @@ Cluster detection across all five windows is `DockGraph.cluster(from:boxes:)` (s
 2. **Delegate Multiplexing**: Each window combines focus, persistence, and snap delegates
 3. **Memory Management**: Controllers and multiplexers stored as properties (prevent deallocation)
 4. **UserDefaults Keys**: Each window has visibility and frame persistence keys
-5. **Keyboard Shortcuts**: Ctrl+V (video), Ctrl+K (milkdrop) for window toggling; Ctrl+W windowshades Main; Option+M (Options › Minimize All) and Cmd+M from any MacAmp window minimize the whole player (`WindowCoordinator.minimizeApp()`)
+5. **Keyboard Shortcuts**: Ctrl+V (video), Ctrl+K (milkdrop) for window toggling; Ctrl+W windowshades Main; Option+M (Options › Minimize All) and Cmd+M from any MacAmp window minimize the whole player (`WindowCoordinator.minimizeApp()` → `WindowVisibilityController.minimizeGroup()`; disabled while Main is hidden)
 
 ---
 
@@ -1692,7 +1692,7 @@ Value types that cross isolation boundaries are `Sendable` (see the table in [Sw
 
 - **Registration:** `WindowDelegateWiring` calls `register(window:kind:)` for each window and adds the manager to that window's `WindowDelegateMultiplexer`; `register` records the window and its last frame and does not set `window.delegate` itself.
 - **Move handling (`windowDidMove`):** converts every window frame to a top-left virtual-screen space spanning all displays, finds the moved window's connected cluster, moves the rest of the cluster by the same delta, then snaps the cluster's bounding box to other windows (`SnapUtils.snapToMany`) and to the screen edges (`SnapUtils.snapWithin`).
-- **Titlebar drags (`beginCustomDrag` / `updateCustomDrag`):** dragging Main moves its docked group (`DockGraph.cluster` over all windows, closed ones included, so a closed window still links the chain); any other window drags alone. Holding Shift at mouse-down turns snapping off for that drag, and Main then moves alone.
+- **Titlebar drags (`beginCustomDrag` / `updateCustomDrag`):** dragging Main moves its docked group (`DockGraph.cluster` over all windows, closed ones included, so a closed window still links the chain); any other window drags alone. Holding Shift at mouse-down turns off snapping to other windows for that drag, and Main moves alone; the screens still contain it.
 - **Shade re-anchoring (`windowDidResize`):** when Main, EQ or Playlist changes height with its top edge fixed (shade/unshade), the windows docked below it (`DockGraph.dockedBelow`) move by the same amount; a window hanging from a window that doesn't move stays put.
 - **Feedback prevention:** `isAdjusting` suppresses re-entry while the manager moves windows itself; `beginProgrammaticAdjustment()` / `endProgrammaticAdjustment()` let other code (double-size resize, window resize) suspend snapping.
 - **Cluster queries:** `clusterKinds(containing:)` returns the `WindowKind`s touching a window (`WindowResizeController.resizeMainAndEQWindows` uses it to tell whether the playlist is docked to the main window, the equalizer or floating); `areConnected(_:_:)` wraps it.

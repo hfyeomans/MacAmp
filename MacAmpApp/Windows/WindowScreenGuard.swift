@@ -1,16 +1,6 @@
 import AppKit
 
-/// Keeps MacAmp's windows reachable across display changes and sleep/wake.
-///
-/// The guard snapshots the layout when a transition starts and ignores moves during it (no
-/// snapping, no persistence). When the screens settle:
-/// - **same displays** (sleep/wake): macOS first moved each window onto a temporary screen, splitting
-///   docked groups, so the snapshot is restored (translated if the displays were re-based);
-/// - **a display was added or returned**: macOS keeps or returns windows to their own display, one
-///   by one, so each docked group is re-formed rigidly around its anchor where macOS put it;
-/// - **a display was removed**: the snapshot is restored so groups stay docked, and stranded groups
-///   are moved onto a remaining screen together.
-/// Any window still unreachable is then clamped on screen, one docked group at a time.
+/// Keeps MacAmp's windows reachable across sleep/wake and display changes (docs/MULTI_WINDOW_ARCHITECTURE.md).
 @MainActor
 final class WindowScreenGuard {
     enum Defaults {
@@ -27,9 +17,10 @@ final class WindowScreenGuard {
     private var observations: [(center: NotificationCenter, token: NotificationCenter.ObservationToken)] = []
     private var snapshot: [WindowKind: NSRect]?
     /// Display frames (by `CGDirectDisplayID`) the current layout's coordinates belong to.
-    private var displays: [UInt32: CGRect] = [:]
-    private var snapshotDisplays: [UInt32: CGRect] = [:]
+    private var displays: [CGDirectDisplayID: CGRect] = [:]
+    private var snapshotDisplays: [CGDirectDisplayID: CGRect] = [:]
     private var wakeDeadline: ContinuousClock.Instant?
+    private var isAsleep = false
     private var settleTask: Task<Void, Never>?
 
     private var settleDelay: Duration { .seconds(Self.seconds(Defaults.screenSettleDelayKey, Defaults.screenSettleDelay)) }
@@ -48,7 +39,7 @@ final class WindowScreenGuard {
         }))
         let workspace = NSWorkspace.shared.notificationCenter
         observations.append((workspace, workspace.addObserver(of: NSWorkspace.shared, for: .willSleep) { [weak self] _ in
-            self?.beginTransition()
+            self?.willSleep()
         }))
         observations.append((workspace, workspace.addObserver(of: NSWorkspace.shared, for: .didWake) { [weak self] _ in
             self?.didWake()
@@ -83,10 +74,10 @@ final class WindowScreenGuard {
 
     // MARK: - Transitions
 
-    /// `fromSavedLayout`: awake display changes may already have moved windows before the
-    /// notification arrives, so use the last persisted layout; before sleep, the live frames.
+    /// `fromSavedLayout`: an awake display change may have moved windows before it's reported.
     private func beginTransition(fromSavedLayout: Bool = false) {
         guard snapshot == nil else { return }
+        persistence.cancelPendingFlush()
         var frames: [WindowKind: NSRect] = [:]
         registry.forEachWindow { window, kind in
             frames[kind] = (fromSavedLayout ? persistence.savedFrame(for: kind) : nil) ?? window.frame
@@ -99,10 +90,20 @@ final class WindowScreenGuard {
 
     private func screensChanged() {
         beginTransition(fromSavedLayout: true)
-        scheduleSettle()
+        if !isAsleep { scheduleSettle() }
+    }
+
+    /// No settle may be pending between sleep and wake; didWake reschedules.
+    private func willSleep() {
+        isAsleep = true
+        settleTask?.cancel()
+        settleTask = nil
+        wakeDeadline = nil
+        beginTransition()
     }
 
     private func didWake() {
+        isAsleep = false
         beginTransition()
         wakeDeadline = .now + wakeWindow
         scheduleSettle()
@@ -163,11 +164,11 @@ final class WindowScreenGuard {
         WindowSnapManager.shared.endProgrammaticAdjustment()
     }
 
-    /// A group's anchor: Main when it's in the group, else the first visible member in this order.
+    /// Anchor priority: the first visible member wins, else the first member.
     private static let anchorOrder: [WindowKind] = [.main, .equalizer, .playlist, .video, .milkdrop]
 
-    private static func currentDisplays() -> [UInt32: CGRect] {
-        var result: [UInt32: CGRect] = [:]
+    private static func currentDisplays() -> [CGDirectDisplayID: CGRect] {
+        var result: [CGDirectDisplayID: CGRect] = [:]
         for screen in NSScreen.screens {
             if let id = screen.cgDirectDisplayID { result[id] = screen.frame }
         }

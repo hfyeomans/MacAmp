@@ -1,9 +1,9 @@
 import SwiftUI
 
-/// The 14 px shade strip: left cap, tiled middle, right cap (with the baked buttons), plus the
-/// current track and its length in TEXT.BMP characters, laid out as Webamp's `PlaylistShade`.
+/// The 14 px shade strip with the current title and length in TEXT.BMP characters (Webamp `PlaylistShade`).
 struct PlaylistShadeView: View {
     @Environment(PlaybackCoordinator.self) private var playbackCoordinator
+    @Environment(SkinManager.self) private var skinManager
 
     let windowWidth: CGFloat
     let isWindowActive: Bool
@@ -37,7 +37,7 @@ struct PlaylistShadeView: View {
                 .allowsHitTesting(false)
 
             if name != nil {
-                let time = timeString(playbackCoordinator.displayDuration)
+                let time = TimeFormatting.formatDuration(playbackCoordinator.displayDuration)
                 characters(time)
                     .offset(x: windowWidth - 30 - CGFloat(time.count) * characterWidth, y: 4)
                     .allowsHitTesting(false)
@@ -63,16 +63,14 @@ struct PlaylistShadeView: View {
         return name.count > limit ? String(name.prefix(limit - 1)) + "…" : name
     }
 
-    private func timeString(_ seconds: Double) -> String {
-        let total = max(0, Int(seconds))
-        return "\(total / 60):" + String(format: "%02d", total % 60)
-    }
-
     private func characters(_ text: String) -> some View {
         HStack(spacing: 0) {
             ForEach(Array(text.enumerated()), id: \.offset) { _, character in
                 let glyph = character.isASCII ? Character(character.lowercased()) : character
-                SimpleSpriteImage("CHARACTER_\(String(glyph).utf16.first ?? 32)", width: 5, height: 6)
+                let code = String(glyph).utf16.first ?? 32
+                // Characters TEXT.BMP doesn't have render as spaces.
+                SimpleSpriteImage("CHARACTER_\(skinManager.currentSkin?.images["CHARACTER_\(code)"] != nil ? code : 32)",
+                                  width: 5, height: 6)
             }
         }
     }

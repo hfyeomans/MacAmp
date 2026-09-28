@@ -65,6 +65,14 @@ struct PlaylistResizeHandle: View {
                         WindowSnapManager.shared.endProgrammaticAdjustment()
                     }
             )
+            // A drag cut off by the handle disappearing (e.g. a shade toggle) must close its bracket.
+            .onDisappear {
+                guard dragStartSize != nil else { return }
+                dragStartSize = nil
+                isDragging = false
+                WindowCoordinator.shared?.hidePlaylistResizePreview(resizePreview)
+                WindowSnapManager.shared.endProgrammaticAdjustment()
+            }
             // Shade grip: Webamp's `right: 20px; top: 3px`.
             .position(x: widthOnly ? windowWidth - 24.5 : windowWidth - 10,
                       y: widthOnly ? 7.5 : windowHeight - 10)

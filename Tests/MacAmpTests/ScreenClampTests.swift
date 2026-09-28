@@ -109,6 +109,30 @@ struct ScreenClampTests {
         #expect(laptop.contains(newMain) && laptop.contains(newVideo))
     }
 
+    @Test("Stranded groups too wide to fit together are each clamped on their own")
+    func strandedGroupsClampedSeparately() throws {
+        let laptop = CGRect(x: 0, y: 0, width: 1800, height: 1130)
+        let video = CGRect(x: 2600, y: 300, width: 550, height: 464)  // off the right edge
+        let frames = ["main": main, "eq": eq, "video": video]            // Main/EQ off the top
+        let moved = ScreenClamp.clamp(groups: [["main", "eq"], ["video"]], frames: frames,
+                                      visible: ["main", "eq", "video"], visibleFrames: [laptop])
+        let newMain = try #require(moved["main"]), newEQ = try #require(moved["eq"])
+        let newVideo = try #require(moved["video"])
+        #expect(laptop.contains(newMain) && laptop.contains(newEQ) && laptop.contains(newVideo))
+        #expect(newMain.minY - newEQ.maxY == 0 && newMain.minX == newEQ.minX)  // still docked
+    }
+
+    @Test("A group without an anchor is left out of the rigid re-form")
+    func rigidSkipsGroupWithoutAnchor() {
+        let video = CGRect(x: 900, y: 1200, width: 550, height: 464)
+        let snapshot = ["main": main, "eq": eq, "video": video]
+        let current = snapshot.mapValues { $0.offsetBy(dx: 50, dy: 0) }
+        let result = ScreenClamp.rigid(groups: [["main", "eq"], ["video"]], snapshot: snapshot,
+                                       current: current) { $0.contains("main") ? "main" : nil }
+        #expect(result["video"] == nil)
+        #expect(result["eq"] == eq.offsetBy(dx: 50, dy: 0))
+    }
+
     @Test("A group macOS returned piecemeal is re-formed rigidly around its anchor")
     func rigidRegroup() throws {
         let playlist = CGRect(x: 100, y: 500, width: 550, height: 468)  // docked under EQ
@@ -121,13 +145,5 @@ struct ScreenClampTests {
         let newPlaylist = try #require(result["playlist"]), newEQ = try #require(result["eq"])
         #expect(newPlaylist == playlist.offsetBy(dx: 1800, dy: -431))
         #expect(newEQ.minY - newPlaylist.maxY == 0)  // docked again
-    }
-
-        @Test("DockGraph.clusters partitions windows into docked groups")
-    func clustersPartition() {
-        let far = CGRect(x: 2000, y: 200, width: 275, height: 116)
-        let rects = ["main": main, "eq": eq, "far": far]
-        let groups = DockGraph.clusters(boxes: rects.mapValues(DockGraph.box(for:)))
-        #expect(Set(groups) == [["main", "eq"], ["far"]])
     }
 }

@@ -1,10 +1,8 @@
 import CoreGraphics
 
-/// Docking connectivity between window boxes (top-left coordinates, `SnapUtils` conventions).
-/// Pure: callers decide which windows to include, so closed windows can still link a chain.
+/// Pure docking connectivity over top-left boxes; callers pick the windows, so closed ones can link a chain.
 enum DockGraph {
-    /// Two boxes are docked when an edge of one lies within snap distance of an edge of the other
-    /// and they overlap along the other axis.
+    /// Docked: an edge within snap distance of the other's edge, overlapping along the other axis.
     static func areDocked(_ a: Box, _ b: Box) -> Bool {
         if SnapUtils.overlapX(a, b) {
             if SnapUtils.near(SnapUtils.top(a), SnapUtils.bottom(b)) { return true }
@@ -46,16 +44,12 @@ enum DockGraph {
         return groups
     }
 
-    /// Top-left box for an AppKit (bottom-left origin) rect. Docking is translation-invariant,
-    /// so flipping the y axis is enough.
+    /// Top-left box for an AppKit rect; docking is translation-invariant, so flipping y is enough.
     static func box(for rect: CGRect) -> Box {
         Box(x: rect.minX, y: -rect.maxY, width: rect.width, height: rect.height)
     }
 
-    /// Windows docked below `resized` (transitively) that must follow a height change of `resized`
-    /// whose top edge stays fixed, e.g. shade/unshade. `oldBox` is `resized` before the change.
-    /// A window hanging from one that stays (its top on that window's bottom) stays with it, and so
-    /// does anything hanging from it; otherwise it would be pulled over or away from that window.
+    /// Windows below `resized` that follow its top-anchored height change; ones hanging from a window that stays, stay.
     static func dockedBelow<ID: Hashable>(_ resized: ID, oldBox: Box, boxes: [ID: Box]) -> Set<ID> {
         var graph = boxes
         graph[resized] = oldBox

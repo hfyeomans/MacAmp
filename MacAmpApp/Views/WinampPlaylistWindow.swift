@@ -202,7 +202,8 @@ struct WinampPlaylistWindow: View {
             SimpleSpriteImage("PLAYLIST_VISUALIZER_BACKGROUND", width: 75, height: 38)
                 .position(x: windowWidth - 187.5, y: windowHeight - 19)
 
-            if settings.isMainWindowShaded {
+            // Main's own visualizer (full or shade strip) covers it while Main is open.
+            if WindowCoordinator.shared?.isMainWindowVisible == false {
                 // Render at 76px native width, clip to 72px to match Winamp's visualizer inset
                 VisualizerView()
                     .frame(width: 76, height: 16)

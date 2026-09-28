@@ -166,8 +166,7 @@ final class WindowSnapManager: NSObject, NSWindowDelegate {
         recordFrames()
     }
 
-    /// Shade/unshade (and other top-anchored height changes) of Main, EQ or Playlist: move the
-    /// windows docked below by the same amount so the chain stays attached.
+    /// Top-anchored height change (shade/unshade): windows docked below follow so the chain stays attached.
     func windowDidResize(_ notification: Notification) {
         guard !isAdjusting, programmaticDepth == 0, let resized = notification.object as? NSWindow,
               let kind = windows.first(where: { $0.value.window === resized })?.key else { return }
@@ -225,8 +224,7 @@ final class WindowSnapManager: NSObject, NSWindowDelegate {
         let idToBox = boxes(in: virtualSpace, includeHidden: true)
         guard idToBox[draggedID] != nil else { return }
 
-        // Winamp: Main drags its docked group; other windows drag alone (detach).
-        // Shift at mouse-down turns snapping off for this drag, and Main then moves alone.
+        // Main drags its docked group, other windows drag alone; Shift at mouse-down: Main alone, no window snapping.
         let snapping = !NSEvent.modifierFlags.contains(.shift)
         let clusterIDs: Set<ObjectIdentifier> = (kind == .main && snapping)
             ? DockGraph.cluster(from: draggedID, boxes: idToBox)
@@ -285,21 +283,21 @@ final class WindowSnapManager: NSObject, NSWindowDelegate {
             union: context.virtualSpace.bounds,
             regions: context.virtualSpace.screenBoxes
         )
+        // Shift turns off snapping to other windows; the screens still contain the group.
         let snappedPoint = SnapUtils.applySnap(
             Point(x: translatedGroupBox.x, y: translatedGroupBox.y),
-            diffToOthers,
+            context.snapping ? diffToOthers : Diff(),
             diffWithin
         )
-        let snapDelta = context.snapping ? CGPoint(
+        let snapDelta = CGPoint(
             x: snappedPoint.x - translatedGroupBox.x,
             y: snappedPoint.y - translatedGroupBox.y
-        ) : .zero
+        )
         var finalDelta = CGPoint(
             x: topLeftDelta.x + snapDelta.x,
             y: topLeftDelta.y + snapDelta.y
         )
-        // Keep the group out of the menu-bar strip: macOS pushes any window whose top enters it
-        // back down on its own, which splits the group.
+        // Keep the group out of the menu-bar strip; macOS would push windows down one by one.
         let groupTop = clusterBaseBox.y + finalDelta.y
         let groupCenterX = clusterBaseBox.x + finalDelta.x + clusterBaseBox.width / 2
         if let strip = context.virtualSpace.menuBarStrips.first(where: {

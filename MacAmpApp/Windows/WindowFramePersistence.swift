@@ -46,6 +46,11 @@ final class WindowFramePersistence {
         }
     }
 
+    func cancelPendingFlush() {
+        persistenceTask?.cancel()
+        persistenceTask = nil
+    }
+
     func schedulePersistenceFlush() {
         guard persistenceSuppressionCount == 0 else { return }
         persistenceTask?.cancel()
@@ -116,9 +121,7 @@ final class WindowFramePersistence {
         return true
     }
 
-    /// Video and Milkdrop get their size from their SwiftUI content after this runs; until then the
-    /// window can be 0 high, and AppKit grows it upward from the bottom edge. Restoring the whole saved
-    /// frame keeps the saved position once the content settles at its saved size.
+    /// Whole saved frame: the window is 0 high until its content sizes it, and would grow up from its bottom edge.
     private func restoreSavedFrame(kind: WindowKind) -> Bool {
         guard let window = registry.window(for: kind),
               let stored = windowFrameStore.frame(for: kind) else { return false }
@@ -126,9 +129,7 @@ final class WindowFramePersistence {
         return true
     }
 
-    /// Restores keep the saved top edge. The restored height can differ from the saved one
-    /// (shade, the Playlist height clamp), and a bottom-anchored origin moved the window down by
-    /// the difference on every launch.
+    /// Keep the saved top edge; the restored height can differ from the saved one.
     private func topAnchoredOrigin(_ stored: NSRect, height: CGFloat) -> NSPoint {
         NSPoint(x: stored.minX, y: stored.maxY - height)
     }

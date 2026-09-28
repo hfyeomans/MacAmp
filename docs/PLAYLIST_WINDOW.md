@@ -40,7 +40,7 @@ The Playlist Window provides track management with PLEDIT.bmp skinning and Winam
 | **Segment Resize** | 25px width × 29px height grid quantization |
 | **Dynamic Tiling** | Chrome tiles expand/contract with window size |
 | **Scroll Slider** | Functional track navigation with proportional thumb |
-| **Mini Visualizer** | 72×16px spectrum display when main window shaded |
+| **Mini Visualizer** | 72×16px spectrum display when the main window is closed |
 | **Size Persistence** | UserDefaults storage across app restarts |
 
 ### Activation Methods
@@ -258,9 +258,9 @@ The shade strip uses the same handle with `widthOnly: true`: a 9×9 grip near th
 
 The playlist window displays a mini visualizer in the bottom bar when:
 1. Window is wide enough (`sizeState.size.width >= 3`, i.e., 350px+)
-2. Main window is in shade mode (`settings.isMainWindowShaded`)
+2. Main window is closed (`WindowCoordinator.isMainWindowVisible == false`)
 
-This matches Winamp 5.x behavior where the visualizer appears in the playlist when the main window's visualizer is hidden.
+This matches Webamp: the playlist's visualizer stands in for Main's while Main is closed. A shaded Main shows its own mini visualizer in the shade strip.
 
 It is the same `VisualizerView` as the main window, gated on `audioPlayer.isVisualizerRendering`, so it animates for video playback as well as audio (see [AVPlayer-Native Video DSP](MACAMP_ARCHITECTURE_GUIDE.md#avplayer-native-video-dsp)).
 
@@ -272,7 +272,7 @@ if showVisualizer {
     SimpleSpriteImage("PLAYLIST_VISUALIZER_BACKGROUND", width: 75, height: 38)
         .position(x: windowWidth - 187.5, y: windowHeight - 19)
 
-    if settings.isMainWindowShaded {
+    if WindowCoordinator.shared?.isMainWindowVisible == false {
         // Render at 76px native width, clip to 72px to match Winamp's visualizer inset
         VisualizerView()
             .frame(width: 76, height: 16)

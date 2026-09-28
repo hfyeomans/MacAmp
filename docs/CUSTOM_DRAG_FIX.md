@@ -54,7 +54,7 @@ private struct DragContext {
     let clusterIDs: Set<ObjectIdentifier>      // static for the whole drag
     let baseBoxes: [ObjectIdentifier: Box]     // base box for every cluster member
     let virtualSpace: VirtualScreenSpace
-    let snapping: Bool                         // false when Shift was held at mouse-down
+    let snapping: Bool                         // false when Shift was held: no snapping to other windows
     var lastInputDelta: CGPoint = .zero
 }
 ```
@@ -62,7 +62,7 @@ private struct DragContext {
 **`beginCustomDrag(kind:startPointInScreen:)`**
 - Builds boxes once (`boxes(in:includeHidden: true)`), so closed windows keep their saved frames and still link the chain.
 - Cluster membership follows Webamp: dragging the **main** window captures the full connected cluster (`DockGraph.cluster(from:boxes:)`); dragging **EQ/Playlist** (or any other window) moves only that window, separating it from the cluster so it can re-snap.
-- Holding Shift at mouse-down turns snapping off for the drag (`snapping = false`), and the main window then moves alone.
+- Holding Shift at mouse-down turns off snapping to other windows (`snapping = false`); the main window moves alone, and screen containment (`snapWithinUnion`) still applies.
 - Stores a base box for every member in `dragContexts[kind]`.
 
 **`updateCustomDrag(kind:cumulativeDelta:)`**

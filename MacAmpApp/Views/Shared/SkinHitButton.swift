@@ -1,7 +1,6 @@
 import SwiftUI
 
-/// A Winamp button whose normal image is part of the window's bitmap (titlebar and shade-strip
-/// buttons): an invisible hit area that draws only the skin's pressed sprite while held.
+/// Invisible hit area over a button baked into the skin bitmap; draws only the pressed sprite.
 struct SkinHitButton: View {
     let pressedSprite: String?
     let width: CGFloat

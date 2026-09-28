@@ -9,7 +9,7 @@ struct DockGraphTests {
     private let eq = Box(x: 0, y: 116, width: 275, height: 116)
     private let playlist = Box(x: 0, y: 232, width: 275, height: 232)
 
-    @Test("A closed EQ still links Main to the Playlist docked below it (#78)")
+    @Test("A closed EQ still links Main to the Playlist docked below it")
     func closedMiddleWindowKeepsChain() {
         let withClosedEQ: [String: Box] = ["main": main, "eq": eq, "playlist": playlist]
         #expect(DockGraph.cluster(from: "main", boxes: withClosedEQ) == ["main", "eq", "playlist"])
@@ -69,6 +69,16 @@ struct DockGraphTests {
         let boxes: [String: Box] = ["main": shadedMain, "eq": eq, "playlist": playlist,
                                     "video": video, "milkdrop": milkdrop, "under": under]
         #expect(DockGraph.dockedBelow("main", oldBox: main, boxes: boxes) == ["eq", "playlist"])
+    }
+
+    @Test("clusters partitions AppKit frames into docked groups")
+    func clustersPartition() {
+        let main = CGRect(x: 100, y: 1200, width: 550, height: 232)
+        let eq = CGRect(x: 100, y: 968, width: 550, height: 232)
+        let far = CGRect(x: 2000, y: 200, width: 275, height: 116)
+        let rects = ["main": main, "eq": eq, "far": far]
+        let groups = DockGraph.clusters(boxes: rects.mapValues(DockGraph.box(for:)))
+        #expect(Set(groups) == [["main", "eq"], ["far"]])
     }
 
     @Test("A window resized with nothing docked below moves nothing")

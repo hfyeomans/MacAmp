@@ -1,7 +1,6 @@
 import CoreGraphics
 
-/// Moves window groups back onto a screen with one offset per group, so docked windows keep their
-/// relative positions (Webamp `ensureWindowsAreOnScreen`, applied per docked group). AppKit coordinates.
+/// Brings window groups back on screen with one offset per group (Webamp `ensureWindowsAreOnScreen`). AppKit coordinates.
 enum ScreenClamp {
     /// The visible frame overlapping `union` the most, or the first (main) screen when none overlaps.
     static func screen(for union: CGRect, visibleFrames: [CGRect]) -> CGRect? {
@@ -10,8 +9,7 @@ enum ScreenClamp {
         return visibleFrames.first
     }
 
-    /// Offset bringing `union` inside `visible`. A group larger than the screen keeps its left and
-    /// top edges on screen so the titlebar stays reachable.
+    /// Offset bringing `union` inside `visible`; an oversized group keeps its left and top edges visible.
     static func offset(for union: CGRect, in visible: CGRect) -> CGVector {
         var dx: CGFloat = 0
         if union.width > visible.width || union.minX < visible.minX {
@@ -28,10 +26,7 @@ enum ScreenClamp {
         return CGVector(dx: dx, dy: dy)
     }
 
-    /// New frames for the windows that must move. Each group is measured by its visible members
-    /// (all members when none is visible) and every member moves by the same offset. When several
-    /// groups are stranded and together fit on the target screen, they move by one shared offset so
-    /// their arrangement survives (Webamp); otherwise each group is clamped on its own.
+    /// New frames for stranded groups, measured by visible members; groups that fit together move together.
     static func clamp<ID: Hashable>(
         groups: [Set<ID>], frames: [ID: CGRect], visible: Set<ID>, visibleFrames: [CGRect]
     ) -> [ID: CGRect] {
@@ -57,10 +52,9 @@ enum ScreenClamp {
         return moved
     }
 
-    /// Each group moved by the origin change of the display it was on (a primary-display change
-    /// re-bases every coordinate). Groups whose display is gone keep their frames.
+    /// Each group moved by its display's origin change; groups whose display is gone keep their frames.
     static func translate<ID: Hashable>(
-        groups: [Set<ID>], frames: [ID: CGRect], from oldDisplays: [UInt32: CGRect], to newDisplays: [UInt32: CGRect]
+        groups: [Set<ID>], frames: [ID: CGRect], from oldDisplays: [CGDirectDisplayID: CGRect], to newDisplays: [CGDirectDisplayID: CGRect]
     ) -> [ID: CGRect] {
         var result = frames
         for group in groups {
@@ -76,9 +70,7 @@ enum ScreenClamp {
         return result
     }
 
-    /// Rigid docked groups: each member keeps its `snapshot` offset from the group's anchor, and the
-    /// group is placed where the anchor is now (top-left corner). Used when macOS has moved windows
-    /// back one by one.
+    /// Each group re-formed from `snapshot` around its anchor's current top-left.
     static func rigid<ID: Hashable>(
         groups: [Set<ID>], snapshot: [ID: CGRect], current: [ID: CGRect], anchor: (Set<ID>) -> ID?
     ) -> [ID: CGRect] {

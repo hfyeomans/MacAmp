@@ -67,7 +67,7 @@ Any window registered with `WindowSnapManager` (via `WindowDelegateWiring`) can 
 **Why Facade + Composition (chosen)**:
 - Callers keep using `WindowCoordinator.shared.method()`; the Facade forwards to the controllers
 - No protocol overhead: controllers are concrete types (one implementation each)
-- Acyclic dependency graph: no controller-to-controller dependencies
+- Acyclic dependency graph: controllers share `WindowRegistry`, `WindowFramePersistence` and `AppSettings` as services but never depend on each other
 - @Observable observation chaining: computed property forwarding preserves SwiftUI reactivity
 
 **Why not Actor-based isolation**:
@@ -102,7 +102,7 @@ MacAmpApp/Windows/
 | `WindowRegistry` | Owns the 5 NSWindowControllers, window↔kind mapping, `liveAnchorFrame` | Yes | No |
 | `WindowFramePersistence` | Save/restore/suppress frames; restores keep the saved top edge; Video and Milkdrop restore their whole saved frame | Yes | No |
 | `WindowScreenGuard` | Keeps windows reachable across sleep/wake and display changes; `clampOnScreen()` | Yes | No |
-| `WindowVisibilityController` | Show/hide/toggle for all windows | Yes | Yes |
+| `WindowVisibilityController` | Show/hide/toggle for all windows; group minimize | Yes | Yes |
 | `WindowResizeController` | Double-size resize, docking context, playlist/video/milkdrop size updates, resize previews | Yes | No |
 | `WindowSettingsObserver` | Observes `isAlwaysOnTop`, `isDoubleSizeMode`, `showVideoWindow`, `showMilkdropWindow` | Yes | No |
 | `WindowDelegateWiring` | Static factory: per window, registers with `WindowSnapManager` and installs a `WindowDelegateMultiplexer` (snap manager, persistence delegate, `WindowFocusDelegate`) | Yes (struct) | No |
@@ -132,8 +132,9 @@ WindowCoordinator (facade / composition root)
     |
     +-- WindowDelegateWiring          (depends on: WindowRegistry, WindowPersistenceDelegate, WindowFocusState)
 
-NO controller-to-controller dependencies.
-All cross-cutting coordination goes through WindowCoordinator facade.
+WindowRegistry, WindowFramePersistence and AppSettings are shared services;
+controllers never depend on each other or on WindowCoordinator.
+All cross-cutting coordination goes through the WindowCoordinator facade.
 ```
 
 When coordination is required (for example, suppressing persistence during resize), the Facade orchestrates it by calling the controllers in sequence.
@@ -245,7 +246,7 @@ Refactor plan and final state: `tasks/done/window-coordinator-refactor/`.
 
 - **Groups are geometric.** Two windows are docked when an edge of one is within `SnapUtils.SNAP_DISTANCE` (10 px, Winamp's default) of an edge of the other and they overlap along the other axis. `DockGraph` (pure, `Models/DockGraph.swift`) computes groups with `cluster(from:boxes:)` / `clusters(boxes:)`.
 - **Closed windows keep the chain.** A Main drag moves every window docked to it, including hidden ones (`WindowSnapManager.beginCustomDrag` builds boxes with `includeHidden: true`), so a closed EQ still links Main to the Playlist under it and reopens in place.
-- **Shift turns snapping off** for a drag (checked at mouse-down); Main then moves alone, without its group.
+- **Shift at mouse-down** turns off snapping to other windows for that drag, and Main moves alone, without its group; the screens still contain the drag.
 - **Menu bar:** a drag keeps the group's top edge out of each screen's menu-bar strip (`VirtualScreenSpace.menuBarStrips`).
 - **Shade/unshade re-anchoring.** Shading keeps a window's top edge and changes its height. `WindowSnapManager.windowDidResize` moves the windows docked below it (`DockGraph.dockedBelow`) by the height change so the chain stays attached. A window hanging from a window that doesn't move (e.g. Milkdrop under a Video window docked beside Main) stays with it, as does anything hanging from it.
 - Programmatic moves are bracketed with `WindowSnapManager.beginProgrammaticAdjustment()` / `endProgrammaticAdjustment()` (nestable); the snap manager ignores moves inside a bracket and re-records frames when it closes.
@@ -271,7 +272,9 @@ Displays are tracked by `NSScreen.cgDirectDisplayID`. **Options › Reset Window
 
 ### Minimize
 
-Winamp minimizes the whole player. `WindowCoordinator.minimizeApp()` hides the other open windows (without changing their persisted visibility) and minimizes Main, which is the only `.miniaturizable` window and owns the player's single Dock tile. On Main's `.didDeminiaturize` the same windows return and the group is clamped on screen. `BorderlessWindow` overrides `performMiniaturize(_:)` to call `minimizeApp()` and validates it in `validateUserInterfaceItem(_:)`, so Window › Minimize (Cmd+M) works from every MacAmp window instead of beeping.
+Winamp minimizes the whole player. `WindowCoordinator.minimizeApp()` forwards to `WindowVisibilityController.minimizeGroup()`, which hides the other open windows (without changing their persisted visibility) and minimizes Main, the only `.miniaturizable` window and the owner of the player's single Dock tile. On Main's `.didDeminiaturize` the hidden windows that are still open in `AppSettings` return, and the coordinator's `onGroupRestored` hook clamps the group on screen. While the group is minimized, turning a window on only updates its setting; it comes back with Main. "Show Main" restores the group.
+
+`BorderlessWindow` overrides `performMiniaturize(_:)` to call `minimizeApp()`, and `validateUserInterfaceItem(_:)` enables it only when Main is visible and not minimized (`canMinimizeApp`), so Window › Minimize (Cmd+M) works from every MacAmp window instead of beeping. Option+M is disabled the same way while Main is hidden.
 
 ### Titlebars and Windowshade Strips
 
@@ -294,7 +297,7 @@ Titlebar and shade-strip buttons are part of the skin bitmaps, so they are `Skin
 | Ctrl+V, Ctrl+K | Show/hide Video, Milkdrop |
 | Ctrl+D | Double size |
 | Ctrl+A | Always on top |
-| Shift (held at mouse-down) | Drag without snapping; Main moves alone |
+| Shift (held at mouse-down) | Drag Main alone, without snapping to other windows |
 
 ---
 

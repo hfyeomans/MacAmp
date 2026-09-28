@@ -1,8 +1,6 @@
 import SwiftUI
 
-/// Shade (collapsed) mode. Buttons and the position well are part of the skin's shade strip, so
-/// they're invisible hit areas (Webamp `main-window.css` `.shade` rules); only pressed sprites and
-/// the position thumb are drawn.
+/// Shade strip: its buttons and position well are baked into the skin, so they are hit areas.
 struct MainWindowShadeLayer: View {
     @Environment(PlaybackCoordinator.self) private var playbackCoordinator
     @Environment(AppSettings.self) private var settings
@@ -28,6 +26,7 @@ struct MainWindowShadeLayer: View {
             VisualizerView(height: 5)
                 .frame(width: 38, height: 5, alignment: .leading)
                 .clipped()
+                .contentShape(Rectangle())
                 .at(Layout.shadeVisualizer)
             buildShadeTimeDisplay()
             buildShadeTitlebarButtons()
@@ -40,17 +39,17 @@ struct MainWindowShadeLayer: View {
     private func buildShadeTransportButtons() -> some View {
         Group {
             SkinHitButton(width: 7, height: 10) { Task { await playbackCoordinator.previous() } }
-                .at(CGPoint(x: 169, y: 2))
+                .at(Layout.shadePreviousButton)
             SkinHitButton(width: 10, height: 10) { playbackCoordinator.togglePlayPause() }
-                .at(CGPoint(x: 176, y: 2))
+                .at(Layout.shadePlayButton)
             SkinHitButton(width: 9, height: 10) { playbackCoordinator.pause() }
-                .at(CGPoint(x: 186, y: 2))
+                .at(Layout.shadePauseButton)
             SkinHitButton(width: 9, height: 10) { playbackCoordinator.stop() }
-                .at(CGPoint(x: 195, y: 2))
+                .at(Layout.shadeStopButton)
             SkinHitButton(width: 10, height: 10) { Task { await playbackCoordinator.next() } }
-                .at(CGPoint(x: 204, y: 2))
+                .at(Layout.shadeNextButton)
             SkinHitButton(width: 10, height: 10) { openFileDialog() }
-                .at(CGPoint(x: 215, y: 2))
+                .at(Layout.shadeEjectButton)
         }
     }
 
@@ -65,21 +64,23 @@ struct MainWindowShadeLayer: View {
         ZStack(alignment: .topLeading) {
             SimpleSpriteImage("MAIN_SHADE_POSITION_BACKGROUND", width: 17, height: 7)
                 .allowsHitTesting(false)
-            SimpleSpriteImage(thumb, width: 3, height: 7)
-                .offset(x: (17 - 3) * progress)
-                .allowsHitTesting(false)
-            GeometryReader { geo in
-                Color.clear
-                    .contentShape(Rectangle())
-                    .gesture(
-                        DragGesture(minimumDistance: 0)
-                            .onChanged { value in interactionState.handlePositionDrag(value, in: geo, audioPlayer: audioPlayer) }
-                            .onEnded { value in interactionState.handlePositionDragEnd(value, in: geo, audioPlayer: audioPlayer) }
-                    )
+            if audioPlayer.currentTrack != nil {
+                SimpleSpriteImage(thumb, width: 3, height: 7)
+                    .offset(x: (17 - 3) * progress)
+                    .allowsHitTesting(false)
+                GeometryReader { geo in
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .gesture(
+                            DragGesture(minimumDistance: 0)
+                                .onChanged { value in interactionState.handlePositionDrag(value, in: geo, audioPlayer: audioPlayer) }
+                                .onEnded { value in interactionState.handlePositionDragEnd(value, in: geo, audioPlayer: audioPlayer) }
+                        )
+                }
             }
         }
         .frame(width: 17, height: 7, alignment: .topLeading)
-        .at(CGPoint(x: 226, y: 4))
+        .at(Layout.shadePositionSlider)
     }
 
     // MARK: - Shade Time Display
@@ -88,12 +89,11 @@ struct MainWindowShadeLayer: View {
     @ViewBuilder
     private func buildShadeTimeDisplay() -> some View {
         let stopped = !playbackCoordinator.isPlaying && !playbackCoordinator.isPaused
-        let remaining = settings.timeDisplayMode == .remaining && !stopped
         let duration = playbackCoordinator.displayDuration
-        let seconds = remaining && duration > 0
-            ? max(0.0, duration - playbackCoordinator.displayTime)
-            : playbackCoordinator.displayTime
-        let digits = interactionState.timeDigits(from: seconds).map { Character(String($0)) }
+        let remaining = settings.timeDisplayMode == .remaining && !stopped && duration > 0
+        let seconds = remaining ? max(0.0, duration - playbackCoordinator.displayTime) : playbackCoordinator.displayTime
+        // Two minute digits: 99:59 is the most the strip can show.
+        let digits = interactionState.timeDigits(from: min(seconds, 5999)).map { Character(String($0)) }
         let visible = !stopped && (!playbackCoordinator.isPaused || interactionState.pauseBlinkVisible)
         let characters: [Character] = [remaining ? "-" : " "] + digits
         ZStack(alignment: .topLeading) {
