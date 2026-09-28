@@ -17,6 +17,8 @@ final class WindowCoordinator {
     private let settingsObserver: WindowSettingsObserver
     var hasPresentedInitialWindows = false
     private var delegateWiring: WindowDelegateWiring?
+    @ObservationIgnored private var minimizedWith: [WindowKind] = []
+    @ObservationIgnored private var deminiaturizeToken: NotificationCenter.ObservationToken?
 
     var mainWindow: NSWindow? { registry.mainWindow }
     var eqWindow: NSWindow? { registry.eqWindow }
@@ -148,6 +150,7 @@ final class WindowCoordinator {
     isolated deinit {
         settingsObserver.stop()
         screenGuard.stop()
+        if let deminiaturizeToken { NotificationCenter.default.removeObserver(deminiaturizeToken) }
     }
 
     // MARK: - Window Resize (forwarded to WindowResizeController)
@@ -178,7 +181,29 @@ final class WindowCoordinator {
 
     // MARK: - Window Visibility (forwarded to WindowVisibilityController)
 
-    func minimizeKeyWindow() { visibility.minimizeKeyWindow() }
+    /// Winamp minimize: the player goes to one Dock tile (Main's). The other open windows hide
+    /// without changing their saved open/closed state and come back, on screen, with Main.
+    func minimizeApp() {
+        guard let main = registry.mainWindow, main.isVisible, !main.isMiniaturized else { return }
+        minimizedWith = []
+        registry.forEachWindow { window, kind in
+            guard kind != .main, window.isVisible else { return }
+            minimizedWith.append(kind)
+            window.orderOut(nil)
+        }
+        if deminiaturizeToken == nil {
+            deminiaturizeToken = NotificationCenter.default.addObserver(of: main, for: .didDeminiaturize) { [weak self] _ in
+                self?.restoreMinimizedGroup()
+            }
+        }
+        main.miniaturize(nil)
+    }
+
+    private func restoreMinimizedGroup() {
+        for kind in minimizedWith { registry.window(for: kind)?.orderFront(nil) }
+        minimizedWith = []
+        screenGuard.clampOnScreen()
+    }
     func showEQWindow() { visibility.showEQWindow() }
     func hideEQWindow() { visibility.hideEQWindow() }
     func toggleEQWindowVisibility() -> Bool { visibility.toggleEQWindowVisibility() }

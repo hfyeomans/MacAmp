@@ -27,6 +27,11 @@ struct AppCommands: Commands {
             Button("Shade/Unshade Equalizer") { settings.isEqualizerWindowShaded.toggle() }
                 .keyboardShortcut("3", modifiers: [.command, .option])
 
+            Button("Windowshade Mode") { settings.isMainWindowShaded.toggle() }
+                .keyboardShortcut("w", modifiers: [.control])
+            Button("Minimize All") { windowCoordinator.minimizeApp() }
+                .keyboardShortcut("m", modifiers: [.option])
+
             Button("Reset Window Positions") { windowCoordinator.resetWindowPositions() }
 
             Divider()

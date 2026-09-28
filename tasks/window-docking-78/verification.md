@@ -65,11 +65,12 @@ Test with at least 3 skins (default plus 2 others). Each control must look like 
 
 | Check | Result |
 |---|---|
-| Main's minimize button minimizes the group; restoring from the Dock brings back the same windows and layout | |
-| Cmd+M from Main, EQ, Playlist, Video and Milkdrop minimizes the group | |
-| Option+M does the same | |
-| Ctrl+W toggles Main windowshade | |
-| Restore after the display changed while minimized: the group comes back on screen | |
+| Main's minimize button minimizes the group; restoring from the Dock brings back the same windows and layout | ✅ 2026-09-28 (owner): one Dock tile; same windows, still docked; closed windows stay closed |
+| Cmd+M from Main, EQ, Playlist, Video and Milkdrop minimizes the group | ✅ 2026-09-28: no beep; Window › Minimize enabled |
+| Option+M does the same | ✅ 2026-09-28 |
+| Shaded Main's strip minimize; restores shaded | ✅ 2026-09-28 |
+| Ctrl+W toggles Main windowshade | ✅ 2026-09-28 |
+| Restore after the display changed while minimized: the group comes back on screen | ✅ 2026-09-28 (owner, LG unplug/re-plug) |
 
 ## Phases 1–3: behaviour
 

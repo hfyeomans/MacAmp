@@ -24,12 +24,6 @@ final class WindowVisibilityController {
         self.settings = settings
     }
 
-    // MARK: - Key Window Actions
-
-    func minimizeKeyWindow() {
-        NSApp.keyWindow?.miniaturize(nil)
-    }
-
     // MARK: - EQ Window
 
     func showEQWindow(makeKey: Bool = false) {

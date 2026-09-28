@@ -62,7 +62,7 @@ struct MainWindowFullLayer: View {
             .at(Layout.optionsButton)
 
             SkinHitButton(pressedSprite: "MAIN_MINIMIZE_BUTTON_DEPRESSED", width: 9, height: 9) {
-                WindowCoordinator.shared?.minimizeKeyWindow()
+                WindowCoordinator.shared?.minimizeApp()
             }
             .at(Layout.minimizeButton)
 
