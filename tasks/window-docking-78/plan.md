@@ -1,6 +1,6 @@
 # Plan: Window Docking, Minimize, Persistence, Windowshade & Sleep/Wake (#78)
 
-> **Status:** APPROVED (decisions D1–D5, owner, 2026-09-27). **Phases 0–2 ✅.** Next: Phase 3.
+> **Status:** APPROVED (decisions D1–D5, owner, 2026-09-27). **Phases 0–3 ✅.** Next: Phase 4.
 > **Branch:** `fix/window-docking-78`.
 > **Target:** macOS 27; Swift 6.2 language mode on the Swift 6.4 toolchain; strict concurrency, `@MainActor` UI, `@Observable` state. SwiftUI handles content and menu commands (`Commands`). AppKit `NSWindow` stays for the borderless Winamp windows, because SwiftUI can't do docking, custom shapes or group moves (research §3).
 > **Research:** `research.md`. **Verification log:** `verification.md`.
