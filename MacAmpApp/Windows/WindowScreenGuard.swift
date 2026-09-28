@@ -1,0 +1,163 @@
+import AppKit
+
+/// Keeps MacAmp's windows reachable across display changes and sleep/wake.
+///
+/// The guard snapshots the layout when a transition starts and ignores moves during it (no
+/// snapping, no persistence). When the screens settle:
+/// - **same displays** (sleep/wake): macOS first moved each window onto a temporary screen, splitting
+///   docked groups, so the snapshot is restored (translated if the displays were re-based);
+/// - **a display was added or returned**: macOS keeps or returns windows to their own display, so
+///   their positions are trusted (restoring would drag them off it);
+/// - **a display was removed**: the snapshot is restored so groups stay docked, and stranded groups
+///   are moved onto a remaining screen together.
+/// Any window still unreachable is then clamped on screen, one docked group at a time.
+@MainActor
+final class WindowScreenGuard {
+    enum Defaults {
+        /// Quiet period after the last screen event before settling.
+        static let screenSettleDelay: Double = 1.0
+        /// Minimum time after wake before settling; bridges the lull before the real screen returns.
+        static let wakeSettleWindow: Double = 3.0
+        static let screenSettleDelayKey = "screenSettleDelay"
+        static let wakeSettleWindowKey = "wakeSettleWindow"
+    }
+
+    private let registry: WindowRegistry
+    private let persistence: WindowFramePersistence
+    private var observations: [(center: NotificationCenter, token: NotificationCenter.ObservationToken)] = []
+    private var snapshot: [WindowKind: NSRect]?
+    /// Display frames (by `CGDirectDisplayID`) the current layout's coordinates belong to.
+    private var displays: [UInt32: CGRect] = [:]
+    private var snapshotDisplays: [UInt32: CGRect] = [:]
+    private var wakeDeadline: ContinuousClock.Instant?
+    private var settleTask: Task<Void, Never>?
+
+    private var settleDelay: Duration { .seconds(Self.seconds(Defaults.screenSettleDelayKey, Defaults.screenSettleDelay)) }
+    private var wakeWindow: Duration { .seconds(Self.seconds(Defaults.wakeSettleWindowKey, Defaults.wakeSettleWindow)) }
+
+    init(registry: WindowRegistry, persistence: WindowFramePersistence) {
+        self.registry = registry
+        self.persistence = persistence
+    }
+
+    func start() {
+        displays = Self.currentDisplays()
+        let app = NotificationCenter.default
+        observations.append((app, app.addObserver(of: NSApplication.self, for: .didChangeScreenParameters) { [weak self] _ in
+            self?.screensChanged()
+        }))
+        let workspace = NSWorkspace.shared.notificationCenter
+        observations.append((workspace, workspace.addObserver(of: NSWorkspace.shared, for: .willSleep) { [weak self] _ in
+            self?.beginTransition()
+        }))
+        observations.append((workspace, workspace.addObserver(of: NSWorkspace.shared, for: .didWake) { [weak self] _ in
+            self?.didWake()
+        }))
+    }
+
+    func stop() {
+        for observation in observations { observation.center.removeObserver(observation.token) }
+        observations.removeAll()
+        settleTask?.cancel()
+        if snapshot != nil { endTransition() }
+    }
+
+    /// Moves each docked group (and each lone window) back onto a screen as a unit.
+    func clampOnScreen() {
+        var frames: [WindowKind: CGRect] = [:]
+        var visible: Set<WindowKind> = []
+        registry.forEachWindow { window, kind in
+            frames[kind] = window.frame
+            if window.isVisible { visible.insert(kind) }
+        }
+        let groups = DockGraph.clusters(boxes: frames.mapValues(DockGraph.box(for:)))
+        let moved = ScreenClamp.clamp(groups: groups, frames: frames, visible: visible,
+                                      visibleFrames: NSScreen.screens.map(\.visibleFrame))
+        guard !moved.isEmpty else { return }
+        WindowSnapManager.shared.beginProgrammaticAdjustment()
+        persistence.beginSuppressingPersistence()
+        for (kind, frame) in moved { registry.window(for: kind)?.setFrameOrigin(frame.origin) }
+        persistence.endSuppressingPersistence()
+        WindowSnapManager.shared.endProgrammaticAdjustment()
+    }
+
+    // MARK: - Transitions
+
+    /// `fromSavedLayout`: awake display changes may already have moved windows before the
+    /// notification arrives, so use the last persisted layout; before sleep, the live frames.
+    private func beginTransition(fromSavedLayout: Bool = false) {
+        guard snapshot == nil else { return }
+        var frames: [WindowKind: NSRect] = [:]
+        registry.forEachWindow { window, kind in
+            frames[kind] = (fromSavedLayout ? persistence.savedFrame(for: kind) : nil) ?? window.frame
+        }
+        snapshot = frames
+        snapshotDisplays = displays
+        persistence.beginSuppressingPersistence()
+        WindowSnapManager.shared.beginProgrammaticAdjustment()
+    }
+
+    private func screensChanged() {
+        beginTransition(fromSavedLayout: true)
+        scheduleSettle()
+    }
+
+    private func didWake() {
+        beginTransition()
+        wakeDeadline = .now + wakeWindow
+        scheduleSettle()
+    }
+
+    private func scheduleSettle() {
+        settleTask?.cancel()
+        settleTask = Task { [weak self] in
+            guard let delay = self?.settleDelay else { return }
+            try? await Task.sleep(for: delay)
+            guard !Task.isCancelled else { return }
+            if let deadline = self?.wakeDeadline, deadline > .now {
+                try? await Task.sleep(until: deadline, clock: .continuous)
+                guard !Task.isCancelled else { return }
+            }
+            self?.settle()
+        }
+    }
+
+    private func settle() {
+        let current = Self.currentDisplays()
+        let displayAdded = !Set(current.keys).isSubset(of: Set(snapshotDisplays.keys))
+        if let snapshot, !displayAdded {
+            let groups = DockGraph.clusters(boxes: snapshot.mapValues(DockGraph.box(for:)))
+            let restored = ScreenClamp.translate(groups: groups, frames: snapshot,
+                                                 from: snapshotDisplays, to: current)
+            registry.forEachWindow { window, kind in
+                guard let saved = restored[kind] else { return }
+                // Top-anchored: keep the saved top edge even if the height changed meanwhile.
+                window.setFrameOrigin(NSPoint(x: saved.minX, y: saved.maxY - window.frame.height))
+            }
+        }
+        wakeDeadline = nil
+        clampOnScreen()
+        endTransition()
+        displays = current
+        persistence.persistAllWindowFrames()
+    }
+
+    private func endTransition() {
+        snapshot = nil
+        persistence.endSuppressingPersistence()
+        WindowSnapManager.shared.endProgrammaticAdjustment()
+    }
+
+    private static func currentDisplays() -> [UInt32: CGRect] {
+        var result: [UInt32: CGRect] = [:]
+        for screen in NSScreen.screens {
+            if let id = screen.cgDirectDisplayID { result[id] = screen.frame }
+        }
+        return result
+    }
+
+    private static func seconds(_ key: String, _ fallback: Double) -> Double {
+        let value = UserDefaults.standard.double(forKey: key)
+        return value > 0 ? value : fallback
+    }
+}

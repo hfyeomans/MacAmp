@@ -26,7 +26,10 @@
   - In MacAmp:
     - **Main's minimize button, Cmd+M and Option+M** from any MacAmp window (Video and Milkdrop included) minimize the whole player.
     - **Ctrl+W** toggles Main windowshade. The existing Cmd+Option+1/2/3 shade shortcuts stay.
-- **D3: a lost display.** Windows move to an available screen, docked groups as a unit, and stay there.
+- **D3: displays coming and going** (revised by the owner, 2026-09-27, after Phase 3 testing).
+  - **Lost display:** windows move to an available screen, docked groups as a unit. Stranded groups move together when they fit, keeping their arrangement.
+  - **Display returns or is added:** **let macOS return the windows**. macOS remembers each window's display and moves it back; MacAmp doesn't undo that, and only clamps anything still unreachable.
+  - This replaces the original "move and keep": restoring the saved layout after a display returned caused a visible jump back.
 - **D4: Winamp extras.**
   - Shift-drag flips snapping.
   - Snap distance changes 15 → **10 px** (Winamp default, `config.h:100`). The same value is the docking-detection tolerance.
@@ -89,6 +92,13 @@ This is Webamp's cluster shift (`ensureWindowsAreOnScreen`) applied per cluster.
 - `NSWorkspace.DidWakeMessage` / `ScreensDidWakeMessage` to start the wake window
 
 The observers use the macOS 27 typed `MainActorMessage` API (`ScreensDidWakeMessage` is an `AsyncMessage`, so it hops to the main actor) and keep `ObservationToken`s, torn down in `stop()`.
+
+**Settle cases (after the owner's Phase 3 test, 2026-09-27):**
+- **Same displays** (sleep/wake): restore the snapshot, translated by each display's origin change, then clamp.
+- **Display added or returned:** trust macOS's positions, then clamp only. Restoring saved *absolute* frames after the built-in became primary re-based the LG from (0,0) to (1800,−431) and dragged windows onto the built-in display.
+- **Display removed:** restore the snapshot so groups stay docked (translated for surviving displays), then clamp; stranded groups move together when they fit (`ScreenClamp.translate` + `clamp`).
+
+The guard tracks display frames by `NSScreen.cgDirectDisplayID` (macOS 26+).
 
 **Moves:** guard moves are wrapped in `isAdjusting` and persisted once the settle run ends.
 
@@ -183,7 +193,7 @@ The EQ and Main bitmaps (`eqmain.bmp`, `titlebar.bmp`, `main.bmp`) likely contai
 ## Out of scope
 
 - Child-window (`addChildWindow`) docking (research §3).
-- Remembering per-display layouts (D3).
+- Remembering per-display layouts beyond what macOS already does (D3).
 - Shade mode for the Video and Milkdrop windows.
 - Changes to the Video/Milkdrop resize model beyond guarding their moves with `isAdjusting`.
 

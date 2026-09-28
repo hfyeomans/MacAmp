@@ -27,6 +27,8 @@ struct AppCommands: Commands {
             Button("Shade/Unshade Equalizer") { settings.isEqualizerWindowShaded.toggle() }
                 .keyboardShortcut("3", modifiers: [.command, .option])
 
+            Button("Reset Window Positions") { windowCoordinator.resetWindowPositions() }
+
             Divider()
 
             // Clutter bar functions

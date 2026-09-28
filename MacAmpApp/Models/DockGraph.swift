@@ -34,6 +34,24 @@ enum DockGraph {
         return visited
     }
 
+    /// All windows split into docked groups (a lone window is its own group).
+    static func clusters<ID: Hashable>(boxes: [ID: Box]) -> [Set<ID>] {
+        var remaining = Set(boxes.keys)
+        var groups: [Set<ID>] = []
+        while let start = remaining.first {
+            let group = cluster(from: start, boxes: boxes)
+            groups.append(group)
+            remaining.subtract(group)
+        }
+        return groups
+    }
+
+    /// Top-left box for an AppKit (bottom-left origin) rect. Docking is translation-invariant,
+    /// so flipping the y axis is enough.
+    static func box(for rect: CGRect) -> Box {
+        Box(x: rect.minX, y: -rect.maxY, width: rect.width, height: rect.height)
+    }
+
     /// Windows docked below `resized` (transitively) that must follow a height change of `resized`
     /// whose top edge stays fixed, e.g. shade/unshade. `oldBox` is `resized` before the change.
     static func dockedBelow<ID: Hashable>(_ resized: ID, oldBox: Box, boxes: [ID: Box]) -> Set<ID> {

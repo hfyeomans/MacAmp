@@ -21,6 +21,8 @@
 | 5 | Is `windowDidMove` from `setFrameOrigin` delivered synchronously, inside the `isAdjusting` bracket? | LLDB breakpoint | ✅ **Yes** (2026-09-27): the probe logged `windowDidMove Main adjusting=true` for cluster moves, so programmatic moves are reported inside the bracket and the `isAdjusting` guard works as the plan assumes. |
 | 6 | Do the Video, Milkdrop and Playlist resize paths move the cluster by accident? Does Main's shade collapse leave a gap that breaks the chain? | Owner toggles shade and resizes with the EQ/Playlist docked; Claude logs clusters | **Shade gap confirmed** (2026-09-27): shading Main shrinks its frame 550×232 → **550×28, top edge fixed** (y 1181 → 1385), but the docked EQ **does not move**, leaving a **204 px gap** at double size, so the EQ is no longer docked. The EQ frame also shrinks when shaded (550×28). → Phase 2 re-anchoring on shade is required. **Resize-path half ✅ PASS** 2026-09-27 (owner): the Video window's 1x/2x buttons and handle-drag resize don't move Main/EQ/Playlist; the resize paths are now bracketed with nestable programmatic-adjustment depth. |
 
+**Playlist drift root cause (Phase 3):** `restorePlaylistWindow()` clamped the height to 900 but kept the bottom-left origin (top edge dropped 1566−900 = 666 px), then `onAppear` resized to `sizeState` (1566) top-anchored, so it moved down 666 px per launch (−20646 → −21312 observed). Fixed: every restore is top-anchored. After the fix the Playlist restored on screen, docked under the EQ.
+
 **Phase 0 conclusion (2026-09-27):** experiments 1, 2, 4 and 5 answered; 3 answered for plain sleep/wake; 6 answered for shade, with the resize paths deferred to Phase 2. Plan updated (Design C: sleep snapshot, transition suppression, settle window; Design D: menu validation override).
 
 ## Phase 4: sprite surfacing (Design G, done with the owner)
@@ -81,8 +83,10 @@ Test with at least 3 skins (default plus 2 others). Each control must look like 
 | #78: with the EQ closed, dragging Main brings the docked Playlist; reopening the EQ puts it back in place | ✅ **PASS** 2026-09-27 (owner): the shaded Playlist followed Main and kept the EQ gap; Show Equalizer reopened it docked in the gap. |
 | Dragging a docked EQ or Playlist detaches it; Shift-drag flips snapping | ✅ **PASS** 2026-09-27 (owner): the EQ drag detaches while Main and Playlist stay; Shift-drag moves Main alone without snapping; a normal drag re-snaps at 10 px. |
 | Shade and unshade keep docked neighbours attached | ✅ **PASS** 2026-09-27 (owner): shading Main moves the EQ and Playlist up with no gap; unshading moves them back. |
-| Sleep/wake (single display): nothing off-screen, groups intact | |
-| Sleep/wake with the external display unplugged: windows on the main screen, groups intact | |
+| Sleep/wake (single display): nothing off-screen, groups intact | ✅ **PASS** 2026-09-27 (owner): mixed layout (Main+EQ+Playlist docked, Video apart), 30 s sleep → everything back where it was, group docked. |
+| Sleep/wake with the external display unplugged: windows on the main screen, groups intact | ✅ reachable and Main+EQ docked (owner, 2026-09-27), **but groups piled on top of each other** → fixed: stranded groups now move together (`strandedGroupsMoveTogether`). Re-test pending. |
+| Opening the lid / plugging the LG back (display added) | ❌ 2026-09-27 (owner): windows jumped to the MacBook display (primary changed, LG re-based to (1800,−431), and the guard restored old absolute frames) and the Playlist separated. On re-plug they jumped to the LG, then back. → fixed: display-added transitions trust macOS; same-display restores translate per display. Re-test pending. |
 | Resolution change and Dock moved to the left: windows stay reachable | |
+| Reset Window Positions | ✅ **PASS** 2026-09-27 (owner): default stack Main, EQ, Playlist, Video, Milkdrop. |
 | Reset Window Positions restores the default stack | |
-| Dragging Main (with the docked EQ) to the very top of the screen keeps the group aligned; the EQ doesn't slide under Main | ❌ 2026-09-27 (owner screenshots): the EQ slides ~30 px under Main → Phase 3 |
+| Dragging Main (with the docked EQ) to the very top of the screen keeps the group aligned; the EQ doesn't slide under Main | ✅ **FIXED** 2026-09-27. Confirmed cause: the group entered the 30 px menu-bar strip, macOS pushed only Main down (Main top 1570, EQ top 1368 vs Main bottom 1338). The drag now keeps the group out of every display's menu-bar strip; the owner confirmed. |

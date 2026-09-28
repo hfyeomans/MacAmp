@@ -22,6 +22,8 @@ final class WindowSnapManager: NSObject, NSWindowDelegate {
         let left: CGFloat
         let bounds: BoundingBox
         let screenBoxes: [Box]
+        /// The menu-bar strip (frame top to visible top) of each display that has one.
+        let menuBarStrips: [Box]
     }
 
     private var windows: [WindowKind: TrackedWindow] = [:]
@@ -292,10 +294,20 @@ final class WindowSnapManager: NSObject, NSWindowDelegate {
             x: snappedPoint.x - translatedGroupBox.x,
             y: snappedPoint.y - translatedGroupBox.y
         ) : .zero
-        let finalDelta = CGPoint(
+        var finalDelta = CGPoint(
             x: topLeftDelta.x + snapDelta.x,
             y: topLeftDelta.y + snapDelta.y
         )
+        // Keep the group out of the menu-bar strip: macOS pushes any window whose top enters it
+        // back down on its own, which splits the group.
+        let groupTop = clusterBaseBox.y + finalDelta.y
+        let groupCenterX = clusterBaseBox.x + finalDelta.x + clusterBaseBox.width / 2
+        if let strip = context.virtualSpace.menuBarStrips.first(where: {
+            groupCenterX >= SnapUtils.left($0) && groupCenterX <= SnapUtils.right($0)
+                && groupTop < SnapUtils.bottom($0) && groupTop >= SnapUtils.top($0) - SnapUtils.SNAP_DISTANCE
+        }) {
+            finalDelta.y += SnapUtils.bottom(strip) - groupTop
+        }
 
         for (id, baseBox) in context.baseBoxes {
             guard let window = idToWindow[id] else { continue }
@@ -342,7 +354,14 @@ final class WindowSnapManager: NSObject, NSWindowDelegate {
             let yTop = virtualTop - (visible.origin.y + visible.size.height)
             return Box(x: x, y: yTop, width: visible.size.width, height: visible.size.height)
         }
-        return VirtualScreenSpace(top: virtualTop, left: virtualLeft, bounds: bounds, screenBoxes: screenBoxes)
+        let menuBarStrips = allScreens.compactMap { screen -> Box? in
+            let inset = screen.frame.maxY - screen.visibleFrame.maxY
+            guard inset > 0 else { return nil }
+            return Box(x: screen.frame.minX - virtualLeft, y: virtualTop - screen.frame.maxY,
+                       width: screen.frame.width, height: inset)
+        }
+        return VirtualScreenSpace(top: virtualTop, left: virtualLeft, bounds: bounds,
+                                  screenBoxes: screenBoxes, menuBarStrips: menuBarStrips)
     }
 
     /// Snapping targets visible windows only; docking chains may include closed windows.

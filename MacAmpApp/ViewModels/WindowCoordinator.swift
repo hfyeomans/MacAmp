@@ -11,6 +11,7 @@ final class WindowCoordinator {
     let skinManager: SkinManager
     private let windowFocusState: WindowFocusState
     let framePersistence: WindowFramePersistence
+    let screenGuard: WindowScreenGuard
     let visibility: WindowVisibilityController
     let resizeController: WindowResizeController
     private let settingsObserver: WindowSettingsObserver
@@ -65,6 +66,7 @@ final class WindowCoordinator {
 
         // Create persistence controller
         framePersistence = WindowFramePersistence(registry: registry, settings: settings)
+        screenGuard = WindowScreenGuard(registry: registry, persistence: framePersistence)
 
         // Create visibility controller
         visibility = WindowVisibilityController(registry: registry, settings: settings)
@@ -89,6 +91,9 @@ final class WindowCoordinator {
         // Apply persisted positions or fall back to defaults
         applyInitialWindowLayout()
         debugLogWindowPositions(step: "after applying initial window layout")
+        screenGuard.clampOnScreen()
+        framePersistence.persistAllWindowFrames()
+        screenGuard.start()
 
         // Show windows only after the initial skin has loaded
         presentWindowsWhenReady()
@@ -142,6 +147,7 @@ final class WindowCoordinator {
 
     isolated deinit {
         settingsObserver.stop()
+        screenGuard.stop()
     }
 
     // MARK: - Window Resize (forwarded to WindowResizeController)
@@ -208,6 +214,15 @@ final class WindowCoordinator {
     func showMain() { visibility.showMain() }
     func hideMain() { visibility.hideMain() }
     func toggleMain() { visibility.toggleMain() }
+
+    /// Default Winamp stack on the main screen, then kept on screen as a group.
+    func resetWindowPositions() {
+        WindowSnapManager.shared.beginProgrammaticAdjustment()
+        setDefaultPositions()
+        WindowSnapManager.shared.endProgrammaticAdjustment()
+        screenGuard.clampOnScreen()
+        framePersistence.persistAllWindowFrames()
+    }
     var isMainWindowVisible: Bool { visibility.isMainWindowVisible }
     func showEqualizer() { visibility.showEQWindow(makeKey: true) }
     func hideEqualizer() { visibility.hideEQWindow() }
