@@ -117,48 +117,50 @@ xcrun stapler validate MacAmp.app
 
 ### Option 1: Branded DMG (Recommended)
 
-Uses `assets/dmg-background.png` (MacAmp screenshot with gradient overlay and install instructions).
+The Finder window uses the "Sunset Grid" background in `assets/dmg/`: `background.svg` (source), `background.png` / `background@2x.png` (660×420 pt at 1x/2x) and `background.tiff` (both, for Retina). Stage **only** the app: `dist/` also holds older DMGs and build products, which would end up inside the image.
 
 ```bash
 brew install create-dmg  # if not installed
 
-mkdir -p dist
-cp -R build/Release/MacAmp.app dist/
+mkdir -p build/dmg-stage
+ditto build/Release/MacAmp.app build/dmg-stage/MacAmp.app
 
 create-dmg \
   --volname "MacAmp" \
   --volicon "MacAmpApp/Assets.xcassets/AppIcon.appiconset/icon_512x512.png" \
-  --background "assets/dmg-background.png" \
+  --background "assets/dmg/background.tiff" \
   --window-pos 200 120 \
-  --window-size 800 530 \
-  --icon-size 100 \
-  --icon "MacAmp.app" 250 450 \
+  --window-size 660 420 \
+  --icon-size 128 \
+  --text-size 14 \
+  --icon "MacAmp.app" 170 200 \
   --hide-extension "MacAmp.app" \
-  --app-drop-link 550 450 \
+  --app-drop-link 490 200 \
   "dist/MacAmp-VERSION.dmg" \
-  "dist/"
+  "build/dmg-stage/"
 
+# Sign the image itself, or Gatekeeper rejects the downloaded DMG ("no usable signature")
+codesign --sign "Developer ID Application: Hank Yeomans (AC3LGVEJJ8)" --timestamp dist/MacAmp-VERSION.dmg
 xcrun notarytool submit dist/MacAmp-VERSION.dmg --keychain-profile "notarytool-password" --wait
 xcrun stapler staple dist/MacAmp-VERSION.dmg
+spctl -a -t open --context context:primary-signature -v dist/MacAmp-VERSION.dmg   # accepted, Notarized Developer ID
 ```
 
-**Background image regeneration** (if the source screenshot changes):
+`--text-size 14` matters: the label band in the background is placed for 14 pt labels (create-dmg defaults to 16). Mount the DMG once before notarizing to check that the icons stand on the horizon and the labels sit on the magenta band.
+
+**New version on the background:** the SVG shows `v2.0` next to the wordmark. Change that text in `assets/dmg/background.svg`, then re-render (needs `rsvg-convert` and the fonts Futura, Avenir Next and Space Mono):
 ```bash
-magick SOURCE_SCREENSHOT.png \
-  -resize 800x \
-  -background black -gravity north -extent 800x530 \
-  \( -size 800x300 gradient:"rgba(0,0,0,0)"-"rgba(0,0,0,0.95)" \
-     -gravity south -background none -extent 800x530 \) \
-  -composite \
-  -gravity south -font "/System/Library/Fonts/Avenir Next.ttc" -weight 500 -pointsize 22 \
-  -fill "rgba(255,255,255,0.9)" -annotate +0+135 "Drag MacAmp to Applications" \
-  assets/dmg-background.png
+cd assets/dmg
+rsvg-convert -w 660  -h 420 background.svg -o background.png
+rsvg-convert -w 1320 -h 840 background.svg -o background@2x.png
+tiffutil -cathidpicheck background.png background@2x.png -out background.tiff
 ```
 
 ### Option 2: Quick DMG (No Branding)
 
 ```bash
 hdiutil create -volname "MacAmp" -srcfolder build/Release/MacAmp.app -ov -format UDZO MacAmp-VERSION.dmg
+codesign --sign "Developer ID Application: Hank Yeomans (AC3LGVEJJ8)" --timestamp MacAmp-VERSION.dmg
 xcrun notarytool submit MacAmp-VERSION.dmg --keychain-profile "notarytool-password" --wait
 xcrun stapler staple MacAmp-VERSION.dmg
 ```
@@ -181,7 +183,7 @@ Finally, test the DMG on a Mac that has never run the app: drag to Applications,
 - [ ] `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` bumped in `project.yml`
 - [ ] Signed with Developer ID, hardened runtime, entitlements included, no `get-task-allow`
 - [ ] App notarized and stapled
-- [ ] DMG created, notarized, and stapled
+- [ ] DMG created from a staging folder holding only `MacAmp.app`, signed, notarized, and stapled
 - [ ] Tested on a clean macOS 27+ system
 - [ ] Release notes written; README.md download link and version references updated
 

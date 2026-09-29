@@ -3,7 +3,7 @@
 **Version:** 3.14.0
 **Date:** 2026-09-28
 **Purpose:** Master index and navigation guide for all MacAmp documentation
-**Total Documentation:** 8,907 active lines across 12 current docs + 27 archived docs
+**Total Documentation:** 8,899 active lines across 12 current docs + 27 archived docs
 
 ---
 
@@ -51,10 +51,10 @@ The suite has 137 tests in 21 suites. Suite tags, `xcodebuildmcp` usage and per-
 
 ## Complete Documentation Inventory
 
-### Architecture & Design (9 documents, 7,974 lines)
+### Architecture & Design (9 documents, 7,964 lines)
 
 #### **[MACAMP_ARCHITECTURE_GUIDE.md](MACAMP_ARCHITECTURE_GUIDE.md)** ⭐
-- **Size**: 157KB, 2,444 lines
+- **Size**: 157KB, 2,441 lines
 - **Last Updated**: 2026-09-28
 - **Status**: ✅ AUTHORITATIVE
 - **Purpose**: Complete architectural reference for MacAmp
@@ -103,7 +103,7 @@ The suite has 137 tests in 21 suites. Suite tags, `xcodebuildmcp` usage and per-
 - **Related Docs**: WINAMP_SKIN_VARIATIONS.md
 
 #### **[MULTI_WINDOW_ARCHITECTURE.md](MULTI_WINDOW_ARCHITECTURE.md)** ⭐
-- **Size**: 22KB, 330 lines
+- **Size**: 22KB, 323 lines
 - **Last Updated**: 2026-09-28
 - **Status**: ✅ PRODUCTION
 - **Purpose**: Multi-window system design: window ownership, coordination, docking, recovery, minimize and windowshade
@@ -195,7 +195,7 @@ The suite has 137 tests in 21 suites. Suite tags, `xcodebuildmcp` usage and per-
 - **Related Docs**: MULTI_WINDOW_ARCHITECTURE.md, VIDEO_WINDOW.md, MILKDROP_WINDOW.md
 
 #### **[CUSTOM_DRAG_FIX.md](CUSTOM_DRAG_FIX.md)**
-- **Size**: 4KB, 98 lines
+- **Size**: 5KB, 98 lines
 - **Last Updated**: 2026-09-28
 - **Status**: ✅ CURRENT
 - **Purpose**: Custom titlebar drag without windows repelling each other or clusters breaking during fast drags
@@ -207,10 +207,10 @@ The suite has 137 tests in 21 suites. Suite tags, `xcodebuildmcp` usage and per-
 - **When to Read**: Implementing custom window dragging, debugging drag issues
 - **Related Docs**: MULTI_WINDOW_ARCHITECTURE.md
 
-### Build & Distribution (1 document, 239 lines)
+### Build & Distribution (1 document, 241 lines)
 
 #### **[RELEASE_BUILD_GUIDE.md](RELEASE_BUILD_GUIDE.md)**
-- **Size**: 11KB, 239 lines
+- **Size**: 11KB, 241 lines
 - **Last Updated**: 2026-09-25
 - **Status**: ✅ AUTHORITATIVE
 - **Purpose**: Building, signing, notarizing, DMG packaging, and troubleshooting
@@ -499,25 +499,25 @@ CODE_SIGNING_FIX.md, CODE_SIGNING_FIX_DIAGRAM.md, and RELEASE_BUILD_COMPARISON.m
 12 Core Technical Documents
 ─────────────────────────────
 IMPLEMENTATION_PATTERNS.md          3,085 lines  (35%)
-MACAMP_ARCHITECTURE_GUIDE.md        2,444 lines  (27%)
+MACAMP_ARCHITECTURE_GUIDE.md        2,441 lines  (27%)
 MILKDROP_WINDOW.md                    613 lines  (7%)
 README.md (this file)                 552 lines  (6%)
 VIDEO_WINDOW.md                       537 lines  (6%)
 PLAYLIST_WINDOW.md                    382 lines  (4%)
 SPRITE_SYSTEM_COMPLETE.md             337 lines  (4%)
-MULTI_WINDOW_ARCHITECTURE.md          330 lines  (4%)
-RELEASE_BUILD_GUIDE.md                239 lines  (3%)
+MULTI_WINDOW_ARCHITECTURE.md          323 lines  (4%)
+RELEASE_BUILD_GUIDE.md                241 lines  (3%)
 WINDOW_FOCUS_ARCHITECTURE.md          148 lines  (2%)
 WINAMP_SKIN_VARIATIONS.md             142 lines  (2%)
 CUSTOM_DRAG_FIX.md                     98 lines  (1%)
 ─────────────────────────────
-TOTAL:                              8,907 lines
+TOTAL:                              8,899 lines
 ```
 
 ### Documentation by Category
 
-- **Architecture & Design**: 90% (7,974 lines)
-- **Build & Distribution**: 3% (239 lines)
+- **Architecture & Design**: 89% (7,964 lines)
+- **Build & Distribution**: 3% (241 lines)
 - **Skin System**: 2% (142 lines)
 - **Navigation & Index**: 6% (552 lines)
 

@@ -2,82 +2,51 @@
 
 ![Platform](https://img.shields.io/badge/platform-macOS%2027.0+-blue?logo=apple)
 ![Swift](https://img.shields.io/badge/Swift-6.2-orange?logo=swift)
-![Version](https://img.shields.io/badge/version-1.3-brightgreen)
+![Version](https://img.shields.io/badge/version-2.0-brightgreen)
 ![Notarized](https://img.shields.io/badge/Notarized-Apple%20Approved-brightgreen?logo=apple)
 ![Maintained](https://img.shields.io/badge/maintained-yes-green)
 
-A pixel-perfect, native macOS audio player that brings the classic desktop audio player experience to modern Apple Silicon Macs with full skin compatibility.
+A native macOS audio player that recreates the classic desktop audio player interface in SwiftUI, pixel for pixel, with full skin compatibility.
 
 ![MacAmp Screenshot](docs/screenshots/macamp-main.png)
 
 ## Overview
 
-MacAmp is a SwiftUI-based audio player for macOS that recreates the iconic desktop audio player interface with modern enhancements. Built for **macOS 27.0+**, it leverages the latest SwiftUI features while maintaining pixel-perfect fidelity to classic skins.
-
 ### Key Features
 
-- 🎨 **Full Skin Support** - Load and switch between classic `.wsz` skins with full sprite and color support
-- 🎵 **Native Audio Engine** - Built on AVFoundation for optimal macOS performance
-- 🎚️ **10-Band Equalizer** - Professional audio control with 17 built-in presets
-- 📊 **Spectrum Analyzer & Oscilloscope** - Click visualizer to cycle through 3 modes: Spectrum (frequency bars), Oscilloscope (waveform), or None
-- ⌨️ **Keyboard Navigation** - Navigate playlist menus with arrow keys (↑↓) and Escape
-- ♿ **VoiceOver Ready** - Accessible menu navigation for screen reader users
-- 📋 **M3U/M3U8 Playlists** - Load playlists with local files and internet radio streams
-- 📻 **Internet Radio** - Stream HTTP/HTTPS radio with live metadata, EQ, and visualizer support
-- 🔄 **Auto-Reconnect** - Streams automatically reconnect after network interruptions with clear error messages
-- 📂 **Playlist Menus** - Sprite-based popup menus for ADD, REM, MISC, and LIST OPTS with hover states
-- ✨ **Multi-Select** - Shift+Click to select multiple tracks, Command+A to select all, with CROP and remove operations
-- 📝 **Native Text Rendering** - Playlist tracks use real text with PLEDIT.txt colors and Unicode support (not bitmap fonts)
-- 🎛️ **Advanced Controls** - Volume, balance, position seeking, shuffle, and three-state repeat (Off/All/One)
-- 🔄 **Three-State Repeat** - Winamp 5 Modern fidelity with Off/All/One modes and "1" badge indicator (Ctrl+R to cycle)
-- 🪟 **Multi-Window Interface** - Main player, equalizer, playlist, and video windows with shade modes
-- 📐 **Resizable Playlist** - Drag to resize in 25×29px segments with dynamic tiling and scroll slider
-- 📊 **Playlist Visualizer** - Mini spectrum analyzer in playlist when main window is shaded
-- 📺 **Video Playback** - Native video support (MP4, MOV, M4V) with V button or Ctrl+V
-- 🎬 **Video Window** - Skinnable video window with VIDEO.bmp chrome or classic fallback
-- 🔲 **Full Video Resize** - Drag any size with 25×29px quantized segments (1x/2x preset buttons)
-- 🎚️ **Unified Video Controls** - Volume slider, seek bar, and time display work for both audio and video
-- 📝 **Video Metadata Ticker** - Auto-scrolling display showing filename, codec, and resolution
-- 🎨 **Butterchurn Visualizations** - 245 Milkdrop 2 presets with 60 FPS audio-reactive WebGL rendering
-- 🌀 **Preset Controls** - Cycle (Space/Backspace), randomize (R), auto-cycle intervals, context menu selection
-- 🖼️ **Milkdrop Window Resize** - Drag corner with 25×29px segment grid and dynamic titlebar expansion
-- 🖼️ **5-Window Architecture** - Main, Equalizer, Playlist, VIDEO, and Milkdrop windows with unified focus tracking
-- 🧲 **Magnetic Docking** - Windows snap together and stay docked when resizing (Ctrl+D compatible)
-- 🔍 **Double-Size Mode** - Toggle 200% scaling with D button or Ctrl+D for better visibility on high-res displays
-- 📌 **Always On Top** - Keep window floating above others with A button or Ctrl+A (Classic Winamp feature)
-- ⚙️ **Options Menu** - Quick access to player settings via O button or Ctrl+O with time display toggle (Ctrl+T)
-- ℹ️ **Track Information** - View detailed track/stream metadata with I button or Ctrl+I
-- 🎯 **Native macOS Integration** - Borderless windows with custom title bars
-- ⚡ **Modern SwiftUI** - Utilizes WindowDragGesture and latest macOS APIs
-- 🔄 **Dynamic Skin Switching** - Hot-swap skins without restart
-- 🎵 **Now Playing Integration** - macOS Control Center shows track info, artwork, and playback controls
-- 🎧 **Remote Commands** - Play/pause/next/previous from media keys, Bluetooth headphones, Control Center
-- 📋 **Playlist Load/Save** - NEW LIST, LOAD LIST, SAVE LIST with M3U/M3U8 import and export
-- ⏱️ **Stream Elapsed Timer** - Live elapsed time for internet radio with playlist position display
-- 📦 **Distribution Ready** - Developer ID signed builds for /Applications installation
-- 🚀 **Swift 6.2 Architecture** - Modern, performant, future-proof codebase
+- **Skins** - Load and hot-swap classic `.wsz` skins (sprites, PLEDIT.txt colors, VISCOLOR.TXT gradients) without a restart; 7 skins are bundled
+- **Audio Engine** - Local files and HTTP/HTTPS internet radio through one AVAudioEngine pipeline, with live stream metadata and automatic reconnect after network drops
+- **10-Band Equalizer** - Preamp, 17 built-in presets and EQF preset files; applies to local files, streams and video
+- **Visualizers** - Spectrum analyzer and oscilloscope in the main window (click to cycle Spectrum → Oscilloscope → None), plus a Milkdrop window with 245 Butterchurn presets
+- **Video** - MP4, MOV and M4V playback in a skinnable, resizable video window; EQ, balance and the visualizers apply to the video's audio
+- **Playlist** - Resizable window with sprite-based ADD, REM, MISC and LIST menus, multi-select, and M3U/M3U8 load and save
+- **Five Windows** - Main, Equalizer, Playlist, Video and Milkdrop, with magnetic docking, windowshade strips, double size (Ctrl+D), always on top (Ctrl+A) and whole-player minimize
+- **Window State** - Positions, open/closed state and shade persist across launches; windows return on screen after sleep/wake and display changes
+- **Playback Controls** - Volume, balance, seeking, shuffle and three-state repeat (Off/All/One, Ctrl+R)
+- **macOS Integration** - Now Playing in Control Center; play/pause/next/previous from media keys, Bluetooth headphones and Control Center
+- **Accessibility** - Keyboard navigation and VoiceOver announcements in the playlist menus
 
 ## Requirements
 
-- **macOS 27.0+** (macOS 15 and 26 are supported by earlier releases)
-- **Apple Silicon** (M1/M2/M3/M4) or Intel Mac
-- **Xcode 26.0+** (for building from source)
+- **macOS 27.0 or later.** On macOS 15 or 26, use [v1.3](https://github.com/hfyeomans/MacAmp/releases/tag/v1.3), the last release that supports them.
+- **Xcode 27** (macOS 27 SDK) and XcodeGen to build from source
 
 ## Download
 
-### Latest Release: v1.3 (March 2026)
+### Latest Release: v2.0 (September 2026)
 
-[![Download MacAmp](https://img.shields.io/badge/Download-MacAmp%20v1.3-blue?style=for-the-badge)](https://github.com/hfyeomans/MacAmp/releases/tag/v1.3)
+[![Download MacAmp](https://img.shields.io/badge/Download-MacAmp%20v2.0-blue?style=for-the-badge)](https://github.com/hfyeomans/MacAmp/releases/tag/v2.0)
 
-**[Download MacAmp-1.3.dmg](https://github.com/hfyeomans/MacAmp/releases/tag/v1.3)**
+**[Download MacAmp-2.0.dmg](https://github.com/hfyeomans/MacAmp/releases/download/v2.0/MacAmp-2.0.dmg)**
 
 | Property | Value |
 |----------|-------|
-| Version | 1.3 |
-| Build | 13 |
+| Version | 2.0 |
+| Build | 14 |
+| Minimum macOS | 27.0 |
 | Signed | Developer ID Application |
 | Notarized | Yes (Apple approved) |
-| Architecture | Universal (arm64 + x86_64) |
+| Architecture | Apple Silicon (arm64) |
 
 **Installation:**
 1. Download the DMG file
@@ -85,13 +54,14 @@ MacAmp is a SwiftUI-based audio player for macOS that recreates the iconic deskt
 3. Drag MacAmp to Applications folder
 4. Launch from Applications (no Gatekeeper warnings)
 
-**What's New in v1.3:**
-- **Now Playing + Remote Commands** - macOS Control Center shows current track with artwork, title, artist, duration. Play/pause/next/previous from keyboard media keys, Bluetooth headphones, and Control Center widget.
-- **Playlist LIST Operations** - NEW LIST, LOAD LIST, SAVE LIST buttons in playlist window. M3U/M3U8 import and export.
-- **Stream Elapsed Timer** - Live elapsed time counter for internet radio streams. Playlist shows track position (e.g., "3/15").
-- **12 Bug Fixes** - Skin digit artifacts, playlist color defaults, NUMS_EX sprite support, crash guards, and more.
+**What's New in v2.0:**
+- **Requires macOS 27** - macOS 15 and 26 stay on v1.3.
+- **EQ, balance and visualizers for video** - The 10-band EQ, preamp, balance, spectrum/oscilloscope and Milkdrop now work on video audio.
+- **Window docking and layout** - The docked group moves with Main, Shift-drag moves Main alone, window state persists, and windows recover after sleep/wake or display changes (Options › Reset Window Positions as a fallback).
+- **Minimize and windowshade** - Cmd+M or Option+M minimizes the whole player; Ctrl+W toggles Main's windowshade. Shade strips for Main, EQ and Playlist now work and can be dragged.
+- **Fixes** - Accurate EQ band frequencies, no visualizer freeze while dragging sliders, and instant pause on internet radio.
 
-See [Release Notes](https://github.com/hfyeomans/MacAmp/releases/tag/v1.3) for full changelog.
+See [v2.0 in Version History](#v20-september-2026---video-dsp-window-management--macos-27) and the [Release Notes](https://github.com/hfyeomans/MacAmp/releases/tag/v2.0).
 
 ## Installation
 
@@ -115,10 +85,10 @@ open MacAmpApp.xcodeproj
 ### Main Window
 
 **Playback Controls:**
-- **Load Files** - Click eject button or drag files (MP3, FLAC, WAV, M4A, MP4, MOV)
+- **Load Files** - Eject button or Cmd+O
 - **Transport** - Play/Pause/Stop, Previous/Next track buttons
 - **Seek** - Drag position slider to jump to any point
-- **Volume/Balance** - Vertical sliders for volume and stereo pan
+- **Volume/Balance** - Sliders for volume and stereo balance
 
 **Clutter Bar** (vertical strip, left side):
 | Button | Shortcut | Function |
@@ -136,81 +106,81 @@ open MacAmpApp.xcodeproj
 - **All** - Loops entire playlist
 - **One** - Repeats current track (shows "1" badge)
 
-**Shade Mode** - Cmd+Option+1 minimizes to 14px title bar
+**Windowshade** - Ctrl+W or Cmd+Option+1 collapses Main to a 14px strip with transport and eject buttons, a position slider, mini time display and mini visualizer.
+
+**Minimize** - The titlebar minimize button, Cmd+M or Option+M minimizes the whole player to a single Dock tile. Restoring it brings back the windows that were open.
+
+### Docking and Window Layout
+
+- Windows snap to each other and to screen edges within 10px.
+- Dragging Main moves every window docked to it, including closed ones, so a closed EQ still links Main to the Playlist below it.
+- Hold Shift when you start dragging Main to move it alone, without snapping.
+- Shade, double size and resizing move the attached windows along with the window that changed size.
+- **Options › Reset Window Positions** restores the default stack.
 
 ### Equalizer Window
 
-Open with **Cmd+Shift+E** or click the EQ button.
+Open with **Cmd+Shift+3** or click the EQ button.
 
-- **10 Frequency Bands** - Drag sliders to adjust (60Hz to 16kHz)
+- **10 Frequency Bands** - Drag sliders to adjust (70Hz to 16kHz)
 - **Preamp** - Overall gain control
-- **ON/OFF** - Toggle EQ processing (works for both local files and internet radio streams)
+- **ON/OFF** - Toggle EQ processing for local files, internet radio and video
 - **Presets** - 17 built-in presets (Classical, Rock, Dance, etc.) via Presets button
+- **Windowshade** - Cmd+Option+3; the strip has volume and balance sliders
 
 ### Playlist Window
 
-Open with **Cmd+Shift+P** or click the PL button.
+Open with **Cmd+Shift+2** or click the PL button.
 
 **Sprite-Based Menus:**
 - **ADD** - Add local files, directories, or URLs (internet radio)
 - **REM** - Remove selected, crop to selection, clear playlist
 - **MISC** - Sort options, file info
-- **LIST OPTS** - Playlist load/save operations
+- **LIST OPTS** - New, load and save playlists (M3U/M3U8)
 
 **Features:**
 - **Double-click** to play any track
-- **Multi-select** - Shift+Click for range, Cmd+A for all
+- **Multi-select** - Shift+Click to add or remove tracks, Cmd+A for all
 - **Resize** - Drag bottom-right corner (25×29px segments, min 275×116)
 - **Scroll Slider** - Gold thumb on right border
-- **Mini Visualizer** - Appears when main window is shaded (≥350px width)
+- **Mini Visualizer** - Appears when Main is closed (≥350px width)
+- **Windowshade** - Cmd+Option+2; the strip shows the current title and track length and has a width grip
 
-**Note:** Internet streams show "Connecting..." during buffering, then live metadata. EQ, visualizer, and balance controls work for both local files and streams. Streams automatically reconnect after network interruptions.
+**Note:** Internet streams show "Connecting..." while buffering, then live metadata. Streams reconnect automatically after network interruptions.
 
 ### Video Window
 
 Open with **Ctrl+V** or click the V clutter button.
 
-- **Supported Formats** - MP4, MOV, M4V, AVI
+- **Supported Formats** - MP4, MOV, M4V, AVI (limited codecs)
 - **Resize** - Drag corner (25×29px segments) or use 1x/2x preset buttons
 - **Controls** - Volume, seek, and time display sync with main window
+- **Audio** - EQ, preamp, balance and all visualizers apply to the video's audio. Multichannel audio is downmixed to stereo; AirPlay and external audio devices follow the system output route.
 - **Metadata Ticker** - Scrolling filename, codec, and resolution
 - **Skinnable** - VIDEO.bmp chrome or classic fallback
 
 ### Milkdrop Window
 
-Open with **Ctrl+K** for 245 Milkdrop 2 presets at 60 FPS.
-
-**Keyboard:**
-| Key | Action |
-|-----|--------|
-| Space | Next preset |
-| Backspace | Previous preset |
-| R | Toggle randomize |
-| C | Toggle auto-cycle |
-| T | Show track title |
+Open with **Ctrl+K** for 245 Milkdrop 2 presets at 60 FPS, driven by local files, internet radio or video audio.
 
 **Context Menu (Right-click):**
 - Current preset display
-- Next/Previous preset
-- Randomize and Auto-Cycle toggles
+- Next/Previous preset (Space/Backspace)
+- Randomize (R) and Auto-Cycle (C) toggles
 - Cycle Interval submenu (5s/10s/15s/30s/60s)
-- Track Title Interval submenu
+- Show Track Title (T) and Track Title Interval submenu
 - Preset list (245 presets, first 100 shown)
 
 **Window:** Resizable (25×29px segments), magnetic docking, GEN.bmp skinnable chrome.
 
 ### Skins
 
-**Switch Bundled Skins:**
-- Cmd+Shift+1 - Classic Winamp
-- Cmd+Shift+2 - Internet Archive
-- Cmd+Shift+3 - Tron Vaporwave
-- Cmd+Shift+4 - Winamp3 Classified
+**Bundled Skins** (Skins menu): Classic Winamp, Internet Archive, Tron Vaporwave, Winamp3 Classified, KenWood KDC-7000 Elite, Mac OS X, Sony MP3 Player.
 
-**Skins Menu (menu bar):**
-- **Cmd+Shift+O** - Open Skins Folder
-- **Cmd+Shift+L** - Load Skin File
-- **Cmd+Shift+R** - Reload Current Skin
+**Skins Menu:**
+- **Cmd+Shift+O** - Import Skin File
+- **Cmd+Shift+L** - Open Skins Folder
+- **Cmd+Shift+R** - Refresh Skins
 
 **Import Skins:** Place `.wsz` files in `~/Library/Application Support/MacAmp/Skins/`
 
@@ -219,156 +189,56 @@ Open with **Ctrl+K** for 245 Milkdrop 2 presets at 60 FPS.
 MacAmp uses a strict three-layer separation, inspired by web frameworks but adapted for SwiftUI's declarative paradigm.
 
 ### Mechanism Layer ("What the app does")
-- **PlaybackCoordinator** - Orchestrates unified audio pipeline (local + streaming through AVAudioEngine)
+- **PlaybackCoordinator** - Orchestrates playback across local files, streams and video
 - **AudioPlayer** - Playback facade with AudioEngineController for engine lifecycle and 10-band EQ
 - **StreamPlayer** - Internet radio with custom decode pipeline and auto-reconnect
-- **VisualizerPipeline** - Audio tap, FFT processing, Butterchurn data
-- **PlaylistController** - Playlist state and navigation logic
 - **VideoPlaybackController** - Video AVPlayer lifecycle management
+- **Video DSP tap** (`Audio/VideoDSP/`) - In-place `MTAudioProcessingTap` on AVPlayer that applies EQ, preamp and balance and feeds the visualizers
+- **VisualizerPipeline** - Engine audio tap, spectrum/waveform processing, Butterchurn data
+- **PlaylistController** - Playlist state and navigation logic
 - **EQPresetStore** - Preset persistence (UserDefaults + JSON)
 - **SkinManager** - Skin loading and hot-swapping
 
 ### Bridge Layer ("How components connect")
 - **SpriteResolver** - Semantic sprite resolution for cross-skin compatibility
 - **WindowCoordinator** - 5-window lifecycle and AppKit/SwiftUI bridge
-- **DockingController** - Multi-window magnetic snapping
+- **DockGraph** / **WindowSnapManager** - Docked-group computation, magnetic snapping and group moves
+- **WindowScreenGuard** - Off-screen recovery after sleep/wake and display changes
 - **WindowFocusState** - Unified focus tracking across all windows
 
 ### Presentation Layer ("What the user sees")
 - **SwiftUI Views** - Pixel-perfect sprite rendering (`.interpolation(.none)`)
 - **SimpleSpriteImage** - Interactive sprite components with semantic IDs
+- **SkinHitButton** - Titlebar and shade-strip buttons drawn by the skin bitmap
 - **Window Chrome Views** - Skinnable VIDEO.bmp and GEN.bmp chrome
 
 For detailed architecture documentation, see [`docs/MACAMP_ARCHITECTURE_GUIDE.md`](docs/MACAMP_ARCHITECTURE_GUIDE.md).
 
 ## Project Structure
 
-MacAmp follows a three-layer architecture inspired by modern frontend frameworks:
-
 ```
 MacAmpApp/
-├── Audio/                              # 🔧 MECHANISM LAYER - Audio Engine & Playback
-│   ├── AudioEngineController.swift         # AVAudioEngine graph, nodes, transport
-│   ├── AudioPlayer.swift                   # Playback facade (734 lines)
-│   ├── EqualizerController.swift           # 10-band EQ state + AVAudioUnitEQ
-│   ├── EQPresetStore.swift                 # EQ preset persistence (UserDefaults + JSON)
-│   ├── MetadataLoader.swift                # Async track/video metadata extraction
-│   ├── PlaybackCoordinator.swift           # Orchestrates dual backend (local + streaming)
-│   ├── PlaylistController.swift            # Playlist state and navigation logic
-│   ├── StreamPlayer.swift                  # Internet radio with auto-reconnect
-│   ├── VideoPlaybackController.swift       # AVPlayer lifecycle and observer management
-│   └── VisualizerPipeline.swift            # Audio tap, FFT processing, Butterchurn data
-│
-├── Models/                             # 🔧 MECHANISM LAYER - Data Models & Parsers
-│   ├── AppSettings.swift                   # @Observable app settings and preferences
-│   ├── EQF.swift                           # EQ preset file format codec
-│   ├── EQPreset.swift                      # Equalizer preset data model
-│   ├── ImageSlicing.swift                  # Sprite sheet extraction utilities
-│   ├── M3UEntry.swift                      # M3U playlist entry structure
-│   ├── M3UParser.swift                     # M3U/M3U8 playlist parser (local + remote)
-│   ├── PLEditParser.swift                  # PLEDIT.txt color parser
-│   ├── PlaylistWindowSizeState.swift       # Playlist resize state with computed properties
-│   ├── RadioStation.swift                  # Radio station model
-│   ├── RadioStationLibrary.swift           # Favorite stations persistence
-│   ├── Size2D.swift                        # Quantized 25×29px resize segments
-│   ├── VideoWindowSizeState.swift          # Video window resize state management
-│   ├── WindowFocusState.swift              # Window focus tracking for active/inactive
-│   ├── Skin.swift                          # Skin package data model
-│   ├── SkinSprites.swift                   # Sprite name definitions and mappings (VIDEO + GEN letters)
-│   ├── SnapUtils.swift                     # Window snapping utilities
-│   ├── SpriteResolver.swift                # Semantic sprite resolution (cross-skin compat)
-│   ├── VisColorParser.swift                # VISCOLOR.TXT gradient parser
-│
-├── ViewModels/                         # 🌉 BRIDGE LAYER - State Management & Controllers
-│   ├── DockingController.swift             # Multi-window coordination and positioning
-│   ├── SkinArchiveLoader.swift             # ZIP archive extraction for skin files
-│   ├── SkinManager.swift                   # Dynamic skin loading, hot-swapping, sprite caching
-│   ├── SkinManager+Import.swift            # Skin import, validation, and notifications
-│   └── WindowCoordinator.swift             # 5-window lifecycle, AppKit bridge, focus tracking
-│
-├── Windows/                            # 🖼️ NSWindowController Layer (AppKit)
-│   ├── WinampMainWindowController.swift    # Main window controller with @MainActor
-│   ├── WinampEqualizerWindowController.swift   # EQ window controller
-│   ├── WinampPlaylistWindowController.swift    # Playlist window controller
-│   ├── WinampVideoWindowController.swift   # Video window controller
-│   └── WinampMilkdropWindowController.swift    # Milkdrop window controller
-│
-├── Views/                              # 🎨 PRESENTATION LAYER - SwiftUI Windows & Views
-│   ├── Components/                         # Reusable UI Components
-│   │   ├── EQPresetPickerView.swift            # Popover preset selection UI
-│   │   ├── PlaylistBitmapText.swift            # Bitmap font rendering for playlist
-│   │   ├── PlaylistMenuDelegate.swift          # NSMenuDelegate for keyboard navigation
-│   │   ├── PlaylistScrollSlider.swift          # Gold thumb scroll slider with proportional sizing
-│   │   ├── PlaylistTimeText.swift              # Time display component
-│   │   ├── SimpleSpriteImage.swift             # Pixel-perfect sprite rendering (.interpolation(.none))
-│   │   ├── SpriteMenuItem.swift                # Sprite-based popup menu items
-│   │   ├── WinampVerticalSlider.swift          # EQ band vertical slider component
-│   │   └── WinampVolumeSlider.swift            # Frame-based volume/balance sliders
-│   ├── MainWindow/                         # 🎵 Decomposed Main Player Window (10 files)
-│   │   ├── WinampMainWindow.swift              # Root composition + lifecycle (~110 lines)
-│   │   ├── WinampMainWindowLayout.swift        # Coordinate constants enum
-│   │   ├── WinampMainWindowInteractionState.swift # @Observable scroll/scrub/blink state
-│   │   ├── MainWindowOptionsMenuPresenter.swift # NSMenu bridge for O button
-│   │   ├── MainWindowFullLayer.swift           # Full-mode composition
-│   │   ├── MainWindowShadeLayer.swift          # Shade-mode composition
-│   │   ├── MainWindowTransportLayer.swift      # Transport buttons (prev/play/pause/stop/next/eject)
-│   │   ├── MainWindowTrackInfoLayer.swift      # Scrolling track title text
-│   │   ├── MainWindowIndicatorsLayer.swift     # Play/pause, mono/stereo, bitrate, sample rate
-│   │   └── MainWindowSlidersLayer.swift        # Volume, balance, position sliders
-│   ├── Windows/                            # Window Chrome Components
-│   │   ├── VideoWindowChromeView.swift         # VIDEO.bmp chrome with dynamic sizing
-│   │   ├── MilkdropWindowChromeView.swift      # GEN.bmp chrome with two-piece letters
-│   │   ├── AVPlayerViewRepresentable.swift     # NSViewRepresentable for AVPlayerView
-│   │   └── ButterchurnWebView.swift            # WKWebView for Butterchurn visualizations
-│   ├── PreferencesView.swift               # Settings and preferences window
-│   ├── SkinnedText.swift                   # Skinned text rendering
-│   ├── VisualizerView.swift                # Spectrum analyzer & oscilloscope rendering
-│   ├── WinampEqualizerWindow.swift         # 10-band equalizer window
-│   ├── WinampPlaylistWindow.swift          # Playlist window with sprite-based menus
-│   ├── WinampVideoWindow.swift             # Video window with AVPlayer
-│   └── WinampMilkdropWindow.swift          # Milkdrop visualization window
-│
-├── Utilities/                          # 🔧 Helper Functions & Extensions
-│   ├── AppLogger.swift                     # Centralized logging facade
-│   ├── MenuActionTarget.swift              # NSMenu closure-to-selector bridge
-│   ├── TimeFormatting.swift                # Shared time formatting utility
-│   ├── WinampAlertHelper.swift             # Alert presentation helpers
-│   └── WinampWindowConfigurator.swift      # Shared window configuration
-│
-├── AppCommands.swift                   # Global keyboard shortcuts and menu commands
-├── MacAmpApp.swift                     # App entry point & dependency injection
-├── SkinsCommands.swift                 # Skin switching command handlers
-└── Skins/                              # Bundled .wsz skin packages
+├── Audio/            # Mechanism: AVAudioEngine playback, EQ, visualizer pipeline,
+│   ├── Streaming/    #   internet radio decode (ICY, AudioFileStream, AudioConverter)
+│   └── VideoDSP/     #   AVPlayer audio tap (EQ biquads, balance, visualizer feed)
+├── Models/           # @Observable settings, parsers (M3U, PLEDIT, VISCOLOR, EQF),
+│                     #   sprite resolution, docking geometry (DockGraph, ScreenClamp)
+├── ViewModels/       # Bridge: WindowCoordinator, SkinManager, Butterchurn bridge/presets
+├── Windows/          # AppKit window controllers, frame persistence, visibility, screen guard
+├── Views/            # Presentation: SwiftUI views (MainWindow/, PlaylistWindow/,
+│                     #   Components/, Shared/, Windows/)
+├── Utilities/        # Logging, window snapping and delegates, helpers
+├── Skins/            # Bundled .wsz skins
+├── AppCommands.swift     # Options menu commands and keyboard shortcuts
+├── SkinsCommands.swift   # Skins menu
+└── MacAmpApp.swift       # App entry point and dependency injection
 
-Tests/
-└── MacAmpTests/
-    ├── AppSettingsTests.swift              # Settings persistence tests
-    ├── AudioPlayerStateTests.swift         # Audio engine state tests
-    ├── DockingControllerTests.swift        # Window coordination tests
-    ├── EQCodecTests.swift                  # EQF file format tests
-    ├── PlaylistNavigationTests.swift       # Playlist operation tests
-    ├── SkinManagerTests.swift              # Skin loading tests
-    └── SpriteResolverTests.swift           # Sprite resolution tests
-
-docs/                                   # Technical Documentation
-tasks/                                  # Development Planning & Context
-Package.swift                           # Swift Package Manager Configuration
+Butterchurn/          # Butterchurn engine and preset packs (JS)
+Tests/MacAmpTests/    # Swift Testing suites (137 tests)
+docs/                 # Technical documentation
+tasks/                # Development planning and context
+project.yml           # XcodeGen project definition
 ```
-
-### Architecture Evolution
-
-**January 2026 - AudioPlayer Decomposition (v1.0.5)**
-- Reduced AudioPlayer from 1,805 → 1,043 lines (-42%)
-- Extracted 5 focused components: EQPresetStore, MetadataLoader, PlaylistController, VideoPlaybackController, VisualizerPipeline
-- Full Swift 6 strict concurrency compliance (Sendable, @MainActor)
-
-**2025 - Foundation**
-- **5-Window System**: Main, Equalizer, Playlist, Video, Milkdrop with unified focus tracking
-- **Unified Audio Pipeline**: All audio through AVAudioEngine (local files + internet radio streams)
-- **Swift 6 Migration**: @Observable macro pattern replacing ObservableObject
-- **Segment-Based Resize**: 25×29px quantized sizing for all resizable windows
-
-See [`docs/MACAMP_ARCHITECTURE_GUIDE.md`](docs/MACAMP_ARCHITECTURE_GUIDE.md) for complete architecture documentation.
 
 ## Keyboard Shortcuts
 
@@ -376,24 +246,22 @@ See [`docs/MACAMP_ARCHITECTURE_GUIDE.md`](docs/MACAMP_ARCHITECTURE_GUIDE.md) for
 
 | Shortcut | Action |
 |----------|--------|
-| `Space` | Play/Pause |
-| `Cmd+O` | Open file |
+| `Cmd+O` | Open files |
 | `Ctrl+O` | Open options menu (time, double-size, repeat, shuffle) |
 | `Ctrl+T` | Toggle time display (elapsed ⇄ remaining) |
 | `Ctrl+R` | Cycle repeat mode (Off → All → One) |
 | `Ctrl+I` | Show track information dialog |
 | `Ctrl+D` | Toggle double-size mode (100% ↔ 200%) |
-| `Ctrl+A` | Toggle always on top (float window) |
+| `Ctrl+A` | Toggle always on top |
 | `Ctrl+V` | Toggle video window |
 | `Ctrl+K` | Toggle Milkdrop window |
-| `Cmd+Shift+E` | Toggle equalizer window |
-| `Cmd+Shift+P` | Toggle playlist window |
-| `Cmd+Shift+1` | Switch to Classic Winamp skin |
-| `Cmd+Shift+2` | Switch to Internet Archive skin |
-| `Cmd+Shift+3` | Switch to Tron Vaporwave skin |
-| `Cmd+Shift+4` | Switch to Winamp3 Classified skin |
-| `←` / `→` | Previous/Next track |
-| `↑` / `↓` | Volume up/down |
+| `Ctrl+W` | Toggle Main windowshade |
+| `Cmd+M` / `Option+M` | Minimize the player (from any MacAmp window) |
+| `Cmd+Shift+1` / `2` / `3` | Show/hide Main / Playlist / Equalizer |
+| `Cmd+Option+1` / `2` / `3` | Shade/unshade Main / Playlist / Equalizer |
+| `Cmd+Shift+O` / `L` / `R` | Import skin / Open skins folder / Refresh skins |
+| `Cmd+,` | Preferences |
+| `Shift` + drag Main | Move Main alone, without snapping |
 
 ### Menu Navigation & Accelerators
 
@@ -406,7 +274,7 @@ See [`docs/MACAMP_ARCHITECTURE_GUIDE.md`](docs/MACAMP_ARCHITECTURE_GUIDE.md) for
 | `Ctrl+R` | Repeat (when Options menu is open) |
 | `Ctrl+S` | Shuffle (when Options menu is open) |
 
-**Accessible Menus:** ADD, REM, MISC, and LIST buttons now support full keyboard navigation with VoiceOver announcements.
+**Accessible Menus:** ADD, REM, MISC, and LIST support keyboard navigation with VoiceOver announcements.
 
 ## Supported Formats
 
@@ -416,31 +284,30 @@ See [`docs/MACAMP_ARCHITECTURE_GUIDE.md`](docs/MACAMP_ARCHITECTURE_GUIDE.md) for
 - AAC/M4A
 - WAV/AIFF
 - Apple Lossless (ALAC)
-- OGG Vorbis (via AVFoundation)
 
 ### Video Files
 - MP4 (H.264, HEVC)
 - MOV (QuickTime)
 - M4V (iTunes video)
-- AVI (common codecs)
+- AVI (limited codecs)
 
 ### Playlists & Streams
 - M3U/M3U8 (local files + radio URLs)
-- HTTP/HTTPS streams (SHOUTcast, Icecast, HLS)
+- HTTP/HTTPS streams (SHOUTcast, Icecast)
 
 ### Skins
 - WSZ (ZIP-based Winamp skins)
-- Classic skin sprite sheets with fallback generation
+- Missing sprite sheets fall back to the bundled default skin
 
 ## Technical Highlights
 
 ### Modern macOS Features
 
-- **Five-Window Architecture** - Independent WindowGroup(id:) scenes with unified focus state
-- **WindowDragGesture** - Native SwiftUI borderless window dragging (macOS 15+)
+- **Five-Window Architecture** - AppKit window controllers hosting SwiftUI views, with unified focus state
 - **@Observable Macro** - Swift 6 strict concurrency with @MainActor isolation
-- **Unified Audio Pipeline** - All audio through AVAudioEngine with EQ, visualizer, and balance for both local and streams
-- **10-Band Parametric EQ** - Real-time equalization via AVAudioUnitEQ
+- **Unified Audio Pipeline** - Local files and streams through AVAudioEngine, with EQ, visualizer and balance for both
+- **AVPlayer-Native Video DSP** - An in-place `MTAudioProcessingTap` runs a biquad EQ cascade matched to AVAudioUnitEQ, preamp and balance on video audio, and feeds the same visualizer path
+- **10-Band EQ** - Real-time equalization via AVAudioUnitEQ
 - **Hot Skin Swapping** - Runtime skin changes without app restart
 
 ### Skin Compatibility
@@ -449,7 +316,7 @@ MacAmp implements comprehensive skin support:
 
 - **Sprite Resolution** - Handles `DIGIT_0` vs `DIGIT_0_EX` variants automatically
 - **Dynamic Loading** - Loads sprite sheets from ZIP archives on-the-fly
-- **Fallback System** - Generates placeholder sprites for missing elements
+- **Fallback System** - Uses default-skin sprites (or transparent placeholders) for missing sheets
 - **2D Grid Rendering** - Supports complex sprite layouts (e.g., EQMAIN.BMP 14×2 grid)
 - **Mirrored Gradients** - Balance slider with proper center snapping
 
@@ -457,14 +324,42 @@ See [`docs/SPRITE_SYSTEM_COMPLETE.md`](docs/SPRITE_SYSTEM_COMPLETE.md) for imple
 
 ### Performance Optimizations
 
-- **Pre-allocated FFT Buffers** - Zero allocations on realtime audio thread (VisualizerScratchBuffers)
+- **Pre-allocated Visualizer Buffers** - Zero allocations on the realtime audio thread (VisualizerScratchBuffers)
 - **Goertzel Algorithm** - Efficient single-bin DFT for 20-bar spectrum analysis
 - **vDSP Acceleration** - Hardware-accelerated audio processing via Accelerate framework
 - **Sprite Sheet Caching** - Pre-processed backgrounds for instant rendering
-- **Background I/O** - Fire-and-forget Task.detached for preset persistence
 - **Progress Timer** - 100ms update interval balances CPU vs. smoothness
 
-## Recent Updates
+## Version History
+
+### v2.0 (September 2026) - Video DSP, Window Management & macOS 27
+
+**Features:**
+- **Requires macOS 27.0 or later** - macOS 15 and 26 stay on v1.3.
+- **EQ, Balance and Visualizers for Video** - The 10-band EQ, preamp, balance, spectrum analyzer, oscilloscope and Milkdrop now apply to video audio. Video audio stays on AVPlayer and is processed in place, so AirPlay and external audio devices follow the system output route. 5.1 and other multichannel tracks are downmixed to stereo.
+- **Window Docking** - Dragging Main moves its whole docked group, including closed windows, so a closed EQ still links Main to the Playlist. Windows snap within 10px to the nearest edge. Hold Shift when you start dragging to move Main alone. Double size and shade keep docked windows attached.
+- **Window State Persistence** - EQ and Playlist open/closed and shade state are restored at launch.
+- **Off-Screen Recovery** - Windows come back on screen after sleep/wake and when displays are added or removed. New **Options › Reset Window Positions**.
+- **Group Minimize** - Main's minimize button, Cmd+M or Option+M (from any MacAmp window) minimizes the whole player to one Dock tile. The EQ and Playlist minimize buttons were removed.
+- **Windowshade** - Ctrl+W toggles Main's windowshade. Titlebars and shade strips now use each skin's own buttons, and every strip can be dragged:
+  - Main: transport and eject, position slider, mini time and mini visualizer
+  - EQ: volume and balance sliders
+  - Playlist: current title, track length and a width grip
+
+**Bugs Fixed:**
+- The first three EQ bands now process at 70, 180 and 320 Hz, the original player's internal frequencies, instead of the 60, 170 and 310 Hz printed on skins
+- Spectrum analyzer no longer freezes while dragging the volume or balance slider
+- Milkdrop preset auto-cycle and track-title overlay keep running while a slider is dragged
+- Pausing internet radio is instant (about 0.7s of audio used to play on); a stream that drops while paused no longer reconnects by itself, and a long-paused stream resumes at the live edge
+- Changing the audio output during video playback no longer resumes the previous track or drops a pause
+- Video and Milkdrop windows no longer reopen higher than where they were closed
+
+**Technical:**
+- Swift 6.2 with strict concurrency
+- 137 automated tests, Thread Sanitizer clean
+- Developer ID signed and Apple notarized
+
+---
 
 ### v1.3 (March 2026) - Now Playing, LIST OPTS & Stream Timer
 
@@ -522,76 +417,42 @@ See [`docs/SPRITE_SYSTEM_COMPLETE.md`](docs/SPRITE_SYSTEM_COMPLETE.md) for imple
 
 ---
 
-### v1.0.5 (January 2026) - Code Quality & Architecture Improvements 🛠️
-
-**A major code quality release focusing on stability and maintainability.**
+### v1.0.5 (January 2026) - Code Quality & Architecture
 
 **Major Changes:**
-- ✅ **Force Unwrap Elimination** - Comprehensive audit and removal of all force unwraps
-  - AudioPlayer completely refactored for safe optional handling
-  - Prevents potential crashes from unexpected nil values
-  - Cleaner error handling throughout playback pipeline
-- ✅ **AudioPlayer Three-Layer Architecture** - Professional restructuring
-  - `AudioEngineController` - AVAudioEngine lifecycle management
-  - `AudioPlaybackController` - Playback state and operations
-  - `AudioBusController` - EQ and audio bus configuration
-  - Clear separation of concerns for better maintainability
-- ✅ **SwiftLint Integration** - Consistent code style enforcement
-  - Automated linting for all Swift files
-  - Enforces best practices and coding standards
-- ✅ **Documentation Updates** - 11 new optimization patterns documented
-  - Comprehensive architecture guide for AudioPlayer refactoring
-  - Lessons learned from force unwrap elimination
-  - Best practices for Swift 6 concurrency
+- **Force Unwrap Elimination** - Removed force unwraps across the playback pipeline to prevent crashes on unexpected nil values
+- **AudioPlayer Decomposition** - AudioPlayer reduced from about 1,800 to 1,043 lines by extracting EQPresetStore, MetadataLoader, PlaylistController, VideoPlaybackController and VisualizerPipeline
+- **SwiftLint Integration** - Automated linting for all Swift files
 
 **Technical:**
-- Enhanced error handling with proper optional chaining
-- Improved state management with clear ownership
 - Thread Sanitizer clean with @MainActor annotations
 - Developer ID signed and Apple notarized
 
 ---
 
-### v1.0.1 (January 2026) - Resizable Milkdrop + Butterchurn Packs 🎆
+### v1.0.1 (January 2026) - First Stable Release
 
-**The first stable release of MacAmp!**
-
-**Major Features:**
-- ✅ **Resizable Milkdrop Window** - Full drag-to-resize support
-  - Drag bottom-right corner with 25×29px quantized segments
-  - Dynamic titlebar expansion using gold filler tiles (symmetrical left/right)
-  - 7-section titlebar: LEFT_CAP + LEFT_GOLD(n) + LEFT_END + CENTER(3) + RIGHT_END + RIGHT_GOLD(n) + RIGHT_CAP
-  - MILKDROP HD letterforms stay centered at all widths
-  - Size persistence via UserDefaults
-- ✅ **Butterchurn Visualization Packs** - 245 authentic Milkdrop 2 presets
-  - WebGL rendering at 60 FPS with real-time FFT audio from AVAudioEngine
-  - Preset navigation: Space/Backspace (next/previous), R (randomize), C (auto-cycle)
-  - Context menu with direct preset selection from full library
-  - Configurable auto-cycle intervals (5s/10s/15s/30s/60s)
-  - Track title overlay with T key toggle
+The first stable release of MacAmp, shipping the resizable Milkdrop window and 245 Butterchurn presets introduced in v0.10.0.
 
 **Technical:**
-- MilkdropWindowSizeState @Observable with computed layout properties
-- ButterchurnBridge.setSize() syncs WebGL canvas on resize
-- Oracle Grade A validation (Thread Sanitizer clean)
 - Developer ID signed and Apple notarized
 
-### v0.10.0 (January 2026) - Butterchurn Visualizations + Milkdrop Resize 🌀
+### v0.10.0 (January 2026) - Butterchurn Visualizations + Milkdrop Resize
 
 **Major Features:**
-- ✅ **Butterchurn Visualization Engine** - Authentic Milkdrop 2 experience via WebGL
+- **Butterchurn Visualization Engine** - Milkdrop 2 visualizations via WebGL
   - 245 presets from Milkdrop 2 library (expanded from original 29)
   - 60 FPS audio-reactive rendering with real-time FFT from AVAudioEngine
   - WKUserScript injection for butterchurn.min.js and butterchurnPresets.min.js
   - 30 FPS Swift→JS audio bridge via callAsyncJavaScript
-- ✅ **Preset Management System** - Full Winamp-compatible preset controls
+- **Preset Management System** - Full Winamp-compatible preset controls
   - Space/Backspace for next/previous (history-based navigation)
   - R key toggles randomize mode
   - C key toggles auto-cycle with intervals (5s/10s/15s/30s/60s)
   - T key shows track title overlay with configurable intervals
   - Context menu with direct preset selection (up to 100 shown)
   - Preset state persisted across restarts (randomize, cycle, intervals)
-- ✅ **Milkdrop Window Resize** - Segment-based resizing with dynamic chrome
+- **Milkdrop Window Resize** - Segment-based resizing with dynamic chrome
   - Drag bottom-right corner with 25×29px quantized segments
   - Minimum 275×116px (Size2D[0,0]), default 275×232px (Size2D[0,4])
   - Dynamic titlebar expansion using gold filler tiles (symmetrical left/right)
@@ -599,7 +460,7 @@ See [`docs/SPRITE_SYSTEM_COMPLETE.md`](docs/SPRITE_SYSTEM_COMPLETE.md) for imple
   - MilkdropWindowSizeState @Observable with computed layout properties
   - Size persistence via UserDefaults
   - Butterchurn canvas sync on resize via ButterchurnBridge.setSize()
-- ✅ **GEN.bmp Sprite System** - Complete chrome implementation
+- **GEN.bmp Sprite System** - Complete chrome implementation
   - MILKDROP HD titlebar letterforms (two-piece sprites for selected/inactive)
   - Active/Inactive titlebar states with WindowFocusState integration
   - Two-piece bottom bar sprites (TOP + BOTTOM for pixel-perfect alignment)
@@ -609,7 +470,6 @@ See [`docs/SPRITE_SYSTEM_COMPLETE.md`](docs/SPRITE_SYSTEM_COMPLETE.md) for imple
 - ButterchurnPresetManager with cycling, randomization, and history
 - NSMenu closure-to-selector bridge pattern (MilkdropMenuTarget)
 - AppKit resize preview overlay during drag (WindowResizePreviewOverlay)
-- Oracle Grade A validation (5 critical bug fixes for thread safety and lifecycle)
 - Thread Sanitizer clean (Timer cleanup, @MainActor annotations)
 
 **Implementation:**
@@ -617,31 +477,30 @@ See [`docs/SPRITE_SYSTEM_COMPLETE.md`](docs/SPRITE_SYSTEM_COMPLETE.md) for imple
 - PR #37: Butterchurn.js visualization integration
 - PR #38: Preset library expansion (29→245 presets)
 - PR #39: Window resize with dynamic titlebar system
-- 7 phases completed (WKUserScript injection → preset management → window resize)
 
-### v0.9.1 (December 2025) - Playlist Window Resize + Mini Visualizer 📐
+### v0.9.1 (December 2025) - Playlist Window Resize + Mini Visualizer
 
 **Major Features:**
-- ✅ **Playlist Window Resize** - Full resize support matching Winamp behavior
+- **Playlist Window Resize** - Full resize support matching Winamp behavior
   - Drag bottom-right corner to resize in 25×29px quantized segments
   - Minimum 275×116px, maximum 2000×900px
   - Three-section bottom bar: LEFT (125px menus) + CENTER (dynamic tiles) + RIGHT (150px controls)
   - Dynamic top bar and side border tiling
   - Size persisted to UserDefaults across restarts
-- ✅ **Playlist Scroll Slider** - Functional gold thumb scroll control
+- **Playlist Scroll Slider** - Functional gold thumb scroll control
   - Proportional thumb size based on visible/total tracks
   - Drag to scroll through playlist
   - Located in right border area
-- ✅ **Playlist Mini Visualizer** - Spectrum analyzer in playlist window
+- **Playlist Mini Visualizer** - Spectrum analyzer in playlist window
   - Activates when main window is **shaded** (minimized to 14px bar)
   - Requires playlist width ≥350px (3+ width segments)
   - Same 19-bar spectrum analyzer as main window
   - Renders 76px, clips to 72px (Winamp historical accuracy)
 
 **Main Window Shade Mode:**
-- ✅ Shade state migrated to AppSettings (observable, persisted)
-- ✅ Cross-window observation enables playlist visualizer activation
-- ✅ Menu command "Shade/Unshade Main" fixed
+- Shade state migrated to AppSettings (observable, persisted)
+- Cross-window observation enables playlist visualizer activation
+- Menu command "Shade/Unshade Main" fixed
 
 **Bug Fixes:**
 - Fixed shade mode buttons not clickable (ZStack alignment)
@@ -653,25 +512,20 @@ See [`docs/SPRITE_SYSTEM_COMPLETE.md`](docs/SPRITE_SYSTEM_COMPLETE.md) for imple
 - PlaylistWindowSizeState.swift - Observable state with computed layout properties
 - PlaylistScrollSlider.swift - Reusable scroll slider component
 - Three-layer pattern maintained (Mechanism→Bridge→Presentation)
-- Oracle Grade: A- (Architecture Aligned)
 
-**Documentation:**
-- Added docs/PLAYLIST_WINDOW.md (860 lines)
-- Added Part 22 to BUILDING_RETRO_MACOS_APPS_SKILL.md
-
-### v0.8.9 (November 2025) - Video & Milkdrop Windows 🎬
+### v0.8.9 (November 2025) - Video & Milkdrop Windows
 
 **Major Features:**
-- ✅ **Video Window** - Native video playback with VIDEO.bmp skinned chrome
+- **Video Window** - Native video playback with VIDEO.bmp skinned chrome
   - Full resize with 25×29px quantized segments
   - 1x/2x size preset buttons
   - VIDEO.bmp sprite rendering (24 sprites) or classic fallback
   - Metadata ticker with auto-scrolling (filename, codec, resolution)
-- ✅ **Milkdrop Window Foundation** - GEN.bmp two-piece letter sprites
+- **Milkdrop Window Foundation** - GEN.bmp two-piece letter sprites
   - "MILKDROP" titlebar with 32 letter sprites
   - Active/Inactive focus states
   - Foundation ready for future visualization
-- ✅ **Unified Video Controls** (Part 21)
+- **Unified Video Controls**
   - Volume slider synced to video playback
   - Seek bar works for video files (drag to any position)
   - Time display shows video elapsed/remaining
@@ -692,7 +546,6 @@ See [`docs/SPRITE_SYSTEM_COMPLETE.md`](docs/SPRITE_SYSTEM_COMPLETE.md) for imple
 - playbackProgress stored pattern (must assign all three values)
 - currentSeekID invalidation before playerNode.stop()
 - AppKit preview overlay for resize visualization
-- Oracle Grade A validation (all architectural concerns resolved)
 
 **Bug Fixes:**
 - Fixed invisible window phantom affecting cluster docking
@@ -700,21 +553,19 @@ See [`docs/SPRITE_SYSTEM_COMPLETE.md`](docs/SPRITE_SYSTEM_COMPLETE.md) for imple
 - Fixed EQ/PL button state sync with WindowCoordinator
 - Fixed timer closures using proper MainActor hopping
 
-**Status:** Video window 100% complete, Milkdrop foundation complete (visualization deferred)
-
-### v0.7.8 (November 2025) - Clutter Bar O & I Buttons 🎉
+### v0.7.8 (November 2025) - Clutter Bar O & I Buttons
 
 **New Features:**
-- ✅ **O Button (Options Menu)** - Context menu with player settings
+- **O Button (Options Menu)** - Context menu with player settings
   - Time display toggle (elapsed ⇄ remaining)
   - Quick access to double-size, repeat, and shuffle modes
   - Keyboard shortcuts: Ctrl+O (menu), Ctrl+T (time toggle)
-- ✅ **I Button (Track Information)** - Metadata dialog
+- **I Button (Track Information)** - Metadata dialog
   - Shows track title, artist, duration
   - Technical details: bitrate, sample rate, channels
   - Stream-aware with graceful fallbacks
   - Keyboard shortcut: Ctrl+I
-- ✅ **Time Display Enhancement** - Click time display to toggle, persists across restarts
+- **Time Display Enhancement** - Click time display to toggle, persists across restarts
 
 **Bug Fixes:**
 - Fixed NSMenu lifecycle issue preventing repeated menu usage
@@ -724,27 +575,20 @@ See [`docs/SPRITE_SYSTEM_COMPLETE.md`](docs/SPRITE_SYSTEM_COMPLETE.md) for imple
 
 **Clutter Bar Status:** 5 of 5 buttons functional (O, A, I, D, V)
 
-### v0.2.0 (October 2025) - Swift 6 Modernization 🎉
+### v0.2.0 (October 2025) - Swift 6 Modernization
 
 **Major Architecture Upgrade:**
-- ✅ **Swift 6.0** - Upgraded to latest Swift with strict concurrency
-- ✅ **Modern State Management** - Migrated to @Observable framework for better performance
-- ✅ **Keyboard Accessibility** - Full keyboard navigation in playlist menus
-- ✅ **Zero Warnings** - Clean build with strict concurrency checking
-- ✅ **Improved Performance** - 10-20% fewer UI updates with fine-grained observation
-- ✅ **VoiceOver Support** - Screen reader accessibility for menus
+- **Swift 6.0** - Upgraded to Swift 6 with strict concurrency
+- **Modern State Management** - Migrated to @Observable framework for better performance
+- **Keyboard Accessibility** - Full keyboard navigation in playlist menus
+- **Zero Warnings** - Clean build with strict concurrency checking
+- **Improved Performance** - 10-20% fewer UI updates with fine-grained observation
+- **VoiceOver Support** - Screen reader accessibility for menus
 
 **User-Visible Improvements:**
-- Smoother UI updates and animations
 - Arrow key navigation in all playlist menus (ADD, REM, MISC, LIST)
-- Better stability and responsiveness
 - Pixel-perfect sprite rendering throughout
 - Improved audio playback reliability
-
-**Technical Excellence:**
-- Zero concurrency errors with Swift 6 strict mode
-- Production-ready codebase
-- Modern SwiftUI patterns throughout
 
 ---
 
@@ -754,45 +598,47 @@ See [`docs/SPRITE_SYSTEM_COMPLETE.md`](docs/SPRITE_SYSTEM_COMPLETE.md) for imple
 
 - **Skin Sprite Coverage** - Some rare skin variants may have missing sprites (fallbacks generated)
 - **Enter Key in Menus** - Menu activation requires click (arrow key navigation + click works)
+- **Multichannel Video Audio** - 5.1+ video is downmixed to stereo ([#88](https://github.com/hfyeomans/MacAmp/issues/88))
 - **Multi-Room Sync** - AirPlay 2 multi-room audio not yet supported
 
 ### Contributing
 
-We welcome contributions! High-impact areas from our [tasks backlog](tasks/):
+Contributions are welcome. High-impact areas (planning notes in [`tasks/`](tasks/)):
 
 1. **Playlist Drag & Drop** - Drop files directly into the playlist window
 2. **HLS Streaming** - Add HLS protocol support to stream decode pipeline
-3. **OGG/Opus Codecs** - Add Vorbis and Opus audio format support via FFmpeg or native decoders
-4. **Video Audio Routing** - Route video audio through AVAudioEngine for EQ/visualizer
+3. **OGG Vorbis** - Local files and Icecast streams
+4. **Multichannel Video Output** - 5.1+ output with speaker-side balance ([#88](https://github.com/hfyeomans/MacAmp/issues/88))
 5. **Dock Integration** - Show transport controls in macOS dock menu
 
 ## Documentation
 
-**📚 Complete Documentation Index:** [`docs/README.md`](docs/README.md) (19,105 lines across 20 documents)
+**Complete Documentation Index:** [`docs/README.md`](docs/README.md)
 
 ### Architecture & Design
 
-| Document | Description | Lines |
-|----------|-------------|-------|
-| [`MACAMP_ARCHITECTURE_GUIDE.md`](docs/MACAMP_ARCHITECTURE_GUIDE.md) | ⭐ **Primary Reference** - Complete system architecture, three-layer design, unified audio pipeline | 5,313 |
-| [`IMPLEMENTATION_PATTERNS.md`](docs/IMPLEMENTATION_PATTERNS.md) | Code patterns, @Observable usage, testing, anti-patterns | 2,327 |
-| [`SPRITE_SYSTEM_COMPLETE.md`](docs/SPRITE_SYSTEM_COMPLETE.md) | Semantic sprite resolution, skin file structure | 814 |
+| Document | Description |
+|----------|-------------|
+| [`MACAMP_ARCHITECTURE_GUIDE.md`](docs/MACAMP_ARCHITECTURE_GUIDE.md) | **Primary Reference** - Complete system architecture, three-layer design, unified audio pipeline, video DSP |
+| [`IMPLEMENTATION_PATTERNS.md`](docs/IMPLEMENTATION_PATTERNS.md) | Code patterns, @Observable usage, testing, anti-patterns |
+| [`SPRITE_SYSTEM_COMPLETE.md`](docs/SPRITE_SYSTEM_COMPLETE.md) | Semantic sprite resolution, skin file structure |
+| [`WINAMP_SKIN_VARIATIONS.md`](docs/WINAMP_SKIN_VARIATIONS.md) | Skin format specifications, file structure |
 
 ### Window Documentation
 
-| Document | Description | Lines |
-|----------|-------------|-------|
-| [`MULTI_WINDOW_ARCHITECTURE.md`](docs/MULTI_WINDOW_ARCHITECTURE.md) | 5-window system design, focus management, magnetic snapping | 1,060 |
-| [`PLAYLIST_WINDOW.md`](docs/PLAYLIST_WINDOW.md) | Playlist resize, scroll slider, mini visualizer | 860 |
-| [`VIDEO_WINDOW.md`](docs/VIDEO_WINDOW.md) | Video playback, VIDEO.bmp chrome, seek/volume sync | 1,151 |
-| [`MILKDROP_WINDOW.md`](docs/MILKDROP_WINDOW.md) | Butterchurn visualization, GEN.bmp sprites, preset management | 1,623 |
+| Document | Description |
+|----------|-------------|
+| [`MULTI_WINDOW_ARCHITECTURE.md`](docs/MULTI_WINDOW_ARCHITECTURE.md) | 5-window system, docking, off-screen recovery, minimize, windowshade |
+| [`WINDOW_FOCUS_ARCHITECTURE.md`](docs/WINDOW_FOCUS_ARCHITECTURE.md) | Active/inactive focus tracking across windows |
+| [`PLAYLIST_WINDOW.md`](docs/PLAYLIST_WINDOW.md) | Playlist resize, scroll slider, mini visualizer |
+| [`VIDEO_WINDOW.md`](docs/VIDEO_WINDOW.md) | Video playback, VIDEO.bmp chrome, seek/volume sync, video audio DSP |
+| [`MILKDROP_WINDOW.md`](docs/MILKDROP_WINDOW.md) | Butterchurn visualization, GEN.bmp sprites, preset management |
 
 ### Build & Distribution
 
 | Document | Description |
 |----------|-------------|
 | [`RELEASE_BUILD_GUIDE.md`](docs/RELEASE_BUILD_GUIDE.md) | Building, signing, notarizing, DMG creation |
-| [`WINAMP_SKIN_VARIATIONS.md`](docs/WINAMP_SKIN_VARIATIONS.md) | Skin format specifications, file structure |
 
 ## Credits
 
@@ -808,6 +654,7 @@ MacAmp draws inspiration from the classic desktop audio player that defined a ge
 
 **Apple Frameworks:**
 - **AVFoundation** - AVAudioEngine, AVPlayer, 10-band EQ, audio/video playback
+- **MediaToolbox** - `MTAudioProcessingTap` for video audio processing
 - **SwiftUI** - Declarative UI with @Observable state management
 - **AppKit** - NSWindow, NSMenu, NSWindowController for window chrome
 - **Accelerate** - vDSP hardware-accelerated FFT for spectrum analysis
@@ -823,17 +670,9 @@ MacAmp draws inspiration from the classic desktop audio player that defined a ge
 
 MIT License - see [LICENSE](LICENSE) for details.
 
-Free to use, modify, and distribute with attribution.
-
 ## Support
 
 For issues, questions, or feature requests:
-- Open an issue on GitHub
+- Open an [issue on GitHub](https://github.com/hfyeomans/MacAmp/issues)
 - Check [`docs/`](docs/) for technical documentation
 - Review [`tasks/`](tasks/) for development planning
-
----
-
-**Built with ❤️ for macOS**
-
-*MacAmp - Bringing classic audio player vibes to modern Apple Silicon.*
