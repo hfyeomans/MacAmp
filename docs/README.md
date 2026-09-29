@@ -475,6 +475,7 @@ The suite has 137 tests in 21 suites. Suite tags, `xcodebuildmcp` usage and per-
 - `docs/sessions/` — dated session logs
 - `docs/xcode-26-reference/` — Apple Xcode 26 reference notes
 - `docs/screenshots/` — images used by the top-level README
+- `docs/diagrams/` — simplified flow diagrams (`.excalidraw` source + PNG): app layers, audio pipeline, internet radio, output device change, AudioPlayer decomposition, visualizer, Milkdrop, window system, docking/recovery/minimize, skin loading, window focus
 - `BUILDING_RETRO_MACOS_APPS_SKILL.md` (repo root) — lessons referenced above (e.g. #27 sine-wave diagnostic, #32 Now Playing)
 - `docs/archive/` — **local only** (gitignored): 27 superseded or historical docs (~9,300 lines). Useful for why past designs were rejected; `semantic-sprites/skin-download-guide.md` lists test-skin sources.
 
