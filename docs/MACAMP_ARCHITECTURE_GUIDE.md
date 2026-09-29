@@ -152,7 +152,7 @@ MacAmp's architecture follows a strict three-layer separation, inspired by web f
 │                                                               │
 │  • SpriteResolver (semantic → actual mapping)               │
 │  • SimpleSpriteImage (sprite rendering)                     │
-│  • DockingController (multi-window coordination)            │
+│  • WindowCoordinator (multi-window coordination)            │
 │  • WindowFocusState (window focus tracking)                 │
 │  • WindowFocusDelegate (focus event handling)               │
 │  • ViewModels (business logic)                              │
@@ -888,7 +888,6 @@ All app state uses the `@Observable` macro with `@MainActor` isolation under Swi
 init() {
     let skinManager = SkinManager()
     let audioPlayer = AudioPlayer()
-    let dockingController = DockingController()
     let settings = AppSettings.instance()
     let radioLibrary = RadioStationLibrary()
     let streamPlayer = StreamPlayer()
@@ -896,14 +895,12 @@ init() {
     // ... _x = State(initialValue: x) for each, skinManager.loadInitialSkin(), WindowFocusState() ...
     let coordinator = WindowCoordinator(skinManager: skinManager, audioPlayer: audioPlayer, /* ... */)
     WindowCoordinator.shared = coordinator
-    dockingController.windowCoordinator = coordinator
 }
 
 // WinampVideoWindowController.swift (the other window controllers follow the same shape)
 let rootView = WinampVideoWindow()
     .environment(skinManager)
     .environment(audioPlayer)
-    .environment(dockingController)
     .environment(settings)
     .environment(radioLibrary)
     .environment(playbackCoordinator)
@@ -958,6 +955,7 @@ MacAmp runs five windows (Main, Equalizer, Playlist, Video, Milkdrop), each an A
 │ Composed Controllers:                                       │
 │  • registry: WindowRegistry (owns 5 NSWindowControllers)   │
 │  • framePersistence: WindowFramePersistence                │
+│  • screenGuard: WindowScreenGuard (sleep/wake, displays)   │
 │  • visibility: WindowVisibilityController (@Observable)    │
 │  • resizeController: WindowResizeController                │
 │  • settingsObserver: WindowSettingsObserver (lifecycle)    │
@@ -1002,12 +1000,13 @@ MacAmp runs five windows (Main, Equalizer, Playlist, Video, Milkdrop), each an A
 WindowCoordinator
     ├── WindowRegistry (no deps)
     ├── WindowFramePersistence (depends on: WindowRegistry, WindowFrameStore)
+    ├── WindowScreenGuard (depends on: WindowRegistry, WindowFramePersistence)
     ├── WindowVisibilityController (depends on: WindowRegistry, AppSettings)
     ├── WindowResizeController (depends on: WindowRegistry, WindowFramePersistence)
     ├── WindowSettingsObserver (depends on: AppSettings only)
     └── WindowDelegateWiring (depends on: WindowRegistry, persistence, focus state)
 
-All acyclic - no controller-to-controller dependencies.
+All acyclic: WindowRegistry, WindowFramePersistence and AppSettings are shared services; controllers never depend on each other.
 ```
 
 ### Window Lifecycle Management
@@ -1026,7 +1025,7 @@ final class WindowCoordinator {
     // Forwarding methods (facade API)
     func showVideo() { visibility.showVideo() }
     func showMilkdrop() { visibility.showMilkdrop() }
-    func minimizeKeyWindow() { visibility.minimizeKeyWindow() }
+    func toggleMain() { visibility.toggleMain() }
 
     // Forwarding properties (@Observable chaining)
     var isEQWindowVisible: Bool {
@@ -1086,7 +1085,7 @@ enum WindowKind: Hashable {
 }
 ```
 
-Cluster detection across all five windows is the snap manager's `connectedCluster` (see [Window Snap Manager](#window-snap-manager)); `WindowSnapManager.clusterKinds(containing:)` exposes it as a `Set<WindowKind>`.
+Cluster detection across all five windows is `DockGraph.cluster(from:boxes:)` (see [Window Snap Manager](#window-snap-manager)).
 
 ### Key Implementation Points
 
@@ -1094,7 +1093,7 @@ Cluster detection across all five windows is the snap manager's `connectedCluste
 2. **Delegate Multiplexing**: Each window combines focus, persistence, and snap delegates
 3. **Memory Management**: Controllers and multiplexers stored as properties (prevent deallocation)
 4. **UserDefaults Keys**: Each window has visibility and frame persistence keys
-5. **Keyboard Shortcuts**: Ctrl+V (video), Ctrl+K (milkdrop) for window toggling
+5. **Keyboard Shortcuts**: Ctrl+V (video), Ctrl+K (milkdrop) for window toggling; Ctrl+W windowshades Main; Option+M (Options › Minimize All) and Cmd+M from any MacAmp window minimize the whole player (`WindowCoordinator.minimizeApp()` → `WindowVisibilityController.minimizeGroup()`; disabled while Main is hidden)
 
 ---
 
@@ -1126,7 +1125,7 @@ Each child layer is its own `View` struct that reads only the `@Environment` val
 
 ### Buttons and Hit Testing
 
-Skinned buttons are plain SwiftUI `Button`s wrapping a `SimpleSpriteImage`, styled `.buttonStyle(.plain)` and `.focusable(false)`, positioned with `.at(...)`. Selected/active states swap the sprite name (for example `MAIN_CLUTTER_BAR_BUTTON_D` / `_SELECTED`). `SimpleSpriteImage` itself has no action or pressed state.
+Skinned buttons are plain SwiftUI `Button`s wrapping a `SimpleSpriteImage`, styled `.buttonStyle(.plain)` and `.focusable(false)`, positioned with `.at(...)`. Selected/active states swap the sprite name (for example `MAIN_CLUTTER_BAR_BUTTON_D` / `_SELECTED`). `SimpleSpriteImage` itself has no action or pressed state. Titlebar and shade-strip buttons, whose normal image is part of the window bitmap, are `SkinHitButton`s (`Views/Shared/SkinHitButton.swift`): invisible hit areas that draw only the pressed sprite while held.
 
 ---
 
@@ -1691,16 +1690,17 @@ Value types that cross isolation boundaries are `Sendable` (see the table in [Sw
 
 `WindowSnapManager` (`Utilities/WindowSnapManager.swift`, `@MainActor`, `NSWindowDelegate`, singleton `shared`) implements Winamp's magnetic docking. Geometry helpers live in `Models/SnapUtils.swift`. Multi-window context: [MULTI_WINDOW_ARCHITECTURE.md](MULTI_WINDOW_ARCHITECTURE.md).
 
-- **Registration:** `WindowDelegateWiring` calls `register(window:kind:)` for each window and adds the manager to that window's `WindowDelegateMultiplexer`; `register` records the window and its last origin and does not set `window.delegate` itself.
+- **Registration:** `WindowDelegateWiring` calls `register(window:kind:)` for each window and adds the manager to that window's `WindowDelegateMultiplexer`; `register` records the window and its last frame and does not set `window.delegate` itself.
 - **Move handling (`windowDidMove`):** converts every window frame to a top-left virtual-screen space spanning all displays, finds the moved window's connected cluster, moves the rest of the cluster by the same delta, then snaps the cluster's bounding box to other windows (`SnapUtils.snapToMany`) and to the screen edges (`SnapUtils.snapWithin`).
+- **Titlebar drags (`beginCustomDrag` / `updateCustomDrag`):** dragging Main moves its docked group (`DockGraph.cluster` over all windows, closed ones included, so a closed window still links the chain); any other window drags alone. Holding Shift at mouse-down turns off snapping to other windows for that drag, and Main moves alone; the screens still contain it.
+- **Size changes (`windowDidResize`, double size, window resizes):** when a window changes size with its top-left fixed (shade/unshade, Ctrl+D, the Playlist/Video/Milkdrop resize handles), `DockGraph.followResize` moves the windows attached below or to its right by the size change; a window attached to one that doesn't move stays put.
 - **Feedback prevention:** `isAdjusting` suppresses re-entry while the manager moves windows itself; `beginProgrammaticAdjustment()` / `endProgrammaticAdjustment()` let other code (double-size resize, window resize) suspend snapping.
-- **Cluster queries:** `clusterKinds(containing:)` returns the `WindowKind`s touching a window (`WindowResizeController.resizeMainAndEQWindows` uses it to tell whether the playlist is docked to the main window, the equalizer or floating); `areConnected(_:_:)` wraps it.
 
 ### Connection Detection
 
 ```swift
-// Two windows are connected when they overlap on one axis and an edge pair is near on the other
-private func boxesAreConnected(_ a: Box, _ b: Box) -> Bool {
+// Models/DockGraph.swift: two windows are docked when they overlap on one axis and an edge pair is near on the other
+static func areDocked(_ a: Box, _ b: Box) -> Bool {
     if SnapUtils.overlapX(a, b) {
         if SnapUtils.near(SnapUtils.top(a), SnapUtils.bottom(b)) { return true }
         if SnapUtils.near(SnapUtils.bottom(a), SnapUtils.top(b)) { return true }
@@ -1717,11 +1717,11 @@ private func boxesAreConnected(_ a: Box, _ b: Box) -> Bool {
 }
 ```
 
-`connectedCluster(start:boxes:)` is a depth-first search over `boxesAreConnected`, returning the set of window identifiers in the group.
+`DockGraph.cluster(from:boxes:)` is a depth-first search over `areDocked`, returning the set of window identifiers in the group; callers choose which windows to include.
 
 ### Key Features
 
-1. **15px snap threshold:** `SnapUtils.SNAP_DISTANCE = 15`; `near` is `abs(a - b) < 15`
+1. **10px snap threshold:** `SnapUtils.SNAP_DISTANCE = 10`; `near` is `abs(a - b) < 10`
 2. **Cluster movement:** docked windows move together as a group
 3. **Screen edge snapping:** windows also snap to display boundaries
 4. **Multi-monitor support:** the virtual space covers every `NSScreen`
@@ -1891,7 +1891,7 @@ http://stream.example.com/radio
 ┌──────────────────────────────────────────────────┐
 │           WindowSnapManager.shared                │
 │                                                   │
-│  • Magnetic window snapping (15px threshold)     │
+│  • Magnetic window snapping (10px threshold)     │
 │  • Connected cluster detection (5 windows)       │
 │  • Screen edge snapping                          │
 │  • Multi-monitor coordinate transformation       │
@@ -2072,7 +2072,7 @@ xcodebuild test -scheme MacAmpApp -destination 'platform=macOS' -enableThreadSan
 xcodebuild test -scheme MacAmpApp -destination 'platform=macOS'   # also run without TSan: wall-clock benchmarks skip themselves under TSan
 ```
 
-**Suites:** `AppSettingsTests`, `AudioPlayerStateTests`, `BiquadNumericalMatchTests`, `DockingControllerTests`, `EngineConfigObserverTests`, `EQCodecTests`, `LockFreeRingBufferTests`, `PlaylistNavigationTests`, `SkinManagerTests`, `SpriteResolverTests`, `StreamPauseTailTests`, `VideoSeekStateMatrixTests`, `VideoTapCPUBenchmarkTests`, `VideoTapFanoutTests`, `VideoTapLifecycleTests`, `VideoTapSendableContractTests`, `VideoTapTelemetryTests`, `VideoTapVisualizerRenderTests`, `WindowDockingGeometryTests`, `WindowFrameStoreTests` (tags in `TestTags.swift`).
+**Suites:** `AppSettingsTests`, `AudioPlayerStateTests`, `BiquadNumericalMatchTests`, `DockGraphTests`, `EngineConfigObserverTests`, `EQCodecTests`, `LockFreeRingBufferTests`, `PlaylistNavigationTests`, `ScreenClampTests`, `SkinManagerTests`, `SpriteResolverTests`, `StreamPauseTailTests`, `VideoSeekStateMatrixTests`, `VideoTapCPUBenchmarkTests`, `VideoTapFanoutTests`, `VideoTapLifecycleTests`, `VideoTapSendableContractTests`, `VideoTapTelemetryTests`, `VideoTapVisualizerRenderTests`, `WindowFrameStoreTests` (tags in `TestTags.swift`).
 
 ### Unit Tests
 
@@ -2218,12 +2218,12 @@ MacAmpApp/
 │   ├── RadioStation.swift / RadioStationLibrary.swift # Saved stations
 │   ├── WindowFocusState.swift      # Key-window tracking
 │   ├── SnapUtils.swift / Size2D.swift # Snap geometry, segment sizes
+│   ├── DockGraph.swift / ScreenClamp.swift # Docked groups, on-screen clamping
 │   └── VideoWindowSizeState.swift / MilkdropWindowSizeState.swift / PlaylistWindowSizeState.swift
 │
 ├── ViewModels/
 │   ├── SkinManager.swift (+ SkinManager+Import.swift) # Skin loading, hot-swap, import
 │   ├── SkinArchiveLoader.swift     # @concurrent ZIP extraction
-│   ├── DockingController.swift     # Window magnetic docking
 │   ├── ButterchurnBridge.swift     # Swift-to-JS Butterchurn bridge
 │   ├── ButterchurnPresetManager.swift # Preset management
 │   ├── WindowCoordinator.swift     # Window management facade
@@ -2257,9 +2257,9 @@ MacAmpApp/
 │   ├── WinampVideoWindow.swift     # Video playback window
 │   ├── WinampMilkdropWindow.swift  # Visualization window
 │   ├── VisualizerView.swift        # Spectrum/oscilloscope visualizer
-│   ├── SkinnedText.swift           # Bitmap font text rendering
 │   ├── PreferencesView.swift       # Preferences window
 │   ├── Shared/
+│   │   ├── SkinHitButton.swift               # Titlebar/shade hit area (pressed sprite only)
 │   │   ├── TitlebarDragCaptureView.swift     # Titlebar drag NSView
 │   │   └── WinampTitlebarDragHandle.swift    # Titlebar drag handle
 │   │
@@ -2285,12 +2285,11 @@ MacAmpApp/
 │   ├── BorderlessWindow.swift                # Borderless NSWindow subclass
 │   ├── WindowRegistry.swift                  # Window ownership + lookup
 │   ├── WindowFramePersistence.swift          # Frame save/load/suppress
+│   ├── WindowScreenGuard.swift               # Sleep/wake + display-change recovery
 │   ├── WindowVisibilityController.swift      # Show/hide/toggle (@Observable)
 │   ├── WindowResizeController.swift          # Resize + docking
 │   ├── WindowSettingsObserver.swift          # Settings observation
 │   ├── WindowDelegateWiring.swift            # Delegate factory
-│   ├── WindowDockingTypes.swift              # Value types (Sendable)
-│   ├── WindowDockingGeometry.swift           # Pure geometry (nonisolated)
 │   ├── WindowFrameStore.swift                # UserDefaults persistence
 │   └── Winamp{Main,Equalizer,Playlist,Video,Milkdrop}WindowController.swift
 │

@@ -1,9 +1,9 @@
 # MacAmp Documentation Guide
 
-**Version:** 3.13.0
-**Date:** 2026-09-25
+**Version:** 3.14.0
+**Date:** 2026-09-28
 **Purpose:** Master index and navigation guide for all MacAmp documentation
-**Total Documentation:** 8,811 active lines across 12 current docs + 27 archived docs
+**Total Documentation:** 8,907 active lines across 12 current docs + 27 archived docs
 
 ---
 
@@ -30,7 +30,7 @@ MacAmp's docs cover a pixel-perfect Winamp 2.x recreation for macOS 27+: archite
 | **New Developer** | [MACAMP_ARCHITECTURE_GUIDE.md](MACAMP_ARCHITECTURE_GUIDE.md) from [Executive Summary](MACAMP_ARCHITECTURE_GUIDE.md#executive-summary) through [Skin System](MACAMP_ARCHITECTURE_GUIDE.md#skin-system-complete-architecture) | [Pattern Overview](IMPLEMENTATION_PATTERNS.md#pattern-overview), [State Management](IMPLEMENTATION_PATTERNS.md#state-management-patterns), [UI Component Patterns](IMPLEMENTATION_PATTERNS.md#ui-component-patterns), then [Test Plan Quick Reference](#test-plan-quick-reference) |
 | **Bug Fixer** | [Architecture Quick Reference](MACAMP_ARCHITECTURE_GUIDE.md#quick-reference), [Topic Lookup](#topic-lookup) | [Anti-Patterns to Avoid](IMPLEMENTATION_PATTERNS.md#anti-patterns-to-avoid), [Common Pitfalls & Solutions](MACAMP_ARCHITECTURE_GUIDE.md#common-pitfalls--solutions) |
 | **Feature Developer** | [State](IMPLEMENTATION_PATTERNS.md#state-management-patterns), [UI Component](IMPLEMENTATION_PATTERNS.md#ui-component-patterns), [Audio Processing Patterns](IMPLEMENTATION_PATTERNS.md#audio-processing-patterns), [Three-Layer Architecture](MACAMP_ARCHITECTURE_GUIDE.md#three-layer-architecture-deep-dive), [Component Integration Maps](MACAMP_ARCHITECTURE_GUIDE.md#component-integration-maps) | UI work: [SPRITE_SYSTEM_COMPLETE.md](SPRITE_SYSTEM_COMPLETE.md), [WINAMP_SKIN_VARIATIONS.md](WINAMP_SKIN_VARIATIONS.md) |
-| **Window Work** | [MULTI_WINDOW_ARCHITECTURE.md](MULTI_WINDOW_ARCHITECTURE.md) | The window's own doc (VIDEO / PLAYLIST / MILKDROP), [WINDOW_FOCUS_ARCHITECTURE.md](WINDOW_FOCUS_ARCHITECTURE.md) |
+| **Window Work** | [MULTI_WINDOW_ARCHITECTURE.md](MULTI_WINDOW_ARCHITECTURE.md), then [Docking, Recovery, Minimize & Windowshade](MULTI_WINDOW_ARCHITECTURE.md#docking-recovery-minimize--windowshade) | The window's own doc (VIDEO / PLAYLIST / MILKDROP), [WINDOW_FOCUS_ARCHITECTURE.md](WINDOW_FOCUS_ARCHITECTURE.md), [CUSTOM_DRAG_FIX.md](CUSTOM_DRAG_FIX.md) |
 | **Release Manager** | [RELEASE_BUILD_GUIDE.md](RELEASE_BUILD_GUIDE.md) | (all-in-one guide) |
 
 ---
@@ -45,15 +45,17 @@ xcodegen generate      # generates MacAmpApp.xcodeproj from project.yml
 xcodebuild test -scheme MacAmpApp -destination 'platform=macOS' -enableThreadSanitizer YES
 ```
 
+The suite has 137 tests in 21 suites. Suite tags, `xcodebuildmcp` usage and per-suite notes: [xcode-testing-context.md](context/xcode-testing-context.md).
+
 ---
 
 ## Complete Documentation Inventory
 
-### Architecture & Design (9 documents, 7,896 lines)
+### Architecture & Design (9 documents, 7,974 lines)
 
 #### **[MACAMP_ARCHITECTURE_GUIDE.md](MACAMP_ARCHITECTURE_GUIDE.md)** ⭐
-- **Size**: 155KB, 2,439 lines
-- **Last Updated**: 2026-03-25
+- **Size**: 157KB, 2,444 lines
+- **Last Updated**: 2026-09-28
 - **Status**: ✅ AUTHORITATIVE
 - **Purpose**: Complete architectural reference for MacAmp
 - **Key Sections**:
@@ -63,14 +65,14 @@ xcodebuild test -scheme MacAmpApp -destination 'platform=macOS' -enableThreadSan
   - Internet radio streaming implementation
   - Component integration maps
   - 20-bar Goertzel-like spectrum analyzer
-  - Window snapping + double-size docking pipeline
+  - Window snapping (`DockGraph` groups, 10 px), shade re-anchoring and the double-size docking pipeline
   - Custom menu patterns (SpriteMenuItem + PlaylistMenuDelegate)
 - **When to Read**: Starting development, architectural reviews, major refactoring
 - **Related Docs**: IMPLEMENTATION_PATTERNS.md, SPRITE_SYSTEM_COMPLETE.md
 
 #### **[IMPLEMENTATION_PATTERNS.md](IMPLEMENTATION_PATTERNS.md)** ⭐
-- **Size**: 146KB, 3,087 lines
-- **Last Updated**: 2026-03-25
+- **Size**: 146KB, 3,085 lines
+- **Last Updated**: 2026-09-28
 - **Status**: ✅ AUTHORITATIVE
 - **Purpose**: Practical code patterns and best practices
 - **Key Sections**:
@@ -101,28 +103,26 @@ xcodebuild test -scheme MacAmpApp -destination 'platform=macOS' -enableThreadSan
 - **Related Docs**: WINAMP_SKIN_VARIATIONS.md
 
 #### **[MULTI_WINDOW_ARCHITECTURE.md](MULTI_WINDOW_ARCHITECTURE.md)** ⭐
-- **Size**: 16KB, 264 lines
-- **Last Updated**: 2026-02-09
+- **Size**: 22KB, 330 lines
+- **Last Updated**: 2026-09-28
 - **Status**: ✅ PRODUCTION
-- **Purpose**: Complete multi-window system design and implementation
+- **Purpose**: Multi-window system design: window ownership, coordination, docking, recovery, minimize and windowshade
 - **Key Sections**:
-  - Window hierarchy and ownership
-  - Focus management across windows
-  - Window grouping and clustering
-  - Magnetic snapping coordination
-  - Window lifecycle management
-  - SwiftUI WindowGroup integration
-  - **WindowCoordinator Refactoring (2026-02)**
-    - Facade + Composition pattern (1,357 → 223 lines, -84%)
-    - 11-file decomposition with dependency matrix
-    - Swift 6.2 concurrency patterns
-  - Testing and debugging strategies
-- **When to Read**: Working with window management, god object refactoring, Swift 6.2 patterns
-- **Related Docs**: WINDOW_FOCUS_ARCHITECTURE.md, VIDEO_WINDOW.md, MILKDROP_WINDOW.md
+  - Window infrastructure and scenes (borderless `NSWindow`s, hidden placeholder `WindowGroup`)
+  - Instant double-size docking pipeline (`DockGraph.followResize`, shared with shade)
+  - `WindowCoordinator` Facade + Composition: controllers, acyclic dependency graph, `@MainActor` boundaries
+  - Swift 6.2 concurrency patterns (recursive `withObservationTracking`, `isolated deinit`, observation chaining, debounced persistence)
+  - Docking: `DockGraph` groups (closed windows keep the chain), 10 px snap, Shift-drag, shade/unshade re-anchoring
+  - Persistence: top-anchored frame restores; visibility and shade flags in `AppSettings`
+  - Off-screen recovery: `WindowScreenGuard` (sleep/wake, display add/remove), `ScreenClamp`, Reset Window Positions
+  - Group minimize (Cmd+M / Option+M) and skin-faithful titlebars and windowshade strips (`SkinHitButton`)
+  - Window shortcuts, common pitfalls, adding a new window
+- **When to Read**: Window management, docking and snapping, windows off-screen after sleep or display changes, minimize/windowshade, adding a window
+- **Related Docs**: WINDOW_FOCUS_ARCHITECTURE.md, CUSTOM_DRAG_FIX.md, VIDEO_WINDOW.md, PLAYLIST_WINDOW.md, MILKDROP_WINDOW.md
 
 #### **[VIDEO_WINDOW.md](VIDEO_WINDOW.md)** ⭐
 - **Size**: 27KB, 537 lines
-- **Last Updated**: 2025-11-14
+- **Last Updated**: 2026-09-28
 - **Status**: ✅ PRODUCTION
 - **Purpose**: Complete video window documentation with chrome system and playback architecture
 - **Key Sections**:
@@ -138,27 +138,28 @@ xcodebuild test -scheme MacAmpApp -destination 'platform=macOS' -enableThreadSan
 - **Related Docs**: SPRITE_SYSTEM_COMPLETE.md, WINDOW_FOCUS_ARCHITECTURE.md
 
 #### **[PLAYLIST_WINDOW.md](PLAYLIST_WINDOW.md)** ⭐
-- **Size**: 19KB, 376 lines
-- **Last Updated**: 2026-03-25
+- **Size**: 19KB, 382 lines
+- **Last Updated**: 2026-09-28
 - **Status**: ✅ PRODUCTION
 - **Purpose**: Complete playlist window documentation with segment-based resize system
 - **Key Sections**:
   - Window specifications and segment grid (25×29px)
   - PlaylistWindowSizeState @Observable model
+  - Titlebar (whole bar drags; `SkinHitButton` shade/close) and the 14px shade strip (title, track length, width-only resize grip)
   - Three-section bottom bar (LEFT/CENTER/RIGHT)
   - List operations (NEW LIST / LOAD LIST / SAVE LIST)
   - Track position display (`trackPositionString`)
   - Resize gesture with AppKit preview overlay
   - Scroll slider with proportional thumb
-  - Mini visualizer (when main window shaded)
+  - Mini visualizer (when the main window is closed)
   - WindowCoordinator bridge methods
   - Size persistence and NSWindow sync
 - **When to Read**: Working with playlist, implementing resize, debugging layout issues
 - **Related Docs**: VIDEO_WINDOW.md, WINDOW_FOCUS_ARCHITECTURE.md, MULTI_WINDOW_ARCHITECTURE.md
 
 #### **[MILKDROP_WINDOW.md](MILKDROP_WINDOW.md)** ⭐
-- **Size**: 38KB, 613 lines
-- **Last Updated**: 2026-03-22
+- **Size**: 37KB, 613 lines
+- **Last Updated**: 2026-09-28
 - **Status**: ✅ PRODUCTION - Complete with Butterchurn visualization and resize
 - **Purpose**: Milkdrop visualization window with Butterchurn.js integration
 - **Key Sections**:
@@ -194,14 +195,14 @@ xcodebuild test -scheme MacAmpApp -destination 'platform=macOS' -enableThreadSan
 - **Related Docs**: MULTI_WINDOW_ARCHITECTURE.md, VIDEO_WINDOW.md, MILKDROP_WINDOW.md
 
 #### **[CUSTOM_DRAG_FIX.md](CUSTOM_DRAG_FIX.md)**
-- **Size**: 4KB, 95 lines
-- **Last Updated**: 2026-09-25
+- **Size**: 4KB, 98 lines
+- **Last Updated**: 2026-09-28
 - **Status**: ✅ CURRENT
 - **Purpose**: Custom titlebar drag without windows repelling each other or clusters breaking during fast drags
 - **Key Sections**:
   - Problem analysis: incremental deltas on current positions, dynamic cluster recalculation, missing base boxes
   - Webamp's working pattern (apply the total delta to base boxes captured at drag start)
-  - Solution: `DragContext`, `beginCustomDrag` (main drags the cluster; EQ/Playlist detach), `updateCustomDrag` (snaps the cluster bounding box)
+  - Solution: `DragContext`, `beginCustomDrag` (main drags the cluster, closed windows included; EQ/Playlist detach; Shift turns off window snapping), `updateCustomDrag` (snaps the cluster bounding box; keeps it out of the menu-bar strip)
   - Verification
 - **When to Read**: Implementing custom window dragging, debugging drag issues
 - **Related Docs**: MULTI_WINDOW_ARCHITECTURE.md
@@ -216,11 +217,11 @@ xcodebuild test -scheme MacAmpApp -destination 'platform=macOS' -enableThreadSan
 - **Key Sections**: key settings table (scheme, product, team, notary profile), Prerequisites, Building (Xcode archive and CLI), Notarization, DMG, Verification, Troubleshooting, Code Signing Troubleshooting, Debug vs Release Configuration, Testing a Release Build (`get-task-allow` trap)
 - **When to Read**: Cutting a release, signing or notarization failures
 
-### Skin System (1 document, 652 lines)
+### Skin System (1 document, 142 lines)
 
 #### **[WINAMP_SKIN_VARIATIONS.md](WINAMP_SKIN_VARIATIONS.md)**
 - **Size**: 5KB, 142 lines
-- **Last Updated**: 2026-09-25
+- **Last Updated**: 2026-09-28
 - **Status**: ✅ CURRENT
 - **Purpose**: Skin format differences (NUMBERS vs NUMS_EX, optional sheets) and how SkinManager handles missing sheets
 - **Key Sections**: Two Number Systems, bundled-skin sheet matrix, How MacAmp Handles This, Comparison with Webamp, Fonts vs Sprites
@@ -267,13 +268,13 @@ xcodebuild test -scheme MacAmpApp -destination 'platform=macOS' -enableThreadSan
 | **ICYFramer** | MACAMP_ARCHITECTURE_GUIDE.md | [Stream Decode Pipeline Components](MACAMP_ARCHITECTURE_GUIDE.md#stream-decode-pipeline-components) |
 | **Internet radio** | MACAMP_ARCHITECTURE_GUIDE.md | [Internet Radio Streaming](MACAMP_ARCHITECTURE_GUIDE.md#internet-radio-streaming) |
 | **Keyboard navigation** | MACAMP_ARCHITECTURE_GUIDE.md | [Sprite-Based Menu System](MACAMP_ARCHITECTURE_GUIDE.md#sprite-based-menu-system) |
-| **Keyboard shortcuts** | MACAMP_ARCHITECTURE_GUIDE.md | [Clutter Bar Buttons](MACAMP_ARCHITECTURE_GUIDE.md#clutter-bar-buttons) |
+| **Keyboard shortcuts** | MACAMP_ARCHITECTURE_GUIDE.md, MULTI_WINDOW_ARCHITECTURE.md | [Clutter Bar Buttons](MACAMP_ARCHITECTURE_GUIDE.md#clutter-bar-buttons), [Window Shortcuts](MULTI_WINDOW_ARCHITECTURE.md#window-shortcuts) |
 | **M3U/PLS playlist resolution** | MACAMP_ARCHITECTURE_GUIDE.md | [Internet Radio Streaming](MACAMP_ARCHITECTURE_GUIDE.md#internet-radio-streaming) |
 | **M3UParser** | MACAMP_ARCHITECTURE_GUIDE.md | [M3U Playlist Parser](MACAMP_ARCHITECTURE_GUIDE.md#m3u-playlist-parser) |
-| **Magnetic snapping** | MACAMP_ARCHITECTURE_GUIDE.md | [Window Snap Manager](MACAMP_ARCHITECTURE_GUIDE.md#window-snap-manager) |
+| **Magnetic snapping** | MACAMP_ARCHITECTURE_GUIDE.md, MULTI_WINDOW_ARCHITECTURE.md | [Window Snap Manager](MACAMP_ARCHITECTURE_GUIDE.md#window-snap-manager), [Docking](MULTI_WINDOW_ARCHITECTURE.md#docking) |
 | **MetadataLoader** | MACAMP_ARCHITECTURE_GUIDE.md | [MetadataLoader](MACAMP_ARCHITECTURE_GUIDE.md#metadataloader-macampappaudiometadataloaderswift) |
 | **Migration guides** | IMPLEMENTATION_PATTERNS.md | [Migration Guides](IMPLEMENTATION_PATTERNS.md#migration-guides) |
-| **nonisolated(unsafe) deinit** | IMPLEMENTATION_PATTERNS.md | [isolated deinit for @MainActor Cleanup](IMPLEMENTATION_PATTERNS.md#pattern-isolated-deinit-for-mainactor-cleanup-swift-62) |
+| **isolated deinit (@MainActor cleanup)** | IMPLEMENTATION_PATTERNS.md | [isolated deinit for @MainActor Cleanup](IMPLEMENTATION_PATTERNS.md#pattern-isolated-deinit-for-mainactor-cleanup-swift-62) |
 | **NUMBERS.bmp format** | WINAMP_SKIN_VARIATIONS.md | [Two Number Systems](WINAMP_SKIN_VARIATIONS.md#two-number-systems) |
 | **NUMS_EX.bmp format** | WINAMP_SKIN_VARIATIONS.md | [Two Number Systems](WINAMP_SKIN_VARIATIONS.md#two-number-systems) |
 | **onTrackMetadataUpdate callback** | IMPLEMENTATION_PATTERNS.md | [Callback Synchronization](IMPLEMENTATION_PATTERNS.md#pattern-callback-synchronization-for-cross-component-communication) |
@@ -344,12 +345,23 @@ xcodebuild test -scheme MacAmpApp -destination 'platform=macOS' -enableThreadSan
 | **playbackProgress stored** | VIDEO_WINDOW.md | [Unified Video Controls](VIDEO_WINDOW.md#unified-video-controls) (time observer) |
 | **Visualization** | MACAMP_ARCHITECTURE_GUIDE.md | [Visualizer Pipeline Architecture](MACAMP_ARCHITECTURE_GUIDE.md#visualizer-pipeline-architecture) |
 | **VisualizerPipeline** | MACAMP_ARCHITECTURE_GUIDE.md, IMPLEMENTATION_PATTERNS.md | [VisualizerPipeline](MACAMP_ARCHITECTURE_GUIDE.md#visualizerpipeline-macampappaudiovisualizerpipelineswift), [Real-Time Buffer Processing](IMPLEMENTATION_PATTERNS.md#pattern-real-time-buffer-processing) |
-| **Window clustering** | MACAMP_ARCHITECTURE_GUIDE.md | [Window Snap Manager](MACAMP_ARCHITECTURE_GUIDE.md#window-snap-manager) |
+| **Window clustering** | MACAMP_ARCHITECTURE_GUIDE.md, MULTI_WINDOW_ARCHITECTURE.md | [Window Snap Manager](MACAMP_ARCHITECTURE_GUIDE.md#window-snap-manager), [Docking](MULTI_WINDOW_ARCHITECTURE.md#docking) |
 | **Window focus tracking** | WINDOW_FOCUS_ARCHITECTURE.md | Full document |
 | **Window hierarchy** | MULTI_WINDOW_ARCHITECTURE.md | [Current MacAmp Architecture](MULTI_WINDOW_ARCHITECTURE.md#current-macamp-architecture) |
 | **Window lifecycle** | MACAMP_ARCHITECTURE_GUIDE.md | [Window Lifecycle Management](MACAMP_ARCHITECTURE_GUIDE.md#window-lifecycle-management) |
-| **Window management** | MACAMP_ARCHITECTURE_GUIDE.md | [Window Snap Manager](MACAMP_ARCHITECTURE_GUIDE.md#window-snap-manager) |
+| **Window management** | MULTI_WINDOW_ARCHITECTURE.md, MACAMP_ARCHITECTURE_GUIDE.md | Full document, [Window Snap Manager](MACAMP_ARCHITECTURE_GUIDE.md#window-snap-manager) |
 | **Window ownership** | MULTI_WINDOW_ARCHITECTURE.md | [File Structure and Responsibilities](MULTI_WINDOW_ARCHITECTURE.md#file-structure-and-responsibilities) |
+| **Docking / DockGraph** | MULTI_WINDOW_ARCHITECTURE.md | [Docking](MULTI_WINDOW_ARCHITECTURE.md#docking) (closed windows keep the chain, 10 px snap) |
+| **Shift-drag (no window snapping)** | MULTI_WINDOW_ARCHITECTURE.md, CUSTOM_DRAG_FIX.md | [Docking](MULTI_WINDOW_ARCHITECTURE.md#docking), [Solution](CUSTOM_DRAG_FIX.md#solution) |
+| **Shade/unshade re-anchoring** | MULTI_WINDOW_ARCHITECTURE.md | [Docking](MULTI_WINDOW_ARCHITECTURE.md#docking) (`DockGraph.followResize`) |
+| **Window frame / visibility persistence** | MULTI_WINDOW_ARCHITECTURE.md | [Persistence](MULTI_WINDOW_ARCHITECTURE.md#persistence) |
+| **Off-screen windows / sleep-wake / display changes** | MULTI_WINDOW_ARCHITECTURE.md | [Off-Screen Recovery](MULTI_WINDOW_ARCHITECTURE.md#off-screen-recovery-windowscreenguard) |
+| **WindowScreenGuard / ScreenClamp** | MULTI_WINDOW_ARCHITECTURE.md | [Off-Screen Recovery](MULTI_WINDOW_ARCHITECTURE.md#off-screen-recovery-windowscreenguard) |
+| **Reset Window Positions** | MULTI_WINDOW_ARCHITECTURE.md | [Off-Screen Recovery](MULTI_WINDOW_ARCHITECTURE.md#off-screen-recovery-windowscreenguard) |
+| **Minimize (Cmd+M / Option+M)** | MULTI_WINDOW_ARCHITECTURE.md | [Minimize](MULTI_WINDOW_ARCHITECTURE.md#minimize) (`minimizeApp`, one Dock tile) |
+| **Windowshade mode (Ctrl+W) / shade strips** | MULTI_WINDOW_ARCHITECTURE.md | [Titlebars and Windowshade Strips](MULTI_WINDOW_ARCHITECTURE.md#titlebars-and-windowshade-strips) |
+| **SkinHitButton / titlebar buttons** | MULTI_WINDOW_ARCHITECTURE.md | [Titlebars and Windowshade Strips](MULTI_WINDOW_ARCHITECTURE.md#titlebars-and-windowshade-strips) |
+| **Playlist shade strip / width grip** | PLAYLIST_WINDOW.md | [Top Bar (Titlebar)](PLAYLIST_WINDOW.md#top-bar-titlebar), [Resize Handle Implementation](PLAYLIST_WINDOW.md#resize-handle-implementation) |
 | **Playlist window** | PLAYLIST_WINDOW.md | Full document |
 | **Playlist resize** | PLAYLIST_WINDOW.md | [Segment-Based Resize System](PLAYLIST_WINDOW.md#segment-based-resize-system) |
 | **PlaylistWindowSizeState** | PLAYLIST_WINDOW.md | [PlaylistWindowSizeState](PLAYLIST_WINDOW.md#playlistwindowsizestate) |
@@ -367,7 +379,7 @@ xcodebuild test -scheme MacAmpApp -destination 'platform=macOS' -enableThreadSan
 | **God object decomposition** | MULTI_WINDOW_ARCHITECTURE.md | [Rationale](MULTI_WINDOW_ARCHITECTURE.md#rationale) |
 | **Swift 6.2 concurrency** | MULTI_WINDOW_ARCHITECTURE.md | [Swift 6.2 Concurrency Patterns](MULTI_WINDOW_ARCHITECTURE.md#swift-62-concurrency-patterns) |
 | **Recursive withObservationTracking** | MULTI_WINDOW_ARCHITECTURE.md | [Recursive withObservationTracking](MULTI_WINDOW_ARCHITECTURE.md#recursive-withobservationtracking) |
-| **nonisolated deinit** | MULTI_WINDOW_ARCHITECTURE.md | [isolated deinit](MULTI_WINDOW_ARCHITECTURE.md#isolated-deinit) |
+| **isolated deinit (WindowCoordinator)** | MULTI_WINDOW_ARCHITECTURE.md | [isolated deinit](MULTI_WINDOW_ARCHITECTURE.md#isolated-deinit) |
 | **Xcode settings** | RELEASE_BUILD_GUIDE.md | [Xcode Configuration](RELEASE_BUILD_GUIDE.md#xcode-configuration) |
 | **AudioEngineController** | MACAMP_ARCHITECTURE_GUIDE.md | [AudioPlayer Decomposition Architecture](MACAMP_ARCHITECTURE_GUIDE.md#audioplayer-decomposition-architecture) |
 | **StreamTerminationReason** | MACAMP_ARCHITECTURE_GUIDE.md, IMPLEMENTATION_PATTERNS.md | [Auto-Reconnect State Machine](MACAMP_ARCHITECTURE_GUIDE.md#auto-reconnect-state-machine), [Typed Stream Termination Reasons](IMPLEMENTATION_PATTERNS.md#pattern-typed-stream-termination-reasons) |
@@ -382,7 +394,7 @@ xcodebuild test -scheme MacAmpApp -destination 'platform=macOS' -enableThreadSan
 | **Stream elapsed time** | BUILDING_RETRO_MACOS_APPS_SKILL.md | Lesson #34 (Anchor-Based Timer) |
 | **Playlist list operations (NEW/LOAD/SAVE)** | PLAYLIST_WINDOW.md | [List Operations](PLAYLIST_WINDOW.md#list-operations-new-list--load-list--save-list) |
 | **M3UWriter** | PLAYLIST_WINDOW.md | [List Operations](PLAYLIST_WINDOW.md#list-operations-new-list--load-list--save-list) |
-| **QueueConfined protocol** | `MacAmpApp/Audio/QueueConfined.swift` | (code file; no dedicated doc section yet) |
+| **QueueConfined protocol** | `MacAmpApp/Audio/Streaming/QueueConfined.swift` | (code file; no dedicated doc section yet) |
 | **TimeFormatting** | `MacAmpApp/Utilities/TimeFormatting.swift` | (code file; no dedicated doc section yet) |
 | **MenuActionTarget / MenuItemFactory** | IMPLEMENTATION_PATTERNS.md | [NSMenu Presenter Isolation](IMPLEMENTATION_PATTERNS.md#pattern-nsmenu-presenter-isolation) |
 | **WinampAlertHelper** | `MacAmpApp/Utilities/WinampAlertHelper.swift` | (code file; no dedicated doc section yet) |
@@ -410,12 +422,16 @@ xcodebuild test -scheme MacAmpApp -destination 'platform=macOS' -enableThreadSan
 | "What's the app architecture?" | [Three-Layer Architecture](MACAMP_ARCHITECTURE_GUIDE.md#three-layer-architecture-deep-dive) |
 | "How do I test my changes?" | [Test Plan Quick Reference](#test-plan-quick-reference) + [Testing Patterns](IMPLEMENTATION_PATTERNS.md#testing-patterns) |
 | "What Swift 6 features are used?" | [Modern Swift 6.2 Patterns](MACAMP_ARCHITECTURE_GUIDE.md#modern-swift-62-patterns) |
-| "How does window snapping work?" | [Window Snap Manager](MACAMP_ARCHITECTURE_GUIDE.md#window-snap-manager) |
+| "How does window snapping work?" | [Window Snap Manager](MACAMP_ARCHITECTURE_GUIDE.md#window-snap-manager) + [Docking](MULTI_WINDOW_ARCHITECTURE.md#docking) |
+| "How do I move one window out of a docked group?" | Drag that window: only a Main drag moves the group. Shift held at mouse-down moves Main alone ([Docking](MULTI_WINDOW_ARCHITECTURE.md#docking)) |
+| "Windows are off-screen after sleep or a display change?" | [Off-Screen Recovery](MULTI_WINDOW_ARCHITECTURE.md#off-screen-recovery-windowscreenguard); Options › Reset Window Positions restores the default stack |
+| "How does minimize work?" | [Minimize](MULTI_WINDOW_ARCHITECTURE.md#minimize): the whole player goes to one Dock tile (Main's button, Cmd+M, Option+M) |
+| "Why do the EQ and Playlist have no minimize button?" | Winamp gives them only shade and close; see [Titlebars and Windowshade Strips](MULTI_WINDOW_ARCHITECTURE.md#titlebars-and-windowshade-strips) |
 | "What's the spectrum analyzer algorithm?" | [Spectrum Analyzer](MACAMP_ARCHITECTURE_GUIDE.md#spectrum-analyzer-20-bar-goertzel-implementation) (20-bar Goertzel) |
 | "How does audio data reach the UI thread?" | [SPSC Shared Buffer](IMPLEMENTATION_PATTERNS.md#pattern-spsc-shared-buffer-for-audio-to-main-thread-transfer) (SPSC shared buffer + poll timer) |
 | "What are the clutter bar buttons?" | [Clutter Bar Buttons](MACAMP_ARCHITECTURE_GUIDE.md#clutter-bar-buttons) |
 | "How do I add clutter bar features?" | [Clutter Bar Buttons](MACAMP_ARCHITECTURE_GUIDE.md#clutter-bar-buttons) |
-| "What keyboard shortcuts are available?" | [Clutter Bar Buttons](MACAMP_ARCHITECTURE_GUIDE.md#clutter-bar-buttons) |
+| "What keyboard shortcuts are available?" | [Clutter Bar Buttons](MACAMP_ARCHITECTURE_GUIDE.md#clutter-bar-buttons) + [Window Shortcuts](MULTI_WINDOW_ARCHITECTURE.md#window-shortcuts) |
 | "How does window focus tracking work?" | WINDOW_FOCUS_ARCHITECTURE.md + [Window Focus State Management](MACAMP_ARCHITECTURE_GUIDE.md#window-focus-state-management) |
 | "How to make titlebars active/inactive?" | [View Layer Usage](WINDOW_FOCUS_ARCHITECTURE.md#4-view-layer-usage) |
 | "How does video playback work?" | [Video Playback System](VIDEO_WINDOW.md#video-playback-system) |
@@ -482,28 +498,28 @@ CODE_SIGNING_FIX.md, CODE_SIGNING_FIX_DIAGRAM.md, and RELEASE_BUILD_COMPARISON.m
 ```
 12 Core Technical Documents
 ─────────────────────────────
-IMPLEMENTATION_PATTERNS.md           3,087 lines  (35%)
-MACAMP_ARCHITECTURE_GUIDE.md         2,439 lines  (28%)
-MILKDROP_WINDOW.md                     613 lines  (7%)
-VIDEO_WINDOW.md                        537 lines  (6%)
-README.md (this file)                  534 lines  (6%)
-PLAYLIST_WINDOW.md                     376 lines  (4%)
-SPRITE_SYSTEM_COMPLETE.md              337 lines  (4%)
-MULTI_WINDOW_ARCHITECTURE.md           264 lines  (3%)
-RELEASE_BUILD_GUIDE.md                 239 lines  (3%)
-WINDOW_FOCUS_ARCHITECTURE.md           148 lines  (2%)
-WINAMP_SKIN_VARIATIONS.md              142 lines  (2%)
-CUSTOM_DRAG_FIX.md                      95 lines  (1%)
+IMPLEMENTATION_PATTERNS.md          3,085 lines  (35%)
+MACAMP_ARCHITECTURE_GUIDE.md        2,444 lines  (27%)
+MILKDROP_WINDOW.md                    613 lines  (7%)
+README.md (this file)                 552 lines  (6%)
+VIDEO_WINDOW.md                       537 lines  (6%)
+PLAYLIST_WINDOW.md                    382 lines  (4%)
+SPRITE_SYSTEM_COMPLETE.md             337 lines  (4%)
+MULTI_WINDOW_ARCHITECTURE.md          330 lines  (4%)
+RELEASE_BUILD_GUIDE.md                239 lines  (3%)
+WINDOW_FOCUS_ARCHITECTURE.md          148 lines  (2%)
+WINAMP_SKIN_VARIATIONS.md             142 lines  (2%)
+CUSTOM_DRAG_FIX.md                     98 lines  (1%)
 ─────────────────────────────
-TOTAL:                              8,811 lines
+TOTAL:                              8,907 lines
 ```
 
 ### Documentation by Category
 
-- **Architecture & Design**: 88% (16,931 lines)
-- **Build & Distribution**: 4% (692 lines)
-- **Skin System**: 3% (652 lines)
-- **Navigation & Index**: 6% (1,065 lines)
+- **Architecture & Design**: 90% (7,974 lines)
+- **Build & Distribution**: 3% (239 lines)
+- **Skin System**: 2% (142 lines)
+- **Navigation & Index**: 6% (552 lines)
 
 ---
 
@@ -516,6 +532,7 @@ TOTAL:                              8,811 lines
 | Bug fix with a lesson | [Anti-Patterns to Avoid](IMPLEMENTATION_PATTERNS.md#anti-patterns-to-avoid) |
 | Build process change | RELEASE_BUILD_GUIDE.md |
 | Skin compatibility issue | WINAMP_SKIN_VARIATIONS.md |
+| Window behaviour change (docking, recovery, minimize, shade) | MULTI_WINDOW_ARCHITECTURE.md + the window's own doc |
 | Any of the above | This index: inventory entry, topic lookup, line counts |
 
 - **Accuracy over ambition:** document what the code does now; verify snippets, paths, and commands against the repo.
@@ -527,6 +544,7 @@ TOTAL:                              8,811 lines
 
 ## Version History
 
+- **3.14.0 (2026-09-28):** Window docking, off-screen recovery, group minimize and windowshade documented in MULTI_WINDOW_ARCHITECTURE.md; stale `DockingController` references removed across docs; index re-audited (inventory sizes/dates, topic lookup, common questions, statistics).
 - **3.13.0 (2026-09-25):** Pruned this index (removed duplicate category/reading-path/map sections and stale quality metrics); leaner RELEASE_BUILD_GUIDE, SPRITE_SYSTEM_COMPLETE, WINAMP_SKIN_VARIATIONS, WINDOW_FOCUS_ARCHITECTURE, CUSTOM_DRAG_FIX re-verified against code.
 - **3.12.0 (2026-09-25):** Documented AVPlayer-native video DSP (`MTAudioProcessingTap`) and fixed stale docs.
 - **3.11.0 (2026-03-25):** Merged multi-window quick start and README into MULTI_WINDOW_ARCHITECTURE.md; archived research summary (15 → 12 docs).

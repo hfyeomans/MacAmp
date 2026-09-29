@@ -90,7 +90,7 @@ Shared window infrastructure (controller stack, three-layer pattern, focus) is d
 
 ### Window Controller Pattern
 
-`WinampVideoWindowController` (`MacAmpApp/Windows/WinampVideoWindowController.swift`) creates a 275×232 `BorderlessWindow`, applies `WinampWindowConfigurator.apply(to:)`, enables the shadow, hosts `WinampVideoWindow` in an `NSHostingController` set as `contentViewController` (never `contentView`, which would release the hosting controller), then calls `WinampWindowConfigurator.installHitSurface(on:)`. It injects `SkinManager`, `AudioPlayer`, `DockingController`, `AppSettings`, `RadioStationLibrary`, `PlaybackCoordinator` and `WindowFocusState` into the environment.
+`WinampVideoWindowController` (`MacAmpApp/Windows/WinampVideoWindowController.swift`) creates a 275×232 `BorderlessWindow`, applies `WinampWindowConfigurator.apply(to:)`, enables the shadow, hosts `WinampVideoWindow` in an `NSHostingController` set as `contentViewController` (never `contentView`, which would release the hosting controller), then calls `WinampWindowConfigurator.installHitSurface(on:)`. It injects `SkinManager`, `AudioPlayer`, `AppSettings`, `RadioStationLibrary`, `PlaybackCoordinator` and `WindowFocusState` into the environment.
 
 ### Five-Window System Integration
 
@@ -384,11 +384,11 @@ Committing only at the end avoids calling `setFrame` on every drag tick (the jit
 
 ### Position Persistence
 
-Frames are saved for every window by `WindowFramePersistence` (`MacAmpApp/Windows/`) through `WindowFrameStore`, under UserDefaults key `WindowFrame.video`. Geometry-change notifications schedule a debounced flush (150 ms); programmatic moves suppress persistence. The window's size in segments is persisted separately by `VideoWindowSizeState`.
+Frames are saved for every window by `WindowFramePersistence` (`MacAmpApp/Windows/`) through `WindowFrameStore`, under UserDefaults key `WindowFrame.video`. Geometry-change notifications schedule a debounced flush (150 ms); programmatic moves suppress persistence. At launch the whole saved frame (position and size) is restored. The window's size in segments is persisted separately by `VideoWindowSizeState`.
 
 ### Magnetic Docking
 
-The window is registered with `WindowSnapManager` as `WindowKind.video`: it snaps to screen edges and other MacAmp windows within `SnapUtils.SNAP_DISTANCE` (15 px), joins clusters and moves with them. Double-size mode does not scale the video window; `WindowResizeController` repositions it to stay docked. See [Window Snap Manager](MACAMP_ARCHITECTURE_GUIDE.md#window-snap-manager).
+The window is registered with `WindowSnapManager` as `WindowKind.video`: it snaps to screen edges and other MacAmp windows within `SnapUtils.SNAP_DISTANCE` (10 px), joins clusters and moves with them. Double-size mode does not scale the video window; `WindowResizeController` repositions it to stay docked. See [Window Snap Manager](MACAMP_ARCHITECTURE_GUIDE.md#window-snap-manager).
 
 ### Visibility State
 
@@ -466,7 +466,7 @@ Video audio DSP suites (`Tests/MacAmpTests/`, Swift Testing; run with Thread San
 | `VideoSeekStateMatrixTests` | `resume: true/false/nil` seek outcomes |
 | `VideoTapSendableContractTests` | `VideoTapContext` stored fields stay render-thread-safe |
 
-Window geometry is covered by `WindowFrameStoreTests` and `WindowDockingGeometryTests`.
+Window geometry is covered by `WindowFrameStoreTests`, `DockGraphTests` and `ScreenClampTests`.
 
 ---
 

@@ -24,7 +24,7 @@ struct BoundingBox {
 }
 
 enum SnapUtils {
-    static let SNAP_DISTANCE: CGFloat = 15
+    static let SNAP_DISTANCE: CGFloat = 10  // Winamp default ("Dock skinned windows at 10 pixels")
 
     static func top(_ b: Box) -> CGFloat { b.y }
     static func bottom(_ b: Box) -> CGFloat { b.y + b.height }
@@ -75,13 +75,14 @@ enum SnapUtils {
         return Diff(x: x, y: y)
     }
 
+    /// Nearest snap per axis; `others` has no stable order, so the first match could land a few px off.
     static func snapToMany(_ a: Box, _ others: [Box]) -> Diff {
         var x: CGFloat?
         var y: CGFloat?
         for b in others {
             let newPos = snap(a, b)
-            if x == nil { x = newPos.x }
-            if y == nil { y = newPos.y }
+            if let nx = newPos.x, x.map({ abs(nx - a.x) < abs($0 - a.x) }) ?? true { x = nx }
+            if let ny = newPos.y, y.map({ abs(ny - a.y) < abs($0 - a.y) }) ?? true { y = ny }
         }
         return Diff(x: x, y: y)
     }

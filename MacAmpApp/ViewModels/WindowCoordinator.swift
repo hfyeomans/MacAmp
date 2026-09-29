@@ -11,6 +11,7 @@ final class WindowCoordinator {
     let skinManager: SkinManager
     private let windowFocusState: WindowFocusState
     let framePersistence: WindowFramePersistence
+    let screenGuard: WindowScreenGuard
     let visibility: WindowVisibilityController
     let resizeController: WindowResizeController
     private let settingsObserver: WindowSettingsObserver
@@ -23,7 +24,7 @@ final class WindowCoordinator {
     var videoWindow: NSWindow? { registry.videoWindow }
     var milkdropWindow: NSWindow? { registry.milkdropWindow }
     // swiftlint:disable:next function_body_length
-    init(skinManager: SkinManager, audioPlayer: AudioPlayer, dockingController: DockingController, settings: AppSettings, radioLibrary: RadioStationLibrary, playbackCoordinator: PlaybackCoordinator, windowFocusState: WindowFocusState) {
+    init(skinManager: SkinManager, audioPlayer: AudioPlayer, settings: AppSettings, radioLibrary: RadioStationLibrary, playbackCoordinator: PlaybackCoordinator, windowFocusState: WindowFocusState) {
         // Store shared state references
         self.settings = settings
         self.skinManager = skinManager
@@ -33,31 +34,31 @@ final class WindowCoordinator {
         registry = WindowRegistry(
             mainController: WinampMainWindowController(
                 skinManager: skinManager, audioPlayer: audioPlayer,
-                dockingController: dockingController, settings: settings,
+                settings: settings,
                 radioLibrary: radioLibrary, playbackCoordinator: playbackCoordinator,
                 windowFocusState: windowFocusState
             ),
             eqController: WinampEqualizerWindowController(
                 skinManager: skinManager, audioPlayer: audioPlayer,
-                dockingController: dockingController, settings: settings,
+                settings: settings,
                 radioLibrary: radioLibrary, playbackCoordinator: playbackCoordinator,
                 windowFocusState: windowFocusState
             ),
             playlistController: WinampPlaylistWindowController(
                 skinManager: skinManager, audioPlayer: audioPlayer,
-                dockingController: dockingController, settings: settings,
+                settings: settings,
                 radioLibrary: radioLibrary, playbackCoordinator: playbackCoordinator,
                 windowFocusState: windowFocusState
             ),
             videoController: WinampVideoWindowController(
                 skinManager: skinManager, audioPlayer: audioPlayer,
-                dockingController: dockingController, settings: settings,
+                settings: settings,
                 radioLibrary: radioLibrary, playbackCoordinator: playbackCoordinator,
                 windowFocusState: windowFocusState
             ),
             milkdropController: WinampMilkdropWindowController(
                 skinManager: skinManager, audioPlayer: audioPlayer,
-                dockingController: dockingController, settings: settings,
+                settings: settings,
                 radioLibrary: radioLibrary, playbackCoordinator: playbackCoordinator,
                 windowFocusState: windowFocusState
             )
@@ -65,6 +66,7 @@ final class WindowCoordinator {
 
         // Create persistence controller
         framePersistence = WindowFramePersistence(registry: registry, settings: settings)
+        screenGuard = WindowScreenGuard(registry: registry, persistence: framePersistence)
 
         // Create visibility controller
         visibility = WindowVisibilityController(registry: registry, settings: settings)
@@ -89,6 +91,11 @@ final class WindowCoordinator {
         // Apply persisted positions or fall back to defaults
         applyInitialWindowLayout()
         debugLogWindowPositions(step: "after applying initial window layout")
+        screenGuard.clampOnScreen()
+        framePersistence.persistAllWindowFrames()
+        screenGuard.start()
+        visibility.onGroupRestored = { [weak self] in self?.screenGuard.clampOnScreen() }
+        visibility.start()
 
         // Show windows only after the initial skin has loaded
         presentWindowsWhenReady()
@@ -142,6 +149,8 @@ final class WindowCoordinator {
 
     isolated deinit {
         settingsObserver.stop()
+        screenGuard.stop()
+        visibility.stop()
     }
 
     // MARK: - Window Resize (forwarded to WindowResizeController)
@@ -172,7 +181,8 @@ final class WindowCoordinator {
 
     // MARK: - Window Visibility (forwarded to WindowVisibilityController)
 
-    func minimizeKeyWindow() { visibility.minimizeKeyWindow() }
+    func minimizeApp() { visibility.minimizeGroup() }
+    var canMinimizeApp: Bool { visibility.canMinimizeGroup }
     func showEQWindow() { visibility.showEQWindow() }
     func hideEQWindow() { visibility.hideEQWindow() }
     func toggleEQWindowVisibility() -> Bool { visibility.toggleEQWindowVisibility() }
@@ -207,6 +217,17 @@ final class WindowCoordinator {
     func showAllWindows() { visibility.showAllWindows() }
     func showMain() { visibility.showMain() }
     func hideMain() { visibility.hideMain() }
+    func toggleMain() { visibility.toggleMain() }
+
+    /// Default Winamp stack on the main screen, then kept on screen as a group.
+    func resetWindowPositions() {
+        WindowSnapManager.shared.beginProgrammaticAdjustment()
+        setDefaultPositions()
+        WindowSnapManager.shared.endProgrammaticAdjustment()
+        screenGuard.clampOnScreen()
+        framePersistence.persistAllWindowFrames()
+    }
+    var isMainWindowVisible: Bool { visibility.isMainWindowVisible }
     func showEqualizer() { visibility.showEQWindow(makeKey: true) }
     func hideEqualizer() { visibility.hideEQWindow() }
     func showPlaylist() { visibility.showPlaylistWindow(makeKey: true) }

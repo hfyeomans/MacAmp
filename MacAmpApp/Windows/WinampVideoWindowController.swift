@@ -3,7 +3,7 @@ import SwiftUI
 
 @MainActor
 class WinampVideoWindowController: NSWindowController {
-    convenience init(skinManager: SkinManager, audioPlayer: AudioPlayer, dockingController: DockingController, settings: AppSettings, radioLibrary: RadioStationLibrary, playbackCoordinator: PlaybackCoordinator, windowFocusState: WindowFocusState) {
+    convenience init(skinManager: SkinManager, audioPlayer: AudioPlayer, settings: AppSettings, radioLibrary: RadioStationLibrary, playbackCoordinator: PlaybackCoordinator, windowFocusState: WindowFocusState) {
         // Create borderless window (follows TASK 1 pattern)
         let window = BorderlessWindow(
             contentRect: NSRect(x: 0, y: 0, width: 275, height: 232),  // Video window matches playlist height
@@ -21,7 +21,6 @@ class WinampVideoWindowController: NSWindowController {
         let rootView = WinampVideoWindow()
             .environment(skinManager)
             .environment(audioPlayer)
-            .environment(dockingController)
             .environment(settings)
             .environment(radioLibrary)
             .environment(playbackCoordinator)

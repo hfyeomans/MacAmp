@@ -116,7 +116,7 @@ Shared window infrastructure (three-layer pattern, controller stack, focus, snap
 
 - `SkinManager`: GEN.bmp sprites
 - `AudioPlayer`: source of Butterchurn audio frames (`snapshotButterchurnFrame()`, see §9.4)
-- `DockingController`, `AppSettings`, `RadioStationLibrary`, `PlaybackCoordinator`
+- `AppSettings`, `RadioStationLibrary`, `PlaybackCoordinator`
 - `WindowFocusState`: focus tracking for chrome state
 - `ButterchurnBridge`, `ButterchurnPresetManager`: owned by the controller
 
@@ -548,12 +548,12 @@ Hybrid is kept because WKWebView already sandboxes the content, every supported 
 
 ### 10.1 Window Position and Size Persistence
 
-- **Frame:** saved for all windows by `WindowFramePersistence` via `WindowFrameStore` under UserDefaults key `WindowFrame.milkdrop` (debounced 150 ms after geometry changes; suppressed during programmatic moves).
+- **Frame:** saved for all windows by `WindowFramePersistence` via `WindowFrameStore` under UserDefaults key `WindowFrame.milkdrop` (debounced 150 ms after geometry changes; suppressed during programmatic moves). At launch the whole saved frame (position and size) is restored.
 - **Size (segments):** `MilkdropWindowSizeState.size.didSet` saves `["width": Int, "height": Int]` under `milkdropWindowSize`; `loadSize()` restores it clamped to `milkdropMinimum`, defaulting to `milkdropDefault`.
 
 ### 10.2 Magnetic Docking
 
-The window is registered with `WindowSnapManager` as `WindowKind.milkdrop`: it snaps to screen edges and other MacAmp windows within `SnapUtils.SNAP_DISTANCE` (15px), forms clusters and moves with them. See [Window Snap Manager](MACAMP_ARCHITECTURE_GUIDE.md#window-snap-manager).
+The window is registered with `WindowSnapManager` as `WindowKind.milkdrop`: it snaps to screen edges and other MacAmp windows within `SnapUtils.SNAP_DISTANCE` (10px), forms clusters and moves with them. See [Window Snap Manager](MACAMP_ARCHITECTURE_GUIDE.md#window-snap-manager).
 
 ### 10.3 Window Lifecycle
 

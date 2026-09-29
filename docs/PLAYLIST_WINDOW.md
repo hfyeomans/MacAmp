@@ -40,13 +40,13 @@ The Playlist Window provides track management with PLEDIT.bmp skinning and Winam
 | **Segment Resize** | 25px width × 29px height grid quantization |
 | **Dynamic Tiling** | Chrome tiles expand/contract with window size |
 | **Scroll Slider** | Functional track navigation with proportional thumb |
-| **Mini Visualizer** | 72×16px spectrum display when main window shaded |
+| **Mini Visualizer** | 72×16px spectrum display when the main window is closed |
 | **Size Persistence** | UserDefaults storage across app restarts |
 
 ### Activation Methods
 
 1. **PL Button:** Click the "PL" button on the main window (`WindowCoordinator.togglePlaylistWindowVisibility()`)
-2. **Menu / Keyboard:** Options → Show/Hide Playlist (`⌘⇧2`, `DockingController.togglePlaylist()`)
+2. **Menu / Keyboard:** Options → Show/Hide Playlist (`⌘⇧2`, `WindowCoordinator.togglePlaylistWindowVisibility()`)
 
 ---
 
@@ -109,17 +109,17 @@ Window Layout (Default 275×232):
 
 ### File Structure
 
-`WinampPlaylistWindow.swift` (220 lines) is the root composer: background chrome, content overlay and shade switch. Child views live in `MacAmpApp/Views/PlaylistWindow/`:
+`WinampPlaylistWindow.swift` (231 lines) is the root composer: background chrome, content overlay and shade switch. Child views live in `MacAmpApp/Views/PlaylistWindow/`:
 
 ```
 MacAmpApp/Views/PlaylistWindow/
-  PlaylistWindowInteractionState.swift  (61 lines, @Observable state)
+  PlaylistWindowInteractionState.swift  (60 lines, @Observable state)
   PlaylistMenuPresenter.swift           (195 lines, AppKit NSMenu bridge)
   PlaylistTrackListView.swift           (78 lines, track list + selection)
   PlaylistBottomControlsView.swift      (113 lines, transport + time)
-  PlaylistShadeView.swift               (42 lines, shade mode)
-  PlaylistResizeHandle.swift            (65 lines, resize drag gesture)
-  PlaylistTitleBarButtons.swift         (33 lines, titlebar buttons)
+  PlaylistShadeView.swift               (79 lines, 14px shade strip)
+  PlaylistResizeHandle.swift            (72 lines, resize drag gesture)
+  PlaylistTitleBarButtons.swift         (20 lines, titlebar buttons)
 
 MacAmpApp/Views/
   PlaylistWindowActions.swift           (318 lines, playlist operations: NEW/LOAD/SAVE LIST, sort, remove, crop)
@@ -136,7 +136,7 @@ Following the [three-layer architecture](MACAMP_ARCHITECTURE_GUIDE.md#three-laye
 
 ### Window Controller Pattern
 
-`WinampPlaylistWindowController` creates a 275×232 `BorderlessWindow` with `styleMask: [.borderless, .resizable]`, `minSize` = (`baseWidth`, `baseHeight`) and `maxSize` = 2000×900, applies `WinampWindowConfigurator`, and hosts `WinampPlaylistWindow` with `SkinManager`, `AudioPlayer`, `DockingController`, `AppSettings`, `RadioStationLibrary`, `PlaybackCoordinator` and `WindowFocusState` injected. It is one of the five windows owned by `WindowCoordinator`; see [Five-Window NSWindowController Stack](MACAMP_ARCHITECTURE_GUIDE.md#five-window-nswindowcontroller-stack).
+`WinampPlaylistWindowController` creates a 275×232 `BorderlessWindow` with `styleMask: [.borderless, .resizable]`, `minSize` = (`baseWidth`, `baseHeight`) and `maxSize` = 2000×900, applies `WinampWindowConfigurator`, and hosts `WinampPlaylistWindow` with `SkinManager`, `AudioPlayer`, `AppSettings`, `RadioStationLibrary`, `PlaybackCoordinator` and `WindowFocusState` injected. It is one of the five windows owned by `WindowCoordinator`; see [Five-Window NSWindowController Stack](MACAMP_ARCHITECTURE_GUIDE.md#five-window-nswindowcontroller-stack).
 
 ---
 
@@ -150,8 +150,12 @@ All chrome is drawn by `WinampPlaylistWindow.buildCompleteBackground()` with abs
 |-------|--------|-----------|
 | Left corner | `PLAYLIST_TOP_LEFT_SELECTED` (active) / `PLAYLIST_TOP_LEFT_CORNER` (inactive), 25×20 | x = 12.5 |
 | Background tiles | `PLAYLIST_TOP_TILE<suffix>`, 25×20 × `topBarTileCount` = `ceil((width − 25) / 25)` | from x = 37.5, under the title |
-| Title | `PLAYLIST_TITLE_BAR<suffix>`, 100×20, wrapped in `WinampTitlebarDragHandle(windowKind: .playlist, …)` | centred at width / 2 |
+| Title | `PLAYLIST_TITLE_BAR<suffix>`, 100×20 | centred at width / 2 |
 | Right corner | `PLAYLIST_TOP_RIGHT_CORNER<suffix>`, 25×20 | x = width − 12.5 |
+
+The whole top bar is wrapped in `WinampTitlebarDragHandle(windowKind: .playlist, …)`, so any part of it drags the window. The shade and close buttons are part of the titlebar bitmap: `PlaylistTitleBarButtons` places `SkinHitButton` hit areas (9×9 at x = width − 16.5 and width − 6.5) that draw only `PLAYLIST_COLLAPSE_SELECTED` / `PLAYLIST_CLOSE_SELECTED` while pressed. Shade toggles `settings.isPlaylistWindowShaded`.
+
+Shaded, `PlaylistShadeView` draws the 14px strip (`PLAYLIST_SHADE_BACKGROUND_LEFT`, tiled `PLAYLIST_SHADE_BACKGROUND`, `PLAYLIST_SHADE_BACKGROUND_RIGHT` / `_RIGHT_SELECTED`) with the current track title and length in TEXT.BMP characters; the whole strip drags the window, and the right cap's buttons use `PLAYLIST_EXPAND_SELECTED` / `PLAYLIST_CLOSE_SELECTED`.
 
 `showTitlebarSpacers` (even width segment count, Webamp parity) is exposed by the size state.
 
@@ -219,6 +223,8 @@ Example Sizes:
 - **onChanged:** candidate = start + `round(dx/25)`, `round(dy/29)` segments (clamped at 0); only the AppKit preview is updated via `coordinator.showPlaylistResizePreview(resizePreview, previewSize:)`.
 - **onEnded:** recompute the final size from the total translation, commit `sizeState.size`, `updatePlaylistWindowSize(to:)`, `hidePlaylistResizePreview`, clear drag state, `endProgrammaticAdjustment()`.
 
+The shade strip uses the same handle with `widthOnly: true`: a 9×9 grip near the strip's right end that changes only the width segment and keeps the 14px strip height.
+
 ### WindowCoordinator Bridge Methods
 
 `WindowResizeController.updatePlaylistWindowSize(to:)` returns early if the size is unchanged, otherwise sets a top-left-anchored frame (`topLeftAnchoredFrame(from:newSize:)`). The playlist is not scaled by double-size mode. `showPlaylistResizePreview` shows the shared `WindowResizePreviewOverlay` over the playlist window; `hidePlaylistResizePreview` hides it.
@@ -252,9 +258,9 @@ Example Sizes:
 
 The playlist window displays a mini visualizer in the bottom bar when:
 1. Window is wide enough (`sizeState.size.width >= 3`, i.e., 350px+)
-2. Main window is in shade mode (`settings.isMainWindowShaded`)
+2. Main window is closed (`WindowCoordinator.isMainWindowVisible == false`)
 
-This matches Winamp 5.x behavior where the visualizer appears in the playlist when the main window's visualizer is hidden.
+This matches Webamp: the playlist's visualizer stands in for Main's while Main is closed. A shaded Main shows its own mini visualizer in the shade strip.
 
 It is the same `VisualizerView` as the main window, gated on `audioPlayer.isVisualizerRendering`, so it animates for video playback as well as audio (see [AVPlayer-Native Video DSP](MACAMP_ARCHITECTURE_GUIDE.md#avplayer-native-video-dsp)).
 
@@ -266,7 +272,7 @@ if showVisualizer {
     SimpleSpriteImage("PLAYLIST_VISUALIZER_BACKGROUND", width: 75, height: 38)
         .position(x: windowWidth - 187.5, y: windowHeight - 19)
 
-    if settings.isMainWindowShaded {
+    if WindowCoordinator.shared?.isMainWindowVisible == false {
         // Render at 76px native width, clip to 72px to match Winamp's visualizer inset
         VisualizerView()
             .frame(width: 76, height: 16)
@@ -293,7 +299,7 @@ if showVisualizer {
 
 ### Window Position Restoration
 
-`WindowFramePersistence.restorePlaylistWindow()` reads the stored frame (`WindowFrameStore`, key `WindowFrame.playlist`), keeps the stored width (at least `baseWidth`), clamps height to `baseHeight`…`LayoutDefaults.playlistMaxHeight` (900), and applies it. Frames are saved by the shared debounced persistence path.
+`WindowFramePersistence.restorePlaylistWindow()` reads the stored frame (`WindowFrameStore`, key `WindowFrame.playlist`), keeps the stored width (at least `baseWidth`), clamps height to `baseHeight`…`LayoutDefaults.playlistMaxHeight` (900), and applies it keeping the saved top edge. Frames are saved by the shared debounced persistence path.
 
 ### Magnetic Docking During Resize
 

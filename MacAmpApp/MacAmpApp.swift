@@ -4,17 +4,16 @@ import SwiftUI
 struct MacAmpApp: App {
     @State private var skinManager: SkinManager
     @State private var audioPlayer: AudioPlayer
-    @State private var dockingController: DockingController
     @State private var settings: AppSettings
     @State private var radioLibrary: RadioStationLibrary
     @State private var streamPlayer: StreamPlayer
     @State private var playbackCoordinator: PlaybackCoordinator
     @State private var windowFocusState: WindowFocusState
+    @State private var windowCoordinator: WindowCoordinator
 
     init() {
         let skinManager = SkinManager()
         let audioPlayer = AudioPlayer()
-        let dockingController = DockingController()
         let settings = AppSettings.instance()
         let radioLibrary = RadioStationLibrary()
         let streamPlayer = StreamPlayer()
@@ -22,7 +21,6 @@ struct MacAmpApp: App {
 
         _skinManager = State(initialValue: skinManager)
         _audioPlayer = State(initialValue: audioPlayer)
-        _dockingController = State(initialValue: dockingController)
         _settings = State(initialValue: settings)
         _radioLibrary = State(initialValue: radioLibrary)
         _streamPlayer = State(initialValue: streamPlayer)
@@ -42,14 +40,13 @@ struct MacAmpApp: App {
         let coordinator = WindowCoordinator(
             skinManager: skinManager,
             audioPlayer: audioPlayer,
-            dockingController: dockingController,
             settings: settings,
             radioLibrary: radioLibrary,
             playbackCoordinator: playbackCoordinator,
             windowFocusState: windowFocusState
         )
         WindowCoordinator.shared = coordinator
-        dockingController.windowCoordinator = coordinator
+        _windowCoordinator = State(initialValue: coordinator)
     }
 
     var body: some Scene {
@@ -84,7 +81,7 @@ struct MacAmpApp: App {
 
         // Commands are defined once here and apply to all window groups
         .commands {
-            AppCommands(dockingController: dockingController, audioPlayer: audioPlayer, settings: settings, playbackCoordinator: playbackCoordinator)
+            AppCommands(windowCoordinator: windowCoordinator, audioPlayer: audioPlayer, settings: settings, playbackCoordinator: playbackCoordinator)
             SkinsCommands(skinManager: skinManager)
         }
     }

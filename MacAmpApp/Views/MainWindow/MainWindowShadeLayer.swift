@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Shade (collapsed) mode — minimal transport, time display, and titlebar buttons.
+/// Shade strip: its buttons and position well are baked into the skin, so they are hit areas.
 struct MainWindowShadeLayer: View {
     @Environment(PlaybackCoordinator.self) private var playbackCoordinator
     @Environment(AppSettings.self) private var settings
@@ -8,15 +8,26 @@ struct MainWindowShadeLayer: View {
     @Environment(WindowFocusState.self) private var windowFocusState
 
     let interactionState: WinampMainWindowInteractionState
+    let optionsPresenter: MainWindowOptionsMenuPresenter
+    let openFileDialog: () -> Void
 
     private typealias Layout = WinampMainWindowLayout
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            SimpleSpriteImage("MAIN_SHADE_BACKGROUND", width: 275, height: 14)
-                .at(CGPoint(x: 0, y: 0))
+            // Not hit-testable, so the titlebar drag handle underneath still moves the window.
+            SimpleSpriteImage(windowFocusState.isMainKey ? "MAIN_SHADE_BACKGROUND_SELECTED" : "MAIN_SHADE_BACKGROUND",
+                              width: 275, height: 14)
+                .allowsHitTesting(false)
 
             buildShadeTransportButtons()
+            buildShadePositionSlider()
+            // Webamp clips the full-width visualizer to the strip's 38 px well rather than squeezing it.
+            VisualizerView(height: 5)
+                .frame(width: 38, height: 5, alignment: .leading)
+                .clipped()
+                .contentShape(Rectangle())
+                .at(Layout.shadeVisualizer)
             buildShadeTimeDisplay()
             buildShadeTitlebarButtons()
         }
@@ -26,78 +37,76 @@ struct MainWindowShadeLayer: View {
 
     @ViewBuilder
     private func buildShadeTransportButtons() -> some View {
-        HStack(spacing: 2) {
-            Button(action: { Task { await playbackCoordinator.previous() } }, label: {
-                SimpleSpriteImage("MAIN_PREVIOUS_BUTTON", width: 23, height: 18).scaleEffect(0.6)
-            })
-            .buttonStyle(.plain)
-            .focusable(false)
-
-            Button(action: { playbackCoordinator.togglePlayPause() }, label: {
-                SimpleSpriteImage("MAIN_PLAY_BUTTON", width: 23, height: 18).scaleEffect(0.6)
-            })
-            .buttonStyle(.plain)
-            .focusable(false)
-
-            Button(action: { playbackCoordinator.pause() }, label: {
-                SimpleSpriteImage("MAIN_PAUSE_BUTTON", width: 23, height: 18).scaleEffect(0.6)
-            })
-            .buttonStyle(.plain)
-            .focusable(false)
-
-            Button(action: { playbackCoordinator.stop() }, label: {
-                SimpleSpriteImage("MAIN_STOP_BUTTON", width: 23, height: 18).scaleEffect(0.6)
-            })
-            .buttonStyle(.plain)
-            .focusable(false)
-
-            Button(action: { Task { await playbackCoordinator.next() } }, label: {
-                SimpleSpriteImage("MAIN_NEXT_BUTTON", width: 22, height: 18).scaleEffect(0.6)
-            })
-            .buttonStyle(.plain)
-            .focusable(false)
+        Group {
+            SkinHitButton(width: 7, height: 10) { Task { await playbackCoordinator.previous() } }
+                .at(Layout.shadePreviousButton)
+            SkinHitButton(width: 10, height: 10) { playbackCoordinator.togglePlayPause() }
+                .at(Layout.shadePlayButton)
+            SkinHitButton(width: 9, height: 10) { playbackCoordinator.pause() }
+                .at(Layout.shadePauseButton)
+            SkinHitButton(width: 9, height: 10) { playbackCoordinator.stop() }
+                .at(Layout.shadeStopButton)
+            SkinHitButton(width: 10, height: 10) { Task { await playbackCoordinator.next() } }
+                .at(Layout.shadeNextButton)
+            SkinHitButton(width: 10, height: 10) { openFileDialog() }
+                .at(Layout.shadeEjectButton)
         }
-        .at(CGPoint(x: 45, y: 3))
+    }
+
+    // MARK: - Shade Position Slider
+
+    @ViewBuilder
+    private func buildShadePositionSlider() -> some View {
+        let progress = interactionState.isScrubbing ? interactionState.scrubbingProgress : audioPlayer.playbackProgress
+        // Webamp picks the thumb by progress: left third, middle, right third.
+        let thumb = progress <= 0.33 ? "MAIN_SHADE_POSITION_THUMB_LEFT"
+            : progress >= 0.66 ? "MAIN_SHADE_POSITION_THUMB_RIGHT" : "MAIN_SHADE_POSITION_THUMB"
+        ZStack(alignment: .topLeading) {
+            SimpleSpriteImage("MAIN_SHADE_POSITION_BACKGROUND", width: 17, height: 7)
+                .allowsHitTesting(false)
+            if audioPlayer.currentTrack != nil {
+                SimpleSpriteImage(thumb, width: 3, height: 7)
+                    .offset(x: (17 - 3) * progress)
+                    .allowsHitTesting(false)
+                GeometryReader { geo in
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .gesture(
+                            DragGesture(minimumDistance: 0)
+                                .onChanged { value in interactionState.handlePositionDrag(value, in: geo, audioPlayer: audioPlayer) }
+                                .onEnded { value in interactionState.handlePositionDragEnd(value, in: geo, audioPlayer: audioPlayer) }
+                        )
+                }
+            }
+        }
+        .frame(width: 17, height: 7, alignment: .topLeading)
+        .at(Layout.shadePositionSlider)
     }
 
     // MARK: - Shade Time Display
 
+    /// TEXT.BMP characters at Webamp's `MiniTime` offsets; the colon is part of the strip.
     @ViewBuilder
     private func buildShadeTimeDisplay() -> some View {
-        ZStack(alignment: .leading) {
-            if settings.timeDisplayMode == .remaining && playbackCoordinator.displayDuration > 0 {
-                ZStack(alignment: .topLeading) {
-                    SimpleSpriteImage(.minusSign, width: 5, height: 1)
-                        .offset(x: 0, y: 6)
-                }
-                .frame(width: 9, height: 13, alignment: .topLeading)
-                .offset(x: 1, y: 0)
-            }
-
-            let duration = playbackCoordinator.displayDuration
-            let timeToShow = settings.timeDisplayMode == .remaining && duration > 0
-                ? max(0.0, duration - playbackCoordinator.displayTime)
-                : playbackCoordinator.displayTime
-            let digits = interactionState.timeDigits(from: timeToShow)
-            let shouldShowDigits = !playbackCoordinator.isPaused || interactionState.pauseBlinkVisible
-
-            if shouldShowDigits {
-                SimpleSpriteImage(.digit(digits[0]), width: 9, height: 13).offset(x: 6, y: 0)
-                SimpleSpriteImage(.digit(digits[1]), width: 9, height: 13).offset(x: 17, y: 0)
-            }
-            if shouldShowDigits {
-                SimpleSpriteImage(.digit(digits[2]), width: 9, height: 13).offset(x: 35, y: 0)
-                SimpleSpriteImage(.digit(digits[3]), width: 9, height: 13).offset(x: 46, y: 0)
+        let stopped = !playbackCoordinator.isPlaying && !playbackCoordinator.isPaused
+        let duration = playbackCoordinator.displayDuration
+        let remaining = settings.timeDisplayMode == .remaining && !stopped && duration > 0
+        let seconds = remaining ? max(0.0, duration - playbackCoordinator.displayTime) : playbackCoordinator.displayTime
+        // Two minute digits: 99:59 is the most the strip can show.
+        let digits = interactionState.timeDigits(from: min(seconds, 5999)).map { Character(String($0)) }
+        let visible = !stopped && (!playbackCoordinator.isPaused || interactionState.pauseBlinkVisible)
+        let characters: [Character] = [remaining ? "-" : " "] + digits
+        ZStack(alignment: .topLeading) {
+            ForEach(Array(zip([1, 7, 12, 20, 25], characters)), id: \.0) { left, character in
+                let code = visible ? character.asciiValue ?? 32 : 32
+                SimpleSpriteImage("CHARACTER_\(code)", width: 5, height: 6)
+                    .offset(x: CGFloat(left))
             }
         }
-        .frame(width: 56, height: 13, alignment: .leading)
+        .frame(width: 30, height: 6, alignment: .topLeading)
         .contentShape(Rectangle())
-        .onTapGesture {
-            settings.toggleTimeDisplayMode()
-        }
-        .at(Layout.timeDisplay)
-        .scaleEffect(0.7)
-        .at(CGPoint(x: 150, y: 7))
+        .onTapGesture { settings.toggleTimeDisplayMode() }
+        .at(Layout.shadeTime)
     }
 
     // MARK: - Shade Titlebar Buttons
@@ -105,31 +114,25 @@ struct MainWindowShadeLayer: View {
     @ViewBuilder
     private func buildShadeTitlebarButtons() -> some View {
         Group {
-            Button(action: {
-                WindowCoordinator.shared?.minimizeKeyWindow()
-            }, label: {
-                SimpleSpriteImage("MAIN_MINIMIZE_BUTTON", width: 9, height: 9)
-            })
-            .buttonStyle(.plain)
-            .focusable(false)
+            SkinHitButton(pressedSprite: "MAIN_OPTIONS_BUTTON_DEPRESSED", width: 9, height: 9) {
+                optionsPresenter.showOptionsMenu(from: Layout.optionsButton, settings: settings,
+                                                 audioPlayer: audioPlayer, isDoubleSizeMode: settings.isDoubleSizeMode)
+            }
+            .at(Layout.optionsButton)
+
+            SkinHitButton(pressedSprite: "MAIN_MINIMIZE_BUTTON_DEPRESSED", width: 9, height: 9) {
+                WindowCoordinator.shared?.minimizeApp()
+            }
             .at(Layout.minimizeButton)
 
-            Button(action: {
+            SkinHitButton(pressedSprite: "MAIN_SHADE_BUTTON_SELECTED_DEPRESSED", width: 9, height: 9) {
                 settings.isMainWindowShaded.toggle()
-            }, label: {
-                SimpleSpriteImage("MAIN_SHADE_BUTTON", width: 9, height: 9)
-            })
-            .buttonStyle(.plain)
-            .focusable(false)
+            }
             .at(Layout.shadeButton)
 
-            Button(action: {
+            SkinHitButton(pressedSprite: "MAIN_CLOSE_BUTTON_DEPRESSED", width: 9, height: 9) {
                 NSApplication.shared.terminate(nil)
-            }, label: {
-                SimpleSpriteImage("MAIN_CLOSE_BUTTON", width: 9, height: 9)
-            })
-            .buttonStyle(.plain)
-            .focusable(false)
+            }
             .at(Layout.closeButton)
         }
     }

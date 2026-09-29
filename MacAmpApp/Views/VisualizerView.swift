@@ -14,6 +14,9 @@ struct VisualizerView: View {
     @Environment(SkinManager.self) var skinManager
     @Environment(AppSettings.self) var settings
 
+    /// 16 in the main window; 5 in the main window's shade strip.
+    var height: CGFloat = VisualizerLayout.height
+
     // Animation state
     @State private var barHeights: [CGFloat] = Array(repeating: 0, count: 19)
     @State private var peakPositions: [CGFloat] = Array(repeating: 0, count: 19)
@@ -23,7 +26,6 @@ struct VisualizerView: View {
     private let barCount = 19
     private let barWidth: CGFloat = 3
     private let barSpacing: CGFloat = 1
-    private let maxHeight: CGFloat = 16
 
     // Animation timing
     private let updateInterval: TimeInterval = 1.0/30.0  // 30 FPS for classic feel
@@ -46,21 +48,21 @@ struct VisualizerView: View {
             case .none:
                 Rectangle().fill(Color.black)
             case .oscilloscope:
-                OscilloscopeView()
+                OscilloscopeView(height: height)
             case .spectrum:
                 HStack(spacing: barSpacing) {
                     ForEach(0..<barCount, id: \.self) { index in
                         SpectrumBar(
                             height: barHeights[index],
                             peakPosition: peakPositions[index],
-                            maxHeight: maxHeight
+                            maxHeight: height
                         )
-                        .frame(width: barWidth, height: maxHeight)
+                        .frame(width: barWidth, height: height)
                     }
                 }
             }
         }
-        .frame(width: VisualizerLayout.width, height: VisualizerLayout.height)
+        .frame(width: VisualizerLayout.width, height: height)
         .background(Color.black)
         .onTapGesture {
             // Cycle through modes: spectrum → oscilloscope → none
@@ -97,7 +99,7 @@ struct VisualizerView: View {
                 let frequencyBoost: CGFloat = 1.0 + (CGFloat(i) / CGFloat(barCount)) * 0.5
                 
                 // Update bar height with amplified frequency data
-                var targetHeight = CGFloat(frequencyData[i]) * maxHeight * amplificationFactor * frequencyBoost
+                var targetHeight = CGFloat(frequencyData[i]) * height * amplificationFactor * frequencyBoost
                 
                 // Add minimum height when playing to ensure visibility
                 if audioPlayer.isVisualizerRendering && frequencyData[i] > 0.01 {
@@ -105,7 +107,7 @@ struct VisualizerView: View {
                 }
                 
                 // Clamp to max height
-                targetHeight = min(maxHeight, targetHeight)
+                targetHeight = min(height, targetHeight)
                 
                 // Apply smoothing for more natural movement
                 barHeights[i] = max(targetHeight, barHeights[i] * decayRate)
@@ -234,6 +236,8 @@ struct OscilloscopeView: View {
     @Environment(AudioPlayer.self) var audioPlayer
     @Environment(SkinManager.self) var skinManager
 
+    var height: CGFloat = VisualizerLayout.height
+
     let updateTimer = Timer.publish(every: 1.0/30.0, on: .main, in: .common).autoconnect()
     @State private var waveformData: [Float] = []
 
@@ -258,7 +262,7 @@ struct OscilloscopeView: View {
             let color = oscilloscopeColor()
             context.stroke(path, with: .color(color), lineWidth: 1)
         }
-        .frame(width: VisualizerLayout.width, height: VisualizerLayout.height)
+        .frame(width: VisualizerLayout.width, height: height)
         .onReceive(updateTimer) { _ in
             if audioPlayer.isVisualizerRendering {
                 waveformData = audioPlayer.getWaveformSamples(count: VisualizerLayout.oscilloscopeSampleCount)

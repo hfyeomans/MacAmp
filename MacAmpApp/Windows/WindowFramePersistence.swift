@@ -36,10 +36,19 @@ final class WindowFramePersistence {
 
     // MARK: - Persistence
 
+    func savedFrame(for kind: WindowKind) -> NSRect? {
+        windowFrameStore.frame(for: kind)
+    }
+
     func persistAllWindowFrames() {
         registry.forEachWindow { window, kind in
             windowFrameStore.save(frame: window.frame, for: kind)
         }
+    }
+
+    func cancelPendingFlush() {
+        persistenceTask?.cancel()
+        persistenceTask = nil
     }
 
     func schedulePersistenceFlush() {
@@ -72,8 +81,8 @@ final class WindowFramePersistence {
         applied = restoreMainWindow(scale: scale) || applied
         applied = restoreEQWindow(scale: scale) || applied
         applied = restorePlaylistWindow() || applied
-        applied = restoreOriginOnly(kind: .video) || applied
-        applied = restoreOriginOnly(kind: .milkdrop) || applied
+        applied = restoreSavedFrame(kind: .video) || applied
+        applied = restoreSavedFrame(kind: .milkdrop) || applied
 
         return applied
     }
@@ -83,7 +92,7 @@ final class WindowFramePersistence {
               let stored = windowFrameStore.frame(for: .main) else { return false }
         var frame = main.frame
         frame.size = CGSize(width: WinampSizes.main.width * scale, height: WinampSizes.main.height * scale)
-        frame.origin = stored.origin
+        frame.origin = topAnchoredOrigin(stored, height: frame.height)
         main.setFrame(frame, display: true)
         return true
     }
@@ -93,7 +102,7 @@ final class WindowFramePersistence {
               let stored = windowFrameStore.frame(for: .equalizer) else { return false }
         var frame = eq.frame
         frame.size = CGSize(width: WinampSizes.equalizer.width * scale, height: WinampSizes.equalizer.height * scale)
-        frame.origin = stored.origin
+        frame.origin = topAnchoredOrigin(stored, height: frame.height)
         eq.setFrame(frame, display: true)
         return true
     }
@@ -106,18 +115,23 @@ final class WindowFramePersistence {
             PlaylistWindowSizeState.baseHeight,
             min(LayoutDefaults.playlistMaxHeight, stored.size.height)
         )
+        stored.origin = topAnchoredOrigin(stored, height: clampedHeight)
         stored.size = CGSize(width: clampedWidth, height: clampedHeight)
         playlist.setFrame(stored, display: true)
         return true
     }
 
-    private func restoreOriginOnly(kind: WindowKind) -> Bool {
+    /// Whole saved frame: the window is 0 high until its content sizes it, and would grow up from its bottom edge.
+    private func restoreSavedFrame(kind: WindowKind) -> Bool {
         guard let window = registry.window(for: kind),
               let stored = windowFrameStore.frame(for: kind) else { return false }
-        var frame = window.frame
-        frame.origin = stored.origin
-        window.setFrame(frame, display: true)
+        window.setFrame(stored, display: true)
         return true
+    }
+
+    /// Keep the saved top edge; the restored height can differ from the saved one.
+    private func topAnchoredOrigin(_ stored: NSRect, height: CGFloat) -> NSPoint {
+        NSPoint(x: stored.minX, y: stored.maxY - height)
     }
 
     // MARK: - Constants
