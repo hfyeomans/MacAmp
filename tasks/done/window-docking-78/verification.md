@@ -100,7 +100,9 @@ Codex review (6 findings) and the ultracode Swift 6.4 design review (66 agents; 
 | Double Size back: layout restored | ✅ owner |
 | Stacked Main/EQ/Playlist toggled repeatedly | ✅ owner (was: EQ overlapped Main on Double when SwiftUI resized first) |
 | Shade/unshade Main in the owner layout after the unified rule | ✅ owner |
-| TSan suite | ✅ 136 tests / 21 suites, all pass |
+| Playlist resize handle and shade grip, Video 1x/2x and resize: windows attached below/right follow; Main/EQ/Playlist unaffected by a Video resize | ✅ owner (CodeRabbit follow-up: resizes now use `DockGraph.followResize`) |
+| Two-column layout (Main/EQ/Playlist + Milkdrop/Video) aligned to the pixel (LLDB); drops snap to the nearest edge on the first try | ✅ owner (snap took the first match from an unordered set; now the nearest per axis) |
+| TSan suite | ✅ 137 tests / 21 suites, all pass |
 
 ## Phase 7: regression checks
 

@@ -68,55 +68,39 @@ final class WindowResizeController {
     // MARK: - Window Size Updates
 
     func updateVideoWindowSize(to pixelSize: CGSize) {
-        guard let video = registry.videoWindow else { return }
-
-        var frame = video.frame
-        guard frame.size != pixelSize else { return }
-
-        AppLog.debug(.window, "[VIDEO RESIZE] Before: Frame: \(frame), Origin: (\(frame.origin.x), \(frame.origin.y)), Size: \(frame.size), ContentView: \(video.contentView?.frame ?? .zero)")
-
-        frame = topLeftAnchoredFrame(from: frame, newSize: pixelSize)
-
-        WindowSnapManager.shared.beginProgrammaticAdjustment()
-        video.setFrame(frame, display: true)
-        WindowSnapManager.shared.endProgrammaticAdjustment()
-
-        AppLog.debug(.window, "[VIDEO RESIZE] After: Frame: \(video.frame), Origin: (\(video.frame.origin.x), \(video.frame.origin.y)), Size: \(video.frame.size)")
+        guard let video = registry.videoWindow, video.frame.size != pixelSize else { return }
+        resize(.video, to: pixelSize)
+        AppLog.debug(.window, "[VIDEO RESIZE] size: \(pixelSize), frame: \(video.frame)")
     }
 
     func updateMilkdropWindowSize(to pixelSize: CGSize) {
-        guard let milkdrop = registry.milkdropWindow else { return }
-
-        var frame = milkdrop.frame
-        guard frame.size != pixelSize else { return }
-
-        let roundedSize = CGSize(
-            width: round(pixelSize.width),
-            height: round(pixelSize.height)
-        )
-
-        frame = topLeftAnchoredFrame(from: frame, newSize: roundedSize)
-
-        WindowSnapManager.shared.beginProgrammaticAdjustment()
-        milkdrop.setFrame(frame, display: true)
-        WindowSnapManager.shared.endProgrammaticAdjustment()
-
-        AppLog.debug(.window, "[MILKDROP RESIZE] size: \(roundedSize), frame: \(frame)")
+        guard let milkdrop = registry.milkdropWindow, milkdrop.frame.size != pixelSize else { return }
+        let roundedSize = CGSize(width: round(pixelSize.width), height: round(pixelSize.height))
+        resize(.milkdrop, to: roundedSize)
+        AppLog.debug(.window, "[MILKDROP RESIZE] size: \(roundedSize), frame: \(milkdrop.frame)")
     }
 
     func updatePlaylistWindowSize(to pixelSize: CGSize) {
-        guard let playlist = registry.playlistWindow else { return }
+        guard let playlist = registry.playlistWindow, playlist.frame.size != pixelSize else { return }
+        resize(.playlist, to: pixelSize)
+        AppLog.debug(.window, "[PLAYLIST RESIZE] size: \(pixelSize), frame: \(playlist.frame)")
+    }
 
-        var frame = playlist.frame
-        guard frame.size != pixelSize else { return }
-
-        frame = topLeftAnchoredFrame(from: frame, newSize: pixelSize)
+    /// Resizes a window top-left anchored; windows attached below or to its right follow.
+    private func resize(_ kind: WindowKind, to size: CGSize) {
+        guard let window = registry.window(for: kind) else { return }
+        var boxes: [WindowKind: Box] = [:]
+        registry.forEachWindow { other, otherKind in boxes[otherKind] = DockGraph.box(for: other.frame) }
+        let after = DockGraph.followResize(boxes: boxes, newSizes: [kind: size], order: WindowSnapManager.dockOrder)
 
         WindowSnapManager.shared.beginProgrammaticAdjustment()
-        playlist.setFrame(frame, display: true)
+        window.setFrame(topLeftAnchoredFrame(from: window.frame, newSize: size), display: true)
+        registry.forEachWindow { other, otherKind in
+            guard otherKind != kind, let box = after[otherKind] else { return }
+            let origin = DockGraph.frame(for: box).origin
+            if origin != other.frame.origin { other.setFrameOrigin(origin) }
+        }
         WindowSnapManager.shared.endProgrammaticAdjustment()
-
-        AppLog.debug(.window, "[PLAYLIST RESIZE] size: \(pixelSize), frame: \(frame)")
     }
 
     // MARK: - Resize Preview Overlays

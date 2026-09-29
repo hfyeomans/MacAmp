@@ -45,7 +45,7 @@ xcodegen generate      # generates MacAmpApp.xcodeproj from project.yml
 xcodebuild test -scheme MacAmpApp -destination 'platform=macOS' -enableThreadSanitizer YES
 ```
 
-The suite has 136 tests in 21 suites. Suite tags, `xcodebuildmcp` usage and per-suite notes: [xcode-testing-context.md](context/xcode-testing-context.md).
+The suite has 137 tests in 21 suites. Suite tags, `xcodebuildmcp` usage and per-suite notes: [xcode-testing-context.md](context/xcode-testing-context.md).
 
 ---
 

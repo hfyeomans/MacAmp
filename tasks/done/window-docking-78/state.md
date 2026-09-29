@@ -23,5 +23,5 @@
 4. **Sleep/wake and displays:** `WindowScreenGuard` (snapshot, settle window, rigid groups on display add, per-display translation, clamp) + `ScreenClamp`; Options › Reset Window Positions; drags stay out of the menu-bar strip.
 5. **Titlebars and windowshade:** `SkinHitButton` hit areas with each window's own pressed sprites (18 sprites surfaced); working, draggable Main/EQ/Playlist shade strips (Main mini time and visualizer, EQ volume/balance, Playlist title/length/width grip); EQ/Playlist minimize removed (D5).
 
-Commits: `757fc8d` (P1), `47b20de` (P2), `1c87531` `af980cd` (P3), `7523b6d` (P4), `88bff5a` (P5), `3fb7210` (P5b), `cd47d52` (P6 docs), `0cee8c8` (review fixes), `51e11e7` (one resize rule for double size and shade). Tests: 136 in 21 suites (TSan, all pass).
+Commits: `757fc8d` (P1), `47b20de` (P2), `1c87531` `af980cd` (P3), `7523b6d` (P4), `88bff5a` (P5), `3fb7210` (P5b), `cd47d52` (P6 docs), `0cee8c8` (review fixes), `51e11e7` (one resize rule for double size and shade). Tests: 137 in 21 suites (TSan, all pass).
 

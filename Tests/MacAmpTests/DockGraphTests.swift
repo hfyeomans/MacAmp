@@ -128,6 +128,17 @@ struct DockGraphTests {
         #expect(Set(groups) == [["main", "eq"], ["far"]])
     }
 
+    @Test("Snapping picks the nearest target on each axis, whatever the order")
+    func snapPicksNearest() {
+        // Dragged window's top is 2 px below A's bottom and 7 px below B's bottom; both within snap range.
+        let dragged = Box(x: 0, y: 118, width: 275, height: 116)
+        let a = Box(x: 0, y: 0, width: 275, height: 116)
+        let b = Box(x: 0, y: 0, width: 275, height: 111)
+        for others in [[a, b], [b, a]] {
+            #expect(SnapUtils.snapToMany(dragged, others).y == 116)
+        }
+    }
+
     @Test("A resize with nothing attached moves nothing")
     func nothingAttached() {
         let after = DockGraph.followResize(boxes: ["main": main], newSizes: ["main": shade], order: order)
