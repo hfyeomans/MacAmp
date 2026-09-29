@@ -3,7 +3,7 @@
 > **Purpose:** Fix issue #78 (join/clamp, minimize, window-state persistence) and the owner's sleep/wake off-screen windows problem.
 > **Created:** 2026-09-26 — pulled ahead of the Structure Sprint (D-WIN78, user).
 > **Branch:** `fix/window-docking-78` (from `main` `0d6e258`).
-> **Status:** ✅ **COMPLETE** (2026-09-28) — Phases 0–7 done (`verification.md`); **PR [#90](https://github.com/hfyeomans/MacAmp/pull/90)** open against `main`, closes #78, awaiting owner merge. Folder moved to `tasks/done/`.
+> **Status:** ✅ **COMPLETE** (2026-09-28) — Phases 0–7 done (`verification.md`); **PR [#90](https://github.com/hfyeomans/MacAmp/pull/90)** merged 2026-09-29 as `88ba342` (merge commit); #78 closed. Folder moved to `tasks/done/`.
 > **Files:** `research.md`, `plan.md`, `todo.md`, `verification.md`, `placeholder.md`, `depreciated.md`.
 
 ## Root causes (summary — details in research.md §1)
