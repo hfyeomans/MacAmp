@@ -117,7 +117,7 @@ xcrun stapler validate MacAmp.app
 
 ### Option 1: Branded DMG (Recommended)
 
-The Finder window uses the "Sunset Grid" background in `assets/dmg/`: `background.svg` (source), `background.png` / `background@2x.png` (660×420 pt at 1x/2x) and `background.tiff` (both, for Retina). Stage **only** the app: `dist/` also holds older DMGs and build products, which would end up inside the image.
+The Finder window uses the "Sunset Grid" background in `assets/dmg/`: `background.svg` (source) and `background.tiff` (660×420 pt at 1x and 2x, for Retina). The PNGs rendered on the way are intermediates (`*.png` is gitignored). Stage **only** the app: `dist/` also holds older DMGs and build products, which would end up inside the image.
 
 ```bash
 brew install create-dmg  # if not installed
