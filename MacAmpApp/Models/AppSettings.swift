@@ -128,17 +128,6 @@ final class AppSettings {
         guard enableLiquidGlass else { return false }
         return materialIntegration == .hybrid || materialIntegration == .modern
     }
-    
-    /// Whether to preserve custom Winamp chrome
-    var shouldPreserveWinampChrome: Bool {
-        return materialIntegration == .classic || materialIntegration == .hybrid
-    }
-    
-    /// Whether to use full system materials
-    var shouldUseFullSystemMaterials: Bool {
-        guard enableLiquidGlass else { return false }
-        return materialIntegration == .modern
-    }
 
     // MARK: - Skin Settings
 

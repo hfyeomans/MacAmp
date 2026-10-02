@@ -43,7 +43,6 @@ final class EqualizerController {
         }
     }
     var eqAutoEnabled: Bool = false
-    var useLogScaleBands: Bool = true
     var appliedAutoPresetTrack: String?
 
     // MARK: - Extracted Controllers
@@ -55,7 +54,6 @@ final class EqualizerController {
 
     // MARK: - Private State
 
-    @ObservationIgnored private var autoEQTask: Task<Void, Never>?
     @ObservationIgnored private var autoPresetClearTask: Task<Void, Never>?
     @ObservationIgnored private var appliedAutoPresetURL: String?
 
@@ -241,8 +239,6 @@ final class EqualizerController {
         if isEnabled, let current = currentTrack {
             applyAutoPreset(for: current)
         } else {
-            autoEQTask?.cancel()
-            autoEQTask = nil
             autoPresetClearTask?.cancel()
             autoPresetClearTask = nil
             appliedAutoPresetTrack = nil
@@ -251,8 +247,6 @@ final class EqualizerController {
     }
 
     private func generateAutoPreset(for track: Track) {
-        autoEQTask?.cancel()
-        autoEQTask = nil
         AppLog.debug(.audio, "AutoEQ: automatic analysis disabled, no preset generated for \(track.title)")
     }
 

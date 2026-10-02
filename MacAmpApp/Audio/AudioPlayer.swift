@@ -316,10 +316,6 @@ final class AudioPlayer { // swiftlint:disable:this type_body_length
         get { equalizer.eqAutoEnabled }
         set { equalizer.eqAutoEnabled = newValue }
     }
-    var useLogScaleBands: Bool {
-        get { equalizer.useLogScaleBands }
-        set { equalizer.useLogScaleBands = newValue }
-    }
     var eqPresetStore: EQPresetStore { equalizer.eqPresetStore }
     var userPresets: [EQPreset] { equalizer.userPresets }
     var visualizerLevels: [Float] { visualizerPipeline.levels }
