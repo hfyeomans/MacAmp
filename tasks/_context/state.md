@@ -196,7 +196,7 @@ Target (MainWindowFullLayer.body):
 | ~~T1 Phase 4: Engine transport extraction~~ | audioplayer-decomposition todo.md | Large | **DONE** | ✅ COMPLETE — PR #60 merged (2026-03-22). AudioPlayer 1,143→705 lines. AudioEngineController 413 lines. |
 | T1 swiftlint suppressions (file_length + type_body_length) | audioplayer-decomposition todo.md | N/A | N/A | Still needed — AudioPlayer.swift is **1,079 lines at HEAD `056c69a`** (705 after PR #60), well above the 600 warning threshold. Requires Phase 5 (seek extraction) to remove; see D8 (trigger fired). |
 | T1 manual verification (EQ bands, presets, auto-EQ, visualizers) | audioplayer-decomposition todo.md (6 items) | Small | Low | No — functional, just not formally verified post-decomposition |
-| Hide Main Window not working | T3 manual testing (pre-existing) | Small | Low | No |
+| ~~Hide Main Window not working~~ | T3 manual testing (pre-existing) | N/A | N/A | **Resolved** by PR #90 — the menu item now calls `WindowVisibilityController.toggleMain()`. |
 | T3 Instruments body evaluation profiling | mainwindow-layer-decomposition todo.md | Small | Low | No — performance optimization |
 | PlaylistWindowActions singleton rearchitecture | playlist-decomp depreciated.md | Large | Low | No |
 | Manual selection state sync fix | playlist-decomp depreciated.md | Small | Low | No — blocked by singleton fix |
@@ -206,7 +206,7 @@ Target (MainWindowFullLayer.body):
 | Swift Testing parameterization improvements | swift-testing todo.md (4 items) | Small | Low | No — code quality |
 | Ring buffer performance benchmarks | lock-free-ring-buffer todo.md (3 items) | Small | Low | No |
 | Ring buffer AudioBufferList overload tests | lock-free-ring-buffer todo.md | Small | Low | No — add during T7 |
-| DockingController debounce `try?` fix | lock-free-ring-buffer deprecated.md | Small | Low | No |
+| ~~DockingController debounce `try?` fix~~ | lock-free-ring-buffer deprecated.md | N/A | N/A | **Obsolete** — `DockingController` deleted in PR #90 (`757fc8d`). |
 | Gate verbose sprite logging behind `#if DEBUG` | memory-cpu-optimization todo.md 4.1 | Small | Low | No |
 | ~~Precompute spectrum band coefficients~~ | memory-cpu-optimization todo.md 4.2→5.7 | N/A | N/A | **Done.** `GoertzelCoefficients` struct caches per sample rate. |
 | NSMenu "Internal inconsistency" warnings | S1 manual testing (2026-03-22) | Small | Low | No — harmless AppKit menu hierarchy warnings for system-injected text menus (Font, Spelling, Substitutions, etc.). Pre-existing, not caused by any sprint work. Common in SwiftUI+AppKit bridging apps. |
@@ -218,9 +218,22 @@ Target (MainWindowFullLayer.body):
 | Order-sensitive TSan flake in `VideoTapFallbackTests` | `tasks/phase-7-watchdog-gate-v2-score-confirm` (2026-05-01, paused `video-audio-engine-routing` arc) | Small | Low | No — observed on the paused vaer branch: the fallback tests pass in isolation but can trip TSan depending on test execution order. **Unowned** — never assigned to a task folder or re-checked against the S3-2 pivot branch's 116/116 TSan run. Reconfirm (or retire) during S3-2 Phase 9 full-suite TSan. |
 | File-growth re-evaluation triggers have FIRED (2 files) | Recorded thresholds vs HEAD `056c69a` | Medium | Medium | No — but both re-evaluations are now due. `MacAmpApp/Audio/AudioPlayer.swift` = **1,079 lines** vs D8's Option-B ">800 lines during S3" trigger (763 on `main`). `MacAmpApp/Audio/Streaming/StreamDecodePipeline.swift` = **825 lines** vs the 697 recorded in its deferral row (825 on `main` too — pre-existing, not pivot drift). **Re-evaluate during Structure Sprint mapping** (S3-2 PR #89 merged 2026-09-25, so the post-merge precondition is met). |
 
-**Context (Hide Main Window):** The "Hide Main" menu item (`AppCommands.swift:13`) calls `DockingController.toggleMain()` which only toggles an internal `panes[idx].visible` boolean. This boolean is not wired to actually hide/show the NSWindow. `WindowVisibilityController.hideMain()` exists and calls `registry.mainWindow?.orderOut(nil)` but is never invoked by the toggle path. Pre-existing — not caused by T3 decomposition.
+**Context (Hide Main Window):** ✅ Resolved by PR #90 (historical note follows). The "Hide Main" menu item (`AppCommands.swift:13`) calls `DockingController.toggleMain()` which only toggles an internal `panes[idx].visible` boolean. This boolean is not wired to actually hide/show the NSWindow. `WindowVisibilityController.hideMain()` exists and calls `registry.mainWindow?.orderOut(nil)` but is never invoked by the toggle path. Pre-existing — not caused by T3 decomposition.
 
 **Context (spm-multiple-producers-fix):** ✅ RESOLVED (2026-03-22). Resolved by Wave 3 swift-tools-version 6.2 upgrade. 55 tests passing.
+
+### From the amp code review (2026-10-02) — deferred to planned phases
+
+Verified against `main` @ `f12bb7b`; stale claims (DockingController, macOS 15 target, `#available` gates, already-deleted symbols) dropped. Fixed in branch `chore/amp-review-dead-code`: dead `useLogScaleBands`, `autoEQTask`, two unused `AppSettings` material helpers. Fixed on `main`: chat transcripts moved to gitignored `chats/`; `module-cache/` + `weak_struct` untracked.
+
+| Item | Deferred to | Note |
+|------|-------------|------|
+| Root `Package.swift` cannot build (mixed Swift + ObjC sources, bridging header; omits Butterchurn resources); nothing runs `swift build` | S3-4 `ogg-vorbis-support` Phase 0a (its plan edits the manifest) or S4-1 | Recommended: delete `Package.swift` + `Package.resolved` + the `.swiftlint.yml` exclude; `project.yml` is the build. |
+| `Skin`/`SpriteResolver` `@unchecked Sendable` over `[String: NSImage]` | S4-1 `swift64-macos27-readiness` (strict concurrency/memory safety) | Main-actor confined in practice; delete the unused `spriteResolver` environment helpers, then drop `Sendable`. |
+| `LockFreeRingBuffer` producer writes `readHead` on overrun — a formal data race, not "accepted" | S4-1 | Impact bounded (a few garbled samples on overrun); fix by drop-newest on overrun or atomics on both heads; correct the doc comment. |
+| Quantized 25×29 resize math in 3 places (6 sites) | `windowing-structure-consolidation` | One `Size2D` helper alongside the shaded-Playlist pixel-size follow-up. |
+| RMS/Goertzel computed twice (engine tap + video tap, "keep in lockstep") | Backlog `visualizer-fidelity-audit` | Extract one shared function (or a parity test) before changing the math. |
+| Appearance Mode (Material/Liquid Glass) prefs only affect the Preferences window itself | Owner decision | Keep for a real Liquid Glass feature (S4-1) or remove the GroupBox and its two keys. |
 
 ### From Wave 3 — Pivot + Deferred Items
 

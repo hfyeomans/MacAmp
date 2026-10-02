@@ -97,5 +97,11 @@ MilkDrop3/
 # Covered by .* pattern above
 
 ######## Local session transcripts ########
+# Chat/agent session exports live in chats/ and never reach the remote.
+/chats/
 /macamp-converstion-*.md
 /macamp-save-*.md
+
+######## Local compiler output ########
+/module-cache/
+/weak_struct
