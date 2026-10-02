@@ -908,7 +908,7 @@ let rootView = WinampVideoWindow()
 window.contentViewController = NSHostingController(rootView: rootView)  // never set contentView
 ```
 
-The SwiftUI `body` only declares a hidden placeholder `WindowGroup`, a Preferences window and the menu commands (`AppCommands`, `SkinsCommands`). Child views read what they need with `@Environment(Type.self)`.
+The SwiftUI `body` only declares a hidden placeholder `WindowGroup`, an empty `Settings` scene and the menu commands (`AppCommands`, `SkinsCommands`). Child views read what they need with `@Environment(Type.self)`.
 
 ---
 
@@ -2257,7 +2257,6 @@ MacAmpApp/
 │   ├── WinampVideoWindow.swift     # Video playback window
 │   ├── WinampMilkdropWindow.swift  # Visualization window
 │   ├── VisualizerView.swift        # Spectrum/oscilloscope visualizer
-│   ├── PreferencesView.swift       # Preferences window
 │   ├── Shared/
 │   │   ├── SkinHitButton.swift               # Titlebar/shade hit area (pressed sprite only)
 │   │   ├── TitlebarDragCaptureView.swift     # Titlebar drag NSView

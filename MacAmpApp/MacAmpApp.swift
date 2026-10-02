@@ -68,17 +68,6 @@ struct MacAmpApp: App {
         Settings {
             EmptyView()
         }
-
-        WindowGroup("Preferences", id: "preferences") {
-            PreferencesView()
-                .environment(settings)
-        }
-        .windowStyle(.hiddenTitleBar)
-        .windowResizability(.contentSize)
-        .defaultPosition(.center)
-        .defaultLaunchBehavior(.suppressed)
-        .restorationBehavior(.disabled)
-
         // Commands are defined once here and apply to all window groups
         .commands {
             AppCommands(windowCoordinator: windowCoordinator, audioPlayer: audioPlayer, settings: settings, playbackCoordinator: playbackCoordinator)

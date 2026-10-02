@@ -2,29 +2,6 @@ import Foundation
 import SwiftUI
 import Observation
 
-/// Material integration levels for Liquid Glass UI support
-enum MaterialIntegrationLevel: String, CaseIterable, Codable {
-    case classic
-    case hybrid
-    case modern
-
-    var displayName: String {
-        switch self {
-        case .classic: return "Classic"
-        case .hybrid: return "Hybrid"
-        case .modern: return "Modern"
-        }
-    }
-
-    var description: String {
-        switch self {
-        case .classic: return "Traditional Winamp appearance with custom backgrounds"
-        case .hybrid: return "Winamp chrome with macOS 26 Tahoe material containers"
-        case .modern: return "Full macOS 26 Tahoe materials integration"
-        }
-    }
-}
-
 /// Global app settings for MacAmp
 @Observable
 @MainActor
@@ -34,8 +11,6 @@ final class AppSettings {
 
     /// Centralized storage keys to prevent typos and enable refactoring
     private enum Keys {
-        static let materialIntegration = "MaterialIntegration"
-        static let enableLiquidGlass = "EnableLiquidGlass"
         static let isDoubleSizeMode = "isDoubleSizeMode"
         static let isAlwaysOnTop = "isAlwaysOnTop"
         static let isMainWindowShaded = "isMainWindowShaded"
@@ -56,26 +31,9 @@ final class AppSettings {
         static let audioPlayerRepeatEnabled = "audioPlayerRepeatEnabled"
     }
 
-    // MARK: - Material Integration
-
-    var materialIntegration: MaterialIntegrationLevel {
-        didSet {
-            UserDefaults.standard.set(materialIntegration.rawValue, forKey: Keys.materialIntegration)
-        }
-    }
-
-    var enableLiquidGlass: Bool {
-        didSet {
-            UserDefaults.standard.set(enableLiquidGlass, forKey: Keys.enableLiquidGlass)
-        }
-    }
-
     @ObservationIgnored private static let shared = AppSettings()
 
     private init() {
-        self.materialIntegration = Self.loadMaterialIntegration()
-        self.enableLiquidGlass = Self.loadLiquidGlassSetting()
-
         // Load persisted clutter bar states (default to false)
         self.isDoubleSizeMode = UserDefaults.standard.bool(forKey: Keys.isDoubleSizeMode)
         self.isAlwaysOnTop = UserDefaults.standard.bool(forKey: Keys.isAlwaysOnTop)
@@ -122,23 +80,6 @@ final class AppSettings {
     static func instance() -> AppSettings {
         return shared
     }
-    
-    /// Whether to use system container backgrounds
-    var shouldUseContainerBackground: Bool {
-        guard enableLiquidGlass else { return false }
-        return materialIntegration == .hybrid || materialIntegration == .modern
-    }
-    
-    /// Whether to preserve custom Winamp chrome
-    var shouldPreserveWinampChrome: Bool {
-        return materialIntegration == .classic || materialIntegration == .hybrid
-    }
-    
-    /// Whether to use full system materials
-    var shouldUseFullSystemMaterials: Bool {
-        guard enableLiquidGlass else { return false }
-        return materialIntegration == .modern
-    }
 
     // MARK: - Skin Settings
 
@@ -158,21 +99,6 @@ final class AppSettings {
     /// Directory for user-installed skins
     static func userSkinsDirectory(fileManager: FileManager = .default) throws -> URL {
         try ensureSkinsDirectory(fileManager: fileManager)
-    }
-
-    private static func loadMaterialIntegration() -> MaterialIntegrationLevel {
-        guard let savedRaw = UserDefaults.standard.string(forKey: Keys.materialIntegration),
-              let saved = MaterialIntegrationLevel(rawValue: savedRaw) else {
-            return .hybrid
-        }
-        return saved
-    }
-
-    private static func loadLiquidGlassSetting() -> Bool {
-        guard let stored = UserDefaults.standard.object(forKey: Keys.enableLiquidGlass) as? Bool else {
-            return true
-        }
-        return stored
     }
 
     @discardableResult

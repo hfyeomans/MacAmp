@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-MacAmp's five Winamp windows (Main, Equalizer, Playlist, Video, Milkdrop) are borderless `NSWindow`s, each owned by an `NSWindowController` subclass and hosting SwiftUI through `NSHostingController`. `WindowCoordinator` creates and coordinates them; it is a thin Facade over focused controllers (registry, persistence, visibility, resize/docking, settings observation, delegate wiring). The SwiftUI scene graph holds only a hidden placeholder `WindowGroup` and the Preferences window.
+MacAmp's five Winamp windows (Main, Equalizer, Playlist, Video, Milkdrop) are borderless `NSWindow`s, each owned by an `NSWindowController` subclass and hosting SwiftUI through `NSHostingController`. `WindowCoordinator` creates and coordinates them; it is a thin Facade over focused controllers (registry, persistence, visibility, resize/docking, settings observation, delegate wiring). The SwiftUI scene graph holds only a hidden placeholder `WindowGroup` and an empty `Settings` scene.
 
 An earlier research proposal to give Video and Milkdrop their own SwiftUI `WindowGroup(id:)` scenes with per-window state models (`VideoVisualizerState`, `WindowStateStore`, `VisualizerCommands`) was not adopted; none of those types exist. Window-specific details live in [VIDEO_WINDOW.md](VIDEO_WINDOW.md), [MILKDROP_WINDOW.md](MILKDROP_WINDOW.md) and [PLAYLIST_WINDOW.md](PLAYLIST_WINDOW.md).
 
@@ -24,7 +24,7 @@ An earlier research proposal to give Video and Milkdrop their own SwiftUI `Windo
 
 - **App Entry Point**: `MacAmpApp.swift`. `init()` creates the long-lived models, loads the initial skin, creates `WindowFocusState`, then creates `WindowCoordinator` (assigned to `WindowCoordinator.shared` and passed to `AppCommands`).
 - **Scene-Level State**: `SkinManager`, `AudioPlayer`, `WindowCoordinator`, `AppSettings` (`AppSettings.instance()`), `RadioStationLibrary`, `StreamPlayer`, `PlaybackCoordinator` and `WindowFocusState`, stored as `@State` in the App struct.
-- **Scenes**: a `WindowGroup(id: "main-placeholder")` with a hidden `EmptyView` (launch suppressed, restoration disabled) to satisfy SwiftUI's main-scene requirement, an empty `Settings` scene, and `WindowGroup("Preferences", id: "preferences")`. `.commands` installs `AppCommands` and `SkinsCommands`.
+- **Scenes**: a `WindowGroup(id: "main-placeholder")` with a hidden `EmptyView` (launch suppressed, restoration disabled) to satisfy SwiftUI's main-scene requirement and an empty `Settings` scene. `.commands` installs `AppCommands` and `SkinsCommands`; `AppCommands` replaces the app-settings menu group with nothing, so there is no Settings… item.
 - **Environment Injection**: each window controller injects the shared models into its root view with `.environment(...)` (see the window docs for each window's list).
 - **Window infrastructure**:
   - `MacAmpApp/Utilities/WinampWindowConfigurator.swift` – shared NSWindow configuration (`apply(to:)`, `installHitSurface(on:)`)
