@@ -18,6 +18,10 @@ struct PlaylistNavigationTests {
     func nextTrackReturnsStreamActionForMixedPlaylist() throws {
         let player = AudioPlayer()
         defer { player.stop() }
+        // repeatMode persists in UserDefaults; pin it so the saved user setting cannot change the result.
+        let savedRepeatMode = player.repeatMode
+        player.repeatMode = .off
+        defer { player.repeatMode = savedRepeatMode }
 
         let localURL = testRoot.appendingPathComponent("mono_test.wav")
         let localTrack = Track(url: localURL, title: "Local", artist: "Artist", duration: 10)
