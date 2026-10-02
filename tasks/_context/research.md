@@ -6,10 +6,11 @@ Findings that inform `plan.md` and apply across tasks. Open work from these find
 
 ## Amp code review (2026-10-02)
 
-Checked against `main` at `f12bb7b`. Slotted items have a row in `deferred.md`.
+Checked against `main` at `f12bb7b`. Slotted items have a row in `deferred.md`. The amp text is a summary of the read-only review on the local branch `review/codebase-audit-2026-09` (`4c3702d`, 2026-09-08); its finding 8 (pass-through facades) was not in the summary and is slotted below.
 
 | Finding | Verdict | Reason or slot |
 |---------|---------|----------------|
+| Pass-through facades: about 25 one-line forwarders in `AudioPlayer`, about 30 in `WindowCoordinator`, and the `PlaybackCoordinator → AudioPlayer → AudioEngineController` stream-bridge chain (Principle 6) | Slotted | SS-1 (AudioPlayer), SS-7 (WindowCoordinator), SS-2/SS-6 (stream bridge) |
 | Dead `EqualizerController.useLogScaleBands` and its `AudioPlayer` forwarder | Fix open (PR #91) | `chore/amp-review-dead-code` (`a032bcd`); still on `main` until the owner merges |
 | Dead `EqualizerController.autoEQTask` | Fix open (PR #91) | Same branch |
 | Unused `AppSettings.shouldPreserveWinampChrome` and `shouldUseFullSystemMaterials` | Fix open (PR #91) | Same branch |

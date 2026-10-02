@@ -50,11 +50,11 @@ Every item: one branch and PR, `xcodegen generate`, TSan build and test, one exh
 | S4-2 | GitHub issues #47, P-6, #79, #84 | `tasks/github-issues-triage/` | QUEUED | Structure Sprint, S4-1 |
 | S4-3 | AirPlay route picker | no folder yet | QUEUED | S4-1 |
 | S4-4 | Multichannel video output (#88) | `tasks/video-multichannel-output/` | QUEUED | S4-3 (roadmap order only) |
-| AT-1 | #86 test isolation | no folder | NEXT | None; standalone PR before S3-3 (owner, 2026-10-02) |
+| AT-1 | #86 test isolation | no folder | IN REVIEW | PR #92 open; owner merges |
 | AT-2 | Timer common-mode helper | no folder yet | DEFERRED | S3-4 (shares StreamPlayer/AudioEngineController); best in SS-7 |
 | BL-1 | Visualizer fidelity audit | no folder yet | BACKLOG | None |
 
-Status words: NEXT = start now; BLOCKED = waiting on a predecessor; QUEUED = waiting its turn; DEFERRED = parked until its slot or trigger; PENDING = needs an owner decision; OPTIONAL; BACKLOG = not scheduled.
+Status words: IN REVIEW = PR open; NEXT = start now; BLOCKED = waiting on a predecessor; QUEUED = waiting its turn; DEFERRED = parked until its slot or trigger; PENDING = needs an owner decision; OPTIONAL; BACKLOG = not scheduled.
 
 ## S3: streaming formats
 
@@ -188,7 +188,7 @@ Starts after S3-4 merges. Each consolidation task gets its own branch; there is 
 
 ### AT-1 #86 test isolation
 
-- **Status:** NEXT. The owner chose a small standalone test-only PR before S3-3 (2026-10-02). It is our own test defect, so it does not wait for S4-2 under D-S4.
+- **Status:** IN REVIEW, PR #92 (`fix/86-test-repeat-mode`). The owner chose a small standalone test-only PR before S3-3 (2026-10-02). It is our own test defect, so it does not wait for S4-2 under D-S4.
 - **Scope:** PlaylistNavigationTests "nextTrack returns stream handoff for mixed playlist" reads `PlaylistController.repeatMode` from the global AppSettings backed by real UserDefaults, so a saved repeat-one setting makes it return `.restartCurrent`. Pin `repeatMode` in the test and save/restore the UserDefaults key. Closes #86.
 - **Gates:** TSan suite; record the result in state.md.
 

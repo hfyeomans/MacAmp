@@ -32,7 +32,7 @@ Status words as defined in `plan.md` (Summary), which is the status source, plus
 | SS-8 | Mirror tests to source layout; last required Structure Sprint step (SS-9 optional) | QUEUED | none; tracked in `swift-project-structure-research/todo.md` |
 | SS-9 | Local packages (Windowing, AudioStreamingCore, SkinEngine) | OPTIONAL | none |
 | S4-3 | AirPlay route picker: in-app `AVRoutePickerView` over the Winamp logo | QUEUED | `airplay-route-picker`, created when planning starts |
-| AT-1 | #86 test isolation: pin `repeatMode` in `PlaylistNavigationTests` | NEXT | none |
+| AT-1 | #86 test isolation: pin `repeatMode` in `PlaylistNavigationTests` | IN REVIEW (PR #92) | none |
 | AT-2 | One Timer helper for the 7 `RunLoop.main.add(timer, forMode: .common)` sites | DEFERRED | none; fits `Core/` once SS-7 creates it |
 | BL-1 | Visualizer fidelity audit: spectrum analyzer vs real frequencies and Winamp/Webamp | BACKLOG | none; created when started |
 

@@ -135,7 +135,8 @@ Checklist derived from `tasks/_context/plan.md`, grouped by plan item ID in exec
 
 ## AT-1 #86 test isolation (no folder)
 
-- [ ] Pin `repeatMode` and save/restore the UserDefaults key in PlaylistNavigationTests; TSan; PR closing #86
+- [x] Pin `repeatMode` and restore the saved value in PlaylistNavigationTests; reproduce and verify; TSan 137/21; PR #92 closing #86
+- [ ] Owner merges PR #92
 
 ## AT-2 Timer common-mode helper (no folder; after S3-4, best in SS-7)
 

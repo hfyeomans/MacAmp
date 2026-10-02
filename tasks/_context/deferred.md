@@ -21,6 +21,7 @@ Sizes: Trivial, Small, Medium, Large.
 
 | Item | Slot | Size | Note |
 |------|------|------|------|
+| Pass-through facades: `AudioPlayer` (~25 one-line forwarders), `WindowCoordinator` (~30), the `PlaybackCoordinator → AudioPlayer → AudioEngineController` stream-bridge chain | SS-1, SS-7, SS-2/SS-6 | Medium | From the 2026-09-08 review (`review/codebase-audit-2026-09`, finding 8). Apply Principle 6 when each file is re-evaluated or moved; remove only forwarders with no policy |
 | Early-project preprocessing workarounds that may no longer be needed | SS-0 | Small | `SkinBackgroundPreprocessor` was removed in #75 after it caused skin artifacts; look for similar pixel fixups while mapping |
 | 8 files added to `Utilities/`, `ViewModels/` and `Models/` after D-STRUCTURE | SS-0 | Small | File list in `tasks/swift-project-structure-research/state.md` (Placement-rule breaches) |
 | Seek characterization tests, including a user action during a pending engine reconfigure (`cancelPendingReconfigure`) | SS-1 | Medium | Precondition for any seek extraction. No test references the seek guards or `cancelPendingReconfigure` |

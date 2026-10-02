@@ -25,7 +25,7 @@ History lives in git and `tasks/done/`.
 | Build | XcodeGen builds from `project.yml`; `MacAmpApp.xcodeproj` is generated and gitignored. Packages are ZIPFoundation (`from: 0.9.20`) and swift-atomics (`from: 1.2.0`), resolved to 0.9.20 and 1.3.0 in root `Package.resolved`, the only tracked lockfile. |
 | Code | `MacAmpApp/` has 122 `.swift` files. The largest are `Audio/AudioPlayer.swift` (1,101 lines) and `Audio/Streaming/StreamDecodePipeline.swift` (825). |
 | `main` | At `b3894d9`, in sync with `origin/main`. The `_context` rewrite and task-folder moves are uncommitted until the owner asks for the commit. |
-| Open PR | #91 `chore/amp-review-dead-code` (`a032bcd`), waiting for the owner to merge. It removes `EqualizerController.useLogScaleBands` and its `AudioPlayer` forwarder, `autoEQTask`, and `AppSettings.shouldPreserveWinampChrome` / `shouldUseFullSystemMaterials`. Until it merges, that code is still on `main`. |
+| Open PRs | #92 `fix/86-test-repeat-mode` (`a8d2ece`, AT-1): pins repeat mode in the #86 test; full TSan suite passed (137/21); `/codex:review` could not run (Codex CLI rejects its configured model `gpt-6.1-sol` for a ChatGPT account). #91 `chore/amp-review-dead-code` (`a032bcd`), waiting for the owner to merge. It removes `EqualizerController.useLogScaleBands` and its `AudioPlayer` forwarder, `autoEQTask`, and `AppSettings.shouldPreserveWinampChrome` / `shouldUseFullSystemMaterials`. Until it merges, that code is still on `main`. |
 | Tests | 137 tests in 21 suites passed under TSan on `main` and on PR #91 (2026-10-02). The #86 test passed in that run, but it can still fail depending on the saved Repeat setting. |
 | Active work | Nothing is being implemented. Next is S3-3 `hls-streaming-support` (plan approved at Oracle 9.0/10), starting with pre-flight PF.3, preferably after the owner merges PR #91. Then S3-4, the Structure Sprint and S4 (see `plan.md`). |
 | Docs | The index is `docs/README.md`. `docs/diagrams/` holds 11 Excalidraw diagrams with PNG exports. |
@@ -47,7 +47,7 @@ History lives in git and `tasks/done/`.
 |--------|------|-------|
 | `chore/amp-review-dead-code` | `a032bcd` | PR #91, open. |
 | `feat/video-audio-engine-routing` | `5af91eb` | The paused S3-2 attempt (Phase 7 partial). Kept on origin and locally as a reference. |
-| `spike/avplayer-inplace-tap-dsp` | `dd53d64` | The S3-2 Phase 0 spike, not in `main`. On origin and locally; owner decision 4. |
+| `spike/avplayer-inplace-tap-dsp` | `dd53d64` | The S3-2 Phase 0 spike, not in `main`. On origin and locally; branch cleanup (owner decision 5). |
 | `fix/window-docking-78` (origin) | `3b8fd3a` | Merged in #90. Owner decision 5. |
 | `fix/pr81-butterchurn-timer-callbacks` | `212d1d8` | Merged in #83, still on origin and locally. Owner decision 5. |
 | Other merged branches | various | 47 origin and 31 local branches are already merged into `main`. These docs do not track them; cleanup is up to the owner. |
@@ -86,7 +86,7 @@ History lives in git and `tasks/done/`.
 
 ### Process
 
-- **Spike policy:** Phase 0 spikes run on throwaway branches. Findings go into the task's `research.md`, and the branch is then deleted, so spike code never reaches `main`. Known exception: `spike/avplayer-inplace-tap-dsp` (owner decision 4).
+- **Spike policy:** Phase 0 spikes run on throwaway branches. Findings go into the task's `research.md`, and the branch is then deleted, so spike code never reaches `main`. Known exception: `spike/avplayer-inplace-tap-dsp` (owner decision 5, recommended delete).
 - **Manual-gate rule (from S3-2; applies to the S3-3 and S3-4 manual gates):** a manual-gate FAILURE produces an ADR amendment and a targeted retry, never a soft-skip.
 - **Workflow:**
   - One task per branch and PR.
@@ -102,6 +102,7 @@ History lives in git and `tasks/done/`.
     This kills a running MacAmp.
 - **Task folders:** each task folder has six files: `state.md`, `research.md`, `plan.md` (created when planning starts), `todo.md`, `placeholder.md` and `depreciated.md`. `depreciated.md` is the standard spelling; review-bot comments flagging the spelling are false positives. A finished folder moves to `tasks/done/`.
 - **Deferred items** are tracked in `tasks/_context/deferred.md`, never only in a task file or a PR comment.
+- **Swift and platform level (owner, 2026-10-02):** code must build in Swift 6.2 language mode, prefer Swift 6.4 idioms where 6.2 allows them, and use macOS 27 APIs without availability gates below 27, so the S4-1 language-mode switch needs no rework.
 - **Comments:** production comments are at most one line and never cite reviews, PR numbers or ADR ids.
 - **Refactors** follow Principles 1-7 and the pre-decomposition gate in `principles.md`.
 
@@ -130,13 +131,14 @@ History lives in git and `tasks/done/`.
 
 ## Owner decisions pending
 
-1. Merge PR #91, preferably before S3-3 branches.
-2. S3-4: before vendoring in Phase 1, either run the 5-station live OGG spot-check or accept the risk. The spot-check also answers whether OGG is still worth doing in 2026.
-3. Appearance Mode preferences (`materialIntegration`, `enableLiquidGlass`) only restyle the Preferences window. Either keep them for a real Liquid Glass feature in S4-1, or remove the GroupBox and both keys.
-4. Delete `spike/avplayer-inplace-tap-dsp` (`dd53d64`) from origin, or keep it.
-5. Delete merged branches on GitHub: `fix/window-docking-78`, `fix/pr81-butterchurn-timer-callbacks` and any other merged branches you no longer want.
-6. Purge from git history `new-architecture-convresation.md` (added in `95ebc06`) and `module-cache/` (first committed in `5c4b8fa`): yes or no. A purge needs a force-push to `main`, which the ruleset likely blocks.
-7. Reply to and resolve PR #81 review threads #2 and #3 (`./scripts/resolve-pr-comments.sh 81 list`).
+1. Merge PR #91 (dead code, no behavior change), preferably before S3-3 branches. If decision 3 is "remove", fold that removal into #91 first.
+2. Review and merge PR #92 (AT-1, closes #86).
+3. S3-4: before vendoring in Phase 1, either run the 5-station live OGG spot-check or accept the risk. The spot-check also answers whether OGG is still worth doing in 2026.
+4. Appearance Mode preferences (`materialIntegration`, `enableLiquidGlass`) only add a `.thickMaterial` blur behind their own GroupBox, which is the Preferences window's only content; the labels promise app-wide "Liquid Glass" effects that do not exist. Recommended (two independent adversarial reviews, 2026-10-02): remove them, which also removes the Preferences window and its Cmd+, item; leave the two UserDefaults keys orphaned. Alternative: keep an empty Preferences window for future settings.
+5. Branch cleanup (owner runs it; GH013 blocks deletion from the CLI): commands for 68 merged origin branches, 35 merged local branches and the unmerged no-PR branches (including `spike/avplayer-inplace-tap-dsp`, recommended delete) are in the gitignored `tmp/branch-cleanup.md`. Squash-merged branch tips were checked against their PRs' final commits, so nothing is lost. Before deleting local `review/codebase-audit-2026-09`, archive its `review.md` (it is the source of the amp review).
+6. Git history purge of `new-architecture-convresation.md` (`95ebc06`) and `module-cache/` (`5c4b8fa`): recommended NO. The transcript holds no secrets; a purge rewrites 684 commits and all 11 release tags, breaks 588 commit references in the docs, leaves the old objects reachable through GitHub PR refs unless GitHub Support purges them, and needs a ruleset bypass for the force-push.
+7. Fix the Codex CLI model setting so `/codex:review` runs again (your Codex config; it currently asks for `gpt-6.1-sol`).
+8. Reply to and resolve PR #81 review threads #2 and #3 (`./scripts/resolve-pr-comments.sh 81 list`).
 
 ## Shipped
 
