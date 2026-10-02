@@ -7,7 +7,6 @@ struct AppCommands: Commands {
     @Bindable var audioPlayer: AudioPlayer
     @Bindable var settings: AppSettings
     var playbackCoordinator: PlaybackCoordinator
-    @Environment(\.openWindow) private var openWindow
 
     var body: some Commands {
         CommandMenu("Options") {
@@ -93,12 +92,8 @@ struct AppCommands: Commands {
             .keyboardShortcut("o", modifiers: [.command])
         }
 
-        CommandGroup(replacing: .appSettings) {
-            Button("Preferences...") {
-                openWindow(id: "preferences")
-            }
-            .keyboardShortcut(",", modifiers: [.command])
-        }
+        // MacAmp has no settings window; hide the empty "Settings…" item.
+        CommandGroup(replacing: .appSettings) {}
     }
 
     private func presentOpenPanel() {

@@ -260,7 +260,6 @@ project.yml           # XcodeGen project definition
 | `Cmd+Shift+1` / `2` / `3` | Show/hide Main / Playlist / Equalizer |
 | `Cmd+Option+1` / `2` / `3` | Shade/unshade Main / Playlist / Equalizer |
 | `Cmd+Shift+O` / `L` / `R` | Import skin / Open skins folder / Refresh skins |
-| `Cmd+,` | Preferences |
 | `Shift` + drag Main | Move Main alone, without snapping |
 
 ### Menu Navigation & Accelerators
