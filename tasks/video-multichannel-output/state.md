@@ -1,24 +1,25 @@
-# Task State: Video Multichannel Output
+# State: Video Multichannel Output (S4-4)
 
-> **Purpose:** Play 5.1 and other multichannel/spatial video audio as multichannel (like Apple Music/TV) while MacAmp's balance still controls the left vs right speakers.
-> **Created:** 2026-09-25
-> **Issue:** [#88](https://github.com/hfyeomans/MacAmp/issues/88)
-> **Status:** 📋 **QUEUED** — deferred from S3-2 by the owner on 2026-09-25; S3-2 ships a stereo downmix for fidelity. Research findings seeded in `research.md`; experiments not started. **Predecessors satisfied** (S3-2 PR #89 + PR #87 both merged) — unblocked; roadmap position unchanged.
+Updated: 2026-10-02
 
----
+**Status:** QUEUED. Research seeded; experiments not started.
 
-## Predecessors
+**Issue:** [#88](https://github.com/hfyeomans/MacAmp/issues/88)
 
-| Predecessor | Why | Status |
-|-------------|-----|--------|
-| S3-2 `avplayer-native-video-dsp` → PR #C merged | Introduces the preferred-format tap (ADR-12) this task extends | ✅ merged 2026-09-25 — PR #89 (`ae15f5c`) |
-| D-TARGET27 / PR #87 merged | `MTAudioProcessingTapCreateWithPreferredFormat` is macOS 27 | ✅ merged 2026-09-25 (`c79c2ca`) |
+## Purpose
+
+Play 5.1 and other multichannel or spatial video audio as multichannel (as Apple Music and TV do) while MacAmp's balance still controls the left vs right speakers.
+
+## Gating
+
+- Predecessors are met: S3-2 `avplayer-native-video-dsp` (PR #89) added the preferred-format tap this task extends, and D-TARGET27 (PR #87) made `MTAudioProcessingTapCreateWithPreferredFormat` (macOS 27) available.
+- Unblocked, but it keeps its roadmap position after S4-3 `airplay-route-picker`.
 
 ## Starting point
 
-- `VideoTap.preferredProcessingFormat` pins **2 ch** at the source rate: mono is upmixed and multichannel downmixed by the system before the tap.
-- This task changes the pin to the source layout and makes balance layout-aware (see the recommended design in `research.md`).
+- `VideoTap.preferredProcessingFormat` pins stereo Float32 non-interleaved at the source rate (`MacAmpApp/Audio/VideoDSP/VideoTap.swift:220-227`), so the system upmixes mono and downmixes multichannel before the tap.
+- This task pins the source layout instead and makes balance layout-aware (recommended design in `research.md`), keeping the source-rate pin that fixed AirPlay 2 pumping.
 
 ## Next step
 
-Run experiments 1–4 in `research.md`, then write `plan.md`.
+Run experiments 1-4 and the passthrough check in `research.md`, then write `plan.md`.

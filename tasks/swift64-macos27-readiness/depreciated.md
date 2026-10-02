@@ -1,5 +1,5 @@
-# Deprecated/Legacy Code: Swift 6.4 / macOS 27 Readiness
+# Depreciated: Swift 6.4 / macOS 27 Adoption (S4-1)
 
-> **Purpose:** Track deprecated or legacy code removed during this task
+Updated: 2026-10-02
 
-Clean. No deprecated code identified yet.
+Code and plan items this task removes or retires. None recorded.

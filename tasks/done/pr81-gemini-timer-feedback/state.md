@@ -1,5 +1,7 @@
 # PR 81 Gemini Timer Feedback State
 
+> **SHIPPED (archived 2026-10-02):** Merged via PR #83 (`1d24258`); only the owner's reply to and resolution of PR #81 review threads #2 and #3 remains.
+
 ## Status
 
 Implementation in progress on branch `fix/pr81-butterchurn-timer-callbacks`.

@@ -1,19 +1,20 @@
 # Todo: HLS Streaming Support
 
-> Implementation checklist derived from `plan.md`. Each item is a discrete, verifiable unit of work.
-> Sprint S3 wave S3-3. Branch `feat/hls-streaming-support`. PR #D.
-> **Predecessors:** S3-1B `stream-pause-tail` AND S3-2 `video-audio-engine-routing` must be merged first.
+Updated: 2026-10-02
+
+> Checklist derived from `plan.md`. Branch `feat/hls-streaming-support`; the PR number is assigned when it opens.
+> Predecessors satisfied: S3-1B `stream-pause-tail` (PR #82) and S3-2 `avplayer-native-video-dsp` (PR #89).
 
 ---
 
 ## Pre-flight
 
-- [ ] **PF.1** Confirm S3-1B (stream-pause-tail, PR #B) merged to main
-- [ ] **PF.2** Confirm S3-2 (video-audio-engine-routing, PR #C) merged to main
-- [ ] **PF.3** Re-read at HEAD: `StreamDecodePipeline.swift`, `StreamPlayer.swift`, `AudioFileStreamParser.swift` — note any line drift vs research §Appendix
-- [ ] **PF.4** `git checkout -b feat/hls-streaming-support`
+- [x] **PF.1** S3-1B `stream-pause-tail` merged (PR #82, `b60fd57`)
+- [x] **PF.2** S3-2 gate met by `avplayer-native-video-dsp` PR #89 (`ae15f5c`)
+- [ ] **PF.3** Re-read at HEAD: `StreamDecodePipeline.swift` (825 lines), `StreamPlayer.swift` (714), `AudioFileStreamParser.swift` (186). Anchors were refreshed at `b3894d9`; fix any that later merges shifted. Confirm the S3-3/S3-4 map in `tasks/_context/research.md` (File-conflict map) still holds
+- [ ] **PF.4** Cut `feat/hls-streaming-support` from main
 - [ ] **PF.5** Create folder `MacAmpApp/Audio/HLS/`
-- [ ] **PF.6** Confirm Oracle plan score ≥ 9/10 (this plan), all findings dispositioned in plan.md §19
+- [x] **PF.6** Plan scored ≥ 9/10 (9.0 in round 4); findings dispositioned in `plan.md` §19
 
 ## Phase 1 — `M3U8Parser.swift`
 
@@ -85,6 +86,7 @@
 - [ ] **P4.11** Add `DecodeContext.resetParserOnDecodeQueue()` internal method (plan §8.4)
 - [ ] **P4.12** Wire feeder closures: `feedAudio`, `onParserReset`, `onMetadataTitle`, `onFinished`, `getPipelineGeneration` (plan §8.3.2)
 - [ ] **P4.13** Update `stopInternal()` to cancel `hlsFeeder` (plan §8.5)
+- [ ] **P4.13b** Add a generation guard to `StreamDecodePipeline.stop()` (`StreamDecodePipeline.swift:275-280`), which fires `onTermination(.userStopped)` without one (theoretical double-fire)
 - [ ] **P4.14** Update post-S3-1B `pauseByUser()` / `resumeByUser()` to dispatch on `hlsFeeder.pauseByUser` / `resumeByUser` when feeder is present (plan §8.5.1)
 - [ ] **P4.15** TSan clean: build + run existing test suite (no regressions)
 - [ ] **P4.16** Commit: `feat(audio): integrate HLS detection + dispatch in StreamDecodePipeline`
@@ -102,19 +104,23 @@
 - [ ] **P6.1** Extend `StreamPlayer.isReconnectable(_:)` switch with `.streamFinished` (false), `.unsupportedFormat` (false) (plan §10.1)
 - [ ] **P6.2** Extend `StreamTerminationReason.userMessage` switch (plan §9.2): `.streamFinished` → "Stream ended", `.unsupportedFormat(let msg)` → msg
 - [ ] **P6.3** Verify legacy paths unchanged: progressive MP3/AAC streams behave identically
+- [ ] **P6.3b** Optional: delete the unused DEBUG seams `pipelineStateForTesting` (`StreamPlayer.swift:640`) and `drainResumeWarmupForTesting` (`:683`); nothing calls them
 - [ ] **P6.4** Commit: `feat(audio): map HLS termination to reconnect policy + user messages`
 
 ## Phase 7 — Tests (final pass)
 
 - [ ] **P7.1** Verify all M3U8Parser tests pass (P1.10)
-- [ ] **P7.2** Verify all HLSSegmentFeeder tests pass (P3.16)
+- [ ] **P7.2** Verify all HLSSegmentFeeder tests pass (P3.17)
 - [ ] **P7.3** Add end-to-end smoke test gated by `MACAMP_HLS_INTEGRATION=1` (plan §12.3)
-- [ ] **P7.4** Verify legacy `M3UParser` tests still pass
-- [ ] **P7.5** Verify `LockFreeRingBuffer` tests still pass
+- [ ] **P7.4** Full suite passes against the 137-test baseline, including `StreamPauseTailTests` (no M3UParser or StreamDecodePipeline test files exist)
+- [ ] **P7.5** Verify `LockFreeRingBufferTests` still pass
 - [ ] **P7.6** Verify TSan clean across full test suite
+- [ ] **P7.6b** Instruments decoder-lifecycle leak check per `tasks/_context/instruments-allocations-workflow.md`: Debug build (Allocations needs dylib injection, which hardened builds block); filter Recorded Types with `MacAmp.`, not `MacAmpApp.` (matches nothing, false PASS)
 - [ ] **P7.7** Commit: `test(hls): add end-to-end smoke + ensure regressions are caught`
 
 ## Phase 8 — Manual verification
+
+> A manual-gate FAILURE means an ADR amendment in `plan.md` plus a targeted retry, never a soft-skip. NOT ABLE with a stated reason is acceptable.
 
 - [ ] **P8.1** Smoke test 3+ live HLS stations (NPR / BBC / SomaFM-mirror or equivalent)
   - [ ] Plays within 5 s of click
@@ -130,36 +136,35 @@
 - [ ] **P8.4** Regression: 1 legacy `.pls` file — routed through `resolvePlaylistURL` unchanged
 - [ ] **P8.5** Regression: 5 local files (MP3, AAC, FLAC, WAV, M4A) — engine bridge sane
 - [ ] **P8.6** Transition: HLS → local file → HLS — clean transitions, no `-10868`
-- [ ] **P8.7** Encrypted HLS (find a test feed if possible, else skip): error message surfaces, no reconnect loop
-- [ ] **P8.8** fMP4 / TS HLS (find test feeds, else skip): error message surfaces, no reconnect loop
+- [ ] **P8.7** Encrypted HLS: error message surfaces, no reconnect loop (no test feed found → record NOT ABLE with the reason)
+- [ ] **P8.8** fMP4 / TS HLS: error message surfaces, no reconnect loop (no test feed found → record NOT ABLE with the reason)
+- [ ] **P8.9** Decide `parser.reset()` per segment vs only on `EXT-X-DISCONTINUITY` from the P8.1 listening and WAV-dump results; record the decision in `plan.md` §14
 
 ## Phase 9 — Documentation
 
 - [ ] **P9.1** Add "HLS audio path" subsection to `docs/MACAMP_ARCHITECTURE_GUIDE.md` §4
 - [ ] **P9.2** Add "Closure-injection seam to preserve private visibility" pattern to `docs/IMPLEMENTATION_PATTERNS.md`
-- [ ] **P9.3** Update `tasks/_context/tasks_index.md` — flip `hls-streaming-support` to ✅ COMPLETE on merge
-- [ ] **P9.4** Update `tasks/_context/state.md` — append S3-3 outcome row
-- [ ] **P9.5** Populate `placeholder.md` with deferrals discovered during implementation (likely: Content-Type promotion of non-`.m3u8`; sample-accurate HLS pause; per-segment vs per-discontinuity parser.reset() decision)
-- [ ] **P9.6** Populate `depreciated.md` if any legacy code is removed (none expected)
-- [ ] **P9.7** Update task `state.md` with final status and architecture diagram
-- [ ] **P9.8** Commit: `docs(hls): document HLS audio path + closure-injection pattern`
+- [ ] **P9.3** Record deferrals in `tasks/_context/deferred.md` (Content-Type promotion, sample-accurate HLS pause, VOD duration and the HLS v2/v3 items are already listed; add anything new)
+- [ ] **P9.4** Populate `depreciated.md` if any legacy code is removed (only the optional P6.3b seams expected)
+- [ ] **P9.5** Update task `state.md` with final status and architecture diagram
+- [ ] **P9.6** Commit: `docs(hls): document HLS audio path + closure-injection pattern`
 
-## Phase 10 — Oracle code-review pass
+## Phase 10 — Pre-PR review
 
-- [ ] **P10.1** Run `mcp__codex-cli__codex` (`gpt-5.5`, `xhigh`) with all changed files attached
-- [ ] **P10.2** Iterate up to 4 rounds; address all P1/P2 findings
-- [ ] **P10.3** Score ≥ 9/10 OR all blockers dispositioned
-- [ ] **P10.4** Append Oracle Code-Review Summary to `state.md`
+- [ ] **P10.1** Run one exhaustive `/codex:review --base main`
+- [ ] **P10.2** Fix findings that affect correctness or the stated requirements
+- [ ] **P10.3** Before any second round, tell the owner what it would chase and roughly what it costs
+- [ ] **P10.4** Record the outcome in `state.md`: what was fixed, and one line per finding left open
 
 ## Phase 11 — PR
 
 - [ ] **P11.1** Push branch to remote
-- [ ] **P11.2** Open PR #D: `feat(audio): add HLS audio-only streaming (AAC ADTS, master+media, live+VOD)`
-- [ ] **P11.3** Request CodeRabbit / Gemini-bot review
-- [ ] **P11.4** Resolve all PR comments via `scripts/resolve-pr-comments.sh` workflow
-- [ ] **P11.5** Merge after green CI + manual sign-off
-- [ ] **P11.6** Delete branch after merge
-- [ ] **P11.7** Move `tasks/hls-streaming-support/` → `tasks/done/hls-streaming-support/`
+- [ ] **P11.2** `gh pr create`: `feat(audio): add HLS audio-only streaming (AAC ADTS, master+media, live+VOD)`; record the PR number in `state.md` and in the Open PR and Active work rows of `tasks/_context/state.md` (Snapshot)
+- [ ] **P11.3** Wait for review-bot comments (CodeRabbit)
+- [ ] **P11.4** Resolve PR comments via `scripts/resolve-pr-comments.sh`, then stop
+- [ ] **P11.5** The owner merges after green CI and manual sign-off
+- [ ] **P11.6** The owner deletes the branch on GitHub (GH013 blocks CLI deletion)
+- [ ] **P11.7** Close out per `tasks/_context/resume-prompt.md` step 8: task status MERGED, `git mv tasks/hls-streaming-support tasks/done/`, add the Shipped row to `tasks/_context/state.md`, and update `_context` plan, todo, deferred, tasks_index (move the row, recount `done/`) and resume-prompt
 
 ---
 

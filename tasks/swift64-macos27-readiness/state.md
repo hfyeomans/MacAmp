@@ -1,83 +1,84 @@
-# Task State: Swift 6.4 / macOS 27 Readiness
+# State: Swift 6.4 / macOS 27 Adoption (S4-1)
 
-> **Purpose:** Prepare MacAmp for the Swift 6.4 language mode and macOS 27 — inventory what changes, decide what to adopt vs defer, and settle the deployment-target question with an ADR.
-> **Created:** 2026-09-05
-> **Sprint:** S4-1 (Post-Structure-Sprint)
-> **Status:** 📋 **QUEUED** — blocked on the Post-S3 Structure Sprint. Runs **before** S4-2 `github-issues-triage` (ordering confirmed by user 2026-09-05). Research not started. **Re-scoped 2026-09-25 (D-TARGET27) to an adoption task:** the deployment target is now macOS 27.0 (PR #87 merged); first item is the macOS-27 deprecations — 14 + 2 test-only from S3-2 (`BiquadNumericalMatchTests.swift:246-247`), all 16 on `main` since PR #89 merged, deferred here by user decision 2026-09-25 (warnings only). See `_context/state.md` D-TARGET27.
-> **Updated:** 2026-09-25 (S3-2 predecessor ✅ merged — PR #89, `ae15f5c`). Earlier 2026-09-25 (S3-2 predecessor: PR #89 open). Earlier 2026-09-25 (D-TARGET27 re-scope; S3-2 predecessor then at Phase 8 complete, branch pushed at `5125bb3`). Prior — 2026-09-05 (S4-1-before-S4-2 ordering confirmed by user)
+Updated: 2026-10-02
 
----
+**Status:** QUEUED. Research not started; implementation waits for the Structure Sprint.
 
-## Predecessors
+## Purpose
 
-| Predecessor | Why | Status |
-|-------------|-----|--------|
-| S3-2 `avplayer-native-video-dsp` → PR #C merged | The branch that introduced `Audio/VideoDSP/` (ADR-3a `@unchecked Sendable` containment, `Synchronization.Atomic`/`Mutex`) must land before its concurrency surface can be re-evaluated under a new language mode | ✅ merged — [PR #89](https://github.com/hfyeomans/MacAmp/pull/89), merge commit `ae15f5c` (2026-09-25) |
-| S3-3 `hls-streaming-support` → merged | S3 must close before the Structure Sprint starts | queued |
-| S3-4 `ogg-vorbis-support` → merged | Adds vendored C deps + `Package.swift` / `project.yml` changes that a tools-version bump would touch | queued |
-| Post-S3 Structure Sprint | File-move consolidation is a stop-the-world pass; a language-mode bump on top of moving files doubles the conflict surface | not started |
+Adopt what the macOS 27 minimum (D-TARGET27, PR #87) and the Xcode 27 / Swift 6.4 toolchain allow: clear the macOS 27 deprecations, adopt `Span`/`MutableSpan`/`InlineArray` where they fit, evaluate strict memory safety, and decide the Swift 6.4 language mode in its own ADR. The task also carries the amp-review items and S3-2 follow-ups slotted to S4-1 (Scope below). This file is the home for their mechanisms and line anchors.
 
-> **Allowance:** the **research half** of this task touches no code and may run opportunistically earlier (during S3 or the Structure Sprint). Only the implementation half is gated on the Structure Sprint landing.
->
-> **Ordering vs S4-2 `github-issues-triage` is CONFIRMED BY THE USER (2026-09-05): S4-1 runs first.** The user mandated that the GitHub-issue fixes come after the `.swift` rearrangement, and confirmed that S4-1 precedes S4-2 because its deprecation findings may change how the S4-2 issues are fixed. See `_context/state.md` decision D-S4.
+## Gating
 
----
+- The research half touches no code and may run any time.
+- Implementation starts after the Structure Sprint, which starts after S3-4 `ogg-vorbis-support` merges.
+- S4-1 runs before S4-2 `github-issues-triage` (D-S4, `tasks/_context/state.md`). S4-3 `airplay-route-picker` also follows S4-1.
 
-## Current toolchain vs project pins (verified 2026-09-05)
+## Toolchain and pins
 
-| Axis | Machine / toolchain | Project pin | Gap |
-|------|--------------------|-------------|-----|
-| macOS (host) | 27.0 (`26A5425a` at 2026-09-05) | — | Matches the deployment target since PR #87 (2026-09-25) |
-| Xcode | 27.0 (`27A5194q`) | `project.yml` declares `xcodeVersion: 26.0` | Cosmetic drift, known; fix as part of this task |
-| Swift toolchain | 6.4 | — | — |
-| Swift language mode | — | `SWIFT_VERSION` 6.2 | The bump this task evaluates |
-| SwiftPM | — | swift-tools-version 6.2 | Bump decision paired with the above |
-| Deployment target | — | macOS 27.0 (was 15.0; raised by PR #87, 2026-09-25) | Decided — D-TARGET27 |
+| Axis | Value | Note |
+|------|-------|------|
+| Host | macOS 27.0 (26A428) | |
+| Toolchain | Xcode 27.0 (27A5194q), Swift 6.4 | |
+| Language mode | `SWIFT_VERSION: '6.2'` (`project.yml:38,66`) | 6.4 is this task's ADR |
+| Tools version | `swift-tools-version: 6.2` (root `Package.swift`) | Root manifest is slated for deletion; after S3-4 the remaining manifest is `Vendor/COggVorbis/Package.swift` |
+| Deployment target | macOS 27.0 (`project.yml:5`) | Decided (D-TARGET27); no `#available`/`@available` gates remain in `MacAmpApp/` |
+| `xcodeVersion` | `'26.0'` (`project.yml:6`) | Cosmetic drift; bump to 27 here |
+| Test baseline | 137 tests in 21 suites pass under TSan on `main` | Run 2026-10-02 on Xcode 27 |
 
-The Swift **module** name is `MacAmp` (`PRODUCT_NAME`); `MacAmpApp` is the scheme. Mangled symbols read `_$s6MacAmp…`.
+The Swift module is `MacAmp` (`PRODUCT_NAME`); `MacAmpApp` is the scheme. Anchors below are from `main` at `b3894d9`; the Structure Sprint will move files, so re-resolve them at pickup.
 
----
+## Scope
 
-## Research questions
+### macOS 27 deprecations (warnings deferred from #87/#89)
 
-**(a) What flips when `SWIFT_VERSION` → 6.4?**
-Concurrency defaults, stdlib additions (e.g. `InlineArray`, `Span`), deprecations, and strict-concurrency diagnostics. Specifically: what it means for the **ADR-3a `@unchecked Sendable` containment** (the Gate 1 header contract + `RenderThreadSafe` marker protocol + the Gate 3a/3b/3c reflection tests) and for the `Synchronization.Atomic` / `Mutex` usage in `MacAmpApp/Audio/VideoDSP/`.
+- `AVAudioEngine.connect(_:to:format:)`: 12 sites in `MacAmpApp/Audio/AudioEngineController.swift` (lines 155-554). The #87 record counted 10.
+- `AVAudioPlayerNode.play()` at `AudioEngineController.swift:295`; `auAudioUnit` (use `withAUAudioUnit`) at `:231`.
+- `installTap(onBus:)` at `MacAmpApp/Audio/VisualizerPipeline.swift:123`.
+- `.AVPlayerItemDidPlayToEndTime` (use `AVPlayerItem.didPlayToEndTimeNotification`) at `MacAmpApp/Audio/VideoPlaybackController.swift:145`.
+- Test-only: `connect` x2 at `Tests/MacAmpTests/BiquadNumericalMatchTests.swift:246-247`.
+- Recorded as 14 production + 2 test-only; recount from a build log at pickup.
 
-**(b) What's new in SwiftUI on macOS 26/27 that MacAmp can adopt?**
-Weighted against the project's constraint that the UI must stay 1:1 pixel-faithful to classic Winamp skins.
+### Language, concurrency and memory safety
 
-**(c) What does macOS 27 add or deprecate across the AppKit + AV surface MacAmp depends on?**
-AppKit (Liquid Glass), toolbars, WebKit-in-SwiftUI (Butterchurn runs in WebKit), AVFoundation / `MTAudioProcessingTap` (the whole S3-2 video-DSP architecture rests on it), AVAudioEngine.
+- Adopt `Span`/`MutableSpan`/`InlineArray` in the DSP and visualizer buffers.
+- Evaluate `-strict-memory-safety`.
+- Swift 6.4 language-mode ADR: `SWIFT_VERSION` and tools-version together or staged, with rollback; the fate of the ADR-3a containment gates (header contract, `RenderThreadSafe`, Gate 3a/3b/3c tests) and of `Synchronization.Atomic`/`Mutex` in `MacAmpApp/Audio/VideoDSP/`.
+- Default MainActor isolation (T8 Phase 5): questionable ROI; decide in the language-mode ADR. Blast radius: `tasks/done/swift-concurrency-62-cleanup/research.md`.
+- Strict-concurrency leftovers: `nonisolated(unsafe)` x1 (`MacAmpApp/Audio/Streaming/StreamDecodePipeline.swift:79`) and `Task.detached` x3 (`MacAmpApp/Views/PlaylistWindowActions.swift:103/257/288`; SS-7 may replace that singleton first).
+- S3-2 P-2: `Mirror` cannot inspect `~Copyable` fields in the `VideoTapContext` Sendable-contract test (`Tests/MacAmpTests/VideoTapSendableContractTests.swift`, Test 3a). Revisit under 6.4 and strict memory safety.
+- S3-2 P-3: `@preconcurrency import AVFoundation` in `MacAmpApp/Audio/VideoDSP/VideoTap.swift:1` and `MacAmpApp/Audio/AudioEngineConfigurationObserver.swift:1`. Drop it if the macOS 27 SDK annotations allow.
+- P-2 and P-3 details: `tasks/done/avplayer-native-video-dsp/placeholder.md`.
 
-**(d) Should the deployment target be raised (15 → 26 or 27)?**
-What it unlocks and what it breaks for skins + windowing, and what it costs in addressable users. **Decided 2026-09-25 (D-TARGET27): macOS 27, PR #87.**
+### Amp-review items
 
----
+- **Skin Sendable.** Only `Skin` is `@unchecked Sendable` (over `[String: NSImage]`, `MacAmpApp/Models/Skin.swift:10`). `SpriteResolver` is plain `Sendable` (`MacAmpApp/Models/SpriteResolver.swift:97`) and stores a `Skin` (`:98`). Delete the unused environment helpers (`SpriteResolver.swift:396-421`: `SpriteResolverKey`, `EnvironmentValues.spriteResolver`, `View.spriteResolver`; no callers) together with the MARK and `import SwiftUI` above them (`:392-394`), which only the helpers use. Then drop `@unchecked Sendable` from `Skin`; `SpriteResolver` loses `Sendable` with it.
+- **LockFreeRingBuffer overrun race.** `writeHead` and `readHead` are already `ManagedAtomic` (`MacAmpApp/Audio/LockFreeRingBuffer.swift:23-24`). On overrun the producer advances `readHead` (`:83`) and then `memcpy`s into frames the consumer may still be reading (`:95-97`): a formal data race. Fix: drop-newest on overrun, or a documented accepted-loss contract. Rewrite the class doc comment (`:4-16`) to match: its "Known race (accepted)" paragraph (`:12-16`) is wrong, it calls the decode-queue producer real-time (`:7`), and its worst case is out of date (a zero-filled quantum since the `readHead` CAS in `c6a5b23`).
 
-## Key ADR to write
+### Ring-buffer follow-ups
 
-**ADR-1: Deployment target.** *Decided by the user 2026-09-25 (D-TARGET27 in `_context/state.md`): macOS 27, implemented in PR #87 — this ADR now only needs to record it.* Original framing: stay on macOS 15.0, or raise to 26 / 27. This is the decision that gates most of (b) and (c) — every "adopt this new API" answer is conditional on it. The ADR must state the user-reach cost, the APIs unlocked, the APIs that would need `if #available` fallbacks either way, and a kill switch.
+- Move `ManagedAtomic` (swift-atomics) to `Synchronization.Atomic`. Dropping the dependency also means migrating the stream silence gate in `AudioEngineController.swift` (`:53,338,377,397`) and the `ManagedAtomic` uses in `StreamPauseTailTests` and `LockFreeRingBufferTests`.
+- Replace the `withKnownIssue(isIntermittent: true)` wrapper on the "High throughput" test (`Tests/MacAmpTests/LockFreeRingBufferTests.swift:440`) once overrun behavior changes.
+- Add a TSan stress test for overrun during an active read.
+- Replace the ring capacity hard-coded at 4 sites (32,768 frames, `MacAmpApp/Audio/StreamPlayer.swift:130/197/471/573`) with one named constant.
+- Add unit tests for `activateStreamBridge` / `deactivateStreamBridge` (`MacAmpApp/Audio/AudioEngineController.swift:391/453`).
+- Optional: benchmarks (write/read under 1 µs at 512 frames, zero hot-path allocations), using `tasks/_context/instruments-allocations-workflow.md`. Allocations runs on Debug builds only (`tasks/_context/research.md`).
 
-Secondary ADRs likely needed: language-mode bump (`SWIFT_VERSION` + swift-tools-version, together or staged), and the fate of the ADR-3a containment gates under 6.4 semantics.
+### Root Package.swift (fallback)
 
----
+S3-4 decides this in commit C1 on `feat/ogg-vorbis-support`: delete root `Package.swift`, `Package.resolved` and the `.swiftlint.yml:44` exclude, and in the same change pin exact ZIPFoundation and swift-atomics versions in `project.yml`, because `Package.resolved` is the only tracked lockfile (`MacAmpApp.xcodeproj` is gitignored). It pins zipfoundation 0.9.20 and swift-atomics 1.3.0 today. If S3-4 did not land it, do it here.
 
-## Deliverables
+### Other inputs
 
-| File | Content |
-|------|---------|
-| `research.md` | Change inventory + impact matrix per MacAmp subsystem (Audio, VideoDSP, Skins, Windowing, Milkdrop/WebKit, Views) |
-| `plan.md` | Adopt/defer decision per item + the deployment-target ADR. **Oracle-gated ≥ 9/10 before any code.** |
-| `todo.md` | Phased work-item checklist |
+- Passthrough guard (`tasks/done/unified-audio-pipeline/todo.md:142`, item 2.3): confirm stream decode output stays Float32 PCM if `AVAudioContentSource_Passthrough` can deliver encoded frames. HDMI/optical-only risk. The macOS 27 SDK header describes it as an encoder content-source value (`AVFAudio/AVAudioSettings.h:110`), so check whether the risk is real.
+- NSMenu "Internal inconsistency" console warnings (system-injected text menus in SwiftUI/AppKit bridging): harmless; recheck on macOS 27.
 
----
+## Owner decisions affecting this task
 
-## Status log
+Listed in `tasks/_context/state.md` (Owner decisions pending).
 
-| Date | Entry |
-|------|-------|
-| 2026-09-05 | Folder scaffolded. Queued as S4-1. No research started. |
-| 2026-09-05 | Ordering **confirmed by user**: S4-1 runs before S4-2 `github-issues-triage`. Predecessor S3-2 status refreshed — branch pushed to origin at `5fe8c3c` (docs sync; code unchanged since `944795a`), Phase 8 manual gates in progress with the user. |
-| 2026-09-25 | **Re-scoped by D-TARGET27** — min OS macOS 27 (PR #87 merged, `c79c2ca`); this task becomes adoption. macOS-27 deprecations (14 on `main` + 2 test-only on the S3-2 branch) deferred here by user decision. S3-2 predecessor: Phase 8 complete, Phase 9 next, branch at `5125bb3`. |
-| 2026-09-25 | S3-2 predecessor: Phase 9 complete; PR #C opened as PR #89, awaiting merge. |
-| 2026-09-25 | S3-2 predecessor ✅ merged (PR #89, `ae15f5c`); task folder moved to `tasks/done/avplayer-native-video-dsp/`. Remaining gate: the Post-S3 Structure Sprint. |
+- **Appearance Mode:** Liquid Glass work here happens only if the owner keeps the Material/Liquid Glass preferences (`materialIntegration`, `enableLiquidGlass` in `MacAmpApp/Models/AppSettings.swift`).
+
+## Next step
+
+Phase 0 research (`todo.md`).

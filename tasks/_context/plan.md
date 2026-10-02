@@ -1,416 +1,206 @@
-# Cross-Task Execution Plan (HISTORICAL)
+# MacAmp Roadmap Plan
 
-> **Status:** HISTORICAL — All Waves 1-3 complete (8 PRs merged as of 2026-03-14). This document preserves the original execution plan for reference. For current sprint planning (S0-S3) and post-Wave-3 work, see `state.md`.
->
-> **Purpose:** Master plan coordinating 6 MacAmp tasks across waves, worktrees, and Claude instances.
-> Answers: what order, what's parallel, what blocks what, and what invalidates what.
-> **Date:** 2026-02-21
-> **Validated by:** Oracle (gpt-5.3-codex, xhigh reasoning) x2 — initial analysis + verification pass (corrections applied)
+Updated: 2026-10-02
 
-### Quick Reference
+Future work only, in execution order. Current state, decisions in force and process rules live in `tasks/_context/state.md`. Unslotted deferred items are in `tasks/_context/deferred.md`, findings in `tasks/_context/research.md`, and the checklist in `tasks/_context/todo.md`. Each task folder holds its own detail.
 
-| Metric | Value |
-|--------|-------|
-| Tasks | 8 (T1-T8) |
-| Plans complete | 6 of 6 |
-| Pending before start | None — all resolved |
-| Waves | 3 |
-| Branches | 6 |
-| PRs | 8+ (Wave 1: 3 merged, Wave 2: 2 merged, Wave 3: 3+ TBD) |
-| Max parallel worktrees | 3 (Wave 1) |
-| Semantic file conflicts | T1+T5 (AudioPlayer), T3+T5 (MainWindow), T4+T6 (Package) |
-| pbxproj strategy | Sequential merge: A -> C -> B |
+## Flow
 
----
+```text
+S3-3 HLS ──► S3-4 OGG ──► Structure Sprint (SS-0..SS-8) ──► S4-1 ──► S4-2 ──► S4-3 ──► S4-4
+                                                             ▲
+                 S4-1 research half (no code), any time ─────┘
 
-## Executive Summary
+Structure Sprint:
+SS-0 map ──┬──► SS-1 seek ────────┬──► SS-6 Audio/ ───────┐
+           ├──► SS-2 decode ──────┘                       ├──► SS-7 App/Core/Shared ──► SS-8 tests ──► SS-9 (optional)
+           ├──► SS-3 Windowing/ ──┬──► SS-5 Features/ ────┘
+           └──► SS-4 Milkdrop ────┘
 
-Six planned tasks decompose into **3 execution waves**. Wave 1 runs 3 worktrees in parallel with a defined sequential merge order for `project.pbxproj` conflict resolution. Wave 2 is sequential (semantic file conflicts on WinampMainWindow.swift). Wave 3 depends on Wave 1's ring buffer output.
-
-```
-Wave 1 (PARALLEL — 3 worktrees, 3 Claude instances)
-├── Worktree A: T1 Phases 1-3 (AudioPlayer decomposition)
-├── Worktree B: T2 (PlaylistWindow decomposition)
-└── Worktree C: T4 + T6 (Ring buffer + Swift Testing)
-
-    ──── sequential merge: A first, then C, then B ────
-    ──── pbxproj conflicts resolved at each merge step ────
-
-Wave 2 (SEQUENTIAL — 1 Claude instance, 2 separate PRs)
-├── PR 1: T5 Phase 1 (Stream volume routing)
-└── PR 2: T3 (MainWindow decomposition)
-
-    ──── merge each PR sequentially ────
-
-Wave 3 (SEQUENTIAL — strictly ordered, each step depends on previous merge)
-├── Step 3a: T8 PR 1 (Swift 6.2 foundation: SWIFT_VERSION + isolated deinit + DispatchQueue)
-├── Step 3b: T7 (Unified Audio Pipeline: custom stream decode, benefits from 6.2)
-├── Step 3c: T8 PR 2 (AudioPlayer isolated deinit + @concurrent, post-pipeline)
-└── Step 3d: T1 Phase 4 (Engine transport extraction, deferred until stable)
+Now, before S3-3: AT-1 (#86)     After S3-4: AT-2 (Timer helper, best in SS-7)     Backlog: BL-1 (visualizer audit)
 ```
 
-**Total: 8 tasks (T1-T8) across 3 waves, 8+ PRs**
-**Wave 3 note:** T8 is split across 3a/3c because AudioPlayer.swift is modified by both T7 and T8.
+## Ordering rules
+
+1. **S3-3 before S3-4** (state.md, S3 order). OGG rebases on post-HLS main using HLS plan §17.1.2.
+2. **D-STRUCTURE** (state.md): all file moves wait for the Structure Sprint after S3-4 merges. Until then, new files go to their target location and decomposition splits files in place.
+3. **D-S4** (state.md): S4-2 lands after the Structure Sprint and after S4-1, whose deprecation findings may change how the issues are fixed. The only exception so far is D-WIN78 (#78, done in PR #90).
+4. **S4-1's research half is ungated.** It touches no code and may run any time. Only its implementation waits for the Structure Sprint.
+5. S4-3 follows S4-1 (API findings). S4-4's predecessors are met, but it keeps its slot after S4-3.
+
+Every item: one branch and PR, `xcodegen generate`, TSan build and test, one exhaustive `/codex:review --base main` before the PR, and the owner merges and deletes the branch. Close-out: `git mv` the folder to `tasks/done/` and update `_context/` (state, plan, todo, deferred, tasks_index, resume-prompt). There are no Oracle plan gates (owner, 2026-10-02).
+
+## Summary
+
+| ID | Item | Folder | Status | Predecessors |
+|----|------|--------|--------|--------------|
+| S3-3 | Audio-only HLS | `tasks/hls-streaming-support/` | NEXT | #82, #89 merged; PR #91 merge recommended first |
+| S3-4 | OGG Vorbis | `tasks/ogg-vorbis-support/` | BLOCKED | S3-3 |
+| SS-0 | Structure Sprint map | `tasks/swift-project-structure-research/` | QUEUED | S3-4 |
+| SS-1 | AudioPlayer seek re-evaluation (D8) | `tasks/audioplayer-seek-extraction/` | DEFERRED | SS-0, S3-4 |
+| SS-2 | StreamDecodePipeline re-evaluation | `tasks/streamdecodepipeline-decomposition/` | DEFERRED | SS-0, S3-4 |
+| SS-3 | Windowing/ consolidation | `tasks/windowing-structure-consolidation/` | DEFERRED | SS-0 |
+| SS-4 | Features/Milkdrop/ consolidation | `tasks/milkdrop-feature-consolidation/` | DEFERRED | SS-0 |
+| SS-5 | Features/ consolidation | no folder yet | QUEUED | SS-0, SS-3, SS-4 |
+| SS-6 | Audio/ consolidation | no folder yet | QUEUED | SS-0, SS-1, SS-2 |
+| SS-7 | App/, Core/, Shared/ and composition root | no folder yet | QUEUED | SS-0, SS-5, SS-6 |
+| SS-8 | Mirror tests to source layout | no folder yet | QUEUED | SS-3 to SS-7 |
+| SS-9 | Local packages | no folder yet | OPTIONAL | SS-8 |
+| S4-1 | macOS 27 / Swift 6.4 adoption | `tasks/swift64-macos27-readiness/` | QUEUED | Research: none. Implementation: Structure Sprint |
+| S4-2 | GitHub issues #47, P-6, #79, #84 | `tasks/github-issues-triage/` | QUEUED | Structure Sprint, S4-1 |
+| S4-3 | AirPlay route picker | no folder yet | QUEUED | S4-1 |
+| S4-4 | Multichannel video output (#88) | `tasks/video-multichannel-output/` | QUEUED | S4-3 (roadmap order only) |
+| AT-1 | #86 test isolation | no folder | NEXT | None; standalone PR before S3-3 (owner, 2026-10-02) |
+| AT-2 | Timer common-mode helper | no folder yet | DEFERRED | S3-4 (shares StreamPlayer/AudioEngineController); best in SS-7 |
+| BL-1 | Visualizer fidelity audit | no folder yet | BACKLOG | None |
 
----
+Status words: NEXT = start now; BLOCKED = waiting on a predecessor; QUEUED = waiting its turn; DEFERRED = parked until its slot or trigger; PENDING = needs an owner decision; OPTIONAL; BACKLOG = not scheduled.
 
-## Prerequisites (All Resolved)
+## S3: streaming formats
 
-| Prerequisite | Required By | Status | Resolved In |
-|-------------|-------------|--------|-------------|
-| N1-N6 internet radio fixes | T5 Phase 1 | **DONE** | PR #49 |
-| VisualizerPipeline SPSC refactor | T5 Phase 2 | **DONE** | PR #48 |
-| T4 plan.md written | T4 implementation | **DONE** | Written 2026-02-21 from existing research |
-| T6 swift-tools-version decision | T6 Phase 1 | **DONE** | User decided: **6.2** |
+### S3-3 Audio-only HLS
 
----
+- **Scope:** M3U8 master and media playlists with AAC-ADTS segments, live and VOD. Adds `MacAmpApp/Audio/HLS/` (M3U8Parser ~225 LOC, HLSSegmentFeeder ~350 LOC) and `Tests/MacAmpTests/HLSStreamingTests` (~300 LOC). The feeder hands bytes to `DecodeContext.handleIncomingData` (`StreamDecodePipeline.swift:617`) through an injected `@Sendable (Data) -> Void` closure, so no visibility widens. Edits StreamDecodePipeline (M3U dialect classifier, HLS start, generation snapshot, pause/resume dispatch, non-reconnectable `.streamFinished` and `.unsupportedFormat`), AudioFileStreamParser (`reset()` with format and magic-cookie compare) and StreamPlayer (`isReconnectable`, `userMessage`). Two tokens gate stale callbacks: `pipelineGeneration` and `pauseEpoch`. Phase 4 also adds the missing generation guard to `StreamDecodePipeline.stop()` (`:275-280`). Branch `feat/hls-streaming-support`.
+- **Non-goals:** MPEG-TS, fMP4, LL-HLS, ABR, DRM, HLS video, splitting StreamDecodePipeline, and any change to AudioPlayer, AudioEngineController, PlaybackCoordinator, Track, RadioStation or M3UParser.
+- **Amp item:** optional, in Phase 6: delete the unused StreamPlayer DEBUG seams `pipelineStateForTesting` (`StreamPlayer.swift:640`) and `drainResumeWarmupForTesting` (`:683`).
+- **Risks and gates:**
+  - PF.3 first: re-read StreamDecodePipeline (825 lines), StreamPlayer (714) and AudioFileStreamParser (186) at branch time and confirm the anchors. They were refreshed at `b3894d9`; PR #91 does not touch these files, but later merges may shift them.
+  - Open design call: `parser.reset()` per segment or only on `EXT-X-DISCONTINUITY`. Decide with listening and dump tests.
+  - Re-derive the S3-3/S3-4 file-conflict map from both plans at start (current map in research.md).
+  - Phase 7: full TSan suite, opt-in `MACAMP_HLS_INTEGRATION` smoke test, Instruments decoder-lifecycle leak check per `tasks/_context/instruments-allocations-workflow.md` (build constraints in research.md).
+  - Phase 8 manual gates: 3+ live HLS stations, legacy .m3u/.pls/SHOUTcast, local formats, HLS↔local transitions, encrypted/fMP4/TS error paths. A manual-gate failure means an ADR amendment plus a targeted retry, never a soft-skip.
+
+### S3-4 OGG Vorbis
+
+- **Scope:** OGG Vorbis for local files and Icecast streams. Vendors libogg 1.3.5 and libvorbis 1.3.7 as one local package, `Vendor/COggVorbis` (Cogg, Cvorbis), wired through `project.yml`. Adds VorbisDecoder (QueueConfined), OggCodecSniffer, and a fileprivate StreamBackend, PipelineLifecycle and StreamFormatHint in StreamDecodePipeline. Collapses to one `formatReadyFired` gate and fixes the chained-format `onFormatReady` gap (onChainFormatChange → onStreamChainFormatChanged → PlaybackCoordinator). Local playback through VorbisFileSource and LocalAudioSource (chained `scheduleBuffer` on playerNode). Renames ICYMetadata to a top-level StreamMetadata and adds .ogg/.oga to MetadataLoader. Documents the Release-build confinement gap in `AudioConverterDecoder.clearQueue` / `QueueConfined`, which VorbisDecoder reuses. arm64 only, macOS 27. Branch `feat/ogg-vorbis-support`; throwaway spikes `spike/ogg-build-wiring` (0a) and `spike/ogg-local-playback` (0b).
+- **Non-goals:** encoding, more than 2 output channels, HLS-Vorbis, Theora, Opus/FLAC/Speex.
+- **Amp item:** root `Package.swift` cannot build (mixed Swift and ObjC with a bridging header, no Butterchurn resources), and nothing runs `swift build`. In commit C1 on `feat/ogg-vorbis-support`, not on the throwaway spike, delete `Package.swift`, `Package.resolved` and the `.swiftlint.yml` exclude (`.swiftlint.yml:44`). `Package.resolved` is the only tracked lockfile (`.gitignore:44` ignores `MacAmpApp.xcodeproj/`), so the same commit replaces the `from:` ranges in `project.yml` with exact pins at today's resolved versions: ZIPFoundation 0.9.20 and swift-atomics 1.3.0. Fallback slot: S4-1.
+- **Risks and gates:**
+  - Order: G1 after S3-3 merges, re-read every Files Affected at HEAD (no code); then the 0a/0b spikes; then cut `feat/ogg-vorbis-support` and apply the 5-step HLS hand-off (HLS plan §17.1.2) as its first work.
+  - Owner call before Phase 1: run the 5-station live OGG spot-check or accept the risk. It also answers whether OGG is still worth doing.
+  - Phase 0a/0b spikes are hard gates (0b: drift ≤100 ms over 60 s, exactly one completion, TSan clean). Record the results in research.md and delete both spike branches.
+  - C9: Release binary size ≤500 KB stripped, plus an Instruments decoder-lifecycle leak check.
+  - StreamDecodePipeline grows to about 1,225 raw / ~820 SwiftLint-counted lines, past the 600 `file_length` warning (research.md, Fired growth triggers), and the plan forbids splitting it; SS-2 handles that.
+  - Manual gates follow the S3-3 failure rule (ADR amendment plus targeted retry).
+  - Close-out: once root `Package.swift` is gone, the swift-tools-version decision in state.md refers only to `Vendor/COggVorbis/Package.swift`; update that line.
 
-## Wave 1: Parallel Infrastructure & Refactoring
+## Structure Sprint
 
-### Timing: Immediate — all pre-flight items resolved
+Starts after S3-4 merges. Each consolidation task gets its own branch; there is no umbrella restructure branch.
 
-### Pre-Flight Checklist
+### SS-0 Structure Sprint map
 
-- [x] User approves cross-task plan
-- [x] T4 plan.md written
-- [x] T6 swift-tools-version decided: **6.2**
-- [ ] 3 git worktrees created from `main` HEAD
-- [ ] 3 Claude instances launched (one per worktree)
+- **Scope:** one source-to-target map for every file in `MacAmpApp/` and `Tests/` against the approved layout: App/, Core/, Shared/, Features/, Audio/, Windowing/, Resources/, with no top-level ViewModels/ or Utilities/. Set the execution order and dependencies. Create task folders for SS-5, SS-6 and SS-7 (6-file layout; plan.md is created when planning starts). `project.yml` globs `MacAmpApp/`, so moves inside it need no edit; only the Butterchurn folder reference (`project.yml:25`) changes, plus an `excludes:` entry for the moved folder in the `MacAmpApp` sources entry (SS-4). Decide the ambiguous files and where the shared domain models left in Models/ go (list in `tasks/swift-project-structure-research/plan.md`, step 3). Reconcile Audio/ subfolder names with what exists: Streaming/, VideoDSP/ (not the planned Video/), ObjCBridge/, plus HLS/ and Vorbis/ from S3. Audit leftover early-project preprocessing workarounds.
+- **Amp item:** folder misplacement across Models/, ViewModels/ and Utilities/, including the 8 placement-rule breaches listed in `tasks/swift-project-structure-research/state.md`. The map covers every file; SS-3 to SS-7 move them.
+- **Gates:** run the SS-1 and SS-2 re-evaluations before any moves.
 
----
+### SS-1 AudioPlayer seek re-evaluation (D8)
 
-### Worktree A: AudioPlayer Decomposition (T1 Phases 1-3)
+- **Why now:** D8 (AudioPlayer stays whole, Option C) is under re-evaluation, not in force. Two of its three triggers fired: size (`AudioPlayer.swift` is 1,101 lines) and new responsibility (the video-tap and engine-reconfigure sections); the testability trigger has not.
+- **Scope:** re-evaluate Option B, a lean SeekController with direct references to the engine and videoPlaybackController and about 2 callbacks (onRequestNextTrack, onPlaylistAdvanceRequest). If go, move atomically: currentSeekID, seekGuardActive, isHandlingCompletion, shouldIgnoreCompletion, seek, seekToPercent, videoSeekCompletion and onPlaybackEnded. Decompose in place in Audio/, before SS-6. Replace the seek-guard `Task.sleep` delays with one structured guard-clear, only once tests exist. Decide the two swiftlint suppressions (`AudioPlayer.swift:1` file_length, `:9` type_body_length): after seek extraction both SwiftLint counts stay near 650, so `file_length` still warns and `type_body_length` still errors (`tasks/audioplayer-seek-extraction/research.md`).
+- **Also:** the optional SS-1 rows in deferred.md (PreReconfigureSnapshot narrowing).
+- **Risks and gates:** seek characterization tests come first (seek while playing or paused, seek to end, rapid seeks, guarded stream no-op, a user action during a pending engine reconfigure via cancelPendingReconfigure). Go/no-go ADR. Kill switch: cancel if state ownership would still be split. TSan, manual seek and remote-command checks.
 
-**Branch:** `refactor/audioplayer-decomposition`
-**Claude Instance:** Dedicated instance in separate terminal
-**Estimated effort:** Medium (3 phases, ~200 lines moved, 1 new file)
-**pbxproj impact:** 1 new file (EqualizerController.swift) — minimal
+### SS-2 StreamDecodePipeline re-evaluation
 
-| Phase | What | Files | Risk |
-|-------|------|-------|------|
-| 1 | Extract EqualizerController | AudioPlayer.swift, new EqualizerController.swift | Low |
-| 2 | Consolidate visualizer forwarding | AudioPlayer.swift, VisualizerPipeline.swift | Low |
-| 3 | Clean up FourCC extension | AudioPlayer.swift | Zero |
+- **Scope:** re-baseline at post-OGG HEAD (825 lines today; projected growth in research.md, Fired growth triggers). Re-evaluate extracting DecodeContext (private becomes internal, Principle 5), SessionDelegateProxy (HLS adds a second fileprivate copy, still under the Rule of Three) and PlaylistResolver with formatHint; redraw the resolver boundary after HLS adds its M3U classifier. Retrofit DecodeContext (`@unchecked Sendable`, `StreamDecodePipeline.swift:525`) to the ADR-3a header contract plus gate test that the other ADR-3a types follow (list in state.md, Architecture invariants). Decompose in place in Audio/Streaming/.
+- **Risks and gates:** preserve generation-token, shutdown and callback semantics. Go/no-go per the `tasks/_context/principles.md` checklist. TSan, manual radio test (metadata, reconnect, pause/resume).
 
-**Phase 4 explicitly excluded** — deferred to Wave 3 or later (architectural conflict with T5 Phase 2).
+### SS-3 Windowing/ consolidation
 
-**Verification:**
-- Build + run with Thread Sanitizer
-- All EQ functions work (10 bands, preamp, presets, auto-EQ)
-- Visualizer renders correctly
-- swiftlint suppressions reduced (target: 0-1 remaining)
+- **Scope:** move generic window infrastructure into `MacAmpApp/Windowing/` (Controllers/, Coordination/, Geometry/, Persistence/) after a dependency analysis of WindowCoordinator and WindowRegistry that rejects cycles. Classify each candidate: move as-is, move after a small abstraction, or leave. #78 follow-ups from PR #90: minimize injection into BorderlessWindow, ScreenClamp.restore plus tests, PlaylistWindowSizeState.pixelSize, a topAnchoredOrigin helper, an Option+Cmd+M check and the docs fixes. Add a WindowSizeState protocol for the duplicated Playlist, Video and Milkdrop size-state types. The docs-only #78 fixes may land any time.
+- **Amp items:**
+  - One `Size2D.quantizedDelta` helper replaces the 25×29 quantized resize math in 3 views (6 sites: PlaylistResizeHandle `:29/:46`, VideoWindowChromeView `:304/:322`, MilkdropWindowChromeView `:173/:190`). Do it with the shaded-Playlist pixel-size helper.
+  - `SkinSprites.characterSpriteName(for:)` (#78 follow-up 6, extended by the amp review) for all 10 `CHARACTER_` sites in 8 files.
+  - Move `Utilities/WinampWindowConfigurator.swift` and `Utilities/WindowResizePreviewOverlay.swift` into Windowing/.
+- **Risks and gates:** the #78 and amp refactors are behavior-touching exceptions to the sprint's "no behavior change" rule. Manual multi-window checks: docking, visibility, persistence, resize, shade, double size.
 
----
+### SS-4 Features/Milkdrop/ consolidation
 
-### Worktree B: PlaylistWindow Decomposition (T2)
+- **Scope:** move Models/MilkdropWindowSizeState, ViewModels/ButterchurnBridge, ViewModels/ButterchurnPresetManager, Views/WinampMilkdropWindow, Views/Windows/ButterchurnWebView, Views/Windows/MilkdropWindowChromeView and Windows/WinampMilkdropWindowController into `Features/Milkdrop/`. Move the repo-root `Butterchurn/` to `Features/Milkdrop/Resources/Butterchurn/`, update `project.yml:25`, and exclude the moved folder from the `MacAmpApp` sources entry so XcodeGen does not add it twice. Generic windowing code stays out. Decide whether WinampMilkdropWindow/Controller keep the Winamp prefix, and whether the unreferenced `Butterchurn/test.html` keeps shipping.
+- **Risks and gates:** bundle lookups use subdirectory "Butterchurn" (`ButterchurnWebView.swift:112/:157`) and change only if the bundled folder name changes. Verify Butterchurn loads in Debug and in a packaged Release build.
 
-**Branch:** `refactor/playlistwindow-decomposition`
-**Claude Instance:** Dedicated instance in separate terminal
-**Estimated effort:** Medium (4 phases, 6-8 new files, 2 deleted)
-**pbxproj impact:** 6-8 new files, 2 deleted — significant. Merges last in Wave 1.
+### SS-5 Features/ consolidation
 
-| Phase | What | Files | Risk |
-|-------|------|-------|------|
-| 1 | Create PlaylistWindowInteractionState + PlaylistMenuPresenter | New files | Low |
-| 2 | Extract 5-6 child views | New files | Low |
-| 3 | Rewrite root, restore private access, delete extension | WinampPlaylistWindow.swift, DELETE +Menus.swift | Medium |
-| 4 | Verification | N/A | N/A |
+- **Scope:** move feature-local views, state and window controllers into `Features/<Feature>/` for MainWindow, Playlist, Equalizer, Video, Preferences, Skins and Radio, by the proximity rule. Views/MainWindow/ and Views/PlaylistWindow/ are already subfolders; the EQ, Video and Views/Windows/ files are flat. Feature-local Models/ state (for example Playlist/VideoWindowSizeState) moves with its feature. Folder to create: `tasks/features-consolidation/`, seeded from SS-0's map.
+- **Amp item:** optional `tileRow` helper for the tiled title-bar chrome repeated in 4 views (WinampPlaylistWindow, WinampVideoWindow, VideoWindowChromeView, MilkdropWindowChromeView).
+- **Gates:** xcodegen, TSan, manual smoke per window.
 
-**Verification:**
-- Build + run with Thread Sanitizer
-- Visual comparison: playlist renders identically with 3+ skins
-- Track selection, double-click play, menu operations, shade mode, resize, scroll
-- Zero lint violations without suppressions
+### SS-6 Audio/ consolidation
 
----
+- **Scope:** split Audio/ into Playback/ (AudioPlayer, PlaybackCoordinator, PlaylistController, AudioEngineController, AudioEngineConfigurationObserver, and SeekController if SS-1 goes ahead), Streaming/ (exists; add StreamPlayer, LockFreeRingBuffer and any SS-2 extractions), Equalizer/ (EqualizerController, EQPresetStore), Visualization/ (VisualizerPipeline, VisualizerFeed, VisualizerScratchBuffers, possibly VideoTapVisualizerRender), VideoDSP/ (keep the name; add VideoPlaybackController), Persistence/, ObjCBridge/, HLS/ and Vorbis/. SS-0's map places the rest, including MetadataLoader and RenderThreadSafe. Folder to create: `tasks/audio-consolidation/`.
+- **Gates:** xcodegen, TSan, smoke for local audio, streams, video and Butterchurn.
 
-### Worktree C: Ring Buffer + Swift Testing (T4 + T6)
+### SS-7 App/, Core/, Shared/ and composition root
 
-**Branch:** `infra/ring-buffer-and-testing`
-**Claude Instance:** Dedicated instance in separate terminal
-**Estimated effort:** Medium-High
-**pbxproj impact:** 1-3 new files (ring buffer + test files)
+- **Scope:** App/ gets MacAmpApp.swift, AppCommands, SkinsCommands and the composition root. Core/ gets small, truly global code (AppLogger, TimeFormatting, WeakBox) and stays small. Shared/ gets cross-feature UI and primitives (today's Views/Shared/ and Views/Components/). Delete the top-level ViewModels/ and Utilities/. Replace the PlaylistWindowActions singleton (an NSMenuItem target with mutable selectedIndices that also holds the 3 `Task.detached`), which removes the manual playlist selection-state sync. Folder to create: `tasks/app-core-shared-consolidation/`, seeded from `tasks/done/playlistwindow-layer-decomposition/depreciated.md` §3-4.
+- **Amp item:** one composition root in App/ replaces the `WindowCoordinator.shared` and `AppSettings.instance()` access paths and the init repeated across the 5 window controllers (counts in deferred.md, SS-7).
+- **Gates:** xcodegen, TSan, manual multi-window and menu checks. AT-2 fits here once Core/ exists.
 
-**Why combined:** Both modify Package.swift — T4 adds swift-atomics dependency, T6 bumps swift-tools-version. Combining avoids Package.swift merge conflicts.
+### SS-8 Mirror tests to source layout
 
-#### Internal Sequencing (within worktree)
+- **Scope:** reorganize the flat `Tests/MacAmpTests/` (21 files) to mirror the new layout, for example Audio/Streaming/, Windowing/, Features/Milkdrop/. Pure moves, no test-behavior changes. Update `docs/context/xcode-testing-context.md`. Then one follow-up commit for the SS-8 rows in deferred.md (`Task.sleep` determinism, Swift Testing follow-ups). Tracked in `tasks/swift-project-structure-research/todo.md`.
+- **Gates:** the full TSan suite stays green; the move commit keeps the same test count.
 
-```
-Step 1: T6 Phase 1 — Bump Package.swift to swift-tools-version 6.0 (or 6.2)
-Step 2: T4 — Add swift-atomics to Package.swift, implement LockFreeRingBuffer + tests
-Step 3: T6 Phases 2-6 — Migrate test assertions, suites, parameterization, async, tags
-```
+### SS-9 Local packages (optional)
 
-This order ensures all Package.swift changes happen coherently.
+- **Scope:** extract local Swift packages (Windowing, AudioStreamingCore, SkinEngine) only where a boundary is proven. Evaluate after the sprint; see `tasks/swift-project-structure-research/plan.md`.
 
-#### T4: Lock-Free Ring Buffer
+## S4: platform adoption and issues
 
-| Step | What | Files |
-|------|------|-------|
-| 1 | Write plan.md (currently placeholder) | tasks/lock-free-ring-buffer/plan.md |
-| 2 | Add swift-atomics to Package.swift | Package.swift |
-| 3 | Implement LockFreeRingBuffer | New: MacAmpApp/Audio/LockFreeRingBuffer.swift |
-| 4 | Unit tests (write/read, wrap-around, underrun, overrun, generation ID) | New test file |
-| 5 | Concurrent stress tests | New test file |
-| 6 | Performance benchmarks (<1us latency) | New test file |
-
-#### T6: Swift Testing Modernization
-
-| Phase | What | Files |
-|-------|------|-------|
-| 1 | Bump Package.swift to 6.0+ | Package.swift |
-| 2 | Assertion migration (XCTAssert -> #expect/#require) | All 9 test files |
-| 3 | Suite modernization (XCTestCase -> struct) | All 9 test files |
-| 4 | Parameterization | AudioPlayerStateTests, SpriteResolverTests, WindowDockingGeometryTests |
-| 5 | Async fixes | DockingControllerTests, SkinManagerTests |
-| 6 | Tags & traits | All test files + new tag extension |
-
-**Verification:**
-- `swift build` and `swift test` both pass
-- Ring buffer: all unit tests, stress tests, benchmarks pass
-- All 23+ tests pass with new Swift Testing assertions
-- Build with Thread Sanitizer succeeds
-
----
-
-## Wave 1 Merge
-
-### Sequential Merge Order (required for pbxproj)
+### S4-1 macOS 27 / Swift 6.4 adoption
 
-```
-1. Merge Worktree A (T1) — 1 new file, smallest pbxproj change
-   └── Full build + test on main
+- **Scope:** adoption task under D-TARGET27.
+  - Replace the macOS-27 deprecations deferred from #87/#89: 14 production plus 2 test-only (`BiquadNumericalMatchTests.swift:246-247`). Recount from a build log; AudioEngineController alone now has 12 `.connect(` sites. The others are `AVAudioPlayerNode.play()`, `auAudioUnit` (→ `withAUAudioUnit`), `installTap(onBus:)` (`VisualizerPipeline.swift:123`) and `AVPlayerItemDidPlayToEndTime` (`VideoPlaybackController.swift:145`).
+  - Adopt Span/MutableSpan/InlineArray in the DSP and visualizer buffers; evaluate `-strict-memory-safety`.
+  - Swift 6.4 language-mode ADR (SWIFT_VERSION and tools-version are 6.2 today). It covers the ADR-3a containment gates, Atomic/Mutex, default MainActor isolation and the `Vendor/COggVorbis/Package.swift` manifest.
+  - Strict-concurrency leftovers: `nonisolated(unsafe)` at `StreamDecodePipeline.swift:79`, 3 `Task.detached` at `PlaylistWindowActions.swift:103/257/288`, S3-2 P-2 (Mirror misses `~Copyable` fields) and P-3 (`@preconcurrency import AVFoundation`).
+  - Fix the cosmetic `xcodeVersion: '26.0'` at `project.yml:6`. Record D-TARGET27 as ADR-1.
+  - Deferred inputs slotted here: every S4-1 row in deferred.md (passthrough guard, NSMenu warnings recheck, ManagedAtomic → Synchronization.Atomic, the ring-capacity constant, stream-bridge lifecycle tests, ring-buffer benchmarks).
+  - Liquid Glass work depends on the owner's Appearance Mode decision.
+- **Amp items** (mechanism and line anchors in `tasks/swift64-macos27-readiness/state.md`, Amp-review items):
+  - Skin Sendable: delete the unused `spriteResolver` environment helpers, then drop `@unchecked Sendable` from Skin. SpriteResolver is already plain `Sendable`.
+  - LockFreeRingBuffer overrun race: the heads are already ManagedAtomic; the race is the producer's storage write over unread frames on overrun. Fix with drop-newest on overrun or a documented accepted-loss contract, and correct the "Known race (accepted)" doc comment. Add the overrun-during-read TSan stress test and replace `withKnownIssue` on the high-throughput test.
+  - Fallback: the root `Package.swift` deletion and version pins, if S3-4 C1 did not land them.
+- **Risks and gates:** the research half (Xcode doc bundle, deep research and point lookups on Swift 6.4, SwiftUI, and macOS 27 AppKit/WebKit/AVFoundation/AVAudioEngine) may start any time. Re-run the TSan baseline at pickup. The concurrency and ring-buffer changes are risky enough for the external review.
 
-2. Merge Worktree C (T4+T6) — Package.swift + 1-3 new files
-   └── Resolve pbxproj conflicts (mechanical)
-   └── Full build + test on main
+### S4-2 GitHub issues
 
-3. Merge Worktree B (T2) — 6-8 new files, 2 deleted
-   └── Resolve pbxproj conflicts (mechanical)
-   └── Full build + test on main
-```
+- **Scope**, one branch and PR each, in this order:
+  1. #47: Cmd+Shift+1-3 is bound to both bundled-skin switching (`SkinsCommands.swift`) and the window toggles (`AppCommands.swift:15-19`).
+  2. P-6: after a video, loading an audio track does not auto-play. Close P-6 in `tasks/done/avplayer-native-video-dsp/placeholder.md` and in deferred.md.
+  3. #79: drag and drop onto the window, Dock or app icon does nothing, and Finder double-click / Open With is greyed out. Leads: `Info.plist` CFBundleDocumentTypes lists only skins, there are no onDrop handlers, and Cmd+O is limited to `[.audio]` (`AppCommands.swift:107`).
+  4. #84: Nucleo NLog v102 classic-skin rendering; verify across 3-5 skins and update the skin docs.
+  - Also: VideoPlaybackController does not observe `timeControlStatus`, so an external AVPlayer pause is not mirrored in the UI. The RemoteLayerTreeDisplayLinkClient warning is in scope only if it recurs without a debugger. #86 joins here only if the owner folds AT-1 in. #78 is done (PR #90); #88 is S4-4.
+- **Risks and gates:** re-fetch the issues and reproduce each on HEAD first. plan.md with a fix plan per issue, a file-conflict map and merge order, folding in S4-1's deprecation conclusions; owner sign-off before code. Close each issue with its PR link.
 
-**Post-merge verification:** Full build + `swift test` + Thread Sanitizer on main after all 3 merges.
+### S4-3 AirPlay route picker
 
----
+- **Scope:** an in-app AVRoutePickerView over the Winamp logo, re-planned on Swift 6.4 and macOS 27. Inputs: the Oct 2025 plans in `tasks/depreciated/airplay/` and `tasks/depreciated/winamp-airplay-overlay/`, never implemented (AVRoutePickerView has never been in `MacAmpApp/` or `Tests/`). Folder to create: `tasks/airplay-route-picker/` (6-file layout).
+- **Risks and gates:** on macOS, AVRoutePickerView routes a single AVPlayer and cannot redirect AVAudioEngine. AVAudioEngineConfigurationChange is not a general route-change signal, so route awareness needs a HAL default-output listener (`tasks/stale/airpods-route-gate-validation/`). S3-2 gate 8.9 (AirPlay 2) results feed the acceptance criteria. Details in research.md.
 
-## Wave 2: Sequential Feature + Refactoring
+### S4-4 Multichannel video output (#88)
 
-### Timing: After all Wave 1 merges complete
+- **Scope:** today `VideoTap.preferredProcessingFormat` pins stereo Float32 at the source rate (`VideoTap.swift:220-227`). Recommended: pin the source layout, apply left gain to L/Ls/Lrs and right gain to R/Rs/Rrs, and fold Center (and LFE, if Apple's downmix includes it) into the near side. About 40-60 LOC in the tap plus a main-actor layout-to-role mapping, with no route detection and no item rebuild.
+- **Risks and gates:** experiments 1-4 first (C/LFE downmix coefficients, negotiated channel count per route, effect on the Spatial/Atmos indicator, changing `allowedAudioSpatializationFormats` on a live item). Check passthrough routes (AVAudioContentSource_Passthrough) before pinning more than 2 channels. Keep the source-rate AirPlay 2 pumping fix (ADR-12). Layout-mapping and fold-math unit tests, then ear checks. The tracked `clapperboard-videos/` corpus (5 clips, one surround) suits the experiments (research.md).
 
-### Step 2a: Internet Streaming Volume Control Phase 1 (T5 Ph1)
+## Outside the main sequence
 
-**Branch:** `feature/stream-volume-control`
-**PR:** Separate PR (for revertability)
-**Claude Instance:** Can reuse any Wave 1 instance
-**Estimated effort:** Low (~100 lines changed across 5 files)
-**pbxproj impact:** None (no new files)
+### AT-1 #86 test isolation
 
-| Step | What | Files |
-|------|------|-------|
-| 1.1 | Add volume/balance properties to StreamPlayer | StreamPlayer.swift |
-| 1.2-1.3 | Route volume/balance through PlaybackCoordinator | PlaybackCoordinator.swift |
-| 1.4 | Add capability flags (supportsEQ, supportsBalance, supportsVisualizer) | PlaybackCoordinator.swift |
-| 1.5 | Reroute volume slider binding through coordinator | WinampMainWindow.swift |
-| 1.6 | Remove video volume from AudioPlayer.volume didSet | AudioPlayer.swift |
-| 1.7 | Dim EQ UI during stream playback | WinampEqualizerWindow.swift |
-| 1.8 | Dim balance slider + reroute binding | WinampMainWindow.swift |
-| 1.9 | Apply persisted volume on stream start | StreamPlayer.swift |
+- **Status:** NEXT. The owner chose a small standalone test-only PR before S3-3 (2026-10-02). It is our own test defect, so it does not wait for S4-2 under D-S4.
+- **Scope:** PlaylistNavigationTests "nextTrack returns stream handoff for mixed playlist" reads `PlaylistController.repeatMode` from the global AppSettings backed by real UserDefaults, so a saved repeat-one setting makes it return `.restartCurrent`. Pin `repeatMode` in the test and save/restore the UserDefaults key. Closes #86.
+- **Gates:** TSan suite; record the result in state.md.
 
-**Note on AudioPlayer.swift post-T1 merge:** After T1 merge (Wave 1), EQ methods have moved to EqualizerController.swift. T5 Ph1 Step 1.6 modifies `AudioPlayer.volume` didSet, which remains in AudioPlayer.swift (not extracted by T1). Locate by symbol name (`var volume: Float` with `didSet`) — surrounding code will have changed due to T1's extractions.
+### AT-2 Timer common-mode helper
 
-**Verification:**
-- Volume slider controls stream volume (immediate effect)
-- Volume persists across stream/local switches
-- EQ/balance dimmed during streams
-- Local file playback unchanged (no regression)
+- **When:** after S3-4, because it edits StreamPlayer and AudioEngineController, which S3-3 and S3-4 also edit (research.md); best done in SS-7.
+- **Scope:** add `Timer.scheduledOnMainCommon(every:repeats:_:)` and migrate the 7 `Timer` + `RunLoop.main.add(_, forMode: .common)` sites: VisualizerPipeline, AudioEngineController, StreamPlayer, VideoWindowChromeView, WinampMainWindowInteractionState and ButterchurnPresetManager (×2). Place it in Core/ once SS-7 creates it, otherwise in Utilities/ with a documented exception. A new .swift file needs only `xcodegen generate`.
+- **Risks and gates:** review the `@Sendable` capture (`[weak self]`, `MainActor.assumeIsolated`) at each site. TSan; manual visualizer, timer and Butterchurn check.
 
----
+## Backlog
 
-### Step 2b: MainWindow Layer Decomposition (T3)
+### BL-1 Visualizer fidelity audit
 
-**Branch:** `refactor/mainwindow-decomposition`
-**PR:** Separate PR (large structural refactor — isolated for clean review/revert)
-**Claude Instance:** Same as Step 2a (carries context from T5 Ph1)
-**Estimated effort:** Medium (4 phases, 8-10 new files)
-**pbxproj impact:** 8-10 new files, 1 deleted — significant
-
-| Phase | What | Files |
-|-------|------|-------|
-| 1 | Scaffolding (Layout, InteractionState, OptionsMenuPresenter) | 3 new files |
-| 2 | Extract child views (Transport, TrackInfo, Indicators, Sliders, Full, Shade) | 6 new files |
-| 3 | Rewrite root, restore private access, delete extension | WinampMainWindow.swift, DELETE +Helpers.swift |
-| 4 | Verification | N/A |
-
-**T5 Phase 1 integration notes:** T3 must account for T5 Phase 1's changes when extracting:
-- Volume slider binding now routes through PlaybackCoordinator (T5 Step 1.5) — moves to `MainWindowSlidersLayer`
-- Balance slider binding routes through coordinator + capability check (T5 Step 1.8) — moves to `MainWindowSlidersLayer`
-- EQ/playlist toggle buttons and capability-aware UI — moves to appropriate child views
-
-**Verification:**
-- Build + run with Thread Sanitizer
-- Visual comparison: main window renders identically with 3+ skins in full and shade mode
-- All transport, slider, menu, and indicator functions work
-- Volume/balance still route through coordinator (T5 Phase 1 not regressed)
-- Stream capability flags still correctly dim controls
-- Zero lint violations
-
----
-
-## Wave 2 Merge
-
-```
-1. Merge T5 Ph1 PR (`feature/stream-volume-control`)
-   └── Full build + test on main
-   └── Manual test: stream volume works
-
-2. Merge T3 PR (`refactor/mainwindow-decomposition`)
-   └── Full build + test on main
-   └── Verify T5 Ph1 not regressed (stream volume still works)
-```
-
----
-
-## Wave 3: Swift 6.2 Foundation + Unified Audio Pipeline (Updated 2026-03-13)
-
-### Timing: After Wave 2 merge. Strictly sequential (3a→3b→3c→3d).
-
-**Wave 3 Pivot:** T5 Phase 2 MTAudioProcessingTap approach FAILED (callbacks never fire for
-streaming AVPlayerItems). Replaced by T7 (unified-audio-pipeline): custom decode using
-AudioFileStream + AudioConverter → LockFreeRingBuffer → AVAudioSourceNode → AVAudioEngine.
-
-New task T8 (swift-concurrency-62-cleanup) added as prerequisite — upgrades SWIFT_VERSION to 6.2,
-establishes `isolated deinit` pattern, and cleans up DispatchQueue usage. T8 is split across
-Steps 3a and 3c because AudioPlayer.swift is modified by both T7 and T8.
-
-### Step 3a: T8 PR 1 — Swift 6.2 Foundation
-
-**Branch:** `feature/swift-concurrency-62-cleanup`
-**Scope:** SWIFT_VERSION 6.0→6.2, `@preconcurrency import ZIPFoundation`, LockFreeRingBuffer
-warning fixes, `isolated deinit` (VideoPlaybackController, VisualizerPipeline, WindowCoordinator),
-DispatchQueue→Task cleanup (WindowAccessor, PreferencesView)
-
-### Step 3b: T7 — Unified Audio Pipeline
-
-**Branch:** TBD (from main after 3a merges)
-**Scope:** Custom decode pipeline (ICYFramer, AudioFileStreamParser, AudioConverterDecoder,
-StreamDecodePipeline), StreamPlayer rewrite (removes AVPlayer), AudioPlayer bridge (sourceNode),
-PlaybackCoordinator bridge lifecycle, VisualizerView isEngineRendering, capability flags.
-Benefits from Swift 6.2: `isolated deinit` for StreamPlayer, `@MainActor @Sendable` callbacks,
-task naming. See `tasks/unified-audio-pipeline/plan.md` "Swift 6.2 Adoption Notes" section.
-
-### Step 3c: T8 PR 2 — Post-Pipeline Concurrency Cleanup
-
-**Branch:** TBD (from main after 3b merges)
-**Scope:** AudioPlayer `isolated deinit` (covers final shape with streamSourceNode/bridge),
-`@concurrent` static functions (EQPresetStore, SkinManager, MetadataLoader).
-
-### Step 3d: T1 Phase 4 — Engine Transport Extraction (DEFERRED)
-
-Engine boundaries change when streamSourceNode is added. Extract transport AFTER T7+T8 stabilize.
-
-**Prerequisites (all met):**
-- T4 (ring buffer) merged in Wave 1
-- T1 Phases 1-3 merged (cleaner AudioPlayer facade) in Wave 1
-- T5 Phase 1 merged (capability flags infrastructure) in Wave 2
-
----
-
-## Complete Dependency Graph
-
-```
-                    ┌──────────────────────────────────────────┐
-                    │              WAVE 1 (parallel)            │
-                    │                                          │
-                    │  T1 Ph1-3 ─── Worktree A                │
-                    │  T2 ───────── Worktree B                │
-                    │  T4 + T6 ──── Worktree C                │
-                    │                                          │
-                    └──────────────┬───────────────────────────┘
-                                   │
-                    sequential merge (A → C → B)
-                    pbxproj resolved at each step
-                                   │
-                    ┌──────────────▼───────────────────────────┐
-                    │           WAVE 2 (sequential)            │
-                    │                                          │
-                    │  T5 Ph1 ──── PR #1 (volume routing)     │
-                    │      │                                   │
-                    │      ▼                                   │
-                    │  T3 ──────── PR #2 (mainwindow decomp)  │
-                    │                                          │
-                    └──────────────┬───────────────────────────┘
-                                   │
-                    ┌──────────────▼───────────────────────────┐
-                    │      WAVE 3 (strictly sequential)        │
-                    │                                          │
-                    │  3a: T8 PR1 ── Swift 6.2 foundation     │
-                    │      │                                   │
-                    │      ▼                                   │
-                    │  3b: T7 ────── Unified Audio Pipeline    │
-                    │      │                                   │
-                    │      ▼                                   │
-                    │  3c: T8 PR2 ── AudioPlayer deinit +     │
-                    │                @concurrent               │
-                    │      │                                   │
-                    │      ▼                                   │
-                    │  3d: T1 Ph4 ── (deferred)               │
-                    │                                          │
-                    └──────────────────────────────────────────┘
-```
-
----
-
-## What Interferes, Blocks, or Overlaps
-
-| Relationship | Type | Detail |
-|-------------|------|--------|
-| T4 -> T5 Phase 2 | **Hard dependency (resolved)** | Ring buffer is prerequisite — merged in Wave 1 |
-| T5 Ph1 -> T5 Ph2 | **Hard dependency (resolved)** | Capability flags needed — merged in Wave 2 |
-| N1-N6 -> T5 Ph1 | **Hard dependency (resolved)** | PR #49 merged |
-| T8 PR1 -> T7 | **Hard dependency** | T7 needs SWIFT_VERSION 6.2 from T8 PR1 |
-| T7 -> T8 PR2 | **Hard dependency** | T8 PR2 needs AudioPlayer's final shape from T7 |
-| T8 + T7 | **File conflict** | Both modify AudioPlayer.swift — T8 split into PR1 (non-AudioPlayer) + PR2 (post-T7) |
-| T8 + T7 | **File conflict** | Both modify StreamPlayer.swift — T8 Phase 3 DROPPED (T7 rewrites file) |
-| T1 + T5 | **File conflict (resolved)** | Both modify AudioPlayer.swift — T1 first (Wave 1) |
-| T3 + T5 Ph1 | **File conflict (resolved)** | Both modify WinampMainWindow.swift — T5 Ph1 first (Wave 2) |
-| T4 + T6 | **File conflict (resolved)** | Both modify Package.swift — combined in one branch (Wave 1) |
-| T1 Ph4 + T7 | **Architectural conflict** | Both restructure engine internals — Ph4 deferred to Step 3d |
-| T1, T2, T3, T4 | **pbxproj conflict (resolved)** | Sequential merge in Wave 1 |
-
-## What Makes Plans Obsolete If Done in Wrong Order
-
-| If this runs first | This plan becomes stale | Reason | Severity |
-|-------------------|------------------------|--------|----------|
-| T3 (MainWindow decomp) | T5 Ph1 plan | Volume/balance binding locations move to child view files | HIGH — resolved (T5 Ph1 merged first) |
-| T7 (Unified Pipeline) | T1 Ph4 plan | Engine graph has new source routing Ph4 doesn't account for | MEDIUM — Ph4 deferred to Step 3d |
-| T7 (Unified Pipeline) | T8 PR 2 plan | AudioPlayer gains bridge state; isolated deinit must cover final shape | MEDIUM — T8 split into PR1 (pre-T7) + PR2 (post-T7) |
-| T8 PR 1 (Swift 6.2) | T7 plan | T7 must use 6.2 patterns (isolated deinit, @concurrent, nonisolated-async behavior) | HIGH — T7 plan updated with 10 Swift 6.2 findings |
-
----
-
-## Risk Register
-
-| Risk | Likelihood | Impact | Mitigation |
-|------|-----------|--------|-----------|
-| pbxproj merge conflicts in Wave 1 | **HIGH** | **LOW** | Sequential merge order; conflicts are mechanical |
-| T5 Ph1 plan symbol locations shift after T1 | MEDIUM | LOW | T1 doesn't change AudioPlayer public API; locate by symbol name (`var volume`, `didSet`) |
-| T3 accidentally regresses T5 Ph1 changes | MEDIUM | MEDIUM | Separate PRs; T3 plan notes coordinator bindings; verify stream volume after T3 |
-| T4 plan writing delays Wave 1 start | MEDIUM | MEDIUM | Write T4 plan before launching worktrees; can be done quickly from existing research |
-| T1 Ph4 invalidated by T5 Ph2 | HIGH | LOW | Ph4 explicitly deferred; decision after Ph2 |
-| Package.resolved conflicts | LOW | LOW | Combined T4+T6 branch handles all SPM changes |
-| Ring buffer (T4) takes longer than expected | MEDIUM | HIGH | T5 Ph2 blocked; all other tasks unaffected |
-| T6 swift-tools-version bump surfaces concurrency violations | MEDIUM | MEDIUM | Fix violations in T6 branch before merging; doesn't affect other worktrees |
-
----
-
-## Checklist for Starting Execution
-
-- [x] User approves this cross-task plan
-- [x] User decides swift-tools-version: **6.2**
-- [x] T4 plan.md written from existing research.md
-- [ ] Create 3 git worktrees from `main` HEAD
-- [ ] Launch 3 Claude instances (one per worktree)
-- [ ] Each instance reads its task's plan.md and begins execution
-- [ ] Track progress in individual task state.md files
-- [ ] When all 3 complete: merge sequentially (A -> C -> B), resolve pbxproj at each step
+- **Scope:** check band centres and bar mapping (20 Goertzel bands to 19 bars), per-band gains, log scaling, smoothing and peak falloff against Winamp/Webamp, across Main, the Main shade strip and Playlist. Includes the 2026-09-28 shade-strip bars stuck at max and the optional SwiftUI body-evaluation profiling (deferred.md BL-1 rows). Create the folder when started.
+- **Amp item:** RMS/Goertzel is computed twice (`VisualizerPipeline.makeTapHandler` and `Audio/VideoDSP/VideoTapVisualizerRender.swift`, which says the two must match). Add a parity test first (preferred at two occurrences under Principle 4), or extract one shared function, before changing the math.

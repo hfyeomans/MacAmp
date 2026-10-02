@@ -1,5 +1,7 @@
 # Todo: Video Audio Engine Routing
 
+**PAUSED-AS-REFERENCE: branch feat/video-audio-engine-routing @ 5af91eb; superseded by S3-2 avplayer-native-video-dsp (PR #89). Not resumed. The Phase 1 SHAs cited below are orphaned pre-rebase objects; Phase 1 (engine configuration observer) reached main as ef6668d..0c82a7d via PR #89.**
+
 > **Plan:** `tasks/video-audio-engine-routing/plan.md`
 > **Branch:** `feat/video-audio-engine-routing` (after S3-1 merged)
 > **Spike branch:** `spike/vaer-av-drift-measurement` (throwaway)

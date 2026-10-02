@@ -1,15 +1,21 @@
 # Todo: Milkdrop Feature Consolidation
 
-> **Description:** Checklist for preparing and executing the Milkdrop / Butterchurn ownership cleanup. Deferred to post-S3 Structure Sprint (D-STRUCTURE decision 2026-03-15).
-> **Purpose:** Keep the feature move deliberate, verifiable, and separate from the urgent runtime fix.
+Updated: 2026-10-02
 
----
+Derived from `plan.md`.
 
-- [ ] Produce a source-to-target mapping for all Milkdrop / Butterchurn Swift files
-- [ ] Produce a source-to-target mapping for `Butterchurn/` resources
-- [ ] Decide the final location for Milkdrop chrome files under `Features/Milkdrop/`
-- [ ] Move the agreed feature files into `Features/Milkdrop/`
-- [ ] Move `Butterchurn/` resources into a feature-owned resources path
-- [ ] Update project/resource metadata if required
-- [ ] Regenerate Xcode project if paths change
-- [ ] Build and verify resource loading in both Xcode Debug and packaged app flows
+## Decide (after SS-0)
+
+- [ ] Naming: keep the `Winamp` prefix or rename to `MilkdropWindow`/`MilkdropWindowController`
+- [ ] Chrome file location: flat or `Chrome/`
+- [ ] Whether `Butterchurn/test.html` keeps shipping
+- [ ] Confirm the source-to-target table in `plan.md` against SS-0's `mapping.md` at post-S3 HEAD
+
+## Execute
+
+- [ ] Move the 7 Swift files into `Features/Milkdrop/` (pure-move commit)
+- [ ] Move `Butterchurn/` to `MacAmpApp/Features/Milkdrop/Resources/Butterchurn/`; update `project.yml:25`; exclude it from the `MacAmpApp` source entry
+- [ ] `xcodegen generate`; confirm a single `Butterchurn` folder reference
+- [ ] TSan build and test
+- [ ] Verify Butterchurn loads in a Debug run and in a packaged Release build
+- [ ] One `/codex:review --base main`, then open the PR

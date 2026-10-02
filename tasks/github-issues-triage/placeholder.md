@@ -1,7 +1,7 @@
-# Placeholders: GitHub Issues Triage
+# Placeholder: GitHub Issues Triage (S4-2)
 
-> **Purpose:** Track stubs and placeholders introduced during implementation
+Updated: 2026-10-02
 
-No placeholders. Task not yet started.
+Stubs introduced during implementation. Deferred items go to `tasks/_context/deferred.md`, not here. None recorded.
 
-> Note: internal placeholder **P-6** (video→audio transition does not auto-play) is an *input* to this task, not a placeholder created by it. It is carried in `tasks/done/avplayer-native-video-dsp/placeholder.md` until fixed here — see this task's `state.md`.
+P-6 is an input to this task, not a placeholder it created; its record stays in `tasks/done/avplayer-native-video-dsp/placeholder.md` until the fix lands (todo 2.2).

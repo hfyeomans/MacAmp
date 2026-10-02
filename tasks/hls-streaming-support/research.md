@@ -3,7 +3,8 @@
 > **Purpose:** Add audio-only HLS support to MacAmp's existing custom stream decode pipeline so that radio stations served as HLS (.m3u8 + .aac/.ts/.m4s segments) play with full feature parity (EQ, visualization, balance, ICY-equivalent metadata).
 >
 > **Date:** 2026-04-27
-> **Status:** Research complete. Plan to follow.
+> **Status:** Research complete; plan approved 2026-04-27.
+> **Updated:** 2026-10-02
 > **Sprint:** S3 (Large)
 
 ---
@@ -19,7 +20,7 @@ MacAmp's unified audio pipeline (T7, PR #57) decodes progressive HTTP streams (S
 - Segment formats: AAC ADTS (`.aac`) for v1; MPEG-TS (`.ts`) and fragmented MP4 (`.m4s`) deferred
 
 **Explicitly out of scope:**
-- **Video HLS** — handled by `VideoPlaybackController` via AVPlayer; HLS video already works there because AVPlayer natively supports it. The QA1716 tap limitation only blocks audio EQ/viz, and the `video-audio-engine-routing` task addresses that separately.
+- **Video HLS** — handled by `VideoPlaybackController` via AVPlayer; HLS video already plays there because AVPlayer natively supports it. QA1716 blocks the tap for streaming items, so HLS video has no EQ/viz/balance; S3-2 (`avplayer-native-video-dsp`) covers local video only, and HLS video is not on the roadmap.
 - **DRM (FairPlay, AES-128/SAMPLE-AES `#EXT-X-KEY`)** — radio audio HLS rarely uses these.
 - **Adaptive bitrate switching** — radio bitrates are homogeneous; pick one variant up front.
 - **Live DVR / time-shift / `#EXT-X-DISCONTINUITY` recovery** — out of scope for v1.
@@ -31,20 +32,20 @@ MacAmp's unified audio pipeline (T7, PR #57) decodes progressive HTTP streams (S
 
 ## Current Architecture (what HLS plugs into)
 
-### Files (HEAD as of 2026-04-27)
+### Files (line counts at `b3894d9`, 2026-10-02)
 
 | File | Lines | Role |
 |---|---|---|
-| `MacAmpApp/Audio/StreamPlayer.swift` | 415 | @Observable MainActor facade. Owns `StreamDecodePipeline`, ring-buffer lifecycle, reconnect policy, ICY metadata propagation, elapsed-time anchor. |
-| `MacAmpApp/Audio/Streaming/StreamDecodePipeline.swift` | 698 | @MainActor orchestrator. Owns URLSession, decode queue, `DecodeContext`. Today it handles **two** kinds of URL: (a) direct audio (HTTP body = audio bytes) and (b) M3U/M3U8/PLS playlist files (resolved to a single direct URL via `resolvePlaylistURL`). |
+| `MacAmpApp/Audio/StreamPlayer.swift` | 714 | @Observable MainActor facade. Owns `StreamDecodePipeline`, ring-buffer lifecycle, reconnect policy, ICY metadata propagation, elapsed-time anchor. |
+| `MacAmpApp/Audio/Streaming/StreamDecodePipeline.swift` | 825 | @MainActor orchestrator. Owns URLSession, decode queue, `DecodeContext`. Today it handles **two** kinds of URL: (a) direct audio (HTTP body = audio bytes) and (b) M3U/M3U8/PLS playlist files (resolved to a single direct URL via `resolvePlaylistURL`). |
 | `MacAmpApp/Audio/Streaming/ICYFramer.swift` | 200 | Pure value-type framer that strips ICY metadata blocks based on `icy-metaint` header. |
-| `MacAmpApp/Audio/Streaming/AudioFileStreamParser.swift` | 187 | C-API wrapper over `AudioFileStreamOpen/ParseBytes`. Emits ASBD, magic cookie, and packet batches. |
-| `MacAmpApp/Audio/Streaming/AudioConverterDecoder.swift` | 286 | C-API wrapper over `AudioConverter`. Decodes packets to Float32 stereo PCM. |
-| `MacAmpApp/Audio/Streaming/QueueConfined.swift` | ~25 | Debug confinement assertion mixin used by Parser/Decoder. |
-| `MacAmpApp/Audio/PlaybackCoordinator.swift` | 562 | Routes Track/RadioStation to AudioPlayer or StreamPlayer; activates engine bridge on `onFormatReady`. |
-| `MacAmpApp/Audio/AudioPlayer.swift` | 705 | Local playback + bridge mechanism (`activateStreamBridge`, `streamSourceNode`). |
+| `MacAmpApp/Audio/Streaming/AudioFileStreamParser.swift` | 186 | C-API wrapper over `AudioFileStreamOpen/ParseBytes`. Emits ASBD, magic cookie, and packet batches. |
+| `MacAmpApp/Audio/Streaming/AudioConverterDecoder.swift` | 298 | C-API wrapper over `AudioConverter`. Decodes packets to Float32 stereo PCM. |
+| `MacAmpApp/Audio/Streaming/QueueConfined.swift` | 19 | Debug confinement assertion mixin used by Parser/Decoder. |
+| `MacAmpApp/Audio/PlaybackCoordinator.swift` | 587 | Routes Track/RadioStation to AudioPlayer or StreamPlayer; activates engine bridge on `onFormatReady`. |
+| `MacAmpApp/Audio/AudioPlayer.swift` | 1101 | Local playback + bridge mechanism (`activateStreamBridge`, `streamSourceNode`). |
 | `MacAmpApp/Models/M3UParser.swift` | 142 | Legacy M3U/M3U8 parser (used today for *playlist files*, not HLS). Emits `M3UEntry` with `.url`. |
-| `MacAmpApp/Models/Track.swift` | 44 | `isStream` is currently `scheme == http/https && !isFileURL`. |
+| `MacAmpApp/Models/Track.swift` | 43 | `isStream` is currently `scheme == http/https && !isFileURL`. |
 | `MacAmpApp/Models/RadioStation.swift` | 23 | URL-bearing model. |
 
 ### Today's data flow (progressive)
@@ -318,7 +319,7 @@ For radio audio, variants are typically homogeneous (e.g. one or two AAC bitrate
 
 None of this is needed for v1. The variant chosen at start sticks for the lifetime of the pipeline. If the user wants a different variant, they pick a different station URL.
 
-Document as `placeholder.md` entry only if implementation reveals stations with mandatory ABR.
+ABR is deferred in `tasks/_context/deferred.md` (HLS v2 row); revisit only if implementation reveals stations with mandatory ABR.
 
 ---
 
@@ -370,8 +371,7 @@ Document as `placeholder.md` entry only if implementation reveals stations with 
 ### Operational tasks (Oracle nit applied)
 
 - `xcodegen generate` after adding the 3 new Swift files (project.yml uses path-based source globbing, so no project.yml edit; just regenerate `MacAmpApp.xcodeproj`).
-- `tasks/_context/tasks_index.md` — flip `hls-streaming-support` from PLANNED to COMPLETE on PR merge.
-- `tasks/_context/state.md` — append S3 outcome row.
+- `tasks/_context/` updates: close-out per todo P11.7.
 - `docs/MACAMP_ARCHITECTURE_GUIDE.md §4` — new "HLS audio path" subsection beside the existing progressive stream subsection.
 - `docs/IMPLEMENTATION_PATTERNS.md` — append "Closure-injection seam to preserve private visibility" as a reusable pattern (justification: this seam will likely repeat in future stream-side features).
 
@@ -408,7 +408,7 @@ Document as `placeholder.md` entry only if implementation reveals stations with 
 4. **`AAC ADTS` segment support only.** TS / fMP4 segments → "format not supported" error.
 5. **No ABR**, no master-with-alternates renditions (fail fast), no DRM, no LL-HLS.
 6. **Tests**: parser fixtures, feeder unit tests with fake URLSession, integration-level smoke test that points at a known-good public AAC HLS stream and waits for `onFormatReady`.
-7. **Docs update**: `docs/MACAMP_ARCHITECTURE_GUIDE.md §4` — add "HLS audio path" subsection. `tasks/_context/state.md` — mark task complete. `placeholder.md` for any deferrals discovered during implementation.
+7. **Docs update**: `docs/MACAMP_ARCHITECTURE_GUIDE.md §4` — add "HLS audio path" subsection. `tasks/_context/` close-out per todo P11.7. `tasks/_context/deferred.md` for any deferrals discovered during implementation.
 
 ### V2 (separate task if needed)
 
@@ -480,16 +480,16 @@ A second Oracle pass would be appropriate when `plan.md` exists, since the plan 
 
 ---
 
-## Appendix: HEAD line numbers (for plan.md author)
+## Appendix: HEAD line numbers (at `b3894d9`, 2026-10-02)
 
-- `StreamDecodePipeline.start(url:)` — line 108
-- `StreamDecodePipeline.isPlaylistURL(_:)` — line 358
-- `StreamDecodePipeline.resolvePlaylistURL(_:)` — line 365
-- `StreamDecodePipeline.formatHint(for:)` — line 434
-- `DecodeContext.handleIncomingData(_:)` — line 537
-- `DecodeContext.shutdown()` — line 561
-- `DecodeContext.handlePackets(...)` — line 612
-- `StreamPlayer.handleTermination(_:)` — line 272
-- `StreamPlayer.attemptReconnect()` — line 305
+- `StreamDecodePipeline.start(url:)` — line 112
+- `StreamDecodePipeline.isPlaylistURL(_:)` — line 394
+- `StreamDecodePipeline.resolvePlaylistURL(_:)` — line 401
+- `StreamDecodePipeline.formatHint(for:)` — line 470
+- `DecodeContext.handleIncomingData(_:)` — line 617
+- `DecodeContext.shutdown()` — line 668
+- `DecodeContext.handlePackets(...)` — line 719
+- `StreamPlayer.handleTermination(_:)` — line 382
+- `StreamPlayer.attemptReconnect()` — line 432
 - `M3UParser.parse(content:relativeTo:)` — line 37 (legacy, kept in place)
 - `Track.isStream` — line 17

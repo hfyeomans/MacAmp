@@ -498,7 +498,7 @@ Not reusable (engine-routing-specific):
 
 - **`tasks/video-audio-engine-routing/`** (saved task folder) — Phase 0 spike findings, Phase 1 engine-config-observer plan, Phase 2 `MTAudioProcessingTap` plan (the *spec* is reusable; the implementation choice differs), Phase 7 quality-investigation findings (the route-change + clock-domain learnings that prompted the pivot)
 - **`feat/video-audio-engine-routing`** branch (paused, pushed to origin) — full implementation of the engine-routing approach. Read end-to-end during Step 2 retrospective.
-- **`tasks/_context/s3-2-pivot.md`** — three-step pivot tracker
+- **`tasks/_context/depreciated/s3-2-pivot.md`** — three-step pivot tracker
 - **Apple docs:** TN2249 ("Using `MTAudioProcessingTap` to process audio data tapped from `AVPlayer`"), `AVMutableAudioMix`, `AVAudioUnitEQ`, `MTAudioProcessingTap` framework reference
 
 ---

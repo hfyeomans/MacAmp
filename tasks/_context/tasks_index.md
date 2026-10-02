@@ -1,181 +1,59 @@
 # Tasks Index
 
-> **Purpose:** Index of the open tasks in `tasks/` plus the merged rows that gate them. Each entry notes the task name, purpose, and current status. Not exhaustive: 12 one-shot review-scratch folders are listed separately under "Unindexed Review-Scratch Folders".
->
-> **Updated:** 2026-09-29 (**v2.0 released**, [release page](https://github.com/hfyeomans/MacAmp/releases/tag/v2.0). Earlier: S4-2a `window-docking-78` ✅ MERGED — [PR #90](https://github.com/hfyeomans/MacAmp/pull/90) merged 2026-09-29 as `88ba342`, #78 closed; folder moved to `tasks/done/` (`done/` 80 → 81); #78 removed from S4-2; `windowing-structure-consolidation` gains 7 planned follow-ups; Backlog gains `visualizer-fidelity-audit`. **S3-3 `hls-streaming-support` is NEXT.**) Earlier 2026-09-25 (post-PR-#89 merge — S3-2 `avplayer-native-video-dsp` ✅ **MERGED** (merge commit `ae15f5c`), folder moved to `tasks/done/`; **S3-3 `hls-streaming-support` is NEXT**; S4-4 predecessors satisfied; active folder count 29 → 28, `done/` 79 → 80.) Earlier 2026-09-25 (S3-2 Phase 9 complete except 9.14 — branch pushed; PR #C opened as PR #89.) Earlier 2026-09-25 (S3-2 Phase 8 complete, branch pushed at `5125bb3`; PR #87 min-macOS-27 merged; S4-3 `airplay-route-picker` (no folder) + S4-4 `video-multichannel-output` (folder, #88) added — active folder count 28 → 29.) Prior — 2026-09-05 (S4 ordering confirmed; manual runbook in progress — synced to code HEAD `056c69a` — `avplayer-native-video-dsp` Phases 1-7 ✅, Phase 8 automated gates ✅ / manual hardware gates being executed by the user, **Phase 9 NEXT**; branch pushed to origin at `5fe8c3c` (2026-09-05 docs sync; code unchanged since `944795a`), unmerged, PR #C not yet opened; folder + `done/` counts corrected; fired file-growth triggers recorded; 12 unindexed review-scratch folders listed. **Later the same day:** the Post-Structure-Sprint (S4) section was reshaped and both of its task folders were scaffolded — `swift64-macos27-readiness` (S4-1) and `github-issues-triage` (S4-2, renamed from the placeholder `github-issues-sprint`) — active folder count 26 → 28; **S4-1-before-S4-2 ordering confirmed by user 2026-09-05.**)
-> **Excludes:** `tasks/stale/`, `tasks/depreciated/`. Merged `done/` rows are retained where they gate an open task (S3-1A, S3-1B, S3-2 pivot, `timer-runloop-mode-audit`).
+Updated: 2026-10-02
 
----
+Index of task folders only. Order, scope and predecessors live in `plan.md`; current state in `state.md`; deferred items in `deferred.md`.
 
-## Legend
+Status words as defined in `plan.md` (Summary), which is the status source, plus PAUSED for the vaer reference folder (kept as reference, not resumed).
 
-| Status | Meaning |
-|--------|---------|
-| 🟡 DEFERRED | Postponed to future milestone |
-| 📋 QUEUED | Roadmap task with a scaffolded folder; gated on a predecessor, research not started |
-| 📄 REFERENCE | Documentation/analysis artifact, not an implementation task |
-| ✅ MERGED | Shipped to `main` via a PR; folder lives in `tasks/done/` |
-| ✅ READY | Plan + todo Oracle-gated; implementation not started (may be gated on a predecessor) |
-| 🔧 IMPLEMENTING | Implementation in progress on a branch |
-| ⏸ PAUSED-AS-REFERENCE | Superseded approach; branch preserved for reference, not resumed |
+## Active folders (11)
 
----
+| Folder | Plan id | Status | Purpose |
+|--------|---------|--------|---------|
+| `hls-streaming-support` | S3-3 | NEXT | Audio-only HLS (M3U8 master/media playlists, AAC ADTS segments, live + VOD) through a new `MacAmpApp/Audio/HLS/`. |
+| `ogg-vorbis-support` | S3-4 | BLOCKED | OGG Vorbis for local files and Icecast via vendored libogg/libvorbis, plus the chained-format fix; commit C1 also settles the root `Package.swift` and pins package versions in `project.yml`. |
+| `swift-project-structure-research` | SS-0 | QUEUED | Structure Sprint map. Also the approved placement policy and target layout, in force now. |
+| `audioplayer-seek-extraction` | SS-1 | DEFERRED | Re-evaluate D8 (Option C) and, if go, extract the seek state machine from `AudioPlayer.swift`. |
+| `streamdecodepipeline-decomposition` | SS-2 | DEFERRED | `DecodeContext` extraction and concurrency-contract retrofit; re-baseline after S3-4. |
+| `windowing-structure-consolidation` | SS-3 | DEFERRED | Move window infrastructure to `Windowing/`, plus the #78 and amp follow-ups in its `todo.md`. |
+| `milkdrop-feature-consolidation` | SS-4 | DEFERRED | Move Milkdrop/Butterchurn code and the repo-root `Butterchurn/` resources to `Features/Milkdrop/`. |
+| `swift64-macos27-readiness` | S4-1 | QUEUED | macOS 27 / Swift 6.4 adoption (deprecations, Span/InlineArray, strict memory safety, language-mode ADR), plus the `Skin` Sendable and `LockFreeRingBuffer` overrun amp items. |
+| `github-issues-triage` | S4-2 | QUEUED | Fix #47, P-6, #79 and #84, one branch and PR each. |
+| `video-multichannel-output` | S4-4 | QUEUED | #88: multichannel/spatial video output with speaker-side balance. |
+| `video-audio-engine-routing` | none | PAUSED | First S3-2 attempt (video audio through AVAudioEngine); branch `feat/video-audio-engine-routing` @ `5af91eb`. |
 
-## Sprint S3: LOW-MEDIUM Priority — Edge Cases + Optimization + Video Routing
+## Roadmap rows without folders
 
-> **Status (2026-04-27):** All 5 tasks Oracle-validated through plan + todo phases (≥ 9/10). Implementation-ready. Locked execution order in `_context/state.md`.
->
-> **Status (2026-09-25, PR #89 merged):** S3-2 (pivot) `avplayer-native-video-dsp` ✅ **MERGED** — [PR #89](https://github.com/hfyeomans/MacAmp/pull/89), merge commit `ae15f5c`; folder → `done/avplayer-native-video-dsp`. **S3-3 `hls-streaming-support` is NEXT** (its S3-2 gate is satisfied), then S3-4. Sprint S3 stays here until S3-3 + S3-4 merge.
->
-> **Status (2026-09-25, PR opened):** S3-2 **Phases 1-9 ✅** (Phase 9 except 9.14). **[PR #89](https://github.com/hfyeomans/MacAmp/pull/89) open, awaiting the user's review/merge**; then close-out 10.1-10.8, then S3-3 → S3-4.
->
-> **Status (2026-09-25):** S3-2 **Phase 8 ✅ complete** (all manual gates run with the user; AirPlay 2 fix ADR-12; multichannel → S4-4 #88; PR #87 merged in). **Phase 9 next**, then PR #C.
->
-> **Status (2026-09-05):** S3-1A ✅ + S3-1B ✅ merged. S3-2 (pivot) is at Phase 8 — automated gates ✅, manual/hardware gates **being executed by the user from 2026-09-05**, Phase 9 next — on branch `feat/avplayer-native-video-dsp`, 74 commits ahead of `main`, **pushed to origin at `5fe8c3c` (2026-09-05 docs sync; code unchanged since `944795a`); unmerged; PR #C not yet opened**. S3-3 is blocked behind it; S3-4 is blocked behind S3-3. Code idle since 2026-06-27 (`5fe8c3c` and `056c69a` are docs-only).
+| Plan id | Item | Status | Folder |
+|---------|------|--------|--------|
+| SS-5 | `Features/` consolidation: MainWindow, Playlist, Equalizer, Video, Preferences, Skins, Radio | QUEUED | `features-consolidation`, created by SS-0 |
+| SS-6 | `Audio/` consolidation: Playback/, Streaming/, Equalizer/, Visualization/, VideoDSP/, Persistence/, ObjCBridge/, HLS/, Vorbis/ | QUEUED | `audio-consolidation`, created by SS-0 |
+| SS-7 | `App/`, `Core/`, `Shared/` and the composition root | QUEUED | `app-core-shared-consolidation`, created by SS-0 |
+| SS-8 | Mirror tests to source layout; last required Structure Sprint step (SS-9 optional) | QUEUED | none; tracked in `swift-project-structure-research/todo.md` |
+| SS-9 | Local packages (Windowing, AudioStreamingCore, SkinEngine) | OPTIONAL | none |
+| S4-3 | AirPlay route picker: in-app `AVRoutePickerView` over the Winamp logo | QUEUED | `airplay-route-picker`, created when planning starts |
+| AT-1 | #86 test isolation: pin `repeatMode` in `PlaylistNavigationTests` | NEXT | none |
+| AT-2 | One Timer helper for the 7 `RunLoop.main.add(timer, forMode: .common)` sites | DEFERRED | none; fits `Core/` once SS-7 creates it |
+| BL-1 | Visualizer fidelity audit: spectrum analyzer vs real frequencies and Winamp/Webamp | BACKLOG | none; created when started |
 
-| Step | Task | Purpose | Size | Status | Oracle Score |
-|------|------|---------|------|--------|:---:|
-| S3-1A | `done/mainwindow-visualizer-isolation` | Visualizer freeze fix (run-loop-mode mismatch in producer) | Small | ✅ **MERGED** PR #80 (2026-04-28) | 9.4/10 plan + 9.3/10 pre-PR |
-| S3-1B | `done/stream-pause-tail` | Fix 0.7s pause tail (silence gate + producer quiesce) + latent reconnect-during-pause bug | Small-Medium | ✅ **MERGED** PR #82 (2026-04-30, merge `b60fd57`) | 9.1/10 plan; 9/10 final impl |
-| ~~S3-2~~ | ~~`video-audio-engine-routing`~~ | ~~Route video audio through AVAudioEngine~~ | — | ⏸ **PAUSED-AS-REFERENCE** 2026-05-01 — see `_context/s3-2-pivot.md`. Branch `feat/video-audio-engine-routing` preserved at `5af91eb`, pushed to origin. | — |
-| S3-2 (pivot) | `done/avplayer-native-video-dsp` | Bring EQ + Balance + Milkdrop to video via AVPlayer-native in-place tap DSP (replaces S3-2 engine-routing approach) | Medium-High | ✅ **MERGED** [PR #89](https://github.com/hfyeomans/MacAmp/pull/89) (2026-09-25, merge `ae15f5c`, 96 commits) — Steps 1+2+3 ✅; **Phases 1-7 ✅** (Ph2-7 Oracle-approved; Ph1 had no Oracle round); **Phase 8 ✅ COMPLETE 2026-09-25** per task `verification.md`: 8.1 PASS (Debug `-Onone` DSP-core regression guard), **8.1b PARTIAL** (Time Profiler: `tapProcess` ≈0.4–1.0% of budget; literal 99p not producible), 8.2 NOT ABLE (no Intel Mac), 8.3/8.4/8.15 PASS, 8.5 PASS (22-min video), 8.5b-8.5e PASS, 8.6/8.7/8.10 PASS, 8.8 N/A, 8.9 PASS after the ADR-12 fix, 8.11 NOT ABLE AS WRITTEN, 8.12 NOT ABLE, 8.13 PASS (5.1 → stereo), 8.14 PASS, 7.9/7.10 PASS; 119 TSan tests, only pre-existing #86 fails. **Phase 9 ✅ 2026-09-25** (UI audit — no changes; docs; pre-PR Codex review 4 × P2 fixed in `e094e2e`); 9.14 user review → merged. See `_context/s3-2-pivot.md` (RESOLVED). | research 10/10, plan **9.8/10**; impl Ph2 9.0 / Ph3 9.6 / Ph4 9.6 / Ph5 10 / Ph6 9 / Ph7 9; Ph8 round 1 7/10 → fixes in `944795a`, no re-score recorded |
-| S3-3  | `hls-streaming-support` | Audio-only HLS (M3U8 + AAC ADTS, live + VOD) | Large | ✅ READY — 📋 **NEXT** (S3-2 gate satisfied: PR #89 merged) | 9.0/10 |
-| S3-4  | `ogg-vorbis-support` | OGG Vorbis (libvorbis), local + Icecast streams; chained-format gap fix | Medium-Large | ✅ READY (Phase 0a/0b spikes first) | 9.3/10 |
+## Archive
 
----
+- `tasks/done/`: 87 entries (85 folders, 2 files), finished tasks. Shipped work is summarized in `state.md` (Shipped).
+- `tasks/stale/`: 88 entries (80 folders, 8 files), abandoned work and review scratch, including the paused vaer branch's review-scratch folders.
+- `tasks/depreciated/`: 2 folders (`airplay`, `winamp-airplay-overlay`), inputs to S4-3.
 
-## Post-S3-1A Follow-Ups
+## `_context/` file map
 
-| Task | Purpose | Size | Status |
-|------|---------|------|--------|
-| `done/timer-runloop-mode-audit` | Normalized all 6 non-Pattern-A timer-on-RunLoop callsites onto Pattern A; 2 Butterchurn bugs fixed as side-effect; codebase now uniform on `Timer(...)` + `RunLoop.main.add(.common)` | Small | ✅ **MERGED** PR #81 (2026-04-29, merge `ac09dd4`) |
-| `timer-scheduled-on-common-extension` | Extract `Timer.scheduledOnMainCommon` helper, migrate all 7 timer-on-RunLoop callsites to use it; `@Sendable` closure migration warrants per-site review | Small-Medium | 🟡 **DEFERRED** — discovered during `timer-runloop-mode-audit`; predecessor merged ✅; task folder not yet created |
-
----
-
-## Deferred Decomposition (Re-evaluate during/after S3)
-
-| Task | Purpose | Size | Status |
-|------|---------|------|--------|
-| `streamdecodepipeline-decomposition` | DecodeContext extraction from `Audio/Streaming/StreamDecodePipeline.swift` (**825 lines** at HEAD *and* on `main`; row previously said 697) | Medium | 🟡 DEFERRED — One responsibility, architecturally sound. **Growth trigger has FIRED (697 → 825)**, independently of the S3-2 branch; re-evaluate during Structure Sprint mapping. |
-| `audioplayer-seek-extraction` | Extract seek state machine from `AudioPlayer.swift` (**1,101 lines** on `main` since PR #89 merged, 2026-09-25 (1,082 at `5125bb3`; 763 on `main` before the merge); row previously said 734) | Medium | 🟡 DEFERRED (Option C) — **The 800-line Option B trigger has FIRED at HEAD** (S3-2 video-path growth); re-evaluate during Structure Sprint mapping. |
-| `visualizerpipeline-decomposition` | VisualizerPipeline.swift decomposition | Medium | 🟡 NO-GO — Cancelled. Private @unchecked Sendable surface risk. **Superseded in practice, not merely cancelled:** S3-2 Phase 1 already performed the extraction (`VisualizerFeed` + `VisualizerScratchBuffers`), taking `VisualizerPipeline.swift` 699 → **416 lines** at HEAD. |
-
----
-
-## Post-S3: Structure Sprint
-
-| Task | Purpose | Size | Status |
-|------|---------|------|--------|
-| `windowing-structure-consolidation` | Move window infrastructure under `Windowing/`. **Plus 7 planned follow-ups from the #78 design review (2026-09-28, owner):** inject the minimize hook into `BorderlessWindow`, pure `ScreenClamp.restore` policy + tests, one shaded-Playlist pixel-size helper, one top-anchored-origin helper, verify Option+Cmd+M, consolidate TEXT.BMP glyph naming, three pre-existing doc fixes — see its `todo.md` | Medium | 🟡 DEFERRED to post-S3 (follow-ups planned) |
-| `milkdrop-feature-consolidation` | Move Milkdrop/Butterchurn under `Features/Milkdrop/` | Medium | 🟡 DEFERRED to post-S3 |
-| *(not yet created)* | `Features/` consolidation (Video, EQ, Playlist) | Medium | NOT CREATED |
-| *(not yet created)* | `Audio/` consolidation (ownership boundaries) | Medium | NOT CREATED |
-| *(not yet created)* | `App/`, `Core/`, `Shared/` consolidation | Medium | NOT CREATED |
-
-> Followed by Post-Structure-Sprint (S4) — see section below (added 2026-09-05).
-
----
-
-## Post-Structure-Sprint (S4)
-
-> Added 2026-09-05 (user request). Sequenced **after** the Post-S3 Structure Sprint above, which itself starts only after S3-4 `ogg-vorbis-support` merges. Both folders were scaffolded 2026-09-05 with the 5-file canonical layout (`state.md`, `research.md`, `todo.md`, `placeholder.md`, `depreciated.md`); no research has started in either. S4-2 was previously listed here as the placeholder name `github-issues-sprint`. S4-3 and S4-4 were added 2026-09-25 (S4-4 folder scaffolded; S4-3 roadmap row only).
-
-| Step | Task | Purpose | Size | Status | Predecessors |
-|------|------|---------|------|--------|--------------|
-| S4-1 | `swift64-macos27-readiness` | **Re-scoped 2026-09-25 (D-TARGET27): min OS = macOS 27 — now an adoption task (Span/MutableSpan, InlineArray, strict-memory-safety; ~~drop availability gates~~ done in #87). Also carries 2 amp-review items (2026-10-02): `Skin` `@unchecked Sendable`, `LockFreeRingBuffer` overrun race — see `state.md`).** Research-first readiness pass for **Swift 6.4 language mode + macOS 27**: reconcile the installed toolchain (Xcode 27.0 `27A5194q`, Swift 6.4, host macOS 27.0 `26A5425a`) against the project's pins (`SWIFT_VERSION` 6.2, swift-tools-version 6.2, deployment target macOS 27.0 since PR #87 (was 15.0), cosmetic `project.yml` `xcodeVersion: 26.0`). Four research questions: (a) what flips at `SWIFT_VERSION` 6.4 and what it means for the ADR-3a `@unchecked Sendable` containment + `Synchronization.Atomic`/`Mutex` use in VideoDSP; (b) new SwiftUI on macOS 26/27; (c) macOS 27 AppKit (Liquid Glass) / toolbars / WebKit-in-SwiftUI (Butterchurn) / AVFoundation + `MTAudioProcessingTap` / AVAudioEngine deltas; (d) ~~whether to raise the deployment target~~ — decided 2026-09-25 (D-TARGET27, macOS 27). First adoption item: the 14 macOS-27 deprecations + 2 test-only from S3-2 (16 in all, all on `main` since PR #89 merged; deferred here by user decision 2026-09-25). | Medium | 📋 **QUEUED** — folder scaffolded 2026-09-05; research not started | Post-S3 Structure Sprint (implementation half only — the research half is ungated, see the allowance below) |
-| S4-2 | `github-issues-triage` | Triage + fix the issues other users filed on `hfyeomans/MacAmp`, landing the fixes in the post-Structure-Sprint layout: **#84** Nucleo NLog v2G rendering defects, **#79** can't drag files / open by double-click, ~~**#78**~~ (done in S4-2a, PR #90), **#47** Cmd+Shift+1-3 shortcut conflict — plus internal **P-6** (video→audio transition does not auto-play) folded in from `done/avplayer-native-video-dsp/placeholder.md`. One branch/PR per issue, each Oracle-gated. | Medium-Large | 📋 **QUEUED** — folder scaffolded 2026-09-05; research not started | Post-S3 Structure Sprint (user mandate) + S4-1 (**confirmed by user 2026-09-05**, see note) |
-| S4-3 | `airplay-route-picker` | In-app **AirPlay route picker** (Winamp-logo overlay), revived on the current toolchain. Researched and planned in Oct 2025 (`tasks/depreciated/airplay/`, `tasks/depreciated/winamp-airplay-overlay/`: `AVRoutePickerView` over the logo) but never implemented — `git log -S AVRoutePickerView` finds no commits on any branch; today users pick AirPlay from Control Center. Re-plan on Swift 6.4 / macOS 27 instead of reusing the 2025 plan verbatim: it predates S3-2 (video audio now flows AVPlayer → in-place tap and follows the system route) and the `AudioEngineConfigurationObserver` that already handles engine rewires; S4-1's API findings + deployment-target ADR decide what a modern picker can use. Phase 8 gate 8.9 (AirPlay 2, incl. multi-room) results feed its acceptance criteria. Added 2026-09-25 (user request). | Medium | 📋 **QUEUED** — added 2026-09-25; no folder yet | S4-1 |
-| S4-2a | `window-docking-78` | **Issue #78 + sleep/wake off-screen windows**, pulled ahead of the Structure Sprint (D-WIN78, 2026-09-26, user). Delivered: docking groups incl. closed windows, 10 px snap, Shift-drag, one size-change rule (shade + double size), persisted EQ/Playlist visibility/shade, sleep/wake + display recovery, Reset Window Positions, group minimize + Ctrl+W windowshade, skin-faithful titlebars/shade strips. Branch `fix/window-docking-78`; folder `tasks/done/window-docking-78/`. | Medium-Large | ✅ **MERGED** — [PR #90](https://github.com/hfyeomans/MacAmp/pull/90) merged 2026-09-29 as `88ba342`; #78 closed | none (exception to D-S4) |
-| S4-4 | `video-multichannel-output` | **Issue #88.** Multichannel (5.1+/spatial) video output with speaker-side balance. Deferred from S3-2 on 2026-09-25 (user): S3-2 ships a stereo downmix at the source rate. Recommended design and 4 pre-implementation experiments in the folder's `research.md`. | Medium | 📋 **QUEUED** — folder scaffolded 2026-09-25; predecessors satisfied (unblocked) | S3-2 PR #89 ✅ merged 2026-09-25; PR #87 ✅ |
-
-> **Ordering — confirmed by user 2026-09-05.** The user mandated that the GitHub-issue fixes come *after* the `.swift` rearrangement, and confirmed on 2026-09-05 that **S4-1 runs before S4-2**: S4-1's deprecation findings may change how the S4-2 issues are fixed, so doing it second would risk reworking fresh fixes.
-> **Allowance:** S4-1's **research half touches no code**, so it may run opportunistically earlier (even during S3 or the Structure Sprint); only its implementation half is gated on the Structure Sprint landing. S4-2 stays hard-gated behind the Structure Sprint (#78 left S4-2: it was pulled ahead as S4-2a and completed in PR #90).
-
----
-
-## Backlog / Research
-
-| Task | Purpose | Status |
-|------|---------|--------|
-| `ios-port-feasibility-research` | Research feasibility of iOS/iPadOS port | 📄 REFERENCE |
-| `visualizer-fidelity-audit` *(no folder yet)* | **Added 2026-09-28 (owner).** Check the spectrum analyzer (the EQ-style bars in Main, the Main shade strip and the Playlist) against real frequencies and Winamp fidelity: band centres and bar mapping (20 Goertzel bands → 19 bars), per-band equalization gains, log scaling, smoothing/peak falloff, and how Winamp/Webamp draw them. **Include:** 2026-09-28 the shade-strip bars were pinned at maximum on every band until an app restart (after minimize/hide cycles, during #78 Phase 7 checks). Suspects: a non-finite value persisting through the recursive smoothing in `VisualizerPipeline.updateLevels`, or NaN reaching the Goertzel clamp (`min(1.0, NaN)` returns 1.0). If it recurs, leave the app running and read `visualizerPipeline.levels` over LLDB. **Before changing the math (amp review 2026-10-02):** the RMS/Goertzel code exists twice (engine tap + video tap); extract one shared function or add a parity test first. | 🔬 RESEARCH — queued |
-
----
-
-## Active References
-
-| Task | Purpose | Status |
-|------|---------|--------|
-| `audioplayer-decomposition` | Ph1-4 COMPLETE (PR #52 + #60). Phase 5 (seek) tracked by `audioplayer-seek-extraction`. | 📄 REFERENCE |
-| `lock-free-ring-buffer` | COMPLETE. Deferred: benchmarks, flaky high-throughput test (`withKnownIssue`). | 📄 REFERENCE |
-| `swift-project-structure-research` | Approved placement-policy reference for S1-S3 and Structure Sprint. | 📄 REFERENCE |
-| `agent-docs-history-search` | One-shot research: located prior agent-doc / `AGENTS.md` / `CLAUDE.md` / `GEMINI.md` work across `done/` and `stale/`. | 📄 REFERENCE |
-
----
-
-## Unindexed Review-Scratch Folders (12)
-
-> Never indexed. Eleven were committed to this branch on 2026-05-26 (`95ebc06`, parallel-agent review scratch), after this index last changed on 2026-05-02 (`1f7a0a0`); `pr81-gemini-timer-feedback` predates it (added 2026-04-30) and was simply skipped. All are one-shot Oracle-review / verification scratch folders, **not open work** — each holds only `plan.md` / `research.md` / `state.md`. Eleven belong to the paused `feat/video-audio-engine-routing` (vaer) branch and reached `main` with the PR #89 merge (2026-09-25; previously only on `feat/avplayer-native-video-dsp`); one belongs to merged PR #81. **Recommendations only — nothing has been moved.**
-
-| Folder | Subject | Recommendation |
-|--------|---------|----------------|
-| `airpods-route-gate-validation` | vaer Phase 7 — proved `AVAudioEngineConfigurationChange` is not a general macOS route-change signal; the evidentiary root of the S3-2 pivot | → `stale/` (Phase 7 arc) — **highest-value survivor**; it holds the Apple SDK header citations (`AVAudioEngine.h`, `AudioHardware.h`) that justify pivot reason #1, and `_context/s3-2-pivot.md` should point at it before any archiving |
-| `a-b-implementation-review` | vaer Phase 7 — review of `617622b` (HAL default-output listener + 3 s stall threshold) | → `stale/` (Phase 7 arc) |
-| `phase-7-watchdog-gate-v2-rereview` | vaer Phase 7 — gate v2 review chain, link 1 of 3 | → `stale/` (Phase 7 arc; archive the 3-folder chain together) |
-| `phase-7-watchdog-gate-v2-final-pass` | vaer Phase 7 — gate v2 chain, link 2 of 3 (drove `9825b4f`) | → `stale/` (Phase 7 arc) |
-| `phase-7-watchdog-gate-v2-score-confirm` | vaer Phase 7 — gate v2 chain, link 3 of 3 | → `stale/` (Phase 7 arc) — log its **unowned order-sensitive TSan flake in `VideoTapFallbackTests`** as a deferred item in `_context/` first |
-| `video-gate-bf13572-re-review` | vaer Phase 7 — final review on the branch (`bf13572`) | → `stale/` (Phase 7 arc) |
-| `video-audio-tap-phase2-rereview` | vaer Phase 2 — `VideoAudioTap` surround downmix + AAC layouts | → `stale/` — richest technical artifact; keep intact |
-| `video-audio-engine-routing-pass2-review` | vaer Phase 3 — race/cancellation pass-2 review | → `stale/` (Phase 3 arc) — settled, not an open thread |
-| `review-f41418a-video-regressions` | vaer Phase 3 regression arc, pass 1 | → `stale/` (Phase 3 arc; archive the 3-folder arc together) |
-| `video-regression-f18c518-pass2-verification` | vaer Phase 3 regression arc, pass 2 | → `stale/` (Phase 3 arc) |
-| `video-load-task-pass3-verification` | vaer Phase 3 regression arc, pass 3 (clean close) | → `stale/` (Phase 3 arc) |
-| `pr81-gemini-timer-feedback` | PR #81 `fix/timer-runloop-mode-audit` — the only one whose code shipped; the fix reached `main` via the PR #83 merge (`1d24258`) | → `done/`, beside `done/timer-runloop-mode-audit`. Only outstanding item is the GitHub reply/resolve of PR #81 threads #2 and #3 (`./scripts/resolve-pr-comments.sh 81 list`) |
-
----
-
-## Summary Statistics
-
-| Category | Count |
-|---------|-------|
-| Total active task folders in `tasks/` (excl. `_context/`, `done/`, `stale/`, `depreciated/`) | **28** — 16 indexed in the tables above (13 + the 3 S4 folders: S4-1/S4-2 scaffolded 2026-09-05, S4-4 2026-09-25; S3-2 pivot moved to `done/` 2026-09-25) + 12 unindexed review-scratch (closed; see "Unindexed Review-Scratch Folders") |
-| ✅ READY to implement (S3-3 NEXT — S3-2 gate satisfied; S3-4 blocked behind S3-3) | 2 rows |
-| ⏸ PAUSED-AS-REFERENCE (`video-audio-engine-routing`) | 1 row |
-| 📋 QUEUED (S4-1 `swift64-macos27-readiness`, S4-2 `github-issues-triage`, S4-3 `airplay-route-picker`, S4-4 `video-multichannel-output`) | 4 rows — S4-1/S4-2 folders scaffolded 2026-09-05, S4-4 2026-09-25; S4-3 has no folder |
-| 🟡 DEFERRED / NO-GO | 6 rows (5 have task folders; `timer-scheduled-on-common-extension` has none) |
-| 📄 REFERENCE | 5 rows (4 under Active References + `ios-port-feasibility-research`) |
-| Backlog | 1 |
-| In `tasks/done/` | 81 entries (79 folders + 2 files; `window-docking-78` added 2026-09-28) |
-| In `tasks/stale/` | 69 folders + 8 standalone files |
-
----
-
-## Completed Sprints
-
-### Sprint S2 (COMPLETE — 2026-03-24)
-
-| Task | Result |
-|------|--------|
-| `os-workgroup-integration` | PR #66 — Oracle 8.5/10 |
-| `stream-track-counter` | PR #68 — Oracle 8/10 |
-| `playlist-list-operations` | PR #67 — Oracle 9/10 |
-| `airplay-integration` | PR #69 — Now Playing + remote commands. AirPlay triggers DEFUNCT. |
-
-### Post-S2 Decomposition (COMPLETE — 2026-03-26)
-
-| Task | Result |
-|------|--------|
-| `intra-file-dedup-simplification` | PR #71 — First-pass dedup across 4 files |
-| `codebase-wide-simplification` | PR #72 — -732 lines, 6 files deleted, 4 utilities created |
-| `responsibility-sweep` | PR #74 — 109 files audited: 76 Clean, 26 Justified, 7 Actionable |
-| `skinmanager-decomposition` | PR #75 — 766→454 lines. ArchiveLoader, Import extracted. Preprocessor removed. |
-| `winamp-equalizer-window-decomposition` | PR #76 — 616→354 lines. WinampVerticalSlider + EQPresetPickerView extracted. |
-
-### Sprint S1 (COMPLETE — 2026-03-22)
-
-See `_context/state.md` for full scorecard. 4 tasks + 1 hotfix, 4 PRs merged (#60-#64).
-
-### Sprint S0 (COMPLETE — 2026-03-14)
-
-`docs-implementation-patterns-update` — PR #59.
+| File | Use |
+|------|-----|
+| `state.md` | Current state only: release, branches, open PRs and issues, test baseline, decisions in force, architecture invariants, owner decisions pending, Shipped table. |
+| `plan.md` | Future work in order (S3-3 through BL-1): scope, predecessors, status, amp items per slot. |
+| `todo.md` | Checklist derived from `plan.md`; checked only when verifiably done. |
+| `deferred.md` | Every deferred item with its slot. Deferred items are never tracked only in a task file or PR comment. |
+| `research.md` | Cross-task research findings and gotchas. |
+| `depreciated.md` | One line per superseded item, pointing into `depreciated/`. |
+| `principles.md` | Decomposition principles 1-7 and the pre-decomposition gate. |
+| `instruments-allocations-workflow.md` | In-repo Instruments leak-check procedure; caveats in `research.md`. |
+| `tasks_index.md` | This index. |
+| `resume-prompt.md` | Pickup prompt for a fresh session. |
+| `depreciated/` | Archived `_context` docs: Waves 1-3 plan and research, the S3-2 pivot record, the AVPlayer-bridge deep research, and the stream-loopback / dual-backend lessons. |

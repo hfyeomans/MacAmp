@@ -1,77 +1,53 @@
 # Plan: StreamDecodePipeline Decomposition
 
-> **Description:** Implementation plan for decomposing `StreamDecodePipeline.swift` (697 lines) into focused files.
-> **Updated:** 2026-03-25 (line numbers refreshed post-Phase 2.5 cleanup)
+Updated: 2026-10-02
 
----
+Steps for SS-2: re-evaluate the split of `StreamDecodePipeline.swift` and retrofit the `DecodeContext` concurrency contract.
 
-## Objective
+## When and where
 
-Reduce `StreamDecodePipeline.swift` from 697 to ~380 lines by extracting self-contained types and static utilities into neighboring files within `Audio/Streaming/`.
+Structure Sprint, after S3-4 merges. Work in place in `MacAmpApp/Audio/Streaming/`, which is already the target folder.
 
-## Extraction Plan
+## Step 1: Re-baseline
 
-### Step 1: Extract `DecodeContext.swift` (Safe, ~199 lines)
+At post-OGG HEAD, redo the responsibility map in `research.md` and set a new size target from it. The March target (697 down to ~380 lines) no longer applies.
 
-Move the entire `DecodeContext` class (lines 457-655) to its own file. This is already a separate class with clear boundaries — queue-confined decode chain owning ICYFramer, AudioFileStreamParser, AudioConverterDecoder. Consider adopting `QueueConfined` protocol (already used by AudioFileStreamParser + AudioConverterDecoder) for consistency.
+## Step 2: Go/no-go
 
-- Change access from `private` to `internal`
-- No API changes needed — constructed via init, communicated via closures
-- Include all methods: `handleIncomingData`, `shutdown`, `joinWorkgroupIfAvailable`, `leaveWorkgroup`, `handleFormatAvailable`, `handlePackets`, `configureFramer`
+Run the pre-decomposition gate in `tasks/_context/principles.md` and record the result as an ADR with a kill switch (Principle 7). Questions to settle:
 
-### Step 2: Extract `SessionDelegateProxy.swift` (Safe, ~34 lines)
+- Does extracting `DecodeContext` still require `private` to `internal` (Principle 5), and does the step 3 contract test offset that? After S3-4 it also stores the fileprivate `StreamBackend`, `PipelineLifecycle` and `StreamFormatHint` enums (`research.md`), which would widen with it.
+- `SessionDelegateProxy`: S3-3 adds a second, fileprivate proxy in `HLSSegmentFeeder`. Two copies stay below the Rule of Three (Principle 4); do not merge them.
+- Playlist resolution and `formatHint(for:)`: redraw the boundary after S3-3 adds `classifyM3UDialect` to `start(url:)` and S3-4 reworks the format hint.
 
-Move the entire `SessionDelegateProxy` class (lines 664-697) to its own file. Completely self-contained NSObject delegate proxy.
+## Step 3: DecodeContext concurrency contract (go or no-go)
 
-- Change access from `private` to `internal`
-- No behavioral change — closures set at init, then read-only
+- Write the contract at the top of `DecodeContext`: what is confined to the decode queue, which entry points other queues may call, and why `@unchecked Sendable` is needed.
+- Add a DEBUG gate test in the style of `VideoTapSendableContractTests`.
+- The render-thread field rules (only `Atomic`, `Mutex` and `RenderThreadSafe` fields) do not fit a queue-confined type whose fields are plain `var`s. Define a queue-confinement form of the contract; the existing `QueueConfined` protocol is a candidate.
+- Decide whether `SessionDelegateProxy` (also `@unchecked Sendable`) comes under the same contract.
+- Add `DecodeContext` to the contract list in the ARCH GUIDE (`:1514`).
 
-### Step 3: Extract `PlaylistResolver.swift` (Safe, ~76 lines)
+## Step 4: Extract (if go)
 
-Move all static playlist resolution code (lines 358-430) to a standalone utility:
-- `isPlaylistURL(_:)` (static)
-- `resolvePlaylistURL(_:)` (static async throws)
-- `parsePLS(content:)` (static)
-- `PlaylistResolveError` enum
+One commit per extraction:
 
-These have **zero instance state coupling** — all `static` or `private static`. Move `PlaylistResolveError` into the same file (not its own file — too small).
+1. `Audio/Streaming/DecodeContext.swift` (`private` to `internal`), with all its methods.
+2. `Audio/Streaming/SessionDelegateProxy.swift` (`private` to `internal`).
+3. `Audio/Streaming/PlaylistResolver.swift`: `isPlaylistURL`, `resolvePlaylistURL`, `parsePLS`, `PlaylistResolveError`, plus the format hint if step 2 keeps them together (too small for its own file).
 
-### Step 4: Extract `StreamFormatHint.swift` (Safe, ~14 lines)
-
-Move `formatHint(for:)` (lines 434-445, static). `formatHint(forContentType:)` was already removed in Phase 2.5 (zero callers). At only 14 lines, consider folding into `PlaylistResolver.swift` instead of a separate file.
-
-### Step 5: Clean up residual pipeline (no extraction)
-
-- Update `StreamDecodePipeline.swift` to reference extracted types
-- Verify generation-token semantics still work across file boundaries
-
-**NOT extracting `StreamState`/`StreamTerminationReason` (23 lines).** Per Gemini guidance: these are tiny enums consumed primarily within the same file. Extracting them to their own file adds a file with no distinct lifecycle. They stay in `StreamDecodePipeline.swift`.
-
-## New Files Created
-
-| File | Lines | Source |
-|------|-------|--------|
-| `Audio/Streaming/DecodeContext.swift` | ~199 | Nested class extraction |
-| `Audio/Streaming/SessionDelegateProxy.swift` | ~34 | Nested class extraction |
-| `Audio/Streaming/PlaylistResolver.swift` | ~87 | Static methods + error enum + format hint |
-| ~~`Audio/Streaming/StreamFormatHint.swift`~~ | ~~~14~~ | Folded into PlaylistResolver (too small for own file) |
-
-**Total new files: 3** (StreamFormatHint folded into PlaylistResolver — only 14 lines after Phase 2.5 cleanup)
-**Residual StreamDecodePipeline.swift: ~380 lines**
+`StreamState` and `StreamTerminationReason` stay nested in `StreamDecodePipeline`: they are tiny and have no separate lifecycle.
 
 ## Constraints
 
-- Preserve generation-token, shutdown, and callback semantics
-- Do not destabilize the decode queue / audio-thread handoff
-- Decompose in place within `Audio/Streaming/` (already at target location)
-- Do not mix new stream features into this cleanup task
-- Flag-but-don't-fix duplications and dead code in `placeholder.md`
+- Preserve generation-token, shutdown and callback semantics.
+- Do not destabilize the decode-queue to render-thread hand-off.
+- Add no stream features in this task.
+- Flag duplication and dead code in `placeholder.md`; do not fix it here.
 
 ## Verification
 
-- Stream startup, buffering, pause/resume, and stop still work
-- Metadata and format-ready callbacks still fire correctly
-- Error paths and termination reasons surface cleanly
-- Auto-reconnect (exponential backoff) still works end-to-end
-- `xcodegen generate` + XcodeBuildMCP build + test pass
-- Thread Sanitizer clean
+- `xcodegen generate`, then build and test with Thread Sanitizer (commands in `tasks/_context/state.md`, Process).
+- swiftlint passes on the changed files (`research.md`, File).
+- Manual radio test: start, buffering, metadata, format-ready, pause/resume, stop, auto-reconnect, error and termination messages; an M3U or PLS URL; an HLS stream and an OGG stream once S3-3 and S3-4 have shipped.
+- One `/codex:review --base main` before the PR; the owner reviews and merges.

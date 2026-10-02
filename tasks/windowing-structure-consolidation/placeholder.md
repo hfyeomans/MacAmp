@@ -1,8 +1,5 @@
 # Placeholder: Windowing Structure Consolidation
 
-> **Description:** Records any intentionally deferred or ambiguous items encountered during windowing consolidation.
-> **Purpose:** Prevent vague TODOs in production code and capture exact follow-up work.
+Updated: 2026-10-02
 
----
-
-No placeholders recorded yet.
+Stubs and ambiguous-file notes from the windowing move. Deferred items go to `tasks/_context/deferred.md`, not here. None recorded.

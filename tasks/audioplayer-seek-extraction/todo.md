@@ -1,40 +1,35 @@
 # Todo: AudioPlayer Seek Extraction
 
-> **Description:** Checklist for extracting the seek state machine from AudioPlayer.swift.
-> **Updated:** 2026-03-24 (Oracle review v2 — expanded callback contract)
+Updated: 2026-10-02
 
----
+Checklist for SS-1, derived from `plan.md`.
 
-- [x] Wait for S2 tasks to stabilize (COMPLETE — S2 merged, AudioPlayer at 734 lines post-Phase 2.5)
-- [x] Produce a responsibility map of seek state machine coupling points
-- [ ] Create branch `refactor/audioplayer-seek-extraction`
-- [ ] Update state.md to IN PROGRESS
-- [ ] Expand seek characterization tests before extraction
-  - [ ] Seek during playback → position updates + resumes
-  - [ ] Seek while paused → position updates + stays paused
-  - [ ] Seek at end-of-track → completion handling
-  - [ ] Rapid seeks → only last seek takes effect
-  - [ ] Seek during stream (no-op) → guard behavior
-- [ ] Create `Audio/SeekController.swift` with:
-  - [ ] 3 seek state properties (currentSeekID, seekGuardActive, isHandlingCompletion)
-  - [ ] shouldIgnoreCompletion(from:)
-  - [ ] seekToPercent(_:resume:) with video delegation
-  - [ ] seek(to:resume:) core implementation
-  - [ ] onPlaybackEnded(fromSeekID:) with full callback contract
-  - [ ] Public API: invalidateSeekID(), activateSeekGuard(), clearSeekGuard()
-  - [ ] 6 callbacks: onTransition, onProgressUpdate, onRequestNextTrack, onPlaylistAdvanceRequest, onPlaybackFinished, onRemoveVisualizerTap
-- [ ] Wire callbacks in AudioPlayer.init (weak self captures)
-- [ ] Update AudioPlayer.playTrack to use SeekController
-- [ ] Update AudioPlayer.loadAudioFile to use SeekController
-- [ ] Update AudioPlayer.play/pause/stop to use SeekController
-- [ ] Run `xcodegen generate`
-- [ ] XcodeBuildMCP build (Thread Sanitizer enabled)
-- [ ] XcodeBuildMCP test — all seek tests pass
-- [ ] Oracle review on extraction
-- [ ] Verify AudioPlayer.swift under 600 lines
-- [ ] Remove `// swiftlint:disable file_length`
-- [ ] Remove `// swiftlint:disable:this type_body_length`
-- [ ] Run swiftlint — zero violations without suppressions
-- [ ] Manual test: seek during play, seek while paused, rapid seeks, stream (no seek), remote command seek
-- [ ] Push branch -> create PR for user review
-- [ ] Update state.md and shared _context/ on completion
+## Re-evaluation
+
+- [x] Seek coupling map (`research.md`, at `b3894d9`)
+- [ ] Re-measure the seek map and SwiftLint counts at post-OGG HEAD (34 guard-var references at `b3894d9`)
+- [ ] Seek characterization tests: seek while playing, seek while paused, seek to end, rapid seeks, stream no-op
+- [ ] `AudioPlayer`-level test for a user action during a pending engine reconfigure (`cancelPendingReconfigure`)
+- [ ] Pre-decomposition gate (`tasks/_context/principles.md`) and go/no-go ADR on Option B with its kill switch
+
+## If go
+
+- [ ] Branch `refactor/audioplayer-seek-extraction`; set `state.md` to IN PROGRESS
+- [ ] Create `Audio/SeekController.swift` with non-optional init dependencies (engine, `videoPlaybackController`)
+- [ ] Move the atomic unit in one commit (`plan.md` step 3)
+- [ ] Route `playTrack`, `loadAudioFile`, `play`, `pause`, `stop` and the engine-reconfigure handlers through the new guard API
+- [ ] `xcodegen generate`; build and test with Thread Sanitizer
+- [ ] Manual checks (`plan.md` Verification)
+- [ ] In a separate commit, once the characterization tests pass: replace the guard `Task.sleep` delays with one structured guard-clear (`placeholder.md`)
+- [ ] One `/codex:review --base main`; fix what affects correctness
+- [ ] PR for owner review
+
+## SwiftLint suppressions (moved from `audioplayer-decomposition`)
+
+- [ ] Decide thresholds vs a further split (`plan.md` step 5)
+- [ ] Remove `// swiftlint:disable file_length` (`AudioPlayer.swift:1`), or record the decision to keep it
+- [ ] Remove `// swiftlint:disable:this type_body_length` (`AudioPlayer.swift:9`), or record the decision to keep it
+
+## Close-out
+
+- [ ] Update `state.md` and `tasks/_context/` with the outcome

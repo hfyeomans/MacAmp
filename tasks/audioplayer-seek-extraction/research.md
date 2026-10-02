@@ -1,190 +1,85 @@
 # Research: AudioPlayer Seek Extraction
 
-> **Description:** Responsibility map focused on seek state machine extraction from AudioPlayer.swift.
-> **Updated:** 2026-03-25 (line numbers refreshed post-Phase 2.5 cleanup)
+Updated: 2026-10-02
 
----
+Seek-state coupling map for `MacAmpApp/Audio/AudioPlayer.swift`. Line numbers are at `b3894d9`; PR #91 (-4 lines) and S3-4 will move them, so re-measure at post-OGG HEAD (`plan.md` step 0).
 
-## File Overview
+## File
 
-**File:** `MacAmpApp/Audio/AudioPlayer.swift`
-**Lines:** 734 (down from 740 — Phase 2.5 removed `getRMSData(bands:)` forwarding + minor cleanup)
-**Class:** `AudioPlayer` — `@Observable @MainActor final class`
+- 1,101 lines. `@Observable @MainActor final class AudioPlayer`.
+- Suppressions: `// swiftlint:disable file_length` (`:1`), `// swiftlint:disable:this type_body_length` (`:9`).
+- SwiftLint counts lines without comments and whitespace. Linting a copy with both suppressions removed gives `file_length` 758 (warns at 600, errors at 1,200) and a class body of 750 (`type_body_length` warns at 400, errors at 600), so the type suppression hides an error. Thresholds: `.swiftlint.yml:58-69`.
+- The atomic unit (`:54-56`, `:422-428`, `:783-847`, `:965-976`, `:992-1040`) is about 109 of those counted lines. `AudioPlayer` keeps the `seek`/`seekToPercent` facade, so both counts end near 650 after extraction: `file_length` still warns and `type_body_length` still errors.
+- `closure_body_length` (warns at 30) also fires at `:246` (32, video tap) and `:995` (32, the `onPlaybackEnded` closure, part of the atomic unit).
+- SwiftLint is not in the build or CI; `.githooks/pre-commit` lints staged Swift files with `--strict`, where warnings fail.
 
-## SwiftLint Suppressions
+## Section map
 
-| Line | Suppression |
-|------|-------------|
-| 1 | `// swiftlint:disable file_length` |
-| 9 | `// swiftlint:disable:this type_body_length` |
+| Lines | Section | Seek-related |
+|---|---|---|
+| :15-48 | Engine controller (`engine` `:16`), extracted controllers, video-tap balance fan-out | — |
+| :49-69 | Playback state | Guard vars `:54-56`, `pendingReconfigureSnapshot` `:63` |
+| :70-175 | Stream bridge state, volume/balance and their video-tap fan-out, playlist, video, callbacks (`onPlaylistAdvanceRequest` `:151`, `onPlaybackFinished` `:152`) | Callbacks fired by `onPlaybackEnded` |
+| :176-300 | Video Tap (in-place DSP on the AVPlayer audio path) | — |
+| :301-333 | Equalizer forwarding | — |
+| :334-401 | Init/deinit | Wires `engine.onPlaybackEnded` (`:363`), reconfigure callbacks (`:369-374`), video `onPlaybackEnded` (`:384`) |
+| :402-429 | State machine: `transition(to:)` `:404`, `shouldIgnoreCompletion` `:422` | Core seek |
+| :430-611 | Track management: `playTrack` `:511`, `detectMediaType` `:579`, `loadAudioFile` `:584` | Writes guards |
+| :612-734 | Transport: `play` `:614`, `pause` `:652`, `stop` `:683`, `eject` `:716` | Writes guards |
+| :735-782 | EQ and stream-bridge forwarding | — |
+| :783-847 | Seeking: `seekToPercent` `:785`, `seek` `:801` | Core seek |
+| :848-976 | Engine reconfiguration: `cancelPendingReconfigure` `:863`, `handleEngineWillReconfigure` `:883`, `handleEngineDidReconfigure` `:915`, `videoSeekCompletion` `:965` | Writes all three guards; `videoSeekCompletion` is core seek |
+| :977-991 | Visualizer forwarding | — |
+| :992-1040 | Playback completion: `onPlaybackEnded` `:994` | Core seek |
+| :1041-1101 | Playlist navigation: `handlePlaylistAction` `:1080` | Calls `seek(to: 0)` at `:1085` |
 
-Both removed when file drops below ~600 lines.
+## Guard access map
 
----
+34 lines reference the three vars (2 of them comments, :857 and :902).
 
-## Line Count Breakdown by Section
+| Var | Reads | Writes |
+|---|---|---|
+| `currentSeekID` (`:54`) | `shouldIgnoreCompletion` `:423`; passed to `engine.scheduleFrom` in `loadAudioFile` `:588`, `stop` `:698`, `seek` `:821`, `handleEngineDidReconfigure` `:928` | `playTrack` `:520`, `loadAudioFile` `:587`, `stop` `:697`, `seek` `:815`, `handleEngineWillReconfigure` `:905` |
+| `seekGuardActive` (`:56`) | `shouldIgnoreCompletion` `:424` | true: `playTrack` `:521`, `seek` `:814`, `handleEngineWillReconfigure` `:906`. false: `playTrack` `:528` (50 ms) and `:538`, `play` `:648`, `pause` `:679`, `stop` `:712`, `seek` `:844` (100 ms), `cancelPendingReconfigure` `:865`, `handleEngineDidReconfigure` `:951` (100 ms), `onPlaybackEnded` `:1032` |
+| `isHandlingCompletion` (`:55`) | `onPlaybackEnded` `:997` (re-entrancy guard) | true: `handleEngineWillReconfigure` `:907`, `onPlaybackEnded` `:1001`. false: `cancelPendingReconfigure` `:866`, `handleEngineDidReconfigure` `:955` (200 ms), `onPlaybackEnded` `:1036` (200 ms) |
 
-| Section | Lines | Content | Seek-Related? |
-|---------|-------|---------|---------------|
-| A: Imports/decl | 9 | Boilerplate | swiftlint suppressions |
-| B: Controllers | 10 | Engine, EQ, Viz refs | No |
-| C: Viz props | 20 | Forwarding | No |
-| D: Playback state | 15 | Properties | **3 seek vars** |
-| E: Misc props | 86 | Volume, playlist, video, EQ | No |
-| F: Init/deinit | 54 | Setup + callbacks | **Wires seek callbacks** |
-| G: State machine | 27 | transition + shouldIgnore | **shouldIgnoreCompletion** |
-| H: Track mgmt | 74 | Add/remove tracks | No |
-| I: playTrack | 59 | Load + play track | **Writes seek state** |
-| J: loadAudioFile | 27 | File loading | **Writes currentSeekID** |
-| K: Transport | 102 | play/pause/stop/eject | **Writes seek state** |
-| L: EQ forwarding | 20 | Method forwarding | No |
-| M: Stream bridge | 17 | Method forwarding | No |
-| N: Seeking | 75 | seek + seekToPercent + videoSeekCompletion | **CORE SEEK** |
-| O: Viz forwarding | 14 | Method forwarding | No |
-| P: Completion | 39 | onPlaybackEnded | **CORE SEEK** |
-| Q: Playlist nav | 56 | next/prev/handle | **Calls seek** |
+`play`, `pause`, `stop`, `seek` and `playTrack` call `cancelPendingReconfigure()` first.
 
-**Seek-dedicated lines (N+P+shouldIgnore):** ~121
-**Seek-touching lines in other sections:** ~59
-**Total seek-coupled code:** ~180 lines
-
----
-
-## Seek State Variable Access Map
-
-### `currentSeekID` (line 48)
-
-| Line | Op | Context |
-|------|-----|---------|
-| 48 | Decl | `private var currentSeekID: UUID = UUID()` |
-| 221 | Read | `shouldIgnoreCompletion` — compares incoming seekID |
-| 317 | Write | `playTrack` — invalidates pending completions |
-| 377 | Write | `loadAudioFile` — new ID for scheduled segment |
-| 378 | Read | `loadAudioFile` — passed to `engine.scheduleFrom` |
-| 467 | Write | `stop` — invalidates pending completions |
-| 468 | Read | `stop` — passed to `engine.scheduleFrom` |
-| 591 | Write | `seek` — new ID for seek operation |
-| 597 | Read | `seek` — passed to `engine.scheduleFrom` |
-
-### `seekGuardActive` (line 50)
-
-| Line | Op | Context |
-|------|-----|---------|
-| 50 | Decl | `private var seekGuardActive = false` |
-| 222 | Read | `shouldIgnoreCompletion` — suppresses nil-ID completions |
-| 318 | Write T | `playTrack` — guard window start |
-| 325 | Write F | `playTrack` — delayed guard end (50ms) |
-| 335 | Write F | `playTrack` — synchronous clear |
-| 437 | Write F | `play` — clear after successful start |
-| 453 | Write F | `pause` — clear on pause |
-| 482 | Write F | `stop` — clear on stop |
-| 590 | Write T | `seek` — guard window start |
-| 620 | Write F | `seek` — delayed guard end (100ms) |
-| 676 | Write F | `onPlaybackEnded` — clear after handling |
-
-### `isHandlingCompletion` (line 49)
-
-| Line | Op | Context |
-|------|-----|---------|
-| 49 | Decl | `private var isHandlingCompletion = false` |
-| 648 | Read | `onPlaybackEnded` — reentrancy guard |
-| 652 | Write T | `onPlaybackEnded` — lock |
-| 680 | Write F | `onPlaybackEnded` — delayed unlock (200ms) |
-
----
-
-## shouldIgnoreCompletion Call Chain
+## Completion call chain
 
 ```text
-AudioEngineController.scheduleFrom(time:seekID:)
-  -> completionHandler fires on playerNode segment end
-    -> engine.onPlaybackEnded?(completionID)
-      -> AudioPlayer.onPlaybackEnded(fromSeekID:)
-        -> shouldIgnoreCompletion(from: fromSeekID)
+engine.scheduleFrom(time:seekID:) -> playerNode segment ends
+  -> engine.onPlaybackEnded?(seekID) -> AudioPlayer.onPlaybackEnded(fromSeekID:)
+    -> shouldIgnoreCompletion(from:)
 
-Also triggered (nil seekID):
-  videoPlaybackController.onPlaybackEnded -> AudioPlayer.onPlaybackEnded()
-  AudioPlayer.play() at end-of-track -> AudioPlayer.onPlaybackEnded()
-  AudioPlayer.seek() on schedule failure -> delayed AudioPlayer.onPlaybackEnded()
+nil seekID callers:
+  videoPlaybackController.onPlaybackEnded (:386)
+  play() at end of track (:635)
+  seek() when scheduling fails, after 150 ms (:836)
 ```
 
----
+## What the atomic unit touches outside seek state
 
-## onPlaybackEnded Coupling to Playlist Navigation
+- `seek`: reads `currentMediaType`, `isPlaying`; writes `currentTime`, `playbackProgress`; calls `transition(to:)`.
+- `onPlaybackEnded`: calls `transition(to:)`, `visualizerPipeline.stopVideoVisualization()` (video), `engine.invalidateProgressTimer()`, writes `playbackProgress` and `currentTime` (engine file duration for audio, `currentDuration` for video), calls `nextTrack()` and fires `onPlaylistAdvanceRequest` or `onPlaybackFinished`, calls `engine.removeVisualizerTapIfNeeded()` when not playing.
+- `videoSeekCompletion`: writes `currentTime`, `playbackProgress`, `currentDuration`; calls `transition(to:)`.
+- `transition(to:)` has 17 call sites in the file.
+- Engine members used: `audioFile`, `currentFileDuration`, `scheduleFrom`, `invalidateProgressTimer`, `startEngineIfNeeded`, `installVisualizerTapIfNeeded`, `playAudio`, `startProgressTimer`, `removeVisualizerTapIfNeeded`.
 
-`onPlaybackEnded` (line 639) calls `nextTrack()` returning `PlaylistAdvanceAction`:
-- `.requestCoordinatorPlayback(track)` / `.playLocally(track)` -> fires `onPlaylistAdvanceRequest?(track)` callback
-- `.none` -> fires `onPlaybackFinished?()` callback
+## External callers
 
-These callbacks are wired by PlaybackCoordinator.
+- `MacAmpApp/Views/MainWindow/WinampMainWindowInteractionState.swift:97`: `seekToPercent(progress, resume:)` (slider scrub).
+- `MacAmpApp/Audio/PlaybackCoordinator.swift:582`: `seek(to:)` (Now Playing remote command).
+- Streams do not use `AudioPlayer.seek`.
 
----
+## Test coverage
 
-## Atomic Unit — What MUST Move Together
+- `AudioPlayerStateTests` has 17 tests, including the Phase 4 characterization block. None exercises seek.
+- `VideoSeekStateMatrixTests` covers `VideoPlaybackController.seek`, not `AudioPlayer`.
+- `EngineConfigObserverTests` covers the observer, not `AudioPlayer`'s handlers.
+- No test references `currentSeekID`, `seekGuardActive`, `isHandlingCompletion` or `cancelPendingReconfigure`.
 
-### Properties (3 lines):
-- `currentSeekID: UUID` (line 48)
-- `isHandlingCompletion: Bool` (line 49)
-- `seekGuardActive: Bool` (line 50)
+## Prior review input
 
-### Methods (~117 lines):
-- `shouldIgnoreCompletion(from:)` (lines 220-226) — 7 lines
-- `seekToPercent(_:resume:)` (lines 546-560) — 15 lines
-- `seek(to:resume:)` (lines 562-606) — 45 lines
-- `videoSeekCompletion` computed property (lines 610-620) — 11 lines
-- `onPlaybackEnded(fromSeekID:)` (lines 639-677) — 39 lines
-
-### What CANNOT move (stays in AudioPlayer):
-- `transition(to:)` — called from 15+ locations
-- `playTrack(track:)` — writes seek state but handles track loading, media type switching, EQ
-- `play()` / `pause()` / `stop()` — write seekGuardActive but are core transport
-- `loadAudioFile(url:)` — writes currentSeekID but is playTrack helper
-- `handlePlaylistAction(_:)` — calls `seek(to: 0, ...)` for restart
-
----
-
-## Extraction Strategy
-
-The extracted `SeekController` would need to expose to AudioPlayer:
-- `invalidateSeekID() -> UUID` — returns new ID for `scheduleFrom` calls
-- `setSeekGuardActive(_:)` — for playTrack/play/pause/stop to manage guard window
-- `resetCompletionGuard()` — clear all seek state
-
-AudioPlayer methods that currently write seek state directly would call through the controller.
-
----
-
-## AudioEngineController Methods Called by Seek Path
-
-| Method | Called From |
-|--------|------------|
-| `scheduleFrom(time:seekID:)` | loadAudioFile, stop, seek |
-| `invalidateProgressTimer()` | playTrack, seek, onPlaybackEnded |
-| `startProgressTimer()` | seek |
-| `stopAudio()` | playTrack, stop |
-| `playAudio()` | seek |
-| `startEngineIfNeeded()` | seek |
-| `installVisualizerTapIfNeeded()` | seek |
-| `removeVisualizerTapIfNeeded()` | onPlaybackEnded |
-| `currentFileDuration` | seekToPercent, seek, onPlaybackEnded |
-| `audioFile` | seekToPercent, seek (nil-check guard) |
-
-SeekController needs reference to AudioEngineController.
-
----
-
-## S2 Impact on Seek Path
-
-- **Stream Track Counter:** No direct impact — streams bypass AudioPlayer.seek()
-- **Now Playing:** PlaybackCoordinator uses `audioPlayer.seek(to:)` for remote command. Facade pattern preserved.
-
-## Prior Oracle Recommendation (Phase 4, 2026-03-22)
-
-> "Keep seek state machine in AudioPlayer for this phase, unless you also move onPlaybackEnded completion filtering as one atomic unit. Partial move is the risky path."
-
-This task implements the atomic-unit extraction the Oracle recommended deferring.
-
-## Expected Result
-
-AudioPlayer.swift: 734 -> ~554 lines (below 600 warning and error thresholds)
-Both swiftlint suppressions removed.
+- Oracle, Phase 4 (2026-03-22): "Keep seek state machine in AudioPlayer for this phase, unless you also move onPlaybackEnded completion filtering as one atomic unit. Partial move is the risky path."
+- Oracle preferred a separate `SeekController` over growing `AudioEngineController`: engine transport and the seek state machine are distinct responsibilities.

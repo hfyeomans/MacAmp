@@ -1,5 +1,7 @@
 # Placeholders: HLS Streaming Support
 
-> **Purpose:** Track stubs and placeholders introduced during implementation
+Updated: 2026-10-02
 
-No placeholders. Task not yet started.
+> Stubs and placeholders introduced during implementation. Deferred features go to `tasks/_context/deferred.md`, not here.
+
+None. Implementation has not started.

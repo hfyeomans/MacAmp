@@ -1,61 +1,38 @@
-# Task State: GitHub Issues Triage
+# State: GitHub Issues Triage (S4-2)
 
-> **Purpose:** Triage and fix the issues other users filed on `hfyeomans/MacAmp`, sequenced so the fixes land in the post-Structure-Sprint layout rather than being rebased across a file-move sprint.
-> **Created:** 2026-09-05
-> **Sprint:** S4-2 (Post-Structure-Sprint)
-> **Status:** 📋 **QUEUED** — blocked on the Post-S3 Structure Sprint (user mandate) and on S4-1 `swift64-macos27-readiness` (ordering confirmed by user 2026-09-05). Research not started.
-> **Updated:** 2026-09-25 (S3-2 predecessor ✅ merged — PR #89, `ae15f5c`). Earlier 2026-09-25 (S3-2 predecessor: PR #89 open). Earlier 2026-09-25 (S3-2 predecessor then at Phase 8 complete, branch pushed at `5125bb3`; issue list re-checked). Earlier: 2026-09-05 S4-1-before-S4-2 ordering confirmed by user.
+Updated: 2026-10-02
 
----
+**Status:** QUEUED. Research not started.
 
-## Predecessors
+## Purpose
 
-| Predecessor | Why | Basis |
-|-------------|-----|-------|
-| Post-S3 Structure Sprint | The user's mandate: the issue fixes land in the new `.swift` layout, so they are not rebased across a stop-the-world file-move pass. #78 touches windowing and benefits most from the moves having landed. | **User mandate** |
-| S4-1 `swift64-macos27-readiness` | S4-1's deprecation findings may change *how* these issues are fixed; fixing first would risk reworking fresh code. | **CONFIRMED BY USER 2026-09-05.** See `_context/state.md` decision D-S4. |
+Triage and fix the user-filed issues on `hfyeomans/MacAmp` plus internal item P-6, landing the fixes in the post-Structure-Sprint layout.
 
-The Structure Sprint itself starts only after S3-4 `ogg-vorbis-support` merges, which is behind S3-3 `hls-streaming-support`, which was behind the S3-2 PR #C. S3-2 (`avplayer-native-video-dsp`) ✅ **merged 2026-09-25 as [PR #89](https://github.com/hfyeomans/MacAmp/pull/89)** (merge commit `ae15f5c`), so S3-3 is now next.
+## Gating
 
----
+Hard-gated behind the Structure Sprint and S4-1 `swift64-macos27-readiness` (D-S4, `tasks/_context/state.md`).
 
-## Issues in scope
+## Open issues
 
-Open on `hfyeomans/MacAmp` as of 2026-09-05 (`gh issue list`; no recently closed issues). **Re-checked 2026-09-25:** #84/#79/#78/#47 still open; two more are open and not listed below — **#88** multichannel video output (tracked as S4-4 `video-multichannel-output`) and **#86** test depends on the saved Repeat setting (pre-existing test-isolation defect; whether it belongs here is the user's call).
+#47, #79 and #84 are in scope here. #86 is fixed separately as AT-1 (owner, 2026-10-02). #88 is S4-4 `video-multichannel-output`. The full open-issue table is in `tasks/_context/state.md`.
 
-| # | Filed | Author | Title | Summary | Size guess | Likely subsystem |
-|---|-------|--------|-------|---------|:----------:|------------------|
-| #84 | 2026-05-16 | @morozov | Nucleo NLog v2G rendering defects | Classic-skin rendering defects surfaced by the **Nucleo NLog v102** skin; everything renders correctly under the default skin, so this is a skin-variation parsing/sprite issue rather than a general render bug | Medium | `Skins/` — skin parsing, `SpriteResolver`, `region.txt` / `pledit.txt` handling. See `docs/WINAMP_SKIN_VARIATIONS.md` + `docs/SPRITE_SYSTEM_COMPLETE.md` |
-| #79 | 2026-04-11 | @MatteAce | Can't drag files, or open by doubleclick | Dragging onto the window, onto the Dock, and onto the app icon all do nothing. **Related UX gap:** Cmd+O restricts the open panel to `[.audio]` (`MacAmpApp/AppCommands.swift:99`), so video files can't be opened that way either | Medium | App/document lifecycle — drag-and-drop registration, `Info.plist` document types, `NSApplicationDelegate` open-file handling, `AppCommands` |
-| #78 | 2026-04-08 | @Crater-Dude | Windows can't be permanently joined/clamped, no minimization | Moving the player detaches the playlist; minimization doesn't work; user wants full window-state persistence (the EQ window reopens on every launch, even after being closed). **✅ Done 2026-09-28 as S4-2a `window-docking-78`, [PR #90](https://github.com/hfyeomans/MacAmp/pull/90) — not part of this task any more.** **Likely the largest of the four** | Large | Windowing — `DockingController`, `WindowVisibilityController`, the `NSWindow` subclasses, `AppSettings` persistence. See `docs/MULTI_WINDOW_ARCHITECTURE.md` + `docs/WINDOW_FOCUS_ARCHITECTURE.md`. Note the pre-existing "Hide Main Window not working" deferred item in `_context/state.md` — probably the same wiring gap |
-| #47 | 2026-02-10 | @hfyeomans | Keyboard shortcut conflict: Cmd+Shift+1-3 (skins vs window toggles) | The same chord is bound twice — skin selection and window toggles | Small | `AppCommands` / menu + keyboard shortcut map |
-| **P-6** | 2026-05-28 | internal | Video→audio transition does not auto-play | After a video plays, loading an audio track does not auto-play (user must hit Next). Audio→audio is fine. Suspected: `.video → .audio` cleanup leaves transport state that no-ops the `play()`, or async `loadAudioFile` races the immediate `play()`. Non-blocking; surfaced in S3-2 Phase 8 gate 8.14 | Small | `Audio/AudioPlayer.swift`, `Audio/PlaybackCoordinator.swift`, `Audio/VideoPlaybackController.swift` |
+## Scope
 
-**P-6 provenance:** carried over from `tasks/done/avplayer-native-video-dsp/placeholder.md` (P-6) and the "Post-S3-2 `avplayer-native-video-dsp` Findings" section of `_context/state.md`, which records it as still open and needing a dedicated follow-up task. This is that task. It should be re-confirmed against HEAD now that PR #C (#89) has merged — the S3-2 pivot may have moved it.
+Order: #47, then P-6, then #79, then #84. One branch and one PR per item. Repro leads and hypotheses live in `research.md`.
 
----
+| Item | Reporter, filed | Problem | Size | Likely area |
+|------|-----------------|---------|------|-------------|
+| #47 | @hfyeomans, 2026-02-10 | Cmd+Shift+1-3 is bound to both skin switching and the window toggles | Small | `AppCommands`, `SkinsCommands` |
+| P-6 | internal, 2026-05-28 | After a video, loading an audio track does not auto-play (needs Next) | Small | `AudioPlayer`, `PlaybackCoordinator`, `VideoPlaybackController` |
+| #79 | @MatteAce, 2026-04-11 | Dropping files on the window, Dock icon or app icon does nothing; Finder double-click and "Open With" fail; Cmd+O hides video files | Medium | Document types, drop handling, `AppCommands` |
+| #84 | @morozov, 2026-05-16 | "Nucleo NLog v2G rendering defects": the Nucleo NLog v102 skin renders with defects the default skin does not show | Medium | `Skins/`, `SpriteResolver` |
+| `timeControlStatus` residual | internal (S3-2 route gates) | An external pause of the video `AVPlayer` is not mirrored in the UI; goes next to P-6 | Small | `VideoPlaybackController` |
+| RemoteLayerTreeDisplayLinkClient warnings | internal | Watch item: in scope only if the "stuck 0.50s" warnings recur with no debugger attached | Unknown | Main-thread UI performance |
 
-## Approach
+## Owner decisions affecting this task
 
-**One branch + one PR per issue**, each Oracle-gated per `feedback_sprint_workflow.md` (every sprint task gets Oracle review + a PR for user review before merge, regardless of size). Suggested execution order once unblocked: #47 (smallest, isolated) → P-6 → #79 → #84. (#78 was done separately as S4-2a, PR #90.)
+None open. #86 went to the standalone AT-1 PR, and there is no plan-level Oracle gate (owner, 2026-10-02).
 
----
+## Next step
 
-## Deliverables
-
-| File | Content |
-|------|---------|
-| `research.md` | Per-issue reproduction on HEAD + root-cause hypothesis |
-| `plan.md` | Per-issue fix plan, one branch/PR each. **Oracle-gated ≥ 9/10 before any code.** |
-| `todo.md` | Phase 0 triage → Phase 1 plan → Phase 2 per-issue implementation |
-
----
-
-## Status log
-
-| Date | Entry |
-|------|-------|
-| 2026-09-05 | Folder scaffolded. Queued as S4-2. Issue list captured from `gh issue list`. No reproduction attempted yet. |
-| 2026-09-05 | Ordering **confirmed by user**: S4-1 `swift64-macos27-readiness` runs first, then this task. Predecessor chain refreshed — S3-2 pushed to origin at `5fe8c3c`, Phase 8 manual gates in progress with the user, PR #C not yet opened. |
-| 2026-09-25 | S3-2 predecessor: Phase 9 complete; PR #C opened as PR #89, awaiting merge. |
-| 2026-09-25 | S3-2 predecessor ✅ merged (PR #89, `ae15f5c`). Chain now: S3-3 → S3-4 → Structure Sprint → S4-1 → this task. |
+Phase 0 triage (`todo.md`) once the Structure Sprint and S4-1 have merged. Use `./scripts/resolve-pr-comments.sh <PR#>` for reviewer threads on each PR.

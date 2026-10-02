@@ -1,5 +1,7 @@
 # State: Lock-Free Ring Buffer
 
+> **CLOSED (archived 2026-10-02):** Shipped in PR #50 (`752a4dd`) and integrated by the unified audio pipeline (PR #57); live items are in `tasks/_context/deferred.md`, and the overrun race fix is slotted to S4-1.
+
 > **Purpose:** Tracks the current state of the task including progress, blockers, decisions made, and open questions.
 
 ---

@@ -1,67 +1,50 @@
-# State
+# State: Swift Project Structure
 
-> **Description:** Status and decision log for the Swift project-structure research and backlog-shaping task.
-> **Purpose:** Record what was approved, what was intentionally deferred, and how this work should influence active sprints.
+Updated: 2026-10-02
+
+Placement-policy reference for the whole repo, and owner of Structure Sprint planning (SS-0).
 
 ## Status
 
-Research complete. Policy approved. Backlog shaping complete.
+- Policy: approved and in force.
+- SS-0 (Structure Sprint planning): QUEUED. Starts after S3-4 merges (D-STRUCTURE). Scope and steps in `plan.md`; sprint order in `tasks/_context/plan.md`.
 
-## Current Position
+## Decisions in force
 
-- Current repo audit is complete.
-- External research is complete.
-- Recommended structure has been written into `plan.md`.
-- Sprint conflict analysis is complete.
-- The task has shifted from pure research into an architecture-governance plan.
+- **Target layout:** `MacAmpApp/{App, Core, Shared, Features, Audio, Windowing, Resources}`. No top-level `ViewModels/` or `Utilities/` once the sprint ends. Folder roles are in `plan.md`.
+- **Ownership model:** feature-first for user-facing areas, subsystem-first for shared engines, small `Core/` and `Shared/`. Local packages come only after folder ownership is stable (SS-9).
+- **D-STRUCTURE (2026-03-15):** all file moves happen in one Structure Sprint after S3-4 merges. Moves touch `project.yml`, imports, bundle resource paths and test references, so they stop the world and conflict with feature branches; one focused pass is lower risk than moves woven into feature work. Decomposition splits files in place before any move.
+- **Placement rule (standing):** new files go to their target ownership location. No new top-level files in `Utilities/` or `ViewModels/` without a documented exception.
+- Principles 1-7 and the pre-decomposition gate in `tasks/_context/principles.md` govern every refactor in the sprint.
 
-## Key Conclusions
+## Placement-rule breaches since 2026-03-15
 
-- MacAmp’s biggest structural issue is not “too few folders”; it is the wrong top-level boundary.
-- `Views`, `Models`, `ViewModels`, and `Utilities` are too broad to remain the primary organization for a growing macOS app.
-- The repo should move to feature-first and subsystem-first ownership boundaries before attempting serious modularization.
-- Modularization is still worthwhile later, but only after folder-level ownership is cleaned up.
+Every one gets a row in the SS-0 mapping.
 
-## Likely High-Value First Moves
+| File | Added |
+|------|-------|
+| `Utilities/MenuActionTarget.swift` | 2026-03-24 (7daa60e) |
+| `Utilities/TimeFormatting.swift` | 2026-03-24 (7daa60e) |
+| `Utilities/WinampAlertHelper.swift` | 2026-03-24 (bbc2654) |
+| `Utilities/WeakBox.swift` | 2026-05-28 (e1f8a4e) |
+| `ViewModels/SkinArchiveLoader.swift` | 2026-03-25 (d88fa28, PR #75) |
+| `ViewModels/SkinManager+Import.swift` | 2026-03-25 (d88fa28, PR #75) |
+| `Models/DockGraph.swift` | 2026-09-27 (47b20de, PR #90) |
+| `Models/ScreenClamp.swift` | 2026-09-27 (1c87531, PR #90) |
 
-- Create `Features/`, `Audio/`, `Windowing/`, `Core/`, and `Shared/` ownership boundaries.
-- Consolidate Milkdrop / Butterchurn into one feature area.
-- Consolidate generic window infrastructure into one `Windowing` subsystem.
-- Break up the largest files by responsibility, starting with `AudioPlayer.swift`.
+## Decomposition wave (closed)
 
-## Recommendation On Timing
+- `AudioPlayer.swift`: Phases 1-4 shipped (PR #60, hotfix #62), but the file has regrown to 1,101 lines. Seek extraction is re-evaluated in SS-1 (`tasks/audioplayer-seek-extraction/`).
+- `SkinManager.swift`: done in PR #75 (now 441 lines).
+- `WinampEqualizerWindow.swift`: selective extraction done in PR #76 (now 365 lines).
+- `VisualizerPipeline.swift`: superseded by S3-2 Phase 1 (146a8b4), which extracted `VisualizerFeed` and `VisualizerScratchBuffers` (now 416 lines).
+- `StreamDecodePipeline.swift`: deferred; its 800-line trigger fired (825 lines). Re-evaluated in SS-2 (`tasks/streamdecodepipeline-decomposition/`).
 
-- Do not launch a broad repo-wide structure refactor during Sprint S1.
-- Use this task as the source of truth for placement rules during S1 implementation work.
-- Schedule focused consolidation tasks after the current high-churn S1 items land.
+## Definition of done
 
-## Difficulty
+1. Target structure documented and approved: **met**.
+2. New work stops adding files to dumping-ground folders: **not met** (see breaches above).
+3. At least one feature area and one subsystem consolidated: **not met**.
+4. Follow-on tasks exist for every remaining migration: **not met**. Windowing (SS-3) and Milkdrop (SS-4) have folders; Features/ (SS-5), Audio/ (SS-6) and App/Core/Shared (SS-7) do not.
 
-- Big-bang implementation now: High risk, high churn
-- Policy + incremental adoption now: Medium and realistic
-- Full architecture improvement over several follow-on tasks: Medium-Large, but tractable
-
-## Approved Decisions
-
-- The target ownership model is approved.
-- This task is the structure policy reference for Sprint S1.
-- Large-file decomposition follow-ons are now explicitly represented as post-S2 / pre-S3 tasks rather than a vague planning gate.
-- `AudioPlayer.swift` remains covered by the existing `audioplayer-decomposition` task; the other large files now have their own task folders.
-
-### D-STRUCTURE: All file-move consolidation deferred to post-S3 Structure Sprint (2026-03-15)
-
-**Decision:** All folder-structure consolidation work (file moves into `Features/`, `Audio/`, `Windowing/`, `Core/`, `Shared/`, `App/`) is deferred to a single dedicated "Structure Sprint" after S3 completes. This replaces the previous plan of weaving consolidation incrementally through post-S1 and post-S2 phases.
-
-**What stays in S1-S3:**
-
-- Placement policy remains active — new files go to the right place, don't make things worse
-- Decomposition tasks (split large files) remain in their current sprint slots (S1: AudioPlayer Ph4, post-S2: SkinManager, VisualizerPipeline, StreamDecodePipeline, WinampEqualizerWindow)
-
-**What moves to post-S3:**
-
-- `windowing-structure-consolidation` — deferred from post-S1 to post-S3
-- `milkdrop-feature-consolidation` — deferred from post-S1 to post-S3
-- Source-to-target mappings for all ownership boundaries
-- Creation of remaining consolidation tasks (Features/ for Video/EQ/Playlist, Audio/ boundaries, App/Core/Shared/)
-
-**Rationale:** The incremental weave through 5 sprint phases was over-engineered and already incomplete. File moves touch `project.yml`, imports, bundle resource paths, and test references — inherently a "stop the world" operation that conflicts with active feature branches. Decomposition first makes files smaller and easier to move. One focused post-S3 pass is lower risk and higher coherence than scattered moves interleaved with feature work.
+Current measurements are in `research.md`.

@@ -1,5 +1,7 @@
 # Instruments Allocations Workflow (macOS 26 / Xcode 16+)
 
+> Not yet re-checked on Xcode / Instruments 27; build constraints are in `research.md` (Toolchain and verification).
+
 > **Source of truth for in-repo Instruments leak checks.** Captured 2026-05-19 from Apple's "Analyze heap memory" WWDC 2024 session + Xcode 16 / Instruments docs. **Updated 2026-09-05** (Recorded-Types module name corrected to `MacAmp`; added the `xcrun heap` census gotcha). Modern UI differs from pre-macOS-15 walkthroughs (no post-recording "Statistics" tab; pre-recording config view is new).
 >
 > **Use cases:**

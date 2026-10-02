@@ -15,7 +15,7 @@
 
 ## 1. Problem Statement
 
-Video files in MacAmp currently play with no EQ, no balance, and no visualizer participation. The previous attempt (`feat/video-audio-engine-routing`, paused-as-reference at commit `5af91eb`) routed video audio out of AVPlayer through `AVAudioEngine` to apply DSP. That approach reached Phase 7 testing and failed for four documented reasons (see `tasks/_context/s3-2-pivot.md`):
+Video files in MacAmp currently play with no EQ, no balance, and no visualizer participation. The previous attempt (`feat/video-audio-engine-routing`, paused-as-reference at commit `5af91eb`) routed video audio out of AVPlayer through `AVAudioEngine` to apply DSP. That approach reached Phase 7 testing and failed for four documented reasons (see `tasks/_context/depreciated/s3-2-pivot.md`):
 
 1. **`AVAudioEngineConfigurationChange` is unreliable for AirPlay/AirPods route changes.** The notification only fires when the engine's effective configuration actually changes; AirPods route through the AirPlay subsystem and don't always trigger it. Proven by a missing log line in user traces during Phase 7 — the watchdog gate never armed for the bug case.
 2. **Master-clock-coupled video stalls.** AVPlayer's audio queue is the master clock for video on macOS. Any ring under-run on the engine consumer side stalled the master clock, which stalled the video frame. Larger ring (16 K frames) mitigated but did not eliminate.
@@ -923,7 +923,7 @@ This task adds new files (`VideoDSP/` module) and modifies a small number of exi
 - Delete local branch `spike/avplayer-inplace-tap-dsp` (throwaway).
 - Move `tasks/done/avplayer-native-video-dsp/` → `tasks/done/avplayer-native-video-dsp/` (per project workflow).
 - Update `tasks/_context/resume-prompt.md`, `tasks/_context/state.md`, `tasks/_context/tasks_index.md`.
-- Mark `tasks/_context/s3-2-pivot.md` as resolved.
+- Mark `tasks/_context/depreciated/s3-2-pivot.md` as resolved.
 - Single `chore: close out avplayer-native-video-dsp (PR #C)` commit.
 
 ---
@@ -964,7 +964,7 @@ These items are documented for resolution during the named phase. They are **not
 - `tasks/done/avplayer-native-video-dsp/research-notes/eq-numerical-match.md` — RBJ cookbook + Apple parametric EQ design
 - `tasks/done/avplayer-native-video-dsp/research-notes/saved-branch-retrospective.md` — allowlist/denylist with file:line citations
 - `tasks/done/avplayer-native-video-dsp/research-notes/visualizer-feed.md` — `VisualizerPipeline` mapping
-- `tasks/_context/s3-2-pivot.md` — strategic decision log
+- `tasks/_context/depreciated/s3-2-pivot.md` — strategic decision log
 - `tasks/_context/principles.md` — 7 decomposition principles
 - `tasks/done/stream-pause-tail/plan.md` — recent S3 plan exemplar
 - `spike/avplayer-inplace-tap-dsp` — throwaway spike branch (kept locally)

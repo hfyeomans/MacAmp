@@ -17,7 +17,7 @@ Numbering: `<Phase>.<Item>`. `[x]` complete, `[~]` in-progress, `[!]` blocked.
 - [x] 1.4 Drop `wasVideoBridge` field from `PreReconfigureSnapshot` (commit `ffd77c1`)
 - [x] 1.5 Build + TSan green (72/72)
 - [x] 1.6 Scaffold `tasks/done/avplayer-native-video-dsp/` with 6 canonical files
-- [x] 1.7 Create `tasks/_context/s3-2-pivot.md` three-step tracker
+- [x] 1.7 Create `tasks/_context/depreciated/s3-2-pivot.md` three-step tracker
 - [x] 1.8 Cross-reference pivot tracker from `_context/state.md`, `tasks_index.md`, `resume-prompt.md`
 - [x] 1.9 Mark old branch + old task PAUSED-AS-REFERENCE
 
@@ -371,5 +371,5 @@ Numbering: `<Phase>.<Item>`. `[x]` complete, `[~]` in-progress, `[!]` blocked.
 - [x] 10.4 Update `tasks/_context/state.md` Quick Reference + sprint table
 - [x] 10.5 Update `tasks/_context/tasks_index.md` (S3-2 row → MERGED with `done/` path; S3 not yet complete, so the sprint stays in the active table)
 - [x] 10.6 Update `tasks/_context/resume-prompt.md` Active Work Queue (advance to S3-3)
-- [x] 10.7 Mark `tasks/_context/s3-2-pivot.md` as RESOLVED
+- [x] 10.7 Mark `tasks/_context/depreciated/s3-2-pivot.md` as RESOLVED
 - [x] 10.8 Single `chore: close out avplayer-native-video-dsp (PR #89)` commit — ✅ 2026-09-25

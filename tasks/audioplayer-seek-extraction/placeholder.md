@@ -1,19 +1,10 @@
 # Placeholders: AudioPlayer Seek Extraction
 
-> **Description:** Tracks deferred cleanup and deduplication targets discovered during extraction.
-> **Purpose:** Checklist for the future simplification/dedup pass (Phase 2.5, after file moves).
+Updated: 2026-10-02
 
----
+Cleanup targets flagged for this task (flag, don't fix until the listed condition holds).
 
-## Deduplication Targets (For future Phase 2.5 simplification pass)
-
-| Location | Issue | Suggested Fix |
-|----------|-------|---------------|
-| SeekController seek guard delays (50ms, 100ms, 200ms) | Three different delay values for `Task.sleep` guard clearing. These were established through debugging across multiple PRs and are timing-sensitive. | Evaluate whether a single configurable delay or a more structured guard-clearing mechanism would be cleaner. Only change after comprehensive seek tests are in place. |
-
-## Architecture Notes (For future consideration)
-
-| Item | Context |
-|------|---------|
-| SeekController vs AudioEngineController expansion | The Oracle recommended a new SeekController rather than expanding AudioEngineController. AudioEngineController owns engine transport (play/pause/stop/volume/balance). SeekController owns seek state machine (guards, completion filtering, playlist advancement). These are distinct responsibilities. |
-| onPlaybackEnded playlist coupling | `onPlaybackEnded` calls `nextTrack()` which returns `PlaylistAdvanceAction`. This couples seek completion to playlist navigation. The callback pattern preserves this coupling cleanly — SeekController doesn't need to know about playlists, it just fires the callback. |
+| Target | Location (`AudioPlayer.swift`, `b3894d9`) | Fix and condition |
+|---|---|---|
+| Guard-clear `Task.sleep` delays | `playTrack` 50 ms (`:527`); `seek` 150 ms delayed `onPlaybackEnded` after a failed schedule (`:835`) and 100 ms guard clear (`:843`); `handleEngineDidReconfigure` 100 ms (`:950`) and 200 ms (`:954`); `onPlaybackEnded` 200 ms unlock (`:1035`). Two sleep APIs are mixed: `nanoseconds:` at `:527/:835/:843/:1035`, `.milliseconds` at `:950/:954`. | Replace with one structured guard-clear. The delays are timing-sensitive, so change them only after the seek characterization tests pass, and in a commit separate from the extraction. |
+| Force-unwrapped engine | `@ObservationIgnored private var engine: AudioEngineController!` (`:16`) | Make it non-optional if the init order allows. A new `SeekController` must not copy the pattern (`plan.md` step 3). |

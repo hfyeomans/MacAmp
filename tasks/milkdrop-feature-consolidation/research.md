@@ -1,38 +1,33 @@
 # Research: Milkdrop Feature Consolidation
 
-> **Description:** Research task for consolidating Milkdrop / Butterchurn feature files and resources under a dedicated `Features/Milkdrop/` ownership boundary.
-> **Purpose:** Define a safe move plan that improves ownership without interfering with the current Xcode runtime fix. Deferred to post-S3 Structure Sprint (D-STRUCTURE decision 2026-03-15).
+Updated: 2026-10-02
 
----
+Where the Milkdrop feature lives today (main @ b3894d9) and how its resources reach the bundle.
 
-## Goal
+## Swift files (7, in 5 folders)
 
-Create a source-to-target migration map for Milkdrop / Butterchurn code and resources.
+- `Models/MilkdropWindowSizeState.swift`
+- `ViewModels/ButterchurnBridge.swift`
+- `ViewModels/ButterchurnPresetManager.swift`
+- `Views/WinampMilkdropWindow.swift`
+- `Views/Windows/ButterchurnWebView.swift`
+- `Views/Windows/MilkdropWindowChromeView.swift`
+- `Windows/WinampMilkdropWindowController.swift`
 
-## Initial Context
+## Resources
 
-- `swift-project-structure-research` identified Milkdrop / Butterchurn as a highly scattered feature.
-- Current files are split across:
-  - `Models/`
-  - `ViewModels/`
-  - `Views/`
-  - `Views/Windows/`
-  - `Windows/`
-  - repo-root `Butterchurn/` resources
-- `xcode-butterchurn-webcontent-diagnosis` should stay focused on the runtime fix first.
+- Repo-root `Butterchurn/`: `bridge.js`, `butterchurn.min.js`, `butterchurnPresets.min.js`, `butterchurnPresetsExtra.min.js`, `index.html`, `test.html`.
+- Bundled as a folder reference by `project.yml:25` (`path: Butterchurn`, `type: folder`, `buildPhase: resources`), so it lands as a `Butterchurn/` subfolder of the app bundle.
+- `ButterchurnWebView` loads it with `Bundle.main.url(..., subdirectory: "Butterchurn")` at :112 (`index.html`) and :157 (the `.js` files). These lookups change only if the bundled folder name changes.
+- `test.html` is referenced nowhere in the code but ships with the folder.
+- Root `Package.swift` never declared Butterchurn (its resources are only `Skins` and `Assets.xcassets`), and it is being deleted (S3-4 commit C1, fallback S4-1).
+- The `project.yml` `sources` entry for `MacAmpApp` is recursive. A `Butterchurn/` folder moved under `MacAmpApp/` would also be picked up as individual files unless that entry excludes it.
 
-## Initial Scope
+## Naming
 
-In scope:
-- feature-local Swift files for Milkdrop / Butterchurn
-- feature-owned raw resources
-- feature-local state types and bridges
+- `CLAUDE.md` naming conventions use the `Winamp` prefix (`WinampMainWindow.swift`), and all five windows and controllers follow it (`WinampMainWindow`, `WinampPlaylistWindow`, `WinampEqualizerWindow`, `WinampVideoWindow`, `WinampMilkdropWindow` and their `*WindowController`s). The original proposal renamed only the Milkdrop pair to `MilkdropWindow`/`MilkdropWindowController`.
 
-Out of scope:
-- fixing the Xcode runtime bug unless the move is directly required
-- generic window infrastructure
-- unrelated visualizer pipeline changes
+## Scope
 
-## Status
-
-DEFERRED to post-S3 Structure Sprint (D-STRUCTURE decision 2026-03-15). Was originally post-S1.
+- In: feature-local Swift files, feature-owned resources, feature-local state types and bridges.
+- Out: generic window infrastructure (SS-3) and visualizer pipeline changes.

@@ -1,84 +1,60 @@
 # State: OGG Vorbis Support
 
-> **Purpose:** Add OGG Vorbis decoding for both local files and Icecast streams. Closes Winamp parity gap.
-> **Created:** 2026-03-14
-> **Sprint:** S3, Wave S3-4 (last task — sequential after S3-3 merges)
-> **Status:** PLAN APPROVED — ready for spike phase pending S3-3 merge
+Updated: 2026-10-02
 
----
+**Status:** BLOCKED (on S3-3). Plan approved (Oracle 9.3/10 in round 3; review record in `plan.md` §23). After S3-3 merges, the Phase 0a and 0b spikes are hard gates. First action after S3-3 merges: G1 in `todo.md`.
 
-## Current Status
+Adds OGG Vorbis decoding for local files and Icecast streams (a Winamp parity gap), and fixes the one-shot `onFormatReady` gap that chained streams expose. Sprint S3, wave S3-4, last in S3. Created 2026-03-14. Platform: arm64 only, macOS 27.
 
-**Phase:** Plan complete, Oracle gate cleared. Implementation gated on Phase 0a + 0b spikes.
-**Last Updated:** 2026-04-27.
+## Gates
 
-### Artifacts
+- Predecessors: S3-1 (PR #80, #82) and S3-2 `avplayer-native-video-dsp` (PR #89) merged. S3-3 `hls-streaming-support` pending. `video-audio-engine-routing` is not a predecessor.
+- Rebase on post-HLS main using `tasks/hls-streaming-support/plan.md` §17.1.2 (linked from `plan.md` §20).
+- Successor: the Structure Sprint starts after this PR merges.
+- Owner decision pending (todo G1b; listed in `tasks/_context/state.md`, Owner decisions pending): run the 5-station live OGG spot-check before vendoring, or accept the risk.
 
-| File | Status |
-|------|--------|
-| `research.md` | ✅ Complete (Oracle 6.8/10 GO-WITH-CHANGES → 10/10 actionable items applied, 2026-04-27) |
-| `plan.md` | ✅ Complete — Oracle iter 3: **9.3/10 APPROVED** (883 lines, 22 sections) |
-| `todo.md` | ✅ Complete (245 lines, derived from plan) |
-| `depreciated.md` | Empty (no deprecated code yet — `ICYMetadata → StreamMetadata` rename in Phase 6 will not deprecate; renames in place) |
-| `placeholder.md` | Empty (none yet) |
+## Branches and PR
 
-### Oracle Iterations (plan + todo)
+- `feat/ogg-vorbis-support` (implementation), plus throwaway `spike/ogg-build-wiring` (Phase 0a) and `spike/ogg-local-playback` (Phase 0b). None exist yet.
+- PR number is assigned when the PR opens.
+- Review gate: one exhaustive `/codex:review --base main` before the PR. The owner merges and deletes the branch (GH013 blocks CLI deletion).
 
-| # | Score | Verdict |
-|---|------:|---------|
-| 1 | 8.2/10 | GO-WITH-CHANGES (1 CRITICAL, 3 HIGH, 2 MEDIUM, 1 LOW) |
-| 2 | 8.9/10 | GO-WITH-CHANGES (state map drift, callback naming, residual hardcoded test count) |
-| 3 | **9.3/10** | **GO** (2 LOW nits applied in trailing pass) |
+## Key decisions
 
----
-
-## Branch + Wave
-
-- **Branch:** `feat/ogg-vorbis-support`
-- **Spike branches:** `spike/ogg-build-wiring` (Phase 0a, throwaway) + `spike/ogg-local-playback` (Phase 0b, throwaway)
-- **Wave:** S3-4 sequential — last task in S3
-- **PR target:** PR #E
-- **Predecessors:** S3-1, S3-2, S3-3 all merged. All file conflicts resolve in this PR (last in chain).
-- **Successors:** none (S3 closes here)
-
----
-
-## Key Plan Decisions
+Detail and rationale live in `plan.md`.
 
 | # | Decision |
 |---|----------|
-| 1 | Decoder: **libvorbis + libogg primary** (chained-stream support critical for Icecast). stb_vorbis ruled out (chained-stream gap). |
-| 2 | Local-file integration: **Path A-revised** — chained `playerNode.scheduleBuffer` on existing `AVAudioPlayerNode`. Preserves transport contracts (Oracle CRITICAL fix). |
-| 3 | Stream integration: **`StreamBackend` enum sum type** inside `StreamDecodePipeline.swift`. NOT a protocol with strategy objects (Principle 6). `DecodeContext` retains all queue-confined state (Principle 3). |
-| 4 | Sniff-then-decode pipeline state machine: `Connecting → Sniffing → DecoderSelected → Buffering → Playing`. Buffer up to first complete BOS Ogg page (8 KB cap, 250 ms timeout). |
-| 5 | `ICYMetadata` → `StreamMetadata` rename. ICY and Vorbis become adapters. |
-| 6 | Chained-format gap fix: `formatReadyFired` collapsed to single decode-queue-confined source of truth. `onChainFormatChange` (pipeline) → `onStreamChainFormatChanged` (StreamPlayer) → `PlaybackCoordinator` deactivate→activate→re-pass workgroup. T13b verifies plumbing. |
-| 7 | `VorbisDecoder` uses immutable `Mode` sum-type (`.stream` vs `.seekableFile`) with disjoint state per mode and per-method applicability asserts. |
-| 8 | Universal build (`arm64 x86_64`) **mandatory and non-negotiable**. |
-| 9 | Strict "completion handler does NOT decode" contract — dedicated producer queue. |
-| 10 | Phase 0a + 0b are hard gates. 0a fails → fall back to xcframework (Option 2). 0b fails → escalate, possibly abort task. |
+| 1 | Decoder: libvorbis + libogg; chained-stream support is required for Icecast. stb_vorbis ruled out for its chained-stream gap. |
+| 2 | Local files: Path A-revised, chained `playerNode.scheduleBuffer` on the existing `AVAudioPlayerNode`, keeping transport contracts. |
+| 3 | Streams: a fileprivate `StreamBackend` enum inside `StreamDecodePipeline.swift`, not a protocol; `DecodeContext` keeps all queue-confined state. |
+| 4 | Sniff-then-decode lifecycle: Connecting → Sniffing → DecoderSelected → Buffering → Playing, buffering to the first complete BOS page (8 KB cap, 250 ms timeout). |
+| 5 | `ICYMetadata` becomes a top-level `StreamMetadata`; ICY and Vorbis comments are adapters. |
+| 6 | One decode-queue `formatReadyFired` gate; `onChainFormatChange` → `onStreamChainFormatChanged` → `PlaybackCoordinator` deactivates, re-activates and re-passes the workgroup. T13b verifies the plumbing. |
+| 7 | `VorbisDecoder` has an immutable `Mode` sum type (`.stream` / `.seekableFile`) with disjoint state and per-method preconditions. |
+| 8 | arm64 only on macOS 27. `project.yml` never set `ARCHS`; there is no universal-build requirement. |
+| 9 | `scheduleBuffer` completion handlers never decode; a dedicated producer queue owns all libvorbis calls. |
+| 10 | Phases 0a and 0b are hard gates: 0a fails → xcframework fallback; 0b fails → escalate, possibly abort. |
+| 11 | C1 (on the feature branch, not the spike) deletes the root `Package.swift`, `Package.resolved` and the `.swiftlint.yml` exclude, and pins exact package versions in `project.yml` (`plan.md` §6). Fallback slot: S4-1. |
 
----
+## Files
 
-## File Inventory
+Estimate: ~1000 LOC new Swift, ~250 modified, ~3 MB vendored C, ~30 KB fixtures.
 
-- ~1000 LOC new Swift
-- ~250 LOC modified
-- ~3 MB vendored C (libogg + libvorbis)
-- ~30 KB binary test fixtures
-- New `Vendor/libogg/`, `Vendor/libvorbis/` SwiftPM cTargets + modulemaps
-- `Package.swift` + `project.yml` updates
+- Vendored C: one local package, `Vendor/COggVorbis` (`Cogg` and `Cvorbis` targets), wired through `project.yml`. Only the license files live in `Vendor/libogg/` and `Vendor/libvorbis/`.
+- New Swift: `Audio/Vorbis/` (`VorbisDecoder`, `OggCodecSniffer`, `VorbisFileSource`), `Audio/Streaming/StreamMetadata.swift`, `Tests/MacAmpTests/VorbisDecoderTests.swift` plus fixtures.
+- Modified (line counts at `b3894d9`; "HLS" marks files S3-3 also edits):
 
----
+| File | Lines |
+|------|------:|
+| `MacAmpApp/Audio/Streaming/StreamDecodePipeline.swift` (HLS) | 825 |
+| `MacAmpApp/Audio/StreamPlayer.swift` (HLS) | 714 |
+| `MacAmpApp/Audio/AudioEngineController.swift` | 580 |
+| `MacAmpApp/Audio/AudioPlayer.swift` | 1101 |
+| `MacAmpApp/Audio/PlaybackCoordinator.swift` | 587 |
+| `MacAmpApp/Audio/Streaming/ICYFramer.swift` | 200 |
+| `MacAmpApp/Audio/MetadataLoader.swift` | 169 |
+| `MacAmpApp/Views/PlaylistWindowActions.swift` (optional) | 318 |
+| `project.yml`, `.swiftlint.yml`; root `Package.swift` and `Package.resolved` deleted | — |
 
-## Next Steps (after S3-3 merges)
-
-1. Re-read all affected files at HEAD post-S3-3 merge; reconcile drift.
-2. Cut throwaway branch `spike/ogg-build-wiring`. Execute Phase 0a (Cvorbis→Cogg actually linked, universal `lipo` proof).
-3. If 0a passes: cut `spike/ogg-local-playback`. Execute Phase 0b (chained-buffer transport contract on macOS 15 + macOS 26).
-4. If both pass: write findings to research.md, delete spike branches.
-5. Cut implementation branch `feat/ogg-vorbis-support`.
-6. Execute Phase 1 (vendor) → Phase 10 (binary size measurement) per todo.md.
-7. Run TSan-enabled tests via xcodebuildmcp.
-8. Run Oracle code-review gate against `main`.
-9. Open PR #E.
+`StreamDecodePipeline.swift` is already past its growth trigger, and HLS and OGG both add to it (projection in `tasks/_context/research.md`, Fired growth triggers). Both plans forbid splitting it; SS-2 re-evaluates it.

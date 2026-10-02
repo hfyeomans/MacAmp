@@ -34,7 +34,7 @@ The contrarian framing: **don't drag video audio out of AVPlayer. Apply processi
 | 3 | Plan phase — write `plan.md`, iterate with Oracle, ADR-3a containment cycle (user-requested), user sign-off | ✅ DONE | 2026-05-02 (Oracle 9.8/10 final after 5 rounds) |
 | 4 | Implementation — 9 phases per `plan.md` §6 | ✅ MERGED | 2026-09-25 — PR #89, merge commit `ae15f5c` |
 
-See `tasks/_context/s3-2-pivot.md` for the strategic decision log.
+See `tasks/_context/depreciated/s3-2-pivot.md` for the strategic decision log.
 
 ---
 

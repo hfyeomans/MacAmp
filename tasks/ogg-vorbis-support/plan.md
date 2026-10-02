@@ -1,10 +1,12 @@
 # Plan: OGG Vorbis Support
 
-> **Status:** PLANNED — awaits successful completion of Phase 0a + Phase 0b spikes before implementation begins.
+> **Status:** BLOCKED (plan approved, Oracle 9.3/10; waits on S3-3), then Phase 0a + 0b spikes gate implementation.
+> **Updated:** 2026-10-02
 > **Sprint:** S3-4 (last task in S3, sequential after `hls-streaming-support`).
+> **Platform:** arm64 only, macOS 27 (project minimum).
 > **Branch (implementation):** `feat/ogg-vorbis-support`.
 > **Spike branches (throwaway):** `spike/ogg-build-wiring` (Phase 0a) + `spike/ogg-local-playback` (Phase 0b).
-> **PR target:** PR #E.
+> **PR target:** number assigned when the PR opens.
 > **Source of truth:** `tasks/ogg-vorbis-support/research.md` (Oracle GO-WITH-CHANGES 6.8/10 with revisions applied).
 
 ---
@@ -27,7 +29,7 @@ This is the last unaddressed lossy-codec gap relative to Winamp 5 parity. The ta
 
 **Concrete failure modes EXPOSED (and fixed in passing):**
 
-4. Existing `onFormatReady` is one-shot (`StreamDecodePipeline.swift:152-158`). A chained Icecast Vorbis stream that changes sample rate or channel count at a chain boundary would silently corrupt the engine bridge. This gap exists today for any future codec change; OGG is the first real-world trigger.
+4. Existing `onFormatReady` is one-shot (guard at `StreamDecodePipeline.swift:157`). A chained Icecast Vorbis stream that changes sample rate or channel count at a chain boundary would silently corrupt the engine bridge. This gap exists today for any future codec change; OGG is the first real-world trigger.
 
 ---
 
@@ -39,7 +41,7 @@ This is the last unaddressed lossy-codec gap relative to Winamp 5 parity. The ta
 - **OGG Speex** — sniffer must REJECT.
 - **Vorbis encoding** — MacAmp never encodes.
 - **Multichannel (>2) Vorbis** — downmix to stereo at decode time.
-- **Variable-bitrate display** — already deferred under shared `_context/state.md`.
+- **Variable-bitrate display** — already deferred in `tasks/_context/deferred.md` (Real-time VBR bitrate display).
 - **HLS-Vorbis** — vanishingly rare in production; out of scope.
 - **Pure-Swift Vorbis port** — explicitly rejected in research §"Library Options"; no mature implementation exists.
 
@@ -52,7 +54,7 @@ This is the last unaddressed lossy-codec gap relative to Winamp 5 parity. The ta
 | 1 | Problem statement written | YES — §1, four concrete failure modes. |
 | 2 | Non-goals listed | YES — §2. |
 | 3 | Principles contract approved | YES — §16 (state map) and §22 (ADR) below: P1 (problem-first), P3 (state ownership: keep DecodeContext as single source of truth), P4 (rule of three: only `ICYMetadata`→`StreamMetadata` rename hits the safety-invariant exception at 2 callers; no other extractions until 3rd codec lands), P5 (no visibility widening: `StreamBackend` lives inside `StreamDecodePipeline.swift` as fileprivate where possible), P6 (no pass-through middlemen: backend is enum, not protocol with adapter classes), P7 (ADR + kill switch: §19 + §22). |
-| 4 | Responsibility map exists | YES — §11. |
+| 4 | Responsibility map exists | YES — §16. |
 | 5 | Complexity assessed | YES — adds ~700-1000 lines new Swift + ~3 MB vendored C. New cognitive load is concentrated in `VorbisDecoder` (libvorbis state machine) and `StreamDecodePipeline` state machine. The rest is mechanical wiring. |
 | 6 | Candidate split scored | YES — `LocalAudioSource` enum (60 lines) vs full `LocalPlaybackBackend` protocol (months): scored cohesion-positive, state-risk-low, visibility-impact-zero, pass-through-risk-zero. Sum-type wins. |
 | 7 | Public/internal API delta | Low: new public `VorbisDecoder` (internal to module), `OggCodecSniffer` (internal), `VorbisFileSource` (internal), `StreamMetadata` rename (internal). No public-API expansion. |
@@ -66,7 +68,7 @@ This is the last unaddressed lossy-codec gap relative to Winamp 5 parity. The ta
 
 > **Why mandatory:** Oracle (HIGH, research §"Build / SwiftPM Integration Approach") flagged "Option 1 needs no `project.yml` change" as not credible. XcodeGen does not auto-inherit root `Package.swift` target graph for cTargets; per-target `dependencies` and a `packages:` block entry are likely required. Failure here cascades — vendoring ~3 MB of libvorbis source before knowing it links is wasted effort.
 
-**Goal:** Prove that a SwiftPM cTarget defined in a local sibling package + wired through `project.yml` can be `import`ed and called from the `MacAmp` target, building cleanly with TSan on both arm64 and x86_64.
+**Goal:** Prove that a SwiftPM cTarget defined in a local sibling package + wired through `project.yml` can be `import`ed and called from the `MacAmp` target, building cleanly with TSan on arm64 (macOS 27).
 
 **Approach:**
 
@@ -95,13 +97,13 @@ This is the last unaddressed lossy-codec gap relative to Winamp 5 parity. The ta
    let _ = og_smoke()      // Cogg-only path
    let _ = vb_smoke()      // Cvorbis-calls-Cogg path (real linkage)
    ```
-9. Build (universal, mandatory both arches):
-   - `xcodebuildmcp macos build --json '{"extraArgs":["-enableThreadSanitizer","YES","ARCHS=arm64 x86_64","ONLY_ACTIVE_ARCH=NO"]}'`
+9. Build:
+   - `xcodebuildmcp macos build --json '{"extraArgs":["-enableThreadSanitizer","YES"]}'`
    - Confirm zero warnings related to module map / unresolved symbol.
 10. Run TSan-enabled test suite — must remain green.
-11. Verify dual-arch by running `lipo -archs` on the built binary — the result MUST be exactly `arm64 x86_64`. Single-arch result is a HARD FAIL of Phase 0a.
+11. Record `lipo -archs` on the built binary (arm64 expected).
 
-**Pass criterion:** All 11 steps succeed; both `og_smoke()` AND `vb_smoke()` link and execute; TSan clean; `lipo -archs` shows `arm64 x86_64`.
+**Pass criterion:** All 11 steps succeed; both `og_smoke()` AND `vb_smoke()` link and execute; TSan clean.
 
 **Fail criteria + branch decisions:**
 
@@ -109,12 +111,11 @@ This is the last unaddressed lossy-codec gap relative to Winamp 5 parity. The ta
 |--------------|----------|
 | Module map ambiguity (libogg `os_types.h` vs system header) | Acceptable — namespace via `Cogg/include/ogg/` folder. Not a kill condition. |
 | `xcodegen` does not produce a `MacAmp` target that links the cTargets | Try wiring as separate `targets:` (sibling Swift target dep). If still failing → fall back to **Option 2 (xcframework)**. |
-| Cross-arch build fails (e.g., x86_64 missing) | Investigate `ARCHS` setting; if structural → fall back to xcframework. |
 | Builds but `og_smoke()` returns garbage / linker silently picks wrong symbol | Hard fail → re-plan with xcframework. |
 
 **Deliverable:** Append "Phase 0a Spike Result" section to `research.md` with: build command output, `lipo -info` output, decision (Option 1 confirmed / Option 2 fallback), commit SHA on spike branch.
 
-**Branch lifecycle:** `spike/ogg-build-wiring` is **deleted after results recorded**. No code from the spike is reused beyond the `project.yml` packages block and the `Vendor/COggVorbis/Package.swift` skeleton (those carry forward to Phase 1 with smoke files removed).
+**Branch lifecycle:** `spike/ogg-build-wiring` is **deleted after results recorded**. No code from the spike is reused beyond the `project.yml` packages block and the `Vendor/COggVorbis/Package.swift` skeleton (those carry forward to Phase 1 with smoke files removed). The root `Package.swift` deletion is not done here; it lands in C1 on the feature branch (§6).
 
 ---
 
@@ -132,7 +133,7 @@ This is the last unaddressed lossy-codec gap relative to Winamp 5 parity. The ta
    - Schedules them via chained `scheduleBuffer(_:completionHandler:)` on the existing `AudioEngineController.playerNode`.
    - Each completion handler schedules the next chunk; the final chunk's completion fires `onPlaybackEnded`.
 2. Wire a debug menu item that invokes the spike against a fixture WAV.
-3. Manual verification on macOS 15 Sequoia + macOS 26 Tahoe (both targets):
+3. Manual verification on macOS 27:
    - V0b.1 — Play: hear continuous audio, no clicks at chunk boundaries.
    - V0b.2 — Pause / resume: `playerNode.pause()` and `playerNode.play()` continue to work; no scheduled-buffer queue corruption.
    - V0b.3 — `playerTime` driven progress timer continues to update during chained playback (no jumps at chunk boundaries).
@@ -140,7 +141,7 @@ This is the last unaddressed lossy-codec gap relative to Winamp 5 parity. The ta
    - V0b.5 — Completion: final-buffer completion fires `onPlaybackEnded` exactly once with correct seekID.
    - V0b.6 — TSan clean across all of the above.
 
-**Pass criterion:** All six checks pass on both macOS 15 and macOS 26.
+**Pass criterion:** All six checks pass on macOS 27.
 
 **Fail criteria:**
 
@@ -166,7 +167,7 @@ This is the last unaddressed lossy-codec gap relative to Winamp 5 parity. The ta
 
 - `libogg-1.3.5` — `src/bitwise.c`, `src/framing.c`, headers under `include/ogg/`.
 - `libvorbis-1.3.7` — `lib/*.c` (analysis, bitrate, block, codebook, envelope, floor0, floor1, info, lookup, lpc, lsp, mapping0, mdct, psy, registry, res0, sharedbook, smallft, synthesis, vorbisenc (exclude), vorbisfile, window), headers under `include/vorbis/`.
-- `config_types.h` — pre-generated for arm64 + x86_64 macOS (typedefs `ogg_int16_t = int16_t` etc.).
+- `config_types.h` — pre-generated for arm64 macOS (typedefs `ogg_int16_t = int16_t` etc.).
 - License files: `Vendor/libogg/LICENSE.txt`, `Vendor/libvorbis/LICENSE.txt` (verbatim Xiph BSD).
 
 **Build wiring:**
@@ -178,6 +179,8 @@ This is the last unaddressed lossy-codec gap relative to Winamp 5 parity. The ta
 - `project.yml`:
   - `packages: COggVorbis: { path: ./Vendor/COggVorbis }`.
   - `MacAmp.dependencies` adds `package: COggVorbis, product: Cogg` and `Cvorbis`.
+  - Pin `ZIPFoundation` and `swift-atomics` to exact versions (`exactVersion:`; both lockfiles resolve 0.9.20 and 1.3.0 at `b3894d9`).
+- Root `Package.swift`, root `Package.resolved` and the `Package.swift` entry in `.swiftlint.yml` `excluded:` are deleted in C1. The root manifest cannot build (Swift plus the ObjC `AUAudioUnitWorkgroupShim.m` and a bridging header, no Butterchurn resources) and nothing runs `swift build`. Its `Package.resolved` is the only tracked lockfile (`MacAmpApp.xcodeproj` is gitignored), hence the exact pins. If C1 cannot take this, it falls back to S4-1.
 
 **License compliance (BSD-3-Clause + MIT):**
 
@@ -195,7 +198,7 @@ xcodebuildmcp macos build --json '{"extraArgs":["-enableThreadSanitizer","YES"]}
 xcodebuildmcp macos test  --json '{"extraArgs":["-enableThreadSanitizer","YES"]}'
 ```
 
-Plus binary-size measurement (Phase 10).
+Plus binary-size measurement (Phase 9).
 
 ---
 
@@ -396,14 +399,14 @@ private static func formatHint(for url: URL, contentType: String?) -> StreamForm
 
 **Existing behaviour (TWO independent gates today — must collapse to one):**
 
-- `StreamDecodePipeline.formatReadyFired` (line 100) — gate that prevents re-firing the @MainActor `onFormatReady` callback.
+- `StreamDecodePipeline.formatReadyFired` (line 104 at `b3894d9`) — gate that prevents re-firing the @MainActor `onFormatReady` callback.
 - `DecodeContext.formatReadyFired` (declared on the queue-confined context) — gate that prevents re-invoking `onFormatReady(detectedSampleRate, generation)` from `handlePackets`.
 
 A chained Vorbis stream that changes sample rate or channel count silently writes the new PCM into a ring buffer whose source-node format is now wrong → audio corruption. Both gates must be reset together; otherwise a partial reset leaves stale bridge format and silent corruption.
 
 **Fix (single authoritative gate + bridge re-tune):**
 
-1. **Eliminate the duplicate gate.** Remove `StreamDecodePipeline.formatReadyFired` (the @MainActor copy at line 100). The decode-queue-confined `DecodeContext.formatReadyFired` becomes the single source of truth. The MainActor pipeline relies on the closure-arrival ordering: `onFormatReady` is only emitted from `DecodeContext` and the closure body is itself idempotent against duplicate same-sample-rate fires (compare-and-skip). This satisfies Principle 3 (state ownership: one source).
+1. **Eliminate the duplicate gate.** Remove `StreamDecodePipeline.formatReadyFired` (the @MainActor copy at line 104). The decode-queue-confined `DecodeContext.formatReadyFired` becomes the single source of truth. The MainActor pipeline relies on the closure-arrival ordering: `onFormatReady` is only emitted from `DecodeContext` and the closure body is itself idempotent against duplicate same-sample-rate fires (compare-and-skip). This satisfies Principle 3 (state ownership: one source).
 2. **`VorbisDecoder` emits `.chainBoundary(newSampleRate, newChannels)`** on every BOS page after the first.
 3. **`DecodeContext` compares `(detectedSampleRate, detectedChannels)` against the previous values**:
    - If sample rate AND channel count unchanged: log + continue (no flush, no callback).
@@ -481,7 +484,7 @@ private var currentSource: LocalAudioSource?
 - `loadFile(url:)` — branch on extension:
   - `.ogg`/`.oga` → `currentSource = .vorbis(VorbisFileSource(url: url))`; call new `rewireForVorbis(_:)`.
   - else → existing `currentSource = .avAudioFile(AVAudioFile(forReading: url))`; existing `rewireForFile(_:)`.
-- `audioFile` getter is now `currentSource?.asAVAudioFile` (returns nil for Vorbis). **Important:** existing call sites in `AudioPlayer` (`engine.audioFile != nil`) become `engine.hasLoadedSource`. Add a new `var hasLoadedSource: Bool { currentSource != nil }` — replaces 4 call sites in `AudioPlayer.swift` (lines 417, 552, 568; verify at HEAD).
+- `audioFile` getter is now `currentSource?.asAVAudioFile` (returns nil for Vorbis). **Important:** existing call sites in `AudioPlayer` (`engine.audioFile != nil`) become `engine.hasLoadedSource`. Add a new `var hasLoadedSource: Bool { currentSource != nil }` — replaces 4 call sites in `AudioPlayer.swift` (lines 628, 791, 808, 927 at `b3894d9`; verify at HEAD).
 - `currentFileDuration` — switch on `currentSource`.
 - `scheduleFrom(time:seekID:)`:
   - `.avAudioFile` → existing `playerNode.scheduleSegment(...)` path.
@@ -522,7 +525,7 @@ Unchanged. The graph is still `playerNode → eqNode → mainMixer → output`. 
 3. `VorbisDecoder.pump()` emits `.metadata(StreamMetadata)` derived from `ov_comment()` (TITLE, ARTIST keys; UTF-8 already).
 4. All call sites updated in lock-step (no compatibility shim — internal type, internal callers):
    - `StreamDecodePipeline.swift:57` — `onMetadata: (@MainActor @Sendable (StreamMetadata) -> Void)?`
-   - `StreamPlayer.swift:214` callback signature.
+   - `StreamPlayer.swift:323` `pipeline.onMetadata` closure parameter type.
    - `DecodeContext` `onMetadata` closure.
 
 **Vorbis Comments → StreamMetadata adapter:**
@@ -567,7 +570,7 @@ Unchanged. The graph is still `playerNode → eqNode → mainMixer → output`. 
 
 **New test file:** `Tests/MacAmpTests/VorbisDecoderTests.swift`.
 
-**Fixtures (committed to repo or downloaded by `Scripts/fetch-vorbis-fixtures.sh`):**
+**Fixtures (committed to repo or downloaded by `scripts/fetch-vorbis-fixtures.sh`):**
 
 - `tone-440hz-q5.ogg` — 1-second 440 Hz sine, Vorbis q5, stereo 44.1 kHz. (Generate via `oggenc` from a known-WAV; commit the .ogg, not the WAV.)
 - `chained-2streams.ogg` — two concatenated logical streams, both stereo 44.1 kHz, with different `ARTIST` Vorbis comments.
@@ -601,6 +604,8 @@ Unchanged. The graph is still `playerNode → eqNode → mainMixer → output`. 
 
 **Live-station spot-check table (manual, recorded in research.md):**
 
+> The values below are assumptions, not measurements; research Oracle finding 7 asked for them to be measured before locking in libvorbis. Todo G1b holds the owner's call: measure before Phase 1, or accept the risk.
+
 | Station | URL hint | Chain frequency | Sample rate | Channels |
 |---------|----------|-----------------|-------------|----------|
 | SomaFM Groove Salad OGG | `https://ice2.somafm.com/groovesalad-128-ogg` | per-track | 44.1 | 2 |
@@ -633,7 +638,6 @@ Goal: replace the asserted "+300 KB" claim with a measurement.
    ```
 5. Append "Binary Size Delta" table to `research.md`:
    - arm64 .text delta (bytes).
-   - x86_64 .text delta (bytes).
    - Stripped `.app` delta.
    - Compressed `.dmg` delta.
 
@@ -657,21 +661,21 @@ Decision criterion (already accepted): up to +500 KB stripped is acceptable. >1 
 | `MacAmpApp/Resources/THIRD_PARTY_LICENSES.txt` | Xiph BSD notices | text |
 | `Tests/MacAmpTests/VorbisDecoderTests.swift` | T1-T15 | 400 |
 | `Tests/MacAmpTests/Fixtures/Vorbis/*.ogg` + `*.bin` | Audio + sniff fixtures | binary |
-| `Scripts/fetch-vorbis-fixtures.sh` | Optional: regenerate fixtures from WAV | 40 |
+| `scripts/fetch-vorbis-fixtures.sh` | Optional: regenerate fixtures from WAV | 40 |
 
 ### Modified files (verified at HEAD)
 
 | Path | Change |
 |------|--------|
-| `Package.swift` | Add `Vendor/COggVorbis` as dependency package. |
-| `project.yml` | Add `packages: COggVorbis: { path: ./Vendor/COggVorbis }`; add `package: COggVorbis, product: Cogg` and `Cvorbis` to `MacAmp.dependencies`; add `Resources/THIRD_PARTY_LICENSES.txt` to resources. |
-| `MacAmpApp/Audio/AudioEngineController.swift` (424 lines at HEAD) | Add `LocalAudioSource` enum, `currentSource` property, `hasLoadedSource` getter, `rewireForVorbis(_:)`, `loadFile` branch on extension, `currentFileDuration` switch, `scheduleFrom` Vorbis branch with producer task, `clearFile` close. ~120 lines added. |
-| `MacAmpApp/Audio/AudioPlayer.swift` (734 lines at HEAD) | Replace 4 sites of `engine.audioFile != nil` with `engine.hasLoadedSource`. No other changes. swiftlint suppressions remain. |
+| Root `Package.swift`, `Package.resolved`; `.swiftlint.yml` | Deleted in C1; `.swiftlint.yml` drops its `Package.swift` exclude (§6). |
+| `project.yml` | Add `packages: COggVorbis: { path: ./Vendor/COggVorbis }`; add `package: COggVorbis, product: Cogg` and `Cvorbis` to `MacAmp.dependencies`; add `Resources/THIRD_PARTY_LICENSES.txt` to resources; pin `ZIPFoundation` and `swift-atomics` to exact versions. |
+| `MacAmpApp/Audio/AudioEngineController.swift` (580 lines at `b3894d9`) | Add `LocalAudioSource` enum, `currentSource` property, `hasLoadedSource` getter, `rewireForVorbis(_:)`, `loadFile` branch on extension, `currentFileDuration` switch, `scheduleFrom` Vorbis branch with producer task, `clearFile` close. ~120 lines added. |
+| `MacAmpApp/Audio/AudioPlayer.swift` (1101 lines at `b3894d9`) | Replace 4 sites of `engine.audioFile != nil` (:628, :791, :808, :927) with `engine.hasLoadedSource`. No other changes. swiftlint suppressions remain. |
 | `MacAmpApp/Audio/MetadataLoader.swift` (169 lines at HEAD) | Branch `loadTrackMetadata` and `loadAudioProperties` on `.ogg`/`.oga`; add `loadVorbisMetadata` helper. ~80 lines added. |
-| `MacAmpApp/Audio/Streaming/StreamDecodePipeline.swift` (697 lines at HEAD) | Add `StreamBackend` fileprivate enum, `PipelineLifecycle` state, `StreamFormatHint` enum, `setHint` on DecodeContext, `OggCodecSniffer` integration, buffered-byte replay, `onChainFormatChange` callback, sample-rate change handling. ~250 lines net added. |
+| `MacAmpApp/Audio/Streaming/StreamDecodePipeline.swift` (825 lines at `b3894d9`, plus HLS) | Add `StreamBackend` fileprivate enum, `PipelineLifecycle` state, `StreamFormatHint` enum, `setHint` on DecodeContext, `OggCodecSniffer` integration, buffered-byte replay, `onChainFormatChange` callback, sample-rate change handling. ~250 lines net added. |
 | `MacAmpApp/Audio/Streaming/ICYFramer.swift` (200 lines at HEAD) | Replace `ICYMetadata` with shared `StreamMetadata` (move struct out). ~5 lines net change. |
-| `MacAmpApp/Audio/StreamPlayer.swift` (414 lines at HEAD) | `onMetadata` signature update; new `onStreamChainFormatChanged: (@MainActor (Float64) -> Void)?` callback (forwards from `pipeline.onChainFormatChange`). ~20 lines. |
-| `MacAmpApp/Audio/PlaybackCoordinator.swift` (562 lines at HEAD) | Wire `streamPlayer.onStreamChainFormatChanged` → `audioPlayer.deactivateStreamBridge()` → `audioPlayer.activateStreamBridge(_, sampleRate:)` → re-pass workgroup. ~25 lines. |
+| `MacAmpApp/Audio/StreamPlayer.swift` (714 lines at `b3894d9`) | `onMetadata` signature update; new `onStreamChainFormatChanged: (@MainActor (Float64) -> Void)?` callback (forwards from `pipeline.onChainFormatChange`). ~20 lines. |
+| `MacAmpApp/Audio/PlaybackCoordinator.swift` (587 lines at `b3894d9`) | Wire `streamPlayer.onStreamChainFormatChanged` → `audioPlayer.deactivateStreamBridge()` → `audioPlayer.activateStreamBridge(_, sampleRate:)` → re-pass workgroup. ~25 lines. |
 | `MacAmpApp/Views/PlaylistWindowActions.swift` | Optional defensive add of `UTType(filenameExtension: "ogg")` and `"oga"` if `.audio` doesn't auto-include them. 0-2 lines. |
 
 **Estimated total:** ~1000 lines new Swift, ~250 lines modified Swift, ~3 MB vendored C, ~30 binary KB fixture audio.
@@ -698,7 +702,7 @@ No new actor isolation. No widening of `private` → `internal`. `StreamBackend`
 
 1. `xcodebuildmcp macos build --json '{"extraArgs":["-enableThreadSanitizer","YES"]}'` — clean.
 2. `xcodebuildmcp macos test  --json '{"extraArgs":["-enableThreadSanitizer","YES"]}'` — all new tests (T1-T15, T13b, T14b) green; all pre-task tests still green (baseline count recorded in C1 commit message).
-3. `lipo -archs MacAmp` shows `arm64 x86_64`.
+3. Builds and runs on arm64, macOS 27 (MacAmp has no universal-build requirement).
 4. Release-build size delta documented (Phase 9).
 
 **Manual gates (must all pass before PR review):**
@@ -711,10 +715,10 @@ No new actor isolation. No widening of `private` → `internal`. `StreamBackend`
 10. Add Internet Radio Station with Icecast OGG URL → plays.
 11. Try Opus/.opus URL → user-visible error "OGG Opus not supported", no hang.
 
-**Oracle gates (during planning + implementation):**
+**Review gates (during planning + implementation):**
 
-12. This plan iterated with Oracle (`gpt-5.5`, `xhigh`) to score ≥ 9/10 BEFORE implementation begins.
-13. Post-implementation: Codex Oracle code review of full diff, score ≥ 9/10 BEFORE PR opens.
+12. This plan iterated with Oracle to score ≥ 9/10 BEFORE implementation begins. Met: 9.3/10 (§23).
+13. Post-implementation: one exhaustive `/codex:review --base main` BEFORE the PR opens; findings that affect correctness or requirements are fixed.
 
 ---
 
@@ -733,7 +737,7 @@ No new actor isolation. No widening of `private` → `internal`. `StreamBackend`
 | **stb_vorbis fallback needed** | Low | Not the primary plan; documented in research. |
 | **Binary size regression** | Low | Measured in Phase 9; budget +500 KB stripped. |
 | **License notice missing in shipped app** | Low | `THIRD_PARTY_LICENSES.txt` in bundle resources; verify post-build. |
-| **macOS arch coverage** | Low | Phase 0a step 9 verifies `lipo -archs`. |
+| **macOS arch coverage** | Low | arm64 only on macOS 27; libvorbis is portable C89. |
 | **Vorbis Comments encoding** | Low | UTF-8 per spec — `String(data:encoding:.utf8)` direct. |
 | **Mono / 5.1 Vorbis** | Low | T5 + T6 fixtures; downmix coefficients per ITU-R BS.775. |
 | **MetadataLoader regression on non-OGG files** | Low | Branch is at the top of method; existing path untouched. |
@@ -750,7 +754,6 @@ No new actor isolation. No widening of `private` → `internal`. `StreamBackend`
 | 0a | xcframework also fails | **Pause task.** Escalate; consider Homebrew system-library only as dev-mode build (not shipping). |
 | 0b | `playerTime` drift ≥ 100 ms over 60 s with chained `scheduleBuffer` | Investigate sample-clock anchor. If unfixable → escalate; consider `LocalPlaybackBackend` protocol redesign. |
 | 0b | Completion fires multiple/zero times | **Abort task** — Path A-revised assumptions wrong; protocol redesign is months of work for low-value codec. |
-| 1 | libvorbis fails to compile cleanly on x86_64 | Fall back to xcframework (Option 2) which can be built once per arch and combined. **Universal build is non-negotiable for this task** — MacAmp ships arm64 + x86_64 (see `project.yml`). Dropping x86_64 is a formal scope change, not an implicit fallback; if all paths fail, abort task per top-level kill switch. |
 | 4 | DecodeContext state machine introduces TSan-detectable races | Roll back §9.7 chain-boundary fix; ship Phase 5 (local-only) as v1; re-plan stream path as separate PR. |
 | 5 | Audible artifacts at chunk boundaries on real Vorbis content | Increase chunk size to 16384 frames; if still audible → cross-fade chunks (small additional code). Not a kill condition. |
 | 6 | Renaming `ICYMetadata` introduces unexpected call-site fanout | Cancel rename; use a `typealias StreamMetadata = ICYFramer.ICYMetadata` instead (still satisfies API hygiene). |
@@ -764,22 +767,24 @@ No new actor isolation. No widening of `private` → `internal`. `StreamBackend`
 
 **Branches:**
 
-- `feat/ogg-vorbis-support` — implementation. PR #E.
-- `spike/ogg-build-wiring` — Phase 0a, throwaway, deleted post-merge of `feat/...`.
-- `spike/ogg-local-playback` — Phase 0b, throwaway, deleted post-merge of `feat/...`.
+- `feat/ogg-vorbis-support` — implementation. PR number assigned when it opens.
+- `spike/ogg-build-wiring` — Phase 0a, throwaway, deleted once results are recorded in `research.md`.
+- `spike/ogg-local-playback` — Phase 0b, throwaway, deleted once results are recorded in `research.md`.
 
-**Predecessors (locked S3 ordering, see `_context/state.md`):**
+**Predecessors (locked S3 ordering):**
 
-- S3-3 `hls-streaming-support` MUST be merged.
-- S3-2 `video-audio-engine-routing` MUST be merged.
-- S3-1 (`mwvi`, `spt`) MUST be merged.
+- S3-3 `hls-streaming-support` MUST be merged (pending).
+- S3-2 merged as `avplayer-native-video-dsp` (PR #89). `video-audio-engine-routing` is paused as reference and is not a predecessor.
+- S3-1 merged (`mainwindow-visualizer-isolation` PR #80, `stream-pause-tail` PR #82).
+
+**Successor:** the Structure Sprint starts after this PR merges.
 
 **Pre-implementation steps (in order):**
 
-1. Run Phase 0a spike on `spike/ogg-build-wiring`. Append result to `research.md`. Decide Option 1 vs 2.
-2. Run Phase 0b spike on `spike/ogg-local-playback`. Append result to `research.md`. Pass/abort.
-3. Re-read affected files at HEAD (this plan was authored against post-S3-3 HEAD on 2026-04-27; line numbers may shift if hotfixes land).
-4. Branch `feat/ogg-vorbis-support` off latest `main`.
+1. After S3-3 merges, re-read the affected files at HEAD and refresh anchors (no code). This plan was authored 2026-04-27, before S3-1, S3-2 and S3-3 merged, so line numbers have drifted.
+2. Run Phase 0a spike on `spike/ogg-build-wiring`. Append result to `research.md`. Decide Option 1 vs 2.
+3. Run Phase 0b spike on `spike/ogg-local-playback`. Append result to `research.md`. Pass/abort.
+4. Branch `feat/ogg-vorbis-support` off latest `main`, then apply the HLS hand-off checklist in `tasks/hls-streaming-support/plan.md` §17.1.2 before Phase 1.
 
 **Commit cadence (one commit per phase, force-push permitted on feature branch):**
 
@@ -797,8 +802,8 @@ No new actor isolation. No widening of `private` → `internal`. `StreamBackend`
 
 - Summary: ≤ 3 bullets, link to `tasks/ogg-vorbis-support/research.md` + this plan.
 - Test plan: §17.
-- Co-Authored-By: Claude Opus 4.7.
-- Oracle review summary appended once score ≥ 9/10.
+- Attribution: the commit and PR attribution lines given for the session.
+- `/codex:review` outcome: what was fixed, one line per finding left open.
 
 ---
 
@@ -808,7 +813,7 @@ No new actor isolation. No widening of `private` → `internal`. `StreamBackend`
 
 | Phase | Rollback procedure |
 |-------|-------------------|
-| 1 | `git revert C1`. Rebuild. Vendor dir + `Package.swift` packages entry removed. No app behaviour change (no Vorbis code referenced yet). |
+| 1 | `git revert C1`. Rebuild. Vendor dir + `project.yml` packages entry removed; root `Package.swift`/`Package.resolved` and the version ranges come back. No app behaviour change (no Vorbis code referenced yet). |
 | 2 | `git revert C2`. `VorbisDecoder.swift` deleted. No call sites yet (introduced in C4/C5). |
 | 4 | `git revert C4`. Stream pipeline returns to pre-OGG state. `chained-rate-change` gap returns (acceptable until next attempt). Local file path retained from C5 (independent). |
 | 5 | `git revert C5`. Local Vorbis disabled; streams retained. |
@@ -827,7 +832,7 @@ No new actor isolation. No widening of `private` → `internal`. `StreamBackend`
 
 **Decision:** Add OGG Vorbis support via vendored libvorbis + libogg, with stream-side `StreamBackend` enum branch and local-side `LocalAudioSource` enum branch on `AudioEngineController`. Rename `ICYMetadata` → `StreamMetadata` in passing.
 
-**Status:** Proposed (this plan). Awaits Oracle ≥ 9/10 + Phase 0a/b spike pass.
+**Status:** Proposed. Oracle gate met (9.3/10); awaits the Phase 0a/0b spike pass.
 
 **Context:** Last unaddressed lossy-codec parity gap; resolves a real-world existing pipeline gap (one-shot `onFormatReady`).
 
@@ -867,7 +872,7 @@ No new actor isolation. No widening of `private` → `internal`. `StreamBackend`
 | 3 | 2026-04-27 | **9.3** | **GO** | LOW: stale §15 cross-reference (should be §19); LOW: `openSeekable` API drift between §10.1 and §7 / todo. | Both fixed in trailing pass. |
 | 4 | — | n/a | n/a | n/a (≥9 reached at round 3) | — |
 
-**Post-implementation Oracle review:** mandatory before PR opens; same model/effort; full diff against base branch; target ≥ 9/10. Per `_context/state.md` "Per the research, second Oracle pass mandatory after plan exists" — this is the post-implementation pass, gating PR.
+**Post-implementation review:** one exhaustive `/codex:review --base main` before the PR opens (§17 gate 13). It replaces the earlier post-implementation Oracle loop.
 
 ---
 

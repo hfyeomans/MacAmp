@@ -1,5 +1,5 @@
-# Deprecated/Legacy Code: GitHub Issues Triage
+# Depreciated: GitHub Issues Triage (S4-2)
 
-> **Purpose:** Track deprecated or legacy code removed during this task
+Updated: 2026-10-02
 
-Clean. No deprecated code identified yet.
+Code and plan items this task removes or retires. None recorded.

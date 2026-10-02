@@ -1,23 +1,28 @@
 # Todo: StreamDecodePipeline Decomposition
 
-> **Description:** Checklist for executing the `StreamDecodePipeline.swift` decomposition.
-> **Updated:** 2026-03-24 (implementation-ready)
+Updated: 2026-10-02
 
----
+Checklist for SS-2, derived from `plan.md`.
 
-- [x] Produce a responsibility map for `StreamDecodePipeline.swift`
-- [ ] Create branch `refactor/streamdecodepipeline-decomposition`
-- [ ] Update state.md to IN PROGRESS
-- [ ] Extract `DecodeContext` class to `Audio/Streaming/DecodeContext.swift` (private -> internal)
-- [ ] Extract `SessionDelegateProxy` class to `Audio/Streaming/SessionDelegateProxy.swift` (private -> internal)
-- [ ] Extract static playlist resolution to `Audio/Streaming/PlaylistResolver.swift` (include PlaylistResolveError)
-- [ ] Fold `formatHint(for:)` into `PlaylistResolver.swift` (only 14 lines after Phase 2.5 cleanup)
-- [x] ~~Flag dead code `formatHint(forContentType:)` in placeholder.md~~ — removed in Phase 2.5
-- [x] Flag intentional `extractICYMetaInt` call pattern in placeholder.md (not a bug)
-- [ ] Run `xcodegen generate`
-- [ ] XcodeBuildMCP build (Thread Sanitizer enabled)
-- [ ] XcodeBuildMCP test
-- [ ] Oracle review on extraction
-- [ ] Manual test: play internet radio stream, verify metadata/reconnect
-- [ ] Push branch -> create PR for user review
-- [ ] Update state.md and shared _context/ on completion
+## Re-evaluation
+
+- [x] Responsibility map (`research.md`, at `b3894d9`)
+- [ ] Re-baseline the map at post-OGG HEAD and set a new size target
+- [ ] Go/no-go per the pre-decomposition gate in `tasks/_context/principles.md`; ADR with kill switch
+- [ ] `DecodeContext` concurrency contract: header contract plus DEBUG gate test; add it to the ARCH GUIDE contract list
+
+## If go
+
+- [ ] Branch `refactor/streamdecodepipeline-decomposition`; set `state.md` to IN PROGRESS
+- [ ] Extract `DecodeContext` to `Audio/Streaming/DecodeContext.swift` (`private` to `internal`)
+- [ ] Extract `SessionDelegateProxy` to `Audio/Streaming/SessionDelegateProxy.swift`
+- [ ] Extract playlist resolution (plus the format hint, per step 2) to `Audio/Streaming/PlaylistResolver.swift`
+- [ ] Check generation-token, shutdown and callback semantics across the new files
+- [ ] `xcodegen generate`; build and test with Thread Sanitizer
+- [ ] Manual radio test (`plan.md` Verification)
+- [ ] One `/codex:review --base main`; fix what affects correctness
+- [ ] PR for owner review
+
+## Close-out
+
+- [ ] Update `state.md` and `tasks/_context/` with the outcome

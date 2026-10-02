@@ -3,6 +3,7 @@
 > **Purpose:** Add OGG Vorbis decoding to MacAmp's audio pipeline (local files + Icecast streams).
 > **Sprint:** S3 (LOW priority, deferred from `unified-audio-pipeline` Phase 2.4).
 > **Created:** 2026-04-27.
+> **Updated:** 2026-10-02
 
 ---
 
@@ -31,8 +32,8 @@ URL → AVAudioFile(forReading:) → AVAudioPlayerNode → EQ → mainMixer → 
 Apple's `AVAudioFile` opens the file and returns a `processingFormat` (Float32, n-channel). `AVAudioPlayerNode.scheduleSegment(_:startingFrame:frameCount:at:)` schedules ranges for playback. **The pipeline assumes random-access seeking and `file.length` in frames.** Vorbis-in-Ogg supports both, but `AVAudioFile` will fail to open a `.ogg` file because Core Audio cannot decode Vorbis.
 
 Detection points:
-- `AudioPlayer.detectMediaType(url:)` — line 369. Currently only branches on video extensions (`mp4/mov/m4v/avi`); everything else falls through to `.audio` and `loadAudioFile()`.
-- `AudioPlayer.loadAudioFile(url:)` — line 374. Calls `engine.loadFile(url:)` → `AVAudioFile(forReading: url)` → `throws` on Vorbis.
+- `AudioPlayer.detectMediaType(url:)` — line 579 (at `b3894d9`). Currently only branches on video extensions (`mp4/mov/m4v/avi`); everything else falls through to `.audio` and `loadAudioFile()`.
+- `AudioPlayer.loadAudioFile(url:)` — line 584. Calls `engine.loadFile(url:)` → `AVAudioFile(forReading: url)` → `throws` on Vorbis.
 - `MetadataLoader.loadTrackMetadata(from:)` and `loadAudioProperties(from:)` use `AVURLAsset`. **AVURLAsset does not understand Ogg-Vorbis either** — it reads container-level fields when available, otherwise returns fallbacks.
 
 ### Stream path (`StreamDecodePipeline.swift` + `DecodeContext`)
@@ -51,7 +52,7 @@ URLSession bytes
 ```
 
 **Format detection / branch points:**
-- `StreamDecodePipeline.formatHint(url:)` — line 434. Returns `kAudioFileMP3Type`, `kAudioFileAAC_ADTSType`, or 0. **Vorbis has no `kAudioFile*Type` constant** because AudioToolbox does not support it. This is the structural branch where Vorbis must diverge.
+- `StreamDecodePipeline.formatHint(url:)` — line 470 (at `b3894d9`). Returns `kAudioFileMP3Type`, `kAudioFileAAC_ADTSType`, or 0. **Vorbis has no `kAudioFile*Type` constant** because AudioToolbox does not support it. This is the structural branch where Vorbis must diverge.
 - `DecodeContext.handleFormatAvailable(_:)` — fires when AudioFileStreamParser detects an ASBD. **Will never fire for OGG** because the parser refuses to recognise Ogg pages. The OGG path must bypass `AudioFileStreamParser` + `AudioConverterDecoder` entirely.
 - ICY metadata: Icecast OGG streams typically *do not* send `icy-metaint` (ICY metadata blocks would corrupt Ogg page boundaries). Instead, song metadata is embedded as Vorbis comments in periodic chained Ogg streams. **`ICYFramer.configure(metaInterval: 0)` is the natural no-op path** — already supported. We must NOT route Ogg bytes through ICY framing when `icy-metaint` is absent (already correct behaviour).
 
@@ -130,7 +131,7 @@ URLSession bytes
 - Reproduce copyright notice + disclaimer in distribution.
 - Cannot use Xiph trademarks for endorsement.
 
-**Implementation:** Bundle a `Resources/THIRD_PARTY_LICENSES.txt` (or `.bundle/Contents/Resources/Credits.rtf` — macOS About dialog convention) containing the verbatim Xiph BSD notice. No NOTICE-style file required (NOTICE is Apache-specific). Update `Package.swift` `resources:` array.
+**Implementation:** Bundle a `Resources/THIRD_PARTY_LICENSES.txt` (or `.bundle/Contents/Resources/Credits.rtf` — macOS About dialog convention) containing the verbatim Xiph BSD notice. No NOTICE-style file required (NOTICE is Apache-specific). (Superseded: the plan adds the file to `project.yml` resources; C1 deletes the root `Package.swift`.)
 
 **Notarization / Hardened Runtime:** No issue. Static archives of permissively-licensed C are routinely shipped through Apple notarization. No special entitlements. Decoding is in-process with no IPC, no JIT, no executable memory — Hardened Runtime defaults are fine.
 
@@ -236,6 +237,8 @@ URLSession bytes
 
 ## Build / SwiftPM Integration Approach
 
+> Superseded in part by plan §4/§6: the cTargets live in a local `Vendor/COggVorbis` package wired through `project.yml`, and C1 deletes the root `Package.swift` rather than extending it (see `depreciated.md`). MacAmp targets arm64 only on macOS 27.
+
 ### Option 1 — Vendored C sources as a SwiftPM `cTarget` (RECOMMENDED)
 
 Add to `Package.swift`:
@@ -262,14 +265,14 @@ Add to `Package.swift`:
 ```
 
 **Gotchas:**
-- libvorbis ships with a `config_types.h.in` autoconf template. Vendor a pre-generated `config_types.h` for arm64+x86_64 macOS (typedefs `ogg_int16_t = int16_t` etc.). One file, frozen since 2008.
+- libvorbis ships with a `config_types.h.in` autoconf template. Vendor a pre-generated `config_types.h` for arm64 macOS (typedefs `ogg_int16_t = int16_t` etc.). One file, frozen since 2008.
 - libvorbis depends on libogg headers — `Cvorbis` declares `dependencies: [.target(name: "Cogg")]`.
 - modulemap: SwiftPM auto-generates from `publicHeadersPath`; verify no name collisions (libogg `os_types.h` vs system `os/types.h` — namespace via folder layout).
 - XcodeGen (`project.yml`): the `.target(name: "Cogg")` and `Cvorbis` SwiftPM targets become regular dependencies. The `MacAmp` Xcode target imports `Cvorbis` via `import Cvorbis`. **No project.yml change needed** beyond adding `Cogg`/`Cvorbis` to the package's `Package.swift` if we wire them as SwiftPM products. **However:** MacAmp's primary build is the `.xcodeproj` generated from `project.yml`, NOT SwiftPM. Need to verify XcodeGen pulls in the local SwiftPM C targets. Likely requires adding them as `packages:` entries pointing to `path: ./Vendor/...`.
 
 ### Option 2 — Pre-built xcframework
 
-- Build libvorbis + libogg static archives once for arm64 + x86_64 macOS.
+- Build libvorbis + libogg static archives once for arm64 macOS.
 - Wrap as `Vorbis.xcframework`.
 - Reference via `binaryTarget(name: "Vorbis", path: "Vendor/Vorbis.xcframework")`.
 
@@ -331,7 +334,7 @@ Triple-check with priority order:
 
 > **Oracle (HIGH, 2026-04-27):** "First ~64 bytes" was wrong. Ogg page header is 27 bytes minimum + segment table (variable). The first packet in the page contains the codec ID; for Vorbis the magic is at byte offset 0 of the packet body but the page must be reassembled first. Sniffing should buffer **until the first complete page is available, capped at 4-8 KB or 250 ms timeout** with explicit error on overshoot. Default Ogg page size is ~4 KB so 8 KB is a safe upper bound.
 
-> **Oracle (HIGH, 2026-04-27):** Detection flow conflicts with current `DecodeContext` lifecycle. The current code creates the parser eagerly in `DecodeContext.init` and starts parsing the first chunk immediately ([StreamDecodePipeline.swift:497-523](../../MacAmpApp/Audio/Streaming/StreamDecodePipeline.swift#L497)). For "sniff first, then choose decoder" we need a new explicit startup state: collect bytes into a buffer, classify codec when threshold reached, then instantiate backend and **replay buffered bytes through it**. Add to plan as an explicit pipeline phase: `Connecting → Sniffing → DecoderSelected → Buffering → Playing`.
+> **Oracle (HIGH, 2026-04-27):** Detection flow conflicts with current `DecodeContext` lifecycle. The current code creates the parser eagerly in `DecodeContext.init` and starts parsing the first chunk immediately ([StreamDecodePipeline.swift:577-603](../../MacAmpApp/Audio/Streaming/StreamDecodePipeline.swift#L577) at `b3894d9`). For "sniff first, then choose decoder" we need a new explicit startup state: collect bytes into a buffer, classify codec when threshold reached, then instantiate backend and **replay buffered bytes through it**. Add to plan as an explicit pipeline phase: `Connecting → Sniffing → DecoderSelected → Buffering → Playing`.
 
 **`StreamDecodePipeline.formatHint(for:)` upgrade** — replace the `AudioFileTypeID` return with a richer enum:
 
@@ -357,7 +360,7 @@ Branched on extension AND `Content-Type`. Magic byte sniffing happens later in D
 |---|---|---|---|
 | **0a. Build wiring spike** | Trivial `Cogg`+`Cvorbis` SwiftPM cTargets via `Vendor/COggVorbis/Package.swift`; wire through `project.yml` `packages:` block. Smoke test = `import Cogg` + call from Swift compiles+links+runs. | High (decides Option 1 vs Option 2) | If fails, fallback to xcframework (Option 2) and re-plan. |
 | **0b. Local playback contract spike** | Verify `AVAudioPCMBuffer` chained `scheduleBuffer` reproduces `playerTime`/completion semantics for a known WAV (no Vorbis yet). Confirms Path A-revised is sound. | Medium (decides whether AVAudioPlayerNode-chain works for chunked decode) | If `playerTime` drifts or completion doesn't fire reliably, escalate to plan-time architecture review. |
-| **1. Full vendoring** | Vendor full libogg + libvorbis sources; build clean across arm64+x86_64; license bundle in `THIRD_PARTY_LICENSES.txt`. | Low (after Phase 0a passes) | Static archives build clean. |
+| **1. Full vendoring** | Vendor full libogg + libvorbis sources; build clean on arm64; license bundle in `THIRD_PARTY_LICENSES.txt`. | Low (after Phase 0a passes) | Static archives build clean. |
 | **2. Local file path** | `VorbisFileSource` + `LocalAudioSource` enum in `AudioEngineController` + extension detection. EQ + visualizer + seek must work end-to-end. Reuses `AVAudioPlayerNode`. | Medium | Manual: open `.ogg` file, play, seek, pause, resume, EQ change. |
 | **3. Stream path** | `StreamBackend` sum type + Vorbis stream decoder (libogg sync + libvorbis synthesis) + DecodeContext branch + sniffer-driven backend selection + buffered byte replay. ICY framing bypassed. | Medium-High (chained streams + sniff replay) | Manual: connect to live Icecast OGG, verify metadata changes mid-stream. |
 | **4. Metadata surfacing** | Vorbis comments → `StreamMetadata` (renamed from `ICYMetadata`) → existing `Track.title/.artist` and `streamTitle/streamArtist` flow. | Low | Manual: file metadata visible in playlist; stream title updates on chained-stream metadata change. |
@@ -369,12 +372,14 @@ Branched on extension AND `Content-Type`. Magic byte sniffing happens later in D
 **Explicitly out of v1:**
 - Vorbis encoding.
 - Multi-channel (>2 channels) Vorbis. Downmix to stereo at decode time.
-- Variable-bitrate display (covered by deferred "Real-time VBR bitrate display" item in `_context/state.md`).
+- Variable-bitrate display (covered by the "Real-time VBR bitrate display" row in `tasks/_context/deferred.md`).
 - HLS-Vorbis (effectively non-existent in production).
 
 ---
 
 ## Files Affected (Inventory)
+
+> Superseded by plan §15 (Files Inventory) and `depreciated.md`; kept as the research-time inventory.
 
 **New files:**
 - `Vendor/libogg/` — vendored sources (~10 .c files, ~40 KB of .h) + `LICENSE.txt`.
@@ -408,7 +413,7 @@ Branched on extension AND `Content-Type`. Magic byte sniffing happens later in D
 | **SwiftPM C target visibility** | Medium — XcodeGen may not pick up local Package C targets | Spike: vendor a tiny C file, verify `import Cogg` works from MacAmp. Fallback = xcframework. |
 | **Binary size growth** | Low (~300 KB) | Acceptable. App is already ~30 MB. |
 | **A/V sync (n/a here, audio-only)** | n/a | n/a |
-| **macOS arch coverage** | Low — libvorbis is portable C89 | Build on arm64+x86_64; configure `config_types.h` for both. |
+| **macOS arch coverage** | Low — libvorbis is portable C89 | Build on arm64 (macOS 27); configure `config_types.h` for it. |
 | **Performance on render thread** | Low | Vorbis decode is ~5-10× faster than realtime on M1; running off a producer thread into the ring buffer (same as AudioConverter path). |
 | **Format detection ambiguity** (`.ogg` could be Opus) | Low-Medium — user confusion if Opus file fails | Magic-byte sniffer + explicit error message. |
 | **Metadata surfacing differences** | Low — Vorbis comments already structured (UTF-8 KEY=VALUE) | Map `TITLE`/`ARTIST` directly to existing fields. |
@@ -417,9 +422,9 @@ Branched on extension AND `Content-Type`. Magic byte sniffing happens later in D
 | **Vorbis comments containing track-position metadata in chained streams** | Low | Honor Winamp behaviour: don't reset elapsed time on metadata change (already implemented for ICY in `StreamPlayer`; same rule applies). |
 | **Local transport regression** *(Oracle)* | High — silent breakage of progress/completion/seek if the local-file abstraction goes wrong | Path A-revised (chained `scheduleBuffer` on existing `playerNode`) deliberately preserves transport. Phase 0b spike pre-validates with a non-Vorbis source. Add unit tests for chained-buffer completion and seek-while-playing. |
 | **Render-thread safety** *(Oracle)* | High — any libvorbis call inside the render block would risk audio glitches | All decode work runs on the producer side (decode queue or scheduleBuffer producer task). Render thread only consumes pre-decoded `AVAudioPCMBuffer` (file path) or `LockFreeRingBuffer` (stream path). Document this invariant in code comments and add `dispatchPrecondition` asserts. |
-| **Chained-stream format change mid-playback** *(Oracle)* | High — current `onFormatReady` is one-shot ([StreamDecodePipeline.swift:153](../../MacAmpApp/Audio/Streaming/StreamDecodePipeline.swift#L153)); a chained Vorbis stream that changes sample rate or channel count would silently corrupt the bridge | Allow `onFormatReady` to fire on chain boundaries when sample-rate/channel-count differ from current. Coordinator must tear down + re-activate the engine bridge with the new ASBD. **This is a real existing gap in the streaming pipeline that OGG support exposes.** Plan must address. |
+| **Chained-stream format change mid-playback** *(Oracle)* | High — current `onFormatReady` is one-shot ([StreamDecodePipeline.swift:157](../../MacAmpApp/Audio/Streaming/StreamDecodePipeline.swift#L157) at `b3894d9`); a chained Vorbis stream that changes sample rate or channel count would silently corrupt the bridge | Allow `onFormatReady` to fire on chain boundaries when sample-rate/channel-count differ from current. Coordinator must tear down + re-activate the engine bridge with the new ASBD. **This is a real existing gap in the streaming pipeline that OGG support exposes.** Plan must address. |
 | **stb_vorbis chained-stream gap not yet evidenced** *(Oracle)* | Medium — "many stations chain on metadata change" was asserted, not measured | Plan-time spot check: test 5 live OGG stations (SomaFM Groove Salad, KEXP, RadioParadise OGG endpoint if any, BBC backup, indie). Record per-station: chain frequency, sample-rate stability, channel-count stability. Add evidence table to research before plan finalization. |
-| **Binary size — measured, not asserted** *(Oracle)* | Low — directionally certain but not measured | Measure release-build delta arm64+x86_64 after Phase 1; add to research. |
+| **Binary size — measured, not asserted** *(Oracle)* | Low — directionally certain but not measured | Measure the release-build delta after Phase 1; add to research. |
 
 ---
 
@@ -437,7 +442,7 @@ Branched on extension AND `Content-Type`. Magic byte sniffing happens later in D
 
 **Status:** Gemini CLI was invoked but returned empty output (cwd-related auth issue under the sub-agent sandbox). Gemini was asked to cover: pure-Swift Vorbis decoder maturity, SwiftPM gotchas for libvorbis, stb_vorbis quality vs reference, Ogg streaming-API behaviour, BSD-license distribution requirements, modern Icecast OGG prevalence, codec discrimination, Vorbis comments format.
 
-**Substituted with direct knowledge** of the well-established Vorbis ecosystem (libvorbis 1.3.7, libogg 1.3.5, stb_vorbis are stable since 2008-2020; RFCs 3533/5334 are unchanged; Vorbis spec is frozen). Where this research makes claims that warrant verification before implementation, those are flagged in **Open Questions** — particularly stream prevalence in 2026 and stb_vorbis chained-stream behaviour. **Plan-stage agent should re-run Gemini once cwd auth is resolved**, focused on those two narrow points, and append findings here. The library/license/integration recommendations are stable enough not to require external validation.
+**Substituted with direct knowledge** of the well-established Vorbis ecosystem (libvorbis 1.3.7, libogg 1.3.5, stb_vorbis are stable since 2008-2020; RFCs 3533/5334 are unchanged; Vorbis spec is frozen). Where this research makes claims that warrant verification before implementation, those are flagged in **Open Questions** — particularly stream prevalence in 2026 and stb_vorbis chained-stream behaviour. **Plan-stage agent should re-run Gemini once cwd auth is resolved**, focused on those two narrow points, and append findings here. (Not done at plan stage; todo G1b folds it into the live spot-check or drops it.) The library/license/integration recommendations are stable enough not to require external validation.
 
 ---
 

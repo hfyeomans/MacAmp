@@ -1,15 +1,10 @@
 # Plan: Windowing Structure Consolidation
 
-> **Description:** Implementation plan for moving generic window-management code into a coherent `Windowing/` subsystem.
-> **Purpose:** Bound the consolidation so it improves ownership and navigation without turning into a broad UI refactor.
+Updated: 2026-10-02
 
----
+Move generic window infrastructure into `MacAmpApp/Windowing/` and land the listed follow-ups in the same pass. Predecessor: SS-0.
 
-## Objective
-
-Move generic window-management infrastructure into a dedicated `Windowing/` source area while preserving behavior.
-
-## Proposed Target Layout
+## Target layout
 
 ```text
 MacAmpApp/Windowing/
@@ -19,40 +14,43 @@ MacAmpApp/Windowing/
   Persistence/
 ```
 
-## Candidate Migrations
+Feature-specific windows, chrome and window controllers stay with their features (SS-4, SS-5).
 
-- `Windows/WindowRegistry.swift`
-- `Windows/WindowVisibilityController.swift`
-- `Windows/WindowResizeController.swift`
-- `Windows/WindowFrameStore.swift`
-- `Windows/WindowFramePersistence.swift`
-- `Windows/WindowDockingGeometry.swift`
-- `Windows/WindowDockingTypes.swift`
-- `Windows/WindowSettingsObserver.swift`
-- `Utilities/WindowSnapManager.swift`
-- `Utilities/WindowAccessor.swift` if still truly generic after review
-- `Utilities/WindowDelegateMultiplexer.swift`
-- `Utilities/WindowFocusDelegate.swift`
-- `ViewModels/WindowCoordinator.swift`
-- `ViewModels/WindowCoordinator+Layout.swift`
+## Candidates to classify
+
+Classify each as **move as-is**, **move after a small abstraction**, or **leave in place**, after the dependency analysis in `research.md`.
+
+- `Windows/`: `WindowRegistry`, `WindowVisibilityController`, `WindowResizeController`, `WindowFrameStore`, `WindowFramePersistence`, `WindowSettingsObserver`, `WindowScreenGuard`, `WindowDelegateWiring`, `BorderlessWindow`
+- `Utilities/`: `WindowSnapManager`, `WindowDelegateMultiplexer`, `WindowFocusDelegate`, `WinampWindowConfigurator`, `WindowResizePreviewOverlay`
+- `ViewModels/`: `WindowCoordinator`, `WindowCoordinator+Layout` (move whole, or split generic from feature-coupled parts first)
+- `Models/`: `DockGraph`, `ScreenClamp`, `SnapUtils`, `Size2D`, `WindowFocusState`. The three `*WindowSizeState` types follow SS-0's ambiguous-file decision.
+
+## Follow-ups (the only behavior-touching changes allowed)
+
+From the #78 design review:
+
+1. **Inject minimize into `BorderlessWindow`:** `var onPerformMiniaturize: (() -> Void)?` and a `canMinimize` hook, wired once in `WindowCoordinator+Layout.configureWindows()`, instead of reading `WindowCoordinator.shared`. Keep the `validateUserInterfaceItem` override (not OR'd with super).
+2. **Restore policy in `ScreenClamp`:** a pure `restore(snapshot:current:visible:oldDisplays:newDisplays:anchorOrder:)` (rigid when a display was added, otherwise translate). `WindowScreenGuard.settle()` keeps the live-height `setFrameOrigin` and its clamp, end, displays, persist order. Add 2-3 `ScreenClampTests`.
+3. **Shaded Playlist pixel size:** `PlaylistWindowSizeState.pixelSize(for:shaded:)`, used by `WinampPlaylistWindow.windowPixelSize`, both `PlaylistResizeHandle` sites (the preview uses the candidate size) and the literal 14s. Do not store shade state in the size model.
+4. **Top-anchored origin:** one nonisolated `topAnchoredOrigin(keepingTopOf:height:)` on `DockGraph` or `ScreenClamp` for `WindowFramePersistence` and `WindowScreenGuard.settle` (live height). Leave `WindowResizeController.topLeftAnchoredFrame`, which rounds.
+5. **Option+Cmd+M check:** run `NSApp.miniaturizeAll` on a live app. If Main minimizes without hiding the group, make Main's typed `.willMiniaturize` message the single hide path.
+6. **TEXT.BMP glyph names:** one `SkinSprites.characterSpriteName(for:)` with the missing-glyph-to-space rule, replacing all 10 hand-built `CHARACTER_` names (8 files, list in `research.md`).
+7. **Docs fixes** (any time, no need to wait for the sprint): the `xcode-testing-context.md` tag rows, `MACAMP_ARCHITECTURE_GUIDE.md:1095`, `VIDEO_WINDOW.md:391`, `MILKDROP_WINDOW.md:556`.
+
+From the 2026-10-02 amp review:
+
+8. **Quantized resize helper:** `Size2D.quantizedDelta(base:translation:)` backed by shared 25x29 segment constants, replacing the 6 sites in the Playlist, Video and Milkdrop resize handles. Do it together with item 3.
+9. **`WindowSizeState` protocol** to remove the duplicated size persistence in `Playlist`/`Video`/`MilkdropWindowSizeState`. Do it together with item 8.
 
 ## Constraints
 
-- Do not mix this task with feature-specific window redesign.
-- Do not mix this task with active S1 implementation branches.
-- Avoid introducing behavior changes except where required by the move.
-
-## Open Questions
-
-- `WindowCoordinator` and `WindowRegistry` may still carry feature-specific knowledge that prevents a clean move into a generic `Windowing/` subsystem.
-- The implementation pass must classify each candidate as:
-  - generic and safe to move
-  - generic after extracting a small abstraction
-  - feature-coupled and better left in place until a later refactor
-- Dependency analysis must happen before any file move so this task does not create circular imports or force broad API reshaping during a structure cleanup.
+- No feature-specific window redesign.
+- Not alongside feature branches that touch window code.
+- SS-4 also edits `MilkdropWindowChromeView.swift` (item 8 touches :173/:190): land one before branching the other.
+- Commit the pure file moves separately from the follow-ups so rename detection stays clean.
 
 ## Verification
 
-- Project builds after moves and XcodeGen regeneration if needed
-- Main, EQ, playlist, video, and Milkdrop windows still open and coordinate correctly
-- Docking, visibility, persistence, and resize behaviors remain unchanged
+- `xcodegen generate`; TSan build and test (baseline 137 tests in 21 suites, plus the new `ScreenClampTests`).
+- Manual: Main, EQ, Playlist, Video and Milkdrop open and coordinate; docking, visibility, frame persistence, resize, shade and double size behave as before; sleep/wake and display changes keep windows on screen; group minimize from Main and from Option+Cmd+M.
+- One `/codex:review --base main` before the PR.

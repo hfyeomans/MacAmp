@@ -1,22 +1,23 @@
-# Placeholder Tracking: StreamDecodePipeline Decomposition
+# Placeholders: StreamDecodePipeline Decomposition
 
-> **Description:** Tracks deferred cleanup, dead code, and deduplication targets discovered during decomposition.
-> **Purpose:** Checklist for the future simplification/dedup pass (Phase 2.5, after file moves).
+Updated: 2026-10-02
 
----
+Duplication and cleanup targets flagged for this task (flag, don't fix).
 
-## Dead Code (Flag for removal in dedup pass)
+## Duplication to watch
 
-| Symbol | File:Line | Issue | Status |
-|--------|-----------|-------|--------|
-| ~~`formatHint(forContentType:)`~~ | ~~StreamDecodePipeline.swift:457~~ | ~~`static` with zero callers~~ | **REMOVED in Phase 2.5** |
-
-## Intentional Non-Duplication (Document, not a bug)
-
-| Pattern | Explanation |
+| Item | Note |
 |---|---|
-| `extractICYMetaInt` called once from onResponse proxy (line 189) | The `handleHTTPResponse` method (lines 301-305) does NOT call `extractICYMetaInt` again — comment explains why. Single call site, not a duplication. |
+| `SessionDelegateProxy` | S3-3 adds a second fileprivate copy in `HLSSegmentFeeder`. Two copies; share only when a third appears (Principle 4). |
 
-## Deduplication Targets (For future Phase 2.5 simplification pass)
+## Cleanup targets
 
-None identified in this file. The pipeline code is already well-factored with clear single responsibilities.
+| Target | Fix and condition |
+|---|---|
+| `DecodeContext` doc comment (:524) says it uses "the same pattern as VisualizerScratchBuffers in VisualizerPipeline.swift" | `VisualizerScratchBuffers` moved to its own file in `146a8b4` and now follows the render-thread contract. Replace the comment when `plan.md` step 3 writes the contract header. |
+
+## Intentional non-duplication
+
+| Pattern | Why it is not a duplication |
+|---|---|
+| `extractICYMetaInt` plus `configureFramer` | Called once, from the `onResponse` proxy callback on the delegate queue (:199-200), so the framer is configured before data arrives. `handleHTTPResponse` deliberately does not configure it again; the comment at :337-340 explains why. |

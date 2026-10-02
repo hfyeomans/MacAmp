@@ -1,5 +1,7 @@
 # Task State: AudioPlayer.swift Decomposition
 
+> **CLOSED (archived 2026-10-02):** Phases 1-4 shipped in PR #52 (`614fa5f`) and PR #60 (`8fae97d`); Phase 5 (seek extraction) and the 2 open swiftlint-suppression items moved to `tasks/audioplayer-seek-extraction/`.
+
 > **Description:** Tracks the current state of the AudioPlayer decomposition task including progress, blockers, and decisions.
 > **Purpose:** Single source of truth for task status, updated as implementation progresses.
 

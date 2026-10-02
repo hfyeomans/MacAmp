@@ -12,8 +12,8 @@ An iPadOS version is feasible, but it would be a selective port plus product red
 
 ### Build configuration
 
-- `project.yml` defines only a macOS application target with macOS 15.0 deployment. No iOS or iPadOS target exists.
-- `Package.swift` also declares only `.macOS("26.0")`.
+- `project.yml` defines only a macOS application target with a macOS 27.0 deployment target. No iOS or iPadOS target exists.
+- `Package.swift` also declares only `.macOS("27.0")`.
 
 ### Product shape
 

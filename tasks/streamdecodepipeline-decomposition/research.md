@@ -1,120 +1,66 @@
 # Research: StreamDecodePipeline Decomposition
 
-> **Description:** Responsibility map for decomposing `StreamDecodePipeline.swift` into smaller, focused files.
-> **Updated:** 2026-03-25 (line numbers refreshed post-Phase 2.5 cleanup)
+Updated: 2026-10-02
 
----
+Responsibility map and constraints for SS-2. Line numbers are at `b3894d9`; S3-3 and S3-4 will move them (`plan.md` step 1).
 
-## File Overview
+## File
 
-**File:** `MacAmpApp/Audio/Streaming/StreamDecodePipeline.swift`
-**Lines:** 697 (down from 713 — Phase 2.5 removed dead `formatHint(forContentType:)` + unused `metaInt` block)
-**Contains:** 3 types — `StreamDecodePipeline` (lines 25-447), `DecodeContext` (lines 457-655), `SessionDelegateProxy` (lines 664-697)
+`MacAmpApp/Audio/Streaming/StreamDecodePipeline.swift`: 825 lines. Imports `Foundation`, `AudioToolbox`, `@preconcurrency import os`.
 
-## Imports
-
-| Import | Usage |
-|--------|-------|
-| `Foundation` | URLSession, URLRequest, Data, NSError, OperationQueue |
-| `AudioToolbox` | AudioFileTypeID, AudioStreamBasicDescription, kAudioFileMP3Type, etc. |
-| `@preconcurrency import os` | os_workgroup_t |
-
----
-
-## Section-by-Section Responsibility Map
-
-### Section 1: Enums & State Types (lines 27-49) — 23 lines
-- **Responsibility:** Stream state machine and termination reason types
-- **Key symbols:** `StreamState` enum (idle, connecting, buffering, playing, paused, error), `StreamTerminationReason` enum (8 cases)
-- **External coupling:** StreamTerminationReason extended in StreamPlayer.swift with `userMessage`
-- **Extractability:** **Safe** — pure value types
-
-### Section 2: Stored Properties & Callbacks (lines 51-104) — 54 lines
-- **Responsibility:** Instance state, callbacks, queue/context, session/task, generation token
-- **Key symbols:** `state`, `onStateChange`, `onFormatReady`, `onMetadata`, `onTermination`, `ringBuffer`, `audioWorkgroup`, `decodeQueue`, `decodeContext`, `urlSession`, `dataTask`, `delegateProxy`, `generation`, `formatReadyFired`, `userRequestedStop`
-- **Extractability:** N/A — inherent class state
-
-### Section 3: Audio Workgroup Management (lines 64-79) — 16 lines
-- **Responsibility:** Forwarding audio IO workgroup to DecodeContext
-- **Key symbols:** `audioWorkgroup` property, `setAudioWorkgroup(_:)`
-- **Extractability:** **Moderate** — coupled to decodeContext and decodeQueue
-
-### Section 4: Lifecycle Management (lines 106-268) — 163 lines
-- **Responsibility:** start/stop/pause/resume, DecodeContext creation, URLSession setup
-- **Key symbols:** `start(url:ringBuffer:)`, `startDirectStream(url:ringBuffer:generation:)`, `pause()`, `resume()`, `stop()`, `isolated deinit`, `stopInternal()`, `setState(_:)`
-- **Internal coupling:** Creates DecodeContext, SessionDelegateProxy; calls setState; uses generation token
-- **Extractability:** **Risky** — core of the class, stays
-
-### Section 5: HTTP Response Handling (lines 275-330) — 56 lines
-- **Responsibility:** HTTP status classification, error routing
-- **Key symbols:** `handleHTTPResponse(_:generation:)`, `extractICYMetaInt(from:)` (static)
-- **Extractability:** **Safe** — `extractICYMetaInt` is pure static function
-
-### Section 6: Stream Completion Handling (lines 332-363) — 32 lines
-- **Responsibility:** URLSession completion classification
-- **Key symbols:** `handleStreamComplete(error:generation:)`
-- **Extractability:** **Safe** — self-contained handler
-
-### Section 7: Playlist Resolution (lines 358-430) — 73 lines
-- **Responsibility:** Detect and resolve M3U/M3U8/PLS playlist URLs to direct stream URLs
-- **Key symbols:** `isPlaylistURL(_:)` (static), `resolvePlaylistURL(_:)` (static async throws), `parsePLS(content:)` (static), `PlaylistResolveError` enum
-- **Internal coupling:** Called only from `start()` (lines 121, 126)
-- **External coupling:** `M3UParser`
-- **Extractability:** **Safe** — ALL four symbols are `static` with zero instance state coupling
-
-### Section 8: Format Hint Utility (lines 434-445) — 14 lines
-- **Responsibility:** Map URL paths to AudioToolbox format hint IDs
-- **Key symbols:** `formatHint(for:)` (static, 14 lines)
-- **Phase 2.5:** `formatHint(forContentType:)` removed (zero callers)
-- **Extractability:** **Safe** — pure static function. Small enough to fold into PlaylistResolver.
-
-### Section 9: DecodeContext (lines 457-655) — 199 lines
-- **Responsibility:** Queue-confined decode chain state. Owns ICYFramer, AudioFileStreamParser, AudioConverterDecoder.
-- **Key symbols:** `DecodeContext` (private final class, @unchecked Sendable), `handleIncomingData(_:)`, `shutdown()`, `joinWorkgroupIfAvailable()`, `leaveWorkgroup(token:)`, `handleFormatAvailable(_:)`, `handlePackets(data:descriptions:)`
-- **Threading:** All mutable state confined to `decodeQueue`. `@unchecked Sendable` with `dispatchPrecondition` assertions. Per-block workgroup join/leave.
-- **External coupling:** ICYFramer, AudioFileStreamParser, AudioConverterDecoder, LockFreeRingBuffer, AudioWorkgroupJoin/Leave (ObjC shim)
-- **Extractability:** **Safe** — already a separate class with clear boundaries
-
-### Section 10: SessionDelegateProxy (lines 664-697) — 34 lines
-- **Responsibility:** NSObject delegate proxy forwarding URLSessionDataDelegate callbacks to closures
-- **Key symbols:** `SessionDelegateProxy` (private final class, NSObject, URLSessionDataDelegate, @unchecked Sendable)
-- **Internal coupling:** Created in startDirectStream; closures capture [weak self, weak context]
-- **Extractability:** **Safe** — completely self-contained
-
----
-
-## Concurrency / Threading Summary
-
-| Thread/Queue | Code Location | Symbols |
+| Type | Lines | Notes |
 |---|---|---|
-| Main Thread (@MainActor) | StreamDecodePipeline | All public API |
-| Decode Queue (serial) | DecodeContext | framer, parser, decoder, ringBuffer.write |
-| URLSession delegate queue | SessionDelegateProxy | onResponse, onData, onComplete |
-| Audio IO Thread (external) | AVAudioSourceNode | ringBuffer.read (not in this file) |
+| `StreamDecodePipeline` (`@MainActor final class`) | :25-515 | Lifecycle, HTTP, completion, playlist resolution, format hint, DEBUG test seams |
+| `DecodeContext` (`private final class`, `@unchecked Sendable`) | :525-783 | Queue-confined decode chain; DEBUG test seams at :768-782 |
+| `SessionDelegateProxy` (`private final class`, `NSObject`, `URLSessionDataDelegate`, `@unchecked Sendable`) | :792-825 | Forwards delegate callbacks to closures set once in init |
 
-**Generation token pattern:** `generation: UInt64` incremented on every start/stop. All callbacks reject stale data.
+SwiftLint (comments and whitespace excluded): `file_length` 555, under the 600 warning; no suppressions in the file. `startDirectStream` (:148) warns on `function_body_length` (72 lines, limit 60). `.githooks/pre-commit` lints staged files with `--strict`, where warnings fail.
 
-## Sole Consumer
+## Section map: StreamDecodePipeline
 
-`StreamPlayer.swift` is the only external consumer.
+| Lines | Section | Extractability |
+|---|---|---|
+| :27-52 | `StreamState`, `StreamTerminationReason` | Stays; `StreamPlayer.swift:691` extends `StreamTerminationReason` with `userMessage` |
+| :53-63 | Callbacks to `StreamPlayer` | Inherent |
+| :64-84 | Ring buffer, audio workgroup (`setAudioWorkgroup` :76, `nonisolated(unsafe)` :79) | Coupled to `decodeContext` and `decodeQueue` |
+| :85-109 | Decode context, URLSession, generation token (`generation` :100), prebuffer tracking (`formatReadyFired` :104) | Inherent |
+| :110-310 | Lifecycle: `start` :112, `startDirectStream` :148, `pauseByUser` :240, `resumeByUser` :257, `stop` :275, `stopInternal` :290, `setState` :306 | Core; stays |
+| :311-357 | HTTP response: `handleHTTPResponse` :313, `extractICYMetaInt` :346 (`nonisolated static`) | Pure static helper |
+| :358-390 | Stream completion: `handleStreamComplete` :360 | Self-contained |
+| :391-467 | Playlist resolution: `isPlaylistURL` :394, `resolvePlaylistURL` :401, `parsePLS` :437, `PlaylistResolveError` :456; uses `M3UParser` | All `private static`, no instance state; called only from `start` |
+| :468-482 | `formatHint(for:)` :470 | `private static` |
+| :483-514 | DEBUG test seams | Move with what they test |
 
----
+## DecodeContext
 
-## Recommended Extraction Units
+- Owns `ICYFramer`, `AudioFileStreamParser` and `AudioConverterDecoder`, and writes the `LockFreeRingBuffer`.
+- Entry points: `configureFramer` :608, `handleIncomingData` :617, `setPausedByUser` :643, `resetPrebufferTracking` :657, `shutdown` :668. Private: workgroup join/leave :685/:691, `handleFormatAvailable` :698, `handlePackets` :719.
+- State includes `formatReadyFired` (:535) and the user-pause gate `isPausedByUser` (:540).
+- Confinement today: the doc comment (:519-524) says all mutable state is confined to the decode serial queue; `dispatchPrecondition` checks run at :586, :699 and :720. Fields are plain `var`s, so the render-thread contract's field rules do not apply as written.
+- `QueueConfined` (`Audio/Streaming/QueueConfined.swift`) provides a DEBUG `assertConfinement()`; `AudioFileStreamParser` and `AudioConverterDecoder` adopt it, `DecodeContext` does not.
 
-| # | Target File | Sections | Est. Lines | Risk |
-|---|-------------|----------|------------|------|
-| 1 | `PlaylistResolver.swift` (incl. format hint) | Section 7 + 8 | ~87 | Safe |
-| 2 | `DecodeContext.swift` | Section 9 (entire DecodeContext class) | ~199 | Safe |
-| 3 | `SessionDelegateProxy.swift` | Section 10 (entire delegate proxy) | ~34 | Safe |
-| 4 | `StreamDecodePipeline.swift` (remaining) | Sections 2-6 (core lifecycle) | ~380 | Core — stays |
+## Concurrency contract (ADR-3a)
 
-**Post-extraction estimate:** ~380 lines (down from 697)
+`docs/MACAMP_ARCHITECTURE_GUIDE.md` § Audio Mechanism Concurrency Contract (:1510). `@unchecked Sendable` is acceptable only as a gated exception: the boundary needs it, the contract is written at the top of the type, stored fields are restricted, and tests enforce it. `VideoTapContext` (enforced by `VideoTapSendableContractTests`), `VisualizerFeed`, `VisualizerScratchBuffers` and `BiquadCascade` (via the `RenderThreadSafe` marker in `Audio/RenderThreadSafe.swift`) follow it. `DecodeContext` is named as the next retrofit (:1514).
 
-## Dead Code
+## Threading
 
-- ~~`formatHint(forContentType:)` at line 457~~ — **Removed in Phase 2.5** (was `static` with zero callers)
+| Context | Runs |
+|---|---|
+| `@MainActor` | All `StreamDecodePipeline` API and state |
+| Decode serial queue | `DecodeContext`: framer, parser, decoder, ring-buffer writes |
+| URLSession delegate queue | `SessionDelegateProxy` callbacks (`onResponse`, `onData`, `onComplete`) |
+| Render thread (outside this file) | Ring-buffer reads in the stream `AVAudioSourceNode` |
 
-## Intentional Non-Duplication
+A generation token (`UInt64`, bumped on start and stop) makes every callback drop stale work.
 
-- `extractICYMetaInt` is called from the `onResponse` proxy callback (line 189, delegate queue). The `handleHTTPResponse` method (lines 301-305) has a comment explaining why it does NOT call `extractICYMetaInt` again — the proxy already handles it.
+## Consumers and tests
+
+- `StreamPlayer` (`StreamPlayer.swift:47`) is the only owner. S3-3's `HLSSegmentFeeder` will read the generation and feed `DecodeContext.handleIncomingData` (:617) through an injected `@Sendable (Data) -> Void` closure, so no visibility widens.
+- `StreamPauseTailTests` (9 tests) covers the pause gate through the DEBUG seams.
+
+## Upcoming changes from S3-3 and S3-4
+
+- **S3-3 HLS** (about +160/-10 lines): `classifyM3UDialect`, `startHLSStream`, an `OSAllocatedUnfairLock` generation snapshot, pause/resume dispatch to the feeder, and two non-reconnectable termination cases (`.streamFinished`, `.unsupportedFormat`). HLS bypasses `configureFramer` and `SessionDelegateProxy`; `HLSSegmentFeeder` carries its own fileprivate proxy.
+- **S3-4 OGG** (about +250 lines): fileprivate `StreamBackend` (an enum, not a protocol), `PipelineLifecycle` and `StreamFormatHint` enums; new `DecodeContext` fields that store them (backend, lifecycle, sniffer, format hint, detected channels; OGG `plan.md` §16); `formatHint(for:)` becomes `formatHint(for:contentType:) -> StreamFormatHint`; the two `formatReadyFired` gates (:104 main actor, :535 decode queue) collapse to the decode-queue copy; an `onChainFormatChange` callback.
+- Projected size after both: about 1,225 lines (825 + 150 + 250). At today's ratio of counted to raw lines (555/825) that is roughly 820 counted lines: past the 600 `file_length` warning, well below the 1,200 error. Neither plan splits the file; the split stays with this task.

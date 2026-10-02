@@ -1,23 +1,35 @@
 # State: AudioPlayer Seek Extraction
 
-> **Description:** Extract the seek state machine from AudioPlayer.swift into SeekController.
-> **Updated:** 2026-03-25 (DEFERRED — Option C per responsibility sweep)
+Updated: 2026-10-02
 
-## Status
+**Status:** DEFERRED. Roadmap slot SS-1 (`tasks/_context/plan.md`): start of the Structure Sprint, after S3-4 merges (OGG edits `AudioPlayer.swift`) and SS-0 drafts the source-to-target map. Not started; no branch.
 
-DEFERRED (Option C). Responsibility sweep confirmed AudioPlayer has one cohesive responsibility (local audio playback orchestration facade). 734 lines with swiftlint suppressions accepted as threshold mismatches, not architecture signals.
+Re-evaluates decision D8 (keep `AudioPlayer` whole) and, if the answer is go, extracts the seek state machine into a lean `SeekController`.
 
-The 6-callback SeekController pattern would create pass-through indirection (Principle 6). Seek state (`currentSeekID`, `seekGuardActive`, `isHandlingCompletion`) is tightly coupled to play/stop/onPlaybackEnded (Principle 3: state ownership).
+## D8: under re-evaluation
 
-## Fallback (Option B)
+D8 (2026-03-25) kept `AudioPlayer` as one class (Option C): one cohesive responsibility (local-playback orchestration facade), no concrete failure mode, seek state tightly coupled to play/stop/`onPlaybackEnded` (Principle 3), and the two swiftlint suppressions read as threshold mismatches. The 6-callback `SeekController` was rejected as pass-through indirection (Principle 6); see `depreciated.md`.
 
-If AudioPlayer grows past 800 lines during S3 (e.g., `video-audio-engine-routing`) or gains a genuinely new responsibility, revisit with a lean SeekController design:
-- Give SeekController direct references to `engine` and `videoPlaybackController`
-- Reduce to ~2 callbacks (`onRequestNextTrack`, `onPlaylistAdvanceRequest`)
-- Kill switch: cancel if state ownership would still be fragmented
+D8 is under re-evaluation, not in force. Two of its three revisit triggers have fired:
 
-## Re-evaluation Criteria
+| Trigger | State |
+|---|---|
+| File grows past 800 lines | Fired: 1,101 lines at `b3894d9` (~1,097 after PR #91). |
+| A genuinely new responsibility | Fired: Video Tap section (`AudioPlayer.swift:176-300`) and Engine Reconfiguration Handlers (`:848-976`); the handlers also write all three seek guards. |
+| Seek logic must be testable on its own | Not fired. |
 
-- File grows past 800 lines
-- New responsibility added (not just more facade forwarding)
-- Seek logic becomes independently testable requirement
+## Option under re-evaluation (Option B)
+
+A lean `SeekController` with direct references to the engine and `videoPlaybackController` and about 2 callbacks (`onRequestNextTrack`, `onPlaylistAdvanceRequest`). Kill switch: cancel if state ownership would still be split between `SeekController` and `AudioPlayer`. Steps and open questions: `plan.md`.
+
+## Precondition
+
+Seek characterization tests come first (`plan.md` step 1). No test references the three guard vars or `cancelPendingReconfigure` today.
+
+## Open decision
+
+The `file_length` and `type_body_length` suppressions. Seek extraction alone leaves both SwiftLint counts above 600 (`research.md`, File), so it does not settle them (`plan.md` step 5).
+
+## Blockers
+
+None beyond sequencing (S3-4, SS-0).

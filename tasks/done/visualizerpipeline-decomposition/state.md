@@ -1,5 +1,7 @@
 # State: VisualizerPipeline Decomposition
 
+> **SUPERSEDED (archived 2026-10-02):** S3-2 Phase 1 (`146a8b4`) extracted `VisualizerFeed` and `VisualizerScratchBuffers` under the `@unchecked Sendable` contract; `VisualizerPipeline.swift` is now 416 lines.
+
 > **Description:** Tracks readiness and progress for the `VisualizerPipeline.swift` decomposition task.
 > **Updated:** 2026-03-25 (NO-GO per responsibility sweep + Principle 5)
 

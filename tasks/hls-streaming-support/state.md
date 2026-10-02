@@ -1,90 +1,57 @@
 # State: HLS Streaming Support
 
-> **Purpose:** Add audio-only HLS protocol support (M3U8 + AAC ADTS, master/media playlists, live + VOD) to the unified audio pipeline.
-> **Created:** 2026-03-14
-> **Sprint:** S3, Wave S3-3 (sequential after S3-2 merges)
-> **Status:** PLAN APPROVED — **NEXT; gates satisfied** (S3-1 merged PR #80/#82; S3-2 merged PR #89, `ae15f5c`, 2026-09-25). Ready for pre-flight PF.1-PF.5.
+Updated: 2026-10-02
 
----
+**Status:** NEXT. Plan approved (Oracle 9.0/10 in round 4; review record in `plan.md` §19). Implementation not started. First action: PF.3 in `todo.md`.
 
-## Current Status
+Adds audio-only HLS (M3U8 master/media playlists, AAC ADTS segments, live + VOD) to the stream decode pipeline. Sprint S3, wave S3-3. Created 2026-03-14.
 
-**Phase:** Plan complete, Oracle gate cleared.
-**Last Updated:** 2026-04-27.
+**Today:** an HLS URL goes through the legacy M3U path, plays its first ~6 s segment, reports `serverClosed`, and reconnect-loops.
 
-### Artifacts
+## Gates
 
-| File | Status |
-|------|--------|
-| `research.md` | ✅ Complete (Oracle 7/10 → 8/8 actionable items applied, 2026-04-27) |
-| `plan.md` | ✅ Complete — Oracle iter 4: **9.0/10 APPROVED** (1273 lines) |
-| `todo.md` | ✅ Complete (175 lines, derived from plan) |
-| `depreciated.md` | Empty (no deprecated code yet) |
-| `placeholder.md` | Empty (none yet) |
+- Predecessors merged: S3-1B `stream-pause-tail` (PR #82, `b60fd57`) and S3-2 `avplayer-native-video-dsp` (PR #89, `ae15f5c`). `video-audio-engine-routing` is paused as reference and is not a predecessor.
+- Recommended, not required: the owner merges PR #91 (`chore/amp-review-dead-code`) first so the branch starts from the cleaned main.
+- Successor: S3-4 `ogg-vorbis-support` rebases on post-HLS main using `plan.md` §17.1.2.
 
-### Oracle Iterations (plan + todo)
+## Branch and PR
 
-| # | Score | Verdict |
-|---|------:|---------|
-| 1 | 7.0/10 | CONDITIONAL |
-| 2 | 8.0/10 | CONDITIONAL |
-| 3 | 8.0/10 | CONDITIONAL |
-| 4 | **9.0/10** | **APPROVED** |
+- Branch `feat/hls-streaming-support`, cut from main at PF.4 (does not exist yet). No spike.
+- PR number is assigned when the PR opens.
+- Review gate: one exhaustive `/codex:review --base main` before the PR. The owner merges and deletes the branch (GH013 blocks CLI deletion).
 
-16 actionable findings + 11 nitpicks applied across 4 rounds. 1 nitpick rejected (project convention `depreciated.md`). 2 OGG-side nitpicks deferred to OGG plan author.
+## Key decisions
 
----
-
-## Branch + Wave
-
-- **Branch:** `feat/hls-streaming-support`
-- **Spike:** none
-- **Wave:** S3-3 sequential (after S3-2 merges)
-- **PR target:** PR #D
-- **Predecessors:** S3-1 (`stream-pause-tail`) ✅ merged PR #82; S3-2 ✅ merged PR #89 (`ae15f5c`, 2026-09-25) — shipped as the pivot `avplayer-native-video-dsp` (the original `video-audio-engine-routing` is PAUSED-AS-REFERENCE). Gate satisfied.
-- **Successors:** `ogg-vorbis-support` (S3-4) — must rebase its plan against post-HLS HEAD; HLS plan §17.1 includes a detailed OGG rebase checklist.
-
-**Pre-flight (PF.1 – PF.5 in todo):** re-read every `Files Affected` source at HEAD post-merge; reconcile any line-number drift before Phase 1.
-
----
-
-## Key Plan Decisions
+Detail and rationale live in `plan.md`.
 
 | # | Decision |
 |---|----------|
-| 1 | v1 scope locked: AAC ADTS only; master + media playlists; live + VOD. NO TS/fMP4/LL-HLS/ABR/DRM/HLS-video. |
-| 2 | Integration: **Option A** — new `HLSSegmentFeeder` feeds bytes into existing `DecodeContext.handleIncomingData` via injected `@Sendable (Data) -> Void` closure. Preserves Principle 5 (no visibility leaks). |
-| 3 | Two new `StreamTerminationReason` cases: `.streamFinished` (VOD natural end), `.unsupportedFormat` (DRM/fMP4/no-audio-variant). Prevents reconnect loops on permanent failures. |
-| 4 | New `MacAmpApp/Audio/HLS/` subfolder separate from `Audio/Streaming/` — communicates HLS as transport-orchestration concern. |
-| 5 | Two-token stale-callback gating (`pipelineGeneration` + `pauseEpoch`) protects orthogonal invariants. |
-| 6 | `OSAllocatedUnfairLock<UInt64>` for generation snapshot — explicitly avoids `MainActor.assumeIsolated` deadlock trap. |
-| 7 | Defense-in-depth: parser-level ASBD + `mFormatFlags` + magic-cookie compare with `parserFatalState` flag against silent format corruption. |
-| 8 | HLS pause integrates with S3-1B's `pauseByUser`/`resumeByUser` barrier API. v1 keeps it simple — re-fetch playlist on resume + always invoke `parser.reset()`. |
-| 9 | AHA Rule of Three deferral: `StreamFormatHint` enum belongs in S3-4 OGG (3rd codec). HLS does not preempt it. |
-| 10 | `ClassifyError` mapping decided at error-construction site (HLS-malformed → `.unsupportedFormat`, legacy-malformed → `.playlistResolutionFailed`) — eliminates reconnect-loop risk by construction. |
+| 1 | v1 scope: AAC ADTS only; master + media playlists; live + VOD. No MPEG-TS, fMP4, LL-HLS, ABR, DRM or HLS video. |
+| 2 | Integration Option A: `HLSSegmentFeeder` feeds bytes to `DecodeContext.handleIncomingData` through an injected `@Sendable (Data) -> Void` closure; no visibility widening. |
+| 3 | Two new non-reconnectable `StreamTerminationReason` cases: `.streamFinished` (VOD end) and `.unsupportedFormat` (DRM, fMP4, no audio variant). |
+| 4 | New `MacAmpApp/Audio/HLS/` folder, separate from `Audio/Streaming/`. |
+| 5 | Two orthogonal stale-callback tokens: `pipelineGeneration` and the feeder's `pauseEpoch`. |
+| 6 | The feeder reads the generation through an `OSAllocatedUnfairLock<UInt64>` snapshot, never `MainActor.assumeIsolated`. |
+| 7 | `AudioFileStreamParser.reset()` plus a post-reset ASBD (incl. `mFormatFlags`) and magic-cookie compare; a mismatch sets `parserFatalState` and is a fatal decode error, not a decoder swap. |
+| 8 | HLS pause plugs into S3-1B's `pauseByUser`/`resumeByUser`; v1 re-fetches the playlist and calls `parser.reset()` on resume. |
+| 9 | No `StreamFormatHint` enum here; S3-4 OGG introduces it as the third codec. |
+| 10 | `ClassifyError` mapping is fixed where the error is built: malformed HLS maps to `.unsupportedFormat`, malformed legacy playlist to `.playlistResolutionFailed`. |
 
----
+## Files
 
-## File Inventory
+New (~750-1000 LOC): `MacAmpApp/Audio/HLS/M3U8Parser.swift` (~225), `MacAmpApp/Audio/HLS/HLSSegmentFeeder.swift` (~350), `Tests/MacAmpTests/HLSStreamingTests.swift` (~300).
 
-**New (3 files, ~750-1000 LOC):**
-- `MacAmpApp/Audio/HLS/M3U8Parser.swift` (~225 LOC)
-- `MacAmpApp/Audio/HLS/HLSSegmentFeeder.swift` (~350 LOC)
-- `Tests/MacAmpTests/HLSStreamingTests.swift` (~300 LOC)
+Modified (line counts at `b3894d9`):
 
-**Modified (3 files):**
-- `Audio/StreamDecodePipeline.swift` (+160/-10)
-- `Audio/AudioFileStreamParser.swift` (+40 — new `reset()` hook)
-- `Audio/StreamPlayer.swift` (+12)
+| File | Lines | Planned delta |
+|------|------:|---------------|
+| `MacAmpApp/Audio/Streaming/StreamDecodePipeline.swift` | 825 | +~160 / -10 |
+| `MacAmpApp/Audio/Streaming/AudioFileStreamParser.swift` | 186 | +~40 (`reset()` plus the ASBD/cookie compare and `parserFatalState`) |
+| `MacAmpApp/Audio/StreamPlayer.swift` | 714 | +~12 (optionally minus the two unused DEBUG seams, P6.3b) |
 
----
+`StreamDecodePipeline.swift` is already past its 800-line growth trigger (projection after HLS and OGG in `tasks/_context/research.md`, Fired growth triggers). The plan forbids splitting it here; SS-2 re-evaluates it.
 
-## Next Steps (implementation — S3-2 merged 2026-09-25, gate satisfied)
+## Open calls during implementation
 
-1. Pre-flight: PF.1 – PF.5 (re-read at HEAD).
-2. Optional: Gemini re-run if any open question warrants (research §"Gemini Research Findings" pending).
-3. Create worktree on `feat/hls-streaming-support`.
-4. Phase 1: M3U8Parser → Phase 2: parser.reset() → Phase 3: HLSSegmentFeeder → … Phase 7: tests.
-5. Run TSan-enabled tests via xcodebuildmcp.
-6. Run Oracle code-review gate after implementation.
-7. Open PR #D.
+- `parser.reset()` per segment or only on `EXT-X-DISCONTINUITY` (todo P8.9).
+- Gemini re-run only if implementation raises a question the plan does not answer (plan §4).

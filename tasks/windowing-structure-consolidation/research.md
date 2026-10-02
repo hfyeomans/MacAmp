@@ -1,46 +1,30 @@
 # Research: Windowing Structure Consolidation
 
-> **Description:** Research task for consolidating MacAmp’s generic window-management infrastructure under a dedicated `Windowing/` ownership boundary.
-> **Purpose:** Map the current scattered windowing files to a focused subsystem and define a safe consolidation scope. Deferred to post-S3 Structure Sprint (D-STRUCTURE decision 2026-03-15).
+Updated: 2026-10-02
 
----
+Where window code lives today (main @ b3894d9) and the facts behind each follow-up.
 
-## Goal
+## Current spread
 
-Create a source-to-target migration map for generic window infrastructure without mixing that work into active Sprint S1 tasks.
+| Folder | Window files |
+|--------|--------------|
+| `Windows/` | `BorderlessWindow`, `WindowDelegateWiring`, `WindowFramePersistence`, `WindowFrameStore`, `WindowRegistry` (73 lines), `WindowResizeController`, `WindowScreenGuard`, `WindowSettingsObserver`, `WindowVisibilityController`; plus 5 feature-local `Winamp*WindowController` |
+| `Utilities/` | `WindowSnapManager`, `WindowDelegateMultiplexer`, `WindowFocusDelegate`, `WinampWindowConfigurator`, `WindowResizePreviewOverlay` |
+| `ViewModels/` | `WindowCoordinator` (239 lines), `WindowCoordinator+Layout` (129 lines) |
+| `Models/` | geometry and focus: `DockGraph`, `ScreenClamp`, `SnapUtils`, `Size2D`, `WindowFocusState`; feature size state: `PlaylistWindowSizeState`, `VideoWindowSizeState`, `MilkdropWindowSizeState` |
 
-## Initial Context
+## Coupling
 
-- `swift-project-structure-research` identified generic windowing infrastructure as one of the cleanest high-value consolidation targets.
-- Current window-related code is spread across:
-  - `MacAmpApp/Windows/`
-  - `MacAmpApp/Utilities/Window*`
-  - `MacAmpApp/ViewModels/WindowCoordinator*`
-  - some `Models/*Window*` value/state types
+- `WindowCoordinator` and `WindowRegistry` may carry feature-specific knowledge. Before any move, decide per type whether it is generic, generic after a small seam or split, or feature-coupled and left in place. Reject any plan that creates circular dependencies or forces broad API reshaping.
+- `BorderlessWindow` reads `WindowCoordinator.shared` for minimize (`BorderlessWindow.swift:10`, `:15`). App-wide there are 24 `WindowCoordinator.shared` references; retiring them is SS-7's composition-root work, not this task's.
 
-## Initial Scope
+## Follow-up evidence
 
-In scope:
-- generic window mechanics
-- docking geometry/types
-- frame persistence/store
-- visibility/registry/coordinator infrastructure
-- dependency analysis for `WindowCoordinator`, `WindowRegistry`, and adjacent helpers before any move is proposed
-
-Out of scope:
-- feature-specific window views
-- feature-specific chrome
-- runtime behavior changes unrelated to ownership cleanup
-
-## Dependency Analysis Requirement
-
-- Before implementation, map which `WindowCoordinator` and `WindowRegistry` responsibilities are truly generic versus feature-coupled.
-- Identify whether a safe move requires:
-  - leaving some types in their current feature area
-  - extracting a protocol/adapter seam first
-  - splitting generic and feature-specific responsibilities into separate files
-- Reject any move plan that would introduce circular dependencies or force a broad behavior refactor under the guise of structure cleanup.
-
-## Status
-
-DEFERRED to post-S3 Structure Sprint (D-STRUCTURE decision 2026-03-15). Was originally post-S1.
+- #78 design-review follow-ups: `tasks/done/window-docking-78/verification.md` (Phase 7) and `docs/MULTI_WINDOW_ARCHITECTURE.md` §Docking, Recovery, Minimize & Windowshade.
+- `ScreenClamp` has `clamp`, `translate` and `rigid` but no restore policy; `WindowScreenGuard.settle()` picks between them inline. `ScreenClampTests.swift` exists.
+- Top-anchored origin math: a private `topAnchoredOrigin` in `WindowFramePersistence.swift:133` and inline math in `WindowScreenGuard.swift:151`. `WindowResizeController.topLeftAnchoredFrame` (:18) rounds, so it stays separate.
+- Shaded Playlist size: `WinampPlaylistWindow.windowPixelSize` (:18) and literal `14` heights at :66 and :68; `PlaylistResizeHandle` derives the shaded size itself at :39 (preview) and :57.
+- Quantized 25x29 resize math at 6 sites: `PlaylistResizeHandle.swift:29/:46` (named segment constants), `VideoWindowChromeView.swift:304/:322` and `MilkdropWindowChromeView.swift:173/:190` (literal 25 and 29). `Size2D` has `toPixels()` and `clamped` but no quantize helper.
+- Size persistence is duplicated across the three `*WindowSizeState` types.
+- TEXT.BMP glyph names are built by hand in 10 `CHARACTER_` occurrences across 8 files: `VideoWindowChromeView:196`, `MainWindowTrackInfoLayer:44`, `PlaylistBitmapText:31`, `PlaylistShadeView:72` (x2), `MainWindowIndicatorsLayer:60/:75`, `MainWindowShadeLayer:102`, `SkinSprites:482`, `SpriteResolver:159`.
+- Docs errors found during #78: the `.audio`, `.concurrency` and `.parsing` tag rows in `docs/context/xcode-testing-context.md` are incomplete; `docs/MACAMP_ARCHITECTURE_GUIDE.md:1095` says every window persists visibility (Main does not); `docs/VIDEO_WINDOW.md:391` and `docs/MILKDROP_WINDOW.md:556` say those windows move with a cluster (only a Main drag moves the group).

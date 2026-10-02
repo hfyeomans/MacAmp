@@ -1,22 +1,19 @@
 # State: Milkdrop Feature Consolidation
 
-> **Description:** Tracks readiness, boundaries, and sequencing for the Milkdrop / Butterchurn feature consolidation task.
-> **Purpose:** Ensure the consolidation happens after the urgent Xcode runtime issue and remains a bounded feature-ownership move.
+Updated: 2026-10-02
 
----
+SS-4: move the Milkdrop/Butterchurn Swift files and the repo-root `Butterchurn/` resources into `MacAmpApp/Features/Milkdrop/`.
 
 ## Status
 
-DEFERRED to post-S3 Structure Sprint (D-STRUCTURE decision 2026-03-15).
+DEFERRED to the Structure Sprint (D-STRUCTURE). Starts after SS-0's mapping, which itself starts after S3-4 merges.
 
-## Scheduling
+## Current position
 
-- ~~Start after Sprint S1 stabilizes.~~ Deferred to post-S3 Structure Sprint.
-- All file-move consolidation is now batched into one dedicated pass after S3 completes.
-- Decomposition tasks (S1-S3) will make files smaller before this task runs, reducing move risk.
-- Prefer to start only after `xcode-butterchurn-webcontent-diagnosis` is merged unless that task already required the same file moves.
+- `MacAmpApp/Features/` does not exist yet. The 7 Swift files sit in 5 folders and the resources at the repo root (`research.md`).
+- Nothing blocks the move.
 
-## Key Decision
+## Decisions
 
-- This task owns the broad `Features/Milkdrop/` move.
-- The runtime-fix task should stay scoped unless forced otherwise by implementation.
+- This task owns the `Features/Milkdrop/` move. Generic window code stays out of it and goes to `Windowing/` (SS-3).
+- Behavior stays unchanged, and Butterchurn must load in both Debug and packaged (Release/DMG) builds.

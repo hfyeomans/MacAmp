@@ -1,268 +1,82 @@
-# Plan
+# Plan: Structure Sprint
 
-> **Description:** Execution plan for turning the Swift project-structure research into a safe backlog and rollout strategy.
-> **Purpose:** Prevent repo-structure churn while still letting the new ownership model guide active and future tasks.
+Updated: 2026-10-02
 
-## Recommended Direction
+Target layout, SS-0 planning work, and the scopes of the Structure Sprint steps that have no folder yet (SS-5 to SS-9). Step order and predecessors live in `tasks/_context/plan.md`; SS-1 to SS-4 have their own folders.
 
-MacAmp should move away from top-level type buckets and toward a hybrid structure:
-
-- feature-first for user-facing areas
-- subsystem-first for shared technical engines
-- very small `Shared` / `Core` areas for truly cross-cutting code
-
-## Recommended Top-Level Structure
+## Target layout
 
 ```text
 MacAmpApp/
-  App/
-  Core/
-  Shared/
-  Features/
-  Audio/
-  Windowing/
-  Resources/
+  App/         MacAmpApp.swift, AppCommands, SkinsCommands, composition-root wiring
+  Core/        truly global, generic code only; stays small (it must not become the new Utilities/)
+  Shared/      cross-feature UI and primitives (today's Views/Shared/ and Views/Components/)
+  Features/    MainWindow/ Playlist/ Equalizer/ Milkdrop/ Video/ Preferences/ Skins/ Radio/
+  Audio/       Playback/ Streaming/ Equalizer/ Visualization/ VideoDSP/ Persistence/ ObjCBridge/ HLS/ Vorbis/
+  Windowing/   Controllers/ Coordination/ Geometry/ Persistence/
+  Resources/   only resources no feature owns; feature resources live with the feature
 ```
 
-### `App/`
-
-Keep app entry and bootstrap wiring here:
-- `MacAmpApp.swift`
-- app commands
-- app-level composition/root dependency wiring
-
-### `Core/`
-
-Only code that is truly global and generic:
-- logging
-- narrow cross-cutting extensions
-- tiny support utilities with no feature ownership
-
-This should stay small. It must not become the new `Utilities`.
-
-### `Shared/`
-
-UI and primitives that are reused across multiple features but are not app-global infrastructure:
-- reusable skinned controls
-- small value types genuinely used across multiple areas
-- presentation primitives
-
-### `Features/`
+- **Proximity rule:** a file that mostly serves one feature lives in that feature, including its state, window controller and resources.
+- **`Models/` shrinks** to shared domain models only (e.g. `Track`, `RadioStation`, `Skin`, `AppSettings`, `EQPreset`); feature-local state moves to its feature and windowing types to `Windowing/`. SS-0's mapping decides whether the remainder stays in `Models/` or moves under `Core/` or `Shared/`.
+- **Audio/ names follow what exists:** `Streaming/` (since PR #57), `VideoDSP/` (not the originally planned `Video/`), `ObjCBridge/`, plus `HLS/` (S3-3) and `Vorbis/` (S3-4).
+- **File conventions:** one primary type per file, with adjacent responsibility-specific extensions; split by responsibility, not line count; name types by role (coordinator, bridge, store) instead of a global "ViewModels" category; tests mirror source ownership.
 
-All user-facing areas should live here, each with their own nearby state, views, coordinators, and resources:
+## SS-0: planning (this folder)
 
-```text
-Features/
-  MainWindow/
-  Playlist/
-  Equalizer/
-  Milkdrop/
-  Video/
-  Preferences/
-  Skins/
-  Radio/
-```
+Starts after S3-4 merges. Output: `mapping.md` in this folder, one row per file in `MacAmpApp/` and `Tests/`, giving its target path and the step that moves it.
 
-Each feature can have internal subfolders only if they help:
+1. **Mapping covers every file**, including the 8 placement-rule breaches listed in `state.md` and the S3 additions under `Audio/HLS/` and `Audio/Vorbis/`.
+2. **Audio/ reconciliation.** The original map omitted `AudioEngineController`, `AudioEngineConfigurationObserver`, `MetadataLoader`, `RenderThreadSafe`, `StreamPlayer`, `VisualizerFeed`, `VisualizerScratchBuffers`, `Streaming/QueueConfined` and the 5 `VideoDSP/` files. Place all of them.
+3. **Ambiguous files:** `Models/*WindowSizeState` and `WindowFocusState` (windowing type or feature state), `Size2D`, `SnapUtils`, `WeakBox`, `MetadataLoader`, `RenderThreadSafe`, and `VideoTapVisualizerRender` (`VideoDSP/` or `Visualization/`). Also decide where the shared domain models left in `Models/` end up: stay there, or move under `Core/` or `Shared/`.
+4. **project.yml migration.** Its `sources` entry globs `MacAmpApp/`, so moves inside it need no `project.yml` edit. The Butterchurn folder reference at `project.yml:25` changes, plus an `excludes:` entry for the moved folder in the `MacAmpApp` sources entry, so XcodeGen does not add it twice (SS-4). Root `Package.swift` is gone by then (S3-4 commit C1, fallback S4-1), so there are no SwiftPM paths to update.
+5. **Execution order.** Run the SS-1 and SS-2 go/no-go decisions first (both decompose in place in `Audio/`), then the moves. Record shared-file overlaps, e.g. SS-3 and SS-4 both edit `MilkdropWindowChromeView.swift`, and SS-3's follow-ups edit `Views/` files that SS-5 later moves.
+6. **Create the SS-5, SS-6 and SS-7 task folders** (state, research, plan, todo, placeholder, depreciated; `plan.md` once planning starts), seeded from the mapping.
+7. **Audit leftover early-project preprocessing workarounds** (`SkinBackgroundPreprocessor` was already removed in PR #75) and record any survivors in the mapping.
 
-```text
-Features/Milkdrop/
-  MilkdropWindow.swift
-  MilkdropWindowController.swift
-  MilkdropWindowSizeState.swift
-  ButterchurnBridge.swift
-  ButterchurnPresetManager.swift
-  ButterchurnWebView.swift
-  Chrome/
-  Resources/
-```
+## SS-5: Features/ consolidation
 
-The main rule is proximity: if a file mostly exists for one feature, keep it in that feature.
+Folder to create: `tasks/features-consolidation/`. After SS-0, SS-3 and SS-4.
 
-### `Audio/`
+- Move feature-local views, state and window controllers into `Features/<Feature>/` for MainWindow, Playlist, Equalizer, Video, Preferences, Skins and Radio. `Views/MainWindow/` and `Views/PlaylistWindow/` are already subfolders; the EQ, Video and `Views/Windows/*` files are flat.
+- Feature-local `Models/` state (e.g. `PlaylistWindowSizeState`, `VideoWindowSizeState`) moves with its feature.
+- Optional: a small `tileRow` helper for the tiled title-bar chrome, repeated in 4 files (`WinampPlaylistWindow`, `WinampVideoWindow`, `VideoWindowChromeView`, `MilkdropWindowChromeView`; 20 `.position(…, y: 10)` sites). It is past the Principle 4 threshold.
 
-Treat audio as a technical subsystem, but break it down internally by responsibility:
+## SS-6: Audio/ consolidation
 
-```text
-Audio/
-  Playback/
-  Streaming/
-  Equalizer/
-  Visualization/
-  Video/
-  Persistence/
-```
+Folder to create: `tasks/audio-consolidation/`. After SS-0, SS-1 and SS-2.
 
-Suggested mapping:
-- `AudioPlayer.swift`, `PlaybackCoordinator.swift`, `PlaylistController.swift` → `Audio/Playback/`
-- `AudioConverterDecoder.swift`, `AudioFileStreamParser.swift`, `ICYFramer.swift`, `StreamDecodePipeline.swift`, `LockFreeRingBuffer.swift` → `Audio/Streaming/`
-- `EqualizerController.swift`, `EQPresetStore.swift` → `Audio/Equalizer/`
-- `VisualizerPipeline.swift` → `Audio/Visualization/`
-- `VideoPlaybackController.swift` → `Audio/Video/`
+- `Playback/`: `AudioPlayer`, `PlaybackCoordinator`, `PlaylistController`, `AudioEngineController`, `AudioEngineConfigurationObserver`, plus `SeekController` if SS-1 goes ahead.
+- `Streaming/` (exists): add `StreamPlayer`, `LockFreeRingBuffer` and any SS-2 extractions.
+- `Equalizer/`: `EqualizerController`, `EQPresetStore`.
+- `Visualization/`: `VisualizerPipeline`, `VisualizerFeed`, `VisualizerScratchBuffers`, possibly `VideoTapVisualizerRender`.
+- `VideoDSP/` (exists): add `VideoPlaybackController`.
+- `Persistence/`, `ObjCBridge/`, `HLS/`, `Vorbis/`: contents per the mapping.
+- Smoke: local file, stream, video and Butterchurn playback.
 
-### `Windowing/`
+## SS-7: App/, Core/, Shared/ and composition root
 
-Create one shared subsystem for generic window infrastructure:
+Folder to create: `tasks/app-core-shared-consolidation/`, seeded with the `PlaylistWindowActions` rows from `tasks/done/playlistwindow-layer-decomposition/depreciated.md` sections 3-4. After SS-0, SS-5 and SS-6.
 
-```text
-Windowing/
-  Controllers/
-  Geometry/
-  Persistence/
-  Coordination/
-```
+- `App/`: `MacAmpApp.swift`, `AppCommands`, `SkinsCommands` and the composition root.
+- `Core/`: candidates `AppLogger`, `TimeFormatting`, `WeakBox`. `Shared/`: today's `Views/Shared/` and `Views/Components/`.
+- Delete the top-level `ViewModels/` and `Utilities/` once empty.
+- **Composition root:** inject `WindowCoordinator` and `AppSettings` through the environment and retire the parallel paths: `WindowCoordinator.shared` (24 references, 21 in `Views/`) and `AppSettings.instance()` (14).
+- **Replace the `PlaylistWindowActions` singleton** (`NSMenuItem` target with mutable `selectedIndices`) and drop the manual selection-state sync that it forces. Its 3 `Task.detached` calls are also an S4-1 strict-concurrency item.
+- **One shared init** for the 5 window controllers, which repeat the same setup today.
 
-This is where generic window mechanics live:
-- `WindowSnapManager`
-- `WindowResizeController`
-- `WindowFrameStore`
-- `WindowDockingGeometry`
-- `WindowRegistry`
-- `WindowCoordinator`
+## SS-8: mirror tests
 
-Feature-specific windows stay in `Features/*`, while reusable window mechanics move here.
+After SS-3 to SS-7. Move the flat `Tests/MacAmpTests/` (21 files) into folders that mirror the new layout (e.g. `Audio/Streaming/`, `Windowing/`, `Features/Milkdrop/`). Pure moves, no test changes, same test count. Update `docs/context/xcode-testing-context.md`. Then one follow-up commit for the SS-8 rows in `tasks/_context/deferred.md` (`Task.sleep` determinism, Swift Testing follow-ups).
 
-### `Resources/`
+## SS-9: local packages (optional)
 
-Move feature-owned raw resources closer to the code that owns them when practical.
+After SS-8, and only where a boundary has proven itself: evaluate `Windowing`, `AudioStreamingCore` and `SkinEngine` as local packages. Not scheduled.
 
-High-priority example:
-- move repo-root `Butterchurn/` into a feature-owned resources location such as:
-  - `MacAmpApp/Features/Milkdrop/Resources/Butterchurn/`
-  - or a future local package resource bundle if Milkdrop becomes a package
+## Rules for every step
 
-## File-Level Conventions
-
-### 1. One primary type per file
-
-- Keep one main type per file whenever practical.
-- Helper extensions are fine, but they should be adjacent and responsibility-specific.
-
-### 2. Split by responsibility, not by arbitrary line count
-
-For large files, split when there are clearly separate concerns:
-- `AudioPlayer+EngineLifecycle.swift`
-- `AudioPlayer+LocalPlayback.swift`
-- `AudioPlayer+StreamingBridge.swift`
-- `AudioPlayer+State.swift`
-
-That is better than a blind “every 300 lines” rule.
-
-### 3. Avoid top-level `ViewModels` as a global category
-
-- In SwiftUI/macOS apps, many “view models” are actually coordinators, bridges, stores, or managers.
-- Name them by role and colocate them with their feature or subsystem.
-
-### 4. Mirror tests to source ownership
-
-Test files should follow the same conceptual boundaries:
-- `Tests/MacAmpTests/Audio/Streaming/...`
-- `Tests/MacAmpTests/Windowing/...`
-- `Tests/MacAmpTests/Features/Milkdrop/...`
-
-## Migration Plan
-
-## Recommended Delivery Strategy
-
-Do **not** try to solve this as one giant “restructure the repo” PR.
-
-Use a 3-track approach:
-- `Track A: structure policy` — define and approve the target layout and movement rules
-- `Track B: opportunistic adoption` — apply the structure in files already being touched by active sprint tasks
-- `Track C: targeted cleanup` — ~~after S1 stabilizes~~ deferred to post-S3 Structure Sprint (D-STRUCTURE decision 2026-03-15)
-
-### Phase 1: Folder and group cleanup within the existing target
-
-- No modules yet
-- Move files into `Features`, `Audio`, `Windowing`, `Core`, `Shared`
-- Update XcodeGen and SwiftPM paths/resources as needed
-- Keep behavior unchanged
-
-### Phase 2: Decompose the worst oversized files
-
-Start with:
-- `AudioPlayer.swift`
-- `SkinManager.swift`
-- `VisualizerPipeline.swift`
-- `StreamDecodePipeline.swift`
-
-### Phase 3: Normalize naming and ownership
-
-- Eliminate the top-level `Utilities` and `ViewModels` buckets
-- Reduce `Models` to true shared/domain models only
-- Move feature-local state next to its owning feature
-
-### Phase 4: Extract local packages only where boundaries are already proven
-
-Best candidates after cleanup:
-- `Windowing`
-- `AudioStreamingCore`
-- `SkinEngine`
-
-Do not package everything just to look “clean”. Package the areas that already behave like separate subsystems.
-
-## Recommended Sequencing Against Current Sprints
-
-### Step 0: Ratify the structure rules now
-
-Do this immediately:
-- approve the top-level ownership model
-- define file-placement rules
-- define what counts as `Core`, `Shared`, `Feature`, `Windowing`, and `Audio`
-
-This is low-risk and unblocks consistent future work.
-
-**Status:** Approved.
-
-### Step 1: Apply the rules to S1 tasks only where they already touch files
-
-Use current tasks as adoption points instead of creating a separate churn-heavy refactor:
-- `xcode-butterchurn-webcontent-diagnosis`
-  - if files must move anyway, consolidate Butterchurn under a `Features/Milkdrop` path
-  - if not, defer moves and only document intended ownership
-- `audioplayer-decomposition` Phase 4
-  - use the target `Audio/Playback` ownership model when extracting transport pieces
-- `network-auto-reconnect`
-  - keep all new reconnect code under `Audio/Streaming`
-
-### Step 2: ~~After S1~~ Post-S3 Structure Sprint — run focused structure tasks
-
-**Updated (D-STRUCTURE decision 2026-03-15):** All file-move consolidation deferred to a dedicated post-S3 Structure Sprint. Task folders exist but implementation is deferred.
-
-Recommended follow-on implementation tasks:
-- `windowing-structure-consolidation`
-  - move generic window infrastructure into `Windowing/`
-- `milkdrop-feature-consolidation`
-  - move Butterchurn and Milkdrop files plus resources into `Features/Milkdrop/`
-- Additional consolidation tasks (Features/, Audio/, App/Core/Shared/) to be created during post-S3 planning
-
-**Status:** Task folders created; DEFERRED to post-S3.
-
-### Step 3: After S2 / before S3, make the remaining oversized files explicit architecture owners
-
-Use dedicated task ownership instead of leaving the next wave implicit:
-- existing task: `audioplayer-decomposition` Phase 4 remains the owner for `AudioPlayer.swift`
-- new task: `skinmanager-decomposition`
-- new task: `visualizerpipeline-decomposition`
-- new task: `streamdecodepipeline-decomposition`
-- new task: `winamp-equalizer-window-decomposition`
-
-### Step 4: Re-evaluate package extraction
-
-Only after the folder ownership is stable should local packages be considered.
-
-## Definition of Done For This Architecture Task
-
-- The target structure is documented and approved.
-- New work stops adding files to global dumping-ground categories by default.
-- At least one feature area and one subsystem area are consolidated using the new pattern.
-- Follow-on tasks exist for the remaining high-value migrations.
-
-## Version-Control Recommendation
-
-- Use a dedicated documentation/planning branch and PR for shared `_context` and task-governance updates when possible.
-- Do **not** bundle these planning updates into unrelated feature branches.
-- For implementation:
-  - keep active Sprint S1 fixes in their own task branches
-  - keep post-S3 consolidation tasks in their own focused branches
-  - avoid a single umbrella “restructure” branch
+- One branch and PR per step; no umbrella restructure branch. Do not run a move while a feature branch touches the same files.
+- Commit pure moves separately from refactors, so git rename detection keeps file history readable.
+- Verify each PR: `xcodegen generate`, TSan build and test (baseline 137 tests in 21 suites), manual smoke of the moved area, then one `/codex:review --base main` before the PR.
+- Close-out after the last move: update path references in `docs/` (~150 `MacAmpApp/<folder>/` references across 11 top-level docs at b3894d9) and the architecture tree in the local `CLAUDE.md`.
+- `_context` docs are committed directly to main, and only when the owner asks.

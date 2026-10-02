@@ -1,248 +1,92 @@
-# Cross-Task Research: Dependency & Conflict Analysis (HISTORICAL)
-
-> **Status:** HISTORICAL — All tasks T1-T6 completed, T7-T8 added and completed post-research. T5 Phase 2 pivoted from MTAudioProcessingTap to T7 unified-audio-pipeline. Actual execution diverged from predictions (8 PRs vs 5 expected, sequential merges vs parallel). For current state, see `state.md`.
->
-> **Purpose:** Documents file-level conflicts, architectural dependencies, and parallelization analysis across 6 planned MacAmp tasks.
-> **Date:** 2026-02-21
-> **Validated by:** Oracle (gpt-5.3-codex, xhigh reasoning) x2 — initial analysis + verification pass
-> **Sources:** Oracle, file explorer agent, all 6 task research/plan/state documents, Xcode project file analysis
-
-### Quick Reference
-
-| Metric | Value |
-|--------|-------|
-| Tasks | 6 (T1-T6) |
-| Plans complete | 6 of 6 |
-| Resolved prerequisites | 4 (N1-N6 PR #49, SPSC PR #48, T4 plan written, T6 version: 6.2) |
-| Pending decisions | 0 |
-| Execution waves | 3 |
-| Branches | 6 |
-| Expected PRs | 5 (Wave 1: 3, Wave 2: 2; Wave 3 PR count TBD) |
-| File conflict pairs (semantic) | 3 (T1+T5, T3+T5, T4+T6) |
-| File conflict pairs (pbxproj) | 6 (all file-creating task pairs) |
-
----
-
-## 1. Task Inventory
-
-| ID | Task | Internal Status | Scope | Risk |
-|----|------|----------------|-------|------|
-| T1 | `audioplayer-decomposition` | Research + plan complete | AudioPlayer.swift 1,070 -> ~680 lines (facade pattern) | Low (Ph1-3), Med-High (Ph4) |
-| T2 | `playlistwindow-layer-decomposition` | Research + plan complete | WinampPlaylistWindow ~516 -> ~120 lines (child views) | Low |
-| T3 | `mainwindow-layer-decomposition` | Research + plan complete | WinampMainWindow ~894 -> ~80 lines (child views) | Medium |
-| T4 | `lock-free-ring-buffer` | Research complete, **plan pending** | New SPSC ring buffer + swift-atomics dependency | Medium |
-| T5 | `internet-streaming-volume-control` | Research + plan complete | Phase 1: volume routing; Phase 2: Loopback Bridge | Ph1: Low, Ph2: High |
-| T6 | `swift-testing-modernization` | Research + plan complete | 9 test files XCTest -> Swift Testing, Package.swift bump | Low |
-
-### Prerequisites (Completed)
-
-| Prerequisite | Status | Resolved In |
-|-------------|--------|-------------|
-| N1-N6 internet radio fixes (T5 blocker) | **RESOLVED** | PR #49 (merged 2026-02-21) |
-| VisualizerPipeline SPSC refactor (T5 Ph2 prereq) | **RESOLVED** | PR #48 (merged 2026-02-14) |
-
----
-
-## 2. File-Level Conflict Matrix
-
-### Production Files Touched Per Task
-
-| File | T1 | T2 | T3 | T4 | T5 Ph1 | T5 Ph2 | T6 |
-|------|----|----|----|----|--------|--------|----|
-| `AudioPlayer.swift` | **MODIFY** | | | | **MODIFY** | **MODIFY** | |
-| `VisualizerPipeline.swift` | **MODIFY** | | | | | (indirect) | |
-| `StreamPlayer.swift` | | | | | **MODIFY** | **MODIFY** | |
-| `PlaybackCoordinator.swift` | | | | | **MODIFY** | **MODIFY** | |
-| `WinampMainWindow.swift` | | | **REWRITE** | | **MODIFY** | | |
-| `WinampMainWindow+Helpers.swift` | | | **DELETE** | | | | |
-| `WinampPlaylistWindow.swift` | | **REWRITE** | | | | | |
-| `WinampPlaylistWindow+Menus.swift` | | **DELETE** | | | | | |
-| `WinampEqualizerWindow.swift` | | | | | **MODIFY** | | |
-| `VisualizerView.swift` | | | | | | **MODIFY** | |
-| `Package.swift` | | | | **MODIFY** | | | **MODIFY** |
-| `Package.resolved` | | | | **MODIFY** | | | (possible) |
-| **`project.pbxproj`** | **MODIFY** | **MODIFY** | **MODIFY** | **MODIFY** | | | |
-| New: `EqualizerController.swift` | **CREATE** | | | | | | |
-| New: `LockFreeRingBuffer.swift` | | | | **CREATE** | | | |
-| New: `Views/MainWindow/*.swift` (8-10) | | | **CREATE** | | | | |
-| New: `Views/PlaylistWindow/*.swift` (6-8) | | **CREATE** | | | | | |
-| 9 test files | | | | | | | **MODIFY** |
-
-### Critical Overlaps (2+ tasks touching same file)
-
-| File | Tasks | Severity | Notes |
-|------|-------|----------|-------|
-| **`project.pbxproj`** | T1 + T2 + T3 + T4 | **HIGH** | All file-creating tasks modify Xcode project file. Explicit `PBXFileReference` + `PBXBuildFile` entries required for each new file. |
-| **AudioPlayer.swift** | T1 + T5 | **HIGH** | T1 extracts EQ methods, T5 removes video volume didSet + adds sourceNode |
-| **WinampMainWindow.swift** | T3 + T5 Ph1 | **HIGH** | T3 restructures entire file, T5 reroutes volume/balance bindings |
-| **Package.swift** | T4 + T6 | **MEDIUM** | T4 adds swift-atomics dependency, T6 bumps tools-version |
-| **Package.resolved** | T4 + T6 | **LOW** | T4 adds swift-atomics resolution; T6 tools-version bump may re-resolve |
-| **VisualizerPipeline.swift** | T1 + T5 Ph2 | **LOW** | T1 moves getFrequencyData in, T5 uses it — complementary |
-
-### project.pbxproj Impact Detail
-
-The Xcode project (`MacAmpApp.xcodeproj/project.pbxproj`, 1,017 lines) uses **explicit file references** (not folder references). Each new/deleted/moved file requires:
-- A `PBXFileReference` entry (file registration)
-- A `PBXBuildFile` entry (build phase inclusion)
-- A `PBXGroup` `children` array update (directory structure)
-
-| Task | Files Added | Files Deleted | pbxproj Sections Affected |
-|------|-----------|--------------|--------------------------|
-| T1 | 1 (EqualizerController.swift) | 0 | PBXFileReference, PBXBuildFile, Audio group |
-| T2 | 6-8 (PlaylistWindow child views) | 2 (extension + possible moves) | PBXFileReference, PBXBuildFile, Views group, new PlaylistWindow group |
-| T3 | 8-10 (MainWindow child views) | 1 (+Helpers.swift) | PBXFileReference, PBXBuildFile, Views group, new MainWindow group |
-| T4 | 1-3 (buffer + tests) | 0 | PBXFileReference, PBXBuildFile, Audio group |
-
-**pbxproj conflicts are mechanical** (adding/removing entries), never semantic. They are resolvable but annoying. Mitigation: sequential merge with explicit pbxproj resolution at each step.
-
----
-
-## 3. Pairwise Conflict Analysis (All 15 Pairs)
-
-### Oracle Assessment (gpt-5.3-codex, xhigh)
-
-| Pair | Result | Shared Files |
-|------|--------|-------------|
-| T1 + T2 | **Parallel (pbxproj caution)** | project.pbxproj only |
-| T1 + T3 | **Parallel (pbxproj caution)** | project.pbxproj only |
-| T1 + T4 | **Parallel (pbxproj caution)** | project.pbxproj only |
-| T1 + T5 | **CONFLICT** | AudioPlayer.swift, VisualizerPipeline.swift |
-| T1 + T6 | **Safe parallel** | None |
-| T2 + T3 | **Parallel (pbxproj caution)** | project.pbxproj only |
-| T2 + T4 | **Parallel (pbxproj caution)** | project.pbxproj only |
-| T2 + T5 | **Safe parallel** | None |
-| T2 + T6 | **Safe parallel** | None |
-| T3 + T4 | **Parallel (pbxproj caution)** | project.pbxproj only |
-| T3 + T5 | **CONFLICT** | WinampMainWindow.swift |
-| T3 + T6 | **Safe parallel** | None |
-| T4 + T5 | **Sequential (dependency)** | T5 Phase 2 depends on T4 output |
-| T4 + T6 | **Merge risk** | Package.swift, Package.resolved |
-| T5 + T6 | **Safe parallel** | None |
-
-**Correction from verification pass:** Original analysis claimed "zero file overlap" for Wave 1 worktrees. This is incorrect — `project.pbxproj` is shared by all file-creating tasks. Updated all pairwise classifications to reflect this.
-
----
-
-## 4. Ordering Constraint Analysis
-
-### Hard Dependencies (Must-Sequence)
-
-1. **T4 -> T5 Phase 2:** Ring buffer is a prerequisite for Loopback Bridge
-2. **T5 Phase 1 -> T5 Phase 2:** Capability flags infrastructure needed before bridge
-3. **N1-N6 fixes -> T5 Phase 1:** Internet radio infrastructure must work before adding volume routing. **Status: RESOLVED in PR #49.**
-
-### Soft Dependencies (Recommended Sequence)
-
-4. **T1 Phases 1-3 before T5:** Cleaner AudioPlayer facade gives T5 a more stable surface
-5. **T5 Phase 1 before T3:** See trade-off analysis in Section 5
-6. **T4 before or with T6:** Package.swift/Package.resolved coordination
-
-### No Dependencies (Fully Independent)
-
-7. **T2:** Zero production file overlap with any other task (pbxproj only)
-8. **T6 (test files):** Zero production code overlap with any task
-
----
-
-## 5. Plan Invalidation Risk Analysis
-
-### What happens if Task X is done first?
-
-| If done first | Impact on other tasks |
-|---------------|----------------------|
-| T1 (AudioPlayer decomp) | **Positive** for T5 — cleaner facade to work against. T5 locates symbols by name (e.g. `var volume: Float`), not position. |
-| T2 (Playlist window) | **No impact** on any other task (pbxproj conflict is mechanical) |
-| T3 (MainWindow decomp) | **Invalidates T5 Phase 1 plan references** — volume/balance binding locations move from WinampMainWindow.swift to MainWindowSlidersLayer.swift. T5 plan update required but functional intent unchanged. |
-| T4 (Ring buffer) | **No impact** on any other task (enables T5 Phase 2) |
-| T5 Phase 1 (Volume) | **Small impact on T3** — T3 must account for new coordinator bindings during extraction (~5 lines of binding changes). Easily absorbed since T3 moves all bindings to child views anyway. |
-| T5 Phase 2 (Bridge) | **Moderate impact on T1 Phase 4** — both restructure engine/transport internals |
-| T6 (Swift Testing) | **No impact** on any other task |
-
-### T3 vs T5 Phase 1 Ordering: Trade-Off Analysis
-
-This is a **trade-off, not a hard rule**. Both orderings are viable.
-
-**Option A: T5 Phase 1 FIRST, then T3 (chosen)**
-
-| Pro | Con |
-|-----|-----|
-| T5 Ph1 plan works as-written (targets symbols in WinampMainWindow.swift) | T3 lands on critical path (blocked by T5 Ph1) |
-| T3 naturally absorbs T5's small binding changes during restructuring | Adds latency to total execution time |
-| Lower coordination risk — T5 author doesn't need to know T3's new structure | |
-
-**Option B: T3 FIRST, then T5 Phase 1 (Oracle's alternative)**
-
-| Pro | Con |
-|-----|-----|
-| T3 runs in Wave 1 (off critical path), reduces total execution time | T5 Ph1 plan needs updating: binding refs move to child view files |
-| T5 gets cleaner, smaller child view targets to modify | T5 implementer must understand T3's new directory/file structure |
-| Child view isolation = more precise changes | More coordination overhead |
-
-**Decision: Option A (T5 Ph1 first).** The plan-stability benefit outweighs the critical-path cost. T5 Ph1 is small (~100 lines, <1 day effort). The alternative saves time on paper but introduces plan-update overhead and coordination risk that could cost more than it saves. The key advantage: T5 Ph1's plan references specific symbols (`buildVolumeSlider`, `audioPlayer.volume` binding, `audioPlayer.balance` binding) in WinampMainWindow.swift. After T3, these symbols would live in child view files (`MainWindowSlidersLayer.swift`) requiring the T5 plan to be rewritten with new file targets.
-
----
-
-## 6. Parallelization Strategy
-
-### Can Use Separate Worktrees Simultaneously
-
-| Worktree A | Worktree B | Worktree C | Safe? |
-|-----------|-----------|-----------|-------|
-| T1 | T2 | T4+T6 | **YES** — pbxproj-only overlap (mechanical merge) |
-
-All other Wave 1 combinations are also viable, but the above is the chosen configuration.
-
-**Important:** "Safe" means no semantic file conflicts. All file-creating worktrees will modify `project.pbxproj` — this requires sequential merge with mechanical conflict resolution. See Section 7 for merge strategy.
-
-### Cannot Run in Parallel
-
-| Task A | Task B | Reason |
-|--------|--------|--------|
-| T1 | T5 | Both modify AudioPlayer.swift (semantic conflict) |
-| T3 | T5 Ph1 | Both modify WinampMainWindow.swift (semantic conflict) |
-| T4 | T5 Ph2 | Sequential dependency (ring buffer prerequisite) |
-
-### Agent Teams vs Separate Instances
-
-| Approach | Best For | Tasks |
-|----------|----------|-------|
-| **Separate Claude instances + worktrees** | Isolated tasks with pbxproj-only overlap | T1, T2, T4+T6 (Wave 1) |
-| **Sequential in same instance** | Semantic file conflicts | T5 Ph1 then T3 (Wave 2) |
-| **Single instance after merges** | Complex dependencies | T5 Ph2 (Wave 3) |
-
----
-
-## 7. pbxproj Merge Strategy
-
-### Problem
-
-Wave 1 has 3 worktrees that all create new files, each adding entries to `project.pbxproj`. Merging in any order will produce pbxproj conflicts on the 2nd and 3rd merges.
-
-### Solution: Sequential Merge with Designated Integration Order
-
-1. **Merge Worktree A (T1) first** — smallest pbxproj change (1 new file). Clean merge.
-2. **Merge Worktree C (T4+T6) second** — 1-3 new files + Package.swift changes. Resolve pbxproj mechanically.
-3. **Merge Worktree B (T2) third** — largest pbxproj change (6-8 new files, 2 deletes). Resolve pbxproj mechanically.
-
-**Why this order:** Smallest-first reduces the amount of existing pbxproj content that conflicts with. T4+T6 before T2 because Package.swift changes should land before large structural changes.
-
-### Conflict Resolution Process
-
-pbxproj conflicts are always mechanical:
-- `PBXFileReference` section: accept both sides (both add new entries to a flat list)
-- `PBXBuildFile` section: accept both sides (both add new entries to a flat list)
-- `PBXGroup` children arrays: combine children from both sides into the correct group
-
-No semantic judgment required. Can be automated with `xcodebuild` project regeneration if needed.
-
----
-
-## 8. Sources
-
-- Oracle (gpt-5.3-codex, xhigh reasoning) — initial pairwise analysis + verification pass (C+ grade, corrections applied)
-- File explorer agent — file path verification, conflict matrix construction
-- Xcode project analysis — confirmed explicit `PBXFileReference` file management (1,017-line pbxproj)
-- Task documents: All 6 tasks' research.md, plan.md, state.md files
-- tasks_index.md — current task status inventory
-- PR #49 — N1-N6 internet radio fixes (T5 prerequisite, resolved)
-- PR #48 — Memory/CPU optimization (T5 Ph2 SPSC prerequisite, resolved)
+# Cross-Task Research
+
+Updated: 2026-10-02
+
+Findings that inform `plan.md` and apply across tasks. Open work from these findings is tracked in `deferred.md`; superseded approaches are in `depreciated.md`. Line counts are at `main` `b3894d9`.
+
+## Amp code review (2026-10-02)
+
+Checked against `main` at `f12bb7b`. Slotted items have a row in `deferred.md`.
+
+| Finding | Verdict | Reason or slot |
+|---------|---------|----------------|
+| Dead `EqualizerController.useLogScaleBands` and its `AudioPlayer` forwarder | Fix open (PR #91) | `chore/amp-review-dead-code` (`a032bcd`); still on `main` until the owner merges |
+| Dead `EqualizerController.autoEQTask` | Fix open (PR #91) | Same branch |
+| Unused `AppSettings.shouldPreserveWinampChrome` and `shouldUseFullSystemMaterials` | Fix open (PR #91) | Same branch |
+| Chat transcripts committed at the repo root | Fixed | `b3894d9`: moved to the gitignored `chats/` |
+| `module-cache/` and `weak_struct` tracked | Fixed | `b3894d9`: untracked and ignored |
+| Root `Package.swift` cannot build (mixed Swift and ObjC with a bridging header, no Butterchurn resources) | Slotted | S3-4 commit C1, with exact version pins in `project.yml`; fallback S4-1 |
+| `Skin`/`SpriteResolver` are `@unchecked Sendable` | Slotted, corrected | S4-1. Only `Skin` is `@unchecked Sendable`; `SpriteResolver` is plain `Sendable` |
+| LockFreeRingBuffer overrun race; fix with "drop-newest or atomics on both heads" | Slotted, corrected | S4-1. Both heads are already `ManagedAtomic`; the race is the producer's storage write over unread frames, so the fix is drop-newest (or a documented accepted-loss contract) |
+| Quantized 25x29 resize math in 3 places | Slotted | SS-3 |
+| AppKit window files in `Utilities/` | Slotted | SS-3 |
+| TEXT.BMP glyph naming duplicated | Slotted | SS-3, extended to `MainWindowIndicatorsLayer` and `SpriteResolver` |
+| Tiled title-bar chrome in 4 places | Slotted, optional | SS-5 |
+| Two access paths to shared objects; 5 window controllers repeat the same init | Slotted, corrected | SS-7. `WindowCoordinator.shared` has 24 refs app-wide (21 in `Views/`), not ~22 |
+| Files in `Models/`, `ViewModels/` and `Utilities/` that belong elsewhere | Slotted | SS-0 map |
+| RMS/Goertzel computed twice | Slotted | BL-1, parity test first |
+| Unused StreamPlayer `...ForTesting` DEBUG seams | Slotted, optional | S3-3 Phase 6 deletes the two with no callers; the other seams are test-only with no Release impact |
+| #86 test reads the real UserDefaults Repeat setting | Slotted | AT-1, standalone PR (owner, 2026-10-02) |
+| Appearance Mode preferences only restyle the Preferences window | Owner decision | `tasks/_context/state.md` |
+| Git history still holds `new-architecture-convresation.md` and `module-cache/` | Owner decision | `tasks/_context/state.md`; a purge needs a force-push to `main` |
+| DockingController and its broken menu items | Rejected, stale | Deleted in PR #90 (`757fc8d`) |
+| macOS 15/26 deployment-target mismatch | Rejected, stale | The target is 27.0 since #87 |
+| Redundant `#available` checks | Rejected, stale | Removed in #87; none remain in `MacAmpApp/` |
+| `SkinnedText`, `areConnected`, `DockPaneState.position`, `snapDistance` | Rejected, stale | Deleted in PR #90: `SkinnedText` in `7523b6d`, `areConnected` in `46e3056`, `DockPaneState` and `snapDistance` with DockingController in `757fc8d` |
+| Title-bar buttons duplicated four times | Rejected, stale | PR #90 (`7523b6d`) replaced them with `SkinHitButton` hit areas over the skin bitmaps (`MacAmpApp/Views/Shared/SkinHitButton.swift`) |
+| `didSet` UserDefaults persistence blocks | Rejected | The documented house pattern (single source of truth) |
+| Playlist model under `Audio/` | Rejected | Follows the approved placement policy |
+
+## Fired growth triggers
+
+| File | Lines | Trigger | Status | Re-evaluate in |
+|------|------:|---------|--------|----------------|
+| `MacAmpApp/Audio/AudioPlayer.swift` | 1,101 | D8 Option B: over 800 lines; a new responsibility; seek logic testable on its own | Two of three fired: size, and the video-tap and engine-reconfigure sections. Testability has not (`tasks/audioplayer-seek-extraction/state.md`) | SS-1 |
+| `MacAmpApp/Audio/Streaming/StreamDecodePipeline.swift` | 825 | Over 800 lines, or a new responsibility | Size fired. The plans add ~150 (HLS) and ~250 (OGG) net, about 1,225 raw / ~820 SwiftLint-counted lines, past the 600 `file_length` warning and below the 1,200 error; both plans forbid splitting it | SS-2 |
+| `MacAmpApp/Audio/VisualizerPipeline.swift` | 416 | Over 800 lines; a new consumer needs the shared buffers; the audio-thread model changes | The consumer trigger fired and S3-2 Phase 1 (`146a8b4`) resolved it; the others have not fired | None |
+
+Largest files: AudioPlayer 1,101; StreamDecodePipeline 825; StreamPlayer 714; PlaybackCoordinator 587; AudioEngineController 580; SkinSprites 487; SkinManager 441; SpriteResolver 421; VisualizerPipeline 416; AppSettings 390. `MacAmpApp/` has 122 `.swift` files and `Tests/MacAmpTests/` has 21.
+
+SwiftLint (`.swiftlint.yml:58-69`): `type_body_length` warns at 400 and errors at 600; `file_length` warns at 600 and errors at 1,200, ignoring comment-only and blank lines. AudioPlayer suppresses both; SkinManager suppresses `type_body_length`.
+
+## File-conflict map: S3-3, S3-4 and later
+
+From the HLS plan §11 and the OGG plan §15, with paths and line counts checked at HEAD. Re-derive from both plans at S3-3 PF.3.
+
+| File (lines) | S3-3 HLS | S3-4 OGG | Later |
+|--------------|----------|----------|-------|
+| `MacAmpApp/Audio/Streaming/StreamDecodePipeline.swift` (825) | +~160/-10: M3U classifier, HLS start, generation snapshot, 2 termination cases | ~+250 net: StreamBackend, PipelineLifecycle, StreamFormatHint, sniffer, `onChainFormatChange` | SS-2 |
+| `MacAmpApp/Audio/StreamPlayer.swift` (714) | +~12: `isReconnectable`, `userMessage`; optional seam delete | ~20: `onMetadata` signature, `onStreamChainFormatChanged` | SS-6 move to `Streaming/`; AT-2 timer (`:358`) |
+| `MacAmpApp/Audio/Streaming/AudioFileStreamParser.swift` (186) | +~40: `reset()`, post-reset ASBD/magic-cookie compare, `parserFatalState` | none | none |
+| `MacAmpApp/Audio/Streaming/ICYFramer.swift` (200) | none | `ICYMetadata` becomes a top-level `StreamMetadata` | none |
+| `MacAmpApp/Audio/PlaybackCoordinator.swift` (587) | none expected | ~25: chain-format bridge rewire | SS-6 |
+| `MacAmpApp/Audio/AudioEngineController.swift` (580) | none expected | ~120: `LocalAudioSource`, Vorbis load and schedule | SS-6; S4-1 deprecations; AT-2 timer (`:269`) |
+| `MacAmpApp/Audio/AudioPlayer.swift` (1,101) | none expected | 4 `engine.audioFile != nil` sites (`:628/791/808/927`) become `hasLoadedSource` | SS-1 |
+| `MacAmpApp/Audio/MetadataLoader.swift` (169) | none | ~80: `.ogg`/`.oga` branch | SS-0 placement |
+| `MacAmpApp/Views/PlaylistWindowActions.swift` (318) | none | optional `.ogg`/`.oga` UTTypes | SS-7 singleton |
+| `project.yml` | none | COggVorbis package, license resource, exact pins (C1) | SS-4 Butterchurn path (`:25`) |
+| `Package.swift`, `Package.resolved`, `.swiftlint.yml:44` | none | Deleted, exclude removed (C1) | none |
+| New `MacAmpApp/Audio/HLS/` | M3U8Parser, HLSSegmentFeeder | Rebases onto it | SS-0 places it |
+| New `MacAmpApp/Audio/Vorbis/`, `Vendor/COggVorbis/`, `MacAmpApp/Audio/Streaming/StreamMetadata.swift`, `MacAmpApp/Resources/THIRD_PARTY_LICENSES.txt` | none | Adds them | SS-0 places them |
+
+- **HLS-to-OGG seams** (HLS plan §17.1.1-17.1.2): HLS adds a fileprivate `makeStreamMetadata` factory so the OGG rename is a one-line edit; OGG turns the HLS `formatHint` into `.audioFileStream(kAudioFileAAC_ADTSType)`; HLS's `DecodeContext` starts in OGG's `.buffering` lifecycle state; HLS does not opt into `onChainFormatChange`. The OGG plan's rebase step (§20) applies §17.1.2.
+- **Any-time items vs S3:** AT-2 edits StreamPlayer and AudioEngineController, which S3-4 also edits, so run it after S3-4 (plan.md puts it in SS-7). AT-1 (`Tests/MacAmpTests/PlaylistNavigationTests.swift`), BL-1 (VisualizerPipeline, VideoTapVisualizerRender) and the S4-1 research half do not overlap S3. The #78 docs fixes and the S3-3 close-out both edit `docs/MACAMP_ARCHITECTURE_GUIDE.md`, in different sections.
+- **Inside the Structure Sprint:** SS-3 and SS-4 both edit `MilkdropWindowChromeView` (SS-3's resize helper at `:173/:190`, SS-4's move); land one before branching the other. SS-5 moves `VideoWindowChromeView` only after SS-3. SS-1 and SS-2 split files in place before SS-6 moves them. Work after the sprint (S4-1 onward) uses the new paths, for example LockFreeRingBuffer under `Audio/Streaming/`.
+
+## Toolchain and verification
+
+- Build, test and sandbox commands are in `tasks/_context/state.md` (Verification).
+- **Leak checks:** Instruments Allocations works only on Debug builds, because dylib injection is blocked on every hardened-runtime build. `xcrun heap <pid>` works on any build that carries `get-task-allow`. The Developer-ID Release build does not (`CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO`), but an Xcode Run injects `get-task-allow`, so a Release configuration launched from Xcode can be inspected with LLDB or `xcrun heap` without re-signing.
+- **Procedure:** `tasks/_context/instruments-allocations-workflow.md` (WWDC24 session 10173). Filter Recorded Types with `MacAmp.` (the PRODUCT_NAME); `MacAmpApp.` matches nothing and reads as a false pass. The doc does not state the Debug-only limit above, and its UI steps have not been re-checked on Xcode/Instruments 27. S3-3 Phase 7 (P7.6b) and S3-4 C9 use it.
+- **LLDB:** the Xcode IDE MCP (`RunProject` with the debugger, `InvokeDebuggerCommand`, `GetConsoleOutput`, `StopProject`) for a run Xcode launches; `xcodebuildmcp debugging attach --pid` for a process that is already running (needs `get-task-allow`). The xcodebuildmcp daemon does not auto-start in the sandboxed shell. Set breakpoints by symbol: the S3-2 telemetry breakpoint `EqualizerController.swift:106` (in `pollVideoTapSampleRates`) shifts when PR #91 merges.
+- **Test corpus:** `clapperboard-videos/` holds 5 tracked clips (about 3 s each, one surround) used by the video-tap tests and the Instruments recipe; suitable for the S4-4 experiments.
+
+## Platform and design findings
+
+- **AirPlay and routes (input to S4-3):** on macOS, AVRoutePickerView routes a single AVPlayer and cannot redirect AVAudioEngine (S2, `tasks/done/airplay-integration/`). `AVAudioEngineConfigurationChange` fires only when the engine's I/O format changes, not on general route changes, so route awareness needs a HAL default-output listener (`tasks/stale/airpods-route-gate-validation/`); none exists in `MacAmpApp/`. AVRoutePickerView has never been in `MacAmpApp/` or `Tests/`; the commits that mention it touch only docs and task files.
+- **HAL log noise:** `!obj`, `!dev` and `nope` lines on AirPlay-to-built-in switches are OS device-teardown chatter (Apple's own apps print the same), not a MacAmp bug.
+- **D-TARGET27 APIs:** only `MTAudioProcessingTapCreateWithPreferredFormat` is in use (`MacAmpApp/Audio/VideoDSP/VideoTap.swift:289`). S4-1 candidates: whole-mix taps (`AVAudioMixInputParametersTrackMixID`), `InlineArray`, `Span`/`MutableSpan`, `Array.mutableSpan` and `-strict-memory-safety`. No `#available` or `@available` remains in `MacAmpApp/`.
+- **S3-2 CPU gate:** the automated 8.1 pass is a Debug (`-Onone`) regression guard, p99 about 11% of the 21,333 µs deadline. The real gate, 8.1b (Release plus Time Profiler), is PARTIAL: `tapProcess` costs about 0.4-1.0% of the budget. Never summarize it as "the CPU gate passed". Record: `tasks/done/avplayer-native-video-dsp/verification.md`.
+- **Swift 6.2 isolation:** closures defined inside `@MainActor` methods inherit that isolation, so real-time render and tap blocks come from `nonisolated static` factories (`AudioEngineController.makeStreamRenderBlock`, `VisualizerPipeline.makeTapHandler`).
+- **Principle 4 applied to the amp items:** RMS/Goertzel is a second occurrence, so a parity test fits better than an extraction. The quantized resize math (3 views, 6 sites) and the tiled chrome (4 views) are past the Rule of Three, so extraction is justified.
+- **Debugging lessons from S3-1A:** diagnose the whole pipeline, since symptoms show at the consumer while causes often sit at the producer; and run a structural search (ast-grep) before editing setter chains or timers. Both are in `BUILDING_RETRO_MACOS_APPS_SKILL.md:577-579`.

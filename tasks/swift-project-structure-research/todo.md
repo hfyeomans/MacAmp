@@ -1,47 +1,31 @@
-# Todo
+# Todo: Structure Sprint
 
-> **Description:** Action checklist for converting the structure research into approved policy and bounded follow-on tasks.
-> **Purpose:** Track what has been ratified now, what must guide Sprint S1, and what is intentionally deferred to later architecture work.
+Updated: 2026-10-02
 
-## Immediate
+Derived from `plan.md`. The placement rule is a standing decision in `state.md`, not a checkbox. SS-1 to SS-4 are tracked in their own folders.
 
-- [x] Approve the target top-level structure: `App`, `Core`, `Shared`, `Features`, `Audio`, `Windowing`, `Resources`
-- [x] Approve the rule that new files should default to feature/subsystem ownership instead of global `Views` / `Models` / `ViewModels` / `Utilities`
-- [x] Use this task as a standing architecture policy reference for upcoming work
+## SS-0: planning (after S3-4 merges)
 
-## During Sprint S1
+- [ ] Write `mapping.md`: every file in `MacAmpApp/` and `Tests/`, including the 8 breaches in `state.md` and the S3 `Audio/HLS/` and `Audio/Vorbis/` files
+- [ ] Reconcile `Audio/` subfolders with what exists (`Streaming/`, `VideoDSP/`, `ObjCBridge/`, `HLS/`, `Vorbis/`) and place the 13 files the old map omitted
+- [ ] Decide the ambiguous files: `Models/*WindowSizeState`, `WindowFocusState`, `Size2D`, `SnapUtils`, `WeakBox`, `MetadataLoader`, `RenderThreadSafe`, `VideoTapVisualizerRender`, and where the remaining shared domain models in `Models/` go
+- [ ] `project.yml` migration analysis (the Butterchurn path at `project.yml:25` plus an `excludes:` entry for the moved folder)
+- [ ] Audit leftover early-project preprocessing workarounds
+- [ ] Settle the order: SS-1 and SS-2 go/no-go first, then the moves; list shared-file overlaps between steps
+- [ ] Create `tasks/features-consolidation/`, `tasks/audio-consolidation/` and `tasks/app-core-shared-consolidation/` (6-file layout; `plan.md` once planning starts)
 
-- [x] For `xcode-butterchurn-webcontent-diagnosis`, decide whether to only fix behavior or also begin `Features/Milkdrop` consolidation
-- [x] For `audioplayer-decomposition` Phase 4, ensure extracted transport code lands under the intended `Audio/Playback` ownership model
-- [x] For `network-auto-reconnect`, keep new work scoped under `Audio/Streaming` and avoid adding new cross-cutting utility files
-- [ ] Avoid introducing new top-level files into `ViewModels` or `Utilities` unless there is a documented exception
+## Moves
 
-## After Sprint S1 (task folders created, implementation deferred)
+- [ ] SS-3 `windowing-structure-consolidation` (see its `todo.md`)
+- [ ] SS-4 `milkdrop-feature-consolidation` (see its `todo.md`)
+- [ ] SS-5 `Features/` consolidation, including the optional `tileRow` helper
+- [ ] SS-6 `Audio/` consolidation
+- [ ] SS-7 `App/`, `Core/`, `Shared/`: composition root (retire `WindowCoordinator.shared` and `AppSettings.instance()`), replace the `PlaylistWindowActions` singleton, shared window-controller init, delete the empty `ViewModels/` and `Utilities/`
+- [ ] SS-8 mirror `Tests/MacAmpTests/` to the new layout; update `docs/context/xcode-testing-context.md`; 137 tests / 21 suites stay green under TSan; then a follow-up commit for the SS-8 rows in `tasks/_context/deferred.md`
+- [ ] Close-out: update `docs/` path references and the local `CLAUDE.md` architecture tree
 
-- [x] Create a focused implementation task: `windowing-structure-consolidation`
-- [x] Create a focused implementation task: `milkdrop-feature-consolidation`
+## Later / optional (SS-9)
 
-## During Sprints S1-S3 (decomposition only, no file moves)
-
-- [x] Keep `AudioPlayer.swift` follow-on work under the existing `audioplayer-decomposition` Phase 4 task
-- [x] Create a dedicated decomposition task: `skinmanager-decomposition`
-- [x] Create a dedicated decomposition task: `visualizerpipeline-decomposition`
-- [x] Create a dedicated decomposition task: `streamdecodepipeline-decomposition`
-- [x] Create a dedicated decomposition task: `winamp-equalizer-window-decomposition`
-
-## Post-S3 Structure Sprint (all consolidation deferred here per D-STRUCTURE decision 2026-03-15)
-
-- [ ] Create a source-to-target mapping for ALL ownership boundaries (single document)
-- [ ] Execute `windowing-structure-consolidation` — move files into `Windowing/`
-- [ ] Execute `milkdrop-feature-consolidation` — move files into `Features/Milkdrop/`
-- [ ] Create and execute `Features/` consolidation (Video, EQ, Playlist)
-- [ ] Create and execute `Audio/` consolidation (existing files → ownership boundaries)
-- [ ] Create and execute `App/`, `Core/`, `Shared/` consolidation
-- [ ] Update `project.yml`, imports, bundle resource paths, test references
-- [ ] Reorganize tests to mirror source ownership boundaries
-
-## Later / Optional
-
-- [ ] Evaluate whether `Windowing` should become a local package
-- [ ] Evaluate whether `AudioStreamingCore` should become a local package
-- [ ] Evaluate whether `SkinEngine` should become a local package
+- [ ] Evaluate `Windowing` as a local package
+- [ ] Evaluate `AudioStreamingCore` as a local package
+- [ ] Evaluate `SkinEngine` as a local package

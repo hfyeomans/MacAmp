@@ -1,5 +1,5 @@
-# Placeholders: Swift 6.4 / macOS 27 Readiness
+# Placeholder: Swift 6.4 / macOS 27 Adoption (S4-1)
 
-> **Purpose:** Track stubs and placeholders introduced during implementation
+Updated: 2026-10-02
 
-No placeholders. Task not yet started.
+Stubs introduced during implementation. Deferred items go to `tasks/_context/deferred.md`, not here. None recorded.

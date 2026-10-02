@@ -1,5 +1,5 @@
-# Placeholders: Video Multichannel Output
+# Placeholder: Video Multichannel Output (S4-4)
 
-> **Purpose:** Track stubs and placeholders introduced during implementation
+Updated: 2026-10-02
 
-No placeholders. Task not yet started.
+Stubs introduced during implementation. Deferred items go to `tasks/_context/deferred.md`, not here. None recorded.

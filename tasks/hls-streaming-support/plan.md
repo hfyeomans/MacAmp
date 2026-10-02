@@ -1,11 +1,12 @@
 # Plan: HLS Streaming Support (Audio-Only)
 
-> **Status:** Plan — Oracle-validated 9/10 in Round 4. Ready for implementation when predecessors merge.
+> **Status:** NEXT. Plan approved (Oracle 9/10 in Round 4); predecessors merged.
+> **Updated:** 2026-10-02
 > **Sprint:** S3 (Wave S3-3, sequential).
 > **Branch:** `feat/hls-streaming-support`.
-> **PR target:** PR #D (after PR #B `stream-pause-tail` and PR #C `video-audio-engine-routing` merge).
-> **Predecessors merged:** S3-1 (`stream-pause-tail`), S3-2 (`video-audio-engine-routing`).
-> **Source of truth:** `tasks/hls-streaming-support/research.md` (Oracle 7/10, 8/8 actionable items applied).
+> **PR target:** number assigned when the PR opens.
+> **Predecessors merged:** S3-1B `stream-pause-tail` (PR #82), S3-2 `avplayer-native-video-dsp` (PR #89).
+> **Source of truth:** `tasks/hls-streaming-support/research.md` (Oracle 7/10; 6 actionable + 2 nitpicks applied).
 > **Scope locked:** AAC-ADTS audio-only, master + media playlists, live + VOD, no DRM, no fMP4, no MPEG-TS, no LL-HLS, no ABR.
 
 ---
@@ -26,7 +27,7 @@ This is the concrete failure mode. Severity: increasing — most new public radi
 
 The following are out of scope for v1 and **must not** creep in:
 
-- **Video HLS.** AVPlayer already handles HLS video natively in `VideoPlaybackController`. The `video-audio-engine-routing` task (S3-2) addresses MTAudioProcessingTap routing for local video; HLS-video routing through the engine is not in scope here and is not blocked by this task.
+- **Video HLS.** AVPlayer already handles HLS video natively in `VideoPlaybackController`, but without EQ, visualizer or balance: S3-2 shipped as `avplayer-native-video-dsp` (an in-place tap for local video only), and the tap does not fire for streaming items (QA1716). HLS video is not on the roadmap.
 - **DRM** (`#EXT-X-KEY:METHOD=AES-128`, `SAMPLE-AES`, FairPlay). Detected and rejected with a non-reconnectable error.
 - **fMP4 segments** (`#EXT-X-MAP:URI=…`, `.m4s`/`.mp4`). Detected and rejected with a non-reconnectable error.
 - **MPEG-TS segments** (`.ts`). Detected and rejected with a non-reconnectable error.
@@ -46,8 +47,8 @@ Although this task primarily *adds* files rather than splitting an existing one,
 |---|------|--------|
 | 1 | Problem statement written | Yes — §1 above. Concrete user-visible failure mode for a growing class of stations. |
 | 2 | Non-goals listed | Yes — §2 above. Explicit fence around DRM/fMP4/TS/ABR/LL-HLS/discontinuity beyond reset/multi-language/decomposition. |
-| 3 | Principles contract approved | Yes — §10 below maps each principle. Critical: P3 (state ownership: feeder owns its own queue, does not co-own DecodeContext state), P5 (no visibility widening — closure injection seam), P6 (no pass-through — feeder adds real policy: refresh, sequencing, generation gating). |
-| 4 | Responsibility map | Yes — §11 below. Three layers: M3U8Parser (pure data), HLSSegmentFeeder (mechanism: orchestrate fetch + refresh + variant selection), StreamDecodePipeline branch (bridge). |
+| 3 | Principles contract approved | Yes — §15 below maps each principle. Critical: P3 (state ownership: feeder owns its own queue, does not co-own DecodeContext state), P5 (no visibility widening — closure injection seam), P6 (no pass-through — feeder adds real policy: refresh, sequencing, generation gating). |
+| 4 | Responsibility map | Yes — three layers: M3U8Parser (pure data), HLSSegmentFeeder (mechanism: orchestrate fetch + refresh + variant selection), StreamDecodePipeline branch (bridge). |
 | 5 | Complexity assessed | High cognitive *new* complexity (state machine: variant pick → media playlist refresh loop → segment download → discontinuity reset). Low cognitive load on the existing pipeline (single new branch; existing `start(url:)` keeps shape). Verdict: introduce HLS as a separate type to keep the existing file's cognitive complexity bounded. |
 | 6 | Candidate split scored | Cohesion gain: high (HLS state + segment fetch is one concern). State risk: low (DecodeContext untouched; feeder's state lives on its own queue). Visibility impact: zero (closure-injection seam). Pass-through risk: zero (feeder adds real policy). |
 | 7 | Public/internal API delta | None public. Two new file-private/internal types. `AudioFileStreamParser` gets one new internal method `reset()`. `StreamDecodePipeline` gets one new internal method `currentGeneration` getter (read-only token) and one new branch in `start(url:)`. No `private → internal` widening on existing types. |
@@ -208,7 +209,7 @@ func reset() {
 ### 6.2 Why this is safe
 
 - The C-API contract is `AudioFileStreamClose` then `AudioFileStreamOpen`. The decoder lifetime contract (Lesson 6: dispose decoder before parser close) is preserved because `reset()` is called *only* between segments while the decoder still has its existing magic cookie cached and its converter intact. We do **not** dispose the decoder during reset.
-- The format hint is unchanged (still `kAudioFileAAC_ADTSType`), so the new stream ID will produce the same ASBD. The existing `onFormatAvailable` callback in `DecodeContext.handleFormatAvailable` (`StreamDecodePipeline.swift:591-610`) early-returns if `decoder != nil`. **Therefore the decoder is NOT swapped on reset**, even if the post-reset ASBD is different.
+- The format hint is unchanged (still `kAudioFileAAC_ADTSType`), so the new stream ID will produce the same ASBD. The existing `onFormatAvailable` callback in `DecodeContext.handleFormatAvailable` (`StreamDecodePipeline.swift:698-717`) early-returns if `decoder != nil`. **Therefore the decoder is NOT swapped on reset**, even if the post-reset ASBD is different.
 - We reuse the same `selfPtr` for the C callback context, so retain/release semantics are unchanged.
 
 ### 6.3 Format mismatch on post-reset (Oracle round 1, A-4)
@@ -241,7 +242,7 @@ If any compared field differs, the parser emits `onError("HLS segment format cha
 2. Flushing the ring buffer (in-flight PCM at the old format would still be valid in absolute terms but would change sample rate mid-buffer — produces clicks / pitch shift).
 3. Re-emitting `onFormatReady` with the new sample rate (would break `PlaybackCoordinator`'s once-per-bridge-lifetime contract — `formatReadyFired` is single-shot).
 
-These complications are out of scope for v1. **Decoder swap on post-discontinuity ASBD change is explicitly unsupported.** Documented as deferred in `placeholder.md` on merge.
+These complications are out of scope for v1. **Decoder swap on post-discontinuity ASBD change is explicitly unsupported.** Deferred in `tasks/_context/deferred.md` (HLS v2 row, already listed).
 
 **Practical note.** All AAC ADTS HLS radio observed in the field uses a single ASBD across discontinuities (sample rate + channel count + bit depth do not change because the encoder config is fixed at the publisher). The mismatch path is a defence-in-depth tripwire, not a routine fail.
 
@@ -556,7 +557,7 @@ start(url:)
    - First non-blank line == `#EXTM3U`? If no → legacy M3U; resolve via existing `M3UParser.parse(content:relativeTo:)` and return `.legacyM3U(firstStreamURL)`. If `M3UParser` fails → attempt `parsePLS` next; if that also fails → `ClassifyError.malformedLegacyPlaylist(message)` (reconnectable per §8.2 mapping table below).
    - Otherwise, scan remaining lines for any `#EXT-X-` prefix → `.hls(body)`. If the body has `#EXTM3U` but no `#EXT-X-` tags, treat as legacy M3U (some legacy servers ship `#EXTM3U` headers without HLS extensions).
    - If the sniff said HLS (`.hls(body)`) and the M3U8 parser then rejects the body inside the HLS branch (e.g. `M3U8Parser.parse` returns `.encryptedNotSupported`, `.fragmentedMP4NotSupported`, `.notM3U8`, etc.), this is a **feeder-side** decision (`HLSSegmentFeeder`'s parse step, §7.2 PARSE_INITIAL), which produces `FeederTermination.decodeRejected`. The classifier itself does **not** invoke `M3U8Parser` — it only does the cheap sniff. `malformedHLSPlaylist` is therefore a **feeder-only** outcome, never a classifier outcome.
-5. Content-Type promotion: **deferred for v1** (resolves Oracle round 1 N-1 contradiction). Only `.m3u8` / `.m3u` URLs go through `classifyM3UDialect`. URLs without those extensions go through the existing `startDirectStream` path; if the body returned is HLS-typed by Content-Type, the existing path will fail loudly with a decode error — the user retries with a `.m3u8` URL or reports it. Document as `placeholder.md` deferral on merge so we can revisit if a real-world station ships HLS at an extension-less endpoint. (Open Question 1 from research.md is **closed** — the answer is "no Content-Type promotion in v1"; the speculative "yes, on first response only" alternative was contradictory and is rejected.)
+5. Content-Type promotion: **deferred for v1** (resolves Oracle round 1 N-1 contradiction). Only `.m3u8` / `.m3u` URLs go through `classifyM3UDialect`. URLs without those extensions go through the existing `startDirectStream` path; if the body returned is HLS-typed by Content-Type, the existing path will fail loudly with a decode error — the user retries with a `.m3u8` URL or reports it. Deferred in `tasks/_context/deferred.md` (already listed) so we can revisit if a real-world station ships HLS at an extension-less endpoint. (Open Question 1 from research.md is **closed** — the answer is "no Content-Type promotion in v1"; the speculative "yes, on first response only" alternative was contradictory and is rejected.)
 
 `ClassifyError` (mapping carried at error-construction time, not deferred to §9.1):
 
@@ -684,7 +685,7 @@ private func stopInternal() {
 
 ### 8.5.1 `pauseByUser()` / `resumeByUser()` for HLS (post-S3-1B integration)
 
-> **S3-1B (`stream-pause-tail`) merges before this task** and replaces `pause()`/`resume()` with async barrier-aware variants `pauseByUser()` / `resumeByUser()`. See `tasks/stream-pause-tail/plan.md` §3.5. The HLS branch must integrate with these, **not** the legacy `pause()`/`resume()`. This subsection specifies the integration.
+> **S3-1B (`stream-pause-tail`, PR #82) has merged** and replaced `pause()`/`resume()` with async barrier-aware variants `pauseByUser()` / `resumeByUser()` (`StreamDecodePipeline.swift:240`, `:257`). See `tasks/done/stream-pause-tail/plan.md` Phase 3, item 3.5. The HLS branch must integrate with these, **not** the legacy `pause()`/`resume()`. This subsection specifies the integration.
 
 Post-S3-1B API as of merge:
 
@@ -841,7 +842,7 @@ When a paused HLS feeder resumes, it re-fetches the playlist and starts the next
 
 S3-1B's `pauseByUser` flushes the ring buffer and quiesces the decode queue. The HLS feeder's `pauseByUser` quiesces the network/segment side. The two run sequentially in `pipeline.pauseByUser()`'s HLS branch (feeder pause → decode-side pause). Result: at the time `pauseByUser()` returns to `StreamPlayer.pause()`, both the producer (feeder) and the decoder (DecodeContext) are quiesced, the ring buffer is flushed, and the silence gate has already been raised by `StreamPlayer.pause()` *before* awaiting `pipeline.pauseByUser()`. The silence-gate-then-quiesce-then-flush sequence is preserved end-to-end.
 
-### 8.5.4 Pause UX trade-off (documented in `placeholder.md` on merge)
+### 8.5.4 Pause UX trade-off (deferred in `tasks/_context/deferred.md`, already listed)
 
 On HLS resume, the user will hear a brief warmup (re-fetch playlist + download fresh segment + prebuffer to the resume threshold) before audio resumes. S3-1B's existing 1-s warmup timeout in `StreamPlayer.startResumeWarmup` covers this. If the prebuffer threshold is not reached within 1 s, the live-edge fallback fires (a fresh `pipeline.start(url:)` is issued — for HLS, that re-creates a fresh feeder on the same playlist URL).
 
@@ -953,9 +954,9 @@ private func isReconnectable(_ reason: StreamDecodePipeline.StreamTerminationRea
 
 This is the only StreamPlayer change. No reconnect-policy regressions for legacy progressive streams.
 
-## 11. Files Inventory (verified against HEAD 2026-04-27)
+## 11. Files Inventory (line counts at `b3894d9`, 2026-10-02)
 
-> HEAD inspection confirms research.md's appendix line numbers are still accurate within ±2 lines. `stream-pause-tail` (S3-1B) and `video-audio-engine-routing` (S3-2) are not yet merged at the time of writing this plan; **the implementation step must re-read these files at HEAD post-merge of the predecessors** and adjust line numbers if needed. The semantic anchors below should still hold.
+> Both predecessors have merged and the research appendix anchors were refreshed at `b3894d9`. Todo PF.3 re-reads these files at branch time and confirms the anchors before Phase 1.
 
 ### 11.1 New files (3)
 
@@ -969,9 +970,9 @@ This is the only StreamPlayer change. No reconnect-policy regressions for legacy
 
 | File | HEAD lines | Δ | Change |
 |------|-----------:|--:|--------|
-| `MacAmpApp/Audio/Streaming/AudioFileStreamParser.swift` | 186 | +25 / 0 | Add `reset()` method (close + reopen, preserve formatHint, reuse selfPtr). |
-| `MacAmpApp/Audio/Streaming/StreamDecodePipeline.swift` | 697 | +160 / -10 | Add 2 enum cases, `isLikelyM3UDialect`, `classifyM3UDialect`, `startHLSStream`, `handleHLSTermination`, generation snapshot, `hlsFeeder` field, feeder cancel in `stopInternal`, `DecodeContext.resetParserOnDecodeQueue`. |
-| `MacAmpApp/Audio/StreamPlayer.swift` | 414 | +12 | Extend `isReconnectable` switch with 2 new cases; extend `userMessage` switch with 2 new cases. |
+| `MacAmpApp/Audio/Streaming/AudioFileStreamParser.swift` | 186 | +40 / 0 | Add `reset()` method (close + reopen, preserve formatHint, reuse selfPtr), plus the post-reset ASBD/magic-cookie compare and `parserFatalState` (§6.3). |
+| `MacAmpApp/Audio/Streaming/StreamDecodePipeline.swift` | 825 | +160 / -10 | Add 2 enum cases, `isLikelyM3UDialect`, `classifyM3UDialect`, `startHLSStream`, `handleHLSTermination`, generation snapshot, `hlsFeeder` field, feeder cancel in `stopInternal`, `DecodeContext.resetParserOnDecodeQueue`. |
+| `MacAmpApp/Audio/StreamPlayer.swift` | 714 | +12 | Extend `isReconnectable` switch with 2 new cases; extend `userMessage` switch with 2 new cases. |
 
 ### 11.3 Possibly affected (verify, no expected change)
 
@@ -982,12 +983,11 @@ This is the only StreamPlayer change. No reconnect-policy regressions for legacy
 ### 11.4 Operational tasks
 
 - `xcodegen generate` after adding the 3 new Swift files (path-based source globbing in `project.yml`; no edit needed).
-- `tasks/_context/tasks_index.md` — flip `hls-streaming-support` from PLANNED to ✅ COMPLETE on PR merge (status update only).
-- `tasks/_context/state.md` — append S3-3 outcome row.
+- `tasks/_context/` updates: close-out per todo P11.7.
 - `docs/MACAMP_ARCHITECTURE_GUIDE.md` — add an "HLS audio path" subsection beside the existing progressive stream subsection in §4.
 - `docs/IMPLEMENTATION_PATTERNS.md` — append a new pattern: "Closure-injection seam to preserve private visibility" (justification: the seam will repeat in future stream-side features such as ogg).
 
-> Note on filename spelling: the project convention (per `~/.claude/CLAUDE.md` and `~/.claude/projects/-Users-hank-dev-src-MacAmp/memory/MEMORY.md` "PR Review False Positives") uses `depreciated.md` (every existing task folder, including `tasks/done/`, uses this spelling). Plan and todo files use it consistently. This is **not** an English typo to be corrected — it is a project naming convention. CodeRabbit / Gemini-bot comments suggesting otherwise are pre-classified false positives.
+> Note on filename spelling: project convention is that task folders use `depreciated.md` (`tasks/_context/state.md`, Process: Task folders). Reviewer comments about the spelling are false positives.
 
 ## 12. Phase 7 — Tests
 
@@ -1018,10 +1018,11 @@ Default-skipped in CI; runs locally when the env var is set.
 
 ### 12.4 Regression coverage
 
-Existing 57 tests must pass. Particular attention to:
-- `StreamDecodePipelineTests` (if any exist — verify at implementation time).
-- `M3UParserTests` (legacy parser unchanged).
+The existing 137 tests must pass. Particular attention to:
+- `StreamPauseTailTests` (pause/resume barrier behaviour).
 - `LockFreeRingBufferTests` (ring buffer semantics unchanged).
+
+No `StreamDecodePipeline` or `M3UParser` test files exist.
 
 ## 13. Verification Approach
 
@@ -1054,7 +1055,7 @@ Pick at least 3 distinct stations covering: (a) major broadcaster (NPR / BBC / R
 
 - `docs/MACAMP_ARCHITECTURE_GUIDE.md` §4 gets the new HLS subsection.
 - `docs/IMPLEMENTATION_PATTERNS.md` gets the new closure-injection-seam pattern.
-- `placeholder.md` records any deferrals discovered during implementation (likely candidates: Content-Type promotion of non-`.m3u8` URLs; HLS pause as suspend-segment instead of stop-restart).
+- `tasks/_context/deferred.md` records any deferrals discovered during implementation (Content-Type promotion of non-`.m3u8` URLs and sample-accurate HLS pause are already listed).
 
 ## 14. Risk Assessment
 
@@ -1068,9 +1069,9 @@ Pick at least 3 distinct stations covering: (a) major broadcaster (NPR / BBC / R
 | Encrypted bytes reach AudioFileStream | High | Low | `M3U8Parser` rejects `EXT-X-KEY:METHOD≠NONE` *before* any segment fetch. Feeder also re-checks per segment. Defence in depth. |
 | Visibility widening for `DecodeContext` | Med | Low | Closure-injection seam (P5). Only `resetParserOnDecodeQueue` is added (file-internal). |
 | ICY metadata loss for HLS | Low | High (by design) | HLS does not use inline ICY. Best-effort `EXTINF` title pass-through partially compensates. Not a regression — HLS does not play at all today. |
-| Conflict with S3-1B `stream-pause-tail` on `StreamDecodePipeline.swift` | Med | Med | S3 ordering is strict serial. Re-read HEAD after S3-1B/S3-2 merge before starting implementation; rebase plan locations as needed. The HLS branch only adds new methods + a single new branch in `start(url:)`; conflict surface is small. |
+| Conflict with S3-1B `stream-pause-tail` on `StreamDecodePipeline.swift` | — | Resolved | S3-1B merged (PR #82) before this branch exists; PF.3 re-reads its code at HEAD. |
 | Conflict with S3-4 `ogg-vorbis-support` on `StreamDecodePipeline.swift` | Low | Med | OGG plan must rebase on this branch. We keep changes minimal and grouped (new branch + new method) to make the rebase mechanical. |
-| HLS pause UX worse than progressive pause | Low | High (by choice) | Documented trade-off; revisit if user feedback demands. Listed in `placeholder.md` on merge. |
+| HLS pause UX worse than progressive pause | Low | High (by choice) | Documented trade-off; revisit if user feedback demands. Listed in `tasks/_context/deferred.md`. |
 
 ## 15. Principles Contract (per `_context/principles.md`)
 
@@ -1098,17 +1099,17 @@ If a kill switch fires, write findings to `placeholder.md` and `depreciated.md` 
 
 ## 17. Branch + PR Plan
 
-- **Branch:** `feat/hls-streaming-support` off `main` *after S3-1B (`stream-pause-tail`, PR #B) and S3-2 (`video-audio-engine-routing`, PR #C) are merged*.
+- **Branch:** `feat/hls-streaming-support` off `main` (both predecessors, PR #82 and PR #89, have merged).
 - **Commits:** roughly one per Phase (P1–P6), plus tests, plus docs. Aim for 8–10 small commits to keep review tractable and revertable.
-- **PR target:** PR #D. Title: `feat(audio): add HLS audio-only streaming (AAC ADTS, master+media, live+VOD)`.
-- **Reviewers:** automated (CodeRabbit, Gemini-bot if configured) + Oracle code-review pass before request-review.
+- **PR:** number assigned when it opens. Title: `feat(audio): add HLS audio-only streaming (AAC ADTS, master+media, live+VOD)`.
+- **Reviewers:** one exhaustive `/codex:review --base main` before the PR, then review bots (CodeRabbit). The owner merges and deletes the branch (GH013 blocks CLI deletion).
 - **Merge gate:**
   - Build clean with TSan.
   - All tests pass.
   - 3+ live HLS stations smoke-tested manually.
   - Legacy `.m3u`/`.pls` regression smoke-tested.
   - Docs updated.
-  - Oracle code-review score ≥ 9/10 OR all P1/P2 findings dispositioned.
+  - `/codex:review` findings that affect correctness or requirements fixed; the rest listed one line each.
 
 ## 17.1 Successor integration — S3-4 `ogg-vorbis-support`
 
@@ -1145,7 +1146,7 @@ OGG introduces a new `PipelineLifecycle` enum on `DecodeContext` (`sniffing` / `
 
 #### D. `onFormatReady` re-fire on chain boundary
 
-OGG's Phase 4.7 introduces `onChainFormatChange` for chained Icecast Vorbis streams. HLS does not need this — the AAC ADTS scope is single-format. But: the HLS plan's `parser.reset()` flow (Phase 2 + §6.3) explicitly **rejects** post-reset format mismatch by surfacing `decodeError`. After OGG merges, this rejection logic should remain unchanged: HLS does not opt into the new `onChainFormatChange` callback. Documented as deferred in `placeholder.md` on merge of OGG.
+OGG's Phase 4.7 introduces `onChainFormatChange` for chained Icecast Vorbis streams. HLS does not need this — the AAC ADTS scope is single-format. But: the HLS plan's `parser.reset()` flow (Phase 2 + §6.3) explicitly **rejects** post-reset format mismatch by surfacing `decodeError`. After OGG merges, this rejection logic should remain unchanged: HLS does not opt into the new `onChainFormatChange` callback. The OGG rebase checks this (§17.1.2 step 4).
 
 ### 17.1.2 OGG branch hand-off checklist (referenced in OGG plan rebase phase)
 
@@ -1157,16 +1158,14 @@ When the OGG branch starts (after this PR merges), the OGG implementer rebases a
 4. Verifies that HLS does NOT subscribe to `onChainFormatChange` — HLS rejects mid-stream format change.
 5. Runs the HLS tests + adds an integration test that confirms HLS still works after OGG's refactor.
 
-This checklist is referenced in `tasks/ogg-vorbis-support/plan.md`'s rebase phase by the OGG plan author after this plan merges.
-
-**Action for OGG plan author:** when this HLS plan merges, the OGG plan author must add a cross-reference to this section in `tasks/ogg-vorbis-support/plan.md` (suggested: a new "§17.5 HLS rebase checklist" pointing back to `tasks/hls-streaming-support/plan.md` §17.1.2). Tracked separately so the OGG branch's bookkeeping remains in OGG's own plan; this HLS plan does not edit OGG files.
+`tasks/ogg-vorbis-support/plan.md` §20 (pre-implementation step 3) and its todo G1 link to this checklist.
 
 ## 18. Rollback Plan
 
 Each Phase is committed independently. Roll-forward is preferred, but a clean rollback is available at every Phase boundary.
 
 - **Pre-merge rollback:** `git revert <phase commit>` per Phase, in reverse order. Phase 6 (StreamPlayer extension) is the last to add, first to revert.
-- **Post-merge rollback:** revert PR #D in full. The only persistent risk is if a future commit depends on the new `.streamFinished` / `.unsupportedFormat` enum cases — keep an eye on S3-4 (OGG) which may add cases too. If it does, coordinate via `_context/state.md`.
+- **Post-merge rollback:** revert the HLS PR in full. The only persistent risk is if a future commit depends on the new `.streamFinished` / `.unsupportedFormat` enum cases — keep an eye on S3-4 (OGG) which may add cases too. If it does, coordinate via `_context/state.md`.
 - **Feature flag:** none. The feature only activates for URLs that the new classifier identifies as HLS; existing code paths are byte-for-byte unchanged for non-HLS URLs.
 
 ## 19. Oracle Validation Summary (this plan)
@@ -1185,14 +1184,14 @@ Reviewer: `mcp__codex-cli__codex` model `gpt-5.5`, `reasoningEffort: xhigh`, rea
 | A-4 | `parser.reset()` post-reset format-mismatch is unobservable (existing handleFormatAvailable early-returns on `decoder != nil`) | **FIXED** §6.3: parser-side ASBD comparison emits `onError` on mismatch → `.decodeError` non-reconnectable. Decoder swap explicitly out of scope. Test added in §6.5. |
 | A-5 | S3-4 OGG conflict map too optimistic (renames `ICYMetadata`, swaps `formatHint` to enum, adds `PipelineLifecycle`, adds `onChainFormatChange`) | **FIXED** §17.1 added: factory wrapper for `ICYMetadata` to keep OGG rename to one line; deferred `StreamFormatHint` abstraction (AHA Rule of Three — OGG is the right place); HLS opts out of `onChainFormatChange`; explicit OGG-rebase checklist. |
 
-**Nitpicks (all FIXED):**
+**Nitpicks (4 fixed, 1 rejected):**
 
 | # | Finding | Disposition |
 |---|---------|-------------|
 | N-1 | Content-Type promotion contradiction (§4 said yes, §8.2 deferred) | **FIXED** §8.2 step 5: explicit "no Content-Type promotion in v1, deferred to placeholder.md". Open Question 1 closed. |
 | N-2 | "File-internal" terminology imprecise across-file | **FIXED** §5.1: clarified as `internal` (default access). §7.6 / §8.5 use `fileprivate` precisely where applicable. |
 | N-3 | URLSession test seam ambiguous (own-session vs URLSession.shared adapter) | **FIXED** §7.6.1: single `HLSURLSessionAdapter` protocol, production `LiveAdapter` owns its own URLSession (not `URLSession.shared`), test `StubAdapter` in tests target. §12.2 updated. |
-| N-4 | "depreciated.md" spelling | **REJECTED as project convention** §11.4 footnote. The project's CLAUDE.md and global memory document `depreciated.md` as the established folder convention; CodeRabbit/Gemini hits on this are pre-classified false positives. Plan keeps `depreciated.md`. |
+| N-4 | "depreciated.md" spelling | **REJECTED as project convention** §11.4 footnote. Project convention (`tasks/_context/state.md`) is `depreciated.md`; CodeRabbit/Gemini hits on this are false positives. Plan keeps `depreciated.md`. |
 | N-5 | "first ~40 chars" truncation message inconsistent with snippet | **FIXED** §9.2: the snippet now reflects the actual behaviour (caller passes a short message; UI handles truncation). |
 
 **Rejected (false positives) — Oracle round 1 listed 5; all upheld here:**
@@ -1214,12 +1213,12 @@ Reviewer: `mcp__codex-cli__codex` model `gpt-5.5`, `reasoningEffort: xhigh`, rea
 | A-3 | `resumeByUser` ordering underspecified vs S3-1B's barrier discipline | **FIXED** §8.5.1: explicit 7-step ordering for the feeder; explicit 3-step ordering inside `pipeline.resumeByUser()` HLS branch (resetPrebufferTracking → feeder.resumeByUser → setPausedByUser(false)); ordering invariant called out and defended. |
 | A-4 | ASBD compare insufficient — missing `mFormatFlags` (AAC profile) and magic cookie; no fatal-state flag to truly stop subsequent packets | **FIXED** §6.3: comparison key extended with `mFormatFlags` and magic cookie content; new `parserFatalState: Bool` flag short-circuits all subsequent `parse(_:)` and packet callbacks until a fresh `init`. |
 
-**Nitpicks (all FIXED):**
+**Nitpicks (3 fixed, 1 noted):**
 
 | # | Finding | Disposition |
 |---|---------|-------------|
 | N-1 | Stale `FeederTermination.malformedPlaylist` in §7.1 enum snippet | **FIXED** §7.1: case removed; comment explains the fold into `decodeRejected`/`networkError`/`httpServerError`. |
-| N-2 | OGG plan does not yet reference §17.1.2 checklist | **NOTED**: HLS plan §17.1.2 calls out the action item for the OGG plan author. The OGG plan edit happens at OGG plan-writing time (separate sub-agent task). |
+| N-2 | OGG plan does not yet reference §17.1.2 checklist | **NOTED**: HLS plan §17.1.2 calls out the action item for the OGG plan author. The OGG plan edit happens at OGG plan-writing time (separate sub-agent task). (Closed: OGG plan §20 links §17.1.2.) |
 | N-3 | `M3U8Parser.parse` takes `String` but §5.2 mentions Latin-1 fallback / 1 MB rejection (mixed responsibility) | **FIXED** §5.2: parser-side robustness (BOM/CRLF/comments/1 MB cap returning `.malformed`) vs caller-side fetch decoding (UTF-8 → Latin-1) cleanly separated. Parser API stays `String`. |
 | N-4 | "17 cases" but visible list had 16 | **FIXED** §5.2: added body-too-large case → 17. §12.1 description updated. |
 
@@ -1244,7 +1243,7 @@ Reviewer: `mcp__codex-cli__codex` model `gpt-5.5`, `reasoningEffort: xhigh`, rea
 | # | Finding | Disposition |
 |---|---------|-------------|
 | N-1 | §14 still labels S3-1B conflict as "small" | **NOTED**: HLS does add a new branch to `pauseByUser`/`resumeByUser`. Risk severity assessment is fine (`Med` in the table); descriptive text not updated since the table already conveys the truth. Acceptable as-is. |
-| N-2 | OGG plan does not yet reference §17.1.2 checklist | **NOTED** (carry-over from Round 2): action item documented for the OGG plan author; out-of-scope for this HLS plan write. |
+| N-2 | OGG plan does not yet reference §17.1.2 checklist | **NOTED** (carry-over from Round 2): action item documented for the OGG plan author; out-of-scope for this HLS plan write. (Closed: OGG plan §20 links §17.1.2.) |
 
 ### Round 4 — score 9/10. PR-READY.
 
@@ -1264,9 +1263,9 @@ Reviewer: `mcp__codex-cli__codex` model `gpt-5.5`, `reasoningEffort: xhigh`, rea
 - 5 Round-1 actionable items applied inline.
 - 4 Round-1 nitpicks applied; 1 (N-4 `depreciated.md` spelling) rejected with documented project convention.
 - 4 Round-2 actionable items applied inline.
-- 4 Round-2 nitpicks applied (1 deferred to OGG plan author).
+- 3 Round-2 nitpicks applied; N-2 deferred to the OGG plan author (closed: OGG plan §20 links §17.1.2).
 - 3 Round-3 actionable items applied inline.
-- 2 Round-3 nitpicks: 1 deferred to OGG plan author (carry-over), 1 acknowledged as descriptive-text vs accurate-table.
+- 2 Round-3 nitpicks: 1 deferred to OGG plan author (carry-over; closed: OGG plan §20), 1 acknowledged as descriptive-text vs accurate-table.
 - 0 Round-4 actionable; 2 Round-4 nitpicks applied.
 
 Total: **16/16 actionable items applied across 4 rounds**. Plan converged at 9/10 in Round 4.
