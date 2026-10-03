@@ -482,7 +482,7 @@ The "Vorbis" label is unreliable: of 15 labelled streams that answered, 10 were 
 - Route by Content-Type plus a first-bytes sniff, not the `.ogg` extension, since some `.ogg` URLs serve MP3 or AAC+.
 - FLAC-in-Ogg is common (about 50 of the 305 "Vorbis" listings, plus Radio Paradise) and will take the "unsupported format" path; its message must be clear.
 - Not measured: a 48 kHz or format-changing live station (none found), BBC/KEXP, CUAC FM (no response), and how often the 6 non-chaining stations chain. The optional Gemini re-run and stb_vorbis chaining check are dropped: the live evidence settles the chaining question.
-- Worth it in 2026? For streaming alone, hard to justify (about 1.5% of directory streams, under 1% of listeners, small community stations). Local `.ogg` playback and Winamp fidelity are the stronger reasons. Scope is an owner decision (`tasks/_context/state.md`).
+- Worth it in 2026? For streaming alone, hard to justify (about 1.5% of directory streams, under 1% of listeners, small community stations). Local `.ogg` playback and Winamp fidelity are the stronger reasons. The owner kept the full scope, local files and streams (2026-10-02).
 
 ## Gemini Research Findings
 

@@ -11,7 +11,7 @@ Adds OGG Vorbis decoding for local files and Icecast streams (a Winamp parity ga
 - Predecessors: S3-1 (PR #80, #82) and S3-2 `avplayer-native-video-dsp` (PR #89) merged. S3-3 `hls-streaming-support` pending. `video-audio-engine-routing` is not a predecessor.
 - Rebase on post-HLS main using `tasks/hls-streaming-support/plan.md` §17.1.2 (linked from `plan.md` §20).
 - Successor: the Structure Sprint starts after this PR merges.
-- Owner decision pending (todo G1b; listed in `tasks/_context/state.md`, Owner decisions pending): run the 5-station live OGG spot-check before vendoring, or accept the risk.
+- G1b live spot-check done 2026-10-02 (`research.md`, Gate G1b); its findings are todo items under G1b. Scope: full, local files and Icecast streams, as planned (owner, 2026-10-02).
 
 ## Branches and PR
 

@@ -65,6 +65,7 @@ History lives in git and `tasks/done/`.
   - Why: the layout should not get worse before the sprint.
   - Files that broke the policy after 2026-03-15 are covered by the SS-0 mapping.
 - **S3 order:** S3-3 (HLS) merges before S3-4 (OGG).
+- **S3-4 scope (owner, 2026-10-02):** full scope as planned, local `.ogg` files and Icecast Ogg streams, chosen after the G1b live check (Vorbis is about 1.5% of Icecast streams; no live format changes at chain boundaries).
   - Why: both edit `StreamDecodePipeline.swift`. OGG goes last because it also touches `project.yml` and vendored C, and it rebases using HLS plan §17.1.2.
 - **D-S4 (owner, 2026-09-05):** GitHub-issue fixes land after the Structure Sprint, and S4-1 runs before S4-2.
   - Why: the fixes should land in the new layout rather than be rebased across a file-move sprint, and S4-1's deprecation findings may change how they are done.
@@ -129,7 +130,6 @@ History lives in git and `tasks/done/`.
 ## Owner decisions pending
 
 1. Delete the merged branches on origin: the GH013 ruleset ("restrict deletions") refuses it from the CLI. Add a bypass or disable that rule temporarily and run the commands in `tmp/branch-cleanup.md`, or use GitHub's Branches page.
-2. S3-4 scope, after the 2026-10-02 live check (`tasks/ogg-vorbis-support/research.md`, Gate G1b): Ogg Vorbis is about 1.5% of Icecast directory streams and under 1% of listeners; none of the plan's reference stations (SomaFM, Radio Paradise, BBC) still serve Vorbis; no live station changed format at a chain boundary. Options: (a) full S3-4 as planned (local files and streams); (b) local `.ogg` files only, deferring Ogg streaming to the backlog, which skips the StreamDecodePipeline backend/lifecycle changes; (c) defer S3-4 entirely. Recommended: (b), since local playback is the Winamp-fidelity value and the streaming half carries most of the risk for little use. Either (b) or (c) needs a short plan revision before Phase 0.
 
 ## Shipped
 
