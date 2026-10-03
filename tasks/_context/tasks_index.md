@@ -32,13 +32,12 @@ Status words as defined in `plan.md` (Summary), which is the status source, plus
 | SS-8 | Mirror tests to source layout; last required Structure Sprint step (SS-9 optional) | QUEUED | none; tracked in `swift-project-structure-research/todo.md` |
 | SS-9 | Local packages (Windowing, AudioStreamingCore, SkinEngine) | OPTIONAL | none |
 | S4-3 | AirPlay route picker: in-app `AVRoutePickerView` over the Winamp logo | QUEUED | `airplay-route-picker`, created when planning starts |
-| AT-1 | #86 test isolation: pin `repeatMode` in `PlaylistNavigationTests` | IN REVIEW (PR #92) | none |
 | AT-2 | One Timer helper for the 7 `RunLoop.main.add(timer, forMode: .common)` sites | DEFERRED | none; fits `Core/` once SS-7 creates it |
 | BL-1 | Visualizer fidelity audit: spectrum analyzer vs real frequencies and Winamp/Webamp | BACKLOG | none; created when started |
 
 ## Archive
 
-- `tasks/done/`: 87 entries (85 folders, 2 files), finished tasks. Shipped work is summarized in `state.md` (Shipped).
+- `tasks/done/`: 88 entries (86 folders, 2 files), finished tasks; `codebase-review-2026-09` (the source of the amp review) was archived there on 2026-10-02. Shipped work is summarized in `state.md` (Shipped).
 - `tasks/stale/`: 88 entries (80 folders, 8 files), abandoned work and review scratch, including the paused vaer branch's review-scratch folders.
 - `tasks/depreciated/`: 2 folders (`airplay`, `winamp-airplay-overlay`), inputs to S4-3.
 

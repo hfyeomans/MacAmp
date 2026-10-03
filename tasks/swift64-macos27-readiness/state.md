@@ -75,9 +75,7 @@ S3-4 decides this in commit C1 on `feat/ogg-vorbis-support`: delete root `Packag
 
 ## Owner decisions affecting this task
 
-Listed in `tasks/_context/state.md` (Owner decisions pending).
-
-- **Appearance Mode:** Liquid Glass work here happens only if the owner keeps the Material/Liquid Glass preferences (`materialIntegration`, `enableLiquidGlass` in `MacAmpApp/Models/AppSettings.swift`).
+None open. The Appearance Mode preferences were removed in #91 (owner, 2026-10-02), so no Liquid Glass adoption is planned; the Winamp windows are borderless skin bitmaps.
 
 ## Next step
 

@@ -39,7 +39,6 @@ Scope, anchors and gating live in `state.md`. Phase 0 may run any time; Phase 2 
 - [ ] 2.11 Strict-concurrency cleanups: P-2, P-3, `nonisolated(unsafe)` x1, `Task.detached` x3 (if SS-7 left them)
 - [ ] 2.12 Passthrough guard
 - [ ] 2.13 Recheck the NSMenu "Internal inconsistency" warnings on macOS 27
-- [ ] 2.14 Liquid Glass work, only if the owner keeps Appearance Mode
 - [ ] 2.15 Apply the language-mode ADR outcome
 - [ ] 2.16 Optional: ring-buffer benchmarks
 - [ ] 2.17 Per change: `xcodegen generate`, then `xcodebuildmcp macos build` and `test` with `--json '{"extraArgs":["-enableThreadSanitizer","YES"]}'`

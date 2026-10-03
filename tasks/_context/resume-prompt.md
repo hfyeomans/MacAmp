@@ -6,20 +6,18 @@ How to use: paste *"Read `tasks/_context/resume-prompt.md` and follow it."*
 
 ## Where things stand
 
-- Current state (release, branches, open PR #91, open issues, test baseline, owner decisions pending): `tasks/_context/state.md`.
+- Current state (release, branches, open PRs, open issues, test baseline, owner decisions pending): `tasks/_context/state.md`.
 - Roadmap and status: `plan.md`; checklist: `todo.md`; deferred items: `deferred.md`; findings and gotchas: `research.md`; folder index: `tasks_index.md`. All in `tasks/_context/`.
 - No task is implementing. S3-3 is next.
 
 ## Next action
 
-1. Run `git status`. If the 2026-10-02 `_context` rewrite and task-folder moves are still uncommitted, commit them as one docs commit on `main` and push (owner approved 2026-10-02).
-2. AT-1 (#86): if its standalone test-only PR is not open or merged yet, do it first (`plan.md`, AT-1).
-3. Ask the owner to merge PR #91 (`chore/amp-review-dead-code`) first if possible, so S3-3 branches from the cleaned `main`. Recommended, not required.
-4. Open `tasks/hls-streaming-support/` and run pre-flight in order (PF.1, PF.2 and PF.6 are satisfied):
+1. Run `git status` and `git pull`; `main` should be clean.
+2. Open `tasks/hls-streaming-support/` and run pre-flight in order (PF.1, PF.2 and PF.6 are satisfied):
    - PF.3: re-read `StreamDecodePipeline.swift`, `StreamPlayer.swift` and `AudioFileStreamParser.swift` at HEAD and refresh the plan's line anchors.
    - PF.4: cut `feat/hls-streaming-support` from `main`.
    - PF.5: create `MacAmpApp/Audio/HLS/`.
-5. Continue with Phase 1 per the task's `todo.md`. Report to the owner before pushing the PR.
+3. Continue with Phase 1 per the task's `todo.md`. Report to the owner before pushing the PR.
 
 ## Per-task pickup process
 

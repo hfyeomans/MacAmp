@@ -17,7 +17,7 @@ SS-0 map ──┬──► SS-1 seek ────────┬──► SS-6 
            ├──► SS-3 Windowing/ ──┬──► SS-5 Features/ ────┘
            └──► SS-4 Milkdrop ────┘
 
-Now, before S3-3: AT-1 (#86)     After S3-4: AT-2 (Timer helper, best in SS-7)     Backlog: BL-1 (visualizer audit)
+After S3-4: AT-2 (Timer helper, best in SS-7)     Backlog: BL-1 (visualizer audit)
 ```
 
 ## Ordering rules
@@ -34,7 +34,7 @@ Every item: one branch and PR, `xcodegen generate`, TSan build and test, one exh
 
 | ID | Item | Folder | Status | Predecessors |
 |----|------|--------|--------|--------------|
-| S3-3 | Audio-only HLS | `tasks/hls-streaming-support/` | NEXT | #82, #89 merged; PR #91 merge recommended first |
+| S3-3 | Audio-only HLS | `tasks/hls-streaming-support/` | NEXT | #82, #89 merged |
 | S3-4 | OGG Vorbis | `tasks/ogg-vorbis-support/` | BLOCKED | S3-3 |
 | SS-0 | Structure Sprint map | `tasks/swift-project-structure-research/` | QUEUED | S3-4 |
 | SS-1 | AudioPlayer seek re-evaluation (D8) | `tasks/audioplayer-seek-extraction/` | DEFERRED | SS-0, S3-4 |
@@ -50,11 +50,10 @@ Every item: one branch and PR, `xcodegen generate`, TSan build and test, one exh
 | S4-2 | GitHub issues #47, P-6, #79, #84 | `tasks/github-issues-triage/` | QUEUED | Structure Sprint, S4-1 |
 | S4-3 | AirPlay route picker | no folder yet | QUEUED | S4-1 |
 | S4-4 | Multichannel video output (#88) | `tasks/video-multichannel-output/` | QUEUED | S4-3 (roadmap order only) |
-| AT-1 | #86 test isolation | no folder | IN REVIEW | PR #92 open; owner merges |
 | AT-2 | Timer common-mode helper | no folder yet | DEFERRED | S3-4 (shares StreamPlayer/AudioEngineController); best in SS-7 |
 | BL-1 | Visualizer fidelity audit | no folder yet | BACKLOG | None |
 
-Status words: IN REVIEW = PR open; NEXT = start now; BLOCKED = waiting on a predecessor; QUEUED = waiting its turn; DEFERRED = parked until its slot or trigger; PENDING = needs an owner decision; OPTIONAL; BACKLOG = not scheduled.
+Status words: NEXT = start now; BLOCKED = waiting on a predecessor; QUEUED = waiting its turn; DEFERRED = parked until its slot or trigger; PENDING = needs an owner decision; OPTIONAL; BACKLOG = not scheduled.
 
 ## S3: streaming formats
 
@@ -77,7 +76,7 @@ Status words: IN REVIEW = PR open; NEXT = start now; BLOCKED = waiting on a pred
 - **Amp item:** root `Package.swift` cannot build (mixed Swift and ObjC with a bridging header, no Butterchurn resources), and nothing runs `swift build`. In commit C1 on `feat/ogg-vorbis-support`, not on the throwaway spike, delete `Package.swift`, `Package.resolved` and the `.swiftlint.yml` exclude (`.swiftlint.yml:44`). `Package.resolved` is the only tracked lockfile (`.gitignore:44` ignores `MacAmpApp.xcodeproj/`), so the same commit replaces the `from:` ranges in `project.yml` with exact pins at today's resolved versions: ZIPFoundation 0.9.20 and swift-atomics 1.3.0. Fallback slot: S4-1.
 - **Risks and gates:**
   - Order: G1 after S3-3 merges, re-read every Files Affected at HEAD (no code); then the 0a/0b spikes; then cut `feat/ogg-vorbis-support` and apply the 5-step HLS hand-off (HLS plan §17.1.2) as its first work.
-  - Owner call before Phase 1: run the 5-station live OGG spot-check or accept the risk. It also answers whether OGG is still worth doing.
+  - G1b live spot-check done 2026-10-02 (`tasks/ogg-vorbis-support/research.md`, Gate G1b): 10 Vorbis stations, no format change at any chain boundary, sub-second jingle chains, real Vorbis about 1.5% of Icecast listings. Its four findings are todo items (retune only on format change, elapsed time not from granules, route by Content-Type + sniff, clear FLAC-in-Ogg/Opus error). Scope (full, local files only, or defer) is an owner decision in state.md.
   - Phase 0a/0b spikes are hard gates (0b: drift ≤100 ms over 60 s, exactly one completion, TSan clean). Record the results in research.md and delete both spike branches.
   - C9: Release binary size ≤500 KB stripped, plus an Instruments decoder-lifecycle leak check.
   - StreamDecodePipeline grows to about 1,225 raw / ~820 SwiftLint-counted lines, past the 600 `file_length` warning (research.md, Fired growth triggers), and the plan forbids splitting it; SS-2 handles that.
@@ -96,7 +95,7 @@ Starts after S3-4 merges. Each consolidation task gets its own branch; there is 
 
 ### SS-1 AudioPlayer seek re-evaluation (D8)
 
-- **Why now:** D8 (AudioPlayer stays whole, Option C) is under re-evaluation, not in force. Two of its three triggers fired: size (`AudioPlayer.swift` is 1,101 lines) and new responsibility (the video-tap and engine-reconfigure sections); the testability trigger has not.
+- **Why now:** D8 (AudioPlayer stays whole, Option C) is under re-evaluation, not in force. Two of its three triggers fired: size (`AudioPlayer.swift` is 1,097 lines) and new responsibility (the video-tap and engine-reconfigure sections); the testability trigger has not.
 - **Scope:** re-evaluate Option B, a lean SeekController with direct references to the engine and videoPlaybackController and about 2 callbacks (onRequestNextTrack, onPlaylistAdvanceRequest). If go, move atomically: currentSeekID, seekGuardActive, isHandlingCompletion, shouldIgnoreCompletion, seek, seekToPercent, videoSeekCompletion and onPlaybackEnded. Decompose in place in Audio/, before SS-6. Replace the seek-guard `Task.sleep` delays with one structured guard-clear, only once tests exist. Decide the two swiftlint suppressions (`AudioPlayer.swift:1` file_length, `:9` type_body_length): after seek extraction both SwiftLint counts stay near 650, so `file_length` still warns and `type_body_length` still errors (`tasks/audioplayer-seek-extraction/research.md`).
 - **Also:** the optional SS-1 rows in deferred.md (PreReconfigureSnapshot narrowing).
 - **Risks and gates:** seek characterization tests come first (seek while playing or paused, seek to end, rapid seeks, guarded stream no-op, a user action during a pending engine reconfigure via cancelPendingReconfigure). Go/no-go ADR. Kill switch: cancel if state ownership would still be split. TSan, manual seek and remote-command checks.
@@ -157,7 +156,7 @@ Starts after S3-4 merges. Each consolidation task gets its own branch; there is 
   - Strict-concurrency leftovers: `nonisolated(unsafe)` at `StreamDecodePipeline.swift:79`, 3 `Task.detached` at `PlaylistWindowActions.swift:103/257/288`, S3-2 P-2 (Mirror misses `~Copyable` fields) and P-3 (`@preconcurrency import AVFoundation`).
   - Fix the cosmetic `xcodeVersion: '26.0'` at `project.yml:6`. Record D-TARGET27 as ADR-1.
   - Deferred inputs slotted here: every S4-1 row in deferred.md (passthrough guard, NSMenu warnings recheck, ManagedAtomic → Synchronization.Atomic, the ring-capacity constant, stream-bridge lifecycle tests, ring-buffer benchmarks).
-  - Liquid Glass work depends on the owner's Appearance Mode decision.
+  - No Liquid Glass adoption is planned: the Appearance Mode preferences were removed in #91, and the borderless bitmap windows cannot use system glass.
 - **Amp items** (mechanism and line anchors in `tasks/swift64-macos27-readiness/state.md`, Amp-review items):
   - Skin Sendable: delete the unused `spriteResolver` environment helpers, then drop `@unchecked Sendable` from Skin. SpriteResolver is already plain `Sendable`.
   - LockFreeRingBuffer overrun race: the heads are already ManagedAtomic; the race is the producer's storage write over unread frames on overrun. Fix with drop-newest on overrun or a documented accepted-loss contract, and correct the "Known race (accepted)" doc comment. Add the overrun-during-read TSan stress test and replace `withKnownIssue` on the high-throughput test.
@@ -171,7 +170,7 @@ Starts after S3-4 merges. Each consolidation task gets its own branch; there is 
   2. P-6: after a video, loading an audio track does not auto-play. Close P-6 in `tasks/done/avplayer-native-video-dsp/placeholder.md` and in deferred.md.
   3. #79: drag and drop onto the window, Dock or app icon does nothing, and Finder double-click / Open With is greyed out. Leads: `Info.plist` CFBundleDocumentTypes lists only skins, there are no onDrop handlers, and Cmd+O is limited to `[.audio]` (`AppCommands.swift:107`).
   4. #84: Nucleo NLog v102 classic-skin rendering; verify across 3-5 skins and update the skin docs.
-  - Also: VideoPlaybackController does not observe `timeControlStatus`, so an external AVPlayer pause is not mirrored in the UI. The RemoteLayerTreeDisplayLinkClient warning is in scope only if it recurs without a debugger. #86 joins here only if the owner folds AT-1 in. #78 is done (PR #90); #88 is S4-4.
+  - Also: VideoPlaybackController does not observe `timeControlStatus`, so an external AVPlayer pause is not mirrored in the UI. The RemoteLayerTreeDisplayLinkClient warning is in scope only if it recurs without a debugger. #86 is fixed (#92); #78 is done (PR #90); #88 is S4-4.
 - **Risks and gates:** re-fetch the issues and reproduce each on HEAD first. plan.md with a fix plan per issue, a file-conflict map and merge order, folding in S4-1's deprecation conclusions; owner sign-off before code. Close each issue with its PR link.
 
 ### S4-3 AirPlay route picker
@@ -185,12 +184,6 @@ Starts after S3-4 merges. Each consolidation task gets its own branch; there is 
 - **Risks and gates:** experiments 1-4 first (C/LFE downmix coefficients, negotiated channel count per route, effect on the Spatial/Atmos indicator, changing `allowedAudioSpatializationFormats` on a live item). Check passthrough routes (AVAudioContentSource_Passthrough) before pinning more than 2 channels. Keep the source-rate AirPlay 2 pumping fix (ADR-12). Layout-mapping and fold-math unit tests, then ear checks. The tracked `clapperboard-videos/` corpus (5 clips, one surround) suits the experiments (research.md).
 
 ## Outside the main sequence
-
-### AT-1 #86 test isolation
-
-- **Status:** IN REVIEW, PR #92 (`fix/86-test-repeat-mode`). The owner chose a small standalone test-only PR before S3-3 (2026-10-02). It is our own test defect, so it does not wait for S4-2 under D-S4.
-- **Scope:** PlaylistNavigationTests "nextTrack returns stream handoff for mixed playlist" reads `PlaylistController.repeatMode` from the global AppSettings backed by real UserDefaults, so a saved repeat-one setting makes it return `.restartCurrent`. Pin `repeatMode` in the test and save/restore the UserDefaults key. Closes #86.
-- **Gates:** TSan suite; record the result in state.md.
 
 ### AT-2 Timer common-mode helper
 

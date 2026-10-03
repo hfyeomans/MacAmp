@@ -12,14 +12,19 @@ Updated: 2026-10-02
 ## Pre-implementation gates
 
 - [x] **Gate G0:** Oracle plan validation ≥ 9/10: 9.3/10 in round 3 (reviewer `gpt-5.3-codex`, xhigh, per plan §23).
-- [ ] **Gate G1:** After S3-3 merges, re-read every file in plan §15 at HEAD and refresh the plan's anchors (refreshed at `b3894d9`; S3-3 and PR #91 will shift them). No code. The HLS hand-off below is applied later, as the first work on `feat/ogg-vorbis-support` (Gate G6).
+- [ ] **Gate G1:** After S3-3 merges, re-read every file in plan §15 at HEAD and refresh the plan's anchors (refreshed at `b3894d9`; #91, merged as `30d9de3`, moved `AudioPlayer.swift` anchors after line 319 up by 4; S3-3 will shift more). No code. The HLS hand-off below is applied later, as the first work on `feat/ogg-vorbis-support` (Gate G6).
   1. Retype the HLS `makeStreamMetadata` factory to return `StreamMetadata`.
   2. Convert the HLS `formatHint = kAudioFileAAC_ADTSType` line to `.audioFileStream(kAudioFileAAC_ADTSType)`.
   3. Fit HLS `DecodeContext` init into `PipelineLifecycle` (`buffering → playing`, like MP3/AAC progressive).
   4. Confirm HLS does not subscribe to `onChainFormatChange` (HLS rejects mid-stream format changes).
   5. Run the HLS tests and add an HLS-after-OGG integration test.
   - Re-derive the map in `tasks/_context/research.md` (File-conflict map) at HEAD.
-- [ ] **Gate G1b (owner call):** Run the 5-station live OGG spot-check before Phase 1 (chain frequency, sample rate and channels per station; research Oracle finding 7; plan §13 table holds assumed values only), or record the risk as accepted. Either way, fold the open Gemini re-run (2026 OGG station prevalence, stb_vorbis chaining) into it or drop it explicitly. The result also answers whether OGG is still worth doing.
+- [x] **Gate G1b:** Live spot-check run 2026-10-02 (10 stations; `research.md`, Gate G1b). Apply its findings:
+  - [ ] Bridge retune/reactivation only on a real format change, never per chain (no gap at track changes or jingles)
+  - [ ] Per-chain decoder reset and metadata update, including sub-second chains
+  - [ ] Elapsed time never from absolute granule positions after a mid-stream join
+  - [ ] Route by Content-Type plus first-bytes sniff, not the `.ogg` extension
+  - [ ] Clear "unsupported format" message for FLAC-in-Ogg and Opus
 - [ ] **Gate G2:** Phase 0a spike PASS — `Cogg`/`Cvorbis` smoke build links + runs on arm64 with TSan, smoke fn returns 42.
 - [ ] **Gate G3:** Phase 0b spike PASS — chained `scheduleBuffer` reproduces play / pause / seek / progress / completion semantics on a non-Vorbis WAV; TSan clean on macOS 27.
 - [ ] **Gate G4:** Append "Phase 0a Spike Result" + "Phase 0b Spike Result" sections to `research.md` with build output, decision, and SHAs.
@@ -221,7 +226,7 @@ Updated: 2026-10-02
 - [ ] 8.20 T14: Local-file play / pause / seek / completion via `VorbisFileSource`.
 - [ ] 8.21 T14b: Producer-thread invariant — assert no libvorbis call occurs inside `scheduleBuffer` completion handler context (capture thread-id sentinel in producer queue, assert ≠ completion-handler thread-id).
 - [ ] 8.22 T15: TSan green.
-- [ ] 8.23 Live-station playback gate: 5 stations × ≥ 5 minutes each (plan §13), using the G1b stations if that check ran.
+- [ ] 8.23 Live-station playback gate: 5 stations × ≥ 5 minutes each (plan §13), using the G1b stations in plan §13.
 - [ ] 8.24 Commit C8.
 
 ## Phase 9 — Binary size + leak check (commit C9, append to research)

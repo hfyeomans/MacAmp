@@ -133,11 +133,6 @@ Checklist derived from `tasks/_context/plan.md`, grouped by plan item ID in exec
 - [ ] Passthrough route check before pinning more than 2 channels
 - [ ] plan.md; implement with layout-mapping and fold-math tests; ear checks; one `/codex:review --base main`; PR
 
-## AT-1 #86 test isolation (no folder)
-
-- [x] Pin `repeatMode` and restore the saved value in PlaylistNavigationTests; reproduce and verify; TSan 137/21; PR #92 closing #86
-- [ ] Owner merges PR #92
-
 ## AT-2 Timer common-mode helper (no folder; after S3-4, best in SS-7)
 
 - [ ] Add the helper, migrate the 7 sites, TSan, manual visualizer/timer/Butterchurn check, PR

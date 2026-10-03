@@ -6,7 +6,7 @@ Starts after the Structure Sprint and S4-1 merge (D-S4). Scope, order and review
 
 ## Phase 0: Triage
 
-- [ ] 0.1 `gh issue list`: confirm the open set (#47, #79, #84, #86, #88) and check for new issues
+- [ ] 0.1 `gh issue list`: confirm the open set (#47, #79, #84, #88) and check for new issues
 - [ ] 0.2 `gh issue view` #47, #79 and #84: read new comments; collect attached skins, recordings and version details
 - [ ] 0.3 Reproduce #47: enumerate every Cmd+Shift+1/2/3 binding and confirm which wins
 - [ ] 0.4 Re-confirm P-6 on HEAD

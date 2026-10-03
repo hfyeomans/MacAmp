@@ -14,7 +14,7 @@ D8 is under re-evaluation, not in force. Two of its three revisit triggers have 
 
 | Trigger | State |
 |---|---|
-| File grows past 800 lines | Fired: 1,101 lines at `b3894d9` (~1,097 after PR #91). |
+| File grows past 800 lines | Fired: 1,097 lines at `30d9de3` (1,097 before PR #91). |
 | A genuinely new responsibility | Fired: Video Tap section (`AudioPlayer.swift:176-300`) and Engine Reconfiguration Handlers (`:848-976`); the handlers also write all three seek guards. |
 | Seek logic must be testable on its own | Not fired. |
 

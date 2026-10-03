@@ -602,17 +602,17 @@ Unchanged. The graph is still `playerNode → eqNode → mainMixer → output`. 
 | T14b | Local-file producer-thread invariant — assert no libvorbis call occurs inside the `scheduleBuffer` completion handler context (verified via a sentinel-thread-id captured in the producer queue and asserted ≠ in-completion-thread-id) | integration |
 | T15 | TSan: full suite green | sanity |
 
-**Live-station spot-check table (manual, recorded in research.md):**
+**Live-station gate stations (measured 2026-10-02, research.md Gate G1b):**
 
-> The values below are assumptions, not measurements; research Oracle finding 7 asked for them to be measured before locking in libvorbis. Todo G1b holds the owner's call: measure before Phase 1, or accept the risk.
+| Station | URL | Chains | Sample rate | Channels | Why |
+|---------|-----|--------|-------------|----------|-----|
+| Punkrockers Radio | `stream.punkrockers-radio.de:8000/prr.ogg` | per track, ~2-3 min | 44.1 | 2 | frequent chains |
+| Radio Free Brazi | `rfb.brazi.net:8000/rfb.ogg` | per track plus sub-second jingle chains | 44.1 | 2 | short-chain stress |
+| Radio Città Fujiko | `streaming.radiocittafujiko.it:8001/rcf.ogg` | per track, ~2.5-3.5 min | 44.1 | 2 | steady metadata |
+| WUVT-FM | `stream.wuvt.vt.edu/wuvt.ogg` | per track, ~6 min | 44.1 | 2 | long chains |
+| LogosRadio | `logosradio.info:8000/logosradio.ogg` | rare, untagged | 44.1 | 1 | mono path |
 
-| Station | URL hint | Chain frequency | Sample rate | Channels |
-|---------|----------|-----------------|-------------|----------|
-| SomaFM Groove Salad OGG | `https://ice2.somafm.com/groovesalad-128-ogg` | per-track | 44.1 | 2 |
-| SomaFM Drone Zone OGG | `https://ice2.somafm.com/dronezone-128-ogg` | per-track | 44.1 | 2 |
-| RadioParadise main mix OGG | (verify endpoint at plan time) | per-track | 44.1 | 2 |
-| BBC Radio 3 OGG fallback (if extant) | TBD | per-track | 48 | 2 |
-| Indie / classic.com / similar | TBD | per-track | 44.1 | 2 |
+No live station changed format at a chain boundary; `chained-rate-change.ogg` covers that case. The SomaFM, Radio Paradise and BBC rows from the 2026-04 draft no longer serve Vorbis.
 
 Each station: ≥ 5 minutes uninterrupted playback, TSan clean, EQ slider reacts, visualizer animates, balance pans audibly, metadata updates on chain boundary.
 

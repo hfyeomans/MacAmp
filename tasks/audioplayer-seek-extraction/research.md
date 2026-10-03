@@ -6,7 +6,7 @@ Seek-state coupling map for `MacAmpApp/Audio/AudioPlayer.swift`. Line numbers ar
 
 ## File
 
-- 1,101 lines. `@Observable @MainActor final class AudioPlayer`.
+- 1,097 lines. `@Observable @MainActor final class AudioPlayer`.
 - Suppressions: `// swiftlint:disable file_length` (`:1`), `// swiftlint:disable:this type_body_length` (`:9`).
 - SwiftLint counts lines without comments and whitespace. Linting a copy with both suppressions removed gives `file_length` 758 (warns at 600, errors at 1,200) and a class body of 750 (`type_body_length` warns at 400, errors at 600), so the type suppression hides an error. Thresholds: `.swiftlint.yml:58-69`.
 - The atomic unit (`:54-56`, `:422-428`, `:783-847`, `:965-976`, `:992-1040`) is about 109 of those counted lines. `AudioPlayer` keeps the `seek`/`seekToPercent` facade, so both counts end near 650 after extraction: `file_length` still warns and `type_body_length` still errors.

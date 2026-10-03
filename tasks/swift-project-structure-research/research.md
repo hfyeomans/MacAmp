@@ -19,7 +19,7 @@ Evidence for the placement policy: how the tree is organized today, where it hur
 | `ViewModels/` | 7 | Butterchurn, Skin and WindowCoordinator types |
 | root | 3 | `MacAmpApp.swift`, `AppCommands.swift`, `SkinsCommands.swift` |
 
-- Largest files: `AudioPlayer.swift` 1,101; `Streaming/StreamDecodePipeline.swift` 825; `StreamPlayer.swift` 714; `PlaybackCoordinator.swift` 587; `AudioEngineController.swift` 580.
+- Largest files: `AudioPlayer.swift` 1,097; `Streaming/StreamDecodePipeline.swift` 825; `StreamPlayer.swift` 714; `PlaybackCoordinator.swift` 587; `AudioEngineController.swift` 580.
 - `Tests/MacAmpTests/` is flat: 21 files.
 - Planned by S3: `Audio/HLS/` (S3-3) and `Audio/Vorbis/` (S3-4). Neither fits the original `Audio/` map.
 

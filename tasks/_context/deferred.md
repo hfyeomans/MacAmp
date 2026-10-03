@@ -71,7 +71,6 @@ Sizes: Trivial, Small, Medium, Large.
 
 | Item | Slot | Size | Note |
 |------|------|------|------|
-| #86: a `PlaylistNavigationTests` case depends on the saved Repeat setting | AT-1 | Small | Standalone test-only PR before S3-3 (owner, 2026-10-02) |
 | Seven `Timer` + `RunLoop.main.add(_, forMode: .common)` call sites with no shared helper | AT-2 | Medium | plan.md AT-2 |
 | Shade-strip visualizer bars stuck at max until restart (2026-09-28, after minimize/hide cycles) | BL-1 | Small | Suspects: a non-finite value persisting in `VisualizerPipeline.updateLevels` smoothing, or NaN at the Goertzel clamp (`min(1.0, NaN)` returns 1.0). If it recurs, read `visualizerPipeline.levels` over LLDB |
 | RMS/Goertzel math exists twice (engine tap and video tap) | BL-1 | Small | Parity test before changing the math (plan.md BL-1) |
@@ -98,4 +97,3 @@ No plan slot. Revisit on user demand; promote a row to `plan.md` when it is pick
 
 | Item | Slot | Size | Note |
 |------|------|------|------|
-| PR #81 review threads #2 and #3 have no reply | owner | Trivial | `./scripts/resolve-pr-comments.sh 81 list`; also in state.md, Owner decisions pending |

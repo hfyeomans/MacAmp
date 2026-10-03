@@ -23,11 +23,11 @@ History lives in git and `tasks/done/`.
 | Platform | macOS 27.0 minimum, Apple Silicon (arm64) only. |
 | Toolchain | Xcode 27.0 (27A5194q) with Swift 6.4, on host macOS 27.0 (26A428). Language mode is Swift 6.2 (`SWIFT_VERSION 6.2`, `SWIFT_STRICT_CONCURRENCY complete`). `project.yml` still says `xcodeVersion: '26.0'`; this has no effect on the build. |
 | Build | XcodeGen builds from `project.yml`; `MacAmpApp.xcodeproj` is generated and gitignored. Packages are ZIPFoundation (`from: 0.9.20`) and swift-atomics (`from: 1.2.0`), resolved to 0.9.20 and 1.3.0 in root `Package.resolved`, the only tracked lockfile. |
-| Code | `MacAmpApp/` has 122 `.swift` files. The largest are `Audio/AudioPlayer.swift` (1,101 lines) and `Audio/Streaming/StreamDecodePipeline.swift` (825). |
-| `main` | At `b3894d9`, in sync with `origin/main`. The `_context` rewrite and task-folder moves are uncommitted until the owner asks for the commit. |
-| Open PRs | #92 `fix/86-test-repeat-mode` (`a8d2ece`, AT-1): pins repeat mode in the #86 test; full TSan suite passed (137/21); `/codex:review` could not run (Codex CLI rejects its configured model `gpt-6.1-sol` for a ChatGPT account). #91 `chore/amp-review-dead-code` (`a032bcd`), waiting for the owner to merge. It removes `EqualizerController.useLogScaleBands` and its `AudioPlayer` forwarder, `autoEQTask`, and `AppSettings.shouldPreserveWinampChrome` / `shouldUseFullSystemMaterials`. Until it merges, that code is still on `main`. |
-| Tests | 137 tests in 21 suites passed under TSan on `main` and on PR #91 (2026-10-02). The #86 test passed in that run, but it can still fail depending on the saved Repeat setting. |
-| Active work | Nothing is being implemented. Next is S3-3 `hls-streaming-support` (plan approved at Oracle 9.0/10), starting with pre-flight PF.3, preferably after the owner merges PR #91. Then S3-4, the Structure Sprint and S4 (see `plan.md`). |
+| Code | `MacAmpApp/` has 121 `.swift` files. The largest are `Audio/AudioPlayer.swift` (1,097 lines) and `Audio/Streaming/StreamDecodePipeline.swift` (825). |
+| `main` | At `30d9de3` (PR #91 merge), in sync with `origin/main`. |
+| Open PRs | None. #92 (#86 test fix) merged as `f7c480c`; #91 (dead code and the Appearance Mode preferences) merged as `30d9de3`. |
+| Tests | 137 tests in 21 suites passed under TSan on PR #91's head (2026-10-02). #86 is fixed: the navigation test pins repeat mode. |
+| Active work | Nothing is being implemented. Next is S3-3 `hls-streaming-support` (plan approved at Oracle 9.0/10), starting with pre-flight PF.3. Then S3-4, the Structure Sprint and S4 (see `plan.md`). |
 | Docs | The index is `docs/README.md`. `docs/diagrams/` holds 11 Excalidraw diagrams with PNG exports. |
 
 ## Open issues
@@ -37,7 +37,6 @@ History lives in git and `tasks/done/`.
 | #47 | Keyboard shortcut conflict: Cmd+Shift+1-3 (skins vs window toggles) | S4-2 |
 | #79 | Can't drag files, or open by double-click | S4-2 |
 | #84 | Nucleo NLog v2G rendering defects | S4-2 |
-| #86 | The test "nextTrack returns stream handoff for mixed playlist" depends on the saved Repeat setting | AT-1: a standalone test-only PR, done before S3-3 (owner, 2026-10-02). |
 | #88 | Video: multichannel (5.1+) output with speaker-side balance | S4-4 |
 | P-6 | Video-to-audio transition does not auto-play. Internal item, not filed on GitHub. | S4-2 |
 
@@ -45,18 +44,16 @@ History lives in git and `tasks/done/`.
 
 | Branch | Head | State |
 |--------|------|-------|
-| `chore/amp-review-dead-code` | `a032bcd` | PR #91, open. |
 | `feat/video-audio-engine-routing` | `5af91eb` | The paused S3-2 attempt (Phase 7 partial). Kept on origin and locally as a reference. |
-| `spike/avplayer-inplace-tap-dsp` | `dd53d64` | The S3-2 Phase 0 spike, not in `main`. On origin and locally; branch cleanup (owner decision 5). |
-| `fix/window-docking-78` (origin) | `3b8fd3a` | Merged in #90. Owner decision 5. |
-| `fix/pr81-butterchurn-timer-callbacks` | `212d1d8` | Merged in #83, still on origin and locally. Owner decision 5. |
-| Other merged branches | various | 47 origin and 31 local branches are already merged into `main`. These docs do not track them; cleanup is up to the owner. |
+| Origin cleanup | various | 70 branches to delete: 68 merged (including `fix/window-docking-78` and `fix/86-test-repeat-mode`) plus 2 never merged (`docs/review-uncommitted-docs`, superseded scaffolding; `spike/avplayer-inplace-tap-dsp`, the S3-2 Phase 0 spike, findings in `tasks/done/avplayer-native-video-dsp/research.md`). The GH013 ruleset refuses deletion from the CLI; commands are in the gitignored `tmp/branch-cleanup.md` (owner decision 1). |
+| Local branches | | Cleaned 2026-10-02: only `main`, `feat/video-audio-engine-routing` and (until its archive commit lands) `review/codebase-audit-2026-09` remain. |
 
 ## Local-only files
 
 - `chats/`: chat and session transcripts, gitignored.
 - `CLAUDE.md`, `AGENTS.md` and `GEMINI.md`: gitignored.
 - `module-cache/` and `weak_struct`: untracked in `b3894d9` and now ignored.
+- No git history purge (owner, 2026-10-02): the transcript and module cache stay in history (`95ebc06`, `5c4b8fa`); the transcript holds no secrets, and a purge would rewrite 684 commits and every release tag.
 
 ## Decisions in force
 
@@ -131,14 +128,8 @@ History lives in git and `tasks/done/`.
 
 ## Owner decisions pending
 
-1. Merge PR #91 (dead code, no behavior change), preferably before S3-3 branches. If decision 3 is "remove", fold that removal into #91 first.
-2. Review and merge PR #92 (AT-1, closes #86).
-3. S3-4: before vendoring in Phase 1, either run the 5-station live OGG spot-check or accept the risk. The spot-check also answers whether OGG is still worth doing in 2026.
-4. Appearance Mode preferences (`materialIntegration`, `enableLiquidGlass`) only add a `.thickMaterial` blur behind their own GroupBox, which is the Preferences window's only content; the labels promise app-wide "Liquid Glass" effects that do not exist. Recommended (two independent adversarial reviews, 2026-10-02): remove them, which also removes the Preferences window and its Cmd+, item; leave the two UserDefaults keys orphaned. Alternative: keep an empty Preferences window for future settings.
-5. Branch cleanup (owner runs it; GH013 blocks deletion from the CLI): commands for 68 merged origin branches, 35 merged local branches and the unmerged no-PR branches (including `spike/avplayer-inplace-tap-dsp`, recommended delete) are in the gitignored `tmp/branch-cleanup.md`. Squash-merged branch tips were checked against their PRs' final commits, so nothing is lost. Before deleting local `review/codebase-audit-2026-09`, archive its `review.md` (it is the source of the amp review).
-6. Git history purge of `new-architecture-convresation.md` (`95ebc06`) and `module-cache/` (`5c4b8fa`): recommended NO. The transcript holds no secrets; a purge rewrites 684 commits and all 11 release tags, breaks 588 commit references in the docs, leaves the old objects reachable through GitHub PR refs unless GitHub Support purges them, and needs a ruleset bypass for the force-push.
-7. Fix the Codex CLI model setting so `/codex:review` runs again (your Codex config; it currently asks for `gpt-6.1-sol`).
-8. Reply to and resolve PR #81 review threads #2 and #3 (`./scripts/resolve-pr-comments.sh 81 list`).
+1. Delete the merged branches on origin: the GH013 ruleset ("restrict deletions") refuses it from the CLI. Add a bypass or disable that rule temporarily and run the commands in `tmp/branch-cleanup.md`, or use GitHub's Branches page.
+2. S3-4 scope, after the 2026-10-02 live check (`tasks/ogg-vorbis-support/research.md`, Gate G1b): Ogg Vorbis is about 1.5% of Icecast directory streams and under 1% of listeners; none of the plan's reference stations (SomaFM, Radio Paradise, BBC) still serve Vorbis; no live station changed format at a chain boundary. Options: (a) full S3-4 as planned (local files and streams); (b) local `.ogg` files only, deferring Ogg streaming to the backlog, which skips the StreamDecodePipeline backend/lifecycle changes; (c) defer S3-4 entirely. Recommended: (b), since local playback is the Winamp-fidelity value and the streaming half carries most of the risk for little use. Either (b) or (c) needs a short plan revision before Phase 0.
 
 ## Shipped
 
@@ -146,7 +137,7 @@ Newest first; dates are git local dates.
 
 | Date | Sprint / wave | PRs / commits |
 |------|---------------|---------------|
-| 2026-10-02 | Amp review cleanup on `main` | `b3894d9`: transcripts moved to the gitignored `chats/`; `module-cache/` and `weak_struct` untracked. The dead-code removal is PR #91, still open. |
+| 2026-10-02 | Amp review cleanup | #91 (`30d9de3`): dead EQ code and the Appearance Mode preferences, with the Preferences window and Cmd+,. #92 (`f7c480c`): #86 test fix (AT-1). `b3894d9`: transcripts to the gitignored `chats/`; `module-cache/` and `weak_struct` untracked. `_context` rebuilt (`4654aa5`). |
 | 2026-09-28 | Docs diagrams | `f12bb7b`: 11 Excalidraw diagrams with PNGs in `docs/diagrams/`. |
 | 2026-09-28 | v2.0 release, build 14 | Tag `v2.0` (`6703b8c`). Contains #77, #80-#83, #87, #89 and #90. |
 | 2026-09-28 | S4-2a `window-docking-78` (D-WIN78) | #90 (`88ba342`), which closed #78. |

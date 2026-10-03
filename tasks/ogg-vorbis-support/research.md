@@ -438,6 +438,52 @@ Branched on extension AND `Content-Type`. Magic byte sniffing happens later in D
 
 ---
 
+## Gate G1b: live station spot-check (2026-10-02)
+
+Owner-approved measurement of real Icecast Ogg streams (research Oracle finding 7). Each station was captured for 115 s and 600 s and its Ogg pages parsed (BOS pages, serials, Vorbis identification and comment headers, granule positions). Durations come from sample positions, not wall-clock time.
+
+| Station | URL | Rate | Ch | Nominal kbps | Chains in 600 s | Seconds between chains | Format change |
+|---|---|---|---|---|---|---|---|
+| WUVT-FM (US college) | `stream.wuvt.vt.edu/wuvt.ogg` | 44.1k | 2 | 128 | 3 | 375 | no |
+| Radio Città Fujiko (IT community) | `streaming.radiocittafujiko.it:8001/rcf.ogg` | 44.1k | 2 | 96 | 4 | 151, 197, 199 | no |
+| Punkrockers Radio (DE) | `stream.punkrockers-radio.de:8000/prr.ogg` | 44.1k | 2 | 192 | 6 | 160, 121, 166, 32 | no |
+| Radio Free Brazi | `rfb.brazi.net:8000/rfb.ogg` | 44.1k | 2 | 192 | 5 (+2 in the short capture) | 200, 0.9, 290; short capture 2.0 | no |
+| LogosRadio (talk) | `logosradio.info:8000/logosradio.ogg` | 44.1k | 1 | 64 | 1 (chained between captures, no tags) | n/a | no |
+| Radio Nova (BG) | `play.global.audio/nova.ogg` | 44.1k | 2 | 96 | 1 | none in 10 min | n/a |
+| Dance Wave! (HU) | `stream1.dancewave.online:8080/dance.ogg` | 44.1k | 2 | 160 | 1 | none | n/a |
+| Laza Rádió (HU) | `stream.lazaradio.com:8100/live.ogg` | 44.1k | 2 | 320 | 1 | none | n/a |
+| Radio Študent (SI) | `kruljo.radiostudent.si:8000/test.ogg` | 44.1k | 2 | 112 | 1 | none | n/a |
+| Dinosaur Radio | `bitsmitter.com:8006/dinofm.ogg` | 44.1k | 2 | 96 | 1 | none | n/a |
+
+**Findings**
+
+- No sample-rate or channel change at any of the 17 chain boundaries seen. Every boundary was a track change: the old chain ends cleanly, the new one carries new ARTIST/TITLE comments, and its granule restarts near 0.
+- Station IDs and jingles make chains under a second long (0.9 s and 2.0 s on Radio Free Brazi).
+- 6 of 10 stations did not chain in 10 minutes (static titles or no tags).
+- Joining mid-stream, the first chain's granule is far from 0.
+- Every reference station in the old plan §13 table is gone: SomaFM's two Ogg URLs return 404 (its `channels.json` lists only MP3/AAC/AAC+), Radio Paradise's `/ogg-192` returns 404 (its only Ogg stream is FLAC-in-Ogg), and no BBC Ogg endpoint or 48 kHz Vorbis station was found.
+
+**Prevalence on dir.xiph.org (all codec listings paged)**
+
+| Codec label | Listings | With a URL | Listeners |
+|---|---|---|---|
+| MP3 | 17,782 (71.3%) | 9,670 (73.6%) | 104,564 (76.7%) |
+| AAC + AAC+ | 6,326 (25.4%) | 3,025 (23.0%) | 30,419 (22.3%) |
+| "Vorbis" | 581 (2.3%) | 305 (2.3%) | 1,195 (0.9%) |
+| Opus | 178 (0.7%) | 110 (0.8%) | 103 (0.08%) |
+
+The "Vorbis" label is unreliable: of 15 labelled streams that answered, 10 were Vorbis, 2 Opus, 1 FLAC-in-Ogg, and 2 `.ogg` URLs served AAC+ or MP3. Real Vorbis is about 1.5% of listings; it still outnumbers Opus about 3:1.
+
+**Consequences for the plan**
+
+- Per-chain decoder reset plus a metadata update on every chain (including sub-second chains) is required. The rate-change bridge retune (T4/T13/T13b) never triggered in practice: keep it as a cheap defensive path, not an evidenced need.
+- Retune or reactivate the bridge only on a real format change, never on every chain; otherwise every track change and every jingle produces an audible gap.
+- Elapsed time must not come from absolute granule positions after a mid-stream join.
+- Route by Content-Type plus a first-bytes sniff, not the `.ogg` extension, since some `.ogg` URLs serve MP3 or AAC+.
+- FLAC-in-Ogg is common (about 50 of the 305 "Vorbis" listings, plus Radio Paradise) and will take the "unsupported format" path; its message must be clear.
+- Not measured: a 48 kHz or format-changing live station (none found), BBC/KEXP, CUAC FM (no response), and how often the 6 non-chaining stations chain. The optional Gemini re-run and stb_vorbis chaining check are dropped: the live evidence settles the chaining question.
+- Worth it in 2026? For streaming alone, hard to justify (about 1.5% of directory streams, under 1% of listeners, small community stations). Local `.ogg` playback and Winamp fidelity are the stronger reasons. Scope is an owner decision (`tasks/_context/state.md`).
+
 ## Gemini Research Findings
 
 **Status:** Gemini CLI was invoked but returned empty output (cwd-related auth issue under the sub-agent sandbox). Gemini was asked to cover: pure-Swift Vorbis decoder maturity, SwiftPM gotchas for libvorbis, stb_vorbis quality vs reference, Ogg streaming-API behaviour, BSD-license distribution requirements, modern Icecast OGG prevalence, codec discrimination, Vorbis comments format.

@@ -34,7 +34,7 @@ Every one gets a row in the SS-0 mapping.
 
 ## Decomposition wave (closed)
 
-- `AudioPlayer.swift`: Phases 1-4 shipped (PR #60, hotfix #62), but the file has regrown to 1,101 lines. Seek extraction is re-evaluated in SS-1 (`tasks/audioplayer-seek-extraction/`).
+- `AudioPlayer.swift`: Phases 1-4 shipped (PR #60, hotfix #62), but the file has regrown to 1,097 lines. Seek extraction is re-evaluated in SS-1 (`tasks/audioplayer-seek-extraction/`).
 - `SkinManager.swift`: done in PR #75 (now 441 lines).
 - `WinampEqualizerWindow.swift`: selective extraction done in PR #76 (now 365 lines).
 - `VisualizerPipeline.swift`: superseded by S3-2 Phase 1 (146a8b4), which extracted `VisualizerFeed` and `VisualizerScratchBuffers` (now 416 lines).

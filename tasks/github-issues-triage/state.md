@@ -14,7 +14,7 @@ Hard-gated behind the Structure Sprint and S4-1 `swift64-macos27-readiness` (D-S
 
 ## Open issues
 
-#47, #79 and #84 are in scope here. #86 is fixed separately as AT-1 (owner, 2026-10-02). #88 is S4-4 `video-multichannel-output`. The full open-issue table is in `tasks/_context/state.md`.
+#47, #79 and #84 are in scope here. #86 was fixed separately in #92. #88 is S4-4 `video-multichannel-output`. The full open-issue table is in `tasks/_context/state.md`.
 
 ## Scope
 
@@ -31,7 +31,7 @@ Order: #47, then P-6, then #79, then #84. One branch and one PR per item. Repro 
 
 ## Owner decisions affecting this task
 
-None open. #86 went to the standalone AT-1 PR, and there is no plan-level Oracle gate (owner, 2026-10-02).
+None open. #86 was fixed separately in #92, and there is no plan-level Oracle gate (owner, 2026-10-02).
 
 ## Next step
 
